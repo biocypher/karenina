@@ -5,8 +5,8 @@ from pydantic import Field
 
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
 from karenina.schemas.entities.answer import BaseAnswer
-from karenina.schemas.entities.primitives import ExactMatch, TraceRegex
 from karenina.schemas.entities.verified_field import VerifiedField
+from karenina.schemas.primitives import ExactMatch, TraceRegex
 
 
 @pytest.mark.unit

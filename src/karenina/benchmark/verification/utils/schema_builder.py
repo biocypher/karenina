@@ -30,7 +30,8 @@ def build_parsing_schema(answer_class: type[BaseAnswer]) -> dict[str, Any]:
     if not verified:
         return schema
 
-    from karenina.schemas.entities.primitives import TracePrimitive, _reconstruct_primitive
+    from karenina.schemas.primitives import TracePrimitive
+    from karenina.schemas.primitives.registry import _reconstruct_primitive
 
     trace_fields: set[str] = set()
     for name, meta in verified.items():

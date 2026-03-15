@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.schemas.entities.normalizers import (
+from karenina.schemas.primitives import (
     SynonymMap,
     apply_normalizer,
     apply_normalizers,

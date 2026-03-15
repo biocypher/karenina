@@ -6,8 +6,8 @@ from pydantic import Field
 from karenina.benchmark.verification.utils.class_discovery import find_answer_class
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
 from karenina.schemas.entities.answer import BaseAnswer
-from karenina.schemas.entities.primitives import BooleanMatch, ExactMatch, TraceRegex
 from karenina.schemas.entities.verified_field import VerifiedField
+from karenina.schemas.primitives import BooleanMatch, ExactMatch, TraceRegex
 
 
 @pytest.mark.integration

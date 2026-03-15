@@ -11,8 +11,8 @@ from karenina.benchmark.verification.stages.core.base import (
 )
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.answer import BaseAnswer
-from karenina.schemas.entities.primitives import BooleanMatch
 from karenina.schemas.entities.verified_field import VerifiedField
+from karenina.schemas.primitives import BooleanMatch
 
 
 class MockAnswer(BaseAnswer):

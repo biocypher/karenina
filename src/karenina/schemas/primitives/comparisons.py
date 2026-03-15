@@ -1,9 +1,8 @@
-"""Verification primitives for VerifiedField-based answer templates.
+"""Parsed verification primitives for VerifiedField-based answer templates.
 
-Primitives define how extracted values are compared against ground truth.
-Two categories:
-- Parsed primitives: operate on judge-extracted values (field included in parsing schema)
-- Trace primitives: operate on raw LLM response (field excluded from parsing schema)
+Parsed primitives operate on judge-extracted values: the field is included
+in the parsing schema, and check() compares the extracted value against
+ground truth.
 """
 
 import logging
@@ -14,48 +13,16 @@ from typing import Any
 from dateutil import parser as dateutil_parser  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
-from karenina.schemas.entities.normalizers import (
+from karenina.schemas.primitives.normalizers import (
     Normalizer,
     apply_normalizers,
 )
+from karenina.schemas.primitives.registry import _register_primitive
 
 logger = logging.getLogger(__name__)
 
 
-# --- Primitive Registry ---
-
-_PRIMITIVE_REGISTRY: dict[str, type["VerificationPrimitive"]] = {}
-
-
-def _register_primitive(cls: type["VerificationPrimitive"]) -> type["VerificationPrimitive"]:
-    """Register a primitive class for deserialization."""
-    _PRIMITIVE_REGISTRY[cls.__name__] = cls
-    return cls
-
-
-def _reconstruct_primitive(data: dict[str, Any]) -> "VerificationPrimitive":
-    """Reconstruct a primitive instance from serialized dict.
-
-    Args:
-        data: Dict with 'type' key and primitive parameters.
-
-    Returns:
-        Instantiated primitive.
-
-    Raises:
-        ValueError: If the primitive type is not recognized.
-    """
-    data = dict(data)  # Copy to avoid mutating
-    type_name = data.pop("type", None)
-    if type_name is None:
-        raise ValueError("Primitive data missing 'type' key")
-    cls = _PRIMITIVE_REGISTRY.get(type_name)
-    if cls is None:
-        raise ValueError(f"Unknown primitive type: {type_name!r}")
-    return cls.model_validate(data)
-
-
-# --- Base Classes ---
+# --- Base Class ---
 
 
 class VerificationPrimitive(BaseModel):
@@ -75,29 +42,6 @@ class VerificationPrimitive(BaseModel):
 
         Returns:
             True if the values match according to this primitive's rules.
-        """
-        raise NotImplementedError
-
-
-class TracePrimitive(VerificationPrimitive):
-    """Base class for primitives that operate on raw LLM response text.
-
-    Fields using TracePrimitive are excluded from the judge's parsing
-    schema. The pipeline evaluates them directly against the raw response.
-    """
-
-    def check(self, extracted: Any, expected: Any) -> bool:
-        """Not used for trace primitives. Use check_trace() instead."""
-        raise NotImplementedError("TracePrimitive uses check_trace(), not check()")
-
-    def check_trace(self, raw_trace: str) -> bool:
-        """Evaluate the raw LLM response.
-
-        Args:
-            raw_trace: The raw text response from the answering LLM.
-
-        Returns:
-            True if the pattern is found/condition is met.
         """
         raise NotImplementedError
 
@@ -379,48 +323,3 @@ class DateRange(VerificationPrimitive):
         except (ValueError, TypeError):
             logger.warning("Date parsing failed for %r", extracted)
             return False
-
-
-# --- Trace Primitives ---
-
-
-@_register_primitive
-class TraceRegex(TracePrimitive):
-    """Check for regex pattern in raw LLM response.
-
-    Returns True if the pattern is found (or count >= count_min).
-    """
-
-    pattern: str
-    count_min: int | None = None
-
-    def check_trace(self, raw_trace: str) -> bool:
-        matches = re.findall(self.pattern, raw_trace)
-        if self.count_min is not None:
-            return len(matches) >= self.count_min
-        return len(matches) > 0
-
-
-@_register_primitive
-class TraceContains(TracePrimitive):
-    """Check for substring in raw LLM response."""
-
-    substring: str
-
-    def check_trace(self, raw_trace: str) -> bool:
-        return self.substring in raw_trace
-
-
-@_register_primitive
-class TraceLength(TracePrimitive):
-    """Check length of raw LLM response."""
-
-    min: int | None = None
-    max: int | None = None
-    unit: str = "chars"
-
-    def check_trace(self, raw_trace: str) -> bool:
-        length = len(raw_trace.split()) if self.unit == "words" else len(raw_trace)
-        if self.min is not None and length < self.min:
-            return False
-        return not (self.max is not None and length > self.max)
