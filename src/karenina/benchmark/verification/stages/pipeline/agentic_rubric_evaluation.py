@@ -146,6 +146,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         Returns:
             Tuple of (scores_dict, traces_dict).
         """
+        # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
         scores: dict[str, int | bool | None] = {}
         traces: dict[str, str | None] = {}
 
@@ -213,16 +214,16 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
 
         # Build a combined investigation prompt
         evaluator = AgenticTraitEvaluator(model_config=first_model)
+        valid_traits = [trait for trait, _ in valid]
 
-        # Use the first trait as the "driver" for investigation context_mode,
-        # building a combined description of all traits
-        combined_desc_parts = [f"- {trait.name}: {trait.description}" for trait, _ in valid]
+        combined_desc_parts = [f"- {trait.name}: {trait.description}" for trait in valid_traits]
         combined_description = "\n".join(combined_desc_parts)
 
-        # Create a synthetic trait for the shared investigation
-        driver_trait = valid[0][0].model_copy(
-            update={"description": combined_description},
-        )
+        # Compute union of context modes and max of turns/timeout across traits
+        include_trace = any(t.context_mode in ("trace_and_workspace", "trace_only") for t in valid_traits)
+        include_workspace = any(t.context_mode in ("trace_and_workspace", "workspace_only") for t in valid_traits)
+        shared_max_turns = max(t.max_turns for t in valid_traits)
+        shared_timeout = max(t.timeout_seconds for t in valid_traits)
 
         # Run a single shared investigation
         try:
@@ -242,10 +243,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
 
             user_parts: list[str] = [f"Question: {context.question_text}"]
 
-            if driver_trait.context_mode in ("trace_and_workspace", "trace_only") and raw_response:
+            if include_trace and raw_response:
                 user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_response}\n--- END TRACE ---")
 
-            if workspace_path and driver_trait.context_mode != "trace_only":
+            if workspace_path and include_workspace:
                 user_parts.append(f"\nWorkspace directory: {workspace_path}")
 
             messages = [
@@ -254,8 +255,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ]
 
             agent_config = AgentConfig(
-                max_turns=driver_trait.max_turns,
-                timeout=float(driver_trait.timeout_seconds),
+                max_turns=shared_max_turns,
+                timeout=float(shared_timeout),
                 workspace_path=workspace_path if workspace_path else None,
             )
 

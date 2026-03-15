@@ -584,13 +584,18 @@ class AgenticRubricTrait(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
+    name: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
     kind: Literal["boolean", "score", "literal"]
-    higher_is_better: bool | None = None
-    weight: float = 1.0
-    min_score: int | None = None
-    max_score: int | None = None
+    higher_is_better: bool = Field(
+        ...,
+        description="Whether higher values indicate better performance. "
+        "For boolean: True means True is good. "
+        "For score: True means higher scores are better. "
+        "For literal: True means higher indices (later classes) are better.",
+    )
+    min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
+    max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
     classes: dict[str, str] | None = None
     context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
     max_turns: int = Field(15, gt=0)
@@ -599,11 +604,11 @@ class AgenticRubricTrait(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def set_legacy_defaults(cls, data: Any) -> Any:
-        """Set higher_is_better default for backward compatibility."""
-        if isinstance(data, dict) and data.get("higher_is_better") is None:
-            data["higher_is_better"] = True
-        return data
+    def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Set default for higher_is_better when loading legacy data."""
+        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+            values["higher_is_better"] = True
+        return values
 
     @model_validator(mode="after")
     def validate_kind_fields(self) -> "AgenticRubricTrait":
@@ -611,8 +616,9 @@ class AgenticRubricTrait(BaseModel):
         if self.kind == "literal":
             if not self.classes:
                 raise ValueError("classes field is required for literal kind")
-            self.min_score = 0
-            self.max_score = len(self.classes) - 1
+            # Automatically derive min_score and max_score from classes
+            object.__setattr__(self, "min_score", 0)
+            object.__setattr__(self, "max_score", len(self.classes) - 1)
         return self
 
     @model_validator(mode="after")
@@ -746,10 +752,7 @@ class Rubric(BaseModel):
             directionalities[callable_trait.name] = callable_trait.higher_is_better
 
         for agentic_trait in self.agentic_traits:
-            # higher_is_better defaults to True via set_legacy_defaults validator
-            directionalities[agentic_trait.name] = (
-                agentic_trait.higher_is_better if agentic_trait.higher_is_better is not None else True
-            )
+            directionalities[agentic_trait.name] = agentic_trait.higher_is_better
 
         # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
