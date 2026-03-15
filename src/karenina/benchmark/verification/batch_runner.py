@@ -229,6 +229,9 @@ def execute_task(
             workspace_copy=task.get("workspace_copy", True),
             workspace_cleanup=task.get("workspace_cleanup", True),
             question_workspace_path=task.get("question_workspace_path"),
+            # Agentic rubric evaluation
+            agentic_rubric_strategy=task.get("agentic_rubric_strategy", "individual"),
+            agentic_rubric_parallel=task.get("agentic_rubric_parallel", False),
             cached_answer_data=cached_answer_data,
         )
 

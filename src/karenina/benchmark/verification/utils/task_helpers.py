@@ -167,4 +167,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "agentic_parsing_timeout": getattr(config, "agentic_parsing_timeout", 120.0),
         "workspace_copy": getattr(config, "workspace_copy", True),
         "workspace_cleanup": getattr(config, "workspace_cleanup", True),
+        # Agentic rubric evaluation configuration
+        "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
+        "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),
     }

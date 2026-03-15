@@ -70,6 +70,9 @@ def run_single_model_verification(
     workspace_copy: bool = True,
     workspace_cleanup: bool = True,
     question_workspace_path: str | None = None,
+    # Agentic rubric evaluation configuration
+    agentic_rubric_strategy: str = "individual",
+    agentic_rubric_parallel: bool = False,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -176,6 +179,9 @@ def run_single_model_verification(
         workspace_root=workspace_root,
         workspace_copy=workspace_copy,
         workspace_cleanup=workspace_cleanup,
+        # Agentic Rubric
+        agentic_rubric_strategy=agentic_rubric_strategy,
+        agentic_rubric_parallel=agentic_rubric_parallel,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
@@ -196,7 +202,13 @@ def run_single_model_verification(
     # If rubric is provided and mode is template_only, upgrade to template_and_rubric
     if (
         rubric
-        and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
+        and (
+            rubric.llm_traits
+            or rubric.regex_traits
+            or rubric.callable_traits
+            or rubric.metric_traits
+            or rubric.agentic_traits
+        )
         and evaluation_mode == "template_only"
     ):
         evaluation_mode = "template_and_rubric"
