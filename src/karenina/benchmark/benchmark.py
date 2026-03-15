@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from ..schemas.entities import Question
 
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from ..schemas.entities.rubric import AgenticRubricTrait
 from ..schemas.results import VerificationResultSet
 from ..schemas.verification import (
     FinishedTemplate,
@@ -463,14 +464,16 @@ class Benchmark:
 
     # ── Rubric management ────────────────────────────────────────────────
 
-    def add_global_rubric_trait(self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait) -> None:
+    def add_global_rubric_trait(
+        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+    ) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
 
     def add_question_rubric_trait(
         self,
         question_id: str,
-        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait,
+        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)
@@ -486,6 +489,8 @@ class Benchmark:
             self.add_global_rubric_trait(callable_trait)
         for metric_trait in rubric.metric_traits:
             self.add_global_rubric_trait(metric_trait)
+        for agentic_trait in rubric.agentic_traits:
+            self.add_global_rubric_trait(agentic_trait)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
@@ -498,6 +503,8 @@ class Benchmark:
             self.add_question_rubric_trait(question_id, callable_trait)
         for metric_trait in rubric.metric_traits:
             self.add_question_rubric_trait(question_id, metric_trait)
+        for agentic_trait in rubric.agentic_traits:
+            self.add_question_rubric_trait(question_id, agentic_trait)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""

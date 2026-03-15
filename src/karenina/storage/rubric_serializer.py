@@ -15,6 +15,7 @@ def serialize_rubric_to_dict(
     regex_traits: list[Any] | None = None,
     callable_traits: list[Any] | None = None,
     metric_traits: list[Any] | None = None,
+    agentic_traits: list[Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]] | None:
     """Serialize rubric traits to dictionary format for database storage.
 
@@ -23,6 +24,7 @@ def serialize_rubric_to_dict(
         regex_traits: List of RegexTrait objects
         callable_traits: List of CallableTrait objects
         metric_traits: List of MetricRubricTrait objects
+        agentic_traits: List of AgenticRubricTrait objects
 
     Returns:
         Dictionary with serialized traits, or None if all trait lists are empty
@@ -31,8 +33,9 @@ def serialize_rubric_to_dict(
     regex_traits = regex_traits or []
     callable_traits = callable_traits or []
     metric_traits = metric_traits or []
+    agentic_traits = agentic_traits or []
 
-    if not (llm_traits or regex_traits or callable_traits or metric_traits):
+    if not (llm_traits or regex_traits or callable_traits or metric_traits or agentic_traits):
         return None
 
     return {
@@ -40,6 +43,7 @@ def serialize_rubric_to_dict(
         "regex_traits": [t.model_dump() for t in regex_traits],
         "callable_traits": [t.model_dump() for t in callable_traits],
         "metric_traits": [t.model_dump() for t in metric_traits],
+        "agentic_traits": [t.model_dump() for t in agentic_traits],
     }
 
 
@@ -60,6 +64,7 @@ def serialize_rubric(rubric: Any) -> dict[str, list[dict[str, Any]]] | None:
         regex_traits=rubric.regex_traits,
         callable_traits=rubric.callable_traits,
         metric_traits=rubric.metric_traits,
+        agentic_traits=getattr(rubric, "agentic_traits", None),
     )
 
 
@@ -158,6 +163,38 @@ def _deserialize_metric_trait(trait_data: dict[str, Any]) -> Any:
     )
 
 
+def _deserialize_agentic_trait(trait_data: dict[str, Any]) -> Any:
+    """Deserialize a single AgenticRubricTrait from dictionary data.
+
+    Args:
+        trait_data: Dictionary with trait data
+
+    Returns:
+        AgenticRubricTrait instance
+    """
+    from ..schemas.entities.rubric import AgenticRubricTrait
+
+    model_override = trait_data.get("model_override")
+    if model_override is not None and isinstance(model_override, dict):
+        from ..schemas.config.models import ModelConfig
+
+        model_override = ModelConfig(**model_override)
+
+    return AgenticRubricTrait(
+        name=trait_data["name"],
+        description=trait_data.get("description") or "",
+        kind=trait_data.get("kind", "boolean"),
+        higher_is_better=trait_data.get("higher_is_better", True),
+        context_mode=trait_data.get("context_mode", "trace_and_workspace"),
+        max_turns=trait_data.get("max_turns", 15),
+        timeout_seconds=trait_data.get("timeout_seconds", 120),
+        min_score=trait_data.get("min_score", 1),
+        max_score=trait_data.get("max_score", 5),
+        classes=trait_data.get("classes"),
+        model_override=model_override,
+    )
+
+
 def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | None:
     """Deserialize a Rubric object from dictionary format.
 
@@ -186,9 +223,10 @@ def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | No
     regex_traits = [_deserialize_regex_trait(t) for t in rubric_data.get("regex_traits", [])]
     callable_traits = [_deserialize_callable_trait(t) for t in rubric_data.get("callable_traits", [])]
     metric_traits = [_deserialize_metric_trait(t) for t in rubric_data.get("metric_traits", [])]
+    agentic_traits = [_deserialize_agentic_trait(t) for t in rubric_data.get("agentic_traits", [])]
 
     # Return None if no traits found
-    if not (llm_traits or regex_traits or callable_traits or metric_traits):
+    if not (llm_traits or regex_traits or callable_traits or metric_traits or agentic_traits):
         return None
 
     return Rubric(
@@ -196,6 +234,7 @@ def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | No
         regex_traits=regex_traits,
         callable_traits=callable_traits,
         metric_traits=metric_traits,
+        agentic_traits=agentic_traits,
     )
 
 
@@ -217,8 +256,9 @@ def serialize_question_rubric_from_cache(
     regex_traits = rubric_data.get("regex_traits", [])
     callable_traits = rubric_data.get("callable_traits", [])
     metric_traits = rubric_data.get("metric_traits", [])
+    agentic_traits = rubric_data.get("agentic_traits", [])
 
-    if not (llm_traits or regex_traits or callable_traits or metric_traits):
+    if not (llm_traits or regex_traits or callable_traits or metric_traits or agentic_traits):
         return None
 
     return serialize_rubric_to_dict(
@@ -226,4 +266,5 @@ def serialize_question_rubric_from_cache(
         regex_traits=regex_traits,
         callable_traits=callable_traits,
         metric_traits=metric_traits,
+        agentic_traits=agentic_traits,
     )

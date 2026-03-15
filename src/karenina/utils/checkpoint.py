@@ -22,6 +22,7 @@ from ..schemas.checkpoint import (
     SchemaOrgSoftwareSourceCode,
 )
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities.rubric import AgenticRubricTrait
 from .checkpoint_trait_converters import (
     convert_rating_to_rubric_trait,
     convert_rubric_trait_to_rating,
@@ -143,7 +144,8 @@ def add_question_to_benchmark(
     raw_answer: str,
     answer_template: str,
     question_id: str | None = None,
-    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None = None,
+    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait]
+    | None = None,
     finished: bool = False,
     author: dict[str, Any] | None = None,
     sources: list[dict[str, Any]] | None = None,
@@ -258,7 +260,7 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait],
+    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -338,23 +340,27 @@ def extract_questions_from_benchmark(
                     "karenina:QuestionSpecificRegexTrait",
                     "karenina:QuestionSpecificCallableTrait",
                     "karenina:QuestionSpecificMetricRubricTrait",
+                    "karenina:QuestionSpecificAgenticRubricTrait",
                 ]
             ]
 
             # Categorize traits by type to match Rubric schema
             if traits:
                 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+                from ..schemas.entities.rubric import AgenticRubricTrait as AgenticRubricTraitLocal
 
                 llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
                 regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
                 callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
                 metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
+                agentic_traits = [t for t in traits if isinstance(t, AgenticRubricTraitLocal)]
 
                 question_rubric = {
                     "llm_traits": llm_traits,
                     "regex_traits": regex_traits,
                     "callable_traits": callable_traits,
                     "metric_traits": metric_traits,
+                    "agentic_traits": agentic_traits,
                 }
 
         questions.append(
@@ -382,7 +388,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None:
+) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -397,7 +403,7 @@ def extract_global_rubric_from_benchmark(
     Returns:
         List of trait objects or None if no global rubric
     """
-    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] = []
+    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] = []
 
     # Extract from rating array (standard format)
     if benchmark.rating:
@@ -408,6 +414,7 @@ def extract_global_rubric_from_benchmark(
                 "karenina:GlobalRegexTrait",
                 "karenina:GlobalCallableTrait",
                 "karenina:GlobalMetricRubricTrait",
+                "karenina:GlobalAgenticRubricTrait",
             ]:
                 traits.append(convert_rating_to_rubric_trait(rating))
 

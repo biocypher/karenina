@@ -524,9 +524,9 @@ class TestGetRubricStatistics:
 
         stats = manager.get_rubric_statistics()
         assert stats["questions_with_rubrics"] == 1
-        # Note: question_rubric is stored as dict with 4 keys (llm_traits, regex_traits, etc.)
+        # Note: question_rubric is stored as dict with 5 keys (llm_traits, regex_traits, callable_traits, metric_traits, agentic_traits)
         # So even with 1 trait, it counts the dict keys
-        assert stats["total_question_traits"] == 4
+        assert stats["total_question_traits"] == 5
 
 
 @pytest.mark.unit
