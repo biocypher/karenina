@@ -61,6 +61,7 @@ class Benchmark:
         description: str = "",
         version: str = "0.1.0",
         creator: str = "Karenina Benchmarking System",
+        workspace_root: Path | None = None,
     ):
         """
         Initialize a new benchmark.
@@ -70,8 +71,12 @@ class Benchmark:
             description: Description of the benchmark
             version: Version of the benchmark content
             creator: Creator name or organization
+            workspace_root: Root directory containing task workspaces.
+                Question workspace paths are resolved relative to this root.
+                Not persisted in the checkpoint (it is a local filesystem path).
         """
         self._base = BenchmarkBase(name, description, version, creator)
+        self._workspace_root = workspace_root
         self._metadata_manager = MetadataManager(self._base)
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
@@ -90,6 +95,20 @@ class Benchmark:
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
         self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
 
+    @property
+    def workspace_root(self) -> Path | None:
+        """Root directory for task workspaces (not persisted in checkpoint)."""
+        return self._workspace_root
+
+    def set_workspace_root(self, path: Path) -> None:
+        """Set the root directory for task workspaces.
+
+        Args:
+            path: Directory containing task workspace subdirectories.
+                Question workspace paths are resolved relative to this root.
+        """
+        self._workspace_root = path
+
     @classmethod
     def create(
         cls,
@@ -97,16 +116,23 @@ class Benchmark:
         description: str = "",
         version: str = "0.1.0",
         creator: str = "Karenina Benchmarking System",
+        workspace_root: Path | None = None,
     ) -> "Benchmark":
         """Create a new benchmark (alias for constructor)."""
-        return cls(name, description, version, creator)
+        return cls(name, description, version, creator, workspace_root=workspace_root)
 
     @classmethod
-    def load(cls, path: Path) -> "Benchmark":
-        """Load a benchmark from a JSON-LD file."""
+    def load(cls, path: Path, workspace_root: Path | None = None) -> "Benchmark":
+        """Load a benchmark from a JSON-LD file.
+
+        Args:
+            path: Path to the JSON-LD benchmark file.
+            workspace_root: Optional root directory for task workspaces.
+        """
         base = BenchmarkBase.load(path)
         instance = cls.__new__(cls)
         instance._base = base
+        instance._workspace_root = workspace_root
         instance._init_managers()
         return instance
 
@@ -510,6 +536,7 @@ class Benchmark:
             run_name,
             async_enabled,
             progress_callback,
+            workspace_root=self._workspace_root,
         )
 
     # ── Results management ───────────────────────────────────────────────
@@ -727,6 +754,7 @@ class Benchmark:
         cloned_base = self._export_manager.clone()
         instance = Benchmark.__new__(Benchmark)
         instance._base = cloned_base
+        instance._workspace_root = self._workspace_root
         instance._init_managers()
         return instance
 

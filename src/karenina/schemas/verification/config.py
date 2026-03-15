@@ -192,16 +192,7 @@ class VerificationConfig(BaseModel):
         description="Timeout in seconds for the investigation agent.",
     )
 
-    # Workspace
-    workspace_root: Path | None = Field(
-        default=None,
-        description=(
-            "Root directory for all workspaces. Mandatory when agentic_parsing "
-            "is True. Question workspace paths are resolved relative to this "
-            "root. Working copies and fresh workspaces are created as siblings "
-            "of source directories under this root."
-        ),
-    )
+    # Workspace (workspace_root lives on Benchmark, not here)
     workspace_copy: bool = Field(
         default=True,
         description=(
@@ -390,17 +381,6 @@ class VerificationConfig(BaseModel):
 
         # Agentic parsing validation
         if self.agentic_parsing:
-            # workspace_root is mandatory
-            if self.workspace_root is None:
-                raise ValueError(
-                    "workspace_root is required when agentic_parsing=True. "
-                    "Set it to the directory containing task workspaces."
-                )
-
-            # workspace_root must exist on disk
-            if not self.workspace_root.is_dir():
-                raise ValueError(f"workspace_root does not exist or is not a directory: {self.workspace_root}")
-
             # Check parsing model interface supports AgentPort
             from karenina.adapters.registry import AdapterRegistry
 
