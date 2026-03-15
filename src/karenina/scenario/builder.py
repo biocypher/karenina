@@ -265,9 +265,14 @@ class Scenario:
     def add_outcome_criterion(self, criterion: ScenarioOutcomeCriterion) -> None:
         """Add a pre-built ScenarioOutcomeCriterion.
 
+        If the criterion has an evaluate callable but no evaluate_source,
+        the source is extracted automatically.
+
         Args:
             criterion: The outcome criterion to add.
         """
+        if criterion.evaluate is not None and criterion.evaluate_source is None:
+            criterion.evaluate_source = extract_callable_source(criterion.evaluate)
         self._outcome_criteria.append(criterion)
 
     def add_outcome(
