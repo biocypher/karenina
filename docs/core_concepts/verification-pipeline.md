@@ -396,7 +396,7 @@ Consider a benchmark question in `template_and_rubric` mode with `abstention_ena
 
 **Stage 5: AbstentionCheck** asks the parsing model: "Did this response refuse to answer?" The model says no. `abstention_detected=False`. Pipeline continues.
 
-**Stage 7: ParseTemplate** sends the response and the `Answer` schema to the Judge LLM. The Judge extracts: `{"target": "BCL2"}`. A filled `Answer` instance is stored as `parsed_answer`.
+**Stage 7: ParseTemplate** sends the response and the `Answer` schema to the Judge LLM. The Judge extracts: `{"target": "BCL2"}`. A filled `Answer` instance is stored as `parsed_answer`. For coding tasks with `agentic_parsing=True`, this stage is replaced by `AgenticParseTemplateStage` (Stage 7b), which uses a two-step process: an investigation agent independently verifies workspace artifacts, then a parser extracts structured data from the investigation findings. See [Agentic Evaluation](agentic-evaluation.md) for details.
 
 **Stage 8: VerifyTemplate** calls `answer.verify()`, which compares `"BCL2"` against the ground truth `"BCL2"`. Field verification passes. Regex verification (if defined) also runs. `verify_result=True`.
 
