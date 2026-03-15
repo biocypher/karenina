@@ -24,8 +24,201 @@ This scenario walks through a complete agentic evaluation end-to-end, using a re
 - Configure agentic answering (via `claude_agent_sdk`) and agentic parsing
 - Run verification and inspect the investigation trace
 - Compare agentic vs trace-only parsing on the same answer
+- Combine agentic parsing with agentic rubric evaluation using `AgenticRubricTrait`
 
 For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation.md). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation.md).
+
+```python tags=["hide-cell"]
+# Setup cell: creates mock data and patches run_verification so that all code
+# cells execute without live LLM calls.
+# This cell is hidden in the rendered documentation.
+import datetime
+import tempfile
+from pathlib import Path
+
+from karenina import Benchmark
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Question
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
+from karenina.schemas.verification.model_identity import ModelIdentity
+
+# ---------------------------------------------------------------------------
+# Mock identities and timestamp
+# ---------------------------------------------------------------------------
+_answering = ModelIdentity(model_name="claude-sonnet-4-6", interface="claude_agent_sdk")
+_parsing = ModelIdentity(model_name="claude-sonnet-4-6", interface="claude_agent_sdk")
+_ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
+
+# ---------------------------------------------------------------------------
+# Template-level mock data (agentic parsing results)
+# ---------------------------------------------------------------------------
+_mock_template = VerificationResultTemplate(
+    raw_llm_response=(
+        "I'll analyze the patient data using logistic regression.\n"
+        "import pandas as pd\nimport statsmodels.api as sm\n\n"
+        "Age is significant (p=0.002). BMI is not significant (p=0.087).\n"
+        "Predicted probability at age 65: 0.3948\n"
+        "AIC for age-only model: 104.2"
+    ),
+    verify_result=True,
+    template_verification_performed=True,
+    agentic_parsing_performed=True,
+    investigation_trace=(
+        "Investigation: I examined the workspace and found analysis.py.\n"
+        "The script imports statsmodels and runs sm.Logit() for logistic regression.\n"
+        "Running the script confirms: age p-value=0.002 (significant), "
+        "BMI p-value=0.087 (not significant).\n"
+        "Predicted probability at age 65: 0.3948. AIC: 104.2."
+    ),
+    parsed_gt_response={
+        "age_significant": True,
+        "bmi_not_significant": True,
+        "age_predicted_probability_65": 0.3953,
+        "age_model_aic": 104.14,
+    },
+    parsed_llm_response={
+        "age_significant": True,
+        "bmi_not_significant": True,
+        "age_predicted_probability_65": 0.3948,
+        "age_model_aic": 104.2,
+    },
+)
+
+# ---------------------------------------------------------------------------
+# Rubric-level mock data (agentic rubric evaluation results)
+# ---------------------------------------------------------------------------
+_mock_rubric = VerificationResultRubric(
+    rubric_evaluation_performed=True,
+    rubric_evaluation_strategy="individual",
+    agentic_trait_scores={"logistic_regression_library": 0},
+    agentic_trait_investigation_traces={
+        "logistic_regression_library": (
+            "Investigation trace: Examined workspace files. Found analysis.py "
+            "containing 'import statsmodels.api as sm'. The logistic regression "
+            "was implemented using sm.Logit(endog, exog).fit(). No scikit-learn "
+            "imports found. Conclusion: the library used is statsmodels."
+        ),
+    },
+)
+
+# ---------------------------------------------------------------------------
+# Assemble mock result
+# ---------------------------------------------------------------------------
+_question_id = "mock-bix51-question-id"
+_result_id = VerificationResultMetadata.compute_result_id(
+    _question_id, _answering, _parsing, _ts,
+)
+
+_mock_result = VerificationResult(
+    metadata=VerificationResultMetadata(
+        question_id=_question_id,
+        template_id="tmpl_bix51",
+        completed_without_errors=True,
+        question_text=(
+            "Using the patient data in data.xlsx, perform logistic regression analysis "
+            "to determine which demographics (age, BMI, gender) predict treatment "
+            "remission."
+        ),
+        raw_answer=(
+            "Age is significant (p=0.002), BMI is not (p=0.087). "
+            "P(remission|age=65)=0.395, AIC=104.1"
+        ),
+        answering=_answering,
+        parsing=_parsing,
+        execution_time=45.3,
+        timestamp=_ts,
+        result_id=_result_id,
+    ),
+    template=_mock_template,
+    rubric=_mock_rubric,
+)
+
+_mock_result_set = VerificationResultSet(results=[_mock_result])
+
+# ---------------------------------------------------------------------------
+# Build a mock result for "template_only" mode (no rubric)
+# ---------------------------------------------------------------------------
+_mock_result_template_only = VerificationResult(
+    metadata=VerificationResultMetadata(
+        question_id=_question_id,
+        template_id="tmpl_bix51",
+        completed_without_errors=True,
+        question_text=_mock_result.metadata.question_text,
+        raw_answer=_mock_result.metadata.raw_answer,
+        answering=_answering,
+        parsing=_parsing,
+        execution_time=38.7,
+        timestamp=_ts,
+        result_id=_result_id,
+    ),
+    template=_mock_template,
+)
+
+_mock_result_set_template_only = VerificationResultSet(results=[_mock_result_template_only])
+
+# ---------------------------------------------------------------------------
+# Build a mock result for trace-only comparison
+# ---------------------------------------------------------------------------
+_mock_trace_only_template = VerificationResultTemplate(
+    raw_llm_response=_mock_template.raw_llm_response,
+    verify_result=True,
+    template_verification_performed=True,
+    agentic_parsing_performed=False,
+    parsed_gt_response=_mock_template.parsed_gt_response,
+    parsed_llm_response={
+        "age_significant": True,
+        "bmi_not_significant": True,
+        "age_predicted_probability_65": 0.395,
+        "age_model_aic": 104.1,
+    },
+)
+
+_mock_trace_only_result = VerificationResult(
+    metadata=VerificationResultMetadata(
+        question_id=_question_id,
+        template_id="tmpl_bix51",
+        completed_without_errors=True,
+        question_text=_mock_result.metadata.question_text,
+        raw_answer=_mock_result.metadata.raw_answer,
+        answering=_answering,
+        parsing=_parsing,
+        execution_time=12.1,
+        timestamp=_ts,
+        result_id=_result_id,
+    ),
+    template=_mock_trace_only_template,
+)
+
+# ---------------------------------------------------------------------------
+# Track which call we are on so different sections get appropriate results
+# ---------------------------------------------------------------------------
+_run_call_count = 0
+
+
+def _patched_run(self, config, **kwargs):
+    global _run_call_count
+    _run_call_count += 1
+    # First call: template-only (Steps 1-5)
+    # Second call: template_and_rubric (agentic rubric section)
+    if _run_call_count == 1:
+        return _mock_result_set_template_only
+    return _mock_result_set
+
+
+Benchmark.run_verification = _patched_run
+
+# Provide a temporary directory for EXPERIMENT_DIR so save/load calls work
+EXPERIMENT_DIR = Path(tempfile.mkdtemp())
+(EXPERIMENT_DIR / "workspace").mkdir(exist_ok=True)
+(EXPERIMENT_DIR / "outputs").mkdir(exist_ok=True)
+```
 
 ---
 
@@ -118,8 +311,6 @@ The template class name (`LogisticRegressionAnswer`) is arbitrary; the pipeline 
 from pathlib import Path
 from karenina.benchmark import Benchmark
 from karenina.schemas.entities import Question
-
-EXPERIMENT_DIR = Path(__file__).parent
 
 # Create benchmark with workspace root
 benchmark = Benchmark(
@@ -270,7 +461,6 @@ For full details on stage ordering, context modes, and the two-step investigatio
 ## Step 6: Save Results
 
 ```python
-import json
 import time
 
 output_dir = EXPERIMENT_DIR / "outputs" / time.strftime("%Y%m%dT%H%M%S")
@@ -298,20 +488,7 @@ The `investigation_trace` is the raw output from the agentic judge's workspace i
 To evaluate how much the agentic judge adds over classical trace-only parsing, run a second verification using the same answering agent output but with `agentic_parsing=False`. The `cached_answer_data` mechanism reuses the existing answer without re-invoking the answering model.
 
 ```python
-from karenina.benchmark.verification.runner import run_single_model_verification
-from karenina.benchmark.verification.utils.cache_helpers import extract_answer_data_from_result
-
-cached = extract_answer_data_from_result(result)
-
-trace_only_result = run_single_model_verification(
-    question_id=question_id,
-    question_text=question.question,
-    template_code=TEMPLATE_CODE,
-    answering_model=config.answering_models[0],
-    parsing_model=config.parsing_models[0],
-    agentic_parsing=False,
-    cached_answer_data=cached,
-)
+trace_only_result = _mock_trace_only_result  # In production: use run_single_model_verification
 
 print(f"Agentic verify:    {result.template.verify_result}")
 print(f"Trace-only verify: {trace_only_result.template.verify_result}")
@@ -323,6 +500,25 @@ if result.template.parsed_llm_response and trace_only_result.template.parsed_llm
         trace_val = trace_only_result.template.parsed_llm_response.get(field)
         match = "MATCH" if agentic_val == trace_val else "DIFFER"
         print(f"  {field}: agentic={agentic_val}, trace={trace_val} [{match}]")
+```
+
+In production, use `run_single_model_verification` with `cached_answer_data` to reuse the existing answer without re-invoking the answering model:
+
+```python
+# Production code (not executed in this notebook):
+# from karenina.benchmark.verification.runner import run_single_model_verification
+# from karenina.benchmark.verification.utils.cache_helpers import extract_answer_data_from_result
+#
+# cached = extract_answer_data_from_result(result)
+# trace_only_result = run_single_model_verification(
+#     question_id=question_id,
+#     question_text=question.question,
+#     template_code=TEMPLATE_CODE,
+#     answering_model=config.answering_models[0],
+#     parsing_model=config.parsing_models[0],
+#     agentic_parsing=False,
+#     cached_answer_data=cached,
+# )
 ```
 
 For coding and data analysis tasks, the agentic judge should be more reliable on verification-requiring fields because it can execute code and inspect outputs directly, rather than relying solely on the answering agent's self-reported results in the trace text.
@@ -352,10 +548,155 @@ For pure text QA (no workspace, no tools), classical parsing (`agentic_parsing=F
 
 ---
 
+## Combining Agentic Parsing with Agentic Rubric Evaluation
+
+The examples above use `evaluation_mode="template_only"`, where the pipeline checks factual correctness via the answer template. To also assess qualitative properties that require workspace investigation, add an `AgenticRubricTrait` and switch to `evaluation_mode="template_and_rubric"`.
+
+An `AgenticRubricTrait` is like an `LLMRubricTrait`, but instead of a single LLM call operating on the response text, it launches a separate agent session with tool access. The agent investigates the workspace (reading files, running scripts) before producing a score. This is Stage 11b (`AgenticRubricEvaluation`) in the pipeline.
+
+### Define the Agentic Rubric Trait
+
+This trait detects which Python library the answering agent used for logistic regression. A classical `LLMRubricTrait` could only inspect the response text, which may not mention the library explicitly. The `AgenticRubricTrait` examines the actual source files in the workspace.
+
+```python
+from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+
+library_detection = AgenticRubricTrait(
+    name="logistic_regression_library",
+    description=(
+        "Examine the Python scripts in the workspace to determine which library "
+        "was used to implement logistic regression. Look at the actual import "
+        "statements and function calls in the code files, not just what the "
+        "agent's response claims."
+    ),
+    kind="literal",
+    classes={
+        "statsmodels": "Uses statsmodels (sm.Logit, smf.logit, GLM with Binomial)",
+        "scikit-learn": "Uses scikit-learn (LogisticRegression from sklearn)",
+        "other": "Uses a different library or manual implementation",
+    },
+    higher_is_better=False,
+    context_mode="workspace_only",
+    max_turns=15,
+    timeout_seconds=120,
+)
+```
+
+Key fields on `AgenticRubricTrait`:
+
+| Field | Value | Purpose |
+|-------|-------|---------|
+| `kind` | `"literal"` | Classifies into ordered categories; returns the class index (0, 1, or 2) |
+| `classes` | `dict` | Ordered mapping of class names to descriptions. Dict order determines indices. |
+| `higher_is_better` | `False` | For this trait, the class index is a label, not a quality ranking |
+| `context_mode` | `"workspace_only"` | The agent sees the question and workspace path, not the answering trace |
+| `max_turns` | `15` | Maximum agent turns for investigation |
+| `timeout_seconds` | `120` | Wall-clock timeout for the investigation |
+
+### Attach the Rubric and Configure
+
+```python
+benchmark.set_global_rubric(Rubric(agentic_traits=[library_detection]))
+
+rubric_config = VerificationConfig(
+    answering_models=[
+        ModelConfig(
+            id="answering",
+            model_name="claude-sonnet-4-6",
+            interface="claude_agent_sdk",
+            system_prompt=(
+                "You are a biostatistician. Work in the provided workspace directory. "
+                "Load the Excel data, perform the requested analysis using Python, "
+                "and report your findings. Save your analysis scripts and result "
+                "files in the workspace so they can be inspected independently."
+            ),
+            agent_timeout=300,
+            agent_middleware=AgentMiddlewareConfig(
+                limits=AgentLimitConfig(model_call_limit=50),
+            ),
+        ),
+    ],
+    parsing_models=[
+        ModelConfig(
+            id="parsing",
+            model_name="claude-sonnet-4-6",
+            interface="claude_agent_sdk",
+        ),
+    ],
+    evaluation_mode="template_and_rubric",
+    rubric_enabled=True,
+    agentic_rubric_strategy="individual",
+    agentic_parsing=True,
+    agentic_judge_context="workspace_only",
+    agentic_parsing_max_turns=50,
+    agentic_parsing_timeout=300,
+    workspace_copy=True,
+    workspace_cleanup=False,
+)
+```
+
+Three settings control agentic rubric evaluation:
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `evaluation_mode` | `"template_and_rubric"` | Runs both template verification (Stages 7/8) and rubric evaluation (Stage 11) |
+| `rubric_enabled` | `True` | Required when `evaluation_mode` includes rubric evaluation |
+| `agentic_rubric_strategy` | `"individual"` | Each agentic trait gets its own agent session. The alternative, `"shared"`, evaluates all agentic traits in a single session. |
+
+### Run Verification and Inspect Rubric Results
+
+```python
+rubric_results = benchmark.run_verification(config=rubric_config, run_name="agentic_rubric_eval")
+rubric_result = rubric_results.results[0]
+
+# Template results (same as before)
+print(f"Template verify: {rubric_result.template.verify_result}")
+print(f"Agentic parsing: {rubric_result.template.agentic_parsing_performed}")
+
+# Agentic rubric results
+print(f"\nAgentic trait scores: {rubric_result.rubric.agentic_trait_scores}")
+```
+
+The `agentic_trait_scores` dictionary maps trait names to their scores. For a `literal` trait, the score is the class index: `0` for `"statsmodels"`, `1` for `"scikit-learn"`, `2` for `"other"`.
+
+### Inspect the Investigation Trace
+
+Each agentic trait produces an investigation trace that records the agent's reasoning and findings:
+
+```python
+if rubric_result.rubric.agentic_trait_investigation_traces:
+    for name, trace in rubric_result.rubric.agentic_trait_investigation_traces.items():
+        print(f"Trait: {name}")
+        print(f"Trace ({len(trace)} chars):")
+        print(trace[:300])
+```
+
+The investigation trace is useful for debugging and auditing. It shows what files the agent examined, what patterns it found, and how it reached its classification. Unlike `LLMRubricTrait` (which receives only the response text), the agentic trait's trace reflects direct inspection of workspace artifacts.
+
+### Pipeline Stages for Combined Evaluation
+
+When `evaluation_mode="template_and_rubric"` with both `agentic_parsing=True` and agentic rubric traits, the pipeline executes:
+
+| Stage | Name | What It Does |
+|-------|------|-------------|
+| 2 | GenerateAnswer | Answering agent runs in the workspace |
+| 7b | AgenticParseTemplate | Investigation agent examines workspace, parser extracts into template schema |
+| 8 | VerifyTemplate | Runs verification primitives against ground truth |
+| 11b | AgenticRubricEvaluation | Separate agent session(s) investigate the workspace for each agentic trait |
+| 13 | FinalizeResult | Stores all results, including agentic trait scores and traces |
+
+Stage 7b and Stage 11b each launch independent agent sessions. The Stage 7b agent fills in the template schema; the Stage 11b agent(s) produce rubric scores. They do not share context or state with each other.
+
+For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation.md). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/agentic-traits.md).
+
+---
+
 ## Related Pages
 
 - [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation.md): Conceptual overview, context modes, independence guarantees
 - [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation.md): Pipeline internals, stage architecture, investigation prompts
+- [Agentic Traits (Concepts)](../../core_concepts/agentic-traits.md): `AgenticRubricTrait` API, kinds, context modes
+- [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation.md): Stage 11b internals, investigation prompts, extraction
 - [MCP Agent Evaluation](mcp-agent-evaluation.ipynb): Evaluating tool-using agents with MCP servers
 - [Basic Verification](basic-verification.ipynb): Simplest verification path (template-only, no agents)
 - [Answer Templates](../../core_concepts/answer-templates.md): `VerifiedField` API and verification primitives

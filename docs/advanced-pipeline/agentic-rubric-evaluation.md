@@ -2,7 +2,7 @@
 
 This page covers the internal machinery of Stage 11b (AgenticRubricEvaluation): how the stage dispatches to individual or shared agent strategies, how the evaluator runs investigation and extraction, and how results flow into FinalizeResult. It is for contributors and power users who need to understand what happens under the hood.
 
-For a conceptual overview of agentic traits and how they differ from other trait types, see the [agentic traits concept page](../core_concepts/agentic-traits.md). For the general pipeline architecture, see [verification-pipeline.md](../core_concepts/verification-pipeline.md). For the parallel Stage 7b internals (agentic template parsing), see [agentic-evaluation.md](agentic-evaluation.md).
+For a conceptual overview of agentic traits and how they differ from other trait types, see the [agentic traits concept page](../core_concepts/rubrics/agentic-traits.md). For the general pipeline architecture, see [verification-pipeline.md](../core_concepts/verification-pipeline.md). For the parallel Stage 7b internals (agentic template parsing), see [agentic-evaluation.md](agentic-evaluation.md).
 
 ## 1. Pipeline Position
 
@@ -256,7 +256,7 @@ In `rubric_only` mode, Stage 11b appears after the standard rubric + deep judgme
 
 ## 9. Next Steps
 
-- [Agentic Traits](../core_concepts/agentic-traits.md): conceptual overview and usage guide
+- [Agentic Traits](../core_concepts/rubrics/agentic-traits.md): conceptual overview and usage guide
 - [Agentic Evaluation](agentic-evaluation.md): Stage 7b internals (agentic template parsing)
 - [Verification Pipeline](../core_concepts/verification-pipeline.md): the 13-stage execution engine
 - [Rubrics](../core_concepts/rubrics/index.md): rubric architecture and trait types

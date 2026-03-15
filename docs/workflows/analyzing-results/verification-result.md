@@ -250,6 +250,8 @@ Scores are split by trait type for type-safe access:
 | `regex_trait_scores` | `dict[str, bool] \| None` | Regex-based traits (boolean pass/fail) |
 | `callable_trait_scores` | `dict[str, bool \| int] \| None` | Callable-based traits (boolean or integer score) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric traits with nested metrics (e.g., `{"extraction": {"precision": 1.0, "recall": 0.8, "f1": 0.89}}`) |
+| `agentic_trait_scores` | `dict[str, int \| bool] \| None` | Agentic rubric trait scores, keyed by trait name. Same value types as LLM traits (boolean, integer score, or class index for literal kind). |
+| `agentic_trait_investigation_traces` | `dict[str, str] \| None` | Raw investigation traces from agentic trait agents, keyed by trait name. Each trace is the full text of the agent's investigation session. |
 
 ### Metric Trait Details
 
