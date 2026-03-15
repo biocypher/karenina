@@ -5,14 +5,17 @@ This package provides:
 - LLMTraitEvaluator: LLM-based subjective trait assessment
 - MetricTraitEvaluator: Confusion matrix metrics (precision, recall, F1)
 - RubricDeepJudgmentHandler: Multi-stage deep judgment evaluation
+- AgenticTraitEvaluator: Agent-based investigate-then-extract evaluation
 """
 
+from .agentic_trait import AgenticTraitEvaluator
 from .deep_judgment import RubricDeepJudgmentHandler
 from .evaluator import RubricEvaluator
 from .llm_trait import LLMTraitEvaluator
 from .metric_trait import MetricTraitEvaluator
 
 __all__ = [
+    "AgenticTraitEvaluator",
     "LLMTraitEvaluator",
     "MetricTraitEvaluator",
     "RubricDeepJudgmentHandler",
