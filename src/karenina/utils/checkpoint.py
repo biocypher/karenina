@@ -151,6 +151,7 @@ def add_question_to_benchmark(
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     answer_notes: str | None = None,
+    workspace_path: str | None = None,
 ) -> str:
     """
     Add a question to a JSON-LD benchmark.
@@ -169,6 +170,7 @@ def add_question_to_benchmark(
         keywords: Optional keywords list
         few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
         answer_notes: Optional free-text notes about how the answer should be interpreted
+        workspace_path: Optional relative path to question workspace directory
 
     Returns:
         The question ID that was added
@@ -216,6 +218,9 @@ def add_question_to_benchmark(
 
     if answer_notes:
         additional_props.append(SchemaOrgPropertyValue(name="answer_notes", value=answer_notes))
+
+    if workspace_path:
+        additional_props.append(SchemaOrgPropertyValue(name="workspace_path", value=workspace_path))
 
     # Convert question-specific rubric traits to ratings
     ratings = None
@@ -291,6 +296,7 @@ def extract_questions_from_benchmark(
         custom_metadata = {}
         few_shot_examples = None
         answer_notes = None
+        workspace_path = None
 
         if question.additionalProperty:
             for prop in question.additionalProperty:
@@ -313,6 +319,8 @@ def extract_questions_from_benchmark(
                         few_shot_examples = prop.value
                 elif prop.name == "answer_notes":
                     answer_notes = prop.value
+                elif prop.name == "workspace_path":
+                    workspace_path = prop.value
                 elif prop.name.startswith("custom_"):
                     key = prop.name.replace("custom_", "")
                     custom_metadata[key] = prop.value
@@ -365,6 +373,7 @@ def extract_questions_from_benchmark(
                 "keywords": question.keywords or getattr(item, "keywords", None),
                 "few_shot_examples": few_shot_examples,
                 "answer_notes": answer_notes,
+                "workspace_path": workspace_path,
             }
         )
 
