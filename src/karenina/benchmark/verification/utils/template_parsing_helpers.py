@@ -67,6 +67,35 @@ def _extract_attribute_names_from_class(answer_class: type[BaseAnswer]) -> list[
     return [name for name in field_names if name not in ("id", "correct", "regex")]
 
 
+def is_regex_only_template(answer_class: type[BaseAnswer]) -> bool:
+    """Check if an Answer class is regex-only (no user-defined fields to parse).
+
+    A template is "regex-only" when it has no user-defined Pydantic fields
+    beyond the base fields (id, correct, regex). Such templates rely entirely
+    on regex pattern matching against the raw LLM response and do not require
+    an LLM judge for parsing.
+
+    Args:
+        answer_class: A Pydantic BaseAnswer subclass
+
+    Returns:
+        True if the template has no user-defined fields (regex-only)
+
+    Example:
+        >>> class RegexOnly(BaseAnswer):
+        ...     def model_post_init(self, __context):
+        ...         self.regex = {"check": {"pattern": r"\\d+", "expected": "42", "match_type": "exact"}}
+        >>> is_regex_only_template(RegexOnly)
+        True
+
+        >>> class WithFields(BaseAnswer):
+        ...     drug_target: str
+        >>> is_regex_only_template(WithFields)
+        False
+    """
+    return len(_extract_attribute_names_from_class(answer_class)) == 0
+
+
 def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]) -> dict[str, str]:
     """Extract attribute descriptions from JSON schema format instructions.
 
@@ -357,50 +386,16 @@ def extract_ground_truth_from_template_code(template_code: str) -> dict[str, Any
     Raises:
         Exception: If the template code cannot be executed or Answer class cannot be instantiated
     """
-    # Execute the template code to get the Answer class
-    # Create a namespace with necessary imports
-    global_ns = {
-        "__builtins__": __builtins__,
-        "BaseAnswer": BaseAnswer,
-    }
+    from .class_discovery import find_answer_class
+    from .template_validation import _build_exec_namespace
 
-    # Import commonly used pydantic and typing components
-    try:
-        from pydantic import Field
-
-        global_ns["Field"] = Field
-    except ImportError:
-        pass
-
-    try:
-        from typing import Any, Literal, Optional, Union
-
-        global_ns.update(
-            {
-                "List": list,
-                "Dict": dict,
-                "Optional": Optional,
-                "Union": Union,
-                "Any": Any,
-                "Literal": Literal,
-            }
-        )
-    except ImportError:
-        pass
-
+    global_ns = _build_exec_namespace()
     local_ns: dict[str, Any] = {}
 
-    # Execute the template code
     exec(template_code, global_ns, local_ns)
 
-    # Check if Answer class was defined
-    if "Answer" not in local_ns:
-        raise ValueError("No 'Answer' class found in template code")
-
-    Answer = local_ns["Answer"]
-
-    # Store the template code for exec-created classes
-    Answer._source_code = template_code
+    Answer = find_answer_class(local_ns)
+    Answer._source_code = template_code  # type: ignore[attr-defined]
 
     # Create test instance and extract ground truth
     _, ground_truth = create_test_instance_from_answer_class(Answer)
@@ -418,48 +413,32 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
         List of trait objects found in the template (LLM, regex, callable, or metric)
     """
     try:
-        # Prepare minimal execution environment similar to template validation
         from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 
-        global_ns = {
-            "__builtins__": __builtins__,
-            "BaseAnswer": BaseAnswer,
-            "Rubric": Rubric,
-            "LLMRubricTrait": LLMRubricTrait,
-            "RegexTrait": RegexTrait,
-            "CallableTrait": CallableTrait,
-            "MetricRubricTrait": MetricRubricTrait,
-        }
-        try:
-            from pydantic import Field
+        from .class_discovery import find_answer_class
+        from .template_validation import _build_exec_namespace
 
-            global_ns["Field"] = Field
-        except Exception:
-            pass
-        try:
-            from typing import Any, ClassVar, Literal, Optional, Union
-
-            global_ns.update(
-                {
-                    "List": list,
-                    "Dict": dict,
-                    "Optional": Optional,
-                    "Union": Union,
-                    "Any": Any,
-                    "Literal": Literal,
-                    "ClassVar": ClassVar,
-                }
-            )
-        except Exception:
-            pass
+        global_ns = _build_exec_namespace()
+        # Add rubric types to namespace
+        global_ns.update(
+            {
+                "Rubric": Rubric,
+                "LLMRubricTrait": LLMRubricTrait,
+                "RegexTrait": RegexTrait,
+                "CallableTrait": CallableTrait,
+                "MetricRubricTrait": MetricRubricTrait,
+            }
+        )
 
         local_ns: dict[str, Any] = {}
         exec(answer_template, global_ns, local_ns)
 
         # Store the template code for exec-created classes
-        if "Answer" in local_ns:
-            Answer = local_ns["Answer"]
-            Answer._source_code = answer_template
+        try:
+            Answer = find_answer_class(local_ns)
+            Answer._source_code = answer_template  # type: ignore[attr-defined]
+        except ValueError:
+            pass  # No Answer class in this template (rubric-only)
 
         # Heuristics: check for rubric on Answer class or top-level var
         extracted_traits: list[Any] = []

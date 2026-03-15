@@ -111,6 +111,7 @@ def extract_questions_from_file(
     author_affiliation_column: str | None = None,
     url_column: str | None = None,
     keywords_columns: list[dict[str, str]] | None = None,
+    answer_notes_column: str | None = None,
 ) -> list[tuple[Question, dict[str, Any]]]:
     """
     Extract questions from a file with flexible column selection and optional metadata.
@@ -126,6 +127,7 @@ def extract_questions_from_file(
         url_column: Optional column name for URLs
         keywords_columns: Optional list of keyword column configurations with individual separators
             e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
+        answer_notes_column: Optional column name for answer interpretation notes
 
     Returns:
         List of tuples containing (Question, metadata_dict)
@@ -163,6 +165,10 @@ def extract_questions_from_file(
         columns_to_use.append(url_column)
         metadata_columns["url"] = url_column
 
+    if answer_notes_column and answer_notes_column in df.columns:
+        columns_to_use.append(answer_notes_column)
+        metadata_columns["answer_notes"] = answer_notes_column
+
     # Add all keyword columns
     if keywords_columns:
         keyword_cols_info = []
@@ -188,11 +194,17 @@ def extract_questions_from_file(
     # Create Question instances with metadata
     results = []
     for _, row in df_filtered.iterrows():
+        # Determine answer_notes value
+        answer_notes_value = None
+        if "answer_notes" in metadata_columns and pd.notna(row[metadata_columns["answer_notes"]]):
+            answer_notes_value = str(row[metadata_columns["answer_notes"]]).strip() or None
+
         # Create the Question
         question = Question(
             question=row[question_column],
             raw_answer=row[answer_column],
-            tags=[],  # No tags in the source data
+            keywords=[],  # No keywords in the source data
+            answer_notes=answer_notes_value,
         )
 
         # Extract metadata
@@ -273,11 +285,14 @@ def generate_questions_file(
 
         var_name = f"question_{i + 1}"
         question_objects.append(var_name)
+        answer_notes_line = ""
+        if question.answer_notes:
+            answer_notes_line = f',\n    answer_notes="""{question.answer_notes}"""'
         content += f'''{var_name} = Question(
     id="{question.id}",
     question="""{question.question}""",
     raw_answer="""{question.raw_answer}""",
-    tags={question.tags}
+    keywords={question.keywords}{answer_notes_line}
 )
 
 '''
@@ -311,6 +326,9 @@ def questions_to_json(questions: list[tuple[Question, dict[str, Any]]]) -> dict[
             "raw_answer": question.raw_answer,
         }
 
+        if question.answer_notes:
+            question_data["answer_notes"] = question.answer_notes
+
         # Add metadata if present
         if metadata:
             question_data["metadata"] = metadata
@@ -332,6 +350,7 @@ def extract_and_generate_questions(
     author_affiliation_column: str | None = None,
     url_column: str | None = None,
     keywords_columns: list[dict[str, str]] | None = None,
+    answer_notes_column: str | None = None,
 ) -> dict[str, Any] | None:
     """
     Extract questions from file and generate a Python file with Question instances.
@@ -349,6 +368,7 @@ def extract_and_generate_questions(
         url_column: Optional column name for URLs
         keywords_columns: Optional list of keyword column configurations with individual separators
             e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
+        answer_notes_column: Optional column name for answer interpretation notes
 
     Returns:
         If return_json is True, returns dictionary in webapp format
@@ -374,6 +394,7 @@ def extract_and_generate_questions(
         author_affiliation_column=author_affiliation_column,
         url_column=url_column,
         keywords_columns=keywords_columns,
+        answer_notes_column=answer_notes_column,
     )
 
     if not questions:

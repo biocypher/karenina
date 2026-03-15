@@ -176,7 +176,9 @@ def test_get_finished_questions() -> None:
     results = benchmark.get_finished_questions()
 
     assert len(results) == 2
-    assert all(q["finished"] is True for q in results)
+    # Verify all returned questions are actually finished via the registry
+    result_ids = {q["id"] for q in results}
+    assert all(benchmark._base._question_registry[q_id].finished is True for q_id in result_ids)
 
 
 @pytest.mark.unit
@@ -209,7 +211,9 @@ def test_get_unfinished_questions() -> None:
     results = benchmark.get_unfinished_questions()
 
     assert len(results) == 2
-    assert all(q.get("finished") is not True for q in results)
+    # Verify all returned questions are actually unfinished via the registry
+    result_ids = {q["id"] for q in results}
+    assert all(benchmark._base._question_registry[q_id].finished is False for q_id in result_ids)
 
 
 @pytest.mark.unit

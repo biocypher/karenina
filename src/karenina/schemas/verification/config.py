@@ -103,6 +103,9 @@ class VerificationConfig(BaseModel):
     # Sufficiency detection settings
     sufficiency_enabled: bool = False  # Enable trace sufficiency detection
 
+    # Extraction hint settings (controls whether hints are appended to the parsing prompt)
+    include_extraction_hints: bool = True  # Include extraction hints in the parsing prompt
+
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
     embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
@@ -569,7 +572,36 @@ class VerificationConfig(BaseModel):
 
         Args:
             base: Optional base config (e.g., from a preset). If None, starts from defaults.
-            **kwargs: Override values. None means "don't override".
+            answering_model: Override for the answering model name.
+            answering_provider: Override for the answering model provider.
+            answering_id: Override for the answering model identifier.
+            answering_interface: Override for the answering adapter interface.
+            parsing_model: Override for the parsing model name.
+            parsing_provider: Override for the parsing model provider.
+            parsing_id: Override for the parsing model identifier.
+            parsing_interface: Override for the parsing adapter interface.
+            temperature: Override for the LLM temperature.
+            manual_traces: Override for manual traces data.
+            replicate_count: Override for the number of replicates.
+            abstention: Override for abstention detection flag.
+            sufficiency: Override for sufficiency checking flag.
+            embedding_check: Override for embedding check flag.
+            deep_judgment: Override for deep judgment flag.
+            evaluation_mode: Override for evaluation mode.
+            embedding_threshold: Override for embedding similarity threshold.
+            embedding_model: Override for embedding model name.
+            async_execution: Override for async execution flag.
+            async_workers: Override for number of async workers.
+            use_full_trace_for_template: Override for full trace template flag.
+            use_full_trace_for_rubric: Override for full trace rubric flag.
+            deep_judgment_rubric_mode: Override for deep judgment rubric mode.
+            deep_judgment_rubric_excerpts: Override for rubric excerpts flag.
+            deep_judgment_rubric_max_excerpts: Override for max rubric excerpts.
+            deep_judgment_rubric_fuzzy_threshold: Override for rubric fuzzy threshold.
+            deep_judgment_rubric_retry_attempts: Override for rubric retry attempts.
+            deep_judgment_rubric_search: Override for rubric search flag.
+            deep_judgment_rubric_search_tool: Override for rubric search tool.
+            deep_judgment_rubric_config: Override for rubric config dict.
 
         Returns:
             A new VerificationConfig with overrides applied.

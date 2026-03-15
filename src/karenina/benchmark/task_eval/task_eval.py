@@ -16,12 +16,13 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
+    from karenina.ports.messages import Message
     from karenina.schemas.entities import Question, Rubric
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 
-from ..verification.evaluators import RubricEvaluator
+from .helpers import merge_logs_and_traces
 from .models import LogEvent, StepEval, TaskEvalResult
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class TaskEval:
         task_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         callable_registry: dict[str, Callable[[str], bool]] | None = None,
+        merge_strategy: Literal["concatenate", "traces_only"] = "concatenate",
     ) -> None:
         """Initialize TaskEval instance.
 
@@ -53,10 +55,14 @@ class TaskEval:
             task_id: Optional task identifier for tracking
             metadata: Optional metadata dictionary
             callable_registry: Registry of callable functions for manual trait evaluation
+            merge_strategy: Default strategy for merging logs before evaluation.
+                "concatenate" combines text and trace logs; "traces_only" uses
+                only logs with trace_messages.
         """
         self.task_id = task_id
         self.metadata = metadata or {}
         self.callable_registry = callable_registry or {}
+        self.merge_strategy: Literal["concatenate", "traces_only"] = merge_strategy
 
         # Storage for logs, questions, and rubrics
         self.global_logs: list[LogEvent] = []
@@ -72,52 +78,77 @@ class TaskEval:
 
     def log(
         self,
-        text: str | dict[str, str],
+        text: str,
         step_id: str | None = None,
         target: Literal["global", "step", "both"] = "both",
         level: Literal["debug", "info", "warn", "error"] = "info",
         tags: list[str] | None = None,
-        payload: dict[str, Any] | None = None,
     ) -> None:
-        """Log an event or response.
+        """Log a text event or response.
 
-        This is the primary method for recording outputs that will be evaluated.
+        This is the primary method for recording text outputs that will be evaluated.
         All logged text is considered as potential answers for evaluation.
 
         Args:
-            text: Log message text (str) or structured dict trace (dict[str, str])
-                  When dict is provided, each key-value pair can be evaluated separately
+            text: Log message text
             step_id: Optional step ID for step-specific logs
             target: Where to log ("global", "step", or "both")
             level: Log level (debug, info, warn, error)
             tags: Optional tags for categorization
-            payload: Optional additional data
 
         Example:
             task.log("The answer is 42")
             task.log("Step 1 complete", step_id="calculation", level="info")
-            task.log({"reasoning": "...", "action": "...", "result": "..."})
-            task.log({"plan": "Create API"}, step_id="planning")
         """
-        import json
+        log_event = LogEvent(
+            level=level,
+            text=text,
+            tags=tags,
+        )
 
-        # Handle dict traces
-        if isinstance(text, dict):
-            log_text = json.dumps(text, ensure_ascii=False)
-            is_dict = True
-            dict_keys_list = list(text.keys())
-        else:
-            log_text = text
-            is_dict = False
-            dict_keys_list = None
+        if target in ("global", "both"):
+            self.global_logs.append(log_event)
+
+        if target in ("step", "both") and step_id:
+            if step_id not in self.step_logs:
+                self.step_logs[step_id] = []
+            self.step_logs[step_id].append(log_event)
+
+    def log_trace(
+        self,
+        messages: "list[Message] | str",
+        step_id: str | None = None,
+        target: Literal["global", "step", "both"] = "both",
+        level: Literal["debug", "info", "warn", "error"] = "info",
+        tags: list[str] | None = None,
+    ) -> None:
+        """Log a structured conversation trace.
+
+        Records Message objects representing a full conversation trace
+        (assistant responses, tool calls, tool results). When a string is
+        provided, it is automatically wrapped as a single assistant Message.
+
+        Args:
+            messages: List of Message objects, or a string (auto-wrapped as
+                assistant Message).
+            step_id: Optional step ID for step-specific logs.
+            target: Where to log ("global", "step", or "both").
+            level: Log level (debug, info, warn, error).
+            tags: Optional tags for categorization.
+
+        Example:
+            from karenina.ports.messages import Message
+            task.log_trace([Message.assistant("The answer is 42")])
+            task.log_trace("Simple text response")
+        """
+        from karenina.ports.messages import Message
+
+        trace_messages = [Message.assistant(messages)] if isinstance(messages, str) else messages
 
         log_event = LogEvent(
             level=level,
-            text=log_text,
             tags=tags,
-            payload=payload,
-            is_dict_structured=is_dict,
-            dict_keys=dict_keys_list,
+            trace_messages=trace_messages,
         )
 
         if target in ("global", "both"):
@@ -152,6 +183,59 @@ class TaskEval:
         else:
             self.global_questions.append(question_obj)
 
+    def add_template(
+        self,
+        template_class: type,
+        step_id: str | None = None,
+    ) -> None:
+        """Add an answer template class for correctness evaluation.
+
+        Accepts a BaseAnswer subclass directly. The class is converted to
+        source code and stored as a synthetic question for the pipeline.
+        No question text is required.
+
+        Args:
+            template_class: A BaseAnswer subclass with fields and verify().
+            step_id: Optional step ID for step-specific templates.
+
+        Example:
+            class Answer(BaseAnswer):
+                target: str = Field(description="The drug target")
+                def ground_truth(self):
+                    self.correct = {"target": "BCL2"}
+                def verify(self) -> bool:
+                    return self.target.upper() == self.correct["target"]
+
+            task.add_template(Answer)
+        """
+        import inspect
+        import textwrap
+
+        try:
+            source = textwrap.dedent(inspect.getsource(template_class))
+        except OSError:
+            raise TypeError(
+                f"Cannot retrieve source code for {template_class.__name__}. "
+                f"add_template() requires a class defined in a .py file or Jupyter notebook. "
+                f"For dynamically defined classes, pass template source code as a string "
+                f"via add_question() instead."
+            ) from None
+
+        # Prepend standard imports so the template is self-contained
+        template_code = (
+            "from karenina.schemas.entities import BaseAnswer\n"
+            "from pydantic import Field\n"
+            "from typing import Any\n\n" + source
+        )
+
+        question_dict: dict[str, Any] = {
+            "id": template_class.__name__.lower(),
+            "question": "",
+            "raw_answer": "",
+            "answer_template": template_code,
+        }
+        self.add_question(question_dict, step_id=step_id)
+
     def add_rubric(self, rubric_obj: "Rubric", step_id: str | None = None) -> None:
         """Add a rubric for quality evaluation.
 
@@ -175,8 +259,7 @@ class TaskEval:
             self.global_rubrics.append(rubric_obj)
 
     def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
-        """
-        Register a callable function for manual trait evaluation.
+        """Register a callable function for manual trait evaluation.
 
         Args:
             name: Name to register the function under
@@ -185,7 +268,6 @@ class TaskEval:
         Raises:
             ValueError: If function doesn't have correct signature
         """
-        # Basic validation of function signature
         import inspect
 
         sig = inspect.signature(func)
@@ -194,18 +276,21 @@ class TaskEval:
         if len(params) != 1:
             raise ValueError(f"Callable '{name}' must have exactly one parameter, got {len(params)}")
 
-        # Store the function
         self.callable_registry[name] = func
 
-    def evaluate(self, config: VerificationConfig, step_id: str | None = None) -> TaskEvalResult:
+    def evaluate(
+        self,
+        config: VerificationConfig,
+        step_id: str | None = None,
+        merge_strategy: Literal["concatenate", "traces_only"] | None = None,
+    ) -> TaskEvalResult:
         """Evaluate logged outputs against questions and rubrics.
-
-        This method evaluates all logged outputs against the defined questions
-        and rubrics to assess quality and characterize failure modes.
 
         Args:
             config: Verification configuration (parsing models only)
             step_id: Optional step ID to evaluate specific step (otherwise global)
+            merge_strategy: Optional override for the instance merge_strategy.
+                If None, uses the instance default.
 
         Returns:
             TaskEvalResult with evaluation outcomes and failure characterization
@@ -217,29 +302,30 @@ class TaskEval:
             )
             result = task.evaluate(config)
         """
-        if step_id:
-            return self._evaluate_step(config, step_id)
-        else:
-            return self._evaluate_global(config)
+        effective_strategy = merge_strategy or self.merge_strategy
 
-    def _evaluate_global(self, config: VerificationConfig) -> TaskEvalResult:
+        if step_id:
+            return self._evaluate_step(config, step_id, effective_strategy)
+        else:
+            return self._evaluate_global(config, effective_strategy)
+
+    def _evaluate_global(
+        self, config: VerificationConfig, merge_strategy: Literal["concatenate", "traces_only"]
+    ) -> TaskEvalResult:
         """Evaluate all global logs against global questions and rubrics.
 
-        In global evaluation, all global logs are treated as potential answers
-        for all global questions, allowing comprehensive evaluation across
-        the entire logged output. After completing global evaluation, this
-        method automatically evaluates all available steps as well.
+        After completing global evaluation, automatically evaluates all
+        available steps as well.
 
         Args:
             config: Verification configuration with parsing models
+            merge_strategy: Strategy for merging logs
 
         Returns:
             TaskEvalResult with both global evaluation results and all step evaluations
         """
-        # Run evaluation loop for global context (step_id=None)
-        step_eval = self._run_evaluation_loop(config, step_id=None)
+        step_eval = self._run_evaluation_loop(config, step_id=None, merge_strategy=merge_strategy)
 
-        # Build result with global evaluation
         task_result = TaskEvalResult(
             task_id=self.task_id,
             metadata=self.metadata,
@@ -247,44 +333,48 @@ class TaskEval:
         )
 
         # After global evaluation, automatically evaluate all available steps
-        for step_id in self._get_available_step_ids():
-            step_result = self._evaluate_step_internal(config, step_id)
-            task_result.per_step[step_id] = step_result
+        for sid in self._get_available_step_ids():
+            step_result = self._evaluate_step_internal(config, sid, merge_strategy)
+            task_result.per_step[sid] = step_result
 
         return task_result
 
-    def _evaluate_step(self, config: VerificationConfig, step_id: str) -> TaskEvalResult:
+    def _evaluate_step(
+        self,
+        config: VerificationConfig,
+        step_id: str,
+        merge_strategy: Literal["concatenate", "traces_only"],
+    ) -> TaskEvalResult:
         """Evaluate step-specific logs against step-specific questions and rubrics.
-
-        In step evaluation, only logs from the specified step are evaluated
-        against questions and rubrics defined for that step, providing
-        focused evaluation for specific workflow stages.
 
         Args:
             config: Verification configuration with parsing models
             step_id: ID of the step to evaluate
+            merge_strategy: Strategy for merging logs
 
         Returns:
             TaskEvalResult with step-specific evaluation results
         """
-        step_eval = self._evaluate_step_internal(config, step_id)
+        step_eval = self._evaluate_step_internal(config, step_id, merge_strategy)
         return self._build_result(step_eval, step_id=step_id)
 
-    def _evaluate_step_internal(self, config: VerificationConfig, step_id: str) -> StepEval:
+    def _evaluate_step_internal(
+        self,
+        config: VerificationConfig,
+        step_id: str,
+        merge_strategy: Literal["concatenate", "traces_only"],
+    ) -> StepEval:
         """Internal method to evaluate a single step and return StepEval.
-
-        This method performs the actual step evaluation logic and returns
-        just the StepEval object, allowing it to be used both for standalone
-        step evaluation and as part of global evaluation.
 
         Args:
             config: Verification configuration with parsing models
             step_id: ID of the step to evaluate
+            merge_strategy: Strategy for merging logs
 
         Returns:
             StepEval with step-specific evaluation results
         """
-        return self._run_evaluation_loop(config, step_id=step_id)
+        return self._run_evaluation_loop(config, step_id=step_id, merge_strategy=merge_strategy)
 
     # =============================================================================
     # DATA PREPARATION METHODS
@@ -327,23 +417,29 @@ class TaskEval:
                 "id": question.id,
                 "question": question.question,
                 "raw_answer": question.raw_answer,
-                "keywords": question.tags,
+                "keywords": question.keywords,
                 "few_shot_examples": question.few_shot_examples,
                 "answer_template": getattr(question, "answer_template", None),
             }
         return question
 
-    def _collect_logs_for_evaluation(self, logs: list[LogEvent]) -> list[str]:
-        """Collect all logged text for evaluation.
+    def _collect_logs_for_evaluation(
+        self,
+        logs: list[LogEvent],
+        merge_strategy: Literal["concatenate", "traces_only"],
+    ) -> "tuple[str, list[Message] | None]":
+        """Collect and merge all logged data for evaluation.
 
-        Returns all non-empty log texts that could be potential responses.
-        This allows TaskEval to work with simple log() calls.
+        Delegates to merge_logs_and_traces() for the actual merge logic.
+
+        Args:
+            logs: List of LogEvent objects.
+            merge_strategy: Strategy for merging logs.
+
+        Returns:
+            Tuple of (response_text_string, optional_message_list).
         """
-        outputs = []
-        for log in logs:
-            if log.text and len(log.text.strip()) > 0:
-                outputs.append(log.text)
-        return outputs
+        return merge_logs_and_traces(logs, strategy=merge_strategy)
 
     def _detect_evaluation_mode(self, context: "EvaluationContext") -> str:
         """Auto-detect evaluation mode based on attached questions and rubrics.
@@ -357,10 +453,8 @@ class TaskEval:
         Raises:
             ValueError: If neither templates nor rubrics are provided
         """
-        # Check if questions have answer templates
         has_templates = any(self._normalize_question(q).get("answer_template") for q in context.questions)
 
-        # Check if rubrics are provided
         has_rubrics = bool(
             context.merged_rubric
             and (
@@ -387,36 +481,37 @@ class TaskEval:
     # EVALUATION LOOP
     # =============================================================================
 
-    def _run_evaluation_loop(self, config: VerificationConfig, step_id: str | None) -> StepEval:
+    def _run_evaluation_loop(
+        self,
+        config: VerificationConfig,
+        step_id: str | None,
+        merge_strategy: Literal["concatenate", "traces_only"],
+    ) -> StepEval:
         """Run the evaluation loop for either global or step-specific context.
-
-        This method contains the shared evaluation logic for both global and step
-        evaluation, reducing code duplication between _evaluate_global and
-        _evaluate_step_internal.
 
         Args:
             config: Verification configuration with parsing models
             step_id: Optional step ID (None for global evaluation)
+            merge_strategy: Strategy for merging logs
 
         Returns:
             StepEval with evaluation results
         """
-        import json
-
-        # Get evaluation context (global or step-specific)
         context = self._get_evaluation_context(step_id=step_id)
-
-        # Detect evaluation mode based on what's attached
         evaluation_mode = self._detect_evaluation_mode(context)
-
-        # Initialize result tracking
         step_eval = StepEval()
 
-        # Collect logs for evaluation (do this once)
-        relevant_logs = self._collect_logs_for_evaluation(context.logs)
+        # Collect and merge logs
+        concatenated_logs, trace_messages = self._collect_logs_for_evaluation(context.logs, merge_strategy)
 
-        # Check for dict-structured logs for per-key evaluation in rubric_only mode
-        dict_logs = [log for log in context.logs if log.is_dict_structured]
+        # Auto-extract agent metrics when Message traces are present
+        agent_metrics: dict[str, Any] | None = None
+        if trace_messages:
+            from karenina.benchmark.verification.utils.trace_agent_metrics import (
+                extract_agent_metrics_from_messages,
+            )
+
+            agent_metrics = extract_agent_metrics_from_messages(trace_messages)
 
         # Determine how many replicates to run
         replicate_count = getattr(config, "replicate_count", 1)
@@ -427,63 +522,14 @@ class TaskEval:
         step_prefix = f"step_{step_id}_" if step_id else ""
         step_suffix = f" in step {step_id}" if step_id else ""
 
-        # Replicate loop: run entire evaluation N times
         for _ in range(replicate_count):
-            # In rubric_only mode with dict logs, create synthetic questions per key
-            if evaluation_mode == "rubric_only" and dict_logs:
-                # Extract unique keys from all dict logs
-                all_dict_keys: set[str] = set()
-                for log in dict_logs:
-                    if log.dict_keys:
-                        all_dict_keys.update(log.dict_keys)
-
-                # Create synthetic questions for each key
-                for key in sorted(all_dict_keys):  # Sort for deterministic order
-                    # Collect values for this key across all dict logs
-                    key_values = []
-                    for log in dict_logs:
-                        try:
-                            log_dict = json.loads(log.text)
-                            if key in log_dict:
-                                key_values.append(log_dict[key])
-                        except json.JSONDecodeError:
-                            continue
-
-                    # Concatenate values for this key
-                    key_response = "\n\n".join(key_values) if key_values else ""
-
-                    if not key_response:
-                        continue
-
-                    # Create synthetic question for this key
-                    synthetic_question = {
-                        "id": f"{step_prefix}dict_key_{key}",
-                        "question": f"Evaluate the '{key}' output{step_suffix}",
-                        "raw_answer": "",  # No ground truth for rubric-only
-                        "answer_template": None,  # No template in rubric_only mode
-                    }
-
-                    self._evaluate_and_store(
-                        step_eval=step_eval,
-                        question_dict=synthetic_question,
-                        response_text=key_response,
-                        parsing_model=config.parsing_models[0],
-                        rubric=context.merged_rubric,
-                        evaluation_mode=evaluation_mode,
-                        error_context=f"dict key {key}{step_suffix}",
-                    )
-
-            # Process regular questions (works for all modes)
-            concatenated_logs = "\n\n".join(relevant_logs) if relevant_logs else ""
-
-            # In rubric_only mode with no explicit questions and no dict logs,
-            # create a synthetic question for string logs
-            if evaluation_mode == "rubric_only" and not context.questions and not dict_logs and concatenated_logs:
+            # In rubric_only mode with no explicit questions, create a synthetic question
+            if evaluation_mode == "rubric_only" and not context.questions and concatenated_logs:
                 synthetic_question = {
                     "id": f"{step_prefix}rubric_only_eval",
                     "question": f"Evaluate the logged output{step_suffix}",
-                    "raw_answer": "",  # No ground truth for rubric-only
-                    "answer_template": None,  # No template in rubric_only mode
+                    "raw_answer": "",
+                    "answer_template": None,
                 }
 
                 self._evaluate_and_store(
@@ -493,19 +539,19 @@ class TaskEval:
                     parsing_model=config.parsing_models[0],
                     rubric=context.merged_rubric,
                     evaluation_mode=evaluation_mode,
-                    error_context=f"rubric-only string logs{step_suffix}",
+                    error_context=f"rubric-only logs{step_suffix}",
+                    trace_messages=trace_messages,
+                    agent_metrics=agent_metrics,
                 )
 
             for question in context.questions:
                 question_dict = self._normalize_question(question)
                 question_id = question_dict.get("id", "unknown")
 
-                # Check if question has answer template
                 answer_template = question_dict.get("answer_template")
 
                 # In rubric_only mode, templates are optional
                 if evaluation_mode != "rubric_only" and not answer_template:
-                    # Skip questions without templates in template modes
                     continue
 
                 self._evaluate_and_store(
@@ -516,6 +562,8 @@ class TaskEval:
                     rubric=context.merged_rubric,
                     evaluation_mode=evaluation_mode,
                     error_context=f"question {question_id}{step_suffix}",
+                    trace_messages=trace_messages,
+                    agent_metrics=agent_metrics,
                 )
 
         return step_eval
@@ -529,11 +577,10 @@ class TaskEval:
         rubric: "Rubric | None",
         evaluation_mode: str,
         error_context: str,
+        trace_messages: "list[Message] | None" = None,
+        agent_metrics: dict[str, Any] | None = None,
     ) -> None:
         """Evaluate a single question and store the result.
-
-        This helper method handles the common pattern of evaluating a question,
-        storing the result, and handling errors gracefully.
 
         Args:
             step_eval: StepEval object to store results in
@@ -543,69 +590,33 @@ class TaskEval:
             rubric: Rubric with evaluation traits (optional)
             evaluation_mode: One of "template_only", "rubric_only", "template_and_rubric"
             error_context: Context string for error messages
+            trace_messages: Optional list of Message objects for the trace
+            agent_metrics: Optional agent execution metrics
         """
         question_id = question_dict.get("id", "unknown")
         assert isinstance(question_id, str), "Question ID must be a string"
 
         try:
-            # Use main verification pipeline
             verification_result = self._evaluate(
                 question_dict=question_dict,
                 response_text=response_text,
                 parsing_model=parsing_model,
                 rubric=rubric,
                 evaluation_mode=evaluation_mode,
+                trace_messages=trace_messages,
+                agent_metrics=agent_metrics,
             )
 
-            # Store VerificationResult
             if question_id not in step_eval.verification_results:
                 step_eval.verification_results[question_id] = []
             step_eval.verification_results[question_id].append(verification_result)
 
         except Exception as e:
-            # Handle evaluation errors gracefully
             logger.warning("Evaluation failed for %s: %s", error_context, e)
 
     # =============================================================================
     # EVALUATION METHODS
     # =============================================================================
-
-    def _evaluate_response(
-        self, question_dict: dict[str, Any], response_text: str, parsing_model: ModelConfig, rubric: "Rubric | None"
-    ) -> dict[str, Any]:
-        """Evaluate a single response against a question and rubric using proper verification pipeline.
-
-        This method uses the same verification pipeline as the main benchmark system,
-        including answer template parsing, LLM-based parsing, and verify() method calls.
-
-        Args:
-            question_dict: Question information with answer_template
-            response_text: The logged response to evaluate
-            parsing_model: Model configuration for parsing
-            rubric: Quality rubric for evaluation
-
-        Returns:
-            Dictionary with evaluation results compatible with verification system
-        """
-        try:
-            # Check if we have an answer template for proper verification
-            answer_template = question_dict.get("answer_template")
-            if not answer_template:
-                # Fallback to simple verification if no template
-                return self._evaluate_response_fallback(question_dict, response_text, parsing_model, rubric)
-
-            # Use the existing verification pipeline
-            result = self._evaluate(question_dict, response_text, parsing_model, rubric)
-            return dict(result)  # Ensure we return dict[str, Any]
-
-        except Exception as e:
-            return {
-                "verify_result": False,
-                "verify_granular_result": {"agent_output": response_text, "error_during_evaluation": str(e)},
-                "verify_rubric": {},
-                "success": False,
-                "error": f"Evaluation failed: {str(e)}",
-            }
 
     def _evaluate(
         self,
@@ -614,6 +625,8 @@ class TaskEval:
         parsing_model: ModelConfig,
         rubric: "Rubric | None",
         evaluation_mode: str = "template_only",
+        trace_messages: "list[Message] | None" = None,
+        agent_metrics: dict[str, Any] | None = None,
     ) -> Any:
         """Evaluate response using main verification pipeline with cached answer data.
 
@@ -623,6 +636,8 @@ class TaskEval:
             parsing_model: Model to use for parsing/evaluation
             rubric: Rubric with evaluation traits (optional)
             evaluation_mode: One of "template_only", "rubric_only", "template_and_rubric"
+            trace_messages: Optional list of Message objects for the trace
+            agent_metrics: Optional agent execution metrics
 
         Returns:
             VerificationResult from the main verification pipeline
@@ -635,7 +650,6 @@ class TaskEval:
 
         # In rubric_only mode, template is optional
         if evaluation_mode == "rubric_only" and not answer_template:
-            # Create a minimal template that just captures the raw response
             answer_template = '''
 from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
@@ -656,7 +670,6 @@ class Answer(BaseAnswer):
         if not self._is_valid_md5_hash(question_id):
             question_id = hashlib.md5(question_id.encode()).hexdigest()
 
-        # Ensure answer_template is a string at this point
         assert isinstance(answer_template, str), "answer_template must be a string"
 
         # Create mock answering model (won't be invoked due to cached_answer_data)
@@ -664,79 +677,37 @@ class Answer(BaseAnswer):
             id="taskeval_mock",
             model_provider="mock",
             model_name="mock",
-            interface="langchain",  # Any interface, won't be called
+            interface="langchain",
             system_prompt="Mock model for TaskEval",
         )
 
         # Prepare cached answer data to inject logged output
-        cached_answer_data = {
+        cached_answer_data: dict[str, Any] = {
             "raw_llm_response": response_text,
             "recursion_limit_reached": False,
             "answering_mcp_servers": None,
             "usage_metadata": None,
-            "agent_metrics": None,
+            "agent_metrics": agent_metrics,
         }
 
-        # Call main verification pipeline with cached answer
+        # Include trace_messages in cached data (serialized as dicts)
+        if trace_messages:
+            cached_answer_data["trace_messages"] = [m.to_dict() for m in trace_messages]
+
         verification_result = run_single_model_verification(
             question_id=question_id,
             question_text=question_text,
             template_code=answer_template,
             answering_model=mock_answering_model,
             parsing_model=parsing_model,
-            rubric=rubric,  # Pass rubric - will be evaluated in RubricEvaluationStage (all 3 types!)
-            cached_answer_data=cached_answer_data,  # Skip generation, use our logged output
-            abstention_enabled=True,  # Enable abstention detection
-            rubric_evaluation_strategy="batch",  # Use batch strategy by default
-            evaluation_mode=evaluation_mode,  # Pass detected evaluation mode
+            rubric=rubric,
+            cached_answer_data=cached_answer_data,
+            abstention_enabled=True,
+            rubric_evaluation_strategy="batch",
+            evaluation_mode=evaluation_mode,
         )
 
-        return verification_result  # Return VerificationResult directly
-
-    def _evaluate_response_fallback(
-        self, question_dict: dict[str, Any], response_text: str, parsing_model: ModelConfig, rubric: "Rubric | None"
-    ) -> dict[str, Any]:
-        """Fallback evaluation when no answer template is available."""
-        # Use the original simple evaluation logic
-        expected_answer = question_dict.get("raw_answer", "")
-        correct = self._check_correctness(response_text, expected_answer)
-
-        # Rubric evaluation: use RubricEvaluator
-        rubric_scores: dict[str, int | bool] = {}
-        if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits):
-            try:
-                evaluator = RubricEvaluator(parsing_model, evaluation_strategy="batch")
-                question_text = question_dict.get("question", "")
-                rubric_scores, _, _ = evaluator.evaluate_rubric(
-                    question=question_text, answer=response_text, rubric=rubric
-                )
-            except Exception as e:
-                logger.warning("RubricEvaluator failed in fallback: %s", e)
-                rubric_scores = {}
-
-        return {
-            "verify_result": correct,
-            "verify_granular_result": {
-                "agent_output": response_text,
-                "expected_answer": expected_answer,
-                "evaluation_method": "taskeval_fallback_with_rubric_evaluator",
-            },
-            "verify_rubric": rubric_scores,
-            "success": True,
-            "error": None,
-        }
-
-    def _check_correctness(self, response_text: str, expected_answer: str) -> bool:
-        """Check if response is correct compared to expected answer."""
-        if not expected_answer:
-            # If no expected answer, consider non-empty response as valid
-            return len(response_text.strip()) > 0
-
-        # Check for semantic similarity (case-insensitive contains)
-        response_lower = response_text.lower().strip()
-        expected_lower = expected_answer.lower().strip()
-
-        return expected_lower in response_lower or response_lower in expected_lower
+        return verification_result
 
     # =============================================================================
     # HELPER METHODS
@@ -759,16 +730,12 @@ class Answer(BaseAnswer):
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []
         for rubric in rubrics:
-            # Add LLM trait names
             for trait in rubric.llm_traits:
                 all_trait_names.append(trait.name)
-            # Add regex trait names
             for regex_trait in rubric.regex_traits:
                 all_trait_names.append(regex_trait.name)
-            # Add callable trait names
             for callable_trait in rubric.callable_traits:
                 all_trait_names.append(callable_trait.name)
-            # Add metric trait names
             for metric_trait in rubric.metric_traits:
                 all_trait_names.append(metric_trait.name)
 
@@ -792,16 +759,12 @@ class Answer(BaseAnswer):
         unique_callable_traits: dict[str, CallableTrait] = {}
         unique_metric_traits: dict[str, MetricRubricTrait] = {}
         for rubric in rubrics:
-            # Combine LLM traits
             for trait in rubric.llm_traits:
                 unique_llm_traits[trait.name] = trait
-            # Combine regex traits
             for regex_trait in rubric.regex_traits:
                 unique_regex_traits[regex_trait.name] = regex_trait
-            # Combine callable traits
             for callable_trait in rubric.callable_traits:
                 unique_callable_traits[callable_trait.name] = callable_trait
-            # Combine metric traits
             for metric_trait in rubric.metric_traits:
                 unique_metric_traits[metric_trait.name] = metric_trait
 

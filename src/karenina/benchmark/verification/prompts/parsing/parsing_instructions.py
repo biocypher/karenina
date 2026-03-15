@@ -42,13 +42,15 @@ class TemplatePromptBuilder:
         self,
         has_tool_traces: bool = False,
         ground_truth: dict[str, Any] | None = None,
+        extraction_hints: dict[str, str] | None = None,
     ) -> str:
         """Build format-agnostic system prompt for template parsing.
 
         This function creates a composable system prompt with:
-        1. Base guidelines (always included) - extraction protocol and critical rules
-        2. Tool trace verification section (conditional - only when MCP/tools present)
-        3. Ground truth section (optional - for semantic matching assistance)
+        1. Base guidelines (always included): extraction protocol and critical rules
+        2. Field extraction guidance (optional): per-field hints for the judge
+        3. Tool trace verification section (conditional): only when MCP/tools present
+        4. Ground truth section (optional): for semantic matching assistance
 
         Format-specific sections (output format, JSON schema) are NOT included here.
         Each adapter appends its own format instructions via AdapterInstruction.
@@ -59,6 +61,9 @@ class TemplatePromptBuilder:
         Args:
             has_tool_traces: Whether the response includes tool call traces (MCP context)
             ground_truth: Optional ground truth for disambiguation assistance
+            extraction_hints: Optional mapping of field name to extraction hint string.
+                When provided and non-empty, a guidance section is inserted after the
+                base guidelines to help the judge locate each field.
 
         Returns:
             Composed system prompt string
@@ -109,6 +114,18 @@ When the response includes tool calls and results:
 
 **Grounding Check**: Use the trace to verify the answer's claims are supported by tool calls/results."""
 
+        # === FIELD EXTRACTION GUIDANCE (optional - when hints are provided) ===
+        extraction_hints_section = ""
+        if extraction_hints:
+            hint_lines = "\n".join(f"- **{name}**: {hint}" for name, hint in extraction_hints.items())
+            extraction_hints_section = f"""
+
+# Field Extraction Guidance
+
+The following hints describe what to look for when extracting specific fields:
+
+{hint_lines}"""
+
         # === GROUND TRUTH SECTION (optional) ===
         ground_truth_section = ""
         if ground_truth is not None:
@@ -126,6 +143,8 @@ Ground Truth:
 
         # Compose final prompt
         sections = [base_guidelines]
+        if extraction_hints_section:
+            sections.append(extraction_hints_section)
         if has_tool_traces:
             sections.append(tool_trace_section)
         if ground_truth_section:

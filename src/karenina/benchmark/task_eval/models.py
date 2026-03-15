@@ -1,9 +1,12 @@
 """Data models for TaskEval."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    pass
 
 # Import VerificationResult for use in StepEval
 from karenina.schemas.verification import VerificationResult
@@ -12,18 +15,16 @@ from karenina.schemas.verification import VerificationResult
 class LogEvent(BaseModel):
     """Single log event in TaskEval."""
 
+    model_config = {"arbitrary_types_allowed": True}
+
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     level: Literal["debug", "info", "warn", "error"]
-    text: str
+    text: str = ""
     tags: list[str] | None = None
-    payload: dict[str, Any] | None = None
-    # New fields for agent output logging
-    question_id: str | None = Field(default=None, description="Question this log answers")
-    is_agent_output: bool = Field(default=False, description="Whether this is agent output to be evaluated")
-    output_type: str | None = Field(default=None, description="Type of output: answer, reasoning, analysis, etc.")
-    # Dict trace support
-    is_dict_structured: bool = Field(default=False, description="Whether this log is from a dict trace")
-    dict_keys: list[str] | None = Field(default=None, description="Keys from dict trace for quick access")
+    trace_messages: list[Any] | None = Field(
+        default=None,
+        description="List of Message objects representing a structured conversation trace",
+    )
 
 
 class StepEval(BaseModel):
@@ -198,6 +199,8 @@ class StepEval(BaseModel):
 
         Returns:
             dict: Mapping trace_id to aggregated results:
+
+                ```python
                 {
                     "trace_id": {
                         "llm": {"clarity": 4.5, "analysis_quality": 3.2},
@@ -211,15 +214,18 @@ class StepEval(BaseModel):
                     },
                     ...
                 }
+                ```
 
         Example:
-            >>> step_eval = StepEval()
-            >>> step_eval.verification_results = {
-            ...     "trace_1": [result1, result2, result3]
-            ... }
-            >>> aggregated = step_eval.aggregate_rubric_results()
-            >>> aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
-            4.333
+            ```python
+            step_eval = StepEval()
+            step_eval.verification_results = {
+                "trace_1": [result1, result2, result3]
+            }
+            aggregated = step_eval.aggregate_rubric_results()
+            aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
+            # 4.333
+            ```
         """
         aggregated = {}
 

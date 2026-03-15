@@ -13,7 +13,7 @@ Tests cover:
 import pytest
 
 from karenina import Benchmark
-from karenina.benchmark.core.questions import QuestionManager, _rename_answer_class_to_standard
+from karenina.benchmark.core.questions import QuestionManager
 from karenina.schemas.entities import BaseAnswer, Question
 
 # Valid template for testing
@@ -25,32 +25,6 @@ VALID_TEMPLATE = '''class Answer(BaseAnswer):
     def verify(self) -> bool:
         return len(self.value) > 0
 '''
-
-
-@pytest.mark.unit
-class TestRenameAnswerClassToStandard:
-    """Tests for _rename_answer_class_to_standard helper function."""
-
-    def test_already_named_answer(self) -> None:
-        """Test that class already named 'Answer' is unchanged."""
-        source = "class Answer(BaseAnswer):\n    pass"
-        result = _rename_answer_class_to_standard(source, "Answer")
-        assert result == source
-
-    def test_renames_custom_class_name(self) -> None:
-        """Test that custom class name is renamed to 'Answer'."""
-        source = "class VenetoclaxAnswer(BaseAnswer):\n    value: int"
-        result = _rename_answer_class_to_standard(source, "VenetoclaxAnswer")
-        assert "class Answer(BaseAnswer):" in result
-        assert "VenetoclaxAnswer" not in result
-        assert "value: int" in result
-
-    def test_fallback_on_ast_parse_error(self) -> None:
-        """Test string replacement fallback when AST parsing fails."""
-        # Use source that might cause AST issues (e.g., with special comments)
-        source = "class CustomAnswer(BaseAnswer):\n    # Some comment\n    pass"
-        result = _rename_answer_class_to_standard(source, "CustomAnswer")
-        assert "class Answer(" in result
 
 
 @pytest.mark.unit
@@ -135,7 +109,7 @@ class TestAddQuestion:
 
         assert q_id in manager.base._questions_cache
         # Should be auto-marked as finished when template is provided
-        assert manager.base._questions_cache[q_id].get("finished") is True
+        assert manager.base._question_registry[q_id].finished is True
 
     def test_add_question_with_string_template(self) -> None:
         """Test adding question with string template."""
@@ -154,7 +128,7 @@ class TestAddQuestion:
 
         # With template - should be auto-finished
         q_id1 = manager.add_question("Q1?", "A1", answer_template=VALID_TEMPLATE)
-        assert manager.base._questions_cache[q_id1].get("finished") is True
+        assert manager.base._question_registry[q_id1].finished is True
 
     def test_add_question_explicit_finished_overrides_auto(self) -> None:
         """Test that explicit finished parameter overrides auto-detection."""
@@ -163,7 +137,7 @@ class TestAddQuestion:
 
         # Explicitly set finished=False even with template
         q_id = manager.add_question("Q1?", "A1", answer_template=VALID_TEMPLATE, finished=False)
-        assert manager.base._questions_cache[q_id].get("finished") is False
+        assert manager.base._question_registry[q_id].finished is False
 
     def test_add_question_without_template_creates_default(self) -> None:
         """Test that default template is created when none provided."""
@@ -260,7 +234,7 @@ class TestAddQuestion:
         # Check checkpoint was updated with keywords
         for item in manager.base._checkpoint.dataFeedElement:
             if manager.base._get_item_id(item) == q_id:
-                assert item.keywords == ["programming", "language"]
+                assert item.item.keywords == ["programming", "language"]
                 break
         else:
             pytest.fail("Question not found in checkpoint")
@@ -496,7 +470,7 @@ class TestAddQuestionFromObject:
         # Check that keywords were set in checkpoint
         for item in manager.base._checkpoint.dataFeedElement:
             if manager.base._get_item_id(item) == q_id:
-                assert item.keywords == ["tag1", "tag2"]
+                assert item.item.keywords == ["tag1", "tag2"]
                 break
 
 
@@ -765,7 +739,7 @@ class TestAddQuestionsBatch:
         ids = manager.add_questions_batch(questions_data)
 
         q_id = ids[0]
-        assert manager.base._questions_cache[q_id]["finished"] is True
+        assert manager.base._question_registry[q_id].finished is True
         assert manager.base._questions_cache[q_id]["author"]["name"] == "Author 1"
         assert manager.base._questions_cache[q_id]["custom_metadata"]["difficulty"] == "easy"
 
@@ -790,7 +764,7 @@ class TestMarkFinished:
         q_id = manager.add_question("Q?", "A", finished=initial_status)
         getattr(manager, method_name)(q_id)
 
-        assert manager.base._questions_cache[q_id]["finished"] is expected_status
+        assert manager.base._question_registry[q_id].finished is expected_status
 
     @pytest.mark.parametrize(
         "initial_status,method_name,expected_status",
@@ -810,8 +784,8 @@ class TestMarkFinished:
 
         getattr(manager, method_name)([q_id1, q_id2])
 
-        assert manager.base._questions_cache[q_id1]["finished"] is expected_status
-        assert manager.base._questions_cache[q_id2]["finished"] is expected_status
+        assert manager.base._question_registry[q_id1].finished is expected_status
+        assert manager.base._question_registry[q_id2].finished is expected_status
 
 
 @pytest.mark.unit
@@ -835,7 +809,7 @@ class TestToggleFinished:
         new_status = manager.toggle_finished(q_id)
 
         assert new_status is expected_status
-        assert manager.base._questions_cache[q_id]["finished"] is expected_status
+        assert manager.base._question_registry[q_id].finished is expected_status
 
     def test_toggle_nonexistent_raises(self) -> None:
         """Test that toggling nonexistent question raises ValueError."""

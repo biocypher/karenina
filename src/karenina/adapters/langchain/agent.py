@@ -10,6 +10,7 @@ import asyncio
 import concurrent.futures
 import logging
 import uuid
+from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
 
 from karenina.ports import (
@@ -192,26 +193,23 @@ class LangChainAgentAdapter:
             return None
         return [tool.name for tool in tools]
 
-    async def _create_agent(
+    def _create_agent(
         self,
-        mcp_urls: dict[str, str],
-        tool_filter: list[str] | None,
+        tools: list[Any],
         kwargs: dict[str, Any],
     ) -> Any:
-        """Create a LangGraph agent with MCP tools.
+        """Create a LangGraph agent with pre-loaded tools.
 
         This is the canonical agent creation path for the LangChain adapter.
         It handles:
         - Base model initialization via init_chat_model_unified
-        - Async MCP tool loading (avoids threading issues)
         - Full middleware stack from AgentMiddlewareConfig
 
-        The AgentPort is for tool-based interactions. For simple LLM calls
-        without tools, use LLMPort instead.
+        Tools must be pre-loaded (e.g. via acreate_persistent_mcp_tools)
+        and passed in.
 
         Args:
-            mcp_urls: Dict mapping server names to URLs (required).
-            tool_filter: List of tool names to filter, or None for all tools.
+            tools: Pre-loaded LangChain-compatible tools.
             kwargs: Additional kwargs for model initialization.
 
         Returns:
@@ -235,16 +233,11 @@ class LangChainAgentAdapter:
         try:
             from langchain.agents import create_agent
             from langgraph.checkpoint.memory import InMemorySaver
-
-            from karenina.adapters.langchain.mcp import acreate_mcp_client_and_tools
         except ImportError as e:
             raise ImportError(
-                "langchain>=1.1.0, langgraph, and langchain-mcp-adapters are required. "
-                "Install with: uv add 'langchain>=1.1.0' langgraph langchain-mcp-adapters"
+                "langchain>=1.1.0 and langgraph are required. "
+                "Install with: uv add 'langchain>=1.1.0' langgraph"
             ) from e
-
-        # Get MCP client and tools asynchronously (avoids threading issues)
-        _, tools = await acreate_mcp_client_and_tools(mcp_urls, tool_filter)
 
         # Auto-detect context size for openai_endpoint interface if not explicitly configured
         max_context_tokens = self._config.max_context_tokens
@@ -333,12 +326,6 @@ class LangChainAgentAdapter:
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
 
-        # Create agent with MCP tools
-        try:
-            agent = await self._create_agent(mcp_urls, tool_filter, kwargs)
-        except Exception as e:
-            raise AgentExecutionError(f"Failed to initialize agent: {e}") from e
-
         # Convert messages to LangChain format
         lc_messages = self._converter.to_provider(messages)
 
@@ -361,49 +348,92 @@ class LangChainAgentAdapter:
         except ImportError:
             use_callback = False
 
-        if use_callback:
-            with get_usage_metadata_callback() as cb:
-                try:
-                    coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
-                    if config.timeout:
-                        try:
-                            agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
-                        except TimeoutError as e:
-                            raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
-                    else:
-                        agent_response = await coro
-                except Exception as e:
-                    error_str = str(e).lower()
-                    error_type = type(e).__name__
-                    if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
-                        recursion_limit_reached = True
-                        logger.warning(f"Agent hit recursion limit: {e}")
-                        agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
-                    else:
-                        raise AgentExecutionError(f"Agent execution failed: {e}") from e
+        # Use AsyncExitStack for persistent MCP sessions — sessions stay alive
+        # for all tool calls during agent execution, avoiding per-call reconnection.
+        # Exceptions are captured inside the block and re-raised after clean exit,
+        # because MCP session cleanup can wrap errors in ExceptionGroup if an
+        # exception propagates through the exit stack.
+        deferred_error: Exception | None = None
 
-                # Extract cumulative usage from callback (reliable across all turns)
-                if hasattr(cb, "usage_metadata") and cb.usage_metadata:
-                    callback_usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
-        else:
+        async with AsyncExitStack() as exit_stack:
+            # Load tools with persistent sessions
+            from karenina.adapters.langchain.mcp import acreate_persistent_mcp_tools
+
             try:
-                coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
-                if config.timeout:
-                    try:
-                        agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
-                    except TimeoutError as e:
-                        raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
-                else:
-                    agent_response = await coro
+                persistent_tools = await acreate_persistent_mcp_tools(
+                    mcp_urls, exit_stack, tool_filter,
+                    self._config.mcp_tool_description_overrides,
+                )
             except Exception as e:
-                error_str = str(e).lower()
-                error_type = type(e).__name__
-                if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
-                    recursion_limit_reached = True
-                    logger.warning(f"Agent hit recursion limit: {e}")
-                    agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
+                deferred_error = AgentExecutionError(f"Failed to load MCP tools: {e}")
+                deferred_error.__cause__ = e
+
+            if deferred_error is None:
+                # Create agent with persistent tools
+                try:
+                    agent = self._create_agent(persistent_tools, kwargs)
+                except Exception as e:
+                    deferred_error = AgentExecutionError(f"Failed to initialize agent: {e}")
+                    deferred_error.__cause__ = e
+
+            if deferred_error is None:
+                if use_callback:
+                    with get_usage_metadata_callback() as cb:
+                        try:
+                            coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
+                            if config.timeout:
+                                try:
+                                    agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
+                                except TimeoutError as e:
+                                    deferred_error = AgentTimeoutError(
+                                        f"Agent execution timed out after {config.timeout}s"
+                                    )
+                                    deferred_error.__cause__ = e
+                            else:
+                                agent_response = await coro
+                        except Exception as e:
+                            error_str = str(e).lower()
+                            error_type = type(e).__name__
+                            if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
+                                recursion_limit_reached = True
+                                logger.warning(f"Agent hit recursion limit: {e}")
+                                agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
+                            elif deferred_error is None:
+                                deferred_error = AgentExecutionError(f"Agent execution failed: {e}")
+                                deferred_error.__cause__ = e
+
+                        # Extract cumulative usage from callback (reliable across all turns)
+                        if hasattr(cb, "usage_metadata") and cb.usage_metadata:
+                            callback_usage = extract_langchain_usage(
+                                cb.usage_metadata, model_name=self._config.model_name
+                            )
                 else:
-                    raise AgentExecutionError(f"Agent execution failed: {e}") from e
+                    try:
+                        coro = agent.ainvoke({"messages": lc_messages}, config=agent_config)
+                        if config.timeout:
+                            try:
+                                agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
+                            except TimeoutError as e:
+                                deferred_error = AgentTimeoutError(
+                                    f"Agent execution timed out after {config.timeout}s"
+                                )
+                                deferred_error.__cause__ = e
+                        else:
+                            agent_response = await coro
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        error_type = type(e).__name__
+                        if "graphrecursionerror" in error_type.lower() or "recursion_limit" in error_str:
+                            recursion_limit_reached = True
+                            logger.warning(f"Agent hit recursion limit: {e}")
+                            agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
+                        elif deferred_error is None:
+                            deferred_error = AgentExecutionError(f"Agent execution failed: {e}")
+                            deferred_error.__cause__ = e
+        # exit_stack closed cleanly -> MCP sessions cleaned up
+
+        if deferred_error is not None:
+            raise deferred_error
 
         # Extract messages from response
         response_messages: list[Any] = []
@@ -471,7 +501,8 @@ class LangChainAgentAdapter:
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as arun().
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If execution exceeds the timeout.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 

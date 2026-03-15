@@ -186,14 +186,14 @@ def test_schema_org_rating_with_evaluation() -> None:
 def test_schema_org_rating_all_additional_types() -> None:
     """Test SchemaOrgRating accepts all additionalType values."""
     additional_types = [
-        "GlobalRubricTrait",
-        "QuestionSpecificRubricTrait",
-        "GlobalRegexTrait",
-        "QuestionSpecificRegexTrait",
-        "GlobalCallableTrait",
-        "QuestionSpecificCallableTrait",
-        "GlobalMetricRubricTrait",
-        "QuestionSpecificMetricRubricTrait",
+        "karenina:GlobalRubricTrait",
+        "karenina:QuestionSpecificRubricTrait",
+        "karenina:GlobalRegexTrait",
+        "karenina:QuestionSpecificRegexTrait",
+        "karenina:GlobalCallableTrait",
+        "karenina:QuestionSpecificCallableTrait",
+        "karenina:GlobalMetricRubricTrait",
+        "karenina:QuestionSpecificMetricRubricTrait",
     ]
 
     for additional_type in additional_types:
@@ -409,29 +409,23 @@ def test_schema_org_data_feed_item_minimal() -> None:
     assert item.dateCreated == now
     assert item.dateModified == now
     assert item.item.text == "Test?"
-    assert item.keywords is None
+    assert item.item.keywords is None
 
 
 @pytest.mark.unit
-def test_schema_org_data_feed_item_with_keywords() -> None:
-    """Test SchemaOrgDataFeedItem with keywords."""
-    now = datetime.now().isoformat()
-
-    item = SchemaOrgDataFeedItem(
-        dateCreated=now,
-        dateModified=now,
-        item=SchemaOrgQuestion(
-            text="Test?",
-            acceptedAnswer=SchemaOrgAnswer(text="Answer"),
-            hasPart=SchemaOrgSoftwareSourceCode(
-                name="Answer",
-                text="class Answer(BaseAnswer):\n    pass",
-            ),
+def test_schema_org_question_with_keywords() -> None:
+    """Test SchemaOrgQuestion with keywords."""
+    question = SchemaOrgQuestion(
+        text="Test?",
+        acceptedAnswer=SchemaOrgAnswer(text="Answer"),
+        hasPart=SchemaOrgSoftwareSourceCode(
+            name="Answer",
+            text="class Answer(BaseAnswer):\n    pass",
         ),
         keywords=["biology", "genetics", "apoptosis"],
     )
 
-    assert item.keywords == ["biology", "genetics", "apoptosis"]
+    assert question.keywords == ["biology", "genetics", "apoptosis"]
 
 
 # =============================================================================
@@ -605,7 +599,7 @@ def test_json_ld_checkpoint_full_structure() -> None:
                 name="clarity",
                 bestRating=1.0,
                 worstRating=0.0,
-                additionalType="GlobalRubricTrait",
+                additionalType="karenina:GlobalRubricTrait",
             )
         ],
         dataFeedElement=[
@@ -626,11 +620,11 @@ def test_json_ld_checkpoint_full_structure() -> None:
                             name="accuracy",
                             bestRating=1.0,
                             worstRating=0.0,
-                            additionalType="QuestionSpecificRubricTrait",
+                            additionalType="karenina:QuestionSpecificRubricTrait",
                         )
                     ],
+                    keywords=["biology", "genetics"],
                 ),
-                keywords=["biology", "genetics"],
             )
         ],
         additionalProperty=[
@@ -644,7 +638,7 @@ def test_json_ld_checkpoint_full_structure() -> None:
     assert len(checkpoint.rating) == 1
     assert len(checkpoint.dataFeedElement) == 1
     assert checkpoint.dataFeedElement[0].id == "q001"
-    assert checkpoint.dataFeedElement[0].keywords == ["biology", "genetics"]
+    assert checkpoint.dataFeedElement[0].item.keywords == ["biology", "genetics"]
     assert len(checkpoint.additionalProperty) == 1
 
 
@@ -718,16 +712,17 @@ def test_schema_org_context_structure() -> None:
     """Test SCHEMA_ORG_CONTEXT has required keys."""
     assert "@version" in SCHEMA_ORG_CONTEXT
     assert "@vocab" in SCHEMA_ORG_CONTEXT
-    assert SCHEMA_ORG_CONTEXT["@vocab"] == "http://schema.org/"
+    assert SCHEMA_ORG_CONTEXT["@vocab"] == "https://schema.org/"
 
 
 @pytest.mark.unit
 def test_schema_org_context_mappings() -> None:
-    """Test SCHEMA_ORG_CONTEXT has required type mappings."""
-    assert SCHEMA_ORG_CONTEXT.get("DataFeed") == "DataFeed"
-    assert SCHEMA_ORG_CONTEXT.get("Question") == "Question"
-    assert SCHEMA_ORG_CONTEXT.get("Answer") == "Answer"
-    assert SCHEMA_ORG_CONTEXT.get("Rating") == "Rating"
+    """Test SCHEMA_ORG_CONTEXT has required mappings."""
+    assert SCHEMA_ORG_CONTEXT.get("karenina") == "urn:karenina:vocab:"
+    # Redundant type entries removed; @vocab handles expansion
+    rating_mapping = SCHEMA_ORG_CONTEXT.get("rating")
+    assert isinstance(rating_mapping, dict)
+    assert rating_mapping.get("@id") == "contentRating"
 
 
 @pytest.mark.unit

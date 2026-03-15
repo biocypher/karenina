@@ -58,8 +58,36 @@ def build_config_from_cli_args(
     then delegates to VerificationConfig.from_overrides() for config construction.
 
     Args:
-        CLI argument values (all optional)
-        preset_config: Optional preset configuration to use as base
+        answering_model: Answering model name.
+        answering_provider: Answering model provider.
+        answering_id: Answering model identifier.
+        parsing_model: Parsing model name.
+        parsing_provider: Parsing model provider.
+        parsing_id: Parsing model identifier.
+        temperature: LLM temperature setting.
+        interface: Adapter interface to use.
+        replicate_count: Number of replicates per question.
+        abstention: Whether to enable abstention detection.
+        sufficiency: Whether to enable sufficiency checking.
+        embedding_check: Whether to enable embedding similarity checks.
+        deep_judgment: Whether to enable deep judgment mode.
+        deep_judgment_rubric_mode: Deep judgment rubric evaluation mode.
+        deep_judgment_rubric_excerpts: Whether to extract excerpts for rubric.
+        deep_judgment_rubric_max_excerpts: Max excerpts per rubric trait.
+        deep_judgment_rubric_fuzzy_threshold: Fuzzy match threshold for rubric excerpts.
+        deep_judgment_rubric_retry_attempts: Retry attempts for rubric excerpt validation.
+        deep_judgment_rubric_search: Whether to enable search for rubric evaluation.
+        deep_judgment_rubric_search_tool: Search tool for rubric evaluation.
+        deep_judgment_rubric_config: Path to custom rubric config JSON file.
+        use_full_trace_for_template: Whether to use full trace for template parsing.
+        use_full_trace_for_rubric: Whether to use full trace for rubric evaluation.
+        evaluation_mode: Evaluation mode (e.g., "standard", "deep").
+        embedding_threshold: Similarity threshold for embedding checks.
+        embedding_model: Model to use for embedding similarity.
+        async_execution: Whether to run verification asynchronously.
+        async_workers: Number of async workers.
+        preset_config: Optional preset configuration to use as base.
+        manual_traces_obj: Optional pre-loaded manual traces object.
 
     Returns:
         VerificationConfig with CLI overrides applied

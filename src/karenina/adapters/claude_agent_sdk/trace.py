@@ -110,9 +110,11 @@ def sdk_messages_to_trace_messages(
         - model?: string
 
     Example:
-        >>> trace_msgs = sdk_messages_to_trace_messages(sdk_messages)
-        >>> for msg in trace_msgs:
-        ...     print(f"{msg['role']}: {msg['content'][:50]}...")
+        ```python
+        trace_msgs = sdk_messages_to_trace_messages(sdk_messages)
+        for msg in trace_msgs:
+            print(f"{msg['role']}: {msg['content'][:50]}...")
+        ```
     """
     try:
         from claude_agent_sdk import AssistantMessage, UserMessage

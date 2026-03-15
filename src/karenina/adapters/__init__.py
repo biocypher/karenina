@@ -9,7 +9,9 @@ application code.
 
 Available adapters:
     - LangChain: Wraps existing LangChain/LangGraph infrastructure
-    - Claude SDK: (Planned) Native Anthropic Agent SDK support
+    - Claude Agent SDK: Native Anthropic Agent SDK support
+    - Claude Tool: Claude-specific tool use with native structured output
+    - Manual: Manual trace replay for testing and debugging
 
 Factory functions:
     - get_llm: Create an LLMPort implementation for a given model config

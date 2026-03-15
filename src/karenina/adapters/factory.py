@@ -13,6 +13,7 @@ Supported Interfaces:
     - openrouter: Routes through LangChain adapter
     - openai_endpoint: Routes through LangChain adapter
     - claude_agent_sdk: Uses Claude Agent SDK adapter (when available)
+    - claude_tool: Uses Claude Tool adapter with native structured output
     - manual: Returns ManualAdapter (raises error if invoked)
 
 Example:

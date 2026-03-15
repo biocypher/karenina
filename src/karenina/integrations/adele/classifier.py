@@ -1,11 +1,14 @@
 """
 ADeLe Question Classifier.
 
-Classifies questions using ADeLe rubrics via LLM-as-judge.
+Classifies questions using ADeLe (Annotated Demand Levels) rubrics via LLM-as-judge.
 This module adapts the existing LLMTraitEvaluator infrastructure
 to evaluate questions (instead of answers) against ADeLe dimensions.
 
 All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 from __future__ import annotations
@@ -54,7 +57,7 @@ class QuestionClassifier:
     def __init__(
         self,
         llm: LLMPort | None = None,
-        model_name: str = "claude-3-5-haiku-latest",
+        model_name: str = "claude-haiku-4-5",
         provider: str = "anthropic",
         temperature: float = 0.0,
         interface: str = "langchain",
@@ -73,7 +76,7 @@ class QuestionClassifier:
             llm: Optional pre-initialized LLMPort instance. If not provided,
                  one will be created using model_config or individual params.
             model_name: Model name to use if llm not provided.
-                       Defaults to claude-3-5-haiku-latest for efficiency.
+                       Defaults to claude-haiku-4-5 for efficiency.
             provider: Model provider to use if llm not provided.
             temperature: Temperature for LLM calls. Defaults to 0.0 for
                         deterministic classifications.

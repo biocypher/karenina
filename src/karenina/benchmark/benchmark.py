@@ -144,6 +144,7 @@ class Benchmark:
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
         few_shot_examples: list[dict[str, str]] | None = None,
+        answer_notes: str | None = None,
     ) -> str:
         """Add a question to the benchmark."""
         return self._question_manager.add_question(
@@ -156,6 +157,7 @@ class Benchmark:
             sources,
             custom_metadata,
             few_shot_examples,
+            answer_notes=answer_notes,
         )
 
     def get_question_ids(self) -> list[str]:
@@ -318,8 +320,13 @@ class Benchmark:
         """Get template code for a question."""
         return self._template_manager.get_template(question_id)
 
-    def update_template(self, question_id: str, template_code: str) -> None:
-        """Update existing template."""
+    def update_template(self, question_id: str, template_code: str | type) -> None:
+        """Update existing template.
+
+        Args:
+            question_id: The question ID
+            template_code: Python code defining the Answer class, or a BaseAnswer subclass
+        """
         self._template_manager.update_template(question_id, template_code)
 
     def copy_template(self, from_id: str, to_id: str) -> None:
@@ -757,6 +764,11 @@ class Benchmark:
         """Get the questions cache (for backward compatibility)."""
         return self._base._questions_cache
 
+    @property
+    def _question_registry(self) -> dict[str, Any]:
+        """Get the question registry (for backward compatibility)."""
+        return self._base._question_registry
+
     def _get_item_id(self, item: Any) -> str:
         """Get the ID for a DataFeedItem (for backward compatibility)."""
         return self._base._get_item_id(item)
@@ -885,9 +897,12 @@ class Benchmark:
 
     def __getitem__(self, key: str | int | slice) -> "SchemaOrgQuestion | list[SchemaOrgQuestion]":
         """Get question(s) as SchemaOrgQuestion object(s) using bracket notation."""
+        from ..schemas.entities.question import QuestionRegistryEntry
+
         if isinstance(key, str):
             question_data = self._base[key]
-            return _helpers.convert_to_schema_org_question(question_data)
+            finished = self._base._question_registry.get(key, QuestionRegistryEntry()).finished
+            return _helpers.convert_to_schema_org_question(question_data, finished=finished)
         elif isinstance(key, int):
             question_ids = self.get_question_ids()
             original_key = key
@@ -897,17 +912,28 @@ class Benchmark:
                 raise IndexError(f"Question index {original_key} out of range (0-{len(question_ids) - 1})")
             question_id = question_ids[key]
             question_data = self._base[question_id]
-            return _helpers.convert_to_schema_org_question(question_data)
+            finished = self._base._question_registry.get(question_id, QuestionRegistryEntry()).finished
+            return _helpers.convert_to_schema_org_question(question_data, finished=finished)
         elif isinstance(key, slice):
             question_ids = self.get_question_ids()
             selected_ids = question_ids[key]
-            return [_helpers.convert_to_schema_org_question(self._base[qid]) for qid in selected_ids]
+            return [
+                _helpers.convert_to_schema_org_question(
+                    self._base[qid],
+                    finished=self._base._question_registry.get(qid, QuestionRegistryEntry()).finished,
+                )
+                for qid in selected_ids
+            ]
         else:
             raise TypeError(f"Invalid key type {type(key)}. Expected str, int, or slice.")
 
     def _convert_to_schema_org_question(self, question_data: dict[str, Any]) -> "SchemaOrgQuestion":
         """Convert internal question dictionary to SchemaOrgQuestion object."""
-        return _helpers.convert_to_schema_org_question(question_data)
+        from ..schemas.entities.question import QuestionRegistryEntry
+
+        q_id = question_data.get("id", "")
+        finished = self._base._question_registry.get(q_id, QuestionRegistryEntry()).finished
+        return _helpers.convert_to_schema_org_question(question_data, finished=finished)
 
     def __eq__(self, other: object) -> bool:
         """Compare two benchmarks for equality."""

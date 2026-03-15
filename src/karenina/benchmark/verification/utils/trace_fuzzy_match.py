@@ -22,12 +22,11 @@ def fuzzy_match_excerpt(excerpt: str, trace: str) -> tuple[bool, float]:
 
     Returns:
         A tuple of (match_found, similarity_score) where:
-        - match_found: True if similarity >= 75% threshold
-        - similarity_score: Float between 0.0 and 1.0 indicating match quality
-          - 1.0 = perfect match
-          - 0.75+ = good match (minor differences)
-          - 0.50-0.75 = partial match (significant differences)
-          - <0.50 = poor match (likely hallucinated)
+        - match_found: True if similarity >= 75% threshold.
+        - similarity_score: Float between 0.0 and 1.0 indicating match quality.
+            1.0 = perfect match, 0.75+ = good match (minor differences),
+            0.50-0.75 = partial match (significant differences),
+            <0.50 = poor match (likely hallucinated).
 
     Examples:
         >>> fuzzy_match_excerpt("exact text", "This contains exact text here")

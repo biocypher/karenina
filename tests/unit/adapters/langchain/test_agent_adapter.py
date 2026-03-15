@@ -153,9 +153,9 @@ class TestLangChainAgentAdapter:
     async def test_run_basic(self, model_config: Any) -> None:
         """Test basic agent run with mocked infrastructure."""
         with (
-            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init_model,
+            patch("karenina.adapters.langchain.initialization.init_chat_model_unified") as mock_init_model,
             patch("karenina.adapters.langchain.middleware.build_agent_middleware") as mock_middleware,
-            patch("karenina.adapters.langchain.mcp.acreate_mcp_client_and_tools") as mock_mcp,
+            patch("karenina.adapters.langchain.mcp.acreate_persistent_mcp_tools", new_callable=AsyncMock) as mock_mcp,
             patch("langchain.agents.create_agent") as mock_create_agent,
             patch("langgraph.checkpoint.memory.InMemorySaver"),
             patch("karenina.adapters.langchain.trace.harmonize_agent_response") as mock_harmonize,
@@ -166,7 +166,7 @@ class TestLangChainAgentAdapter:
 
             mock_middleware.return_value = []
 
-            mock_mcp.return_value = (None, [MagicMock()])  # (client, tools)
+            mock_mcp.return_value = [MagicMock()]  # persistent tools list
 
             ai_msg = AIMessage(content="Final answer")
             ai_msg.response_metadata = {"usage": {"input_tokens": 50, "output_tokens": 25}}

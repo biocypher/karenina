@@ -403,7 +403,7 @@ class TestClaudeSDKTraceCollection:
         from claude_agent_sdk.types import TextBlock
 
         messages = [
-            AssistantMessage(content=[TextBlock(text="The answer is 42.")]),
+            AssistantMessage(model="claude-haiku-4-5", content=[TextBlock(text="The answer is 42.")]),
         ]
         trace = self._to_trace(messages)
         _assert_trace_shape(trace, ["assistant"])
@@ -415,12 +415,13 @@ class TestClaudeSDKTraceCollection:
 
         messages = [
             AssistantMessage(
+                model="claude-haiku-4-5",
                 content=[
                     TextBlock(text="Let me search."),
                     ToolUseBlock(id="tc_001", name="search", input={"query": "BCL2"}),
                     ToolResultBlock(tool_use_id="tc_001", content='{"gene": "BCL2"}'),
                     TextBlock(text="BCL2 is a gene."),
-                ]
+                ],
             ),
         ]
         trace = self._to_trace(messages)
@@ -437,6 +438,7 @@ class TestClaudeSDKTraceCollection:
 
         messages = [
             AssistantMessage(
+                model="claude-haiku-4-5",
                 content=[
                     TextBlock(text="Step 1."),
                     ToolUseBlock(id="tc_1", name="search", input={"q": "first"}),
@@ -445,7 +447,7 @@ class TestClaudeSDKTraceCollection:
                     ToolUseBlock(id="tc_2", name="analyze", input={"data": "..."}),
                     ToolResultBlock(tool_use_id="tc_2", content="second result"),
                     TextBlock(text="Final answer."),
-                ]
+                ],
             ),
         ]
         trace = self._to_trace(messages)

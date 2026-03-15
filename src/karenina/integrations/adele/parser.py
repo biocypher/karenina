@@ -1,8 +1,11 @@
 """
-Parser for ADeLe (Assessment Dimensions for Language Evaluation) rubric text files.
+Parser for ADeLe (Annotated Demand Levels) rubric text files.
 
 ADeLe rubrics define 6 levels (0-5) for evaluating various cognitive and processing dimensions.
 Each level has a label, description, and examples.
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 from __future__ import annotations

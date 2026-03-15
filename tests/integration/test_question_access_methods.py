@@ -111,11 +111,11 @@ class TestEnhancedFilterQuestions:
         # Filter by finished status
         finished = sample_benchmark.filter_questions(finished=True)
         assert len(finished) == 4
-        assert all(q["finished"] for q in finished)
+        assert all(sample_benchmark._base._question_registry[q["id"]].finished for q in finished)
 
         unfinished = sample_benchmark.filter_questions(finished=False)
         assert len(unfinished) == 2
-        assert all(not q["finished"] for q in unfinished)
+        assert all(not sample_benchmark._base._question_registry[q["id"]].finished for q in unfinished)
 
     def test_filter_with_custom_filter_lambda(self, sample_benchmark):
         """Test filtering with custom lambda function."""
@@ -133,7 +133,10 @@ class TestEnhancedFilterQuestions:
             finished=True, custom_filter=lambda q: q.get("custom_metadata", {}).get("difficulty") == "hard"
         )
         assert len(finished_hard) == 2
-        assert all(q["finished"] and q["custom_metadata"]["difficulty"] == "hard" for q in finished_hard)
+        assert all(
+            sample_benchmark._base._question_registry[q["id"]].finished and q["custom_metadata"]["difficulty"] == "hard"
+            for q in finished_hard
+        )
 
     def test_complex_custom_filter(self, sample_benchmark):
         """Test complex filtering logic with multiple conditions."""
@@ -167,10 +170,10 @@ class TestFilterByMetadata:
         assert len(programming_qs) == 4
         assert all(q["custom_metadata"]["category"] == "programming" for q in programming_qs)
 
-        # Exact match on system metadata
+        # Exact match on system metadata (finished is resolved from the registry)
         finished_qs = sample_benchmark.filter_by_metadata("finished", True)
         assert len(finished_qs) == 4
-        assert all(q["finished"] for q in finished_qs)
+        assert all(sample_benchmark._base._question_registry[q["id"]].finished for q in finished_qs)
 
     def test_contains_match_mode(self, sample_benchmark):
         """Test substring matching mode."""
@@ -375,10 +378,9 @@ class TestGetFinishedQuestions:
         finished_ids = sample_benchmark.get_finished_questions(ids_only=True)
         assert len(finished_ids) == 4
 
-        # Verify all returned IDs are actually finished
+        # Verify all returned IDs are actually finished (via registry)
         for q_id in finished_ids:
-            question = sample_benchmark.get_question(q_id)
-            assert question["finished"] is True
+            assert sample_benchmark._base._question_registry[q_id].finished is True
 
     def test_symmetry_with_unfinished(self, sample_benchmark):
         """Test that finished + unfinished = all questions."""
@@ -418,7 +420,8 @@ class TestGetFinishedQuestions:
             assert "id" in q
             assert "question" in q
             assert "raw_answer" in q
-            assert q["finished"] is True
+            # finished is tracked in the registry, not the cache dict
+            assert sample_benchmark._base._question_registry[q["id"]].finished is True
 
     def test_get_unfinished_questions_default_returns_objects(self, sample_benchmark):
         """Test that default behavior returns question objects, not IDs."""
@@ -431,7 +434,8 @@ class TestGetFinishedQuestions:
             assert "id" in q
             assert "question" in q
             assert "raw_answer" in q
-            assert q["finished"] is False
+            # finished is tracked in the registry, not the cache dict
+            assert sample_benchmark._base._question_registry[q["id"]].finished is False
 
     def test_get_missing_templates_default_returns_objects(self):
         """Test that default behavior returns question objects, not IDs."""
@@ -502,7 +506,7 @@ class TestCountByField:
         assert category_counts["science"] == 2
 
     def test_count_by_system_metadata_field(self, sample_benchmark):
-        """Test counting by system metadata field."""
+        """Test counting by system metadata field (finished is resolved from registry)."""
         # Count finished status
         status_counts = sample_benchmark.count_by_field("finished")
         assert status_counts[True] == 4

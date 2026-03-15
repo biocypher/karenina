@@ -1,0 +1,9 @@
+/* Show navigation tabs at narrower viewports (default is ~1220px) */
+@media screen and (min-width: 60em) {
+  .md-header__inner {
+    padding: 0 .2rem;
+  }
+  .md-tabs {
+    display: block;
+  }
+}

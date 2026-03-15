@@ -448,7 +448,7 @@ from karenina.schemas.config import AgentMiddlewareConfig, PromptCachingConfig
 model_config = ModelConfig(
     id="agent-claude",
     model_provider="anthropic",
-    model_name="claude-sonnet-4-5-20250929",
+    model_name="claude-sonnet-4-5",
     temperature=0.0,
     interface="langchain",
     mcp_urls_dict={"biocontext": "https://mcp.biocontext.ai/mcp/"},
