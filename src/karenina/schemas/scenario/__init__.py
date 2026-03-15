@@ -14,6 +14,7 @@ from .checks import (
     ResultCheck,
     TurnCheck,
 )
+from .state import ScenarioExecutionResult, ScenarioState, TurnRecord
 from .types import (
     END,
     EdgeCondition,
@@ -54,4 +55,8 @@ __all__ = [
     # Discriminated unions
     "OutcomeCheckNode",
     "OutcomeNode",
+    # State dataclasses
+    "ScenarioExecutionResult",
+    "ScenarioState",
+    "TurnRecord",
 ]
