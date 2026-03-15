@@ -1,7 +1,13 @@
-"""Multi-turn scenario benchmarks for karenina."""
+"""Multi-turn scenario benchmarks for karenina.
+
+Public API::
+
+    from karenina.scenario import Scenario, ScenarioManager, END, ModelOverride
+"""
 
 from karenina.scenario.builder import Scenario
 from karenina.scenario.edge_resolution import evaluate_state_check, resolve_next_node
+from karenina.scenario.manager import ScenarioManager
 from karenina.scenario.outcome_evaluation import evaluate_outcome
 from karenina.scenario.sugar import (
     all_of,
@@ -31,6 +37,8 @@ from karenina.schemas.scenario.types import (
 __all__ = [
     # Builder
     "Scenario",
+    # Manager
+    "ScenarioManager",
     # Frozen definition
     "ScenarioDefinition",
     # Types
