@@ -1,6 +1,123 @@
+---
+jupyter:
+  jupytext:
+    formats: docs/core_concepts//md,docs/notebooks/core_concepts//ipynb
+    text_representation:
+      extension: .md
+      format_name: markdown
+      format_version: '1.3'
+      jupytext_version: 1.18.1
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
 # Agentic Evaluation
 
 Karenina's classical workflow evaluates factual Q&A: the answering model produces text, the judge parses it into structured fields, and verification primitives compare those fields against ground truth. No tools are needed on either side. Agentic evaluation extends this to coding and data analysis tasks, where both the answering model and the judge need tool access to work in a real workspace.
+
+```python tags=["hide-cell"]
+# Setup cell: provides mock objects for executable examples.
+# This cell is hidden in rendered documentation.
+import datetime
+import tempfile
+from dataclasses import dataclass, field
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from karenina import Benchmark
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities.question import Question
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
+    ModelIdentity,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+    VerificationResultTemplate,
+)
+
+# Create a mock benchmark with workspace support
+_workspace_root = Path(tempfile.mkdtemp()) / "tasks"
+_workspace_root.mkdir(parents=True, exist_ok=True)
+(_workspace_root / "workspace").mkdir(exist_ok=True)
+
+_benchmark = Benchmark.create(
+    name="Coding Tasks",
+    description="Agentic evaluation of coding tasks",
+    version="1.0.0",
+    workspace_root=_workspace_root,
+)
+_benchmark.add_question(
+    question="Fix the bug in calculator.py so that division by zero returns an error message.",
+    raw_answer="Division by zero handled with try/except",
+)
+_qids = _benchmark.get_question_ids()
+
+# Build a mock VerificationResult with agentic fields
+_answering = ModelIdentity(
+    model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk"
+)
+_parsing = ModelIdentity(
+    model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk"
+)
+_ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
+_rid = VerificationResultMetadata.compute_result_id(_qids[0], _answering, _parsing, _ts)
+
+_mock_result = VerificationResult(
+    metadata=VerificationResultMetadata(
+        question_id=_qids[0],
+        template_id="tmpl_agentic",
+        completed_without_errors=True,
+        question_text="Fix the bug in calculator.py so that division by zero returns an error message.",
+        raw_answer="Division by zero handled with try/except",
+        answering=_answering,
+        parsing=_parsing,
+        execution_time=8.5,
+        timestamp=_ts,
+        result_id=_rid,
+    ),
+    template=VerificationResultTemplate(
+        raw_llm_response="I fixed the division by zero bug by adding a try/except block.",
+        verify_result=True,
+        template_verification_performed=True,
+        agentic_parsing_performed=True,
+        investigation_trace="Agent examined workspace: read calculator.py, found try/except block for ZeroDivisionError, ran test suite (3/3 passed).",
+        parsed_gt_response={"bug_fixed": True, "tests_passing": True},
+        parsed_llm_response={"bug_fixed": True, "tests_passing": True},
+    ),
+)
+_mock_result_set = VerificationResultSet(results=[_mock_result])
+
+# Save benchmark so Benchmark.load works
+_tmp_path = Path(tempfile.mkdtemp()) / "coding-tasks.jsonld"
+_benchmark.save(str(_tmp_path))
+
+# Patch Benchmark.load to return our mock benchmark
+_orig_load = Benchmark.load
+
+
+def _patched_load(path, workspace_root=None):
+    _benchmark.set_workspace_root(workspace_root or _workspace_root)
+    return _benchmark
+
+
+Benchmark.load = classmethod(lambda cls, path, workspace_root=None: _patched_load(path, workspace_root))
+
+# Patch run_verification to return mock results
+_orig_run = Benchmark.run_verification
+
+
+def _patched_run(self, config, **kwargs):
+    return _mock_result_set
+
+
+Benchmark.run_verification = _patched_run
+
+# Create a Question object for the workspace_path example
+question = _benchmark.get_question_as_object(_qids[0])
+```
 
 This page explains the concepts behind agentic evaluation: how workspaces work, how adapters differ in their agent support, how the judge independently verifies artifacts, and how configuration is split between `Benchmark` and `VerificationConfig`.
 
@@ -81,7 +198,7 @@ The flag is declared on `AdapterSpec` in the [adapter registry](../../src/kareni
 ```python
 @dataclass
 class AdapterSpec:
-    # ...
+    """Adapter specification in the registry."""
     natively_agentic: bool = False
 ```
 
@@ -228,10 +345,19 @@ In this example:
 5. A parser extracts the investigation findings into the answer template schema.
 6. `VerifyTemplate` checks the parsed fields against ground truth, just as in the classical workflow.
 
-## 9. Next Steps
+## 9. Agentic Rubric Evaluation
+
+Agentic evaluation extends beyond template verification to rubric evaluation as well. `AgenticRubricTrait` deploys an agent to investigate workspace artifacts and extract quality scores, using the same investigate-then-extract pattern as Stage 7b.
+
+This is particularly powerful for coding benchmarks where quality signals live in the code files (library choices, error handling, documentation quality) rather than in the response trace.
+
+See [Agentic Rubric Traits](rubrics/agentic-traits.md) for trait definition and usage, and [Stage 11b Internals](../../advanced-pipeline/agentic-rubric-evaluation.md) for the pipeline mechanics.
+
+## 10. Next Steps
 
 - [Verification Pipeline](verification-pipeline.md): The 13-stage engine that hosts both classical and agentic parsing
 - [Answer Templates](answer-templates.md): Writing the schemas that both classical and agentic judges fill in
 - [Adapters](adapters.md): Understanding port protocols and the adapter registry
 - [MCP Overview](mcp-overview.md): Tool-augmented evaluation for the answering model
 - [Running Verification](../workflows/running-verification/): End-to-end verification workflow including agentic scenarios
+- [Agentic Rubric Traits](rubrics/agentic-traits.md): Agent-investigated quality evaluation
