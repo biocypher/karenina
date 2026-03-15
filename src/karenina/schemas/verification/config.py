@@ -192,6 +192,19 @@ class VerificationConfig(BaseModel):
         description="Timeout in seconds for the investigation agent.",
     )
 
+    # Agentic rubric evaluation
+    agentic_rubric_strategy: Literal["individual", "shared"] = Field(
+        "individual",
+        description="How to evaluate agentic rubric traits. "
+        "'individual': one agent session per trait (robust, isolated). "
+        "'shared': one agent session for all traits (efficient, shared context).",
+    )
+    agentic_rubric_parallel: bool = Field(
+        False,
+        description="Enable parallel evaluation of agentic rubric traits. "
+        "Only applies to 'individual' strategy. Each trait gets a concurrent agent session.",
+    )
+
     # Workspace (workspace_root lives on Benchmark, not here)
     workspace_copy: bool = Field(
         default=True,
