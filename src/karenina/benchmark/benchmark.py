@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.entities.rubric import AgenticRubricTrait
 from ..schemas.results import VerificationResultSet
+from ..schemas.scenario.definition import ScenarioDefinition
 from ..schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
@@ -78,6 +79,7 @@ class Benchmark:
         """
         self._base = BenchmarkBase(name, description, version, creator)
         self._workspace_root = workspace_root
+        self._scenarios: dict[str, ScenarioDefinition] = {}
         self._metadata_manager = MetadataManager(self._base)
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
@@ -88,6 +90,8 @@ class Benchmark:
 
     def _init_managers(self) -> None:
         """Initialize all managers from self._base (used by load/clone)."""
+        if not hasattr(self, "_scenarios"):
+            self._scenarios = {}
         self._metadata_manager = MetadataManager(self._base)
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
@@ -173,7 +177,16 @@ class Benchmark:
         few_shot_examples: list[dict[str, str]] | None = None,
         answer_notes: str | None = None,
     ) -> str:
-        """Add a question to the benchmark."""
+        """Add a question to the benchmark.
+
+        Raises:
+            ValueError: If scenarios already exist (homogeneous enforcement).
+        """
+        if self._scenarios:
+            raise ValueError(
+                "Cannot add standalone questions to a scenario benchmark. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
         return self._question_manager.add_question(
             question,
             raw_answer,
@@ -332,6 +345,80 @@ class Benchmark:
     def count_by_field(self, field_path: str, questions: list[dict[str, Any]] | None = None) -> dict[Any, int]:
         """Count questions grouped by a field value using dot notation."""
         return self._question_manager.count_by_field(field_path, questions)
+
+    # ── Scenario management ─────────────────────────────────────────────
+
+    @property
+    def is_scenario_benchmark(self) -> bool:
+        """True if this benchmark contains scenarios instead of standalone questions."""
+        return len(self._scenarios) > 0
+
+    def add_scenario(self, scenario: "ScenarioDefinition | Any") -> None:
+        """Add a scenario to the benchmark.
+
+        Accepts either a ScenarioDefinition (frozen) or a Scenario builder
+        (which will be validated and frozen automatically).
+
+        Args:
+            scenario: A ScenarioDefinition or a Scenario builder instance.
+
+        Raises:
+            ValueError: If standalone questions already exist (homogeneous enforcement),
+                or if a scenario with the same name already exists.
+        """
+        if self._base._questions_cache:
+            raise ValueError(
+                "Cannot add scenarios to a benchmark that already contains standalone questions. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
+
+        # Accept Scenario builder: call validate() to get a ScenarioDefinition
+        if not isinstance(scenario, ScenarioDefinition):
+            scenario = scenario.validate()
+
+        if scenario.name in self._scenarios:
+            raise ValueError(f"Scenario '{scenario.name}' already exists")
+
+        self._scenarios[scenario.name] = scenario
+
+    def get_scenarios(self) -> list[ScenarioDefinition]:
+        """Get all scenario definitions.
+
+        Returns:
+            List of ScenarioDefinition instances.
+        """
+        return list(self._scenarios.values())
+
+    def get_scenario(self, name: str) -> ScenarioDefinition:
+        """Get a scenario by name.
+
+        Args:
+            name: The scenario name.
+
+        Returns:
+            The ScenarioDefinition.
+
+        Raises:
+            KeyError: If no scenario with that name exists.
+        """
+        try:
+            return self._scenarios[name]
+        except KeyError:
+            raise KeyError(f"Scenario '{name}' not found") from None
+
+    def remove_scenario(self, name: str) -> None:
+        """Remove a scenario by name.
+
+        Args:
+            name: The scenario name.
+
+        Raises:
+            KeyError: If no scenario with that name exists.
+        """
+        try:
+            del self._scenarios[name]
+        except KeyError:
+            raise KeyError(f"Scenario '{name}' not found") from None
 
     # ── Template management ──────────────────────────────────────────────
 
