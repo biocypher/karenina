@@ -169,6 +169,14 @@ class AdapterSpec:
     supports_mcp: bool = False
     supports_tools: bool = False
 
+    # True when the underlying runtime is itself an agent with built-in tools
+    # (e.g. Claude Code). For these adapters, the LLMPort path loses tool
+    # call traces because the runtime executes tools internally. The pipeline
+    # should prefer the AgentPort path to capture the full conversation.
+    # False for scaffolded adapters (LangChain, Claude Tool) where the adapter
+    # explicitly orchestrates each tool call turn.
+    natively_agentic: bool = False
+
 
 class AdapterRegistry:
     """Central registry for adapter specifications.

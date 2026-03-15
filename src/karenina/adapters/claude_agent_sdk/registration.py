@@ -76,6 +76,7 @@ _claude_sdk_spec = AdapterSpec(
     routes_to=None,
     supports_mcp=True,
     supports_tools=True,
+    natively_agentic=True,
 )
 
 AdapterRegistry.register(_claude_sdk_spec)

@@ -221,8 +221,15 @@ class GenerateAnswerStage(BaseVerificationStage):
         if answering_model.interface == "manual":
             logger.info(f"Manual interface: Using MD5 hash '{question_hash}' from question text for trace lookup")
 
-        # Step 2: Determine whether to use AgentPort (with MCP) or LLMPort (simple)
-        use_agent = bool(answering_model.mcp_urls_dict)
+        # Step 2: Determine whether to use AgentPort or LLMPort.
+        # Use AgentPort when MCP servers are configured, OR when the adapter
+        # is natively agentic (e.g. Claude Code). Natively agentic runtimes
+        # execute tools internally; the LLMPort path would lose the tool
+        # call trace.
+        from karenina.adapters.registry import AdapterRegistry
+
+        spec = AdapterRegistry.get_spec(answering_model.interface)
+        use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.natively_agentic)
         answering_agent: AgentPort | None = None
         answering_llm: LLMPort | None = None
 
