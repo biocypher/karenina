@@ -36,6 +36,7 @@ from .primitives import (
 )
 from .question import Question, QuestionRegistryEntry
 from .rubric import (
+    AgenticRubricTrait,
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,
@@ -99,6 +100,7 @@ __all__ = [
     "LLMRubricTrait",
     "RegexTrait",
     "CallableTrait",
+    "AgenticRubricTrait",
     "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",

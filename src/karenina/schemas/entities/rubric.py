@@ -6,10 +6,13 @@ import base64
 import re
 import warnings
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from karenina.schemas.config.models import ModelConfig
 
 TraitKind = Literal["boolean", "score", "literal"]
 
@@ -569,6 +572,78 @@ class MetricRubricTrait(BaseModel):
             return {"tp", "fn", "fp"}  # TN cannot be computed
         else:  # full_matrix
             return {"tp", "fn", "tn", "fp"}  # All four can be computed
+
+
+class AgenticRubricTrait(BaseModel):
+    """Rubric trait evaluated by an agent with tools.
+
+    Unlike LLMRubricTrait (single LLM call), this trait launches an agent
+    that can investigate the response and workspace using tools before
+    producing a score. Supports boolean, score, and literal kinds.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str = Field(..., min_length=1)
+    kind: Literal["boolean", "score", "literal"]
+    higher_is_better: bool | None = None
+    weight: float = 1.0
+    min_score: int | None = None
+    max_score: int | None = None
+    classes: dict[str, str] | None = None
+    context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    max_turns: int = Field(15, gt=0)
+    timeout_seconds: int = Field(120, gt=0)
+    model_override: "ModelConfig | None" = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_legacy_defaults(cls, data: Any) -> Any:
+        """Set higher_is_better default for backward compatibility."""
+        if isinstance(data, dict) and data.get("higher_is_better") is None:
+            data["higher_is_better"] = True
+        return data
+
+    @model_validator(mode="after")
+    def validate_kind_fields(self) -> "AgenticRubricTrait":
+        """Validate kind-specific field constraints."""
+        if self.kind == "literal":
+            if not self.classes:
+                raise ValueError("classes field is required for literal kind")
+            self.min_score = 0
+            self.max_score = len(self.classes) - 1
+        return self
+
+    @model_validator(mode="after")
+    def validate_model_override_supports_agents(self) -> "AgenticRubricTrait":
+        """Validate that model_override supports agent creation (if set)."""
+        if self.model_override is not None:
+            from karenina.adapters.registry import AdapterRegistry
+
+            spec = AdapterRegistry.get_spec(self.model_override.interface)
+            if spec is None or spec.agent_factory is None:
+                raise ValueError(
+                    f"model_override interface '{self.model_override.interface}' "
+                    "does not support agent creation (no agent_factory registered). "
+                    "Use an interface that supports AgentPort (e.g. 'claude_agent_sdk')."
+                )
+        return self
+
+    def validate_score(self, value: int | bool) -> bool:
+        """Validate that a given score is valid for this trait."""
+        if self.kind == "boolean":
+            return isinstance(value, bool)
+        else:
+            if isinstance(value, bool):
+                return False
+            if not isinstance(value, int):
+                return False
+            min_val = self.min_score if self.min_score is not None else 0
+            max_val = self.max_score if self.max_score is not None else 5
+            if self.kind == "literal" and value == -1:
+                return True
+            return min_val <= value <= max_val
 
 
 class Rubric(BaseModel):
