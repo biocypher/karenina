@@ -7,6 +7,11 @@ combine into the template-level verify() result. Common patterns:
 - AnyOf: at least one field must pass
 - AtLeastN: N or more fields must pass
 - FieldCheck: leaf node referencing a single field's result
+
+Generic composition logic (evaluate_composition) lives in
+``schemas.primitives.composition``. This module adds the
+template-domain leaf (FieldCheck), the discriminated StrategyNode union,
+and the ``evaluate_strategy()`` wrapper.
 """
 
 from __future__ import annotations
@@ -15,6 +20,11 @@ import logging
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
+
+from karenina.schemas.primitives.composition import AllOf as _GenericAllOf
+from karenina.schemas.primitives.composition import AnyOf as _GenericAnyOf
+from karenina.schemas.primitives.composition import AtLeastN as _GenericAtLeastN
+from karenina.schemas.primitives.composition import evaluate_composition
 
 logger = logging.getLogger(__name__)
 
@@ -26,25 +36,33 @@ class FieldCheck(BaseModel):
     field: str
 
 
-class AllOf(BaseModel):
-    """All child conditions must pass."""
+class AllOf(_GenericAllOf):
+    """All child conditions must pass (template domain).
 
-    type: Literal["all_of"] = "all_of"
+    Overrides conditions with the discriminated StrategyNode union
+    so nested trees deserialize correctly.
+    """
+
     conditions: list[StrategyNode] = []
 
 
-class AnyOf(BaseModel):
-    """At least one child condition must pass."""
+class AnyOf(_GenericAnyOf):
+    """At least one child condition must pass (template domain).
 
-    type: Literal["any_of"] = "any_of"
+    Overrides conditions with the discriminated StrategyNode union
+    so nested trees deserialize correctly.
+    """
+
     conditions: list[StrategyNode] = []
 
 
-class AtLeastN(BaseModel):
-    """N or more child conditions must pass."""
+class AtLeastN(_GenericAtLeastN):
+    """N or more child conditions must pass (template domain).
 
-    type: Literal["at_least_n"] = "at_least_n"
-    n: int
+    Overrides conditions with the discriminated StrategyNode union
+    so nested trees deserialize correctly.
+    """
+
     conditions: list[StrategyNode] = []
 
 
@@ -62,6 +80,9 @@ AtLeastN.model_rebuild()
 def evaluate_strategy(node: StrategyNode, field_results: dict[str, bool]) -> bool:
     """Evaluate a composition strategy tree against field results.
 
+    Thin wrapper around ``evaluate_composition()`` that supplies the
+    FieldCheck leaf evaluator for the template domain.
+
     Args:
         node: The root node of the strategy tree.
         field_results: Mapping of field names to their pass/fail results.
@@ -72,18 +93,8 @@ def evaluate_strategy(node: StrategyNode, field_results: dict[str, bool]) -> boo
     Raises:
         KeyError: If a FieldCheck references a field not in field_results.
     """
-    if isinstance(node, FieldCheck):
-        return field_results[node.field]
-    if isinstance(node, AllOf):
-        if not node.conditions:
-            return True
-        return all(evaluate_strategy(c, field_results) for c in node.conditions)
-    if isinstance(node, AnyOf):
-        if not node.conditions:
-            return False
-        return any(evaluate_strategy(c, field_results) for c in node.conditions)
-    if isinstance(node, AtLeastN):
-        passing = sum(1 for c in node.conditions if evaluate_strategy(c, field_results))
-        return passing >= node.n
 
-    raise TypeError(f"Unknown strategy node type: {type(node)}")
+    def _field_check_evaluator(leaf: FieldCheck) -> bool:
+        return field_results[leaf.field]
+
+    return evaluate_composition(node, _field_check_evaluator)
