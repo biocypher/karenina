@@ -173,17 +173,28 @@ class NumericRange(VerificationPrimitive):
     """Check that extracted number falls within a range.
 
     Either min or max can be None for open-ended ranges.
-    Boundaries are inclusive.
+    Boundaries are inclusive by default. Set ``exclusive_min`` or
+    ``exclusive_max`` to True for strict inequality on that side.
     """
 
     min: float | None = None
     max: float | None = None
+    exclusive_min: bool = False
+    exclusive_max: bool = False
 
     def check(self, extracted: Any, _expected: Any) -> bool:
         val = float(extracted)
-        if self.min is not None and val < self.min:
-            return False
-        return not (self.max is not None and val > self.max)
+        if self.min is not None:
+            if self.exclusive_min and val <= self.min:
+                return False
+            if not self.exclusive_min and val < self.min:
+                return False
+        if self.max is not None:
+            if self.exclusive_max and val >= self.max:
+                return False
+            if not self.exclusive_max and val > self.max:
+                return False
+        return True
 
 
 # --- List Primitives ---
