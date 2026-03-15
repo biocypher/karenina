@@ -35,6 +35,12 @@ class VerificationResultMetadata(BaseModel):
     run_name: str | None = None
     replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
 
+    # Scenario linking metadata (all nullable; None for standalone questions)
+    scenario_id: str | None = None
+    scenario_node: str | None = None
+    scenario_turn: int | None = None
+    scenario_path: list[str] | None = None
+
     @property
     def answering_model(self) -> str:
         """Backward-compatible accessor returning answering model display string."""
