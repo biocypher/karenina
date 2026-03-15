@@ -15,13 +15,15 @@ This package contains all verification pipeline stages:
 | 8 | VerifyTemplateStage | Run verify() method |
 | 9 | EmbeddingCheckStage | Semantic similarity fallback |
 | 10 | DeepJudgmentAutoFailStage | Excerpt validation for templates |
-| 11 | RubricEvaluationStage | Evaluate rubric traits |
+| 11a | RubricEvaluationStage | Evaluate rubric traits |
+| 11b | AgenticRubricEvaluationStage | Agentic rubric investigation + scoring |
 | 12 | DeepJudgmentRubricAutoFailStage | Excerpt validation for rubrics |
 | 13 | FinalizeResultStage | Build VerificationResult |
 """
 
 from .abstention_check import AbstentionCheckStage
 from .agentic_parse_template import AgenticParseTemplateStage
+from .agentic_rubric_evaluation import AgenticRubricEvaluationStage
 from .deep_judgment_autofail import DeepJudgmentAutoFailStage
 from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
@@ -44,6 +46,7 @@ __all__ = [
     "SufficiencyCheckStage",
     "ParseTemplateStage",
     "AgenticParseTemplateStage",
+    "AgenticRubricEvaluationStage",
     "VerifyTemplateStage",
     "EmbeddingCheckStage",
     "DeepJudgmentAutoFailStage",
