@@ -1,6 +1,8 @@
 """Multi-turn scenario benchmarks for karenina."""
 
 from karenina.scenario.builder import Scenario
+from karenina.scenario.edge_resolution import evaluate_state_check, resolve_next_node
+from karenina.scenario.outcome_evaluation import evaluate_outcome
 from karenina.scenario.sugar import (
     all_of,
     all_turns,
@@ -35,6 +37,11 @@ __all__ = [
     "END",
     "ModelOverride",
     "ScenarioOutcomeCriterion",
+    # Edge resolution
+    "evaluate_state_check",
+    "resolve_next_node",
+    # Outcome evaluation
+    "evaluate_outcome",
     # Sugar functions
     "all_of",
     "all_turns",
