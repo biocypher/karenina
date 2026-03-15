@@ -662,16 +662,21 @@ class Rubric(BaseModel):
     metric_traits: list[MetricRubricTrait] = Field(
         default_factory=list, description="List of metric-based evaluation traits (confusion-matrix analysis)"
     )
+    agentic_traits: list[AgenticRubricTrait] = Field(
+        default_factory=list,
+        description="List of agent-investigated evaluation traits",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
     def get_trait_names(self) -> list[str]:
-        """Get list of all trait names in this rubric (LLM, regex, callable, and metric)."""
+        """Get list of all trait names in this rubric (LLM, regex, callable, metric, and agentic)."""
         llm_names = [trait.name for trait in self.llm_traits]
         regex_names = [trait.name for trait in self.regex_traits]
         callable_names = [trait.name for trait in self.callable_traits]
         metric_names = [trait.name for trait in self.metric_traits]
-        return llm_names + regex_names + callable_names + metric_names
+        agentic_names = [trait.name for trait in self.agentic_traits]
+        return llm_names + regex_names + callable_names + metric_names + agentic_names
 
     def get_llm_trait_names(self) -> list[str]:
         """Get list of LLM trait names only."""
@@ -688,6 +693,10 @@ class Rubric(BaseModel):
     def get_metric_trait_names(self) -> list[str]:
         """Get list of metric trait names only."""
         return [trait.name for trait in self.metric_traits]
+
+    def get_agentic_trait_names(self) -> list[str]:
+        """Get list of agentic trait names only."""
+        return [trait.name for trait in self.agentic_traits]
 
     def get_trait_max_scores(self) -> dict[str, int]:
         """Get max_score for all score-based traits (LLM and callable).
@@ -706,6 +715,10 @@ class Rubric(BaseModel):
         for callable_trait in self.callable_traits:
             if callable_trait.kind == "score" and callable_trait.max_score is not None:
                 max_scores[callable_trait.name] = callable_trait.max_score
+
+        for agentic_trait in self.agentic_traits:
+            if agentic_trait.kind in ("score", "literal") and agentic_trait.max_score is not None:
+                max_scores[agentic_trait.name] = agentic_trait.max_score
 
         return max_scores
 
@@ -731,6 +744,12 @@ class Rubric(BaseModel):
         callable_trait: CallableTrait
         for callable_trait in self.callable_traits:
             directionalities[callable_trait.name] = callable_trait.higher_is_better
+
+        for agentic_trait in self.agentic_traits:
+            # higher_is_better defaults to True via set_legacy_defaults validator
+            directionalities[agentic_trait.name] = (
+                agentic_trait.higher_is_better if agentic_trait.higher_is_better is not None else True
+            )
 
         # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
@@ -821,10 +840,12 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     merged_regex_traits = list(global_rubric.regex_traits) + list(question_rubric.regex_traits)
     merged_callable_traits = list(global_rubric.callable_traits) + list(question_rubric.callable_traits)
     merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
+    merged_agentic_traits = list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits)
 
     return Rubric(
         llm_traits=merged_traits,
         regex_traits=merged_regex_traits,
         callable_traits=merged_callable_traits,
         metric_traits=merged_metric_traits,
+        agentic_traits=merged_agentic_traits,
     )

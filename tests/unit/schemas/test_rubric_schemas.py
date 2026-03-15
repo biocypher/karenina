@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from karenina.schemas.entities import (
+    AgenticRubricTrait,
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,
@@ -753,3 +754,63 @@ class TestAgenticRubricTrait:
                 kind="boolean",
                 timeout_seconds=0,
             )
+
+
+@pytest.mark.unit
+class TestRubricAgenticTraitSupport:
+    """Tests for Rubric model updates to support agentic traits."""
+
+    def _make_agentic_trait(self, name: str = "code_quality") -> AgenticRubricTrait:
+        return AgenticRubricTrait(
+            name=name,
+            description="Check code quality.",
+            kind="boolean",
+        )
+
+    def test_rubric_accepts_agentic_traits(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait()])
+        assert len(rubric.agentic_traits) == 1
+
+    def test_get_trait_names_includes_agentic(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait("agent_check")])
+        assert "agent_check" in rubric.get_trait_names()
+
+    def test_get_agentic_trait_names(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait("a1")])
+        assert rubric.get_agentic_trait_names() == ["a1"]
+
+    def test_get_trait_directionalities_includes_agentic(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait()])
+        dirs = rubric.get_trait_directionalities()
+        assert "code_quality" in dirs
+        assert dirs["code_quality"] is True
+
+    def test_get_trait_max_scores_includes_agentic_score(self):
+        trait = AgenticRubricTrait(
+            name="depth",
+            description="Rate depth.",
+            kind="score",
+            min_score=1,
+            max_score=5,
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        assert rubric.get_trait_max_scores()["depth"] == 5
+
+    def test_merge_rubrics_includes_agentic(self):
+        r1 = Rubric(agentic_traits=[self._make_agentic_trait("t1")])
+        r2 = Rubric(agentic_traits=[self._make_agentic_trait("t2")])
+        merged = merge_rubrics(r1, r2)
+        assert len(merged.agentic_traits) == 2
+
+    def test_merge_rubrics_detects_agentic_name_conflict(self):
+        r1 = Rubric(agentic_traits=[self._make_agentic_trait("dup")])
+        r2 = Rubric(agentic_traits=[self._make_agentic_trait("dup")])
+        with pytest.raises(ValueError, match="Trait name conflicts"):
+            merge_rubrics(r1, r2)
+
+    def test_merge_rubrics_cross_type_name_conflict(self):
+        """Agentic trait name colliding with LLM trait name is detected."""
+        r1 = Rubric(llm_traits=[LLMRubricTrait(name="shared", kind="boolean")])
+        r2 = Rubric(agentic_traits=[self._make_agentic_trait("shared")])
+        with pytest.raises(ValueError, match="Trait name conflicts"):
+            merge_rubrics(r1, r2)
