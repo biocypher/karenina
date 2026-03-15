@@ -5,6 +5,8 @@ judge-extracted values. Fields using TracePrimitive are excluded from
 the judge's parsing schema.
 """
 
+from __future__ import annotations
+
 import re
 from typing import Any
 

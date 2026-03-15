@@ -6,6 +6,8 @@ Two categories:
 - Trace primitives: operate on raw LLM response (field excluded from parsing schema)
 """
 
+from __future__ import annotations
+
 from karenina.schemas.primitives.comparisons import (
     BooleanMatch,
     ContainsAll,

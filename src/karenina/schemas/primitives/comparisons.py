@@ -5,6 +5,8 @@ in the parsing schema, and check() compares the extracted value against
 ground truth.
 """
 
+from __future__ import annotations
+
 import logging
 import re
 from datetime import datetime, timedelta
