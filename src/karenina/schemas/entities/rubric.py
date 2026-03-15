@@ -758,7 +758,7 @@ class Rubric(BaseModel):
         """
         Validate that an evaluation result matches this rubric structure.
 
-        Note: This validates LLM, regex, and callable trait scores only. Metric traits
+        Note: This validates LLM, regex, callable, and agentic trait scores. Metric traits
         are stored separately in VerificationResult fields (metric_trait_confusion_lists
         and metric_trait_metrics) and don't participate in this validation.
         """
@@ -766,7 +766,8 @@ class Rubric(BaseModel):
         llm_names = set(self.get_llm_trait_names())
         regex_names = set(self.get_regex_trait_names())
         callable_names = set(self.get_callable_trait_names())
-        expected_names = llm_names | regex_names | callable_names
+        agentic_names = set(self.get_agentic_trait_names())
+        expected_names = llm_names | regex_names | callable_names | agentic_names
 
         eval_names = set(evaluation.keys())
 
@@ -778,10 +779,14 @@ class Rubric(BaseModel):
         llm_trait_map = {trait.name: trait for trait in self.llm_traits}
         regex_trait_map = {trait.name: trait for trait in self.regex_traits}
         callable_trait_map = {trait.name: trait for trait in self.callable_traits}
+        agentic_trait_map = {trait.name: trait for trait in self.agentic_traits}
 
         for name, value in evaluation.items():
             if name in llm_trait_map:
                 if not llm_trait_map[name].validate_score(value):
+                    return False
+            elif name in agentic_trait_map:
+                if not agentic_trait_map[name].validate_score(value):
                     return False
             elif name in regex_trait_map or name in callable_trait_map:
                 # Regex and callable traits always return boolean

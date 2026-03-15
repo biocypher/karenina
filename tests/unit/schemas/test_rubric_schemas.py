@@ -814,3 +814,29 @@ class TestRubricAgenticTraitSupport:
         r2 = Rubric(agentic_traits=[self._make_agentic_trait("shared")])
         with pytest.raises(ValueError, match="Trait name conflicts"):
             merge_rubrics(r1, r2)
+
+    def test_validate_evaluation_includes_agentic(self):
+        """validate_evaluation checks agentic trait scores."""
+        trait = AgenticRubricTrait(
+            name="code_quality",
+            description="Check.",
+            kind="boolean",
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        assert rubric.validate_evaluation({"code_quality": True}) is True
+        assert rubric.validate_evaluation({"code_quality": 5}) is False  # boolean trait expects bool
+        assert rubric.validate_evaluation({}) is False  # missing trait
+
+    def test_validate_evaluation_agentic_score_trait(self):
+        """validate_evaluation checks agentic score trait range."""
+        trait = AgenticRubricTrait(
+            name="depth",
+            description="Rate depth.",
+            kind="score",
+            min_score=1,
+            max_score=5,
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        assert rubric.validate_evaluation({"depth": 3}) is True
+        assert rubric.validate_evaluation({"depth": 0}) is False  # below min
+        assert rubric.validate_evaluation({"depth": 6}) is False  # above max
