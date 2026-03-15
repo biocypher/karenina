@@ -266,6 +266,11 @@ class GenerateAnswerStage(BaseVerificationStage):
             if answering_model.system_prompt:
                 adapter_messages.append(Message.system(answering_model.system_prompt))
 
+            # Inject conversation history from prior scenario turns (if present)
+            conversation_history = context.get_artifact("conversation_history")
+            if conversation_history:
+                adapter_messages.extend(conversation_history)
+
             # Append workspace location to the user prompt so the agent
             # knows where its files are instead of searching the filesystem.
             user_prompt = constructed_prompt
