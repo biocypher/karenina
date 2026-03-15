@@ -265,7 +265,17 @@ class GenerateAnswerStage(BaseVerificationStage):
             adapter_messages: list[Message] = []
             if answering_model.system_prompt:
                 adapter_messages.append(Message.system(answering_model.system_prompt))
-            adapter_messages.append(Message.user(constructed_prompt))
+
+            # Append workspace location to the user prompt so the agent
+            # knows where its files are instead of searching the filesystem.
+            user_prompt = constructed_prompt
+            if context.workspace_path:
+                user_prompt += (
+                    f"\n\nWorkspace directory: {context.workspace_path}\n"
+                    "All input data files are in this directory. "
+                    "Save any output files here as well."
+                )
+            adapter_messages.append(Message.user(user_prompt))
 
             if use_agent and answering_agent is not None:
                 # AgentPort path: Use for MCP-enabled models with tool calling
