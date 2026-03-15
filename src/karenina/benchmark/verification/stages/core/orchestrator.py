@@ -11,6 +11,7 @@ from karenina.schemas.verification import VerificationResult
 
 from ..pipeline.abstention_check import AbstentionCheckStage
 from ..pipeline.agentic_parse_template import AgenticParseTemplateStage
+from ..pipeline.agentic_rubric_evaluation import AgenticRubricEvaluationStage
 from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage
 from ..pipeline.deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from ..pipeline.embedding_check import EmbeddingCheckStage
@@ -58,6 +59,7 @@ class StageOrchestrator:
         9. EmbeddingCheckStage (optional, after verify)
         10. DeepJudgmentAutoFailStage (optional, after verify)
         11. RubricEvaluationStage (optional, after generate)
+        11b. AgenticRubricEvaluationStage (optional, after rubric evaluation)
         12. DeepJudgmentRubricAutoFailStage (optional, after rubric)
         13. FinalizeResultStage (always last)
     """
@@ -130,6 +132,10 @@ class StageOrchestrator:
                 # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
                 stages.append(DeepJudgmentRubricAutoFailStage())
 
+            # Stage 11b: Agentic rubric evaluation
+            if rubric and rubric.agentic_traits:
+                stages.append(AgenticRubricEvaluationStage())
+
             # Finalize result (always last)
             stages.append(FinalizeResultStage())
 
@@ -179,6 +185,10 @@ class StageOrchestrator:
                 stages.append(RubricEvaluationStage())
                 # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
                 stages.append(DeepJudgmentRubricAutoFailStage())
+
+            # Stage 11b: Agentic rubric evaluation (after Stage 11)
+            if evaluation_mode == "template_and_rubric" and rubric and rubric.agentic_traits:
+                stages.append(AgenticRubricEvaluationStage())
 
             # Finalize result (always last)
             stages.append(FinalizeResultStage())

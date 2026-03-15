@@ -31,7 +31,7 @@ from karenina.benchmark.verification.stages import (
     VerificationContext,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import LLMRubricTrait, Rubric
+from karenina.schemas.entities import AgenticRubricTrait, LLMRubricTrait, Rubric
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
@@ -927,3 +927,97 @@ class TestPipelineResults:
         # FinalizeResultStage builds ModelIdentity from context.answering_model/parsing_model
         assert result.metadata.answering_model == "langchain:claude-haiku-4-5"
         assert result.metadata.parsing_model == "langchain:claude-haiku-4-5"
+
+
+# =============================================================================
+# Agentic Rubric Orchestrator Registration Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestOrchestratorAgenticRubric:
+    """Tests for Stage 11b registration in orchestrator."""
+
+    def _make_agentic_rubric(self):
+        return Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="code_quality",
+                    description="Check code quality.",
+                    kind="boolean",
+                )
+            ]
+        )
+
+    def test_stage_11b_registered_in_template_and_rubric_mode(self):
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" in stage_names
+
+    def test_stage_11b_registered_in_rubric_only_mode(self):
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="rubric_only",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" in stage_names
+
+    def test_stage_11b_not_registered_in_template_only_mode(self):
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_only",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" not in stage_names
+
+    def test_stage_11b_not_registered_when_no_agentic_traits(self):
+        rubric = Rubric(
+            llm_traits=[
+                LLMRubricTrait(name="clarity", kind="boolean"),
+            ]
+        )
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" not in stage_names
+
+    def test_stage_11b_after_rubric_evaluation(self):
+        """Stage 11b comes after RubricEvaluation stage."""
+        rubric = Rubric(
+            llm_traits=[LLMRubricTrait(name="clarity", kind="boolean")],
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="code_quality",
+                    description="Check.",
+                    kind="boolean",
+                )
+            ],
+        )
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+        stage_names = [s.name for s in orch.stages]
+        rubric_idx = stage_names.index("RubricEvaluation")
+        agentic_idx = stage_names.index("AgenticRubricEvaluation")
+        assert agentic_idx > rubric_idx
+
+    def test_agentic_only_rubric_in_rubric_only_mode(self):
+        """Agentic-only rubric (no LLM/regex/callable/metric) still gets Stage 11b."""
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="rubric_only",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" in stage_names
+        # Classical RubricEvaluation should NOT be registered (no LLM/regex/callable/metric traits)
+        assert "RubricEvaluation" not in stage_names
