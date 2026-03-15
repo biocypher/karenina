@@ -73,7 +73,7 @@ class RubricResults(BaseModel):
     def to_dataframe(
         self,
         trait_type: Literal[
-            "llm_score", "llm_binary", "llm_literal", "llm", "regex", "callable", "metric", "all"
+            "llm_score", "llm_binary", "llm_literal", "llm", "regex", "callable", "metric", "agentic", "all"
         ] = "all",
     ) -> Any:
         """
@@ -91,13 +91,14 @@ class RubricResults(BaseModel):
                 - "regex": Regex traits (boolean)
                 - "callable": Callable traits (boolean or score)
                 - "metric": Metric traits (precision, recall, f1) - EXPLODED by metric
+                - "agentic": Agentic traits (boolean or score)
                 - "all": All trait types combined (default)
 
         Column ordering:
             1. Status: completed_without_errors, error
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
-            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, metric_name
+            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, evaluation_method, metric_name
             5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
             6. Execution Metadata: execution_time, timestamp, run_name
             7. Deep Judgment (if include_deep_judgment=True):

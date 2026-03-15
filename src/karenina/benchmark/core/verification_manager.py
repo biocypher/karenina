@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ class VerificationManager:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        workspace_root: "Path | None" = None,
     ) -> VerificationResultSet:
         """
         Run verification on the benchmark using existing execution system.
@@ -45,6 +47,7 @@ class VerificationManager:
             run_name: Optional run name for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
+            workspace_root: Root directory for task workspaces (from Benchmark).
 
         Returns:
             VerificationResultSet containing all verification results
@@ -119,6 +122,7 @@ class VerificationManager:
                 few_shot_examples=q_data.get("few_shot_examples"),
                 question_rubric=question_rubric_dict,
                 keywords=q_data.get("keywords"),
+                workspace_path=q_data.get("workspace_path"),
             )
             templates.append(template)
 
@@ -156,6 +160,7 @@ class VerificationManager:
             storage_url=storage_url,
             benchmark_name=self.base.name,
             progress_callback=batch_progress_callback,
+            workspace_root=workspace_root,
         )
 
         return results

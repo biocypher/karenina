@@ -126,11 +126,14 @@ class QuestionManager:
             # Use answer notes from Question object if not overridden
             if answer_notes is None:
                 answer_notes = question.answer_notes
+            # Extract workspace path for coding benchmarks
+            workspace_path = question.workspace_path
         elif isinstance(question, str):
             # Traditional string input
             question_text = question
             raw_answer_text = raw_answer or ""
             keywords = None
+            workspace_path = None
 
             # Validate required parameters for string input
             if raw_answer is None:
@@ -199,6 +202,7 @@ class QuestionManager:
             keywords,  # Pass keywords from Question object if available
             few_shot_examples,
             answer_notes=answer_notes,
+            workspace_path=workspace_path,
         )
 
         # Update cache

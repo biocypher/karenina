@@ -266,6 +266,7 @@ class TemplateManager:
                     question_rubric=question_rubric,
                     keywords=q_data.get("keywords"),
                     few_shot_examples=q_data.get("few_shot_examples"),
+                    workspace_path=q_data.get("workspace_path"),
                 )
                 templates.append(template)
         return templates

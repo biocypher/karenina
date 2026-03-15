@@ -1,0 +1,286 @@
+"""Tests for AgenticTraitEvaluator."""
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from karenina.ports import AgentResult, Message, Role
+from karenina.ports.usage import UsageMetadata
+from karenina.schemas.config.models import ModelConfig
+from karenina.schemas.entities.rubric import AgenticRubricTrait
+from karenina.schemas.outputs.rubric import SingleBooleanScore, SingleNumericScore
+
+
+def _make_trait(
+    name: str = "test_trait",
+    kind: str = "boolean",
+    context_mode: str = "trace_only",
+) -> AgenticRubricTrait:
+    """Create a test AgenticRubricTrait."""
+    return AgenticRubricTrait(
+        name=name,
+        description="Check quality.",
+        kind=kind,
+        context_mode=context_mode,
+    )
+
+
+def _make_model_config() -> ModelConfig:
+    """Create a test ModelConfig with agent-capable interface."""
+    return ModelConfig(
+        id="test-agent-model",
+        model_name="test-model",
+        model_provider="anthropic",
+        interface="claude_agent_sdk",
+    )
+
+
+def _make_agent_result(
+    raw_trace: str = "Investigation complete.",
+    turns: int = 3,
+    limit_reached: bool = False,
+) -> AgentResult:
+    """Create a realistic AgentResult for test mocking."""
+    return AgentResult(
+        final_response="Summary of findings.",
+        raw_trace=raw_trace,
+        trace_messages=[Message.assistant("Summary of findings.")],
+        usage=UsageMetadata(input_tokens=100, output_tokens=50),
+        turns=turns,
+        limit_reached=limit_reached,
+    )
+
+
+def _make_parse_result(parsed: object) -> MagicMock:
+    """Create a mock ParsePortResult."""
+    mock = MagicMock()
+    mock.parsed = parsed
+    return mock
+
+
+@pytest.mark.unit
+class TestAgenticTraitEvaluator:
+    """Tests for the agentic trait evaluator."""
+
+    def test_evaluate_single_boolean_trait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Single boolean trait returns bool score and trace."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(
+            raw_trace="I investigated and found the code is clean.",
+            turns=3,
+            limit_reached=False,
+        )
+
+        fake_parser = MagicMock()
+        parsed_score = SingleBooleanScore(result=True)
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(parsed_score)
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait()
+
+        score, trace = evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path=None,
+        )
+
+        assert score is True
+        assert trace is not None
+        assert "investigated" in trace
+
+    def test_evaluate_single_score_trait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Single score trait returns int score."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(
+            raw_trace="Code quality is moderate.",
+            turns=5,
+            limit_reached=False,
+        )
+
+        fake_parser = MagicMock()
+        parsed_score = SingleNumericScore(score=3)
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(parsed_score)
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait(kind="score")
+
+        score, trace = evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path=None,
+        )
+
+        assert score == 3
+
+    def test_evaluate_trait_agent_failure_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Agent failure returns None score and None trace."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.side_effect = RuntimeError("Agent timed out")
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait()
+
+        score, trace = evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path=None,
+        )
+
+        assert score is None
+        assert trace is None
+
+    def test_extraction_failure_preserves_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Parser failure returns None score but preserves the investigation trace."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(
+            raw_trace="I found several issues.",
+        )
+
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.side_effect = RuntimeError("Parse failed")
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait()
+
+        score, trace = evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path=None,
+        )
+
+        assert score is None
+        assert trace == "I found several issues."
+
+    def test_workspace_only_mode_excludes_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """workspace_only context_mode does not include raw_llm_response in prompt."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(
+            raw_trace="Checked workspace.",
+            turns=2,
+            limit_reached=False,
+        )
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(
+            SingleBooleanScore(result=True),
+        )
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait(context_mode="workspace_only")
+
+        evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path="/tmp/workspace",
+        )
+
+        # Verify the user message sent to agent does NOT contain the trace
+        call_args = fake_agent.run.call_args
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        user_msgs = [m for m in messages if m.role == Role.USER]
+        assert len(user_msgs) == 1
+        user_text = user_msgs[0].text
+        assert "def foo(): pass" not in user_text
+        assert "/tmp/workspace" in user_text
+
+    def test_trace_only_mode_excludes_workspace(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """trace_only context_mode does not include workspace path in prompt."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(
+            raw_trace="Checked trace only.",
+        )
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(
+            SingleBooleanScore(result=True),
+        )
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait(context_mode="trace_only")
+
+        evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path="/tmp/workspace",
+        )
+
+        call_args = fake_agent.run.call_args
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        user_msgs = [m for m in messages if m.role == Role.USER]
+        user_text = user_msgs[0].text
+        assert "def foo(): pass" in user_text
+        assert "/tmp/workspace" not in user_text
+
+    def test_trace_and_workspace_mode_includes_both(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """trace_and_workspace context_mode includes both trace and workspace."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(
+            raw_trace="Checked both.",
+        )
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(
+            SingleBooleanScore(result=True),
+        )
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        trait = _make_trait(context_mode="trace_and_workspace")
+
+        evaluator.evaluate_trait(
+            trait=trait,
+            question_text="Write a function.",
+            raw_llm_response="def foo(): pass",
+            workspace_path="/tmp/workspace",
+        )
+
+        call_args = fake_agent.run.call_args
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        user_msgs = [m for m in messages if m.role == Role.USER]
+        user_text = user_msgs[0].text
+        assert "def foo(): pass" in user_text
+        assert "/tmp/workspace" in user_text
+
+    def test_run_extraction_is_public(self) -> None:
+        """run_extraction is a public method (needed by Task 8 shared strategy)."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        assert hasattr(evaluator, "run_extraction")
+        assert callable(evaluator.run_extraction)

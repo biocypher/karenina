@@ -60,6 +60,7 @@ from .dataframes import (
 # Core entity models (from entities/)
 # ============================================================================
 from .entities import (
+    AgenticRubricTrait,
     BaseAnswer,
     CallableTrait,
     LLMRubricTrait,
@@ -131,6 +132,7 @@ from .verification import (
 # Rebuild models to resolve forward references
 # Order matters: result containers before Job
 # ============================================================================
+AgenticRubricTrait.model_rebuild()
 RubricResults.model_rebuild()
 RubricJudgmentResults.model_rebuild()
 TemplateResults.model_rebuild()
@@ -147,6 +149,7 @@ __all__ = [
     "LLMRubricTrait",
     "RegexTrait",
     "CallableTrait",
+    "AgenticRubricTrait",
     "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",

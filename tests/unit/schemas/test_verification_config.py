@@ -1127,3 +1127,74 @@ def test_repr_shows_sufficiency_when_enabled() -> None:
 
     repr_str = repr(config)
     assert "Sufficiency: enabled" in repr_str
+
+
+# =============================================================================
+# VerificationConfig Agentic Rubric Config Fields Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAgenticRubricConfigFields:
+    """Tests for agentic rubric strategy and parallel fields on VerificationConfig."""
+
+    def test_defaults(self):
+        """New fields have correct defaults."""
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="test",
+                    model_name="test",
+                    model_provider="test",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+        assert config.agentic_rubric_strategy == "individual"
+        assert config.agentic_rubric_parallel is False
+
+    def test_shared_strategy(self):
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="test",
+                    model_name="test",
+                    model_provider="test",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+            agentic_rubric_strategy="shared",
+        )
+        assert config.agentic_rubric_strategy == "shared"
+
+    def test_parallel_enabled(self):
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="test",
+                    model_name="test",
+                    model_provider="test",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+            agentic_rubric_parallel=True,
+        )
+        assert config.agentic_rubric_parallel is True
+
+    def test_invalid_strategy_rejected(self):
+        with pytest.raises(ValueError):
+            VerificationConfig(
+                parsing_models=[
+                    ModelConfig(
+                        id="test",
+                        model_name="test",
+                        model_provider="test",
+                        interface="langchain",
+                    )
+                ],
+                parsing_only=True,
+                agentic_rubric_strategy="invalid",
+            )

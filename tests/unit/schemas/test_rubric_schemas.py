@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from karenina.schemas.entities import (
+    AgenticRubricTrait,
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,
@@ -624,3 +625,218 @@ def test_metric_requirements_constant() -> None:
     assert METRIC_REQUIREMENTS["specificity"] == {"tn", "fp"}
     assert METRIC_REQUIREMENTS["accuracy"] == {"tp", "tn", "fp", "fn"}
     assert METRIC_REQUIREMENTS["f1"] == {"tp", "fp", "fn"}
+
+
+# =============================================================================
+# AgenticRubricTrait Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAgenticRubricTrait:
+    """Tests for AgenticRubricTrait schema model."""
+
+    def test_minimal_boolean_trait(self):
+        """Boolean trait with only required fields."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        trait = AgenticRubricTrait(
+            name="code_quality",
+            description="Check whether code follows PEP 8.",
+            kind="boolean",
+        )
+        assert trait.name == "code_quality"
+        assert trait.kind == "boolean"
+        assert trait.context_mode == "trace_and_workspace"
+        assert trait.max_turns == 15
+        assert trait.timeout_seconds == 120
+        assert trait.model_override is None
+        assert trait.higher_is_better is True
+
+    def test_score_trait_with_range(self):
+        """Score trait with custom min/max."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        trait = AgenticRubricTrait(
+            name="thoroughness",
+            description="Rate investigation thoroughness.",
+            kind="score",
+            min_score=1,
+            max_score=10,
+        )
+        assert trait.min_score == 1
+        assert trait.max_score == 10
+
+    def test_literal_trait_requires_classes(self):
+        """Literal kind without classes raises ValueError."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        with pytest.raises(ValidationError, match="classes field is required"):
+            AgenticRubricTrait(
+                name="severity",
+                description="Classify severity.",
+                kind="literal",
+            )
+
+    def test_literal_trait_derives_scores(self):
+        """Literal kind auto-derives min_score=0, max_score=len(classes)-1."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        trait = AgenticRubricTrait(
+            name="severity",
+            description="Classify severity.",
+            kind="literal",
+            classes={"low": "Low severity", "medium": "Medium", "high": "High"},
+        )
+        assert trait.min_score == 0
+        assert trait.max_score == 2
+
+    def test_description_is_required(self):
+        """Description cannot be None or empty (it is the agent's task)."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        with pytest.raises(ValidationError):
+            AgenticRubricTrait(name="test", kind="boolean")
+
+    def test_extra_fields_forbidden(self):
+        """Extra fields raise validation error."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        with pytest.raises(ValidationError):
+            AgenticRubricTrait(
+                name="test",
+                description="Desc.",
+                kind="boolean",
+                unknown_field="bad",
+            )
+
+    def test_context_mode_values(self):
+        """All three context_mode values are accepted."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        for mode in ("workspace_only", "trace_and_workspace", "trace_only"):
+            trait = AgenticRubricTrait(
+                name="test",
+                description="Desc.",
+                kind="boolean",
+                context_mode=mode,
+            )
+            assert trait.context_mode == mode
+
+    def test_higher_is_better_legacy_default(self):
+        """Missing higher_is_better defaults to True via set_legacy_defaults."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        data = {"name": "test", "description": "Desc.", "kind": "boolean"}
+        trait = AgenticRubricTrait.model_validate(data)
+        assert trait.higher_is_better is True
+
+    def test_max_turns_must_be_positive(self):
+        """max_turns < 1 raises ValueError."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        with pytest.raises(ValidationError):
+            AgenticRubricTrait(
+                name="test",
+                description="Desc.",
+                kind="boolean",
+                max_turns=0,
+            )
+
+    def test_timeout_must_be_positive(self):
+        """timeout_seconds < 1 raises ValueError."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+        with pytest.raises(ValidationError):
+            AgenticRubricTrait(
+                name="test",
+                description="Desc.",
+                kind="boolean",
+                timeout_seconds=0,
+            )
+
+
+@pytest.mark.unit
+class TestRubricAgenticTraitSupport:
+    """Tests for Rubric model updates to support agentic traits."""
+
+    def _make_agentic_trait(self, name: str = "code_quality") -> AgenticRubricTrait:
+        return AgenticRubricTrait(
+            name=name,
+            description="Check code quality.",
+            kind="boolean",
+        )
+
+    def test_rubric_accepts_agentic_traits(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait()])
+        assert len(rubric.agentic_traits) == 1
+
+    def test_get_trait_names_includes_agentic(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait("agent_check")])
+        assert "agent_check" in rubric.get_trait_names()
+
+    def test_get_agentic_trait_names(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait("a1")])
+        assert rubric.get_agentic_trait_names() == ["a1"]
+
+    def test_get_trait_directionalities_includes_agentic(self):
+        rubric = Rubric(agentic_traits=[self._make_agentic_trait()])
+        dirs = rubric.get_trait_directionalities()
+        assert "code_quality" in dirs
+        assert dirs["code_quality"] is True
+
+    def test_get_trait_max_scores_includes_agentic_score(self):
+        trait = AgenticRubricTrait(
+            name="depth",
+            description="Rate depth.",
+            kind="score",
+            min_score=1,
+            max_score=5,
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        assert rubric.get_trait_max_scores()["depth"] == 5
+
+    def test_merge_rubrics_includes_agentic(self):
+        r1 = Rubric(agentic_traits=[self._make_agentic_trait("t1")])
+        r2 = Rubric(agentic_traits=[self._make_agentic_trait("t2")])
+        merged = merge_rubrics(r1, r2)
+        assert len(merged.agentic_traits) == 2
+
+    def test_merge_rubrics_detects_agentic_name_conflict(self):
+        r1 = Rubric(agentic_traits=[self._make_agentic_trait("dup")])
+        r2 = Rubric(agentic_traits=[self._make_agentic_trait("dup")])
+        with pytest.raises(ValueError, match="Trait name conflicts"):
+            merge_rubrics(r1, r2)
+
+    def test_merge_rubrics_cross_type_name_conflict(self):
+        """Agentic trait name colliding with LLM trait name is detected."""
+        r1 = Rubric(llm_traits=[LLMRubricTrait(name="shared", kind="boolean")])
+        r2 = Rubric(agentic_traits=[self._make_agentic_trait("shared")])
+        with pytest.raises(ValueError, match="Trait name conflicts"):
+            merge_rubrics(r1, r2)
+
+    def test_validate_evaluation_includes_agentic(self):
+        """validate_evaluation checks agentic trait scores."""
+        trait = AgenticRubricTrait(
+            name="code_quality",
+            description="Check.",
+            kind="boolean",
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        assert rubric.validate_evaluation({"code_quality": True}) is True
+        assert rubric.validate_evaluation({"code_quality": 5}) is False  # boolean trait expects bool
+        assert rubric.validate_evaluation({}) is False  # missing trait
+
+    def test_validate_evaluation_agentic_score_trait(self):
+        """validate_evaluation checks agentic score trait range."""
+        trait = AgenticRubricTrait(
+            name="depth",
+            description="Rate depth.",
+            kind="score",
+            min_score=1,
+            max_score=5,
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        assert rubric.validate_evaluation({"depth": 3}) is True
+        assert rubric.validate_evaluation({"depth": 0}) is False  # below min
+        assert rubric.validate_evaluation({"depth": 6}) is False  # above max

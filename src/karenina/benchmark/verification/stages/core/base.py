@@ -18,6 +18,7 @@ Logging Convention:
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from karenina.schemas.config import ModelConfig
@@ -188,6 +189,22 @@ class ArtifactKeys:
     TIMESTAMP = "timestamp"
     EXECUTION_TIME = "execution_time"
 
+    # ==========================================================================
+    # Agentic Parsing
+    # ==========================================================================
+
+    INVESTIGATION_TRACE = "investigation_trace"
+    WORKSPACE_PATH = "workspace_path"
+    AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
+
+    # ==========================================================================
+    # Agentic Rubric Evaluation
+    # ==========================================================================
+
+    AGENTIC_RUBRIC_EVALUATION_PERFORMED = "agentic_rubric_evaluation_performed"
+    AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
+    AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
+
 
 @dataclass
 class VerificationContext:
@@ -287,6 +304,24 @@ class VerificationContext:
 
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None
+
+    # Agentic Parsing Configuration
+    agentic_parsing: bool = False
+    agentic_judge_context: str = "workspace_only"
+    agentic_parsing_max_turns: int = 15
+    agentic_parsing_timeout: float = 120.0
+
+    # Agentic Rubric Configuration
+    agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
+    agentic_rubric_parallel: bool = False
+
+    # Workspace
+    question_workspace_path: str | None = None  # Raw relative path from Question
+    workspace_path: Path | None = None  # Resolved effective path (set by GenerateAnswer)
+    workspace_is_copy: bool = False  # True if workspace is a copy/fresh dir (safe to delete)
+    workspace_root: Path | None = None
+    workspace_copy: bool = True
+    workspace_cleanup: bool = True
 
     # Artifacts (populated by stages)
     artifacts: dict[str, Any] = field(default_factory=dict)

@@ -1,6 +1,7 @@
 """Verification configuration model."""
 
 import contextlib
+import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -22,6 +23,8 @@ from .config_presets import (
     validate_preset_metadata,
 )
 from .prompt_config import PromptConfig
+
+logger = logging.getLogger(__name__)
 
 # Default system prompts for answering and parsing models
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
@@ -162,6 +165,64 @@ class VerificationConfig(BaseModel):
 
     # Per-task-type prompt instructions (optional user-injected instructions for each pipeline stage)
     prompt_config: PromptConfig | None = None
+
+    # Agentic parsing
+    agentic_parsing: bool = Field(
+        default=False,
+        description=(
+            "Enable agentic parsing (Stage 7b). The judge uses tools to "
+            "independently verify artifacts before extracting structured data."
+        ),
+    )
+    agentic_judge_context: Literal["workspace_only", "trace_and_workspace", "trace_only"] = Field(
+        default="workspace_only",
+        description=(
+            "What context the investigation agent receives. "
+            "'workspace_only': question + workspace path (maximum independence). "
+            "'trace_and_workspace': answering agent trace + workspace path. "
+            "'trace_only': equivalent to classical Stage 7a parsing."
+        ),
+    )
+    agentic_parsing_max_turns: int = Field(
+        default=15,
+        description="Max turns for the investigation agent.",
+    )
+    agentic_parsing_timeout: float = Field(
+        default=120.0,
+        description="Timeout in seconds for the investigation agent.",
+    )
+
+    # Agentic rubric evaluation
+    agentic_rubric_strategy: Literal["individual", "shared"] = Field(
+        "individual",
+        description="How to evaluate agentic rubric traits. "
+        "'individual': one agent session per trait (robust, isolated). "
+        "'shared': one agent session for all traits (efficient, shared context).",
+    )
+    agentic_rubric_parallel: bool = Field(
+        False,
+        description="Enable parallel evaluation of agentic rubric traits. "
+        "Only applies to 'individual' strategy. Each trait gets a concurrent agent session.",
+    )
+
+    # Workspace (workspace_root lives on Benchmark, not here)
+    workspace_copy: bool = Field(
+        default=True,
+        description=(
+            "When True, pre-existing question workspaces are copied to a "
+            "sibling working directory before execution, protecting the "
+            "original for re-runs. When False, the pipeline works directly "
+            "in the original directory (destructive)."
+        ),
+    )
+    workspace_cleanup: bool = Field(
+        default=True,
+        description=(
+            "Whether to delete working copies after the run. Only applies to "
+            "copied or auto-created workspaces, never to original source "
+            "directories."
+        ),
+    )
 
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
@@ -329,6 +390,34 @@ class VerificationConfig(BaseModel):
                 raise ValueError(
                     "Search tool must be either a supported tool name string "
                     "or a callable with signature (str | list[str]) -> (str | list[str])"
+                )
+
+        # Agentic parsing validation
+        if self.agentic_parsing:
+            # Check parsing model interface supports AgentPort
+            from karenina.adapters.registry import AdapterRegistry
+
+            for pm in self.parsing_models:
+                spec = AdapterRegistry.get_spec(pm.interface)
+                if spec is None or spec.agent_factory is None:
+                    raise ValueError(
+                        "agentic_parsing=True requires an interface with "
+                        f"AgentPort support, but '{pm.interface}' does not provide one."
+                    )
+
+            # Agentic parsing is not supported in rubric_only mode
+            if self.evaluation_mode == "rubric_only":
+                raise ValueError(
+                    "agentic_parsing=True is not supported with "
+                    "evaluation_mode='rubric_only'. Use 'template_only' or "
+                    "'template_and_rubric'."
+                )
+
+            # Warn about trace_only being equivalent to Stage 7a
+            if self.agentic_judge_context == "trace_only":
+                logger.warning(
+                    "agentic_parsing=True with agentic_judge_context='trace_only' "
+                    "is equivalent to classical parsing (Stage 7a)."
                 )
 
     def __repr__(self) -> str:

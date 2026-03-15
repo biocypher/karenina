@@ -6,10 +6,13 @@ import base64
 import re
 import warnings
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from karenina.schemas.config.models import ModelConfig
 
 TraitKind = Literal["boolean", "score", "literal"]
 
@@ -571,6 +574,84 @@ class MetricRubricTrait(BaseModel):
             return {"tp", "fn", "tn", "fp"}  # All four can be computed
 
 
+class AgenticRubricTrait(BaseModel):
+    """Rubric trait evaluated by an agent with tools.
+
+    Unlike LLMRubricTrait (single LLM call), this trait launches an agent
+    that can investigate the response and workspace using tools before
+    producing a score. Supports boolean, score, and literal kinds.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    kind: Literal["boolean", "score", "literal"]
+    higher_is_better: bool = Field(
+        ...,
+        description="Whether higher values indicate better performance. "
+        "For boolean: True means True is good. "
+        "For score: True means higher scores are better. "
+        "For literal: True means higher indices (later classes) are better.",
+    )
+    min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
+    max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
+    classes: dict[str, str] | None = None
+    context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    max_turns: int = Field(15, gt=0)
+    timeout_seconds: int = Field(120, gt=0)
+    model_override: "ModelConfig | None" = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Set default for higher_is_better when loading legacy data."""
+        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+            values["higher_is_better"] = True
+        return values
+
+    @model_validator(mode="after")
+    def validate_kind_fields(self) -> "AgenticRubricTrait":
+        """Validate kind-specific field constraints."""
+        if self.kind == "literal":
+            if not self.classes:
+                raise ValueError("classes field is required for literal kind")
+            # Automatically derive min_score and max_score from classes
+            object.__setattr__(self, "min_score", 0)
+            object.__setattr__(self, "max_score", len(self.classes) - 1)
+        return self
+
+    @model_validator(mode="after")
+    def validate_model_override_supports_agents(self) -> "AgenticRubricTrait":
+        """Validate that model_override supports agent creation (if set)."""
+        if self.model_override is not None:
+            from karenina.adapters.registry import AdapterRegistry
+
+            spec = AdapterRegistry.get_spec(self.model_override.interface)
+            if spec is None or spec.agent_factory is None:
+                raise ValueError(
+                    f"model_override interface '{self.model_override.interface}' "
+                    "does not support agent creation (no agent_factory registered). "
+                    "Use an interface that supports AgentPort (e.g. 'claude_agent_sdk')."
+                )
+        return self
+
+    def validate_score(self, value: int | bool) -> bool:
+        """Validate that a given score is valid for this trait."""
+        if self.kind == "boolean":
+            return isinstance(value, bool)
+        else:
+            if isinstance(value, bool):
+                return False
+            if not isinstance(value, int):
+                return False
+            min_val = self.min_score if self.min_score is not None else 0
+            max_val = self.max_score if self.max_score is not None else 5
+            if self.kind == "literal" and value == -1:
+                return True
+            return min_val <= value <= max_val
+
+
 class Rubric(BaseModel):
     """
     Collection of evaluation traits applied to all question-answer pairs.
@@ -587,16 +668,21 @@ class Rubric(BaseModel):
     metric_traits: list[MetricRubricTrait] = Field(
         default_factory=list, description="List of metric-based evaluation traits (confusion-matrix analysis)"
     )
+    agentic_traits: list[AgenticRubricTrait] = Field(
+        default_factory=list,
+        description="List of agent-investigated evaluation traits",
+    )
 
     model_config = ConfigDict(extra="forbid")
 
     def get_trait_names(self) -> list[str]:
-        """Get list of all trait names in this rubric (LLM, regex, callable, and metric)."""
+        """Get list of all trait names in this rubric (LLM, regex, callable, metric, and agentic)."""
         llm_names = [trait.name for trait in self.llm_traits]
         regex_names = [trait.name for trait in self.regex_traits]
         callable_names = [trait.name for trait in self.callable_traits]
         metric_names = [trait.name for trait in self.metric_traits]
-        return llm_names + regex_names + callable_names + metric_names
+        agentic_names = [trait.name for trait in self.agentic_traits]
+        return llm_names + regex_names + callable_names + metric_names + agentic_names
 
     def get_llm_trait_names(self) -> list[str]:
         """Get list of LLM trait names only."""
@@ -613,6 +699,10 @@ class Rubric(BaseModel):
     def get_metric_trait_names(self) -> list[str]:
         """Get list of metric trait names only."""
         return [trait.name for trait in self.metric_traits]
+
+    def get_agentic_trait_names(self) -> list[str]:
+        """Get list of agentic trait names only."""
+        return [trait.name for trait in self.agentic_traits]
 
     def get_trait_max_scores(self) -> dict[str, int]:
         """Get max_score for all score-based traits (LLM and callable).
@@ -631,6 +721,10 @@ class Rubric(BaseModel):
         for callable_trait in self.callable_traits:
             if callable_trait.kind == "score" and callable_trait.max_score is not None:
                 max_scores[callable_trait.name] = callable_trait.max_score
+
+        for agentic_trait in self.agentic_traits:
+            if agentic_trait.kind in ("score", "literal") and agentic_trait.max_score is not None:
+                max_scores[agentic_trait.name] = agentic_trait.max_score
 
         return max_scores
 
@@ -657,6 +751,9 @@ class Rubric(BaseModel):
         for callable_trait in self.callable_traits:
             directionalities[callable_trait.name] = callable_trait.higher_is_better
 
+        for agentic_trait in self.agentic_traits:
+            directionalities[agentic_trait.name] = agentic_trait.higher_is_better
+
         # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
 
@@ -664,7 +761,7 @@ class Rubric(BaseModel):
         """
         Validate that an evaluation result matches this rubric structure.
 
-        Note: This validates LLM, regex, and callable trait scores only. Metric traits
+        Note: This validates LLM, regex, callable, and agentic trait scores. Metric traits
         are stored separately in VerificationResult fields (metric_trait_confusion_lists
         and metric_trait_metrics) and don't participate in this validation.
         """
@@ -672,7 +769,8 @@ class Rubric(BaseModel):
         llm_names = set(self.get_llm_trait_names())
         regex_names = set(self.get_regex_trait_names())
         callable_names = set(self.get_callable_trait_names())
-        expected_names = llm_names | regex_names | callable_names
+        agentic_names = set(self.get_agentic_trait_names())
+        expected_names = llm_names | regex_names | callable_names | agentic_names
 
         eval_names = set(evaluation.keys())
 
@@ -684,10 +782,14 @@ class Rubric(BaseModel):
         llm_trait_map = {trait.name: trait for trait in self.llm_traits}
         regex_trait_map = {trait.name: trait for trait in self.regex_traits}
         callable_trait_map = {trait.name: trait for trait in self.callable_traits}
+        agentic_trait_map = {trait.name: trait for trait in self.agentic_traits}
 
         for name, value in evaluation.items():
             if name in llm_trait_map:
                 if not llm_trait_map[name].validate_score(value):
+                    return False
+            elif name in agentic_trait_map:
+                if not agentic_trait_map[name].validate_score(value):
                     return False
             elif name in regex_trait_map or name in callable_trait_map:
                 # Regex and callable traits always return boolean
@@ -746,10 +848,12 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     merged_regex_traits = list(global_rubric.regex_traits) + list(question_rubric.regex_traits)
     merged_callable_traits = list(global_rubric.callable_traits) + list(question_rubric.callable_traits)
     merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
+    merged_agentic_traits = list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits)
 
     return Rubric(
         llm_traits=merged_traits,
         regex_traits=merged_regex_traits,
         callable_traits=merged_callable_traits,
         metric_traits=merged_metric_traits,
+        agentic_traits=merged_agentic_traits,
     )

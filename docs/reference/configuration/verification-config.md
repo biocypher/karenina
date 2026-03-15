@@ -39,6 +39,8 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 | `rubric_enabled` | `bool` | `False` | Master switch for rubric evaluation. Must be `True` when `evaluation_mode` is `template_and_rubric` or `rubric_only`. Must be `False` when `evaluation_mode` is `template_only`. |
 | `rubric_trait_names` | `list[str] \| None` | `None` | Optional filter to evaluate only specific rubric traits by name. When `None`, all traits are evaluated. |
 | `rubric_evaluation_strategy` | `Literal["batch", "sequential"] \| None` | `"batch"` | How LLM rubric traits are evaluated. `batch`: all LLM traits in a single call (efficient, requires JSON output). `sequential`: traits evaluated one-by-one (more reliable, higher cost). |
+| `agentic_rubric_strategy` | `Literal["individual", "shared"]` | `"individual"` | How agentic rubric traits are evaluated. `individual`: one agent per trait (default, most reliable). `shared`: one agent evaluates all traits that share a model (efficient, but falls back to individual when models differ). |
+| `agentic_rubric_parallel` | `bool` | `False` | Reserved for future use. When implemented, will allow parallel evaluation of independent agentic traits. |
 
 **Validation rules:**
 

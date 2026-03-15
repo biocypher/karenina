@@ -30,11 +30,13 @@ from karenina.benchmark.verification.stages import (
     ValidateTemplateStage,
     VerificationContext,
 )
+from karenina.benchmark.verification.stages.core.base import ArtifactKeys
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import LLMRubricTrait, Rubric
+from karenina.schemas.entities import AgenticRubricTrait, LLMRubricTrait, Rubric
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
+    VerificationResultRubric,
     VerificationResultTemplate,
 )
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -927,3 +929,234 @@ class TestPipelineResults:
         # FinalizeResultStage builds ModelIdentity from context.answering_model/parsing_model
         assert result.metadata.answering_model == "langchain:claude-haiku-4-5"
         assert result.metadata.parsing_model == "langchain:claude-haiku-4-5"
+
+
+# =============================================================================
+# Agentic Rubric Orchestrator Registration Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestOrchestratorAgenticRubric:
+    """Tests for Stage 11b registration in orchestrator."""
+
+    def _make_agentic_rubric(self):
+        return Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="code_quality",
+                    description="Check code quality.",
+                    kind="boolean",
+                )
+            ]
+        )
+
+    def test_stage_11b_registered_in_template_and_rubric_mode(self):
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" in stage_names
+
+    def test_stage_11b_registered_in_rubric_only_mode(self):
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="rubric_only",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" in stage_names
+
+    def test_stage_11b_not_registered_in_template_only_mode(self):
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_only",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" not in stage_names
+
+    def test_stage_11b_not_registered_when_no_agentic_traits(self):
+        rubric = Rubric(
+            llm_traits=[
+                LLMRubricTrait(name="clarity", kind="boolean"),
+            ]
+        )
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" not in stage_names
+
+    def test_stage_11b_after_rubric_evaluation(self):
+        """Stage 11b comes after RubricEvaluation stage."""
+        rubric = Rubric(
+            llm_traits=[LLMRubricTrait(name="clarity", kind="boolean")],
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="code_quality",
+                    description="Check.",
+                    kind="boolean",
+                )
+            ],
+        )
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="template_and_rubric",
+        )
+        stage_names = [s.name for s in orch.stages]
+        rubric_idx = stage_names.index("RubricEvaluation")
+        agentic_idx = stage_names.index("AgenticRubricEvaluation")
+        assert agentic_idx > rubric_idx
+
+    def test_agentic_only_rubric_in_rubric_only_mode(self):
+        """Agentic-only rubric (no LLM/regex/callable/metric) still gets Stage 11b."""
+        rubric = self._make_agentic_rubric()
+        orch = StageOrchestrator.from_config(
+            rubric=rubric,
+            evaluation_mode="rubric_only",
+        )
+        stage_names = [s.name for s in orch.stages]
+        assert "AgenticRubricEvaluation" in stage_names
+        # Classical RubricEvaluation should NOT be registered (no LLM/regex/callable/metric traits)
+        assert "RubricEvaluation" not in stage_names
+
+
+# =============================================================================
+# FinalizeResultStage Agentic Rubric Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestFinalizeResultAgenticRubric:
+    """Tests for FinalizeResultStage with agentic rubric results."""
+
+    def _make_context(self, minimal_model_config: ModelConfig) -> VerificationContext:
+        """Create a minimal context for finalize tests."""
+        return VerificationContext(
+            question_id="test-agentic-q1",
+            template_id="template-hash-agentic",
+            question_text="Review the code quality.",
+            template_code=(
+                "from pydantic import Field\n"
+                "from karenina.schemas.entities import BaseAnswer\n\n"
+                "class Answer(BaseAnswer):\n"
+                "    quality: str = Field(description='Code quality')\n\n"
+                "    def verify(self) -> bool:\n"
+                "        return True\n"
+            ),
+            answering_model=minimal_model_config,
+            parsing_model=minimal_model_config,
+        )
+
+    def test_agentic_only_rubric_creates_rubric_result(self, minimal_model_config: ModelConfig):
+        """When only agentic traits exist, rubric_result should still be created."""
+        context = self._make_context(minimal_model_config)
+        context.set_result_field("timestamp", "2024-01-01 12:00:00")
+        context.set_result_field("execution_time", 1.0)
+
+        # Simulate Stage 11b output: agentic evaluation performed, no classical rubric
+        context.set_result_field(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED, True)
+        context.set_result_field(
+            ArtifactKeys.AGENTIC_TRAIT_SCORES,
+            {"code_quality": True, "test_coverage": 4},
+        )
+        context.set_result_field(
+            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            {"code_quality": "Investigated code: looks good.", "test_coverage": "Found 80% coverage."},
+        )
+        # No classical rubric (verify_rubric not set)
+
+        stage = FinalizeResultStage()
+        stage.execute(context)
+
+        result = context.get_artifact("final_result")
+        assert result is not None
+        assert isinstance(result, VerificationResult)
+
+        # Rubric result must be created
+        assert result.rubric is not None
+        assert isinstance(result.rubric, VerificationResultRubric)
+
+        # Agentic fields populated
+        assert result.rubric.agentic_trait_scores == {"code_quality": True, "test_coverage": 4}
+        assert result.rubric.agentic_trait_investigation_traces == {
+            "code_quality": "Investigated code: looks good.",
+            "test_coverage": "Found 80% coverage.",
+        }
+
+        # Classical fields should be None (no classical rubric ran)
+        assert result.rubric.llm_trait_scores is None
+        assert result.rubric.regex_trait_scores is None
+        assert result.rubric.callable_trait_scores is None
+
+    def test_classical_rubric_still_works(self, minimal_model_config: ModelConfig):
+        """When classical rubric runs (without agentic), behavior is preserved."""
+        context = self._make_context(minimal_model_config)
+        context.set_result_field("timestamp", "2024-01-01 12:00:00")
+        context.set_result_field("execution_time", 1.0)
+
+        # Set up a rubric with one LLM trait
+        rubric = Rubric(llm_traits=[LLMRubricTrait(name="clarity", description="Clear?", kind="boolean")])
+        context.rubric = rubric
+
+        # Simulate classical rubric output
+        context.set_result_field(ArtifactKeys.VERIFY_RUBRIC, {"clarity": True})
+
+        stage = FinalizeResultStage()
+        stage.execute(context)
+
+        result = context.get_artifact("final_result")
+        assert result.rubric is not None
+        assert result.rubric.llm_trait_scores == {"clarity": True}
+        assert result.rubric.agentic_trait_scores is None
+
+    def test_both_classical_and_agentic_rubric(self, minimal_model_config: ModelConfig):
+        """When both classical and agentic traits run, both are stored."""
+        context = self._make_context(minimal_model_config)
+        context.set_result_field("timestamp", "2024-01-01 12:00:00")
+        context.set_result_field("execution_time", 1.0)
+
+        # Set up rubric with both trait types
+        rubric = Rubric(
+            llm_traits=[LLMRubricTrait(name="clarity", description="Clear?", kind="boolean")],
+            agentic_traits=[AgenticRubricTrait(name="code_quality", description="Check.", kind="boolean")],
+        )
+        context.rubric = rubric
+
+        # Simulate classical rubric output
+        context.set_result_field(ArtifactKeys.VERIFY_RUBRIC, {"clarity": True})
+
+        # Simulate agentic rubric output
+        context.set_result_field(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED, True)
+        context.set_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES, {"code_quality": True})
+        context.set_result_field(
+            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            {"code_quality": "Looked at code structure."},
+        )
+
+        stage = FinalizeResultStage()
+        stage.execute(context)
+
+        result = context.get_artifact("final_result")
+        assert result.rubric is not None
+
+        # Both classical and agentic fields present
+        assert result.rubric.llm_trait_scores == {"clarity": True}
+        assert result.rubric.agentic_trait_scores == {"code_quality": True}
+        assert result.rubric.agentic_trait_investigation_traces == {"code_quality": "Looked at code structure."}
+
+    def test_no_rubric_when_neither_performed(self, minimal_model_config: ModelConfig):
+        """When neither classical nor agentic rubric ran, rubric_result stays None."""
+        context = self._make_context(minimal_model_config)
+        context.set_result_field("timestamp", "2024-01-01 12:00:00")
+        context.set_result_field("execution_time", 1.0)
+
+        stage = FinalizeResultStage()
+        stage.execute(context)
+
+        result = context.get_artifact("final_result")
+        assert result.rubric is None

@@ -41,6 +41,9 @@ exclude_docs: |
   core_concepts/evaluation-modes.md
   core_concepts/mcp-overview.md
   core_concepts/results-and-scoring.md
+  core_concepts/rubrics/agentic-traits.md
+  core_concepts/agentic-evaluation.md
+  workflows/running-verification/agentic-evaluation.md
 
 theme:
   name: material
@@ -180,6 +183,7 @@ nav:
       - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
       - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
       - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
+      - Agentic Traits: notebooks/core_concepts/rubrics/agentic-traits.ipynb
     - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
@@ -189,6 +193,7 @@ nav:
     - Pipeline:
       - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
       - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
+      - Agentic Evaluation: notebooks/core_concepts/agentic-evaluation.ipynb
     - Infrastructure:
       - Adapters: core_concepts/adapters.md
       - MCP Overview: notebooks/core_concepts/mcp-overview.ipynb
@@ -215,6 +220,7 @@ nav:
       - Deep Judgment: notebooks/running-verification/deep-judgment.ipynb
       - MCP Agent Evaluation: notebooks/running-verification/mcp-agent-evaluation.ipynb
       - Manual Interface: notebooks/running-verification/manual-interface-workflow.ipynb
+      - Agentic Evaluation: notebooks/running-verification/agentic-evaluation.ipynb
     - Analyzing Results:
       - Overview: workflows/analyzing-results/index.md
       - Verification Result: workflows/analyzing-results/verification-result.md
@@ -248,6 +254,8 @@ nav:
       - Deep Judgment (Rubrics): advanced-pipeline/deep-judgment-rubrics.md
       - Prompt Assembly: advanced-pipeline/prompt-assembly.md
       - Custom Stages: advanced-pipeline/custom-stages.md
+      - Agentic Evaluation: advanced-pipeline/agentic-evaluation.md
+      - Agentic Rubric Evaluation: advanced-pipeline/agentic-rubric-evaluation.md
     - Adapters:
       - Overview: advanced-adapters/index.md
       - Ports: advanced-adapters/ports.md

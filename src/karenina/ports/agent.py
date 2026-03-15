@@ -10,6 +10,7 @@ For simple LLM calls without tools, use LLMPort instead.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
 
 if TYPE_CHECKING:
@@ -122,6 +123,10 @@ class AgentConfig:
             other adapters.
         extra: Additional adapter-specific configuration options.
             Keys and values depend on the specific adapter implementation.
+        workspace_path: Optional working directory for the agent. When set,
+            the adapter should ensure the agent operates within this directory.
+            Enforcement is adapter-specific: the Claude SDK uses cwd for real
+            isolation; other adapters inject the path into the system prompt.
 
     Example:
         >>> config = AgentConfig(
@@ -145,6 +150,7 @@ class AgentConfig:
     timeout: float | None = None
     question_hash: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    workspace_path: Path | None = None
 
 
 @dataclass

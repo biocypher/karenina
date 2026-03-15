@@ -16,24 +16,29 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
 )
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.entities.rubric import TraitKind
+from ..schemas.entities.rubric import AgenticRubricTrait, TraitKind
 
 logger = logging.getLogger(__name__)
 
 
 def convert_rubric_trait_to_rating(
-    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait, rubric_type: str = "global"
+    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+    rubric_type: str = "global",
 ) -> SchemaOrgRating:
     """
     Convert an internal trait to a schema.org Rating.
 
     Args:
-        trait: The trait to convert (LLM, regex, callable, or metric)
+        trait: The trait to convert (LLM, regex, callable, metric, or agentic)
         rubric_type: Either 'global' or 'question-specific'
 
     Returns:
         A SchemaOrgRating object
     """
+    # Handle AgenticRubricTrait (must be before LLMRubricTrait check)
+    if isinstance(trait, AgenticRubricTrait):
+        return _convert_agentic_trait_to_rating(trait, rubric_type)
+
     # Handle MetricRubricTrait
     if isinstance(trait, MetricRubricTrait):
         return _convert_metric_trait_to_rating(trait, rubric_type)
@@ -137,6 +142,42 @@ def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) ->
     )
 
 
+def _convert_agentic_trait_to_rating(trait: AgenticRubricTrait, rubric_type: str) -> SchemaOrgRating:
+    """Convert AgenticRubricTrait to SchemaOrgRating."""
+    additional_props = [
+        SchemaOrgPropertyValue(name="kind", value=trait.kind),
+        SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
+        SchemaOrgPropertyValue(name="context_mode", value=trait.context_mode),
+        SchemaOrgPropertyValue(name="max_turns", value=trait.max_turns),
+        SchemaOrgPropertyValue(name="timeout_seconds", value=trait.timeout_seconds),
+    ]
+
+    if trait.classes is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="classes", value=trait.classes))
+    if trait.model_override is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="model_override", value=trait.model_override.model_dump()))
+
+    # Determine best/worst rating based on kind
+    if trait.kind == "boolean":
+        best_rating, worst_rating = 1.0, 0.0
+    elif trait.kind == "literal" and trait.max_score is not None and trait.min_score is not None:
+        best_rating, worst_rating = float(trait.max_score), float(trait.min_score)
+    else:
+        best_rating = float(trait.max_score) if trait.max_score is not None else 5.0
+        worst_rating = float(trait.min_score) if trait.min_score is not None else 1.0
+
+    return SchemaOrgRating(
+        name=trait.name,
+        description=trait.description,
+        bestRating=best_rating,
+        worstRating=worst_rating,
+        additionalType="karenina:GlobalAgenticRubricTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificAgenticRubricTrait",
+        additionalProperty=additional_props,
+    )
+
+
 def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> SchemaOrgRating:
     """Convert LLMRubricTrait to SchemaOrgRating."""
     # Always store deep judgment settings in additionalProperty (in-memory)
@@ -214,7 +255,7 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
 
 def convert_rating_to_rubric_trait(
     rating: SchemaOrgRating,
-) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait:
+) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait:
     """
     Convert a schema.org Rating back to a rubric trait.
 
@@ -222,11 +263,18 @@ def convert_rating_to_rubric_trait(
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object
+        A LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait, or AgenticRubricTrait object
 
     Raises:
         ValueError: If the rating has an unrecognized additionalType
     """
+    # Check if it's an AgenticRubricTrait
+    if rating.additionalType in [
+        "karenina:GlobalAgenticRubricTrait",
+        "karenina:QuestionSpecificAgenticRubricTrait",
+    ]:
+        return _convert_rating_to_agentic_trait(rating)
+
     # Check if it's a MetricRubricTrait
     if rating.additionalType in ["karenina:GlobalMetricRubricTrait", "karenina:QuestionSpecificMetricRubricTrait"]:
         return _convert_rating_to_metric_trait(rating)
@@ -461,6 +509,56 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
             deep_judgment_search_enabled=deep_judgment_search_enabled,
             higher_is_better=higher_is_better,
         )
+
+
+def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTrait:
+    """Convert SchemaOrgRating to AgenticRubricTrait."""
+    kind: TraitKind = "boolean"
+    higher_is_better = True
+    context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    max_turns = 15
+    timeout_seconds = 120
+    classes: dict[str, str] | None = None
+    model_override = None
+
+    if rating.additionalProperty:
+        for prop in rating.additionalProperty:
+            if prop.name == "kind":
+                kind = cast(TraitKind, prop.value)
+            elif prop.name == "higher_is_better":
+                higher_is_better = prop.value
+            elif prop.name == "context_mode":
+                context_mode = cast(Literal["workspace_only", "trace_and_workspace", "trace_only"], prop.value)
+            elif prop.name == "max_turns":
+                max_turns = prop.value
+            elif prop.name == "timeout_seconds":
+                timeout_seconds = prop.value
+            elif prop.name == "classes":
+                if isinstance(prop.value, dict):
+                    classes = prop.value
+                elif isinstance(prop.value, str):
+                    try:
+                        classes = json.loads(prop.value)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse classes JSON for agentic trait '%s'", rating.name)
+            elif prop.name == "model_override" and isinstance(prop.value, dict):
+                from ..schemas.config.models import ModelConfig
+
+                model_override = ModelConfig(**prop.value)
+
+    return AgenticRubricTrait(
+        name=rating.name,
+        description=rating.description or "",
+        kind=kind,
+        higher_is_better=higher_is_better,
+        context_mode=context_mode,
+        max_turns=max_turns,
+        timeout_seconds=timeout_seconds,
+        min_score=int(rating.worstRating),
+        max_score=int(rating.bestRating),
+        classes=classes,
+        model_override=model_override,
+    )
 
 
 def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> None:

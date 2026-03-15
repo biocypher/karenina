@@ -330,5 +330,155 @@ class TestRubricPandasOperations(PandasOperationsTestMixin):
         assert isinstance(grouped, pd.Series)
 
 
+# =============================================================================
+# Agentic Trait Support Tests
+# =============================================================================
+
+
+@pytest.fixture
+def rubric_result_with_agentic_traits() -> VerificationResultRubric:
+    """Create a rubric result with agentic trait scores."""
+    return VerificationResultRubric(
+        rubric_evaluation_performed=True,
+        rubric_evaluation_strategy="batch",
+        llm_trait_scores={
+            "Clarity": 4,
+        },
+        agentic_trait_scores={
+            "CodeQuality": 4,
+            "FollowsInstructions": True,
+        },
+    )
+
+
+@pytest.fixture
+def verification_result_with_agentic(
+    rubric_result_with_agentic_traits: VerificationResultRubric,
+    template_result_success: VerificationResultTemplate,
+) -> VerificationResult:
+    """Create a verification result with agentic trait data."""
+    return VerificationResult(
+        metadata=create_metadata("agentic_q1", "claude-sonnet-4"),
+        template=template_result_success,
+        rubric=rubric_result_with_agentic_traits,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestRubricDataFrameAgenticSupport:
+    """Tests for agentic trait support in rubric DataFrame builder."""
+
+    def test_agentic_trait_type_filter(self):
+        """Build DataFrame with trait_type='agentic' filter."""
+        from karenina.schemas.dataframes.rubric import RubricDataFrameBuilder
+
+        builder = RubricDataFrameBuilder(results=[], include_deep_judgment=False)
+        df = builder.build_dataframe(trait_type="agentic")
+        assert df.empty  # No results, but no error
+
+    def test_all_trait_type_includes_agentic(self):
+        """trait_type='all' includes agentic traits."""
+        from karenina.schemas.dataframes.rubric import RubricDataFrameBuilder
+
+        builder = RubricDataFrameBuilder(results=[], include_deep_judgment=False)
+        df = builder.build_dataframe(trait_type="all")
+        assert df.empty  # No results, but no error
+
+    def test_agentic_traits_in_dataframe(
+        self,
+        verification_result_with_agentic: VerificationResult,
+    ):
+        """Agentic traits appear as rows with trait_type='agentic'."""
+        results = RubricResults(results=[verification_result_with_agentic])
+        df = results.to_dataframe(trait_type="agentic")
+
+        assert len(df) == 2  # CodeQuality and FollowsInstructions
+        assert set(df["trait_type"].unique()) == {"agentic"}
+        assert set(df["trait_name"].unique()) == {"CodeQuality", "FollowsInstructions"}
+
+    def test_agentic_traits_included_in_all(
+        self,
+        verification_result_with_agentic: VerificationResult,
+    ):
+        """trait_type='all' includes agentic traits alongside others."""
+        results = RubricResults(results=[verification_result_with_agentic])
+        df = results.to_dataframe(trait_type="all")
+
+        # Should have LLM trait (Clarity) + 2 agentic traits = 3 total
+        assert len(df) == 3
+        trait_types = set(df["trait_type"].unique())
+        assert "agentic" in trait_types
+        assert "llm_score" in trait_types
+
+    def test_agentic_filter_excludes_other_traits(
+        self,
+        verification_result_with_agentic: VerificationResult,
+    ):
+        """trait_type='agentic' excludes LLM and other trait types."""
+        results = RubricResults(results=[verification_result_with_agentic])
+        df = results.to_dataframe(trait_type="agentic")
+
+        # Should only have agentic traits, not the LLM Clarity trait
+        assert "Clarity" not in df["trait_name"].values
+        assert all(df["trait_type"] == "agentic")
+
+    def test_evaluation_method_column_present(
+        self,
+        verification_result_with_agentic: VerificationResult,
+    ):
+        """All rows have an evaluation_method column."""
+        results = RubricResults(results=[verification_result_with_agentic])
+        df = results.to_dataframe(trait_type="all")
+
+        assert "evaluation_method" in df.columns
+
+    def test_evaluation_method_values(
+        self,
+        verification_result_with_agentic: VerificationResult,
+    ):
+        """evaluation_method has correct values per trait type."""
+        results = RubricResults(results=[verification_result_with_agentic])
+        df = results.to_dataframe(trait_type="all")
+
+        # LLM trait should have evaluation_method="llm"
+        llm_rows = df[df["trait_type"] == "llm_score"]
+        assert all(llm_rows["evaluation_method"] == "llm")
+
+        # Agentic traits should have evaluation_method="agentic"
+        agentic_rows = df[df["trait_type"] == "agentic"]
+        assert all(agentic_rows["evaluation_method"] == "agentic")
+
+    def test_evaluation_method_for_all_existing_trait_types(
+        self,
+        verification_results_list: list[VerificationResult],
+    ):
+        """evaluation_method is set correctly for all existing trait types."""
+        results = RubricResults(results=verification_results_list)
+        df = results.to_dataframe(trait_type="all")
+
+        assert "evaluation_method" in df.columns
+
+        # LLM traits get evaluation_method="llm"
+        llm_rows = df[df["trait_type"].str.startswith("llm")]
+        if len(llm_rows) > 0:
+            assert all(llm_rows["evaluation_method"] == "llm")
+
+        # Regex traits get evaluation_method="regex"
+        regex_rows = df[df["trait_type"] == "regex"]
+        if len(regex_rows) > 0:
+            assert all(regex_rows["evaluation_method"] == "regex")
+
+        # Callable traits get evaluation_method="callable"
+        callable_rows = df[df["trait_type"] == "callable"]
+        if len(callable_rows) > 0:
+            assert all(callable_rows["evaluation_method"] == "callable")
+
+        # Metric traits get evaluation_method="metric"
+        metric_rows = df[df["trait_type"] == "metric"]
+        if len(metric_rows) > 0:
+            assert all(metric_rows["evaluation_method"] == "metric")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

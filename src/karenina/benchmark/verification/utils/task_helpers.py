@@ -160,4 +160,14 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
         # Prompt configuration
         "prompt_config": getattr(config, "prompt_config", None),
+        # Agentic parsing configuration
+        "agentic_parsing": getattr(config, "agentic_parsing", False),
+        "agentic_judge_context": getattr(config, "agentic_judge_context", "workspace_only"),
+        "agentic_parsing_max_turns": getattr(config, "agentic_parsing_max_turns", 15),
+        "agentic_parsing_timeout": getattr(config, "agentic_parsing_timeout", 120.0),
+        "workspace_copy": getattr(config, "workspace_copy", True),
+        "workspace_cleanup": getattr(config, "workspace_cleanup", True),
+        # Agentic rubric evaluation configuration
+        "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
+        "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),
     }

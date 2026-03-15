@@ -22,6 +22,7 @@ from ..schemas.checkpoint import (
     SchemaOrgSoftwareSourceCode,
 )
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities.rubric import AgenticRubricTrait
 from .checkpoint_trait_converters import (
     convert_rating_to_rubric_trait,
     convert_rubric_trait_to_rating,
@@ -143,7 +144,8 @@ def add_question_to_benchmark(
     raw_answer: str,
     answer_template: str,
     question_id: str | None = None,
-    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None = None,
+    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait]
+    | None = None,
     finished: bool = False,
     author: dict[str, Any] | None = None,
     sources: list[dict[str, Any]] | None = None,
@@ -151,6 +153,7 @@ def add_question_to_benchmark(
     keywords: list[str] | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     answer_notes: str | None = None,
+    workspace_path: str | None = None,
 ) -> str:
     """
     Add a question to a JSON-LD benchmark.
@@ -169,6 +172,7 @@ def add_question_to_benchmark(
         keywords: Optional keywords list
         few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
         answer_notes: Optional free-text notes about how the answer should be interpreted
+        workspace_path: Optional relative path to question workspace directory
 
     Returns:
         The question ID that was added
@@ -217,6 +221,9 @@ def add_question_to_benchmark(
     if answer_notes:
         additional_props.append(SchemaOrgPropertyValue(name="answer_notes", value=answer_notes))
 
+    if workspace_path:
+        additional_props.append(SchemaOrgPropertyValue(name="workspace_path", value=workspace_path))
+
     # Convert question-specific rubric traits to ratings
     ratings = None
     if question_rubric_traits:
@@ -253,7 +260,7 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait],
+    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -291,6 +298,7 @@ def extract_questions_from_benchmark(
         custom_metadata = {}
         few_shot_examples = None
         answer_notes = None
+        workspace_path = None
 
         if question.additionalProperty:
             for prop in question.additionalProperty:
@@ -313,6 +321,8 @@ def extract_questions_from_benchmark(
                         few_shot_examples = prop.value
                 elif prop.name == "answer_notes":
                     answer_notes = prop.value
+                elif prop.name == "workspace_path":
+                    workspace_path = prop.value
                 elif prop.name.startswith("custom_"):
                     key = prop.name.replace("custom_", "")
                     custom_metadata[key] = prop.value
@@ -330,23 +340,27 @@ def extract_questions_from_benchmark(
                     "karenina:QuestionSpecificRegexTrait",
                     "karenina:QuestionSpecificCallableTrait",
                     "karenina:QuestionSpecificMetricRubricTrait",
+                    "karenina:QuestionSpecificAgenticRubricTrait",
                 ]
             ]
 
             # Categorize traits by type to match Rubric schema
             if traits:
                 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+                from ..schemas.entities.rubric import AgenticRubricTrait as AgenticRubricTraitLocal
 
                 llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
                 regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
                 callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
                 metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
+                agentic_traits = [t for t in traits if isinstance(t, AgenticRubricTraitLocal)]
 
                 question_rubric = {
                     "llm_traits": llm_traits,
                     "regex_traits": regex_traits,
                     "callable_traits": callable_traits,
                     "metric_traits": metric_traits,
+                    "agentic_traits": agentic_traits,
                 }
 
         questions.append(
@@ -365,6 +379,7 @@ def extract_questions_from_benchmark(
                 "keywords": question.keywords or getattr(item, "keywords", None),
                 "few_shot_examples": few_shot_examples,
                 "answer_notes": answer_notes,
+                "workspace_path": workspace_path,
             }
         )
 
@@ -373,7 +388,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None:
+) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -388,7 +403,7 @@ def extract_global_rubric_from_benchmark(
     Returns:
         List of trait objects or None if no global rubric
     """
-    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] = []
+    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] = []
 
     # Extract from rating array (standard format)
     if benchmark.rating:
@@ -399,6 +414,7 @@ def extract_global_rubric_from_benchmark(
                 "karenina:GlobalRegexTrait",
                 "karenina:GlobalCallableTrait",
                 "karenina:GlobalMetricRubricTrait",
+                "karenina:GlobalAgenticRubricTrait",
             ]:
                 traits.append(convert_rating_to_rubric_trait(rating))
 

@@ -41,7 +41,7 @@ class RubricDataFrameBuilder:
     def build_dataframe(
         self,
         trait_type: Literal[
-            "llm_score", "llm_binary", "llm_literal", "llm", "regex", "callable", "metric", "all"
+            "llm_score", "llm_binary", "llm_literal", "llm", "regex", "callable", "metric", "agentic", "all"
         ] = "all",
     ) -> Any:
         """
@@ -59,13 +59,14 @@ class RubricDataFrameBuilder:
                 - "regex": Regex traits (boolean)
                 - "callable": Callable traits (boolean or score)
                 - "metric": Metric traits (precision, recall, f1) - EXPLODED by metric
+                - "agentic": Agentic traits (boolean or score)
                 - "all": All trait types combined (default)
 
         Column ordering:
             1. Status: completed_without_errors, error
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
-            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, metric_name
+            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, evaluation_method, metric_name
             5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
             6. Execution Metadata: execution_time, timestamp, run_name
             7. Deep Judgment (if include_deep_judgment=True):
@@ -158,6 +159,11 @@ class RubricDataFrameBuilder:
                             self._create_metric_trait_row(result, trait_name, metric_name, metric_score, confusion_data)
                         )
 
+            # Process agentic traits
+            if trait_type in ("agentic", "all") and result.rubric.agentic_trait_scores:
+                for trait_name, trait_score in result.rubric.agentic_trait_scores.items():
+                    rows.append(self._create_agentic_trait_row(result, trait_name, trait_score))
+
         df = pd.DataFrame(rows)
 
         # Reorder columns for consistent structure
@@ -196,6 +202,7 @@ class RubricDataFrameBuilder:
             "trait_score",
             "trait_label",  # For literal kind LLM traits: class name (score is index)
             "trait_type",
+            "evaluation_method",
             "metric_name",
             # Confusion Matrix (for metric traits)
             "confusion_tp",
@@ -263,6 +270,7 @@ class RubricDataFrameBuilder:
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": score_type,
+            "evaluation_method": "llm",
             "trait_score": trait_score,
             "trait_label": trait_label,  # Class name for literal kind traits, None otherwise
             # === Execution Metadata ===
@@ -304,6 +312,7 @@ class RubricDataFrameBuilder:
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": "regex",
+            "evaluation_method": "regex",
             "trait_score": trait_score,
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
@@ -338,6 +347,7 @@ class RubricDataFrameBuilder:
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": "callable",
+            "evaluation_method": "callable",
             "trait_score": trait_score,
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
@@ -374,6 +384,7 @@ class RubricDataFrameBuilder:
             # === Metric Trait Data (EXPLODED) ===
             "trait_name": trait_name,
             "trait_type": "metric",
+            "evaluation_method": "metric",
             "metric_name": metric_name,
             "trait_score": metric_score,
             # === Confusion Matrix Metadata ===
@@ -381,6 +392,47 @@ class RubricDataFrameBuilder:
             "confusion_fp": confusion_data.get("fp") if confusion_data else None,
             "confusion_fn": confusion_data.get("fn") if confusion_data else None,
             "confusion_tn": confusion_data.get("tn") if confusion_data else None,
+            # === Execution Metadata ===
+            "execution_time": metadata.execution_time,
+            "timestamp": metadata.timestamp,
+            "run_name": metadata.run_name,
+        }
+
+    def _create_agentic_trait_row(
+        self,
+        result: VerificationResult,
+        trait_name: str,
+        trait_score: int | bool,
+    ) -> dict[str, Any]:
+        """Create DataFrame row for agentic trait.
+
+        Args:
+            result: The verification result
+            trait_name: Name of the trait
+            trait_score: Score value (bool or int)
+        """
+        metadata = result.metadata
+
+        return {
+            # === Status ===
+            "completed_without_errors": metadata.completed_without_errors,
+            "error": metadata.error,
+            # === Identification Metadata ===
+            "question_id": metadata.question_id,
+            "template_id": metadata.template_id,
+            "question_text": metadata.question_text,
+            "keywords": metadata.keywords,
+            "replicate": metadata.replicate,
+            # === Model Configuration ===
+            "answering_model": metadata.answering_model,
+            "parsing_model": metadata.parsing_model,
+            "answering_system_prompt": metadata.answering_system_prompt,
+            "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Data ===
+            "trait_name": trait_name,
+            "trait_type": "agentic",
+            "evaluation_method": "agentic",
+            "trait_score": trait_score,
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,

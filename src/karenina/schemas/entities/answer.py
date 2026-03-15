@@ -98,6 +98,31 @@ class BaseAnswer(BaseModel):
         return cls._source_code
 
     @classmethod
+    def model_json_schema(cls, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Generate JSON schema with verification metadata stripped.
+
+        Overrides Pydantic's default to ensure __verification__ metadata
+        (containing ground truth values) is never exposed in the schema.
+        This prevents ground truth leakage to LLM judges regardless of
+        which adapter or code path generates the schema.
+
+        All args are forwarded to Pydantic's model_json_schema().
+        """
+        schema = super().model_json_schema(*args, **kwargs)
+
+        def _strip_verification(obj: Any) -> None:
+            if isinstance(obj, dict):
+                obj.pop("__verification__", None)
+                for value in obj.values():
+                    _strip_verification(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _strip_verification(item)
+
+        _strip_verification(schema)
+        return schema
+
+    @classmethod
     def set_source_code_from_notebook(cls) -> None:
         """Capture source code from notebook cell history (Jupyter/IPython only).
 

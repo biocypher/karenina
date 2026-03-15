@@ -4,6 +4,7 @@ Builds the final VerificationResult from accumulated context.
 """
 
 import logging
+import shutil
 from typing import Any
 
 from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
@@ -205,6 +206,9 @@ class FinalizeResultStage(BaseVerificationStage):
             regex_overall_success=context.get_result_field(ArtifactKeys.REGEX_OVERALL_SUCCESS),
             regex_extraction_results=context.get_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS),
             recursion_limit_reached=context.get_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED, False),
+            # Agentic parsing
+            investigation_trace=context.get_result_field(ArtifactKeys.INVESTIGATION_TRACE),
+            agentic_parsing_performed=context.get_result_field(ArtifactKeys.AGENTIC_PARSING_PERFORMED, False),
             abstention_check_performed=context.get_result_field(ArtifactKeys.ABSTENTION_CHECK_PERFORMED, False),
             abstention_detected=context.get_result_field(ArtifactKeys.ABSTENTION_DETECTED),
             abstention_override_applied=context.get_result_field(ArtifactKeys.ABSTENTION_OVERRIDE_APPLIED, False),
@@ -220,7 +224,9 @@ class FinalizeResultStage(BaseVerificationStage):
 
         # Create rubric subclass (if rubric evaluation was performed)
         rubric_result = None
-        if rubric_evaluation_performed:
+        agentic_evaluation_performed = context.get_result_field(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED, False)
+
+        if rubric_evaluation_performed or agentic_evaluation_performed:
             # Split verify_rubric into separate trait score dicts
             verify_rubric = context.get_result_field(ArtifactKeys.VERIFY_RUBRIC)
             # Get rubric definition from context directly (not from result_field)
@@ -268,6 +274,10 @@ class FinalizeResultStage(BaseVerificationStage):
             # Get llm_trait_labels for literal-kind LLM traits (maps trait name to class name)
             llm_trait_labels = context.get_result_field(ArtifactKeys.LLM_TRAIT_LABELS)
 
+            # Get agentic trait evaluation results (populated by Stage 11b)
+            agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
+            agentic_trait_traces = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+
             rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 rubric_evaluation_strategy=context.get_result_field(ArtifactKeys.RUBRIC_EVALUATION_STRATEGY),
@@ -277,6 +287,8 @@ class FinalizeResultStage(BaseVerificationStage):
                 callable_trait_scores=callable_trait_scores,
                 metric_trait_scores=metric_trait_scores_dict,
                 metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
+                agentic_trait_scores=agentic_trait_scores,
+                agentic_trait_investigation_traces=agentic_trait_traces,
             )
 
         # Create deep-judgment subclass (if enabled)
@@ -338,3 +350,15 @@ class FinalizeResultStage(BaseVerificationStage):
 
         # Store final result
         context.set_artifact(ArtifactKeys.FINAL_RESULT, result)
+
+        # Clean up workspace working copies (never originals)
+        if context.workspace_path and context.workspace_cleanup and context.workspace_is_copy:
+            try:
+                shutil.rmtree(context.workspace_path)
+                logger.debug("Cleaned up workspace: %s", context.workspace_path)
+            except Exception:
+                logger.warning(
+                    "Failed to clean up workspace: %s",
+                    context.workspace_path,
+                    exc_info=True,
+                )

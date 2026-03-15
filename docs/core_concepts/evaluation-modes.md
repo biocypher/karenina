@@ -77,6 +77,7 @@ At the orchestration layer, evaluation mode controls which stages `StageOrchestr
 | `EmbeddingCheck` | Present; only runs when enabled and needed | Present; only runs when enabled and needed | No |
 | `DeepJudgmentAutoFail` | Optional | Optional | No |
 | `RubricEvaluation` | No | Yes | Yes |
+| `AgenticRubricEvaluation` | No | If agentic traits | If agentic traits |
 | `DeepJudgmentRubricAutoFail` | No | Optional | Optional |
 | `FinalizeResult` | Yes | Yes | Yes |
 

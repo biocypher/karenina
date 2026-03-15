@@ -8,6 +8,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from karenina.schemas.entities import Rubric
@@ -45,6 +46,7 @@ def generate_task_queue(
     config: VerificationConfig,
     global_rubric: Rubric | None = None,
     run_name: str | None = None,
+    workspace_root: Path | None = None,
 ) -> list[dict[str, Any]]:
     """
     Generate complete task queue via combinatorial expansion.
@@ -78,27 +80,30 @@ def generate_task_queue(
                     # For single replicate, don't include replicate numbers
                     replicate = None if config.replicate_count == 1 else rep
 
-                    tasks.append(
-                        {
-                            # Core
-                            "question_id": template.question_id,
-                            "question_text": template.question_text,
-                            "raw_answer": template.raw_answer,
-                            "template_code": template.template_code,
-                            # Models
-                            "answering_model": ans_model,
-                            "parsing_model": parse_model,
-                            # Metadata
-                            "run_name": run_name,
-                            "replicate": replicate,
-                            # Context
-                            "rubric": rubric,
-                            "keywords": template.keywords,
-                            "few_shot_examples": few_shot,
-                            # Feature flags (from config)
-                            **extract_feature_flags(config),
-                        }
-                    )
+                    task = {
+                        # Core
+                        "question_id": template.question_id,
+                        "question_text": template.question_text,
+                        "raw_answer": template.raw_answer,
+                        "template_code": template.template_code,
+                        # Models
+                        "answering_model": ans_model,
+                        "parsing_model": parse_model,
+                        # Metadata
+                        "run_name": run_name,
+                        "replicate": replicate,
+                        # Context
+                        "rubric": rubric,
+                        "keywords": template.keywords,
+                        "question_workspace_path": template.workspace_path,
+                        "few_shot_examples": few_shot,
+                        # Feature flags (from config)
+                        **extract_feature_flags(config),
+                    }
+                    # Benchmark-level workspace_root overrides config
+                    if workspace_root is not None:
+                        task["workspace_root"] = workspace_root
+                    tasks.append(task)
 
     return tasks
 
@@ -215,6 +220,18 @@ def execute_task(
             deep_judgment_rubric_search_tool=task.get("deep_judgment_rubric_search_tool", "tavily"),
             # Prompt configuration
             prompt_config=task.get("prompt_config"),
+            # Agentic parsing
+            agentic_parsing=task.get("agentic_parsing", False),
+            agentic_judge_context=task.get("agentic_judge_context", "workspace_only"),
+            agentic_parsing_max_turns=task.get("agentic_parsing_max_turns", 15),
+            agentic_parsing_timeout=task.get("agentic_parsing_timeout", 120.0),
+            workspace_root=task.get("workspace_root"),
+            workspace_copy=task.get("workspace_copy", True),
+            workspace_cleanup=task.get("workspace_cleanup", True),
+            question_workspace_path=task.get("question_workspace_path"),
+            # Agentic rubric evaluation
+            agentic_rubric_strategy=task.get("agentic_rubric_strategy", "individual"),
+            agentic_rubric_parallel=task.get("agentic_rubric_parallel", False),
             cached_answer_data=cached_answer_data,
         )
 
@@ -247,6 +264,7 @@ def run_verification_batch(
     storage_url: str | None = None,
     benchmark_name: str | None = None,
     progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
+    workspace_root: Path | None = None,
 ) -> VerificationResultSet:
     """
     Run batch verification with combinatorial expansion.
@@ -264,6 +282,7 @@ def run_verification_batch(
         benchmark_name: Optional benchmark name for auto-save
         progress_callback: Optional callback(current, total, result | None) for progress updates
                           Called before starting each task with preview result
+        workspace_root: Root directory for task workspaces (from Benchmark).
 
     Returns:
         VerificationResultSet containing all verification results
@@ -289,6 +308,7 @@ def run_verification_batch(
         config=config,
         global_rubric=global_rubric,
         run_name=run_name,
+        workspace_root=workspace_root,
     )
 
     # Log execution plan
