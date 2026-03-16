@@ -158,6 +158,8 @@ def _convert_agentic_trait_to_rating(trait: AgenticRubricTrait, rubric_type: str
         SchemaOrgPropertyValue(name="kind", value=kind_value),
         SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
         SchemaOrgPropertyValue(name="context_mode", value=trait.context_mode),
+        SchemaOrgPropertyValue(name="materialize_trace", value=trait.materialize_trace),
+        SchemaOrgPropertyValue(name="persist_trace", value=trait.persist_trace),
         SchemaOrgPropertyValue(name="max_turns", value=trait.max_turns),
         SchemaOrgPropertyValue(name="timeout_seconds", value=trait.timeout_seconds),
     ]
@@ -528,6 +530,8 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
     kind: Any = "boolean"
     higher_is_better: bool | None = True
     context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    materialize_trace = False
+    persist_trace = False
     max_turns = 15
     timeout_seconds = 120
     classes: dict[str, str] | None = None
@@ -544,6 +548,10 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
                 higher_is_better = prop.value
             elif prop.name == "context_mode":
                 context_mode = cast(Literal["workspace_only", "trace_and_workspace", "trace_only"], prop.value)
+            elif prop.name == "materialize_trace":
+                materialize_trace = prop.value
+            elif prop.name == "persist_trace":
+                persist_trace = prop.value
             elif prop.name == "max_turns":
                 max_turns = prop.value
             elif prop.name == "timeout_seconds":
@@ -567,6 +575,8 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
         kind=kind,
         higher_is_better=higher_is_better,
         context_mode=context_mode,
+        materialize_trace=materialize_trace,
+        persist_trace=persist_trace,
         max_turns=max_turns,
         timeout_seconds=timeout_seconds,
         min_score=int(rating.worstRating),

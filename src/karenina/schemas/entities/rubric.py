@@ -607,6 +607,21 @@ class AgenticRubricTrait(BaseModel):
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
     classes: dict[str, str] | None = None
     context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    materialize_trace: bool = Field(
+        False,
+        description=(
+            "Write the agent trace to a file in the workspace instead of "
+            "including it in the prompt. The agent receives the file path "
+            "and can use grep/search tools on it."
+        ),
+    )
+    persist_trace: bool = Field(
+        False,
+        description=(
+            "When True, the materialized trace file is kept after evaluation. "
+            "When False (default), cleaned up after evaluation."
+        ),
+    )
     max_turns: int = Field(15, gt=0)
     timeout_seconds: int = Field(120, gt=0)
     model_override: "ModelConfig | None" = None
@@ -664,6 +679,11 @@ class AgenticRubricTrait(BaseModel):
     @model_validator(mode="after")
     def validate_kind_fields(self) -> "AgenticRubricTrait":
         """Validate kind-specific field constraints."""
+        if self.materialize_trace and self.context_mode == "workspace_only":
+            raise ValueError(
+                "materialize_trace=True requires a trace, but context_mode='workspace_only' "
+                "excludes the trace. Use 'trace_only' or 'trace_and_workspace'."
+            )
         if not isinstance(self.kind, str):
             return self
         if self.kind == "literal":

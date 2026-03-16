@@ -186,6 +186,8 @@ def _deserialize_agentic_trait(trait_data: dict[str, Any]) -> Any:
         kind=trait_data.get("kind", "boolean"),
         higher_is_better=trait_data.get("higher_is_better", True),
         context_mode=trait_data.get("context_mode", "trace_and_workspace"),
+        materialize_trace=trait_data.get("materialize_trace", False),
+        persist_trace=trait_data.get("persist_trace", False),
         max_turns=trait_data.get("max_turns", 15),
         timeout_seconds=trait_data.get("timeout_seconds", 120),
         min_score=trait_data.get("min_score", 1),

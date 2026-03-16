@@ -939,6 +939,69 @@ class TestAgenticRubricTraitTemplateKind:
 
 
 # =============================================================================
+# Trace Materialization Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTraceMaterialization:
+    def test_materialize_trace_defaults_false(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+        )
+        assert trait.materialize_trace is False
+        assert trait.persist_trace is False
+
+    def test_materialize_trace_accepts_true(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_only",
+        )
+        assert trait.materialize_trace is True
+
+    def test_materialize_rejects_workspace_only(self):
+        with pytest.raises(ValidationError, match="workspace_only"):
+            AgenticRubricTrait(
+                name="t",
+                description="d",
+                kind="boolean",
+                materialize_trace=True,
+                context_mode="workspace_only",
+            )
+
+    def test_materialize_with_trace_and_workspace(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_and_workspace",
+        )
+        assert trait.materialize_trace is True
+
+    def test_persist_trace_serializes(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+            materialize_trace=True,
+            persist_trace=True,
+            context_mode="trace_only",
+        )
+        d = trait.model_dump()
+        assert d["materialize_trace"] is True
+        assert d["persist_trace"] is True
+        rebuilt = AgenticRubricTrait.model_validate(d)
+        assert rebuilt.materialize_trace is True
+        assert rebuilt.persist_trace is True
+
+
+# =============================================================================
 # VerificationResultRubric Widened Type Tests
 # =============================================================================
 
