@@ -1,5 +1,9 @@
 """Tests for scenario checkpoint persistence."""
 
+import json as json_mod
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 import pytest
 
 from karenina.benchmark.benchmark import Benchmark
@@ -348,3 +352,113 @@ class TestBenchmarkScenarioCheckpoint:
         props = b._base._checkpoint.additionalProperty or []
         types = [p for p in props if p.name == "benchmark_type"]
         assert len(types) == 1  # still present
+
+
+@pytest.mark.unit
+class TestBenchmarkSaveLoadRoundtrip:
+    def test_scenario_survives_save_load(self):
+        b = Benchmark("test_save")
+        b.add_scenario(_build_branching_scenario())
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+
+            loaded = Benchmark.load(path)
+            assert loaded.is_scenario_benchmark
+            assert len(loaded.get_scenarios()) == 1
+            restored = loaded.get_scenario("test_branch")
+            assert sorted(restored.nodes.keys()) == ["ask", "challenge", "correct"]
+            assert restored.entry_node == "ask"
+
+    def test_edge_conditions_survive_roundtrip(self):
+        b = Benchmark("test_edges")
+        b.add_scenario(_build_branching_scenario())
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+            loaded = Benchmark.load(path)
+            restored = loaded.get_scenario("test_branch")
+            conditional_edges = [e for e in restored.edges if e.condition is not None]
+            assert len(conditional_edges) >= 1
+            assert type(conditional_edges[0].condition.verify_with).__name__ == "BooleanMatch"
+
+    def test_outcome_criteria_survive_roundtrip(self):
+        b = Benchmark("test_outcomes")
+        b.add_scenario(_build_branching_scenario())
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+            loaded = Benchmark.load(path)
+            restored = loaded.get_scenario("test_branch")
+            assert len(restored.outcome_criteria) == 1
+            assert restored.outcome_criteria[0].name == "both_pass"
+            assert restored.outcome_criteria[0].check is not None
+
+    def test_backward_compat_no_scenarios(self):
+        b = Benchmark("question_bench")
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+            loaded = Benchmark.load(path)
+            assert not loaded.is_scenario_benchmark
+            assert loaded.get_scenarios() == []
+
+    def test_homogeneous_enforcement_after_load(self):
+        b = Benchmark("scenario_bench")
+        b.add_scenario(_build_branching_scenario())
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+            loaded = Benchmark.load(path)
+            with pytest.raises(ValueError, match="Cannot add standalone questions"):
+                loaded.add_question("What?", raw_answer="Y", answer_template="class A: pass")
+
+    def test_malformed_has_part_raises(self):
+        """Checkpoint with invalid hasPart data should raise on load."""
+        b = Benchmark("malformed")
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+
+            with open(path) as f:
+                data = json_mod.load(f)
+            # Inject malformed scenario (missing entryNode)
+            data["hasPart"] = [{"@type": "karenina:Scenario", "name": "bad", "nodes": {}, "edges": []}]
+            data.setdefault("additionalProperty", []).append(
+                {"@type": "PropertyValue", "name": "benchmark_type", "value": "scenario"}
+            )
+            with open(path, "w") as f:
+                json_mod.dump(data, f)
+
+            with pytest.raises(ValueError, match="Invalid JSON-LD"):
+                Benchmark.load(path)
+
+    def test_mixed_checkpoint_rejected(self):
+        """Hand-edited checkpoint with both questions and scenarios should fail."""
+        b = Benchmark("mixed")
+        b.add_question("What?", raw_answer="Y", answer_template="class A: pass")
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.jsonld"
+            b.save(path)
+
+            with open(path) as f:
+                data = json_mod.load(f)
+            # Hand-inject hasPart into a question benchmark
+            data["hasPart"] = [
+                SchemaOrgScenario(
+                    name="injected",
+                    entryNode="n",
+                    nodes={},
+                    edges=[],
+                ).model_dump(by_alias=True)
+            ]
+            with open(path, "w") as f:
+                json_mod.dump(data, f)
+
+            with pytest.raises(ValueError, match="both questions and scenarios"):
+                Benchmark.load(path)

@@ -99,6 +99,26 @@ class Benchmark:
         self._results_manager = ResultsManager(self._base)
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
         self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
+        self._rebuild_scenarios()
+
+    def _rebuild_scenarios(self) -> None:
+        """Rebuild _scenarios cache from checkpoint hasPart data."""
+        from ..scenario.checkpoint import schema_org_to_scenario
+
+        has_part = self._base._checkpoint.hasPart
+        if not has_part:
+            return
+
+        # Validate homogeneity: cannot have both questions and scenarios
+        if self._base._questions_cache:
+            raise ValueError(
+                "Checkpoint contains both questions and scenarios; this is not supported. "
+                "A benchmark must contain either standalone questions or scenarios, not both."
+            )
+
+        for schema_org in has_part:
+            defn = schema_org_to_scenario(schema_org)
+            self._scenarios[defn.name] = defn
 
     @property
     def workspace_root(self) -> Path | None:
