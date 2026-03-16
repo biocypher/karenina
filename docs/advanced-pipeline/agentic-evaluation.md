@@ -33,7 +33,7 @@ When `use_agent=True`, the stage calls `AgentPort.run()`, which captures the ful
 | `openai_endpoint` | `False` | Routes to `langchain` |
 | `openrouter` | `False` | Routes to `langchain` |
 
-See [adapters.md](adapters.md) for the full adapter reference.
+See [Adapters](../core_concepts/adapters.md) for the full adapter reference.
 
 ## 2. Workspace Resolution (GenerateAnswer Stage)
 
@@ -322,6 +322,6 @@ Agentic parsing affects several other stages:
 ## 11. Next Steps
 
 - [Verification Pipeline](../core_concepts/verification-pipeline.md): the 13-stage execution engine
-- [Adapters](adapters.md): port/adapter architecture and available interfaces
+- [Adapters](../core_concepts/adapters.md): port/adapter architecture and available interfaces
 - [Answer Templates](../core_concepts/answer-templates.md): writing templates and VerifiedField
 - [Prompt Assembly](prompt-assembly.md): how prompts are constructed for each LLM call

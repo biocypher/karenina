@@ -274,5 +274,5 @@ Examples:
 - [Configuration Hierarchy](index.md) — How presets interact with CLI args, env vars, and defaults
 - [Environment Variables](environment-variables.md) — Setting project-wide defaults
 - [Workspace Initialization](../../getting-started/workspace-init.md) — Creating a project with a `presets/` directory
-- [Running Verification](../../running-verification/index.md) — Using presets in verification workflows
+- [Running Verification](../running-verification/index.md) — Using presets in verification workflows
 - [Preset Schema Reference](../../reference/configuration/preset-schema.md) — Complete preset JSON schema

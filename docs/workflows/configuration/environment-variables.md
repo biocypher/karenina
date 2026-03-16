@@ -182,4 +182,4 @@ Environment variables that accept boolean values recognize these truthy strings 
 - [Presets](presets.md) — Reusable configuration files that override environment variables
 - [Workspace Initialization](../../getting-started/workspace-init.md) — `karenina init` creates default directories and `.env` template
 - [Environment Variables Reference](../../reference/configuration/env-vars.md) — Exhaustive table of all variables
-- [Running Verification](../../running-verification/index.md) — Putting configuration into practice
+- [Running Verification](../running-verification/index.md) — Putting configuration into practice

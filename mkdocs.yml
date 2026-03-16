@@ -23,6 +23,7 @@ exclude_docs: |
   workflows/creating-benchmarks/quality-assessment-benchmark.md
   workflows/creating-benchmarks/choosing-rubric-traits.md
   workflows/creating-benchmarks/scaled-authoring.md
+  workflows/creating-benchmarks/ai-assisted-authoring.md
   workflows/running-verification/basic-verification.md
   workflows/running-verification/full-evaluation.md
   workflows/running-verification/multi-model-comparison.md
