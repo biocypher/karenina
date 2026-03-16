@@ -121,8 +121,6 @@ async def _recording_ainvoke(self, input, config=None, **kwargs):
 
 def run_quickstart():
     """Run the quickstart flow end-to-end with real API calls."""
-    from pydantic import Field
-
     from karenina import Benchmark
     from karenina.schemas import (
         LLMRubricTrait,
@@ -130,7 +128,8 @@ def run_quickstart():
         RegexTrait,
         VerificationConfig,
     )
-    from karenina.schemas.entities import BaseAnswer
+    from karenina.schemas.entities import BaseAnswer, VerifiedField
+    from karenina.schemas.primitives import BooleanMatch
 
     # Step 1
     benchmark = Benchmark.create(
@@ -172,20 +171,16 @@ def run_quickstart():
 
     # Step 3c: Class-based override
     class Answer(BaseAnswer):
-        identifies_bcl2_as_target: bool = Field(
+        identifies_bcl2_as_target: bool = VerifiedField(
             description=(
                 "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
                 "B-cell lymphoma 2) as the direct pharmacological target. False if "
                 "BCL2 is mentioned only as a pathway member or a different protein "
                 "is identified as the primary target."
-            )
+            ),
+            ground_truth=True,
+            verify_with=BooleanMatch(),
         )
-
-        def ground_truth(self):
-            self.correct = {"identifies_bcl2_as_target": True}
-
-        def verify(self) -> bool:
-            return self.identifies_bcl2_as_target == self.correct["identifies_bcl2_as_target"]
 
     benchmark.update_template(question_ids[1], Answer)
     print("Step 3c: Updated template with class-based definition")

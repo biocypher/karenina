@@ -113,12 +113,11 @@ async def _recording_ainvoke(self, input, config=None, **kwargs):
 
 def run_taskeval_quickstart():
     """Run the TaskEval quickstart flow end-to-end with real API calls."""
-    from pydantic import Field
-
     from karenina.benchmark.task_eval import TaskEval
     from karenina.schemas.config.models import ModelConfig
-    from karenina.schemas.entities import BaseAnswer
+    from karenina.schemas.entities import BaseAnswer, VerifiedField
     from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+    from karenina.schemas.primitives import BooleanMatch
     from karenina.schemas.verification.config import VerificationConfig
 
     # Step 1: Create TaskEval
@@ -138,33 +137,25 @@ def run_taskeval_quickstart():
 
     # Step 3: Define answer template
     class Answer(BaseAnswer):
-        identifies_bcl2_as_target: bool = Field(
+        identifies_bcl2_as_target: bool = VerifiedField(
             description=(
                 "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
                 "B-cell lymphoma 2) as the direct pharmacological target of venetoclax. "
                 "False if BCL2 is mentioned only as a pathway member or a different "
                 "protein is identified as the primary target."
-            )
+            ),
+            ground_truth=True,
+            verify_with=BooleanMatch(),
         )
-        mentions_mechanism: bool = Field(
+        mentions_mechanism: bool = VerifiedField(
             description=(
                 "True if the response explains the mechanism of action (e.g., inhibiting "
                 "BCL2 to trigger apoptosis). False if only the target is named without "
                 "any mechanistic explanation."
-            )
+            ),
+            ground_truth=True,
+            verify_with=BooleanMatch(),
         )
-
-        def ground_truth(self):
-            self.correct = {
-                "identifies_bcl2_as_target": True,
-                "mentions_mechanism": True,
-            }
-
-        def verify(self) -> bool:
-            return all(
-                getattr(self, field) == self.correct[field]
-                for field in self.correct
-            )
 
     task.add_template(Answer)
     print("Step 3: Attached answer template")

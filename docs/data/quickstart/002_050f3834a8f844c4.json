@@ -1,0 +1,64 @@
+{
+  "sequence": 2,
+  "prompt_hash": "050f3834a8f844c4",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are an expert evaluation designer extracting ground-truth attributes from a question and its ideal answer. Build a Pydantic-friendly schema capturing what a judge model should read from candidate responses.\n\nCRITICAL: Use the MINIMUM number of attributes necessary. One attribute per independent piece of information.\n\nBOOLEAN-FIRST PRINCIPLE:\nString fields are fragile: they require exact normalization to match, and minor formatting\ndifferences (capitalization, hyphens, abbreviations) cause false negatives. Boolean fields\nare robust: the judge answers true/false about whether a concept is present, which is\nreliable across judge models. ALWAYS prefer `bool` over `str` unless answer_notes\nexplicitly request string extraction.\n\nType selection rules (in order of preference):\n1. `bool` for factual claims, concept presence, or identity checks (STRONGLY PREFERRED).\n   Convert \"What is X?\" into \"Does the response identify X as Y?\" with a bool.\n2. `Literal['option1', 'option2', ...]` for categorical answers with few fixed options.\n3. `int` or `float` for numeric answers.\n4. `list[str]` with SetContainment for multiple expected items (e.g., gene lists).\n5. `date` for date values.\n6. `str` ONLY when answer_notes explicitly request string extraction. Do not use `str`\n   by default.\n\nFORBIDDEN:\n- Never use `Dict[str, str]` types.\n- Never create redundant attributes that check the same information twice.\n- Never create a \"mentions_X\" boolean AND a Literal/value check for the same answer.\n- Never use `str` type unless answer_notes explicitly ask for it.\n\nExamples of CORRECT minimal schemas:\n- Q: \"What is the MESH ID for X?\" A: \"D010300\" → ONE attribute: `mesh_id: Literal['D010300']`\n- Q: \"Is X a symptom of Y?\" A: \"Yes\" → ONE attribute: `is_symptom: bool`\n- Q: \"What genes are involved?\" A: \"BRCA1, TP53\" → ONE attribute: `genes: list[str]` with ground_truth [\"BRCA1\", \"TP53\"]\n- Q: \"What is the primary target?\" A: \"BCL2\" → ONE attribute: `identifies_bcl2_as_target: bool` with ground_truth True\n\nExample JSON output:\n{{\n  \"attributes\": [\n    {{\n      \"name\": \"identifies_correct_mesh_id\",\n      \"type\": \"Literal['D010300']\",\n      \"ground_truth\": \"D010300\"\n    }}\n  ]\n}}"
+      },
+      {
+        "type": "human",
+        "content": "You receive an evaluation sample consisting of a question and its reference answer:\n\nQuestion:\nHow many chromosomes are in a human somatic cell?\n\nReference Answer:\n46\n\nField Design Plan (use as guidance):\n# Field Design Analysis for Chromosome Count Question\n\n## Reference Answer Breakdown\nThe reference answer is straightforward: a single numeric value of 46. This represents the diploid number of chromosomes in human somatic cells (23 pairs).\n\n## Field Design Reasoning\n\n**Primary Field: Chromosome Count**\n- **Type**: `int`\n- **Rationale**: The answer is fundamentally a numeric quantity. An integer type directly captures the factual claim without requiring text normalization or pattern matching. The judge can verify whether a response states \"46\" or equivalent numeric expressions.\n\n**Normalization Considerations**:\n- Responses might express this as \"46\", \"forty-six\", \"46 chromosomes\", \"23 pairs of chromosomes (46 total)\", etc.\n- An `int` field avoids the fragility of string matching while still capturing the core fact\n- The judge should be able to extract the numeric value regardless of surrounding text or phrasing\n\n**Single vs. Multiple Fields**:\n- This question requires only one field since there is one discrete factual claim to verify\n- No secondary attributes need independent verification (e.g., we're not separately checking \"is this about somatic cells?\" as a boolean—that's context already in the question)\n\n**Potential Complications**:\n- A response might mention both \"46 in somatic cells\" and \"23 in gametes\" (sex cells). The judge should extract the somatic cell count (46) as the primary answer, potentially flagging if the response conflates the two or only provides the gamete count (23).\n- Some responses might say \"23 pairs\" instead of \"46\"—the judge should recognize these as equivalent, though an `int` field of 46 is the most direct encoding.\n\n**Conclusion**: A single `int` field capturing the chromosome count is the most robust and appropriate design for this factual question.\n\nIdentify the minimal set of structured attributes that a judge must extract from a candidate response to verify correctness. Construct a JSON object with a single key `attributes` containing a list of attribute definitions. Each definition must include `name`, `type`, and `ground_truth` fields, where `ground_truth` contains the expected correct value derived from the reference answer.\n\nWhen selecting types, follow these guidelines:\n- FORBIDDEN: Never use `Dict[str, str]` types.\n- FORBIDDEN: Never use `str` type unless answer_notes explicitly request string extraction.\n- Use `bool` as the DEFAULT type for factual claims and concept identification. Convert factual answers into boolean checks (e.g., \"BCL2\" becomes \"identifies_bcl2_as_target: bool = True\").\n- Use `Literal` types when the reference answer suggests a categorical classification with few fixed options.\n- Use `list[str]` for multiple expected items that form a set.\n- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept.\n- If answer_notes are provided and explicitly request string fields or specific extraction behavior, follow those instructions and override the boolean-first default.\n\nReturn only valid JSON."
+      }
+    ]
+  },
+  "response": {
+    "content": [
+      {
+        "id": "toolu_01Tf7zXKfF8epCoofvy3QA7o",
+        "input": {
+          "attributes": [
+            {
+              "name": "chromosome_count",
+              "type": "int",
+              "ground_truth": 46
+            }
+          ]
+        },
+        "name": "GroundTruthSpec",
+        "type": "tool_use",
+        "caller": {
+          "type": "direct"
+        }
+      }
+    ],
+    "id": "lc_run--f0b9eb8e-8433-40a6-a755-49e248d08329-0",
+    "tool_calls": [
+      {
+        "name": "GroundTruthSpec",
+        "args": {
+          "attributes": [
+            {
+              "name": "chromosome_count",
+              "type": "int",
+              "ground_truth": 46
+            }
+          ]
+        },
+        "id": "toolu_01Tf7zXKfF8epCoofvy3QA7o",
+        "type": "tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "tool_use"
+    }
+  }
+}

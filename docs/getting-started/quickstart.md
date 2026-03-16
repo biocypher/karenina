@@ -168,13 +168,13 @@ print(f"Added {len(question_ids)} questions")
 
 ## Step 3: Write Answer Templates
 
-Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each template:
+Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each field uses `VerifiedField` to declare:
 
-1. Declares **attributes** the judge must extract (typed fields)
-2. Stores the **correct values** in `ground_truth`
-3. Implements a **`verify()`** method that compares extracted values to ground truth
+1. A **description** that tells the judge what to extract
+2. The **ground truth** value (what a correct answer looks like)
+3. A **verification primitive** (`verify_with`) that checks the extracted value against ground truth
 
-The class must always be named `Answer` and inherit from `BaseAnswer`.
+The class must inherit from `BaseAnswer`.
 
 ### Automatic Generation
 
@@ -199,29 +199,24 @@ print(generated_code)
 
 ### Manual Definition (Class-Based)
 
-When you need precise control over verification logic, define templates as Python classes and pass them directly. This is especially useful for domain-specific comparisons or multi-field extraction:
+When you need precise control over verification logic, define templates as Python classes and pass them directly. Each field uses `VerifiedField` to declare what to extract, the correct answer, and how to compare:
 
 ```python
-from pydantic import Field
-
-from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.primitives import BooleanMatch
 
 
 class Answer(BaseAnswer):
-    identifies_bcl2_as_target: bool = Field(
+    identifies_bcl2_as_target: bool = VerifiedField(
         description=(
             "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
             "B-cell lymphoma 2) as the direct pharmacological target. False if "
             "BCL2 is mentioned only as a pathway member or a different protein "
             "is identified as the primary target."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {"identifies_bcl2_as_target": True}
-
-    def verify(self) -> bool:
-        return self.identifies_bcl2_as_target == self.correct["identifies_bcl2_as_target"]
 
 
 benchmark.update_template(question_ids[1], Answer)

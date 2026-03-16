@@ -1,5 +1,5 @@
 {
-  "sequence": 8,
+  "sequence": 11,
   "prompt_hash": "3668646934e9dc67",
   "model": "claude-haiku-4-5",
   "request": {
@@ -15,8 +15,8 @@
     ]
   },
   "response": {
-    "content": "Hemoglobin A has **4 protein subunits**: 2 alpha (α) chains and 2 beta (β) chains, giving it a quaternary structure often written as α₂β₂.",
-    "id": "lc_run--487a78ef-cf76-492e-a963-dd90b499e9f9-0",
+    "content": "Hemoglobin A has **4 protein subunits**:\n\n- **2 alpha (α) globin chains**\n- **2 beta (β) globin chains**\n\nThis tetrameric structure (α₂β₂) is essential for hemoglobin's cooperative binding of oxygen and its ability to efficiently transport oxygen throughout the body.",
+    "id": "lc_run--78a7849f-456d-4ec1-a3d1-679f26d08fb7-0",
     "usage_metadata": {
       "input_tokens": 0,
       "output_tokens": 0,
