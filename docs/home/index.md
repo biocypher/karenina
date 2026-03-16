@@ -4,7 +4,9 @@
 
     Karenina is an experimental project still making its baby steps towards maturity. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
 
-**Karenina** is an open-source Python framework that simplifies how you define, run, and share LLM evaluations. Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports two modes:
+**Karenina** is an open-source Python framework that simplifies how you define, run, and share LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions where models use external tools via [MCP](../notebooks/core_concepts/mcp-overview.ipynb), and fully [agentic coding and data analysis tasks](../notebooks/core_concepts/agentic-evaluation.ipynb) where both the answering model and the judge operate in a real workspace with file and code access.
+
+Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports two modes:
 
 - **Benchmark** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
 - **TaskEval** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
@@ -21,7 +23,9 @@
 
 4. **Expressivity.** [Templates](../notebooks/core_concepts/answer-templates.ipynb) combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic).
 
-5. **Benchmarks that measure what you care about.** Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.
+5. **Agentic evaluation, not just Q&A.** Modern LLM deployments increasingly involve agents that write code, run tests, and produce file artifacts. Karenina evaluates these workflows natively: the answering model operates in a [workspace](../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) with tool access, and an independent [judge agent](../notebooks/core_concepts/agentic-evaluation.ipynb#4-two-step-agentic-judging-stage-7b) inspects the resulting artifacts (files created, tests passed, code compiled) rather than relying on the conversation trace alone. The same template and rubric primitives apply whether the task is a factual question or a multi-step coding challenge.
+
+6. **Benchmarks that measure what you care about.** Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.
 
 ## Documentation Structure
 
@@ -44,6 +48,8 @@ This documentation is organized into four sections, each serving a different rea
 - **Evaluate answers** using both rule-based verification and LLM-as-judge strategies
 - **Support natural, unconstrained outputs**, no rigid response formats required
 - **Assess response quality** with rubrics (LLM judgment, regex, callable, and metric traits)
+- **Evaluate agentic tasks** where models operate in workspaces with tool access (coding, data analysis)
+- **Judge workspace artifacts** with an independent agent that inspects files, re-runs tests, and verifies outputs
 
 **Benchmark mode**:
 
@@ -66,6 +72,7 @@ This documentation is organized into four sections, each serving a different rea
 | Verify factual accuracy *and* assess quality (clarity, safety, format) | Both |
 | Run hundreds of questions across multiple models automatically | Benchmark |
 | Share portable evaluation suites that anyone can re-run | Benchmark |
+| Evaluate coding or data analysis tasks with workspace artifacts | Benchmark |
 | Score agent workflow outputs after execution | TaskEval |
 | Evaluate multi-step agent traces per phase | TaskEval |
 
@@ -100,6 +107,8 @@ The two modes differ in where the response comes from:
 
 A common pattern: use a template to verify the model extracted the correct answer, then use rubrics to check that the response was concise, cited sources, and avoided hallucination. This works identically in both modes.
 
+For [agentic tasks](../notebooks/core_concepts/agentic-evaluation.ipynb), both steps extend to workspace inspection: the answering model writes code and artifacts into a workspace directory, and the judge agent independently examines those artifacts before filling in the template. The evaluation engine is the same; only the source of evidence changes (workspace files instead of conversation text).
+
 For a deeper discussion, see [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) and [Philosophy](philosophy.md).
 
 ---
@@ -110,6 +119,7 @@ For a deeper discussion, see [Templates vs Rubrics](../notebooks/core_concepts/t
 - [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) — How a Judge LLM parses and verifies responses
 - [Rubrics](../core_concepts/rubrics/index.md) — Trait-based quality assessment
 - [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) — When to use which, and when to use both
+- [Agentic Evaluation](../notebooks/core_concepts/agentic-evaluation.ipynb) — Workspace-based evaluation for coding and data analysis tasks
 - [TaskEval](../core_concepts/task-eval.md): Evaluate pre-recorded outputs without defining questions
 - [Installation](../getting-started/installation.md) — Install karenina and set up API keys
 - [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, pipelines, adapters, and more

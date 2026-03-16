@@ -7,7 +7,7 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue)](http://mypy-lang.org/)
 
-**Structured LLM evaluation through answer templates and rubrics**
+**Structured LLM evaluation: from factual Q&A to agentic coding tasks**
 
 [About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
 
@@ -20,10 +20,13 @@
 ## 📑 Table of Contents
 
 - [About Karenina](#-about-karenina)
+  - [Why This Approach](#why-this-approach)
 - [The Problem](#-the-problem)
   - [Approach 1: Constrained Output](#1-constrain-the-answering-models-output)
   - [Approach 2: LLM as Judge](#2-use-an-llm-as-a-judge-free-text-evaluation)
-  - [The Karenina Strategy](#-the-karenina-strategy)
+- [The Karenina Strategy](#-the-karenina-strategy)
+  - [Example Workflow](#example-workflow)
+  - [Beyond Correctness: Rubric Evaluation](#beyond-correctness-rubric-evaluation)
 - [Getting Started](#-getting-started)
 - [Command-Line Interface](#-command-line-interface)
 - [Key Features](#-key-features)
@@ -37,7 +40,9 @@
 
 ## 🎯 About Karenina
 
-Karenina is an open-source Python framework for defining, running, and sharing LLM evaluations. It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, and metric traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
+Karenina is an open-source Python framework for defining, running, and sharing LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions via [MCP](docs/core_concepts/mcp-overview.md), and fully [agentic coding and data analysis tasks](docs/core_concepts/agentic-evaluation.md) where both the answering model and the judge operate in a real workspace with file and code access.
+
+It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, and metric traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
 
 The core challenge Karenina addresses is making the formulation of domain-specific benchmarks accessible to non-LLM-technical experts, allowing them to focus their time and expertise on knowledge rather than infrastructure. LLM-assisted template generation automates most code writing, and a JSON-LD format (building on schema.org vocabularies) provides seamless portability between the Python library, REST API, and web GUI.
 
@@ -51,7 +56,9 @@ The core challenge Karenina addresses is making the formulation of domain-specif
 
 4. **Expressivity.** Templates combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic).
 
-5. **Benchmarks that measure what you care about.** Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.
+5. **Agentic evaluation, not just Q&A.** Modern LLM deployments increasingly involve agents that write code, run tests, and produce file artifacts. Karenina evaluates these workflows natively: the answering model operates in a [workspace](docs/core_concepts/agentic-evaluation.md) with tool access, and an independent judge agent inspects the resulting artifacts (files created, tests passed, code compiled) rather than relying on the conversation trace alone. The same template and rubric primitives apply whether the task is a factual question or a multi-step coding challenge.
+
+6. **Benchmarks that measure what you care about.** Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.
 
 ## 🤔 The Problem
 
@@ -121,30 +128,25 @@ This setup allows the judge to flexibly interpret free text while ensuring that 
 **1. Define a Pydantic template:**
 
 ```python
-from karenina.schemas.entities import BaseAnswer
-from pydantic import Field
+from karenina.schemas.entities import BaseAnswer, VerifiedField, BooleanMatch
 
 class Answer(BaseAnswer):
-    identifies_bcl2_as_target: bool = Field(
+    identifies_bcl2_as_target: bool = VerifiedField(
         description=(
             "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
             "B-cell lymphoma 2) as the direct pharmacological target of venetoclax."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {"identifies_bcl2_as_target": True}
-
-    def verify(self) -> bool:
-        return self.identifies_bcl2_as_target == self.correct["identifies_bcl2_as_target"]
 ```
 
 **Key aspects:**
-- The `Field` description guides the Judge LLM on what to extract (here, a boolean judgment about BCL2 identification)
-- `ground_truth` stores the expected values; `verify()` compares them programmatically
-- A single template can mix multiple field types and combine them with arbitrary Python logic in `verify()`
+- The `description` guides the Judge LLM on what to extract (here, a boolean judgment about BCL2 identification)
+- `ground_truth` declares the expected value; `verify_with` selects the verification primitive for programmatic comparison
+- A single template can mix multiple field types with different verification primitives
 
-Template fields can use any type that Pydantic supports:
+`VerifiedField` supports any type that Pydantic supports:
 
 | Type | Use Case | Example |
 |------|----------|---------|
@@ -192,7 +194,7 @@ The key distinction is the **ground-truth boundary**. Templates live on the grou
 | "Did the response identify BCL2 as the target?" | "Does the response cite specific trials or data?" |
 | "Is the mechanism of action accurate?" | "Is the reasoning presented as a chain of steps?" |
 
-Rubrics support four trait types:
+Rubrics support five trait types (LLM traits have three sub-kinds: boolean, score, literal):
 
 | Trait Type | Returns | LLM Required | Use Case |
 |---|---|---|---|
@@ -202,6 +204,7 @@ Rubrics support four trait types:
 | **[RegexTrait](docs/core_concepts/rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
 | **[CallableTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
 | **[MetricRubricTrait](docs/core_concepts/rubrics/metric-traits.md)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
+| **[AgenticRubricTrait](docs/core_concepts/agentic-evaluation.md#9-agentic-rubric-evaluation)** | `bool` or `int` | Yes | Agent investigates workspace artifacts before scoring (code quality, test coverage) |
 
 Here is how a complete evaluation looks for our venetoclax question, combining the template above with two rubric traits:
 
@@ -320,14 +323,15 @@ karenina serve --port 8080
 ## ✨ Key Features
 
 - **[Structured evaluation via answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models parsed by a Judge LLM, verified programmatically
-- **[4 rubric trait types](docs/core_concepts/rubrics/index.md)**: LLM (with literal variant for classification), regex, callable, metric
+- **[Agentic evaluation](docs/core_concepts/agentic-evaluation.md)**: evaluate coding and data analysis tasks where models and judges operate in workspaces with tool access
+- **[5 rubric trait types](docs/core_concepts/rubrics/index.md)**: LLM (boolean, score, literal), regex, callable, metric, agentic
 - **[2 evaluation modes](docs/core_concepts/evaluation-modes.md)**: Benchmark (closed-loop) and TaskEval (open-loop, pre-recorded outputs)
 - **[6 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`
 - **[13-stage configurable verification pipeline](docs/core_concepts/verification-pipeline.md)**: each stage can be enabled or disabled independently
+- **[MCP integration](docs/core_concepts/mcp-overview.md)**: Model Context Protocol servers with tool use tracking
 - **[Few-shot prompting](docs/core_concepts/few-shot.md)**: global or per-question examples with flexible selection modes
 - **[Deep judgment](docs/workflows/running-verification/deep-judgment.md)**: extract verbatim excerpts, reasoning traces, and confidence scores
 - **Async parallel execution**: configurable worker pools for batch runs
-- **[MCP integration](docs/core_concepts/mcp-overview.md)**: Model Context Protocol servers with tool use tracking
 - **[CLI for automation and CI/CD](docs/reference/cli/index.md)**: presets, question filtering, progressive save, and deterministic exit codes
 
 [View full documentation](docs/home/index.md)
@@ -337,10 +341,12 @@ karenina serve --port 8080
 Karenina uses a **hexagonal architecture** ([Ports & Adapters](docs/core_concepts/adapters.md)) for LLM interactions. Three protocol interfaces define what the application needs:
 
 - **LLMPort**: basic LLM text generation
-- **AgentPort**: agentic LLM with tool use and MCP support
+- **AgentPort**: agentic LLM with tool use, MCP support, and [workspace access](docs/core_concepts/agentic-evaluation.md)
 - **ParserPort**: structured output parsing into Pydantic models
 
 Each supported interface provides adapter implementations for these ports. An adapter factory handles instantiation, and an [AdapterInstructionRegistry](docs/core_concepts/prompt-assembly.md) manages interface-specific prompt transformations.
+
+For [agentic evaluation](docs/core_concepts/agentic-evaluation.md), `AgentPort` powers both the answering model (operating in a workspace with tool access) and the judge (independently inspecting workspace artifacts). These two roles are independently configurable: an agentic answering model can be paired with a classical parser, or a classical answering model's response can be verified by an agentic judge.
 
 ### Ecosystem
 
@@ -352,7 +358,7 @@ Each supported interface provides adapter implementations for these ports. An ad
 
 A web-based graphical interface covers most features provided by the backend, making benchmark creation and verification accessible to domain experts who prefer not to write Python code.
 
-[Architecture documentation](docs/home/index.md)
+[Architecture documentation](docs/core_concepts/adapters.md)
 
 ## 📦 Installation
 
@@ -451,6 +457,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 - [**Rubrics**](docs/core_concepts/rubrics/index.md): Quality assessment with four trait types
 - [**Templates vs Rubrics**](docs/core_concepts/template-vs-rubric.md): When to use which
 - [**Verification Pipeline**](docs/core_concepts/verification-pipeline.md): The 13-stage evaluation engine
+- [**Agentic Evaluation**](docs/core_concepts/agentic-evaluation.md): Workspace-based evaluation for coding and data analysis tasks
 
 ### Running Verification
 - [**Verification Config**](docs/reference/configuration/verification-config.md): Configure and run evaluations
