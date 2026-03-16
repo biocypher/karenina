@@ -373,6 +373,11 @@ class Benchmark:
         """True if this benchmark contains scenarios instead of standalone questions."""
         return len(self._scenarios) > 0
 
+    @property
+    def scenario_count(self) -> int:
+        """Return the number of scenarios in the benchmark."""
+        return len(self._scenarios)
+
     def add_scenario(self, scenario: "ScenarioDefinition | Any") -> None:
         """Add a scenario to the benchmark.
 
@@ -1169,8 +1174,8 @@ class Benchmark:
 
     @property
     def is_empty(self) -> bool:
-        """Check if the benchmark has no questions."""
-        return self._base.is_empty
+        """Check if the benchmark has no questions and no scenarios."""
+        return len(self._base._questions_cache) == 0 and len(self._scenarios) == 0
 
     @property
     def is_complete(self) -> bool:
@@ -1192,7 +1197,9 @@ class Benchmark:
         return self.__repr__()
 
     def __len__(self) -> int:
-        """Return the number of questions in the benchmark."""
+        """Return the number of questions or scenarios in the benchmark."""
+        if self._scenarios:
+            return len(self._scenarios)
         return len(self._base)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:

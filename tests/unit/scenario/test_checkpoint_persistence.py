@@ -462,3 +462,34 @@ class TestBenchmarkSaveLoadRoundtrip:
 
             with pytest.raises(ValueError, match="both questions and scenarios"):
                 Benchmark.load(path)
+
+
+@pytest.mark.unit
+class TestBenchmarkScenarioProperties:
+    def test_is_empty_false_for_scenario_benchmark(self):
+        b = Benchmark("test")
+        b.add_scenario(_build_branching_scenario())
+        assert not b.is_empty
+
+    def test_is_empty_true_for_empty_benchmark(self):
+        b = Benchmark("test")
+        assert b.is_empty
+
+    def test_scenario_count(self):
+        b = Benchmark("test")
+        assert b.scenario_count == 0
+        b.add_scenario(_build_branching_scenario())
+        assert b.scenario_count == 1
+
+    def test_len_returns_scenario_count(self):
+        b = Benchmark("test")
+        b.add_scenario(_build_branching_scenario())
+        assert len(b) == 1
+
+    def test_clone_preserves_scenarios(self):
+        b = Benchmark("test")
+        b.add_scenario(_build_branching_scenario())
+        cloned = b.clone()
+        assert cloned.is_scenario_benchmark
+        assert len(cloned.get_scenarios()) == 1
+        assert cloned.get_scenario("test_branch").entry_node == "ask"
