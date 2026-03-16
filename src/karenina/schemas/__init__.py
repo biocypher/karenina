@@ -104,6 +104,32 @@ from .results import (
 )
 
 # ============================================================================
+# Scenario schema types (from scenario/)
+# ============================================================================
+from .scenario import (
+    END,
+    CountTurns,
+    CrossTurnCheck,
+    EdgeCondition,
+    FirstMatchIndex,
+    ModelOverride,
+    OutcomeCheckNode,
+    OutcomeNode,
+    ResultCheck,
+    ScenarioDefinition,
+    ScenarioEdge,
+    ScenarioExecutionResult,
+    ScenarioNode,
+    ScenarioOutcomeCriterion,
+    ScenarioState,
+    StateCheck,
+    ToolFilter,
+    ToolFilterEntry,
+    TurnCheck,
+    TurnRecord,
+)
+
+# ============================================================================
 # Shared models
 # ============================================================================
 from .shared import SearchResultItem
@@ -217,4 +243,25 @@ __all__ = [
     "SchemaOrgPerson",
     "SchemaOrgCreativeWork",
     "DatasetMetadata",
+    # Scenario schema types
+    "END",
+    "StateCheck",
+    "EdgeCondition",
+    "ModelOverride",
+    "ToolFilterEntry",
+    "ToolFilter",
+    "ScenarioEdge",
+    "ScenarioNode",
+    "ScenarioOutcomeCriterion",
+    "ScenarioDefinition",
+    "ScenarioState",
+    "TurnRecord",
+    "ScenarioExecutionResult",
+    "TurnCheck",
+    "ResultCheck",
+    "CrossTurnCheck",
+    "CountTurns",
+    "FirstMatchIndex",
+    "OutcomeCheckNode",
+    "OutcomeNode",
 ]
