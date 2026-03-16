@@ -44,6 +44,10 @@ exclude_docs: |
   core_concepts/rubrics/agentic-traits.md
   core_concepts/agentic-evaluation.md
   workflows/running-verification/agentic-evaluation.md
+  core_concepts/scenarios/building-scenarios.md
+  core_concepts/scenarios/outcome-criteria.md
+  core_concepts/scenarios/state-and-routing.md
+  workflows/scenarios/sycophancy-tutorial.md
 
 theme:
   name: material
@@ -184,6 +188,11 @@ nav:
       - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
       - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
       - Agentic Traits: notebooks/core_concepts/rubrics/agentic-traits.ipynb
+    - Scenarios:
+      - Overview: core_concepts/scenarios/index.md
+      - Building Scenarios: notebooks/core_concepts/scenarios/building-scenarios.ipynb
+      - Outcome Criteria: notebooks/core_concepts/scenarios/outcome-criteria.ipynb
+      - State and Routing: notebooks/core_concepts/scenarios/state-and-routing.ipynb
     - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
@@ -227,6 +236,8 @@ nav:
       - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
       - Exporting: workflows/analyzing-results/exporting.md
       - Iterating: workflows/analyzing-results/iterating.md
+    - Scenarios:
+      - Sycophancy Tutorial: notebooks/scenarios/sycophancy-tutorial.ipynb
   - Reference:
     - reference/index.md
     - Configuration Reference:
