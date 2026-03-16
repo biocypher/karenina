@@ -95,6 +95,7 @@ class ScenarioManager:
                 config=config,
                 run_name=run_name,
                 global_rubric=global_rubric,
+                turn_index=state.turn,
             )
 
             # Grow accumulated history with trace
@@ -234,6 +235,7 @@ class ScenarioManager:
         config: VerificationConfig,
         run_name: str | None,
         global_rubric: Rubric | None,
+        turn_index: int = 0,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -257,7 +259,13 @@ class ScenarioManager:
 
         # Determine evaluation mode
         evaluation_mode = "template_only"
-        if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits):
+        if rubric and (
+            rubric.llm_traits
+            or rubric.regex_traits
+            or rubric.callable_traits
+            or rubric.metric_traits
+            or rubric.agentic_traits
+        ):
             evaluation_mode = "template_and_rubric"
 
         # Build VerificationContext
@@ -276,6 +284,7 @@ class ScenarioManager:
             few_shot_examples=node.question.few_shot_examples,
             use_full_trace_for_template=config.use_full_trace_for_template,
             use_full_trace_for_rubric=config.use_full_trace_for_rubric,
+            scenario_turn=turn_index,
         )
 
         # Set conversation history artifact (the key integration point).
