@@ -242,10 +242,30 @@ _outcome_adapter: TypeAdapter[OutcomeNode] = TypeAdapter(OutcomeNode)
 
 
 def _deserialize_outcome_check(data: dict[str, Any]) -> OutcomeNode:
-    """Deserialize an outcome check, restoring all nested verify_with primitives."""
+    """Deserialize an outcome check, restoring all nested verify_with primitives.
+
+    AllOf/AnyOf/AtLeastN have ``conditions: list[Any]``, so Pydantic leaves
+    nested items as dicts. We recursively deserialize them into proper check
+    nodes after the top-level parse.
+    """
     data = _restore_verify_with_in_dict(dict(data))
     result: OutcomeNode = _outcome_adapter.validate_python(data)
-    return result
+    return _recursively_deserialize_conditions(result)
+
+
+def _recursively_deserialize_conditions(node: OutcomeNode) -> OutcomeNode:
+    """Walk a composition tree, deserializing any dict conditions into typed nodes."""
+    if hasattr(node, "conditions") and node.conditions:
+        deserialized = []
+        for item in node.conditions:
+            if isinstance(item, dict):
+                item = _restore_verify_with_in_dict(dict(item))
+                child: OutcomeNode = _outcome_adapter.validate_python(item)
+                deserialized.append(_recursively_deserialize_conditions(child))
+            else:
+                deserialized.append(item)
+        node.conditions = deserialized
+    return node
 
 
 def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
