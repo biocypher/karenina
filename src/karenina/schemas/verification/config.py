@@ -227,6 +227,9 @@ class VerificationConfig(BaseModel):
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
+    # Scenario execution settings
+    scenario_turn_limit: int = 20  # Max turns before forced termination in scenario execution
+
     def __init__(self, **data: Any) -> None:
         """
         Initialize with environment variable support and default system prompts.
