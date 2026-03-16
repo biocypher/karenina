@@ -12,7 +12,7 @@ Its core idea is formalizing ground truth as structured [answer templates](../no
 - **[Scenarios](../core_concepts/scenarios/index.md)** (closed-loop, multi-turn): Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.
 - **[TaskEval](../notebooks/core_concepts/task-eval.ipynb)** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
 
-**New here?** Start with the **[Quick Start: Q/A Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, the **[Quick Start: Scenarios](../notebooks/scenarios/sycophancy-tutorial.ipynb)** to build a multi-turn evaluation with branching, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
+**New here?** Start with the **[Quick Start: Q/A Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, the **[Quick Start: Scenarios](../notebooks/quickstart-scenarios.ipynb)** to build a multi-turn evaluation with branching, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
 
 ## Why This Approach
 

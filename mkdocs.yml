@@ -9,6 +9,7 @@ exclude_docs: |
   # Jupytext .md companion files — notebooks are the canonical source
   getting-started/quickstart.md
   getting-started/quickstart-taskeval.md
+  getting-started/quickstart-scenarios.md
   workflows/task-eval/index.md
   core_concepts/answer-templates.md
   core_concepts/verification-primitives.md
@@ -169,7 +170,8 @@ nav:
   - Getting Started:
     - getting-started/index.md
     - Installation: getting-started/installation.md
-    - "Quick Start: Benchmark": notebooks/quickstart.ipynb
+    - "Quick Start: Q/A Benchmark": notebooks/quickstart.ipynb
+    - "Quick Start: Scenarios": notebooks/quickstart-scenarios.ipynb
     - "Quick Start: TaskEval": notebooks/quickstart-taskeval.ipynb
     - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
