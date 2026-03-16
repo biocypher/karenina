@@ -43,6 +43,7 @@ class AgenticTraitEvaluator:
         question_text: str,
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
+        trace_file_path: Path | None = None,
     ) -> tuple[int | bool | dict[str, Any] | None, str | None]:
         """Evaluate a single agentic rubric trait.
 
@@ -51,6 +52,9 @@ class AgenticTraitEvaluator:
             question_text: The original question text.
             raw_llm_response: The answering model's raw response (may be None).
             workspace_path: Path to the workspace directory (may be None).
+            trace_file_path: If provided and trait.materialize_trace is True,
+                the investigation prompt references this file path instead of
+                inlining the full trace.
 
         Returns:
             Tuple of (score, investigation_trace).
@@ -64,6 +68,7 @@ class AgenticTraitEvaluator:
                 question_text,
                 raw_llm_response,
                 workspace_path,
+                trace_file_path=trace_file_path,
             )
         except Exception:
             logger.warning(
@@ -92,8 +97,17 @@ class AgenticTraitEvaluator:
         question_text: str,
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
+        trace_file_path: Path | None = None,
     ) -> str:
         """Launch agent to investigate the response/workspace.
+
+        Args:
+            trait: The agentic rubric trait to evaluate.
+            question_text: The original question text.
+            raw_llm_response: The answering model's raw response (may be None).
+            workspace_path: Path to the workspace directory (may be None).
+            trace_file_path: If provided and trait.materialize_trace is True,
+                the prompt references this file instead of inlining the trace.
 
         Returns:
             Raw investigation trace string.
@@ -113,7 +127,14 @@ class AgenticTraitEvaluator:
         user_parts: list[str] = [f"Question: {question_text}"]
 
         if trait.context_mode in ("trace_and_workspace", "trace_only") and raw_llm_response:
-            user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_llm_response}\n--- END TRACE ---")
+            if trait.materialize_trace and trace_file_path:
+                trace_content = (
+                    f"The full agent trace is saved to: {trace_file_path}\n"
+                    "Use file tools (grep, search, read) to examine it."
+                )
+            else:
+                trace_content = raw_llm_response
+            user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{trace_content}\n--- END TRACE ---")
 
         if workspace_path and trait.context_mode != "trace_only":
             user_parts.append(f"\nWorkspace directory: {workspace_path}")

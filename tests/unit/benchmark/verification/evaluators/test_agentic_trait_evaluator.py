@@ -1,5 +1,6 @@
 """Tests for AgenticTraitEvaluator."""
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -321,3 +322,158 @@ class TestExtractTemplate:
         mock_parser.parse_to_pydantic.assert_called_once()
         call_args = mock_parser.parse_to_pydantic.call_args
         assert call_args[0][1] is _TestFindings  # Second arg is the class
+
+
+@pytest.mark.unit
+class TestTraceMaterialization:
+    """Tests for trace file path support in agentic trait evaluation."""
+
+    def test_evaluate_trait_accepts_trace_file_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """evaluate_trait() should accept an optional trace_file_path parameter."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="test_mat",
+            description="Check quality.",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_only",
+        )
+
+        mock_agent_result = _make_agent_result(raw_trace="investigation output")
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = mock_agent_result
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _: mock_agent)
+
+        mock_parsed = SingleBooleanScore(result=True)
+        mock_parse_result = _make_parse_result(mock_parsed)
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = mock_parse_result
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        score, trace = evaluator.evaluate_trait(
+            trait,
+            question_text="Q",
+            raw_llm_response="Response",
+            workspace_path=None,
+            trace_file_path=Path("/tmp/test_trace.txt"),
+        )
+        assert score is True
+
+    def test_materialize_trace_replaces_inline_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When materialize_trace=True and trace_file_path given, prompt uses file reference."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="test_mat_prompt",
+            description="Check quality.",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_only",
+        )
+
+        mock_agent_result = _make_agent_result(raw_trace="investigation output")
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = mock_agent_result
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _: mock_agent)
+
+        mock_parsed = SingleBooleanScore(result=True)
+        mock_parse_result = _make_parse_result(mock_parsed)
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = mock_parse_result
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        evaluator.evaluate_trait(
+            trait,
+            question_text="Q",
+            raw_llm_response="The full inline response text here",
+            workspace_path=None,
+            trace_file_path=Path("/tmp/test_trace.txt"),
+        )
+
+        # The agent prompt should reference the file path, not the inline response
+        call_args = mock_agent.run.call_args
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        user_msgs = [m for m in messages if m.role == Role.USER]
+        user_text = user_msgs[0].text
+        assert "/tmp/test_trace.txt" in user_text
+        assert "The full inline response text here" not in user_text
+
+    def test_no_trace_file_path_uses_inline_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without trace_file_path, the prompt includes inline trace content."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="test_no_mat",
+            description="Check quality.",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_only",
+        )
+
+        mock_agent_result = _make_agent_result(raw_trace="investigation output")
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = mock_agent_result
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _: mock_agent)
+
+        mock_parsed = SingleBooleanScore(result=True)
+        mock_parse_result = _make_parse_result(mock_parsed)
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = mock_parse_result
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        evaluator.evaluate_trait(
+            trait,
+            question_text="Q",
+            raw_llm_response="Inline trace content",
+            workspace_path=None,
+            trace_file_path=None,
+        )
+
+        call_args = mock_agent.run.call_args
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        user_msgs = [m for m in messages if m.role == Role.USER]
+        user_text = user_msgs[0].text
+        assert "Inline trace content" in user_text
+
+    def test_materialize_false_ignores_trace_file_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When materialize_trace=False, trace_file_path is ignored; inline content is used."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="test_no_flag",
+            description="Check quality.",
+            kind="boolean",
+            materialize_trace=False,
+            context_mode="trace_only",
+        )
+
+        mock_agent_result = _make_agent_result(raw_trace="investigation output")
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = mock_agent_result
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _: mock_agent)
+
+        mock_parsed = SingleBooleanScore(result=True)
+        mock_parse_result = _make_parse_result(mock_parsed)
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = mock_parse_result
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        evaluator.evaluate_trait(
+            trait,
+            question_text="Q",
+            raw_llm_response="Inline trace content",
+            workspace_path=None,
+            trace_file_path=Path("/tmp/test_trace.txt"),
+        )
+
+        call_args = mock_agent.run.call_args
+        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        user_msgs = [m for m in messages if m.role == Role.USER]
+        user_text = user_msgs[0].text
+        assert "Inline trace content" in user_text
+        assert "/tmp/test_trace.txt" not in user_text
