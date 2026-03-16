@@ -315,6 +315,9 @@ class VerificationContext:
     agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
     agentic_rubric_parallel: bool = False
 
+    # Scenario
+    scenario_turn: int | None = None
+
     # Workspace
     question_workspace_path: str | None = None  # Raw relative path from Question
     workspace_path: Path | None = None  # Resolved effective path (set by GenerateAnswer)
