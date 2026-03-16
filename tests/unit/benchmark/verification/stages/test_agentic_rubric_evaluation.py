@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel, Field
 
 from karenina.benchmark.verification.stages.core.base import (
     ArtifactKeys,
@@ -298,3 +299,77 @@ class TestAgenticRubricEvaluationExecute:
         # Verify workspace_path was passed to evaluate_trait
         call_kwargs = fake_evaluator.evaluate_trait.call_args
         assert call_kwargs[1]["workspace_path"] == Path("/tmp/test_workspace")
+
+
+# ------------------------------------------------------------------
+# Template kind flattening
+# ------------------------------------------------------------------
+
+
+class _StageTestFindings(BaseModel):
+    count: int = Field(description="Count")
+    items: list[str] = Field(description="Items")
+
+
+@pytest.mark.unit
+class TestTemplateKindFlattening:
+    """Tests for dot-notation flattening of template kind scores."""
+
+    def test_template_trait_scores_are_dot_expanded(self, monkeypatch):
+        """Template kind scores should be flattened with dot notation."""
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = (
+            {"count": 3, "items": ["pip", "run"]},
+            "investigation trace",
+        )
+
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config: fake_evaluator,  # noqa: ARG005
+        )
+
+        trait = AgenticRubricTrait(
+            name="tool_usage",
+            description="Evaluate tool usage.",
+            kind=_StageTestFindings,
+            higher_is_better=None,
+        )
+        ctx = _make_context(agentic_traits=[trait])
+        stage = mod.AgenticRubricEvaluationStage()
+        stage.execute(ctx)
+
+        scores = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES)
+        # Must be flattened into dot-notation keys
+        assert "tool_usage.count" in scores
+        assert "tool_usage.items" in scores
+        assert scores["tool_usage.count"] == 3
+        assert scores["tool_usage.items"] == ["pip", "run"]
+        # The base key should NOT be present
+        assert "tool_usage" not in scores
+
+    def test_non_template_trait_scores_stored_flat(self, monkeypatch):
+        """Non-template kind scores remain stored under the trait name."""
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = (True, "trace")
+
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="quality", kind="boolean")])
+        stage = mod.AgenticRubricEvaluationStage()
+        stage.execute(ctx)
+
+        scores = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES)
+        assert scores == {"quality": True}

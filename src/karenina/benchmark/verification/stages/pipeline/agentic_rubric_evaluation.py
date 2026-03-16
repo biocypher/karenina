@@ -169,7 +169,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 raw_llm_response=raw_response,
                 workspace_path=workspace_path,
             )
-            scores[trait.name] = score
+            if trait.is_template_kind and isinstance(score, dict):
+                for field_name, value in score.items():
+                    scores[f"{trait.name}.{field_name}"] = value
+            else:
+                scores[trait.name] = score
             traces[trait.name] = trace
 
         return scores, traces
@@ -288,7 +292,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             result_traces[trait.name] = shared_trace
             try:
                 extracted = evaluator.run_extraction(trait, shared_trace)
-                result_scores[trait.name] = extracted
+                if trait.is_template_kind and isinstance(extracted, dict):
+                    for field_name, value in extracted.items():
+                        result_scores[f"{trait.name}.{field_name}"] = value
+                else:
+                    result_scores[trait.name] = extracted
             except Exception:
                 logger.warning(
                     "Extraction failed for trait '%s' in shared strategy",
