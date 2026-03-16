@@ -141,7 +141,7 @@ class ResultsIOManager:
                 global_rubric_values.append("")
 
         # Create question-specific rubrics JSON
-        question_specific_rubrics: dict[str, int | bool | dict[str, float]] = {}
+        question_specific_rubrics: dict[str, int | bool | float | str | list[Any] | dict[str, float] | None] = {}
         if all_trait_scores:
             for trait_name in question_specific_traits:
                 if trait_name in all_trait_scores:

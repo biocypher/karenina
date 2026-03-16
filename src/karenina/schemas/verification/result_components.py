@@ -195,7 +195,7 @@ class VerificationResultRubric(BaseModel):
     # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
 
     # Agentic trait evaluation
-    agentic_trait_scores: dict[str, int | bool] | None = Field(
+    agentic_trait_scores: dict[str, int | bool | float | str | list[Any] | None] | None = Field(
         default=None,
         description="Scores from agentic rubric traits. Keyed by trait name.",
     )
@@ -206,7 +206,7 @@ class VerificationResultRubric(BaseModel):
         "Keyed by trait name.",
     )
 
-    def get_all_trait_scores(self) -> dict[str, int | bool | dict[str, float]]:
+    def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
         """
         Get all trait scores across all trait types in a flat dictionary.
 
@@ -218,7 +218,7 @@ class VerificationResultRubric(BaseModel):
                     "feature_identification": {"precision": 1.0, "recall": 1.0, "f1": 1.0}
                 }
         """
-        scores: dict[str, int | bool | dict[str, float]] = {}
+        scores: dict[str, int | bool | float | str | list[Any] | dict[str, float] | None] = {}
 
         if self.llm_trait_scores:
             scores.update(self.llm_trait_scores)

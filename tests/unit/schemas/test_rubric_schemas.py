@@ -20,6 +20,7 @@ from karenina.schemas.entities import (
     RubricEvaluation,
     merge_rubrics,
 )
+from karenina.schemas.verification.result_components import VerificationResultRubric
 
 # =============================================================================
 # MetricRubricTrait Tests
@@ -935,3 +936,38 @@ class TestAgenticRubricTraitTemplateKind:
             assert trait.is_template_kind is False
             d = trait.model_dump()
             assert d["kind"] == kind
+
+
+# =============================================================================
+# VerificationResultRubric Widened Type Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestVerificationResultRubricWidenedTypes:
+    def test_accepts_dot_notation_with_list_values(self):
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={
+                "tool_usage.count": 7,
+                "tool_usage.commands": ["pip", "run"],
+                "tool_usage.found": True,
+                "tool_usage.name": "uv",
+                "tool_usage.score": 3.5,
+            },
+        )
+        assert rubric.agentic_trait_scores["tool_usage.commands"] == ["pip", "run"]
+        assert rubric.agentic_trait_scores["tool_usage.score"] == 3.5
+
+    def test_get_all_trait_scores_includes_widened_types(self):
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={
+                "basic": 4,
+                "template.count": 7,
+                "template.items": ["a", "b"],
+            },
+        )
+        all_scores = rubric.get_all_trait_scores()
+        assert all_scores["template.items"] == ["a", "b"]
+        assert all_scores["basic"] == 4
