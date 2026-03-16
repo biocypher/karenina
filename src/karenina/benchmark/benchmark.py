@@ -623,7 +623,19 @@ class Benchmark:
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> VerificationResultSet:
-        """Run verification on the benchmark using existing execution system."""
+        """Run verification on the benchmark using existing execution system.
+
+        For scenario benchmarks, dispatches to ``_run_scenario_verification``
+        which iterates over the scenario x model cross-product.
+        For standalone question benchmarks, delegates to VerificationManager.
+        """
+        if self.is_scenario_benchmark:
+            return self._run_scenario_verification(
+                config=config,
+                run_name=run_name,
+                async_enabled=async_enabled,
+                progress_callback=progress_callback,
+            )
         return self._verification_manager.run_verification(
             config,
             question_ids,
@@ -632,6 +644,131 @@ class Benchmark:
             progress_callback,
             workspace_root=self._workspace_root,
         )
+
+    def _run_scenario_verification(
+        self,
+        config: VerificationConfig,
+        run_name: str | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> VerificationResultSet:
+        """Run verification for scenario benchmarks.
+
+        Creates a ScenarioManager and iterates over the cross-product of
+        scenarios, answering models, and parsing models. When ``async_enabled``
+        is True and there are multiple task combinations, uses
+        ``asyncio.gather`` with ``manager.arun()`` for parallel execution.
+
+        Args:
+            config: Verification configuration.
+            run_name: Optional run name for tracking.
+            async_enabled: If True, run combinations in parallel via asyncio.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            VerificationResultSet containing all per-turn results.
+        """
+        from ..scenario.manager import ScenarioManager
+
+        manager = ScenarioManager()
+        global_rubric = self._rubric_manager.get_global_rubric()
+        all_results: list[VerificationResult] = []
+
+        # Build the list of (scenario, answering_model, parsing_model) combos
+        combos = [
+            (scenario_def, ans_model, parse_model)
+            for scenario_def in self._scenarios.values()
+            for ans_model in config.answering_models
+            for parse_model in config.parsing_models
+        ]
+
+        if async_enabled and len(combos) > 1:
+            all_results = self._run_scenario_parallel(
+                manager=manager,
+                combos=combos,
+                config=config,
+                run_name=run_name,
+                global_rubric=global_rubric,
+                progress_callback=progress_callback,
+            )
+        else:
+            for scenario_def, ans_model, parse_model in combos:
+                exec_result = manager.run(
+                    scenario=scenario_def,
+                    config=config,
+                    base_answering_model=ans_model,
+                    base_parsing_model=parse_model,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    progress_callback=progress_callback,
+                )
+                all_results.extend(exec_result.turn_results)
+
+        return VerificationResultSet(results=all_results)
+
+    def _run_scenario_parallel(
+        self,
+        manager: Any,
+        combos: list[tuple[Any, Any, Any]],
+        config: VerificationConfig,
+        run_name: str | None,
+        global_rubric: "Rubric | None",
+        progress_callback: Callable[..., None] | None,
+    ) -> list[VerificationResult]:
+        """Run scenario combinations in parallel via asyncio.gather.
+
+        Args:
+            manager: ScenarioManager instance.
+            combos: List of (scenario, answering_model, parsing_model) tuples.
+            config: Verification configuration.
+            run_name: Optional run name.
+            global_rubric: Optional global rubric.
+            progress_callback: Optional progress callback.
+
+        Returns:
+            Flat list of all per-turn VerificationResults.
+        """
+        import asyncio
+
+        async def _gather() -> list[VerificationResult]:
+            coros = [
+                manager.arun(
+                    scenario=scenario_def,
+                    config=config,
+                    base_answering_model=ans_model,
+                    base_parsing_model=parse_model,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    progress_callback=progress_callback,
+                )
+                for scenario_def, ans_model, parse_model in combos
+            ]
+            exec_results = await asyncio.gather(*coros, return_exceptions=True)
+            results: list[VerificationResult] = []
+            for er in exec_results:
+                if isinstance(er, BaseException):
+                    logger.warning(
+                        "Scenario execution raised an exception: %s",
+                        er,
+                    )
+                    continue
+                results.extend(er.turn_results)
+            return results
+
+        # If there is already a running event loop, run in a thread
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _gather())
+                return future.result()
+        else:
+            return asyncio.run(_gather())
 
     # ── Results management ───────────────────────────────────────────────
 
