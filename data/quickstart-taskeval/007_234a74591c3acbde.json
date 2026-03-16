@@ -17,7 +17,7 @@
   "response": {
     "content": [
       {
-        "id": "toolu_016dkjzkLvTmZ4KeAaRFST6q",
+        "id": "toolu_01ESiMvtjZMwg7Hj1tS6rdE3",
         "input": {
           "scores": {
             "synthesis_accuracy": true
@@ -30,7 +30,7 @@
         }
       }
     ],
-    "id": "lc_run--23bf83f8-e77b-400d-be4a-78929c4e3aa9-0",
+    "id": "lc_run--ec147554-80a6-4e66-b12b-fb8467bb5079-0",
     "tool_calls": [
       {
         "name": "BatchRubricScores",
@@ -39,7 +39,7 @@
             "synthesis_accuracy": true
           }
         },
-        "id": "toolu_016dkjzkLvTmZ4KeAaRFST6q",
+        "id": "toolu_01ESiMvtjZMwg7Hj1tS6rdE3",
         "type": "tool_call"
       }
     ],

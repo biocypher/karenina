@@ -1,0 +1,30 @@
+{
+  "sequence": 10,
+  "prompt_hash": "7b15b824a506d7ee",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are a knowledgeable assistant. Answer accurately and concisely."
+      },
+      {
+        "type": "human",
+        "content": "How many chromosomes are in a human somatic cell?"
+      }
+    ]
+  },
+  "response": {
+    "content": "A human somatic cell contains **46 chromosomes**.\n\nThese are organized as 23 pairs: 22 pairs of autosomes and 1 pair of sex chromosomes (XX for females, XY for males).",
+    "id": "lc_run--a8d87642-4c0a-4f02-95a2-a393f2b9931a-0",
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "end_turn"
+    }
+  }
+}
