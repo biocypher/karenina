@@ -8,11 +8,11 @@
 
 Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports three evaluation modes:
 
-- **Benchmark** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
+- **[Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md)** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
 - **[Scenarios](../core_concepts/scenarios/index.md)** (closed-loop, multi-turn): Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.
-- **TaskEval** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
+- **[TaskEval](../notebooks/core_concepts/task-eval.ipynb)** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
 
-**New here?** Start with the **[Quick Start: Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
+**New here?** Start with the **[Quick Start: Q/A Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, the **[Quick Start: Scenarios](../notebooks/scenarios/sycophancy-tutorial.ipynb)** to build a multi-turn evaluation with branching, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
 
 ## Why This Approach
 
@@ -22,7 +22,7 @@ Its core idea is formalizing ground truth as structured [answer templates](../no
 
 3. **Bootstrapped authoring.** LLMs can [auto-generate evaluation code](../notebooks/creating-benchmarks/scaled-authoring.ipynb) from a simple spreadsheet of questions and answers, bootstrapping benchmark creation in minutes. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
 
-4. **Expressivity.** [Templates](../notebooks/core_concepts/answer-templates.ipynb) combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic).
+4. **Expressivity.** [Templates](../notebooks/core_concepts/answer-templates.ipynb) combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic). [Scenarios](../core_concepts/scenarios/index.md) extend this expressivity to multi-turn conversations: define branching evaluation graphs where each turn's result determines the next question, then assert compound outcome criteria over the full conversation (e.g., "the model answered correctly on turn 1 and resisted a sycophantic challenge on turn 2").
 
 5. **Agentic evaluation, not just Q&A.** Modern LLM deployments increasingly involve agents that write code, run tests, and produce file artifacts. Karenina evaluates these workflows natively: the answering model operates in a [workspace](../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) with tool access, and an independent [judge agent](../notebooks/core_concepts/agentic-evaluation.ipynb#4-two-step-agentic-judging-stage-7b) inspects the resulting artifacts (files created, tests passed, code compiled) rather than relying on the conversation trace alone. The same template and rubric primitives apply whether the task is a factual question or a multi-step coding challenge.
 
@@ -52,7 +52,7 @@ This documentation is organized into four sections, each serving a different rea
 - **Evaluate agentic tasks** where models operate in workspaces with tool access (coding, data analysis)
 - **Judge workspace artifacts** with an independent agent that inspects files, re-runs tests, and verifies outputs
 
-**Benchmark mode**:
+**[Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md) mode**:
 
 - **Create benchmarks** from scratch or from existing question sets
 - **Track performance** across multiple models and configurations
@@ -64,7 +64,7 @@ This documentation is organized into four sections, each serving a different rea
 - **Test sycophancy, error correction, and progressive disclosure** across branching conversation paths
 - **Assert outcome criteria** over the full conversation result after execution
 
-**TaskEval mode**:
+**[TaskEval](../notebooks/core_concepts/task-eval.ipynb) mode**:
 
 - **Evaluate any free text** from agent workflows or external systems
 - **Log structured traces** preserving tool calls and conversation history
@@ -72,14 +72,14 @@ This documentation is organized into four sections, each serving a different rea
 
 ## When to Use Karenina
 
-| Scenario | Mode |
-|----------|------|
-| Compare LLM performance across consistent criteria | Benchmark |
-| Evaluate free-form outputs with structured logic (not string matching) | Both |
-| Verify factual accuracy *and* assess quality (clarity, safety, format) | Both |
-| Run hundreds of questions across multiple models automatically | Benchmark |
-| Share portable evaluation suites that anyone can re-run | Benchmark |
-| Evaluate coding or data analysis tasks with workspace artifacts | Benchmark |
+| Need | Mode |
+|------|------|
+| Compare LLM performance across consistent criteria | Q/A Benchmark |
+| Evaluate free-form outputs with structured logic (not string matching) | All modes |
+| Verify factual accuracy *and* assess quality (clarity, safety, format) | All modes |
+| Run hundreds of questions across multiple models automatically | Q/A Benchmark |
+| Share portable evaluation suites that anyone can re-run | Q/A Benchmark |
+| Evaluate coding or data analysis tasks with workspace artifacts | Q/A Benchmark |
 | Score agent workflow outputs after execution | TaskEval |
 | Evaluate multi-step agent traces per phase | TaskEval |
 | Test sycophancy resistance across multi-turn conversation paths | [Scenarios](../core_concepts/scenarios/index.md) |
@@ -108,8 +108,8 @@ Karenina uses a **two-unit evaluation approach** shared by all modes:
 
 The three modes differ in where the response comes from and how the conversation is structured:
 
-| Dimension | Benchmark | Scenarios | TaskEval |
-|-----------|-----------|-----------|----------|
+| Dimension | Q/A Benchmark | Scenarios | TaskEval |
+|-----------|---------------|-----------|----------|
 | Response source | Pipeline generates via answering model | Pipeline generates across multiple turns | You supply pre-recorded outputs |
 | Starting point | Questions (define what to ask) | Scenario graph (nodes, edges, outcome criteria) | Traces (record what happened) |
 | Pipeline stages | All 13 stages | All 13 stages (per turn) | Skips stage 2 (answer generation) |
