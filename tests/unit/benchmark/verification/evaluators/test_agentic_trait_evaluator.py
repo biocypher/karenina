@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel, Field
 
 from karenina.ports import AgentResult, Message, Role
 from karenina.ports.usage import UsageMetadata
@@ -284,3 +285,39 @@ class TestAgenticTraitEvaluator:
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
         assert hasattr(evaluator, "run_extraction")
         assert callable(evaluator.run_extraction)
+
+
+class _TestFindings(BaseModel):
+    count: int = Field(description="Count")
+    items: list[str] = Field(description="Items")
+
+
+@pytest.mark.unit
+class TestExtractTemplate:
+    def test_extract_template_returns_model_dump(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Template extraction returns the Pydantic model_dump dict."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Test.",
+            kind=_TestFindings,
+            higher_is_better=None,
+            context_mode="trace_only",
+        )
+
+        mock_parsed = _TestFindings(count=5, items=["a", "b"])
+        mock_parse_result = _make_parse_result(mock_parsed)
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = mock_parse_result
+
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        result = evaluator.run_extraction(trait, "Investigation trace text")
+
+        assert result == {"count": 5, "items": ["a", "b"]}
+        mock_parser.parse_to_pydantic.assert_called_once()
+        call_args = mock_parser.parse_to_pydantic.call_args
+        assert call_args[0][1] is _TestFindings  # Second arg is the class

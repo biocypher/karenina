@@ -7,6 +7,7 @@ strategy). Each trait produces a score and an investigation trace.
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from karenina.adapters.registry import AdapterRegistry
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
@@ -140,14 +141,14 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[dict[str, int | bool | None], dict[str, str | None]]:
+    ) -> tuple[dict[str, int | bool | dict[str, Any] | None], dict[str, str | None]]:
         """Evaluate each trait with its own agent.
 
         Returns:
             Tuple of (scores_dict, traces_dict).
         """
         # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
-        scores: dict[str, int | bool | None] = {}
+        scores: dict[str, int | bool | dict[str, Any] | None] = {}
         traces: dict[str, str | None] = {}
 
         for trait in traits:
@@ -179,7 +180,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[dict[str, int | bool | None], dict[str, str | None]]:
+    ) -> tuple[dict[str, int | bool | dict[str, Any] | None], dict[str, str | None]]:
         """Evaluate all traits with a single shared agent.
 
         All traits must resolve to the same model (by interface, provider,
@@ -196,7 +197,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         valid = [(trait, m) for trait, m in resolved if m is not None]
         if not valid:
             logger.warning("No traits have agent support; all skipped")
-            empty_scores: dict[str, int | bool | None] = {t.name: None for t in traits}
+            empty_scores: dict[str, int | bool | dict[str, Any] | None] = {t.name: None for t in traits}
             empty_traces: dict[str, str | None] = {t.name: None for t in traits}
             return empty_scores, empty_traces
 
@@ -275,7 +276,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
 
         # Per-trait extraction from the shared trace
-        result_scores: dict[str, int | bool | None] = {}
+        result_scores: dict[str, int | bool | dict[str, Any] | None] = {}
         result_traces: dict[str, str | None] = {}
 
         for trait, model in resolved:
