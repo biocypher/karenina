@@ -373,3 +373,72 @@ class TestTemplateKindFlattening:
 
         scores = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES)
         assert scores == {"quality": True}
+
+
+# ------------------------------------------------------------------
+# Trace file writing
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestWriteTraceFile:
+    """Tests for AgenticRubricEvaluationStage._write_trace_file()."""
+
+    def test_writes_trace_to_workspace(self, tmp_path):
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trace_path = AgenticRubricEvaluationStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="Hello trace content",
+            question_id="q1",
+            scenario_turn=None,
+        )
+        assert trace_path.exists()
+        assert trace_path.read_text(encoding="utf-8") == "Hello trace content"
+        assert trace_path.parent.name == "traces"
+        assert ".karenina" in str(trace_path)
+        assert "q1_trace.txt" in trace_path.name
+
+    def test_includes_turn_in_filename(self, tmp_path):
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trace_path = AgenticRubricEvaluationStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="content",
+            question_id="q1",
+            scenario_turn=2,
+        )
+        assert "q1_turn2_trace.txt" in trace_path.name
+
+    def test_falls_back_to_tempdir_when_no_workspace(self):
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trace_path = AgenticRubricEvaluationStage._write_trace_file(
+            workspace_path=None,
+            trace="content",
+            question_id="q1",
+            scenario_turn=None,
+        )
+        assert trace_path.exists()
+        assert trace_path.read_text(encoding="utf-8") == "content"
+        trace_path.unlink()
+
+    def test_sanitizes_question_id(self, tmp_path):
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trace_path = AgenticRubricEvaluationStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="content",
+            question_id="q/1:bad<chars>",
+            scenario_turn=None,
+        )
+        assert "/" not in trace_path.name
+        assert ":" not in trace_path.name

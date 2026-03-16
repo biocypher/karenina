@@ -6,6 +6,8 @@ strategy). Each trait produces a score and an investigation trace.
 """
 
 import logging
+import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -82,7 +84,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Evaluate all agentic rubric traits.
 
         Dispatches to the individual or shared strategy based on
-        context.agentic_rubric_strategy.
+        context.agentic_rubric_strategy. When any trait has
+        ``materialize_trace=True``, the answering agent trace is written
+        to a file once (shared across all traits) before evaluation begins.
+        The file is cleaned up afterwards unless any trait sets
+        ``persist_trace=True``.
 
         Args:
             context: Verification context with rubric and artifacts.
@@ -91,45 +97,77 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         raw_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         workspace_path = context.workspace_path
 
-        strategy = context.agentic_rubric_strategy
-        if strategy == "shared":
-            scores, traces = self._execute_shared(
-                traits,
-                context,
-                raw_response,
-                workspace_path,
+        # Stage-level trace materialization: write once, share across traits
+        needs_materialization = any(t.materialize_trace for t in traits)
+        should_persist = any(t.persist_trace for t in traits)
+        trace_file_path: Path | None = None
+
+        if needs_materialization and raw_response:
+            scenario_turn = getattr(context, "scenario_turn", None)
+            trace_file_path = self._write_trace_file(
+                workspace_path=workspace_path,
+                trace=raw_response,
+                question_id=context.question_id,
+                scenario_turn=scenario_turn,
             )
-        else:
-            scores, traces = self._execute_individual(
-                traits,
-                context,
-                raw_response,
-                workspace_path,
+            logger.info(
+                "Materialized trace file for question '%s': %s",
+                context.question_id,
+                trace_file_path,
             )
 
-        # Store in artifacts
-        self.set_artifact_and_result(
-            context,
-            ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED,
-            True,
-        )
-        self.set_artifact_and_result(
-            context,
-            ArtifactKeys.AGENTIC_TRAIT_SCORES,
-            scores,
-        )
-        self.set_artifact_and_result(
-            context,
-            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
-            traces,
-        )
+        try:
+            strategy = context.agentic_rubric_strategy
+            if strategy == "shared":
+                scores, traces = self._execute_shared(
+                    traits,
+                    context,
+                    raw_response,
+                    workspace_path,
+                )
+            else:
+                scores, traces = self._execute_individual(
+                    traits,
+                    context,
+                    raw_response,
+                    workspace_path,
+                )
 
-        evaluated = sum(1 for v in scores.values() if v is not None)
-        logger.info(
-            "Agentic rubric evaluation complete: %d/%d traits scored",
-            evaluated,
-            len(traits),
-        )
+            # Store in artifacts
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED,
+                True,
+            )
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_SCORES,
+                scores,
+            )
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+                traces,
+            )
+
+            evaluated = sum(1 for v in scores.values() if v is not None)
+            logger.info(
+                "Agentic rubric evaluation complete: %d/%d traits scored",
+                evaluated,
+                len(traits),
+            )
+        finally:
+            # Cleanup trace file unless persistence requested
+            if trace_file_path is not None and not should_persist:
+                try:
+                    trace_file_path.unlink(missing_ok=True)
+                    logger.debug("Cleaned up trace file: %s", trace_file_path)
+                except Exception:
+                    logger.warning(
+                        "Failed to clean up trace file: %s",
+                        trace_file_path,
+                        exc_info=True,
+                    )
 
     # ------------------------------------------------------------------
     # Strategies
@@ -306,6 +344,46 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 result_scores[trait.name] = None
 
         return result_scores, result_traces
+
+    # ------------------------------------------------------------------
+    # Trace materialization
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _write_trace_file(
+        workspace_path: Path | None,
+        trace: str,
+        question_id: str,
+        scenario_turn: int | None,
+    ) -> Path:
+        """Write trace to a file for agent grep/search access.
+
+        When ``workspace_path`` is provided, the trace file is placed under
+        ``<workspace>/.karenina/traces/``. Otherwise a temporary directory
+        is created as a fallback.
+
+        Args:
+            workspace_path: Resolved workspace directory, or None.
+            trace: The full answering agent trace text.
+            question_id: Question identifier (sanitized for filesystem safety).
+            scenario_turn: Turn index for multi-turn scenarios, or None for
+                single-turn evaluations.
+
+        Returns:
+            Path to the written trace file.
+        """
+        if workspace_path is None:
+            trace_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_"))
+        else:
+            trace_dir = Path(workspace_path) / ".karenina" / "traces"
+        trace_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)
+        filename = f"{safe_id}_turn{scenario_turn}_trace.txt" if scenario_turn is not None else f"{safe_id}_trace.txt"
+
+        trace_path = trace_dir / filename
+        trace_path.write_text(trace, encoding="utf-8")
+        return trace_path
 
     # ------------------------------------------------------------------
     # Helpers
