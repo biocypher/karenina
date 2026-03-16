@@ -20,7 +20,7 @@ The `Scenario` class is a mutable builder for constructing multi-turn benchmark 
 This page covers the builder API: how to construct valid scenario graphs, what validation enforces, and which graph shapes work for common evaluation patterns. For how edges are evaluated at runtime, see [State and Routing](state-and-routing.md). For outcome criteria, see [Outcome Criteria](outcome-criteria.md).
 
 ```python tags=["hide-cell"]
-# Mock setup for documentation - allows notebook to run without API keys.
+# Mock setup for documentation: allows notebook to run without API keys.
 # This cell is hidden in rendered documentation.
 # Rather than importing the real builder (which triggers the full karenina
 # package init chain and requires installed dependencies), we define lightweight
@@ -131,8 +131,6 @@ print("Mock setup complete.")
 `Scenario` is a mutable builder object. You call methods on it to register nodes, connect them with edges, and set the starting point. Calling `validate()` runs structural checks and returns a frozen `ScenarioDefinition` that the scenario runner uses.
 
 The builder separates construction from validation. You can add nodes and edges in any order; errors surface only when you call `validate()`. The resulting `ScenarioDefinition` is immutable: the runner reads it but cannot modify it.
-
-### 1.1 Core Idea
 
 Scenarios are directed graphs, not scripts. Each node carries a question and an answer template. Each edge carries an optional condition. At runtime, the runner evaluates the current node, inspects the result, and follows the first matching edge (or an unconditional fallback). This lets a single scenario definition express branching conversation paths without encoding each path as a separate test.
 
