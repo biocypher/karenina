@@ -3,7 +3,7 @@
 import pytest
 
 from karenina.scenario import END, Scenario
-from karenina.scenario.checkpoint import scenario_to_schema_org
+from karenina.scenario.checkpoint import scenario_to_schema_org, schema_org_to_scenario
 from karenina.schemas.checkpoint import (
     JsonLdCheckpoint,
     SchemaOrgAnswer,
@@ -220,3 +220,67 @@ class TestScenarioToSchemaOrg:
         check = schema.outcomeCriteria[0].check
         for cond in check["conditions"]:
             assert cond["verify_with"]["type"] == "BooleanMatch"
+
+
+@pytest.mark.unit
+class TestSchemaOrgToScenario:
+    def test_roundtrip_basic(self):
+        defn = _build_branching_scenario()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        assert restored.name == defn.name
+        assert restored.entry_node == defn.entry_node
+        assert sorted(restored.nodes.keys()) == sorted(defn.nodes.keys())
+
+    def test_roundtrip_preserves_questions(self):
+        defn = _build_branching_scenario()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        assert restored.nodes["ask"].question.question == "What is X?"
+        assert restored.nodes["ask"].question.raw_answer == "Y"
+        assert "class Answer" in restored.nodes["ask"].question.answer_template
+
+    def test_roundtrip_preserves_edges(self):
+        defn = _build_branching_scenario()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        assert len(restored.edges) == len(defn.edges)
+
+    def test_roundtrip_preserves_edge_conditions(self):
+        defn = _build_branching_scenario()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        conditional_edges = [e for e in restored.edges if e.condition is not None]
+        assert len(conditional_edges) >= 1
+        cond = conditional_edges[0].condition
+        # Must be a proper StateCheck, not a dict
+        assert hasattr(cond, "field")
+        assert cond.field == "verify_result"
+        # Critical: verify_with must be concrete BooleanMatch, not base VerificationPrimitive
+        assert type(cond.verify_with).__name__ == "BooleanMatch"
+
+    def test_roundtrip_preserves_outcome_checks(self):
+        defn = _build_branching_scenario()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        assert len(restored.outcome_criteria) == 1
+        criterion = restored.outcome_criteria[0]
+        assert criterion.name == "both_pass"
+        assert criterion.check is not None
+
+    def test_roundtrip_callable_source_recompiled(self):
+        """state_update should be recompiled from source and be callable."""
+        q = Question(question="Q?", raw_answer="A", answer_template="class Answer: pass")
+        s = Scenario("callable_test")
+        s.add_node("ask", question=q, state_update="lambda acc, p: {**acc, 'x': 1}")
+        s.add_edge("ask", END)
+        s.set_entry("ask")
+        defn = s.validate()
+
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+
+        # state_update should be recompiled and callable
+        assert restored.nodes["ask"].state_update is not None
+        result = restored.nodes["ask"].state_update({}, {})
+        assert result == {"x": 1}
