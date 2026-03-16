@@ -8,7 +8,7 @@ Tests cover:
 """
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from karenina.schemas.entities import (
     AgenticRubricTrait,
@@ -840,3 +840,98 @@ class TestRubricAgenticTraitSupport:
         assert rubric.validate_evaluation({"depth": 3}) is True
         assert rubric.validate_evaluation({"depth": 0}) is False  # below min
         assert rubric.validate_evaluation({"depth": 6}) is False  # above max
+
+
+# =============================================================================
+# AgenticRubricTrait Template Kind Tests
+# =============================================================================
+
+
+class _SampleFindings(BaseModel):
+    count: int = Field(description="A count")
+    items: list[str] = Field(description="Items found")
+    found: bool = Field(description="Whether found")
+
+
+@pytest.mark.unit
+class TestAgenticRubricTraitTemplateKind:
+    def test_accepts_pydantic_class_as_kind(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.is_template_kind is True
+        assert trait.kind is _SampleFindings
+
+    def test_forces_higher_is_better_none(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.higher_is_better is None
+
+    def test_rejects_higher_is_better_true_for_template(self):
+        with pytest.raises(ValidationError, match="must be None"):
+            AgenticRubricTrait(
+                name="test",
+                description="Check stuff.",
+                kind=_SampleFindings,
+                higher_is_better=True,
+            )
+
+    def test_validate_score_noop_for_template(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.validate_score(42) is True
+
+    def test_is_template_kind_false_for_string(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind="boolean",
+        )
+        assert trait.is_template_kind is False
+
+    def test_model_dump_serializes_kind_as_schema(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        d = trait.model_dump()
+        assert d["kind"]["type"] == "template"
+        assert "schema" in d["kind"]
+        assert d["kind"]["schema"]["title"] == "_SampleFindings"
+
+    def test_model_validate_roundtrip(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        d = trait.model_dump()
+        rebuilt = AgenticRubricTrait.model_validate(d)
+        assert rebuilt.is_template_kind is True
+        assert rebuilt.higher_is_better is None
+        assert set(rebuilt.kind.model_fields.keys()) == {"count", "items", "found"}
+
+    def test_existing_string_kinds_unchanged(self):
+        """Ensure backward compatibility."""
+        for kind in ("boolean", "score", "literal"):
+            kwargs = {"name": "t", "description": "d", "kind": kind}
+            if kind == "literal":
+                kwargs["classes"] = {"a": "A", "b": "B"}
+            trait = AgenticRubricTrait(**kwargs)
+            assert trait.is_template_kind is False
+            d = trait.model_dump()
+            assert d["kind"] == kind

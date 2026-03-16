@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING, Any, Literal
 import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
+from karenina.schemas.entities._schema_reconstruction import _reconstruct_model_from_schema
+from karenina.schemas.entities._template_validation import _validate_template_fields
+
 if TYPE_CHECKING:
     from karenina.schemas.config.models import ModelConfig
 
@@ -579,20 +582,26 @@ class AgenticRubricTrait(BaseModel):
 
     Unlike LLMRubricTrait (single LLM call), this trait launches an agent
     that can investigate the response and workspace using tools before
-    producing a score. Supports boolean, score, and literal kinds.
+    producing a score. Supports boolean, score, literal, and template kinds.
+
+    When ``kind`` is a ``BaseModel`` subclass (template kind), the agent
+    produces structured output matching that schema instead of a scalar
+    score. Template kinds require ``higher_is_better=None`` because
+    directionality is not meaningful for structured results.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     name: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
-    kind: Literal["boolean", "score", "literal"]
-    higher_is_better: bool = Field(
+    kind: Literal["boolean", "score", "literal"] | type[BaseModel]
+    higher_is_better: bool | None = Field(
         ...,
         description="Whether higher values indicate better performance. "
         "For boolean: True means True is good. "
         "For score: True means higher scores are better. "
-        "For literal: True means higher indices (later classes) are better.",
+        "For literal: True means higher indices (later classes) are better. "
+        "Must be None for template kind.",
     )
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
@@ -602,17 +611,61 @@ class AgenticRubricTrait(BaseModel):
     timeout_seconds: int = Field(120, gt=0)
     model_override: "ModelConfig | None" = None
 
+    @field_validator("kind", mode="before")
+    @classmethod
+    def validate_kind(cls, v: Any) -> Any:
+        """Accept string literals, BaseModel subclasses, or serialized template dicts."""
+        if isinstance(v, str):
+            return v
+        if isinstance(v, type) and issubclass(v, BaseModel):
+            _validate_template_fields(v)
+            return v
+        if isinstance(v, dict) and v.get("type") == "template":
+            schema = v.get("schema")
+            if schema is None:
+                raise ValueError("Template kind dict must include a 'schema' key")
+            return _reconstruct_model_from_schema(schema)
+        raise ValueError(f"kind must be a string literal, BaseModel subclass, or template dict, got {type(v)}")
+
+    @field_serializer("kind")
+    def serialize_kind(self, value: Any, _info: Any) -> Any:
+        """Serialize BaseModel subclass to a template dict with JSON Schema."""
+        if isinstance(value, type) and issubclass(value, BaseModel):
+            return {"type": "template", "schema": value.model_json_schema()}
+        return value
+
     @model_validator(mode="before")
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+        """Set default for higher_is_better when loading legacy data.
+
+        Skips the legacy default (True) when kind is a template, because
+        template kinds require higher_is_better=None.
+        """
+        if not isinstance(values, dict):
+            return values
+        kind = values.get("kind")
+        # Template kind: do not inject legacy default
+        if not isinstance(kind, str):
+            return values
+        if "higher_is_better" not in values or values.get("higher_is_better") is None:
             values["higher_is_better"] = True
         return values
+
+    @field_validator("higher_is_better", mode="after")
+    @classmethod
+    def validate_higher_is_better(cls, v: bool | None, info: Any) -> bool | None:
+        """Enforce higher_is_better=None for template kind."""
+        kind = info.data.get("kind")
+        if isinstance(kind, type) and issubclass(kind, BaseModel) and v is not None:
+            raise ValueError("higher_is_better must be None for template kind")
+        return v
 
     @model_validator(mode="after")
     def validate_kind_fields(self) -> "AgenticRubricTrait":
         """Validate kind-specific field constraints."""
+        if not isinstance(self.kind, str):
+            return self
         if self.kind == "literal":
             if not self.classes:
                 raise ValueError("classes field is required for literal kind")
@@ -638,6 +691,8 @@ class AgenticRubricTrait(BaseModel):
 
     def validate_score(self, value: int | bool) -> bool:
         """Validate that a given score is valid for this trait."""
+        if self.is_template_kind:
+            return True
         if self.kind == "boolean":
             return isinstance(value, bool)
         else:
@@ -650,6 +705,11 @@ class AgenticRubricTrait(BaseModel):
             if self.kind == "literal" and value == -1:
                 return True
             return min_val <= value <= max_val
+
+    @property
+    def is_template_kind(self) -> bool:
+        """Return True if kind is a BaseModel subclass (template kind)."""
+        return isinstance(self.kind, type) and issubclass(self.kind, BaseModel)
 
 
 class Rubric(BaseModel):
@@ -752,7 +812,8 @@ class Rubric(BaseModel):
             directionalities[callable_trait.name] = callable_trait.higher_is_better
 
         for agentic_trait in self.agentic_traits:
-            directionalities[agentic_trait.name] = agentic_trait.higher_is_better
+            if agentic_trait.higher_is_better is not None:
+                directionalities[agentic_trait.name] = agentic_trait.higher_is_better
 
         # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
