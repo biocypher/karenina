@@ -31,6 +31,10 @@ from .checkpoint import (
     SchemaOrgPropertyValue,
     SchemaOrgQuestion,
     SchemaOrgRating,
+    SchemaOrgScenario,
+    SchemaOrgScenarioEdge,
+    SchemaOrgScenarioNode,
+    SchemaOrgScenarioOutcome,
     SchemaOrgSoftwareSourceCode,
 )
 
@@ -243,6 +247,10 @@ __all__ = [
     "SchemaOrgPerson",
     "SchemaOrgCreativeWork",
     "DatasetMetadata",
+    "SchemaOrgScenario",
+    "SchemaOrgScenarioNode",
+    "SchemaOrgScenarioEdge",
+    "SchemaOrgScenarioOutcome",
     # Scenario schema types
     "END",
     "StateCheck",
