@@ -26,7 +26,7 @@ This scenario walks through a complete agentic evaluation end-to-end, using a re
 - Compare agentic vs trace-only parsing on the same answer
 - Combine agentic parsing with agentic rubric evaluation using `AgenticRubricTrait`
 
-For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation.md). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation.md).
+For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/).
 
 ```python tags=["hide-cell"]
 # Setup cell: creates mock data and patches run_verification so that all code
@@ -301,7 +301,7 @@ class LogisticRegressionAnswer(BaseAnswer):
 '''
 ```
 
-The template class name (`LogisticRegressionAnswer`) is arbitrary; the pipeline discovers the class by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates.md) for the full `VerifiedField` API and available primitives.
+The template class name (`LogisticRegressionAnswer`) is arbitrary; the pipeline discovers the class by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
 
 ---
 
@@ -454,7 +454,7 @@ Four stages do the substantive work in this configuration:
 
 4. **FinalizeResult** (Stage 13): Stores the investigation trace in the result. Because `workspace_cleanup=False`, the working directory is preserved.
 
-For full details on stage ordering, context modes, and the two-step investigation/extraction architecture, see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation.md).
+For full details on stage ordering, context modes, and the two-step investigation/extraction architecture, see [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/).
 
 ---
 
@@ -687,17 +687,17 @@ When `evaluation_mode="template_and_rubric"` with both `agentic_parsing=True` an
 
 Stage 7b and Stage 11b each launch independent agent sessions. The Stage 7b agent fills in the template schema; the Stage 11b agent(s) produce rubric scores. They do not share context or state with each other.
 
-For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation.md). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/agentic-traits.md).
+For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../../advanced-pipeline/agentic-rubric-evaluation/). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/).
 
 ---
 
 ## Related Pages
 
-- [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation.md): Conceptual overview, context modes, independence guarantees
-- [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation.md): Pipeline internals, stage architecture, investigation prompts
-- [Agentic Traits (Concepts)](../../core_concepts/agentic-traits.md): `AgenticRubricTrait` API, kinds, context modes
-- [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation.md): Stage 11b internals, investigation prompts, extraction
-- [MCP Agent Evaluation](mcp-agent-evaluation.ipynb): Evaluating tool-using agents with MCP servers
-- [Basic Verification](basic-verification.ipynb): Simplest verification path (template-only, no agents)
-- [Answer Templates](../../core_concepts/answer-templates.md): `VerifiedField` API and verification primitives
-- [VerificationConfig Reference](../../reference/configuration/verification-config.md): All configuration fields
+- [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/): Conceptual overview, context modes, independence guarantees
+- [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/): Pipeline internals, stage architecture, investigation prompts
+- [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/): `AgenticRubricTrait` API, kinds, context modes
+- [Agentic Rubric Evaluation (Advanced)](../../../advanced-pipeline/agentic-rubric-evaluation/): Stage 11b internals, investigation prompts, extraction
+- [MCP Agent Evaluation](../mcp-agent-evaluation/): Evaluating tool-using agents with MCP servers
+- [Basic Verification](../basic-verification/): Simplest verification path (template-only, no agents)
+- [Answer Templates](../../core_concepts/answer-templates/): `VerifiedField` API and verification primitives
+- [VerificationConfig Reference](../../../reference/configuration/verification-config/): All configuration fields
