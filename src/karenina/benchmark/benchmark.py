@@ -381,6 +381,24 @@ class Benchmark:
 
         self._scenarios[scenario.name] = scenario
 
+        # Write to checkpoint (checkpoint is source of truth)
+        from ..scenario.checkpoint import scenario_to_schema_org
+        from ..schemas.checkpoint import SchemaOrgPropertyValue
+
+        schema_org = scenario_to_schema_org(scenario)
+        if self._base._checkpoint.hasPart is None:
+            self._base._checkpoint.hasPart = []
+        self._base._checkpoint.hasPart.append(schema_org)
+
+        # Set benchmark_type flag (once)
+        props = self._base._checkpoint.additionalProperty or []
+        if not any(p.name == "benchmark_type" for p in props):
+            if self._base._checkpoint.additionalProperty is None:
+                self._base._checkpoint.additionalProperty = []
+            self._base._checkpoint.additionalProperty.append(
+                SchemaOrgPropertyValue(name="benchmark_type", value="scenario")
+            )
+
     def get_scenarios(self) -> list[ScenarioDefinition]:
         """Get all scenario definitions.
 
@@ -419,6 +437,17 @@ class Benchmark:
             del self._scenarios[name]
         except KeyError:
             raise KeyError(f"Scenario '{name}' not found") from None
+
+        # Remove from checkpoint
+        if self._base._checkpoint.hasPart:
+            self._base._checkpoint.hasPart = [s for s in self._base._checkpoint.hasPart if s.name != name]
+            if not self._base._checkpoint.hasPart:
+                self._base._checkpoint.hasPart = None
+                # Clear benchmark_type flag when no scenarios remain
+                if self._base._checkpoint.additionalProperty:
+                    self._base._checkpoint.additionalProperty = [
+                        p for p in self._base._checkpoint.additionalProperty if p.name != "benchmark_type"
+                    ]
 
     # ── Template management ──────────────────────────────────────────────
 

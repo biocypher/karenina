@@ -2,6 +2,7 @@
 
 import pytest
 
+from karenina.benchmark.benchmark import Benchmark
 from karenina.scenario import END, Scenario
 from karenina.scenario.checkpoint import scenario_to_schema_org, schema_org_to_scenario
 from karenina.schemas.checkpoint import (
@@ -284,3 +285,66 @@ class TestSchemaOrgToScenario:
         assert restored.nodes["ask"].state_update is not None
         result = restored.nodes["ask"].state_update({}, {})
         assert result == {"x": 1}
+
+
+@pytest.mark.unit
+class TestBenchmarkScenarioCheckpoint:
+    def test_add_scenario_writes_to_checkpoint(self):
+        b = Benchmark("test")
+        defn = _build_branching_scenario()
+        b.add_scenario(defn)
+        assert b._base._checkpoint.hasPart is not None
+        assert len(b._base._checkpoint.hasPart) == 1
+        assert b._base._checkpoint.hasPart[0].name == "test_branch"
+
+    def test_add_scenario_sets_benchmark_type(self):
+        b = Benchmark("test")
+        b.add_scenario(_build_branching_scenario())
+        props = b._base._checkpoint.additionalProperty or []
+        types = [p for p in props if p.name == "benchmark_type"]
+        assert len(types) == 1
+        assert types[0].value == "scenario"
+
+    def test_add_scenario_benchmark_type_set_once(self):
+        """Adding multiple scenarios should not duplicate the benchmark_type flag."""
+        b = Benchmark("test")
+        q = Question(question="Q2?", raw_answer="A2", answer_template="class Answer: pass")
+        s2 = Scenario("second")
+        s2.add_node("n", question=q)
+        s2.add_edge("n", END)
+        s2.set_entry("n")
+
+        b.add_scenario(_build_branching_scenario())
+        b.add_scenario(s2)
+        props = b._base._checkpoint.additionalProperty or []
+        types = [p for p in props if p.name == "benchmark_type"]
+        assert len(types) == 1
+
+    def test_remove_scenario_clears_checkpoint(self):
+        b = Benchmark("test")
+        b.add_scenario(_build_branching_scenario())
+        b.remove_scenario("test_branch")
+        assert b._base._checkpoint.hasPart is None
+        props = b._base._checkpoint.additionalProperty or []
+        types = [p for p in props if p.name == "benchmark_type"]
+        assert len(types) == 0
+
+    def test_remove_scenario_partial(self):
+        """Removing one of two scenarios should keep hasPart and benchmark_type."""
+        b = Benchmark("test")
+        q = Question(question="Q2?", raw_answer="A2", answer_template="class Answer: pass")
+        s2 = Scenario("second")
+        s2.add_node("n", question=q)
+        s2.add_edge("n", END)
+        s2.set_entry("n")
+
+        b.add_scenario(_build_branching_scenario())
+        b.add_scenario(s2)
+        b.remove_scenario("test_branch")
+
+        assert b._base._checkpoint.hasPart is not None
+        assert len(b._base._checkpoint.hasPart) == 1
+        assert b._base._checkpoint.hasPart[0].name == "second"
+        props = b._base._checkpoint.additionalProperty or []
+        types = [p for p in props if p.name == "benchmark_type"]
+        assert len(types) == 1  # still present
