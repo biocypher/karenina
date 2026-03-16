@@ -33,7 +33,6 @@ class TestScenarioDefinition:
         )
         assert defn.name == "test"
         assert defn.entry_node == "ask"
-        assert defn.global_turn_limit == 20  # default
 
     def test_frozen(self):
         q = _make_question()
@@ -62,7 +61,6 @@ class TestScenarioDefinition:
                 ScenarioEdge(source="ask", target=END),
             ],
             entry_node="ask",
-            global_turn_limit=10,
             outcome_criteria=[
                 ScenarioOutcomeCriterion(
                     name="fast",
@@ -74,7 +72,6 @@ class TestScenarioDefinition:
         data = defn.model_dump()
         restored = ScenarioDefinition.model_validate(data)
         assert restored.name == "pipeline"
-        assert restored.global_turn_limit == 10
         assert len(restored.edges) == 2
         assert len(restored.outcome_criteria) == 1
 

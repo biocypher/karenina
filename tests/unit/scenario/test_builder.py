@@ -216,19 +216,6 @@ class TestSetEntry:
 
 
 # ---------------------------------------------------------------------------
-# Turn limit
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestSetGlobalTurnLimit:
-    def test_set_global_turn_limit(self) -> None:
-        s = Scenario("test")
-        s.set_global_turn_limit(10)
-        assert s._global_turn_limit == 10
-
-
-# ---------------------------------------------------------------------------
 # Outcome criteria
 # ---------------------------------------------------------------------------
 

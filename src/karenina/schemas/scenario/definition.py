@@ -22,6 +22,5 @@ class ScenarioDefinition(BaseModel):
     nodes: dict[str, ScenarioNode]
     edges: list[ScenarioEdge]
     entry_node: str
-    global_turn_limit: int = 20
     outcome_criteria: list[ScenarioOutcomeCriterion] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)

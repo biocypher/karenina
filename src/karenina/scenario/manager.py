@@ -169,7 +169,7 @@ class ScenarioManager:
                 break
 
             # Check global turn limit
-            if state.turn >= scenario.global_turn_limit:
+            if state.turn >= config.scenario_turn_limit:
                 self._report_progress(
                     progress_callback,
                     scenario.name,

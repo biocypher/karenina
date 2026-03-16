@@ -155,7 +155,6 @@ class Scenario:
         self._nodes: dict[str, ScenarioNode] = {}
         self._edges: list[ScenarioEdge] = []
         self._entry_node: str | None = None
-        self._global_turn_limit: int = 20
         self._outcome_criteria: list[ScenarioOutcomeCriterion] = []
 
     def add_node(
@@ -310,14 +309,6 @@ class Scenario:
             raise ValueError(f"'{node_id}' is not a known node")
         self._entry_node = node_id
 
-    def set_global_turn_limit(self, limit: int) -> None:
-        """Set the maximum number of turns before forced termination.
-
-        Args:
-            limit: Maximum turn count.
-        """
-        self._global_turn_limit = limit
-
     def validate(self) -> ScenarioDefinition:
         """Validate the graph and freeze it into a ScenarioDefinition.
 
@@ -346,6 +337,5 @@ class Scenario:
             nodes=dict(self._nodes),
             edges=list(self._edges),
             entry_node=self._entry_node,
-            global_turn_limit=self._global_turn_limit,
             outcome_criteria=list(self._outcome_criteria),
         )

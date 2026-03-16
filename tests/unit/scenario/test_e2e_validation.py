@@ -52,7 +52,6 @@ class TestEndToEndScenario:
         s.add_edge("ask", END)  # fallback
         s.add_edge("confirm", END)
         s.set_entry("ask")
-        s.set_global_turn_limit(10)
         s.add_outcome_criterion(
             ScenarioOutcomeCriterion(
                 name="completed_both",
@@ -65,7 +64,6 @@ class TestEndToEndScenario:
         defn = s.validate()
         assert isinstance(defn, ScenarioDefinition)
         assert defn.name == "e2e_test"
-        assert defn.global_turn_limit == 10
         assert len(defn.nodes) == 2
         assert len(defn.edges) == 3
         assert len(defn.outcome_criteria) == 1
@@ -80,7 +78,6 @@ class TestEndToEndScenario:
         restored = ScenarioDefinition.model_validate(restored_data)
         assert restored.name == defn.name
         assert restored.entry_node == "ask"
-        assert restored.global_turn_limit == 10
         assert len(restored.outcome_criteria) == 1
         assert restored.outcome_criteria[0].evaluate_source is not None
 
