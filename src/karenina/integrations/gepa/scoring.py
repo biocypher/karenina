@@ -16,7 +16,7 @@ def compute_objective_scores(
     model_name: str,
     config: "ObjectiveConfig",
     trait_max_scores: dict[str, int] | None = None,
-    trait_directionalities: dict[str, bool] | None = None,
+    trait_directionalities: dict[str, bool | None] | None = None,
 ) -> dict[str, float]:
     """Compute per-dimension objective scores for Pareto optimization.
 

@@ -142,7 +142,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
 
         # Cache trait max_scores and directionalities from global rubric for proper normalization
         self._trait_max_scores: dict[str, int] = {}
-        self._trait_directionalities: dict[str, bool] = {}
+        self._trait_directionalities: dict[str, bool | None] = {}
         global_rubric = benchmark.get_global_rubric()
         if global_rubric:
             self._trait_max_scores = global_rubric.get_trait_max_scores()

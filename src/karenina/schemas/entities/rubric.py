@@ -735,6 +735,23 @@ class Rubric(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="after")
+    def validate_trait_names(self) -> "Rubric":
+        """Reject dots in agentic trait names to avoid dot-notation collisions.
+
+        Template kind traits produce dot-expanded keys (``trait.field``). A trait
+        named ``"foo.bar"`` would be ambiguous: is it a single trait or the
+        ``bar`` field of trait ``foo``?
+        """
+        for trait in self.agentic_traits:
+            if "." in trait.name:
+                raise ValueError(
+                    f"Agentic trait name '{trait.name}' contains '.', "
+                    f"which would collide with dot-notation keys from "
+                    f"template-kind traits."
+                )
+        return self
+
     def get_trait_names(self) -> list[str]:
         """Get list of all trait names in this rubric (LLM, regex, callable, metric, and agentic)."""
         llm_names = [trait.name for trait in self.llm_traits]
@@ -788,16 +805,18 @@ class Rubric(BaseModel):
 
         return max_scores
 
-    def get_trait_directionalities(self) -> dict[str, bool]:
-        """Get higher_is_better for LLM, regex, and callable traits.
+    def get_trait_directionalities(self) -> dict[str, bool | None]:
+        """Get higher_is_better for LLM, regex, callable, and agentic traits.
 
         Note: MetricRubricTraits are excluded as metrics (precision/recall/F1)
         are inherently 'higher is better'.
 
         Returns:
-            Dict mapping trait name to higher_is_better value.
+            Dict mapping trait name to higher_is_better value. Template kind
+            agentic traits map to None because directionality is not meaningful
+            for structured results.
         """
-        directionalities: dict[str, bool] = {}
+        directionalities: dict[str, bool | None] = {}
 
         llm_trait: LLMRubricTrait
         for llm_trait in self.llm_traits:
@@ -812,8 +831,7 @@ class Rubric(BaseModel):
             directionalities[callable_trait.name] = callable_trait.higher_is_better
 
         for agentic_trait in self.agentic_traits:
-            if agentic_trait.higher_is_better is not None:
-                directionalities[agentic_trait.name] = agentic_trait.higher_is_better
+            directionalities[agentic_trait.name] = agentic_trait.higher_is_better
 
         # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
@@ -825,13 +843,27 @@ class Rubric(BaseModel):
         Note: This validates LLM, regex, callable, and agentic trait scores. Metric traits
         are stored separately in VerificationResult fields (metric_trait_confusion_lists
         and metric_trait_metrics) and don't participate in this validation.
+
+        Template kind agentic traits produce dot-expanded keys (e.g.
+        ``"trait_name.field_name"``), so the expected names set and per-key
+        validation logic account for this notation.
         """
         # Get trait names excluding metric traits (they're validated separately)
         llm_names = set(self.get_llm_trait_names())
         regex_names = set(self.get_regex_trait_names())
         callable_names = set(self.get_callable_trait_names())
-        agentic_names = set(self.get_agentic_trait_names())
-        expected_names = llm_names | regex_names | callable_names | agentic_names
+
+        # For agentic traits, expand template kinds to dot-notation keys
+        agentic_expected: set[str] = set()
+        for trait in self.agentic_traits:
+            if trait.is_template_kind:
+                assert isinstance(trait.kind, type)  # narrows for mypy
+                for field_name in trait.kind.model_fields:
+                    agentic_expected.add(f"{trait.name}.{field_name}")
+            else:
+                agentic_expected.add(trait.name)
+
+        expected_names = llm_names | regex_names | callable_names | agentic_expected
 
         eval_names = set(evaluation.keys())
 
@@ -845,14 +877,18 @@ class Rubric(BaseModel):
         callable_trait_map = {trait.name: trait for trait in self.callable_traits}
         agentic_trait_map = {trait.name: trait for trait in self.agentic_traits}
 
-        for name, value in evaluation.items():
-            if name in llm_trait_map:
-                if not llm_trait_map[name].validate_score(value):
+        for key, value in evaluation.items():
+            trait_name = key.split(".")[0] if "." in key else key
+            if trait_name in llm_trait_map:
+                if not llm_trait_map[trait_name].validate_score(value):
                     return False
-            elif name in agentic_trait_map:
-                if not agentic_trait_map[name].validate_score(value):
+            elif trait_name in agentic_trait_map:
+                trait = agentic_trait_map[trait_name]
+                if trait.is_template_kind:
+                    continue  # Template fields not individually validated
+                if not trait.validate_score(value):
                     return False
-            elif name in regex_trait_map or name in callable_trait_map:
+            elif trait_name in regex_trait_map or trait_name in callable_trait_map:
                 # Regex and callable traits always return boolean
                 if not isinstance(value, bool):
                     return False
