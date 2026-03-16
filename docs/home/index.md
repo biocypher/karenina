@@ -6,9 +6,10 @@
 
 **Karenina** is an open-source Python framework that simplifies how you define, run, and share LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions where models use external tools via [MCP](../notebooks/core_concepts/mcp-overview.ipynb), and fully [agentic coding and data analysis tasks](../notebooks/core_concepts/agentic-evaluation.ipynb) where both the answering model and the judge operate in a real workspace with file and code access.
 
-Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports two modes:
+Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports three evaluation modes:
 
 - **Benchmark** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
+- **[Scenarios](../core_concepts/scenarios/index.md)** (closed-loop, multi-turn): Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.
 - **TaskEval** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
 
 **New here?** Start with the **[Quick Start: Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
@@ -42,7 +43,7 @@ This documentation is organized into four sections, each serving a different rea
 
 ## Key Capabilities
 
-**Shared evaluation engine** (both modes):
+**Shared evaluation engine** (all modes):
 
 - **Define precise evaluation criteria** using code-based answer templates (Pydantic models)
 - **Evaluate answers** using both rule-based verification and LLM-as-judge strategies
@@ -56,6 +57,12 @@ This documentation is organized into four sections, each serving a different rea
 - **Create benchmarks** from scratch or from existing question sets
 - **Track performance** across multiple models and configurations
 - **Share and reproduce** benchmark results via JSON-LD checkpoint files
+
+**[Scenario mode](../core_concepts/scenarios/index.md)**:
+
+- **Define conversation graphs** with nodes (questions) and edges (routing conditions) for multi-turn evaluation
+- **Test sycophancy, error correction, and progressive disclosure** across branching conversation paths
+- **Assert outcome criteria** over the full conversation result after execution
 
 **TaskEval mode**:
 
@@ -75,6 +82,9 @@ This documentation is organized into four sections, each serving a different rea
 | Evaluate coding or data analysis tasks with workspace artifacts | Benchmark |
 | Score agent workflow outputs after execution | TaskEval |
 | Evaluate multi-step agent traces per phase | TaskEval |
+| Test sycophancy resistance across multi-turn conversation paths | [Scenarios](../core_concepts/scenarios/index.md) |
+| Evaluate multi-turn reasoning with branching conditions | [Scenarios](../core_concepts/scenarios/index.md) |
+| Assess error correction behavior across conversation turns | [Scenarios](../core_concepts/scenarios/index.md) |
 
 ## Ecosystem Overview
 
@@ -90,22 +100,22 @@ This documentation covers the **karenina** Python library. The server and GUI ha
 
 ## How It Works
 
-Karenina uses a **two-unit evaluation approach** shared by both modes:
+Karenina uses a **two-unit evaluation approach** shared by all modes:
 
 1. **Answer Templates** verify *correctness*: did the model give the right answer? A Judge LLM parses the response into a structured Pydantic schema, then a programmatic `verify()` method checks it against ground truth.
 
 2. **Rubrics** assess *quality*: how well did the model answer? Trait evaluators examine the raw response for qualities like safety, conciseness, format compliance, or extraction completeness.
 
-The two modes differ in where the response comes from:
+The three modes differ in where the response comes from and how the conversation is structured:
 
-| Dimension | Benchmark | TaskEval |
-|-----------|-----------|----------|
-| Response source | Pipeline generates via answering model | You supply pre-recorded outputs |
-| Starting point | Questions (define what to ask) | Traces (record what happened) |
-| Pipeline stages | All 13 stages | Skips stage 2 (answer generation) |
-| Persistence | JSON-LD checkpoints | In-memory TaskEvalResult |
+| Dimension | Benchmark | Scenarios | TaskEval |
+|-----------|-----------|-----------|----------|
+| Response source | Pipeline generates via answering model | Pipeline generates across multiple turns | You supply pre-recorded outputs |
+| Starting point | Questions (define what to ask) | Scenario graph (nodes, edges, outcome criteria) | Traces (record what happened) |
+| Pipeline stages | All 13 stages | All 13 stages (per turn) | Skips stage 2 (answer generation) |
+| Persistence | JSON-LD checkpoints | JSON-LD checkpoints | In-memory TaskEvalResult |
 
-A common pattern: use a template to verify the model extracted the correct answer, then use rubrics to check that the response was concise, cited sources, and avoided hallucination. This works identically in both modes.
+A common pattern: use a template to verify the model extracted the correct answer, then use rubrics to check that the response was concise, cited sources, and avoided hallucination. This works identically across all modes.
 
 For [agentic tasks](../notebooks/core_concepts/agentic-evaluation.ipynb), both steps extend to workspace inspection: the answering model writes code and artifacts into a workspace directory, and the judge agent independently examines those artifacts before filling in the template. The evaluation engine is the same; only the source of evidence changes (workspace files instead of conversation text).
 
@@ -120,6 +130,7 @@ For a deeper discussion, see [Templates vs Rubrics](../notebooks/core_concepts/t
 - [Rubrics](../core_concepts/rubrics/index.md) — Trait-based quality assessment
 - [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) — When to use which, and when to use both
 - [Agentic Evaluation](../notebooks/core_concepts/agentic-evaluation.ipynb) — Workspace-based evaluation for coding and data analysis tasks
+- [Scenarios](../core_concepts/scenarios/index.md): Multi-turn conversation graph evaluation with branching paths and outcome criteria
 - [TaskEval](../core_concepts/task-eval.md): Evaluate pre-recorded outputs without defining questions
 - [Installation](../getting-started/installation.md) — Install karenina and set up API keys
 - [Core Concepts](../core_concepts/index.md) — Deep dive into checkpoints, pipelines, adapters, and more

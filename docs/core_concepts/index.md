@@ -11,6 +11,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | **Questions & Benchmarks** | The central objects: questions bundled with templates, rubrics, and metadata | [Questions & Benchmarks](questions-and-benchmarks/index.md) |
 | **Checkpoints** | JSON-LD files that store benchmarks (questions, templates, rubrics, results) | [Checkpoints](questions-and-benchmarks/checkpoints.md) |
 | **TaskEval** | Evaluate any free text output using karenina's templates and rubrics (open-loop mode) | [TaskEval](../notebooks/core_concepts/task-eval.ipynb) |
+| **Scenarios** | Multi-turn scenario benchmarks: evaluate LLM behavior across branching conversation graphs | [Scenarios](scenarios/index.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
 | **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
 | **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) |
@@ -28,35 +29,35 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 
 ## How Concepts Fit Together
 
-Karenina supports two entry points into a shared evaluation engine:
+Karenina supports three entry points into a shared evaluation engine:
 
 ```
-Benchmark Mode (closed-loop)              TaskEval Mode (open-loop)
-─────────────────────────                 ────────────────────────
-Questions & Benchmarks                    Logged Outputs
- ├── Questions        ← what to ask        ├── log()        ← plain text
- ├── Answer Templates ← correctness        ├── log_trace()  ← Message traces
- └── Rubric Traits    ← quality            ├── add_template()
-         │                                 └── add_rubric()
-         ▼                                         │
- Checkpoint (.jsonld)                               │
-         │                                         │
-         └──────────────┬──────────────────────────┘
-                        ▼
-                Evaluation Mode     ← which evaluation units to run
-                        │
-                        ▼
-                Adapter             ← which LLM backend to use
-                 ├── LangChain, Claude SDK, Claude Tool, ...
-                 └── optionally with MCP tools
-                        │
-                        ▼
-                Verification Pipeline   ← 13-stage execution engine
-                 ├── Prompt Assembly     ← constructs all LLM prompts
-                 └── Stage by stage      ← generate*, parse, verify, evaluate
-                        │                  (*skipped in TaskEval)
-                        ▼
-                Results & Scoring   ← pass/fail, scores, traits, metrics
+Benchmark Mode (closed-loop)   Scenario Mode (multi-turn)        TaskEval Mode (open-loop)
+─────────────────────────      ──────────────────────────        ────────────────────────
+Questions & Benchmarks         Scenario Graph                    Logged Outputs
+ ├── Questions        ← ask     ├── Nodes      ← questions        ├── log()        ← plain text
+ ├── Answer Templates ← correct ├── Edges      ← conditions       ├── log_trace()  ← Message traces
+ └── Rubric Traits    ← quality └── Outcomes   ← criteria         ├── add_template()
+         │                              │                          └── add_rubric()
+         ▼                              │                                  │
+ Checkpoint (.jsonld)          Checkpoint (.jsonld)                        │
+         │                              │                                  │
+         └──────────────────────┬───────┘──────────────────────────────────┘
+                                ▼
+                        Evaluation Mode     ← which evaluation units to run
+                                │
+                                ▼
+                        Adapter             ← which LLM backend to use
+                         ├── LangChain, Claude SDK, Claude Tool, ...
+                         └── optionally with MCP tools
+                                │
+                                ▼
+                        Verification Pipeline   ← 13-stage execution engine
+                         ├── Prompt Assembly     ← constructs all LLM prompts
+                         └── Stage by stage      ← generate*, parse, verify, evaluate
+                                │                  (*skipped in TaskEval)
+                                ▼
+                        Results & Scoring   ← pass/fail, scores, traits, metrics
 ```
 
 **Shared concepts** (both modes):
@@ -70,6 +71,8 @@ Questions & Benchmarks                    Logged Outputs
 7. **Results** capture everything that happened: pass/fail, scores, excerpts, and metadata
 
 **Benchmark-specific**: A **benchmark** bundles questions with templates and rubrics. **Checkpoints** persist benchmarks as portable JSON-LD files. **MCP** servers can provide tools to the answering model.
+
+**Scenario-specific**: A **scenario** is a directed graph where nodes carry questions and edges carry routing conditions. After each turn the pipeline selects the next node based on verification results. Outcome criteria assert over the full conversation result.
 
 **TaskEval-specific**: **TaskEval** records pre-existing outputs via `log()` and `log_trace()`, attaches evaluation criteria, and feeds them into the pipeline as `cached_answer_data` (skipping answer generation).
 
@@ -94,6 +97,10 @@ A **checkpoint** is a JSON-LD file that stores everything needed to define and r
 **TaskEval** evaluates any free text output using karenina's two evaluation primitives: templates for correctness and rubrics for quality. Instead of defining questions and generating answers (the Benchmark workflow), you supply existing text or structured traces and attach evaluation criteria. This is useful whenever you have outputs that need structured evaluation, whether from agent workflows or external systems.
 
 [Read more about TaskEval →](../notebooks/core_concepts/task-eval.ipynb)
+
+### Scenarios
+
+Multi-turn scenarios evaluate conversation dynamics: sycophancy resistance, error correction, progressive disclosure. A scenario is a directed graph where nodes carry questions and edges carry conditions. After execution, outcome criteria assert over the full conversation result. See [Scenarios](scenarios/index.md).
 
 ### Answer Templates
 
