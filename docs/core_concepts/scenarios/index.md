@@ -1,6 +1,6 @@
 # Scenarios
 
-Scenario benchmarks evaluate LLM behavior across a graph of connected conversation turns. Unlike single-turn benchmarks (which evaluate isolated questions, each independent of the others) and [TaskEval](../task-eval.md) (which evaluates pre-recorded outputs without live LLM calls), scenarios run a live conversation where each turn's result can determine which question comes next. The evaluation covers the full execution: not just individual responses, but the path taken and the state accumulated across turns.
+Scenario benchmarks evaluate LLM behavior across a graph of connected conversation turns. Unlike single-turn benchmarks (which evaluate isolated questions, each independent of the others) and [TaskEval](../../notebooks/core_concepts/task-eval.ipynb) (which evaluates pre-recorded outputs without live LLM calls), scenarios run a live conversation where each turn's result can determine which question comes next. The evaluation covers the full execution: not just individual responses, but the path taken and the state accumulated across turns.
 
 ## Building Blocks
 
@@ -39,13 +39,11 @@ Each scenario consists of three building block types: **nodes** (the questions a
 |------|------|-----|
 | Evaluate isolated factual questions | Benchmark (single-turn) | Each question is independent; no conversation context is needed |
 | Test multi-turn conversation dynamics | Scenarios | Branching paths, conversation history, and cross-turn assertions |
-| Evaluate pre-recorded LLM outputs | [TaskEval](../task-eval.md) | No live LLM calls; offline evaluation of existing traces |
-
-## Building Blocks Overview
+| Evaluate pre-recorded LLM outputs | [TaskEval](../../notebooks/core_concepts/task-eval.ipynb) | No live LLM calls; offline evaluation of existing traces |
 
 ### Nodes
 
-A node carries a [Question](../questions-and-benchmarks/index.md) and its [answer template](../answer-templates.md). The template controls how the model's response is parsed and verified at that turn, exactly as in a single-turn benchmark. Nodes can also specify per-node model overrides, allowing different turns to use different models within the same scenario.
+A node carries a [Question](../questions-and-benchmarks/index.md) and its [answer template](../../notebooks/core_concepts/answer-templates.ipynb). The template controls how the model's response is parsed and verified at that turn, exactly as in a single-turn benchmark. Nodes can also specify per-node model overrides, allowing different turns to use different models within the same scenario.
 
 ### Edges
 
