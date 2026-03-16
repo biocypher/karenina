@@ -62,10 +62,21 @@ This method is public because the shared strategy needs to call it directly (one
 | `boolean` | `SingleBooleanScore` | `.result` (bool) |
 | `score` | `SingleNumericScore` | `.score` (int) |
 | `literal` | `SingleLiteralClassification` | `.classification` (str, then resolved to int index) |
+| `type[BaseModel]` (template kind) | The user's `BaseModel` subclass | `.model_dump()` (dict of all fields) |
 
 For `literal` traits, `_resolve_literal_index()` maps the classification string to its position in the `trait.classes` dict. If the classification does not match any defined class, it returns `-1`.
 
+For template kind traits, `run_extraction()` delegates to `_extract_template()` instead of the standard extraction flow. See Section 2.1 below.
+
 The extraction prompt includes kind-specific context: score range for `score` traits, class descriptions for `literal` traits.
+
+### _extract_template()
+
+This method handles extraction for template kind traits. Instead of building a score-extraction prompt, it sends the investigation trace to `ParserPort.parse_to_pydantic()` with the user's `BaseModel` subclass as the target schema. The parser produces a populated instance of that class, and the method returns `model_dump()` of the result.
+
+The system prompt instructs the parser to fill every field based on evidence from the investigation. Field descriptions on the `BaseModel` guide the parser toward correct extraction, making well-described fields important for accuracy.
+
+The returned dict is stored in `agentic_trait_scores` with dot-notation keys: each field becomes `{trait_name}.{field_name}`. This flattening happens in Stage 11b's `_execute_individual` (or `_execute_shared`) after `evaluate_trait()` returns.
 
 ## 3. Strategy Dispatch
 
@@ -238,7 +249,40 @@ In `rubric_only` mode, Stage 11b appears after the standard rubric + deep judgme
 | **DeepJudgmentRubricAutoFail** (12) | Operates on standard rubric traits. Does not interact with agentic trait results. |
 | **FinalizeResult** (13) | Reads agentic result fields and wires them into `VerificationResultRubric` (see above). |
 
-## 8. Key File Reference
+## 8. Trace Materialization
+
+When any `AgenticRubricTrait` in the rubric has `materialize_trace=True`, Stage 11b writes the answering agent trace to a file instead of inlining it in the investigation prompt. This is useful for long traces that would consume excessive context.
+
+### _write_trace_file staticmethod
+
+**File**: `benchmark/verification/stages/pipeline/agentic_rubric_evaluation.py`
+
+`_write_trace_file()` places the trace file under `<workspace>/.karenina/traces/` when a workspace path is available. If no workspace is set, it creates a temporary directory as a fallback. The filename encodes the question ID and, when present, the scenario turn number. The method returns the `Path` to the written file.
+
+### Stage-Level Lifecycle
+
+The stage handles materialization in a single pass, not per-trait:
+
+1. Before evaluating any trait, the stage checks `any(t.materialize_trace for t in traits)`. If true, it calls `_write_trace_file()` once.
+2. The resulting `trace_file_path` is passed to `evaluate_trait()` for every trait (regardless of whether that specific trait has `materialize_trace=True`). The evaluator checks `trait.materialize_trace` before using the path.
+3. After all evaluations complete, the stage checks `any(t.persist_trace for t in traits)`. If no trait requests persistence, the trace file is deleted. If any trait sets `persist_trace=True`, the file remains.
+
+### Prompt Behavior
+
+When `materialize_trace=True` and a `trace_file_path` is available, `_run_investigation()` replaces the inline trace with a reference:
+
+```
+The full agent trace is saved to: /path/to/.karenina/traces/trace_q_xyz.txt
+Use file tools (grep, search, read) to examine it.
+```
+
+This allows the investigation agent to selectively search the trace using file tools rather than processing the entire trace in its context window.
+
+### Interaction with Context Modes
+
+`materialize_trace=True` requires `context_mode` to include the trace (`"trace_only"` or `"trace_and_workspace"`). Setting it with `context_mode="workspace_only"` raises a `ValueError` at validation time, because there is no trace to materialize.
+
+## 9. Key File Reference
 
 | Domain | File (relative to `karenina/src/karenina/`) |
 |--------|------|
@@ -254,7 +298,7 @@ In `rubric_only` mode, Stage 11b appears after the standard rubric + deep judgme
 | Extraction output schemas | `schemas/outputs/rubric.py` |
 | Adapter registry (agent_factory check) | `adapters/registry.py` |
 
-## 9. Next Steps
+## 10. Next Steps
 
 - [Agentic Traits](../core_concepts/rubrics/agentic-traits.md): conceptual overview and usage guide
 - [Agentic Evaluation](agentic-evaluation.md): Stage 7b internals (agentic template parsing)
