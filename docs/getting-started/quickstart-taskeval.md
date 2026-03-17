@@ -15,7 +15,7 @@ jupyter:
 
 # Quick Start: TaskEval
 
-Evaluate any text output using Karenina's judge LLM machinery. This guide walks you through logging outputs, attaching evaluation criteria, running evaluation, and inspecting results.
+TaskEval evaluates textual outputs that come from an external source: an LLM response, a paper excerpt, a chat transcript, or any other text you already have. You supply the text; Karenina's judge LLM handles the evaluation. This guide walks you through logging outputs, attaching evaluation criteria, running evaluation, and inspecting results.
 
 By the end you will have evaluated a pre-recorded LLM response for both **correctness** (via an answer template) and **quality** (via rubric traits), with no question definition or answer generation required.
 
