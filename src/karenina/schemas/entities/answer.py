@@ -240,7 +240,8 @@ class BaseAnswer(BaseModel):
         if cached is not None:
             return cast(dict[str, bool], cached)
 
-        from karenina.schemas.entities.primitives import TracePrimitive, _reconstruct_primitive
+        from karenina.schemas.primitives import TracePrimitive
+        from karenina.schemas.primitives.registry import _reconstruct_primitive
 
         verified = self.__class__._get_verified_fields()
         results: dict[str, bool] = {}

@@ -5,13 +5,13 @@ from pydantic import BaseModel, Field
 
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.composition import AllOf, AnyOf, FieldCheck
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedField
+from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
     NumericTolerance,
     TraceRegex,
 )
-from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedField
 
 
 @pytest.mark.unit

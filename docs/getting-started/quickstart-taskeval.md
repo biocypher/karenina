@@ -111,38 +111,29 @@ BaseChatModel.ainvoke = _replaying_ainvoke
 from karenina.benchmark.task_eval import TaskEval as _TaskEval
 
 _ANSWER_TEMPLATE_CODE = '''\
-from karenina.schemas.entities import BaseAnswer
-from pydantic import Field
-from typing import Any
+from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.primitives import BooleanMatch
 
 class Answer(BaseAnswer):
-    identifies_bcl2_as_target: bool = Field(
+    identifies_bcl2_as_target: bool = VerifiedField(
         description=(
             "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
             "B-cell lymphoma 2) as the direct pharmacological target of venetoclax. "
             "False if BCL2 is mentioned only as a pathway member or a different "
             "protein is identified as the primary target."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-    mentions_mechanism: bool = Field(
+    mentions_mechanism: bool = VerifiedField(
         description=(
             "True if the response explains the mechanism of action (e.g., inhibiting "
             "BCL2 to trigger apoptosis). False if only the target is named without "
             "any mechanistic explanation."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {
-            "identifies_bcl2_as_target": True,
-            "mentions_mechanism": True,
-        }
-
-    def verify(self) -> bool:
-        return all(
-            getattr(self, field) == self.correct[field]
-            for field in self.correct
-        )
 '''
 
 _original_add_template = _TaskEval.add_template
@@ -207,44 +198,33 @@ print(f"Logged {len(task.global_logs)} event(s)")
 
 ## Step 3: Define an Answer Template
 
-An answer template is a Pydantic schema that defines what to extract from the logged output and how to verify it. The judge LLM parses the logged text into this schema, then `verify()` checks correctness programmatically.
-
-The class must always be named `Answer` and inherit from `BaseAnswer`.
+An answer template is a Pydantic schema that defines what to extract from the logged output and how to verify it. Each field uses `VerifiedField` to declare what to extract, the correct value, and a verification primitive that checks the result.
 
 ```python
-from pydantic import Field
-
-from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.primitives import BooleanMatch
 
 
 class Answer(BaseAnswer):
-    identifies_bcl2_as_target: bool = Field(
+    identifies_bcl2_as_target: bool = VerifiedField(
         description=(
             "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "
             "B-cell lymphoma 2) as the direct pharmacological target of venetoclax. "
             "False if BCL2 is mentioned only as a pathway member or a different "
             "protein is identified as the primary target."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-    mentions_mechanism: bool = Field(
+    mentions_mechanism: bool = VerifiedField(
         description=(
             "True if the response explains the mechanism of action (e.g., inhibiting "
             "BCL2 to trigger apoptosis). False if only the target is named without "
             "any mechanistic explanation."
-        )
+        ),
+        ground_truth=True,
+        verify_with=BooleanMatch(),
     )
-
-    def ground_truth(self):
-        self.correct = {
-            "identifies_bcl2_as_target": True,
-            "mentions_mechanism": True,
-        }
-
-    def verify(self) -> bool:
-        return all(
-            getattr(self, field) == self.correct[field]
-            for field in self.correct
-        )
 
 
 task.add_template(Answer)

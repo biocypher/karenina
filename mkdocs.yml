@@ -9,6 +9,7 @@ exclude_docs: |
   # Jupytext .md companion files — notebooks are the canonical source
   getting-started/quickstart.md
   getting-started/quickstart-taskeval.md
+  getting-started/quickstart-scenarios.md
   workflows/task-eval/index.md
   core_concepts/answer-templates.md
   core_concepts/verification-primitives.md
@@ -23,6 +24,7 @@ exclude_docs: |
   workflows/creating-benchmarks/quality-assessment-benchmark.md
   workflows/creating-benchmarks/choosing-rubric-traits.md
   workflows/creating-benchmarks/scaled-authoring.md
+  workflows/creating-benchmarks/ai-assisted-authoring.md
   workflows/running-verification/basic-verification.md
   workflows/running-verification/full-evaluation.md
   workflows/running-verification/multi-model-comparison.md
@@ -44,6 +46,10 @@ exclude_docs: |
   core_concepts/rubrics/agentic-traits.md
   core_concepts/agentic-evaluation.md
   workflows/running-verification/agentic-evaluation.md
+  core_concepts/scenarios/building-scenarios.md
+  core_concepts/scenarios/outcome-criteria.md
+  core_concepts/scenarios/state-and-routing.md
+  workflows/scenarios/sycophancy-tutorial.md
 
 theme:
   name: material
@@ -164,7 +170,8 @@ nav:
   - Getting Started:
     - getting-started/index.md
     - Installation: getting-started/installation.md
-    - "Quick Start: Benchmark": notebooks/quickstart.ipynb
+    - "Quick Start: Q/A Benchmark": notebooks/quickstart.ipynb
+    - "Quick Start: Scenarios": notebooks/quickstart-scenarios.ipynb
     - "Quick Start: TaskEval": notebooks/quickstart-taskeval.ipynb
     - Workspace Init: getting-started/workspace-init.md
   - Core Concepts:
@@ -184,6 +191,11 @@ nav:
       - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
       - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
       - Agentic Traits: notebooks/core_concepts/rubrics/agentic-traits.ipynb
+    - Scenarios:
+      - Overview: core_concepts/scenarios/index.md
+      - Building Scenarios: notebooks/core_concepts/scenarios/building-scenarios.ipynb
+      - Outcome Criteria: notebooks/core_concepts/scenarios/outcome-criteria.ipynb
+      - State and Routing: notebooks/core_concepts/scenarios/state-and-routing.ipynb
     - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
@@ -227,6 +239,8 @@ nav:
       - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
       - Exporting: workflows/analyzing-results/exporting.md
       - Iterating: workflows/analyzing-results/iterating.md
+    - Scenarios:
+      - Sycophancy Tutorial: notebooks/scenarios/sycophancy-tutorial.ipynb
   - Reference:
     - reference/index.md
     - Configuration Reference:

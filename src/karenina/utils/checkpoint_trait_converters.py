@@ -8,7 +8,9 @@ and the schema.org Rating format used in JSON-LD checkpoints.
 import base64
 import json
 import logging
-from typing import Literal, cast
+from typing import Any, Literal, cast
+
+from pydantic import BaseModel
 
 from ..schemas.checkpoint import (
     JsonLdCheckpoint,
@@ -144,10 +146,20 @@ def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) ->
 
 def _convert_agentic_trait_to_rating(trait: AgenticRubricTrait, rubric_type: str) -> SchemaOrgRating:
     """Convert AgenticRubricTrait to SchemaOrgRating."""
+    # Serialize template kind as a dict with JSON Schema; pass string kinds through
+    kind_value: Any
+    if trait.is_template_kind:
+        template_cls = cast(type[BaseModel], trait.kind)
+        kind_value = {"type": "template", "schema": template_cls.model_json_schema()}
+    else:
+        kind_value = trait.kind
+
     additional_props = [
-        SchemaOrgPropertyValue(name="kind", value=trait.kind),
+        SchemaOrgPropertyValue(name="kind", value=kind_value),
         SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
         SchemaOrgPropertyValue(name="context_mode", value=trait.context_mode),
+        SchemaOrgPropertyValue(name="materialize_trace", value=trait.materialize_trace),
+        SchemaOrgPropertyValue(name="persist_trace", value=trait.persist_trace),
         SchemaOrgPropertyValue(name="max_turns", value=trait.max_turns),
         SchemaOrgPropertyValue(name="timeout_seconds", value=trait.timeout_seconds),
     ]
@@ -158,7 +170,9 @@ def _convert_agentic_trait_to_rating(trait: AgenticRubricTrait, rubric_type: str
         additional_props.append(SchemaOrgPropertyValue(name="model_override", value=trait.model_override.model_dump()))
 
     # Determine best/worst rating based on kind
-    if trait.kind == "boolean":
+    if trait.is_template_kind:
+        best_rating, worst_rating = 0.0, 0.0
+    elif trait.kind == "boolean":
         best_rating, worst_rating = 1.0, 0.0
     elif trait.kind == "literal" and trait.max_score is not None and trait.min_score is not None:
         best_rating, worst_rating = float(trait.max_score), float(trait.min_score)
@@ -513,9 +527,11 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
 
 def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTrait:
     """Convert SchemaOrgRating to AgenticRubricTrait."""
-    kind: TraitKind = "boolean"
-    higher_is_better = True
+    kind: Any = "boolean"
+    higher_is_better: bool | None = True
     context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    materialize_trace = False
+    persist_trace = False
     max_turns = 15
     timeout_seconds = 120
     classes: dict[str, str] | None = None
@@ -524,11 +540,18 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
             if prop.name == "kind":
-                kind = cast(TraitKind, prop.value)
+                # Pass value through directly; the field_validator on
+                # AgenticRubricTrait handles both string literals and
+                # {"type": "template", "schema": ...} dicts.
+                kind = prop.value
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
             elif prop.name == "context_mode":
                 context_mode = cast(Literal["workspace_only", "trace_and_workspace", "trace_only"], prop.value)
+            elif prop.name == "materialize_trace":
+                materialize_trace = prop.value
+            elif prop.name == "persist_trace":
+                persist_trace = prop.value
             elif prop.name == "max_turns":
                 max_turns = prop.value
             elif prop.name == "timeout_seconds":
@@ -552,6 +575,8 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
         kind=kind,
         higher_is_better=higher_is_better,
         context_mode=context_mode,
+        materialize_trace=materialize_trace,
+        persist_trace=persist_trace,
         max_turns=max_turns,
         timeout_seconds=timeout_seconds,
         min_score=int(rating.worstRating),

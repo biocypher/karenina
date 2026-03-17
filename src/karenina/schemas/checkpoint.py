@@ -160,6 +160,58 @@ class SchemaOrgDataFeed(BaseModel):
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
 
+# Schema.org Scenario models for multi-turn benchmark persistence
+class SchemaOrgScenarioNode(BaseModel):
+    """Schema.org node within a scenario, wrapping a Question."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: Literal["karenina:ScenarioNode"] = Field(alias="@type", default="karenina:ScenarioNode")
+    nodeId: str
+    question: SchemaOrgQuestion
+    modelOverride: dict[str, Any] | None = None
+    toolFilter: dict[str, Any] | None = None
+    stateUpdateSource: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SchemaOrgScenarioEdge(BaseModel):
+    """Edge between scenario nodes with optional condition."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    source: str
+    target: str
+    condition: dict[str, Any] | list[dict[str, Any]] | None = None
+    conditionSource: str | None = None
+
+
+class SchemaOrgScenarioOutcome(BaseModel):
+    """Outcome criterion for scenario evaluation."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: str = ""
+    check: dict[str, Any] | None = None
+    evaluateSource: str | None = None
+
+
+class SchemaOrgScenario(BaseModel):
+    """Schema.org Scenario container stored in DataFeed.hasPart."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: Literal["karenina:Scenario"] = Field(alias="@type", default="karenina:Scenario")
+    name: str
+    description: str = ""
+    entryNode: str
+    nodes: dict[str, SchemaOrgScenarioNode]
+    edges: list[SchemaOrgScenarioEdge]
+    outcomeCriteria: list[SchemaOrgScenarioOutcome] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 # Main JSON-LD checkpoint format
 class JsonLdContext(BaseModel):
     """JSON-LD context definition."""
@@ -181,6 +233,7 @@ class JsonLdCheckpoint(BaseModel):
     dateModified: str
     rating: list[SchemaOrgRating] | None = None  # Global rubric
     dataFeedElement: list[SchemaOrgDataFeedItem]  # Questions
+    hasPart: list[SchemaOrgScenario] | None = None  # Scenarios
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -196,5 +249,6 @@ SCHEMA_ORG_CONTEXT = {
     "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
     "rating": {"@id": "contentRating", "@container": "@set"},
     "additionalProperty": {"@id": "additionalProperty", "@container": "@set"},
+    "hasPart": {"@id": "hasPart", "@container": "@set"},
     "keywords": {"@id": "keywords", "@container": "@set"},
 }

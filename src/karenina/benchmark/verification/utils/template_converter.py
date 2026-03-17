@@ -17,9 +17,10 @@ from typing import Any, Literal
 from karenina.benchmark.verification.utils.class_discovery import find_answer_class
 from karenina.benchmark.verification.utils.template_validation import _build_exec_namespace
 from karenina.schemas.entities import BaseAnswer
-from karenina.schemas.entities.primitives import TracePrimitive, _reconstruct_primitive
 from karenina.schemas.entities.template_spec import TemplateFieldSpec, TemplateSpec
 from karenina.schemas.entities.verified_field import VerificationMeta
+from karenina.schemas.primitives import TracePrimitive
+from karenina.schemas.primitives.registry import _reconstruct_primitive
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,7 @@ def validate_spec(spec: TemplateSpec) -> list[str]:
     """
     from pydantic import ValidationError
 
-    from karenina.schemas.entities.primitives import _PRIMITIVE_REGISTRY
+    from karenina.schemas.primitives.registry import _PRIMITIVE_REGISTRY
 
     valid_field_types = {"bool", "str", "int", "float", "list_str", "literal", "date"}
 

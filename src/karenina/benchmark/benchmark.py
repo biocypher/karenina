@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
 from ..schemas.entities.rubric import AgenticRubricTrait
 from ..schemas.results import VerificationResultSet
+from ..schemas.scenario.definition import ScenarioDefinition
 from ..schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
@@ -78,6 +79,7 @@ class Benchmark:
         """
         self._base = BenchmarkBase(name, description, version, creator)
         self._workspace_root = workspace_root
+        self._scenarios: dict[str, ScenarioDefinition] = {}
         self._metadata_manager = MetadataManager(self._base)
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
@@ -88,6 +90,8 @@ class Benchmark:
 
     def _init_managers(self) -> None:
         """Initialize all managers from self._base (used by load/clone)."""
+        if not hasattr(self, "_scenarios"):
+            self._scenarios = {}
         self._metadata_manager = MetadataManager(self._base)
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
@@ -95,6 +99,26 @@ class Benchmark:
         self._results_manager = ResultsManager(self._base)
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
         self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
+        self._rebuild_scenarios()
+
+    def _rebuild_scenarios(self) -> None:
+        """Rebuild _scenarios cache from checkpoint hasPart data."""
+        from ..scenario.checkpoint import schema_org_to_scenario
+
+        has_part = self._base._checkpoint.hasPart
+        if not has_part:
+            return
+
+        # Validate homogeneity: cannot have both questions and scenarios
+        if self._base._questions_cache:
+            raise ValueError(
+                "Checkpoint contains both questions and scenarios; this is not supported. "
+                "A benchmark must contain either standalone questions or scenarios, not both."
+            )
+
+        for schema_org in has_part:
+            defn = schema_org_to_scenario(schema_org)
+            self._scenarios[defn.name] = defn
 
     @property
     def workspace_root(self) -> Path | None:
@@ -173,7 +197,16 @@ class Benchmark:
         few_shot_examples: list[dict[str, str]] | None = None,
         answer_notes: str | None = None,
     ) -> str:
-        """Add a question to the benchmark."""
+        """Add a question to the benchmark.
+
+        Raises:
+            ValueError: If scenarios already exist (homogeneous enforcement).
+        """
+        if self._scenarios:
+            raise ValueError(
+                "Cannot add standalone questions to a scenario benchmark. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
         return self._question_manager.add_question(
             question,
             raw_answer,
@@ -332,6 +365,114 @@ class Benchmark:
     def count_by_field(self, field_path: str, questions: list[dict[str, Any]] | None = None) -> dict[Any, int]:
         """Count questions grouped by a field value using dot notation."""
         return self._question_manager.count_by_field(field_path, questions)
+
+    # ── Scenario management ─────────────────────────────────────────────
+
+    @property
+    def is_scenario_benchmark(self) -> bool:
+        """True if this benchmark contains scenarios instead of standalone questions."""
+        return len(self._scenarios) > 0
+
+    @property
+    def scenario_count(self) -> int:
+        """Return the number of scenarios in the benchmark."""
+        return len(self._scenarios)
+
+    def add_scenario(self, scenario: "ScenarioDefinition | Any") -> None:
+        """Add a scenario to the benchmark.
+
+        Accepts either a ScenarioDefinition (frozen) or a Scenario builder
+        (which will be validated and frozen automatically).
+
+        Args:
+            scenario: A ScenarioDefinition or a Scenario builder instance.
+
+        Raises:
+            ValueError: If standalone questions already exist (homogeneous enforcement),
+                or if a scenario with the same name already exists.
+        """
+        if self._base._questions_cache:
+            raise ValueError(
+                "Cannot add scenarios to a benchmark that already contains standalone questions. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
+
+        # Accept Scenario builder: call validate() to get a ScenarioDefinition
+        if not isinstance(scenario, ScenarioDefinition):
+            scenario = scenario.validate()
+
+        if scenario.name in self._scenarios:
+            raise ValueError(f"Scenario '{scenario.name}' already exists")
+
+        self._scenarios[scenario.name] = scenario
+
+        # Write to checkpoint (checkpoint is source of truth)
+        from ..scenario.checkpoint import scenario_to_schema_org
+        from ..schemas.checkpoint import SchemaOrgPropertyValue
+
+        schema_org = scenario_to_schema_org(scenario)
+        if self._base._checkpoint.hasPart is None:
+            self._base._checkpoint.hasPart = []
+        self._base._checkpoint.hasPart.append(schema_org)
+
+        # Set benchmark_type flag (once)
+        props = self._base._checkpoint.additionalProperty or []
+        if not any(p.name == "benchmark_type" for p in props):
+            if self._base._checkpoint.additionalProperty is None:
+                self._base._checkpoint.additionalProperty = []
+            self._base._checkpoint.additionalProperty.append(
+                SchemaOrgPropertyValue(name="benchmark_type", value="scenario")
+            )
+
+    def get_scenarios(self) -> list[ScenarioDefinition]:
+        """Get all scenario definitions.
+
+        Returns:
+            List of ScenarioDefinition instances.
+        """
+        return list(self._scenarios.values())
+
+    def get_scenario(self, name: str) -> ScenarioDefinition:
+        """Get a scenario by name.
+
+        Args:
+            name: The scenario name.
+
+        Returns:
+            The ScenarioDefinition.
+
+        Raises:
+            KeyError: If no scenario with that name exists.
+        """
+        try:
+            return self._scenarios[name]
+        except KeyError:
+            raise KeyError(f"Scenario '{name}' not found") from None
+
+    def remove_scenario(self, name: str) -> None:
+        """Remove a scenario by name.
+
+        Args:
+            name: The scenario name.
+
+        Raises:
+            KeyError: If no scenario with that name exists.
+        """
+        try:
+            del self._scenarios[name]
+        except KeyError:
+            raise KeyError(f"Scenario '{name}' not found") from None
+
+        # Remove from checkpoint
+        if self._base._checkpoint.hasPart:
+            self._base._checkpoint.hasPart = [s for s in self._base._checkpoint.hasPart if s.name != name]
+            if not self._base._checkpoint.hasPart:
+                self._base._checkpoint.hasPart = None
+                # Clear benchmark_type flag when no scenarios remain
+                if self._base._checkpoint.additionalProperty:
+                    self._base._checkpoint.additionalProperty = [
+                        p for p in self._base._checkpoint.additionalProperty if p.name != "benchmark_type"
+                    ]
 
     # ── Template management ──────────────────────────────────────────────
 
@@ -536,7 +677,19 @@ class Benchmark:
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> VerificationResultSet:
-        """Run verification on the benchmark using existing execution system."""
+        """Run verification on the benchmark using existing execution system.
+
+        For scenario benchmarks, dispatches to ``_run_scenario_verification``
+        which iterates over the scenario x model cross-product.
+        For standalone question benchmarks, delegates to VerificationManager.
+        """
+        if self.is_scenario_benchmark:
+            return self._run_scenario_verification(
+                config=config,
+                run_name=run_name,
+                async_enabled=async_enabled,
+                progress_callback=progress_callback,
+            )
         return self._verification_manager.run_verification(
             config,
             question_ids,
@@ -545,6 +698,131 @@ class Benchmark:
             progress_callback,
             workspace_root=self._workspace_root,
         )
+
+    def _run_scenario_verification(
+        self,
+        config: VerificationConfig,
+        run_name: str | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> VerificationResultSet:
+        """Run verification for scenario benchmarks.
+
+        Creates a ScenarioManager and iterates over the cross-product of
+        scenarios, answering models, and parsing models. When ``async_enabled``
+        is True and there are multiple task combinations, uses
+        ``asyncio.gather`` with ``manager.arun()`` for parallel execution.
+
+        Args:
+            config: Verification configuration.
+            run_name: Optional run name for tracking.
+            async_enabled: If True, run combinations in parallel via asyncio.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            VerificationResultSet containing all per-turn results.
+        """
+        from ..scenario.manager import ScenarioManager
+
+        manager = ScenarioManager()
+        global_rubric = self._rubric_manager.get_global_rubric()
+        all_results: list[VerificationResult] = []
+
+        # Build the list of (scenario, answering_model, parsing_model) combos
+        combos = [
+            (scenario_def, ans_model, parse_model)
+            for scenario_def in self._scenarios.values()
+            for ans_model in config.answering_models
+            for parse_model in config.parsing_models
+        ]
+
+        if async_enabled and len(combos) > 1:
+            all_results = self._run_scenario_parallel(
+                manager=manager,
+                combos=combos,
+                config=config,
+                run_name=run_name,
+                global_rubric=global_rubric,
+                progress_callback=progress_callback,
+            )
+        else:
+            for scenario_def, ans_model, parse_model in combos:
+                exec_result = manager.run(
+                    scenario=scenario_def,
+                    config=config,
+                    base_answering_model=ans_model,
+                    base_parsing_model=parse_model,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    progress_callback=progress_callback,
+                )
+                all_results.extend(exec_result.turn_results)
+
+        return VerificationResultSet(results=all_results)
+
+    def _run_scenario_parallel(
+        self,
+        manager: Any,
+        combos: list[tuple[Any, Any, Any]],
+        config: VerificationConfig,
+        run_name: str | None,
+        global_rubric: "Rubric | None",
+        progress_callback: Callable[..., None] | None,
+    ) -> list[VerificationResult]:
+        """Run scenario combinations in parallel via asyncio.gather.
+
+        Args:
+            manager: ScenarioManager instance.
+            combos: List of (scenario, answering_model, parsing_model) tuples.
+            config: Verification configuration.
+            run_name: Optional run name.
+            global_rubric: Optional global rubric.
+            progress_callback: Optional progress callback.
+
+        Returns:
+            Flat list of all per-turn VerificationResults.
+        """
+        import asyncio
+
+        async def _gather() -> list[VerificationResult]:
+            coros = [
+                manager.arun(
+                    scenario=scenario_def,
+                    config=config,
+                    base_answering_model=ans_model,
+                    base_parsing_model=parse_model,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    progress_callback=progress_callback,
+                )
+                for scenario_def, ans_model, parse_model in combos
+            ]
+            exec_results = await asyncio.gather(*coros, return_exceptions=True)
+            results: list[VerificationResult] = []
+            for er in exec_results:
+                if isinstance(er, BaseException):
+                    logger.warning(
+                        "Scenario execution raised an exception: %s",
+                        er,
+                    )
+                    continue
+                results.extend(er.turn_results)
+            return results
+
+        # If there is already a running event loop, run in a thread
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _gather())
+                return future.result()
+        else:
+            return asyncio.run(_gather())
 
     # ── Results management ───────────────────────────────────────────────
 
@@ -896,8 +1174,8 @@ class Benchmark:
 
     @property
     def is_empty(self) -> bool:
-        """Check if the benchmark has no questions."""
-        return self._base.is_empty
+        """Check if the benchmark has no questions and no scenarios."""
+        return len(self._base._questions_cache) == 0 and len(self._scenarios) == 0
 
     @property
     def is_complete(self) -> bool:
@@ -919,7 +1197,9 @@ class Benchmark:
         return self.__repr__()
 
     def __len__(self) -> int:
-        """Return the number of questions in the benchmark."""
+        """Return the number of questions or scenarios in the benchmark."""
+        if self._scenarios:
+            return len(self._scenarios)
         return len(self._base)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:

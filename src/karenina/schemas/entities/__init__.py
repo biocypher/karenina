@@ -9,10 +9,7 @@ This module contains the fundamental entities used throughout Karenina:
 - Composition: Strategy nodes for combining field results (AllOf, AnyOf, etc.)
 """
 
-from .answer import BaseAnswer, capture_answer_source
-from .composition import AllOf, AnyOf, AtLeastN, FieldCheck, evaluate_strategy
-from .normalizers import Normalizer, SynonymMap, apply_normalizer, apply_normalizers
-from .primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ContainsAll,
     ContainsAny,
@@ -21,6 +18,7 @@ from .primitives import (
     DateTolerance,
     ExactMatch,
     LiteralMatch,
+    Normalizer,
     NumericExact,
     NumericRange,
     NumericTolerance,
@@ -28,12 +26,18 @@ from .primitives import (
     RegexMatch,
     SemanticMatch,
     SetContainment,
+    SynonymMap,
     TraceContains,
     TraceLength,
     TracePrimitive,
     TraceRegex,
     VerificationPrimitive,
+    apply_normalizer,
+    apply_normalizers,
 )
+
+from .answer import BaseAnswer, capture_answer_source
+from .composition import AllOf, AnyOf, AtLeastN, FieldCheck, evaluate_strategy
 from .question import Question, QuestionRegistryEntry
 from .rubric import (
     AgenticRubricTrait,

@@ -2,8 +2,7 @@
 
 import pytest
 
-from karenina.schemas.entities.normalizers import SynonymMap
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ContainsAll,
     ContainsAny,
@@ -18,6 +17,7 @@ from karenina.schemas.entities.primitives import (
     OrderedMatch,
     RegexMatch,
     SetContainment,
+    SynonymMap,
     TraceContains,
     TraceLength,
     TraceRegex,

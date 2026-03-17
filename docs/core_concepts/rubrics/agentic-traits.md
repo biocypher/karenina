@@ -133,8 +133,8 @@ Question + Response Trace + Workspace Path
 |-------|------|----------|---------|-------------|
 | `name` | `str` | Yes | | Human-readable identifier (must be unique within the rubric) |
 | `description` | `str` | Yes | | Evaluation instructions for the agent. This is the primary channel for telling the agent what to investigate and what counts as evidence |
-| `kind` | `"boolean"` / `"score"` / `"literal"` | Yes | | Shape of the result |
-| `higher_is_better` | `bool` | Yes | | Whether higher values indicate better performance |
+| `kind` | `"boolean"` / `"score"` / `"literal"` / `type[BaseModel]` | Yes | | Shape of the result. String literals produce scalar scores; a `BaseModel` subclass (template kind) produces structured multi-field findings (see Section 5.4) |
+| `higher_is_better` | `bool \| None` | Yes | | Whether higher values indicate better performance. Must be `None` for template kind, because structured results have no single direction |
 | `min_score` | `int \| None` | No | `1` | Lower bound for score traits. Auto-derived for literal |
 | `max_score` | `int \| None` | No | `5` | Upper bound for score traits. Auto-derived for literal |
 | `classes` | `dict[str, str] \| None` | Literal only | `None` | Class name to description mapping. Required when `kind="literal"` |
@@ -146,6 +146,8 @@ Question + Response Trace + Workspace Path
 | `context_mode` | `"workspace_only"` / `"trace_and_workspace"` / `"trace_only"` | `"trace_and_workspace"` | What context the agent receives (see Section 4.1) |
 | `max_turns` | `int` | `15` | Maximum agent think-act cycles before the investigation stops |
 | `timeout_seconds` | `int` | `120` | Wall-clock timeout for the investigation step |
+| `materialize_trace` | `bool` | `False` | Write the answering agent trace to a file in the workspace instead of inlining it in the investigation prompt. The investigation agent receives the file path and can use grep/search tools on it. Requires `context_mode` that includes the trace (`"trace_only"` or `"trace_and_workspace"`). See Section 5.5 |
+| `persist_trace` | `bool` | `False` | When `True`, the materialized trace file is kept after evaluation. When `False` (default), cleaned up after evaluation completes |
 | `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. The model's interface must have a registered `agent_factory` |
 
 ## 4. How It Works
@@ -268,7 +270,73 @@ print(f"Trait: {test_quality.name}")
 print(f"Score range: {test_quality.min_score}-{test_quality.max_score}")
 ```
 
-### 5.4 Reading Results
+### 5.4 Template Kind: Agentic Evaluation with Structured Output
+
+The scalar kinds (boolean, score, literal) force each trait to produce a single value. Template kind removes that constraint: you pass a Pydantic `BaseModel` subclass as `kind`, and the investigation agent populates the entire schema on the fly. The result is a structured, multi-field evaluation output whose shape you define.
+
+This is the same investigate-then-extract pattern as scalar kinds, but the extraction step parses the investigation trace into your Pydantic class rather than into a single boolean, integer, or class index. You get the full power of agentic evaluation (tool use, multi-step reasoning, workspace access) combined with the expressiveness of a Pydantic template.
+
+The potential is broad: any evaluation question that naturally produces multiple related findings can be captured in a single trait instead of being split across several scalar traits or lost to free-text summaries. Compliance audits that need to flag several criteria at once, code reviews that track multiple quality dimensions, trace analyses that count and categorize patterns: all become a single trait with a schema that matches the evaluation's natural shape.
+
+```python
+from pydantic import BaseModel, Field
+from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+
+class CodeQualityFindings(BaseModel):
+    """The agent investigates the workspace and fills this in."""
+
+    has_type_hints: bool = Field(
+        description="True if the code uses type annotations on function signatures."
+    )
+    test_count: int = Field(
+        description="Number of test functions found in test files."
+    )
+    external_dependencies: list[str] = Field(
+        description="Third-party packages imported by the code."
+    )
+
+
+trait = AgenticRubricTrait(
+    name="code_quality",
+    description=(
+        "Examine the Python files in the workspace. Check whether functions "
+        "have type annotations. Count the test functions. List every "
+        "third-party package that is imported."
+    ),
+    kind=CodeQualityFindings,
+    higher_is_better=None,  # required: no single direction for multi-field output
+    context_mode="trace_and_workspace",
+)
+
+print(f"Trait: {trait.name}")
+print(f"Template kind: {trait.is_template_kind}")
+print(f"Fields: {list(CodeQualityFindings.model_fields.keys())}")
+```
+
+Because the output has multiple fields with potentially different meanings, `higher_is_better` is set to `None`. Results are stored as flat dot-notation keys in `agentic_trait_scores` (`code_quality.has_type_hints`, `code_quality.test_count`, `code_quality.external_dependencies`), making them easy to access in DataFrames and downstream analysis.
+
+### 5.5 Trace Materialization
+
+Agent traces from multi-turn agentic workflows can be very large. Rather than embedding the entire trace in the investigation prompt, `materialize_trace=True` writes it to a file and gives the investigation agent the file path. The agent can then use file tools (grep, search, read) to examine the trace selectively, which is both more efficient and more effective for targeted analysis.
+
+Set `persist_trace=True` to keep the file after evaluation for inspection or debugging; by default it is cleaned up.
+
+```python
+materialized = AgenticRubricTrait(
+    name="trace_review",
+    description="Review the agent trace for tool call patterns.",
+    kind="boolean",
+    higher_is_better=True,
+    context_mode="trace_only",
+    materialize_trace=True,
+    persist_trace=True,  # keep the file for inspection after evaluation
+)
+```
+
+Trace materialization requires a context mode that includes the trace (`"trace_only"` or `"trace_and_workspace"`). It pairs naturally with template kind: the investigation agent greps a large trace for specific patterns, and the structured Pydantic output captures exactly the findings you care about.
+
+### 5.6 Reading Results
 
 After verification, agentic trait scores and investigation traces are stored in `VerificationResult.rubric`. The following cells use the `_mock_result` from the hidden setup cell.
 
@@ -299,7 +367,7 @@ if found:
     print(f"Value: {value}, Type: {trait_type}")
 ```
 
-### 5.5 Score Validation
+### 5.7 Score Validation
 
 Like `LLMRubricTrait`, agentic traits provide a `validate_score` method that checks whether a given value is valid for the trait's kind and range.
 

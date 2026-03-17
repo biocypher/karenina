@@ -224,4 +224,4 @@ karenina verify checkpoint.jsonld --preset my-config.json --async-workers 8
 - [Presets](presets.md) — Creating, managing, and sharing configuration presets
 - [Workspace Initialization](../../getting-started/workspace-init.md) — Setting up a new karenina project with `karenina init`
 - [Core Concepts](../../core_concepts/index.md) — Understanding templates, rubrics, and evaluation modes
-- [Running Verification](../../running-verification/index.md) — Putting configuration into practice
+- [Running Verification](../running-verification/index.md) — Putting configuration into practice

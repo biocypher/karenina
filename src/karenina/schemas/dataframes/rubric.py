@@ -161,8 +161,8 @@ class RubricDataFrameBuilder:
 
             # Process agentic traits
             if trait_type in ("agentic", "all") and result.rubric.agentic_trait_scores:
-                for trait_name, trait_score in result.rubric.agentic_trait_scores.items():
-                    rows.append(self._create_agentic_trait_row(result, trait_name, trait_score))
+                for trait_name, agentic_score in result.rubric.agentic_trait_scores.items():
+                    rows.append(self._create_agentic_trait_row(result, trait_name, agentic_score))
 
         df = pd.DataFrame(rows)
 
@@ -402,7 +402,7 @@ class RubricDataFrameBuilder:
         self,
         result: VerificationResult,
         trait_name: str,
-        trait_score: int | bool,
+        trait_score: int | bool | float | str | list[Any] | None,
     ) -> dict[str, Any]:
         """Create DataFrame row for agentic trait.
 

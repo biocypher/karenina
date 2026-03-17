@@ -9,6 +9,9 @@ This mirrors the Stage 7b (AgenticParseTemplate) pattern.
 
 import logging
 from pathlib import Path
+from typing import Any, cast
+
+from pydantic import BaseModel
 
 from karenina.adapters import get_agent, get_parser
 from karenina.ports import AgentConfig, Message
@@ -40,7 +43,8 @@ class AgenticTraitEvaluator:
         question_text: str,
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
-    ) -> tuple[int | bool | None, str | None]:
+        trace_file_path: Path | None = None,
+    ) -> tuple[int | bool | dict[str, Any] | None, str | None]:
         """Evaluate a single agentic rubric trait.
 
         Args:
@@ -48,10 +52,13 @@ class AgenticTraitEvaluator:
             question_text: The original question text.
             raw_llm_response: The answering model's raw response (may be None).
             workspace_path: Path to the workspace directory (may be None).
+            trace_file_path: If provided and trait.materialize_trace is True,
+                the investigation prompt references this file path instead of
+                inlining the full trace.
 
         Returns:
             Tuple of (score, investigation_trace).
-            score is None if evaluation failed.
+            score is None if evaluation failed; a dict for template kind traits.
             investigation_trace is None if the agent failed before producing output.
         """
         # Step 1: Investigation
@@ -61,6 +68,7 @@ class AgenticTraitEvaluator:
                 question_text,
                 raw_llm_response,
                 workspace_path,
+                trace_file_path=trace_file_path,
             )
         except Exception:
             logger.warning(
@@ -89,8 +97,17 @@ class AgenticTraitEvaluator:
         question_text: str,
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
+        trace_file_path: Path | None = None,
     ) -> str:
         """Launch agent to investigate the response/workspace.
+
+        Args:
+            trait: The agentic rubric trait to evaluate.
+            question_text: The original question text.
+            raw_llm_response: The answering model's raw response (may be None).
+            workspace_path: Path to the workspace directory (may be None).
+            trace_file_path: If provided and trait.materialize_trace is True,
+                the prompt references this file instead of inlining the trace.
 
         Returns:
             Raw investigation trace string.
@@ -110,7 +127,14 @@ class AgenticTraitEvaluator:
         user_parts: list[str] = [f"Question: {question_text}"]
 
         if trait.context_mode in ("trace_and_workspace", "trace_only") and raw_llm_response:
-            user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_llm_response}\n--- END TRACE ---")
+            if trait.materialize_trace and trace_file_path:
+                trace_content = (
+                    f"The full agent trace is saved to: {trace_file_path}\n"
+                    "Use file tools (grep, search, read) to examine it."
+                )
+            else:
+                trace_content = raw_llm_response
+            user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{trace_content}\n--- END TRACE ---")
 
         if workspace_path and trait.context_mode != "trace_only":
             user_parts.append(f"\nWorkspace directory: {workspace_path}")
@@ -139,7 +163,7 @@ class AgenticTraitEvaluator:
         self,
         trait: AgenticRubricTrait,
         investigation_trace: str,
-    ) -> int | bool:
+    ) -> int | bool | dict[str, Any]:
         """Extract score from investigation trace.
 
         This method is public because the shared strategy in
@@ -147,8 +171,12 @@ class AgenticTraitEvaluator:
         (shared investigation, per-trait extraction).
 
         Returns:
-            The extracted score (bool for boolean traits, int for score/literal).
+            The extracted score (bool for boolean traits, int for score/literal),
+            or a dict for template kind traits.
         """
+        if trait.is_template_kind:
+            return self._extract_template(trait, investigation_trace)
+
         parser = get_parser(self._model_config)
         messages = self._build_extraction_messages(trait, investigation_trace)
 
@@ -171,6 +199,33 @@ class AgenticTraitEvaluator:
             )
 
         raise ValueError(f"Unknown trait kind: {trait.kind}")
+
+    def _extract_template(
+        self,
+        trait: AgenticRubricTrait,
+        investigation_trace: str,
+    ) -> dict[str, Any]:
+        """Extract structured findings into the user's Pydantic class.
+
+        Args:
+            trait: The agentic rubric trait with a template kind.
+            investigation_trace: Raw text from the agent investigation.
+
+        Returns:
+            Dict of extracted field values (model_dump of the parsed model).
+        """
+        parser = get_parser(self._model_config)
+        messages = [
+            Message.system(
+                "You are extracting structured findings from an investigation. "
+                "Based on the investigation output below, fill in every field "
+                "of the requested format with evidence from the investigation."
+            ),
+            Message.user(investigation_trace),
+        ]
+        kind_class = cast(type[BaseModel], trait.kind)
+        parse_result = parser.parse_to_pydantic(messages, kind_class)
+        return parse_result.parsed.model_dump()
 
     def _build_extraction_messages(
         self,

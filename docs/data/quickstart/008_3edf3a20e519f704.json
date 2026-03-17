@@ -1,0 +1,64 @@
+{
+  "sequence": 8,
+  "prompt_hash": "3edf3a20e519f704",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are an expert evaluation designer extracting ground-truth attributes from a question and its ideal answer. Build a Pydantic-friendly schema capturing what a judge model should read from candidate responses.\n\nCRITICAL: Use the MINIMUM number of attributes necessary. One attribute per independent piece of information.\n\nBOOLEAN-FIRST PRINCIPLE:\nString fields are fragile: they require exact normalization to match, and minor formatting\ndifferences (capitalization, hyphens, abbreviations) cause false negatives. Boolean fields\nare robust: the judge answers true/false about whether a concept is present, which is\nreliable across judge models. ALWAYS prefer `bool` over `str` unless answer_notes\nexplicitly request string extraction.\n\nType selection rules (in order of preference):\n1. `bool` for factual claims, concept presence, or identity checks (STRONGLY PREFERRED).\n   Convert \"What is X?\" into \"Does the response identify X as Y?\" with a bool.\n2. `Literal['option1', 'option2', ...]` for categorical answers with few fixed options.\n3. `int` or `float` for numeric answers.\n4. `list[str]` with SetContainment for multiple expected items (e.g., gene lists).\n5. `date` for date values.\n6. `str` ONLY when answer_notes explicitly request string extraction. Do not use `str`\n   by default.\n\nFORBIDDEN:\n- Never use `Dict[str, str]` types.\n- Never create redundant attributes that check the same information twice.\n- Never create a \"mentions_X\" boolean AND a Literal/value check for the same answer.\n- Never use `str` type unless answer_notes explicitly ask for it.\n\nExamples of CORRECT minimal schemas:\n- Q: \"What is the MESH ID for X?\" A: \"D010300\" → ONE attribute: `mesh_id: Literal['D010300']`\n- Q: \"Is X a symptom of Y?\" A: \"Yes\" → ONE attribute: `is_symptom: bool`\n- Q: \"What genes are involved?\" A: \"BRCA1, TP53\" → ONE attribute: `genes: list[str]` with ground_truth [\"BRCA1\", \"TP53\"]\n- Q: \"What is the primary target?\" A: \"BCL2\" → ONE attribute: `identifies_bcl2_as_target: bool` with ground_truth True\n\nExample JSON output:\n{{\n  \"attributes\": [\n    {{\n      \"name\": \"identifies_correct_mesh_id\",\n      \"type\": \"Literal['D010300']\",\n      \"ground_truth\": \"D010300\"\n    }}\n  ]\n}}"
+      },
+      {
+        "type": "human",
+        "content": "You receive an evaluation sample consisting of a question and its reference answer:\n\nQuestion:\nHow many protein subunits does hemoglobin A have?\n\nReference Answer:\n4\n\nField Design Plan (use as guidance):\n# Field Design Analysis for Hemoglobin A Protein Subunits Question\n\n## Reference Answer Breakdown\nThe reference answer is straightforward: a single numeric value of 4, representing the quaternary structure of hemoglobin A (composed of 2 alpha and 2 beta globin chains).\n\n## Field Design Reasoning\n\n**Primary Field: Numeric Count**\n- **Type**: `int`\n- **Rationale**: The question asks \"how many,\" which is explicitly requesting a numeric quantity. The reference answer is a single integer (4). This is unambiguous and objective.\n- **Verification approach**: Direct numeric comparison. The judge should extract any numeric value the response provides as the answer to \"how many subunits\" and compare it to 4.\n\n**No secondary fields needed** because:\n1. The question has a single, well-defined factual answer\n2. There are no categorical choices or multiple independent claims to verify\n3. The answer doesn't require date, list, or string matching\n4. No normalization concerns exist—4 is 4 whether written as \"4\", \"four\", or \"4 subunits\"\n\n## Potential Response Variations to Handle\n- Responses might say \"4 subunits,\" \"four subunits,\" \"4 protein chains,\" etc.\n- Some might elaborate with additional correct information (e.g., \"2 alpha and 2 beta subunits\")\n- Some might provide incorrect numbers (3, 5, etc.)\n\nThe `int` field with direct numeric comparison handles all these cases robustly. The judge should extract the numeric answer provided and verify it equals 4, regardless of surrounding text or phrasing.\n\nIdentify the minimal set of structured attributes that a judge must extract from a candidate response to verify correctness. Construct a JSON object with a single key `attributes` containing a list of attribute definitions. Each definition must include `name`, `type`, and `ground_truth` fields, where `ground_truth` contains the expected correct value derived from the reference answer.\n\nWhen selecting types, follow these guidelines:\n- FORBIDDEN: Never use `Dict[str, str]` types.\n- FORBIDDEN: Never use `str` type unless answer_notes explicitly request string extraction.\n- Use `bool` as the DEFAULT type for factual claims and concept identification. Convert factual answers into boolean checks (e.g., \"BCL2\" becomes \"identifies_bcl2_as_target: bool = True\").\n- Use `Literal` types when the reference answer suggests a categorical classification with few fixed options.\n- Use `list[str]` for multiple expected items that form a set.\n- When the reference answer contains compound terms or phrases, treat them as single semantic units and create one boolean attribute for the complete concept.\n- If answer_notes are provided and explicitly request string fields or specific extraction behavior, follow those instructions and override the boolean-first default.\n\nReturn only valid JSON."
+      }
+    ]
+  },
+  "response": {
+    "content": [
+      {
+        "id": "toolu_01QeFdq1Gfzc39JpnANib2v7",
+        "input": {
+          "attributes": [
+            {
+              "name": "hemoglobin_a_subunit_count",
+              "type": "int",
+              "ground_truth": 4
+            }
+          ]
+        },
+        "name": "GroundTruthSpec",
+        "type": "tool_use",
+        "caller": {
+          "type": "direct"
+        }
+      }
+    ],
+    "id": "lc_run--d4e4229b-5377-47b5-bfaa-03df571a0dc9-0",
+    "tool_calls": [
+      {
+        "name": "GroundTruthSpec",
+        "args": {
+          "attributes": [
+            {
+              "name": "hemoglobin_a_subunit_count",
+              "type": "int",
+              "ground_truth": 4
+            }
+          ]
+        },
+        "id": "toolu_01QeFdq1Gfzc39JpnANib2v7",
+        "type": "tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "tool_use"
+    }
+  }
+}

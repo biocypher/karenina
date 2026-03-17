@@ -8,7 +8,7 @@ Tests cover:
 """
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from karenina.schemas.entities import (
     AgenticRubricTrait,
@@ -20,6 +20,7 @@ from karenina.schemas.entities import (
     RubricEvaluation,
     merge_rubrics,
 )
+from karenina.schemas.verification.result_components import VerificationResultRubric
 
 # =============================================================================
 # MetricRubricTrait Tests
@@ -840,3 +841,196 @@ class TestRubricAgenticTraitSupport:
         assert rubric.validate_evaluation({"depth": 3}) is True
         assert rubric.validate_evaluation({"depth": 0}) is False  # below min
         assert rubric.validate_evaluation({"depth": 6}) is False  # above max
+
+
+# =============================================================================
+# AgenticRubricTrait Template Kind Tests
+# =============================================================================
+
+
+class _SampleFindings(BaseModel):
+    count: int = Field(description="A count")
+    items: list[str] = Field(description="Items found")
+    found: bool = Field(description="Whether found")
+
+
+@pytest.mark.unit
+class TestAgenticRubricTraitTemplateKind:
+    def test_accepts_pydantic_class_as_kind(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.is_template_kind is True
+        assert trait.kind is _SampleFindings
+
+    def test_forces_higher_is_better_none(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.higher_is_better is None
+
+    def test_rejects_higher_is_better_true_for_template(self):
+        with pytest.raises(ValidationError, match="must be None"):
+            AgenticRubricTrait(
+                name="test",
+                description="Check stuff.",
+                kind=_SampleFindings,
+                higher_is_better=True,
+            )
+
+    def test_validate_score_noop_for_template(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.validate_score(42) is True
+
+    def test_is_template_kind_false_for_string(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind="boolean",
+        )
+        assert trait.is_template_kind is False
+
+    def test_model_dump_serializes_kind_as_schema(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        d = trait.model_dump()
+        assert d["kind"]["type"] == "template"
+        assert "schema" in d["kind"]
+        assert d["kind"]["schema"]["title"] == "_SampleFindings"
+
+    def test_model_validate_roundtrip(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        d = trait.model_dump()
+        rebuilt = AgenticRubricTrait.model_validate(d)
+        assert rebuilt.is_template_kind is True
+        assert rebuilt.higher_is_better is None
+        assert set(rebuilt.kind.model_fields.keys()) == {"count", "items", "found"}
+
+    def test_existing_string_kinds_unchanged(self):
+        """Ensure backward compatibility."""
+        for kind in ("boolean", "score", "literal"):
+            kwargs = {"name": "t", "description": "d", "kind": kind}
+            if kind == "literal":
+                kwargs["classes"] = {"a": "A", "b": "B"}
+            trait = AgenticRubricTrait(**kwargs)
+            assert trait.is_template_kind is False
+            d = trait.model_dump()
+            assert d["kind"] == kind
+
+
+# =============================================================================
+# Trace Materialization Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTraceMaterialization:
+    def test_materialize_trace_defaults_false(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+        )
+        assert trait.materialize_trace is False
+        assert trait.persist_trace is False
+
+    def test_materialize_trace_accepts_true(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_only",
+        )
+        assert trait.materialize_trace is True
+
+    def test_materialize_rejects_workspace_only(self):
+        with pytest.raises(ValidationError, match="workspace_only"):
+            AgenticRubricTrait(
+                name="t",
+                description="d",
+                kind="boolean",
+                materialize_trace=True,
+                context_mode="workspace_only",
+            )
+
+    def test_materialize_with_trace_and_workspace(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+            materialize_trace=True,
+            context_mode="trace_and_workspace",
+        )
+        assert trait.materialize_trace is True
+
+    def test_persist_trace_serializes(self):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="d",
+            kind="boolean",
+            materialize_trace=True,
+            persist_trace=True,
+            context_mode="trace_only",
+        )
+        d = trait.model_dump()
+        assert d["materialize_trace"] is True
+        assert d["persist_trace"] is True
+        rebuilt = AgenticRubricTrait.model_validate(d)
+        assert rebuilt.materialize_trace is True
+        assert rebuilt.persist_trace is True
+
+
+# =============================================================================
+# VerificationResultRubric Widened Type Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestVerificationResultRubricWidenedTypes:
+    def test_accepts_dot_notation_with_list_values(self):
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={
+                "tool_usage.count": 7,
+                "tool_usage.commands": ["pip", "run"],
+                "tool_usage.found": True,
+                "tool_usage.name": "uv",
+                "tool_usage.score": 3.5,
+            },
+        )
+        assert rubric.agentic_trait_scores["tool_usage.commands"] == ["pip", "run"]
+        assert rubric.agentic_trait_scores["tool_usage.score"] == 3.5
+
+    def test_get_all_trait_scores_includes_widened_types(self):
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={
+                "basic": 4,
+                "template.count": 7,
+                "template.items": ["a", "b"],
+            },
+        )
+        all_scores = rubric.get_all_trait_scores()
+        assert all_scores["template.items"] == ["a", "b"]
+        assert all_scores["basic"] == 4

@@ -31,6 +31,10 @@ from .checkpoint import (
     SchemaOrgPropertyValue,
     SchemaOrgQuestion,
     SchemaOrgRating,
+    SchemaOrgScenario,
+    SchemaOrgScenarioEdge,
+    SchemaOrgScenarioNode,
+    SchemaOrgScenarioOutcome,
     SchemaOrgSoftwareSourceCode,
 )
 
@@ -101,6 +105,32 @@ from .results import (
     TemplateResults,
     VerificationResultSet,
     create_default_registry,
+)
+
+# ============================================================================
+# Scenario schema types (from scenario/)
+# ============================================================================
+from .scenario import (
+    END,
+    CountTurns,
+    CrossTurnCheck,
+    EdgeCondition,
+    FirstMatchIndex,
+    ModelOverride,
+    OutcomeCheckNode,
+    OutcomeNode,
+    ResultCheck,
+    ScenarioDefinition,
+    ScenarioEdge,
+    ScenarioExecutionResult,
+    ScenarioNode,
+    ScenarioOutcomeCriterion,
+    ScenarioState,
+    StateCheck,
+    ToolFilter,
+    ToolFilterEntry,
+    TurnCheck,
+    TurnRecord,
 )
 
 # ============================================================================
@@ -217,4 +247,29 @@ __all__ = [
     "SchemaOrgPerson",
     "SchemaOrgCreativeWork",
     "DatasetMetadata",
+    "SchemaOrgScenario",
+    "SchemaOrgScenarioNode",
+    "SchemaOrgScenarioEdge",
+    "SchemaOrgScenarioOutcome",
+    # Scenario schema types
+    "END",
+    "StateCheck",
+    "EdgeCondition",
+    "ModelOverride",
+    "ToolFilterEntry",
+    "ToolFilter",
+    "ScenarioEdge",
+    "ScenarioNode",
+    "ScenarioOutcomeCriterion",
+    "ScenarioDefinition",
+    "ScenarioState",
+    "TurnRecord",
+    "ScenarioExecutionResult",
+    "TurnCheck",
+    "ResultCheck",
+    "CrossTurnCheck",
+    "CountTurns",
+    "FirstMatchIndex",
+    "OutcomeCheckNode",
+    "OutcomeNode",
 ]
