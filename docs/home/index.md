@@ -16,17 +16,15 @@ Its core idea is formalizing ground truth as structured [answer templates](../no
 
 ## Why This Approach
 
-1. **Naturalistic evaluation.** Traditional benchmarks force models into artificial formats (multiple-choice letters, regex-compliant strings) that differ from real-world usage and signal to the model that it is being evaluated. In Karenina, the answering model is never constrained: it produces the same kind of response a real user would receive. A separate [Judge LLM](philosophy.md#the-llm-as-judge-approach) evaluates the natural response after the fact.
+1. **Naturalistic evaluation that measures what you care about.** Traditional benchmarks force models into artificial formats (multiple-choice letters, regex-compliant strings) that differ from real-world usage and signal to the model that it is being evaluated. Public benchmarks also create incentives for providers to optimize for the test rather than for real-world usefulness. In Karenina, the answering model is never constrained: it produces the same kind of response a real user would receive. A separate [Judge LLM](philosophy.md#the-llm-as-judge-approach) evaluates the natural response after the fact. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment.
 
-2. **Portable, self-contained benchmarks.** Each [question](../core_concepts/questions-and-benchmarks/index.md) carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single [portable checkpoint](../core_concepts/questions-and-benchmarks/checkpoints.md) that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.
+2. **Self-contained benchmarks.** Each [question](../core_concepts/questions-and-benchmarks/index.md) carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single [portable checkpoint](../core_concepts/questions-and-benchmarks/checkpoints.md) that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.
 
-3. **Bootstrapped authoring.** LLMs can [auto-generate evaluation code](../notebooks/creating-benchmarks/scaled-authoring.ipynb) from a simple spreadsheet of questions and answers, bootstrapping benchmark creation in minutes. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
+3. **Spreadsheet-to-benchmark in minutes.** LLMs [translate plain-text questions and answers](../notebooks/creating-benchmarks/scaled-authoring.ipynb) into runnable evaluation code, accelerating benchmark creation from hours of manual work to minutes. This shifts human effort from writing boilerplate to curating high-quality evaluation criteria. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
 
 4. **Expressivity.** [Templates](../notebooks/core_concepts/answer-templates.ipynb) combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic). [Scenarios](../core_concepts/scenarios/index.md) extend this expressivity to multi-turn conversations: define branching evaluation graphs where each turn's result determines the next question, then assert compound outcome criteria over the full conversation (e.g., "the model answered correctly on turn 1 and resisted a sycophantic challenge on turn 2").
 
 5. **Agentic evaluation, not just Q&A.** Modern LLM deployments increasingly involve agents that write code, run tests, and produce file artifacts. Karenina evaluates these workflows natively: the answering model operates in a [workspace](../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) with tool access, and an independent [judge agent](../notebooks/core_concepts/agentic-evaluation.ipynb#4-two-step-agentic-judging-stage-7b) inspects the resulting artifacts (files created, tests passed, code compiled) rather than relying on the conversation trace alone. The same template and rubric primitives apply whether the task is a factual question or a multi-step coding challenge.
-
-6. **Benchmarks that measure what you care about.** Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.
 
 ## Documentation Structure
 
@@ -74,14 +72,14 @@ This documentation is organized into four sections, each serving a different rea
 
 | Need | Mode |
 |------|------|
-| Compare LLM performance across consistent criteria | Q/A Benchmark |
+| Compare LLM performance across consistent criteria | [Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md) |
 | Evaluate free-form outputs with structured logic (not string matching) | All modes |
 | Verify factual accuracy *and* assess quality (clarity, safety, format) | All modes |
-| Run hundreds of questions across multiple models automatically | Q/A Benchmark |
-| Share portable evaluation suites that anyone can re-run | Q/A Benchmark |
-| Evaluate coding or data analysis tasks with workspace artifacts | Q/A Benchmark |
-| Score agent workflow outputs after execution | TaskEval |
-| Evaluate multi-step agent traces per phase | TaskEval |
+| Run hundreds of questions across multiple models automatically | [Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md) |
+| Share portable evaluation suites that anyone can re-run | [Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md) |
+| Evaluate coding or data analysis tasks with workspace artifacts | [Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md) |
+| Score agent workflow outputs after execution | [TaskEval](../notebooks/core_concepts/task-eval.ipynb) |
+| Evaluate multi-step agent traces per phase | [TaskEval](../notebooks/core_concepts/task-eval.ipynb) |
 | Test sycophancy resistance across multi-turn conversation paths | [Scenarios](../core_concepts/scenarios/index.md) |
 | Evaluate multi-turn reasoning with branching conditions | [Scenarios](../core_concepts/scenarios/index.md) |
 | Assess error correction behavior across conversation turns | [Scenarios](../core_concepts/scenarios/index.md) |
