@@ -1,0 +1,30 @@
+{
+  "sequence": 16,
+  "prompt_hash": "3418d47edf939957",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You are a knowledgeable assistant. Answer accurately and concisely."
+      },
+      {
+        "type": "human",
+        "content": "What is the approved drug target of Venetoclax?"
+      }
+    ]
+  },
+  "response": {
+    "content": "# Venetoclax Drug Target\n\nVenetoclax's approved drug target is **BCL-2 (B-cell lymphoma 2)**.\n\n## Key Details:\n\n- **Drug Class**: BCL-2 inhibitor (selective antagonist)\n- **Mechanism**: Venetoclax selectively binds to and inhibits BCL-2, an anti-apoptotic protein that prevents programmed cell death in cancer cells\n- **Effect**: By blocking BCL-2, it restores apoptosis (cell death) in cancer cells\n\n## FDA-Approved Indications:\n\n1. **Chronic lymphocytic leukemia (CLL)** - with or without 17p deletion\n2. **Acute myeloid leukemia (AML)** - in elderly patients or those unfit for intensive chemotherapy (in combination with hypomethylating agents)\n3. **Small lymphocytic lymphoma (SLL)**\n\nVenetoclax has been particularly transformative in treating CLL, especially in patients with poor-risk cytogenetics (17p deletion or TP53 mutation).",
+    "id": "lc_run--4178df5c-ee55-4bdb-84a3-b0cc574596b0-0",
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "end_turn"
+    }
+  }
+}

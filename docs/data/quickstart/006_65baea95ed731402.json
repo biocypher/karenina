@@ -1,6 +1,6 @@
 {
   "sequence": 6,
-  "prompt_hash": "3d6c81aa147e306d",
+  "prompt_hash": "65baea95ed731402",
   "model": "claude-haiku-4-5",
   "request": {
     "messages": [
@@ -10,20 +10,20 @@
       },
       {
         "type": "human",
-        "content": "Question:\nWhat is the approved drug target of Venetoclax?\n\nReference Answer:\nBCL2\n\nGround-truth attribute specification:\n{\"attributes\": [{\"name\": \"identifies_bcl2_as_approved_target\", \"type\": \"bool\"}]}\n\nProduce JSON with key `field_descriptions` containing a list of objects. Each object must have `name` (matching an attribute name), `description` (instructional text for the judge), and `extraction_hint` (optional normalization guidance, or null if not needed).\n\nEnsure descriptions communicate type expectations, especially emphasizing when boolean values should be used to flag presence of concepts. For boolean concept checks, focus on semantic meaning rather than exact word matching. Make it explicit that the judge is reading the candidate response to this question.\n\nReturn only valid JSON."
+        "content": "Question:\nWhat is the approved drug target of Venetoclax?\n\nReference Answer:\nBCL2\n\nGround-truth attribute specification:\n{\"attributes\": [{\"name\": \"correctly_identifies_bcl2_as_target\", \"type\": \"bool\"}]}\n\nProduce JSON with key `field_descriptions` containing a list of objects. Each object must have `name` (matching an attribute name), `description` (instructional text for the judge), and `extraction_hint` (optional normalization guidance, or null if not needed).\n\nEnsure descriptions communicate type expectations, especially emphasizing when boolean values should be used to flag presence of concepts. For boolean concept checks, focus on semantic meaning rather than exact word matching. Make it explicit that the judge is reading the candidate response to this question.\n\nReturn only valid JSON."
       }
     ]
   },
   "response": {
     "content": [
       {
-        "id": "toolu_01Muk1LwEZYYMzS9BHDXb7aC",
+        "id": "toolu_01EHQ6atcFsKevrff3VfhwJZ",
         "input": {
           "field_descriptions": [
             {
-              "name": "identifies_bcl2_as_approved_target",
-              "description": "Answer with true if the response identifies BCL2 (or semantically equivalent references such as 'BCL-2', 'B-cell lymphoma 2', or 'Bcl2') as the approved drug target of Venetoclax; otherwise answer false.",
-              "extraction_hint": "Accept BCL2 and common formatting variants (BCL-2, Bcl2, B-cell lymphoma 2) as equivalent; focus on whether the concept is conveyed rather than exact string matching."
+              "name": "correctly_identifies_bcl2_as_target",
+              "description": "Answer with true if the response correctly identifies BCL2 (or semantically equivalent references such as 'BCL-2', 'B-cell lymphoma 2', or 'Bcl2') as the approved drug target of Venetoclax; otherwise answer false.",
+              "extraction_hint": "Accept BCL2 in any capitalization or formatting variant (e.g., BCL-2, bcl2, B-cell lymphoma 2) as correct identification of the target."
             }
           ]
         },
@@ -34,20 +34,20 @@
         }
       }
     ],
-    "id": "lc_run--89e722b6-0c17-437f-80e8-80ede4224e57-0",
+    "id": "lc_run--b4b246cb-32c7-421d-9f67-ad5c2e7bd301-0",
     "tool_calls": [
       {
         "name": "AttributeDescriptions",
         "args": {
           "field_descriptions": [
             {
-              "name": "identifies_bcl2_as_approved_target",
-              "description": "Answer with true if the response identifies BCL2 (or semantically equivalent references such as 'BCL-2', 'B-cell lymphoma 2', or 'Bcl2') as the approved drug target of Venetoclax; otherwise answer false.",
-              "extraction_hint": "Accept BCL2 and common formatting variants (BCL-2, Bcl2, B-cell lymphoma 2) as equivalent; focus on whether the concept is conveyed rather than exact string matching."
+              "name": "correctly_identifies_bcl2_as_target",
+              "description": "Answer with true if the response correctly identifies BCL2 (or semantically equivalent references such as 'BCL-2', 'B-cell lymphoma 2', or 'Bcl2') as the approved drug target of Venetoclax; otherwise answer false.",
+              "extraction_hint": "Accept BCL2 in any capitalization or formatting variant (e.g., BCL-2, bcl2, B-cell lymphoma 2) as correct identification of the target."
             }
           ]
         },
-        "id": "toolu_01Muk1LwEZYYMzS9BHDXb7aC",
+        "id": "toolu_01EHQ6atcFsKevrff3VfhwJZ",
         "type": "tool_call"
       }
     ],

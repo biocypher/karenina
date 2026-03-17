@@ -9,7 +9,7 @@ nav = mkdocs_gen_files.Nav()
 src = Path("src")
 
 # Modules to skip entirely
-SKIP_MODULES = {"__main__", "__pycache__", "_archive"}
+SKIP_MODULES = {"__main__", "__pycache__", "_archive", "workflow"}
 
 # Core API modules get top-level nav entries
 CORE_PACKAGES = {
