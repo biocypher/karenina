@@ -270,62 +270,57 @@ print(f"Trait: {test_quality.name}")
 print(f"Score range: {test_quality.min_score}-{test_quality.max_score}")
 ```
 
-### 5.4 Template Kind: Structured Multi-Field Findings
+### 5.4 Template Kind: Agentic Evaluation with Structured Output
 
-When evaluation needs to extract several related findings rather than a single scalar score, pass a `BaseModel` subclass as `kind`. The investigation agent runs the same way as for scalar kinds (it receives the question, optionally the trace, and optionally a workspace path). The extraction step then parses the investigation trace into the fields of the provided Pydantic class instead of extracting a boolean, integer, or class index.
+The scalar kinds (boolean, score, literal) force each trait to produce a single value. Template kind removes that constraint: you pass a Pydantic `BaseModel` subclass as `kind`, and the investigation agent populates the entire schema on the fly. The result is a structured, multi-field evaluation output whose shape you define.
 
-Template kind is conceptually parallel to [answer templates](../../notebooks/core_concepts/answer-templates.ipynb): both use a Pydantic schema to define the expected structure. The difference is that answer templates define the structure of the answering model's response, while template kind defines the structure of evaluation findings produced by the investigation agent.
+This is the same investigate-then-extract pattern as scalar kinds, but the extraction step parses the investigation trace into your Pydantic class rather than into a single boolean, integer, or class index. You get the full power of agentic evaluation (tool use, multi-step reasoning, workspace access) combined with the expressiveness of a Pydantic template.
+
+The potential is broad: any evaluation question that naturally produces multiple related findings can be captured in a single trait instead of being split across several scalar traits or lost to free-text summaries. Compliance audits that need to flag several criteria at once, code reviews that track multiple quality dimensions, trace analyses that count and categorize patterns: all become a single trait with a schema that matches the evaluation's natural shape.
 
 ```python
 from pydantic import BaseModel, Field
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 
-class ToolUsageFindings(BaseModel):
-    total_tool_calls: int = Field(
-        description="Total number of tool calls made by the agent."
+
+class CodeQualityFindings(BaseModel):
+    """The agent investigates the workspace and fills this in."""
+
+    has_type_hints: bool = Field(
+        description="True if the code uses type annotations on function signatures."
     )
-    uv_subcommands: list[str] = Field(
-        description="Distinct uv subcommands used."
+    test_count: int = Field(
+        description="Number of test functions found in test files."
     )
-    used_pip_directly: bool = Field(
-        description="True if pip was used directly instead of via uv."
+    external_dependencies: list[str] = Field(
+        description="Third-party packages imported by the code."
     )
 
+
 trait = AgenticRubricTrait(
-    name="tool_usage",
+    name="code_quality",
     description=(
-        "Count every tool call in the agent trace. List distinct uv "
-        "subcommands. Determine if pip was used directly."
+        "Examine the Python files in the workspace. Check whether functions "
+        "have type annotations. Count the test functions. List every "
+        "third-party package that is imported."
     ),
-    kind=ToolUsageFindings,
-    higher_is_better=None,
-    context_mode="trace_only",
-    materialize_trace=True,
-    persist_trace=True,
+    kind=CodeQualityFindings,
+    higher_is_better=None,  # required: no single direction for multi-field output
+    context_mode="trace_and_workspace",
 )
 
 print(f"Trait: {trait.name}")
 print(f"Template kind: {trait.is_template_kind}")
-print(f"higher_is_better: {trait.higher_is_better}")
+print(f"Fields: {list(CodeQualityFindings.model_fields.keys())}")
 ```
 
-**Result storage.** Template kind results are stored as dot-notation keys in `agentic_trait_scores`. Each field of the Pydantic class becomes `{trait_name}.{field_name}`:
-
-```json
-{
-  "tool_usage.total_tool_calls": 12,
-  "tool_usage.uv_subcommands": ["pip install", "run", "sync"],
-  "tool_usage.used_pip_directly": false
-}
-```
-
-**`higher_is_better=None`** is required for template kind. Structured results contain multiple fields with potentially different directionalities (e.g., `total_tool_calls` might be neutral while `used_pip_directly` is negative), so a single boolean direction does not apply. Analysis tools and DataFrame builders treat `None` as "no aggregation direction."
-
-**Validation constraints.** The `BaseModel` subclass must have at least one field. Field descriptions are strongly recommended because they guide the extraction parser. Trait names must not contain `.` (dots), because dot-notation storage would be ambiguous.
+Because the output has multiple fields with potentially different meanings, `higher_is_better` is set to `None`. Results are stored as flat dot-notation keys in `agentic_trait_scores` (`code_quality.has_type_hints`, `code_quality.test_count`, `code_quality.external_dependencies`), making them easy to access in DataFrames and downstream analysis.
 
 ### 5.5 Trace Materialization
 
-For agent traces that are too large to inline in the investigation prompt (common with multi-turn agentic workflows), `materialize_trace=True` writes the answering agent trace to a file instead of embedding it in the prompt. The investigation agent receives the file path and uses file tools (grep, search, read) to examine the trace.
+Agent traces from multi-turn agentic workflows can be very large. Rather than embedding the entire trace in the investigation prompt, `materialize_trace=True` writes it to a file and gives the investigation agent the file path. The agent can then use file tools (grep, search, read) to examine the trace selectively, which is both more efficient and more effective for targeted analysis.
+
+Set `persist_trace=True` to keep the file after evaluation for inspection or debugging; by default it is cleaned up.
 
 ```python
 materialized = AgenticRubricTrait(
@@ -335,13 +330,11 @@ materialized = AgenticRubricTrait(
     higher_is_better=True,
     context_mode="trace_only",
     materialize_trace=True,
-    persist_trace=False,  # default: clean up after evaluation
+    persist_trace=True,  # keep the file for inspection after evaluation
 )
 ```
 
-**How it works during pipeline execution.** Stage 11b checks whether any agentic trait in the rubric has `materialize_trace=True`. If so, it calls `_write_trace_file()` once to write the trace to `<workspace>/.karenina/traces/` (or a temporary directory if no workspace is set). The file path is passed to each trait's investigation agent. After all traits are evaluated, the file is deleted unless any trait has `persist_trace=True`.
-
-**Constraint:** `materialize_trace=True` requires a context mode that includes the trace (`"trace_only"` or `"trace_and_workspace"`). Setting it with `context_mode="workspace_only"` raises a `ValueError` because there is no trace to materialize.
+Trace materialization requires a context mode that includes the trace (`"trace_only"` or `"trace_and_workspace"`). It pairs naturally with template kind: the investigation agent greps a large trace for specific patterns, and the structured Pydantic output captures exactly the findings you care about.
 
 ### 5.6 Reading Results
 

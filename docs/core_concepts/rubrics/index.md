@@ -71,7 +71,7 @@ Given the question "Which is the putative target of venetoclax?", a [template](.
 | [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
 | [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
-| [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (template kind) | `dict` (dot-notation keys) | Yes (agent) | "Count tool calls, list subcommands, check pip usage" | Agent investigates, parser extracts structured findings into a `BaseModel`; results stored as `{trait}.{field}` keys |
+| [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (template kind) | structured `dict` | Yes (agent) | "Audit code quality across multiple dimensions" | Agent investigates and populates a Pydantic template you define; captures multi-field evaluation findings in a single trait |
 
 Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../../notebooks/core_concepts/verification-pipeline.ipynb) showing how evaluation works (RubricEvaluation).
 
@@ -98,11 +98,10 @@ For a hands-on tutorial that walks through each of these needs with a complete e
 ```
 0. Does the check require inspecting workspace artifacts (code files, output data)?
    │
-   ├─ YES: Need structured multi-field findings?
+   ├─ YES: Need multiple related findings from one evaluation?
    │   │
    │   ├─ YES → AgenticRubricTrait with template kind
-   │   │        kind=YourBaseModel, higher_is_better=None
-   │   │        Results stored as dot-notation keys.
+   │   │        Pass a Pydantic class as kind to capture structured output.
    │   │
    │   └─ NO → AgenticRubricTrait (boolean/score/literal)
    │           context_mode controls what the agent sees.
