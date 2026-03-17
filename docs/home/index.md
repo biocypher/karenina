@@ -8,9 +8,9 @@
 
 Its core idea is formalizing ground truth as structured [answer templates](../notebooks/core_concepts/answer-templates.ipynb): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) from quick checks to complex multi-trait scoring. It supports three evaluation modes:
 
-- **[Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md)** (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.
-- **[Scenarios](../core_concepts/scenarios/index.md)** (closed-loop, multi-turn): Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.
-- **[TaskEval](../notebooks/core_concepts/task-eval.ipynb)** (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
+- **[Q/A Benchmark](../core_concepts/questions-and-benchmarks/index.md)**: Define questions and answer pairs, generate responses, and evaluate them through a staged verification pipeline.
+- **[Scenarios](../core_concepts/scenarios/index.md)**: Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.
+- **[TaskEval](../notebooks/core_concepts/task-eval.ipynb)**: Supply pre-recorded outputs from any source and evaluate them using the same pipeline.
 
 **New here?** Start with the **[Quick Start: Q/A Benchmark](../notebooks/quickstart.ipynb)** to run your first evaluation end-to-end, the **[Quick Start: Scenarios](../notebooks/quickstart-scenarios.ipynb)** to build a multi-turn evaluation with branching, or the **[Quick Start: TaskEval](../notebooks/quickstart-taskeval.ipynb)** if you already have outputs to evaluate.
 
