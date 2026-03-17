@@ -8,12 +8,15 @@ approach where nested structures are flattened into prefixed columns.
 from __future__ import annotations
 
 import contextlib
+import logging
 from typing import TYPE_CHECKING, Any, get_type_hints
 
 from pydantic import BaseModel
 
 from .utils import is_pydantic_model as _is_pydantic_model
 from .utils import unwrap_optional as _unwrap_optional
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -34,6 +37,7 @@ def resolve_type_hints_safe(model: type[BaseModel]) -> dict[str, Any]:
     try:
         return get_type_hints(model)
     except Exception:
+        logger.debug("get_type_hints failed for %s, falling back to model_fields", model, exc_info=True)
         model_fields: dict[str, FieldInfo] = model.model_fields
         return {name: field.annotation for name, field in model_fields.items() if field.annotation}
 
@@ -192,6 +196,12 @@ def flat_dict_to_pydantic(
                 except Exception:
                     # If construction fails, set to None for optional fields
                     if is_optional:
+                        logger.warning(
+                            "Failed to construct nested model %s for field %s, setting to None",
+                            inner_type.__name__,
+                            field_name,
+                            exc_info=True,
+                        )
                         nested_data[field_name] = None
                     else:
                         raise
@@ -234,6 +244,9 @@ def _extract_nested_data(
                 try:
                     result[field_name] = inner_type(**nested_data)
                 except Exception:
+                    logger.warning(
+                        "Failed to construct nested model for field %s, setting to None", field_name, exc_info=True
+                    )
                     result[field_name] = None
         elif column_name in data:
             result[field_name] = data[column_name]

@@ -30,7 +30,7 @@ from karenina.ports.capabilities import PortCapabilities
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class ClaudeSDKParserAdapter:
     Python dict. No json.loads() is needed - use model_validate() directly.
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> from pydantic import BaseModel, Field
 
         >>> class Answer(BaseModel):

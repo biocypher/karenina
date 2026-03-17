@@ -34,6 +34,8 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from karenina.schemas.entities.question import QuestionRegistryEntry
+
 if TYPE_CHECKING:
     from .base import BenchmarkBase
     from .rubrics import RubricManager
@@ -128,8 +130,8 @@ class ExportManager:
 
         # Questions
         lines.append("## Questions")
-        for i, q_data in enumerate(self.base._questions_cache.values(), 1):
-            status = "✅" if q_data.get("finished", False) else "❌"
+        for i, (q_id, q_data) in enumerate(self.base._questions_cache.items(), 1):
+            status = "✅" if self.base._question_registry.get(q_id, QuestionRegistryEntry()).finished else "❌"
             template_status = "📝" if q_data.get("answer_template") else "❌"
 
             lines.append(f"### {i}. {q_data['question']}")
@@ -164,7 +166,7 @@ class ExportManager:
                     q_data["question"],
                     q_data.get("raw_answer", ""),
                     "Yes" if q_data.get("answer_template") else "No",
-                    "Yes" if q_data.get("finished", False) else "No",
+                    "Yes" if self.base._question_registry.get(q_id, QuestionRegistryEntry()).finished else "No",
                     author,
                     q_data.get("date_created", ""),
                     q_data.get("date_modified", ""),
@@ -228,7 +230,11 @@ class ExportManager:
             Dictionary with readiness status and details
         """
         missing_templates = self.templates_manager.get_missing_templates(ids_only=True)
-        unfinished = [q_id for q_id, q_data in self.base._questions_cache.items() if not q_data.get("finished", False)]
+        unfinished = [
+            q_id
+            for q_id in self.base._questions_cache
+            if not self.base._question_registry.get(q_id, QuestionRegistryEntry()).finished
+        ]
         template_valid, template_errors = self.templates_manager.validate_templates()
         rubric_valid, rubric_errors = self.rubrics_manager.validate_rubrics()
 

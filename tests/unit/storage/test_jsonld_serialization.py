@@ -17,7 +17,7 @@ import pytest
 from pydantic import ValidationError
 
 from karenina import Benchmark
-from karenina.schemas.domain import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities import LLMRubricTrait, RegexTrait
 
 # =============================================================================
 # save() Method Tests

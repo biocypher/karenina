@@ -1,6 +1,7 @@
 """Evaluation components for verification."""
 
 from .rubric import (
+    AgenticTraitEvaluator,
     LLMTraitEvaluator,
     MetricTraitEvaluator,
     RubricDeepJudgmentHandler,
@@ -20,6 +21,7 @@ from .trace import (
 )
 
 __all__ = [
+    "AgenticTraitEvaluator",
     "FieldVerificationResult",
     "LLMTraitEvaluator",
     "MetricTraitEvaluator",

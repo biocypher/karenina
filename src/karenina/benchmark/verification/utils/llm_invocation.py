@@ -10,7 +10,7 @@ Functions provided:
 
 Note: LLM invocation is now handled by the port/adapter layer:
 - LLMPort.invoke() for simple LLM calls
-- AgentPort.run_sync() for agent invocations
+- AgentPort.run() for agent invocations (sync) / AgentPort.arun() for async
 - ParserPort.parse_to_pydantic() for structured parsing with retry logic
 
 Note: Template-specific parsing and prompt construction is handled by

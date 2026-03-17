@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pytest
 
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     CallableTrait,
     LLMRubricTrait,
     MetricRubricTrait,
@@ -192,7 +192,7 @@ def test_convert_regex_trait_to_rating_global() -> None:
     assert rating.name == "has_citation"
     assert rating.bestRating == 1
     assert rating.worstRating == 0
-    assert rating.additionalType == "GlobalRegexTrait"
+    assert rating.additionalType == "karenina:GlobalRegexTrait"
 
     # Check additionalProperty
     props = {prop.name: prop.value for prop in (rating.additionalProperty or [])}
@@ -213,7 +213,7 @@ def test_convert_regex_trait_to_rating_question_specific() -> None:
 
     rating = convert_rubric_trait_to_rating(trait, "question-specific")
 
-    assert rating.additionalType == "QuestionSpecificRegexTrait"
+    assert rating.additionalType == "karenina:QuestionSpecificRegexTrait"
 
 
 # =============================================================================
@@ -244,7 +244,7 @@ def test_convert_callable_trait_boolean_to_rating() -> None:
     assert rating.name == "has_keyword"
     assert rating.bestRating == 1.0
     assert rating.worstRating == 0.0
-    assert rating.additionalType == "GlobalCallableTrait"
+    assert rating.additionalType == "karenina:GlobalCallableTrait"
 
     # Check additionalProperty
     props = {prop.name: prop.value for prop in (rating.additionalProperty or [])}
@@ -296,7 +296,7 @@ def test_convert_callable_trait_question_specific() -> None:
 
     rating = convert_rubric_trait_to_rating(trait, "question-specific")
 
-    assert rating.additionalType == "QuestionSpecificCallableTrait"
+    assert rating.additionalType == "karenina:QuestionSpecificCallableTrait"
 
 
 # =============================================================================
@@ -319,7 +319,7 @@ def test_convert_llm_trait_boolean_to_rating() -> None:
     assert rating.name == "clarity"
     assert rating.bestRating == 1
     assert rating.worstRating == 0
-    assert rating.additionalType == "GlobalRubricTrait"
+    assert rating.additionalType == "karenina:GlobalRubricTrait"
 
 
 @pytest.mark.unit
@@ -388,7 +388,7 @@ def test_convert_llm_trait_literal_to_rating() -> None:
     assert rating.bestRating == 2.0
     # worstRating = 0
     assert rating.worstRating == 0.0
-    assert rating.additionalType == "GlobalLLMRubricTrait"
+    assert rating.additionalType == "karenina:GlobalLLMRubricTrait"
 
     # Check additionalProperty
     props = {prop.name: prop.value for prop in (rating.additionalProperty or [])}
@@ -416,7 +416,7 @@ def test_convert_llm_trait_literal_question_specific() -> None:
 
     rating = convert_rubric_trait_to_rating(trait, "question-specific")
 
-    assert rating.additionalType == "QuestionSpecificLLMRubricTrait"
+    assert rating.additionalType == "karenina:QuestionSpecificLLMRubricTrait"
     assert rating.bestRating == 1.0  # len(classes) - 1 = 1
     assert rating.worstRating == 0.0
 
@@ -443,7 +443,7 @@ def test_convert_metric_trait_to_rating() -> None:
     assert rating.name == "entity_extraction"
     assert rating.bestRating == 1.0
     assert rating.worstRating == 0.0
-    assert rating.additionalType == "GlobalMetricRubricTrait"
+    assert rating.additionalType == "karenina:GlobalMetricRubricTrait"
 
     # Check additionalProperty
     props = {prop.name: prop.value for prop in (rating.additionalProperty or [])}
@@ -467,7 +467,7 @@ def test_convert_metric_trait_question_specific() -> None:
 
     rating = convert_rubric_trait_to_rating(trait, "question-specific")
 
-    assert rating.additionalType == "QuestionSpecificMetricRubricTrait"
+    assert rating.additionalType == "karenina:QuestionSpecificMetricRubricTrait"
 
 
 # =============================================================================
@@ -748,12 +748,6 @@ def test_convert_llm_trait_literal_roundtrip() -> None:
     assert restored.max_score == 3  # 4 classes -> 0-3
     assert restored.higher_is_better == original.higher_is_better
     assert restored.deep_judgment_enabled == original.deep_judgment_enabled
-
-
-# Note: The deprecated ManualRubricTrait types (GlobalManualRubricTrait,
-# QuestionSpecificManualRubricTrait) are gracefully skipped with a warning log.
-# The convert_rating_to_rubric_trait function returns None for these types,
-# and callers filter out None values when building trait lists.
 
 
 # =============================================================================

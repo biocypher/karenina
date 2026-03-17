@@ -22,14 +22,12 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow import (
-    JudgmentResults,
-    RubricResults,
-    TemplateResults,
+from karenina.schemas.results import JudgmentResults, RubricResults, TemplateResults
+from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
 )
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 
 def create_metadata(

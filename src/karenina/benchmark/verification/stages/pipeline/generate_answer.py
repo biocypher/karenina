@@ -6,15 +6,19 @@ Uses a unified adapter path for ALL interfaces including manual.
 
 import hashlib
 import logging
+import os
+import shutil
+import time
 import traceback
 from typing import Any
 
-from .....adapters import get_agent, get_llm
-from .....ports import AgentConfig, AgentPort, LLMPort, Message
-from .....schemas.verification.model_identity import ModelIdentity
-from ...utils.llm_invocation import _construct_few_shot_prompt
-from ...utils.trace_agent_metrics import extract_agent_metrics_from_messages
-from ...utils.trace_usage_tracker import UsageTracker
+from karenina.adapters import get_agent, get_llm
+from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
+from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
+from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
+from karenina.ports import AgentConfig, AgentPort, LLMPort, Message
+from karenina.schemas.verification.model_identity import ModelIdentity
+
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
@@ -82,6 +86,58 @@ class GenerateAnswerStage(BaseVerificationStage):
         # Base class handles error checking via super().should_run()
         return super().should_run(context)
 
+    def _resolve_workspace(self, context: VerificationContext) -> None:
+        """Resolve and set the effective workspace for this question.
+
+        Creates or copies the workspace directory as needed. Sets
+        context.workspace_path and context.workspace_is_copy.
+
+        Args:
+            context: Verification context with workspace config.
+
+        Raises:
+            RuntimeError: If a referenced source directory does not exist.
+        """
+        if not context.agentic_parsing:
+            return
+
+        root = context.workspace_root
+        if root is None:
+            raise RuntimeError("workspace_root must be set when agentic_parsing is True")
+
+        # Build unique suffix (replicate-safe for parallel execution)
+        timestamp = time.strftime("%Y%m%dT%H%M%S")
+        suffix = f"run_{timestamp}_pid{os.getpid()}"
+        if context.replicate is not None:
+            suffix += f"_rep{context.replicate}"
+
+        if context.question_workspace_path:
+            # Question references a pre-existing directory
+            source = root / context.question_workspace_path
+            if not source.is_dir():
+                raise RuntimeError(
+                    f"Question workspace not found: {source} "
+                    f"(workspace_root={root}, question_workspace_path={context.question_workspace_path})"
+                )
+
+            if context.workspace_copy:
+                working = root / f"{context.question_workspace_path}_{suffix}"
+                shutil.copytree(source, working)
+                context.workspace_path = working
+                context.workspace_is_copy = True
+                logger.info("Copied workspace %s to %s", source, working)
+            else:
+                context.workspace_path = source
+                context.workspace_is_copy = False
+                logger.info("Using workspace in place: %s", source)
+        else:
+            # No pre-existing workspace; create empty directory
+            working = root / f"{context.question_id}_{suffix}"
+            working.mkdir(parents=True, exist_ok=True)
+            context.workspace_path = working
+            context.workspace_is_copy = True
+            logger.info("Created workspace: %s", working)
+
     def execute(self, context: VerificationContext) -> None:
         """
         Generate answer using configured LLM or use cached answer.
@@ -100,6 +156,9 @@ class GenerateAnswerStage(BaseVerificationStage):
             - Sets context.artifacts["answering_mcp_servers"]
             - Sets context.error if LLM call fails fatally
         """
+        # Resolve workspace for agentic parsing (before any LLM calls)
+        self._resolve_workspace(context)
+
         # Check if cached answer data is available
         if context.cached_answer_data is not None:
             logger.info(f"Using cached answer for question {context.question_id}")
@@ -120,6 +179,17 @@ class GenerateAnswerStage(BaseVerificationStage):
             self.set_artifact_and_result(context, "recursion_limit_reached", recursion_limit_reached)
             self.set_artifact_and_result(context, "answering_mcp_servers", answering_mcp_servers)
             context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
+
+            # Extract trace_messages from cached data (e.g. from TaskEval)
+            trace_messages_data = context.cached_answer_data.get("trace_messages")
+            if trace_messages_data:
+                from karenina.ports.messages import Message as PortMessage
+
+                if isinstance(trace_messages_data[0], dict):
+                    trace_msgs = [PortMessage.from_dict(m) for m in trace_messages_data]
+                else:
+                    trace_msgs = trace_messages_data
+                context.set_artifact(ArtifactKeys.TRACE_MESSAGES, trace_msgs)
 
             # Handle usage tracking for cached answers
             usage_tracker = UsageTracker()
@@ -151,8 +221,15 @@ class GenerateAnswerStage(BaseVerificationStage):
         if answering_model.interface == "manual":
             logger.info(f"Manual interface: Using MD5 hash '{question_hash}' from question text for trace lookup")
 
-        # Step 2: Determine whether to use AgentPort (with MCP) or LLMPort (simple)
-        use_agent = bool(answering_model.mcp_urls_dict)
+        # Step 2: Determine whether to use AgentPort or LLMPort.
+        # Use AgentPort when MCP servers are configured, OR when the adapter
+        # is natively agentic (e.g. Claude Code). Natively agentic runtimes
+        # execute tools internally; the LLMPort path would lose the tool
+        # call trace.
+        from karenina.adapters.registry import AdapterRegistry
+
+        spec = AdapterRegistry.get_spec(answering_model.interface)
+        use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.natively_agentic)
         answering_agent: AgentPort | None = None
         answering_llm: LLMPort | None = None
 
@@ -188,7 +265,22 @@ class GenerateAnswerStage(BaseVerificationStage):
             adapter_messages: list[Message] = []
             if answering_model.system_prompt:
                 adapter_messages.append(Message.system(answering_model.system_prompt))
-            adapter_messages.append(Message.user(constructed_prompt))
+
+            # Inject conversation history from prior scenario turns (if present)
+            conversation_history = context.get_artifact("conversation_history")
+            if conversation_history:
+                adapter_messages.extend(conversation_history)
+
+            # Append workspace location to the user prompt so the agent
+            # knows where its files are instead of searching the filesystem.
+            user_prompt = constructed_prompt
+            if context.workspace_path:
+                user_prompt += (
+                    f"\n\nWorkspace directory: {context.workspace_path}\n"
+                    "All input data files are in this directory. "
+                    "Save any output files here as well."
+                )
+            adapter_messages.append(Message.user(user_prompt))
 
             if use_agent and answering_agent is not None:
                 # AgentPort path: Use for MCP-enabled models with tool calling
@@ -203,12 +295,13 @@ class GenerateAnswerStage(BaseVerificationStage):
                     max_turns=answering_model.agent_middleware.limits.model_call_limit
                     if answering_model.agent_middleware
                     else 25,
-                    timeout=120,
+                    timeout=answering_model.agent_timeout or 180,
                     question_hash=question_hash,
+                    workspace_path=context.workspace_path,
                 )
 
                 # Run the agent
-                result = answering_agent.run_sync(
+                result = answering_agent.run(
                     messages=adapter_messages,
                     mcp_servers=mcp_servers,
                     config=agent_config,

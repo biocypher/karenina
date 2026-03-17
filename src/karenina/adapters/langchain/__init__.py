@@ -14,7 +14,7 @@ Utilities:
 
 Example:
     >>> from karenina.adapters.langchain import LangChainLLMAdapter
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>>
     >>> config = ModelConfig(model="claude-sonnet-4-20250514", provider="anthropic")
     >>> adapter = LangChainLLMAdapter(config)

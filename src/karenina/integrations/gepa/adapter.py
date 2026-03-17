@@ -48,10 +48,9 @@ from karenina.integrations.gepa.scoring import (  # noqa: E402
 
 if TYPE_CHECKING:
     from karenina.benchmark.benchmark import Benchmark
-    from karenina.schemas.workflow.models import ModelConfig
-    from karenina.schemas.workflow.verification.config import VerificationConfig
-    from karenina.schemas.workflow.verification.result import VerificationResult
-    from karenina.schemas.workflow.verification.result_set import VerificationResultSet
+    from karenina.schemas.config import ModelConfig
+    from karenina.schemas.results import VerificationResultSet
+    from karenina.schemas.verification import VerificationConfig, VerificationResult
 
 
 class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
@@ -143,7 +142,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
 
         # Cache trait max_scores and directionalities from global rubric for proper normalization
         self._trait_max_scores: dict[str, int] = {}
-        self._trait_directionalities: dict[str, bool] = {}
+        self._trait_directionalities: dict[str, bool | None] = {}
         global_rubric = benchmark.get_global_rubric()
         if global_rubric:
             self._trait_max_scores = global_rubric.get_trait_max_scores()
@@ -186,7 +185,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
             ValueError: If no MCP servers are configured.
             RuntimeError: If fetching fails.
         """
-        from karenina.utils.mcp import sync_fetch_tool_descriptions
+        from karenina.utils.mcp import fetch_tool_descriptions
 
         # Find first model with MCP configuration
         mcp_urls_dict = None
@@ -204,7 +203,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
         logger.info(f"Fetching tool descriptions from MCP servers: {list(mcp_urls_dict.keys())}")
 
         try:
-            descriptions = sync_fetch_tool_descriptions(mcp_urls_dict, mcp_tool_filter)
+            descriptions = fetch_tool_descriptions(mcp_urls_dict, mcp_tool_filter)
             logger.info(f"Fetched descriptions for {len(descriptions)} tools")
             return descriptions
         except Exception as e:

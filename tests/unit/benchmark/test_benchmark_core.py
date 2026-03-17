@@ -211,7 +211,7 @@ def test_add_question_with_template() -> None:
     benchmark = Benchmark.create(name="test")
 
     template = """
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
 class Answer(BaseAnswer):
@@ -225,7 +225,8 @@ class Answer(BaseAnswer):
     assert q_id in benchmark
     question = benchmark.get_question(q_id)
     assert question["answer_template"] == template
-    assert question["finished"] is True  # Auto-set to True when template provided
+    # finished is now tracked in the question registry, not in the cache dict
+    assert benchmark._base._question_registry[q_id].finished is True
 
 
 @pytest.mark.unit

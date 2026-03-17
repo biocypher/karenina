@@ -21,7 +21,7 @@ class TestLangChainAgentAdapter:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a mock ModelConfig."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-agent",
@@ -147,15 +147,15 @@ class TestLangChainAgentAdapter:
         adapter = LangChainAgentAdapter(model_config)
 
         with pytest.raises(AgentExecutionError, match="AgentPort requires MCP servers"):
-            await adapter.run([Message.user("Test question")])
+            await adapter.arun([Message.user("Test question")])
 
     @pytest.mark.asyncio
     async def test_run_basic(self, model_config: Any) -> None:
         """Test basic agent run with mocked infrastructure."""
         with (
-            patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init_model,
+            patch("karenina.adapters.langchain.initialization.init_chat_model_unified") as mock_init_model,
             patch("karenina.adapters.langchain.middleware.build_agent_middleware") as mock_middleware,
-            patch("karenina.adapters.langchain.mcp.create_mcp_client_and_tools") as mock_mcp,
+            patch("karenina.adapters.langchain.mcp.acreate_persistent_mcp_tools", new_callable=AsyncMock) as mock_mcp,
             patch("langchain.agents.create_agent") as mock_create_agent,
             patch("langgraph.checkpoint.memory.InMemorySaver"),
             patch("karenina.adapters.langchain.trace.harmonize_agent_response") as mock_harmonize,
@@ -166,7 +166,7 @@ class TestLangChainAgentAdapter:
 
             mock_middleware.return_value = []
 
-            mock_mcp.return_value = (None, [MagicMock()])  # (client, tools)
+            mock_mcp.return_value = [MagicMock()]  # persistent tools list
 
             ai_msg = AIMessage(content="Final answer")
             ai_msg.response_metadata = {"usage": {"input_tokens": 50, "output_tokens": 25}}
@@ -186,7 +186,7 @@ class TestLangChainAgentAdapter:
             mock_extract.return_value = ("Final answer", None)
 
             adapter = LangChainAgentAdapter(model_config)
-            result = await adapter.run(
+            result = await adapter.arun(
                 [Message.user("Test question")],
                 mcp_servers={"test": {"type": "http", "url": "http://localhost:8080"}},
             )

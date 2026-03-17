@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from ...schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from ...utils.checkpoint import (
+from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import AgenticRubricTrait
+from karenina.utils.checkpoint import (
     add_global_rubric_to_benchmark,
     extract_global_rubric_from_benchmark,
 )
@@ -20,31 +21,35 @@ class RubricManager:
         """Initialize with reference to benchmark base."""
         self.base = base
 
-    def add_global_rubric_trait(self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait) -> None:
+    def add_global_rubric_trait(
+        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+    ) -> None:
         """
         Add a global rubric trait to the benchmark.
 
         Args:
-            trait: The rubric trait to add (LLM, regex, callable, or metric)
+            trait: The rubric trait to add (LLM, regex, callable, metric, or agentic)
         """
         current_traits = extract_global_rubric_from_benchmark(self.base._checkpoint) or []
         current_traits.append(trait)
         add_global_rubric_to_benchmark(self.base._checkpoint, current_traits)
 
     def add_question_rubric_trait(
-        self, question_id: str, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait
+        self,
+        question_id: str,
+        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """
         Add a question-specific rubric trait.
 
         Args:
             question_id: The question ID
-            trait: The rubric trait to add
+            trait: The rubric trait to add (LLM, regex, callable, metric, or agentic)
 
         Raises:
             ValueError: If question not found
         """
-        from ...utils.checkpoint import convert_rubric_trait_to_rating
+        from karenina.utils.checkpoint import convert_rubric_trait_to_rating
 
         # Find the question
         found = False
@@ -78,17 +83,19 @@ class RubricManager:
             regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
             callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
             metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
+            agentic_traits = [t for t in traits if isinstance(t, AgenticRubricTrait)]
             return Rubric(
                 llm_traits=llm_traits,
                 regex_traits=regex_traits,
                 callable_traits=callable_traits,
                 metric_traits=metric_traits,
+                agentic_traits=agentic_traits,
             )
         return None
 
     def get_question_rubric(
         self, question_id: str
-    ) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] | None:
+    ) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] | None:
         """
         Get question-specific rubric traits.
 
@@ -116,7 +123,7 @@ class RubricManager:
         global_traits = extract_global_rubric_from_benchmark(self.base._checkpoint) or []
 
         # Get question-specific rubric traits
-        question_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait] = []
+        question_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] = []
         if question_id in self.base._questions_cache:
             q_data = self.base._questions_cache[question_id]
             question_rubric = q_data.get("question_rubric")
@@ -127,6 +134,7 @@ class RubricManager:
                     question_traits.extend(question_rubric.get("regex_traits", []))
                     question_traits.extend(question_rubric.get("callable_traits", []))
                     question_traits.extend(question_rubric.get("metric_traits", []))
+                    question_traits.extend(question_rubric.get("agentic_traits", []))
                 elif isinstance(question_rubric, list):
                     # Backwards compatibility if it's already a flat list
                     question_traits = question_rubric
@@ -148,11 +156,13 @@ class RubricManager:
             regex_traits = [t for t in merged_traits if isinstance(t, RegexTrait)]
             callable_traits = [t for t in merged_traits if isinstance(t, CallableTrait)]
             metric_traits = [t for t in merged_traits if isinstance(t, MetricRubricTrait)]
+            agentic_traits = [t for t in merged_traits if isinstance(t, AgenticRubricTrait)]
             return Rubric(
                 llm_traits=llm_traits,
                 regex_traits=regex_traits,
                 callable_traits=callable_traits,
                 metric_traits=metric_traits,
+                agentic_traits=agentic_traits,
             )
 
         return None
@@ -308,17 +318,21 @@ class RubricManager:
         """Get list of question IDs that have question-specific rubrics."""
         return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("question_rubric")]
 
-    def set_global_rubric(self, traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait]) -> None:
+    def set_global_rubric(
+        self, traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait]
+    ) -> None:
         """
         Set the global rubric with a list of traits.
 
         Args:
-            traits: List of rubric traits (LLM, regex, callable, or metric-based)
+            traits: List of rubric traits (LLM, regex, callable, metric, or agentic)
         """
         add_global_rubric_to_benchmark(self.base._checkpoint, traits)
 
     def update_global_rubric_trait(
-        self, trait_name: str, updated_trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait
+        self,
+        trait_name: str,
+        updated_trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> bool:
         """
         Update a specific trait in the global rubric.

@@ -24,8 +24,8 @@ from karenina.benchmark.verification.evaluators import (
     TemplateEvaluator,
     TemplatePromptBuilder,
 )
-from karenina.schemas.domain import BaseAnswer
-from karenina.schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer
 
 # =============================================================================
 # Fixtures

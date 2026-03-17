@@ -52,7 +52,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from ....schemas import SearchResultItem
+from karenina.schemas import SearchResultItem
+
 from .search_helpers import parse_tool_output as _parse_tool_output
 
 logger = logging.getLogger(__name__)

@@ -44,7 +44,7 @@ from karenina.ports import AdapterUnavailableError
 @pytest.fixture
 def langchain_model_config() -> Any:
     """Create a ModelConfig with langchain interface."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     return ModelConfig(
         id="test-langchain",
@@ -57,7 +57,7 @@ def langchain_model_config() -> Any:
 @pytest.fixture
 def openrouter_model_config() -> Any:
     """Create a ModelConfig with openrouter interface."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     return ModelConfig(
         id="test-openrouter",
@@ -70,7 +70,7 @@ def openrouter_model_config() -> Any:
 @pytest.fixture
 def openai_endpoint_model_config() -> Any:
     """Create a ModelConfig with openai_endpoint interface."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     return ModelConfig(
         id="test-openai-endpoint",
@@ -387,8 +387,8 @@ class TestGetAgent:
 
         # Verify it raises ManualInterfaceError when invoked
         with pytest.raises(ManualInterfaceError) as exc_info:
-            agent.run_sync([])
-        assert "agent.run_sync()" in str(exc_info.value)
+            agent.run([])
+        assert "agent.run()" in str(exc_info.value)
 
     def test_get_agent_claude_sdk_fallback_to_langchain(self, claude_sdk_model_config: Any) -> None:
         """Test get_agent falls back to LangChain when Claude SDK unavailable."""
@@ -572,7 +572,7 @@ class TestValidateModelConfig:
 
     def test_validate_model_config_empty_model_name_raises(self) -> None:
         """Test validate_model_config raises AdapterUnavailableError when model_name is empty."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         config = ModelConfig(
             id="test",
@@ -585,7 +585,7 @@ class TestValidateModelConfig:
 
     def test_validate_model_config_missing_provider_for_langchain_raises(self) -> None:
         """Test validate_model_config raises AdapterUnavailableError when provider missing for langchain."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         config = ModelConfig(
             id="test",
@@ -599,7 +599,7 @@ class TestValidateModelConfig:
 
     def test_validate_model_config_allows_empty_provider_for_openrouter(self) -> None:
         """Test validate_model_config allows empty provider for openrouter."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         config = ModelConfig(
             id="test",
@@ -623,7 +623,7 @@ class TestValidateModelConfig:
 
     def test_validate_model_config_allows_empty_provider_for_openai_endpoint(self) -> None:
         """Test validate_model_config allows empty provider for openai_endpoint."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         config = ModelConfig(
             id="test",

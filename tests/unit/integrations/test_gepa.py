@@ -36,7 +36,7 @@ from karenina.integrations.gepa.scoring import (
 )
 
 # Import ModelConfig to fix OptimizationConfig forward reference
-from karenina.schemas.workflow.models import ModelConfig  # noqa: F401
+from karenina.schemas.config import ModelConfig  # noqa: F401
 
 # Rebuild OptimizationConfig to resolve forward references
 OptimizationConfig.model_rebuild()

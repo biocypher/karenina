@@ -1,15 +1,20 @@
 """Results management functionality for benchmarks."""
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...schemas.domain import Rubric
+    from karenina.schemas.entities import Rubric
+
     from .base import BenchmarkBase
 
-from ...schemas.workflow import VerificationResult
-from .results_io import ResultsIOHandler
+from karenina.schemas.verification import VerificationResult
+
+from .results_io import ResultsIOManager
+
+logger = logging.getLogger(__name__)
 
 
 class ResultsManager:
@@ -66,7 +71,7 @@ class ResultsManager:
 
             for result_key, result in self._in_memory_results[run].items():
                 # Check if this matches question ID filter
-                if question_ids is not None and result.question_id not in question_ids:
+                if question_ids is not None and result.metadata.question_id not in question_ids:
                     continue
 
                 all_results[result_key] = result
@@ -89,7 +94,7 @@ class ResultsManager:
             run_results = {}
             for result_key, result in results.items():
                 # Check if this matches question ID filter
-                if question_id is not None and result.question_id != question_id:
+                if question_id is not None and result.metadata.question_id != question_id:
                     continue
 
                 run_results[result_key] = result
@@ -131,7 +136,7 @@ class ResultsManager:
                 # Clear specific questions
                 results_to_remove = []
                 for result_key, result in self._in_memory_results[run].items():
-                    if result.question_id in question_ids:
+                    if result.metadata.question_id in question_ids:
                         results_to_remove.append(result_key)
                         cleared_count += 1
 
@@ -169,9 +174,9 @@ class ResultsManager:
         results = self.get_verification_results(question_ids, run_name)
 
         if format.lower() == "json":
-            return ResultsIOHandler.export_to_json(results)
+            return ResultsIOManager.export_to_json(results)
         elif format.lower() == "csv":
-            return ResultsIOHandler.export_to_csv(results, global_rubric)
+            return ResultsIOManager.export_to_csv(results, global_rubric)
         else:
             raise ValueError(f"Unsupported export format: {format}. Supported formats: json, csv")
 
@@ -274,6 +279,7 @@ class ResultsManager:
                             latest_timestamp = timestamp
                             latest_run = run_name
                 except (ValueError, IndexError):
+                    logger.debug("Could not parse timestamp from run name %s", run_name)
                     continue
 
         # If we couldn't parse timestamps, just get the last one alphabetically
@@ -380,9 +386,9 @@ class ResultsManager:
 
         # Determine format from extension and delegate to handler
         if file_path.suffix.lower() == ".json":
-            results = ResultsIOHandler.load_from_json(file_path)
+            results = ResultsIOManager.load_from_json(file_path)
         elif file_path.suffix.lower() == ".csv":
-            results = ResultsIOHandler.load_from_csv(file_path)
+            results = ResultsIOManager.load_from_csv(file_path)
         else:
             raise ValueError(f"Unsupported file format: {file_path.suffix}. Supported formats: .json, .csv")
 

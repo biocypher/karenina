@@ -6,7 +6,8 @@ Detects when LLM responses lack sufficient information to populate a template.
 import logging
 from typing import Any
 
-from ...evaluators import detect_sufficiency
+from karenina.benchmark.verification.evaluators import detect_sufficiency
+
 from ..core.base import ArtifactKeys, VerificationContext
 from ..core.check_stage_base import BaseCheckStage
 

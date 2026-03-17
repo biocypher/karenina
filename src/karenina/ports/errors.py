@@ -24,11 +24,11 @@ Example usage:
     )
 
     try:
-        result = await agent.run(messages)
+        result = await agent.arun(messages)
     except AdapterUnavailableError as e:
         # Fall back to alternative adapter
         logger.warning(f"Adapter unavailable: {e.reason}, trying {e.fallback_interface}")
-        result = await fallback_agent.run(messages)
+        result = await fallback_agent.arun(messages)
     except AgentTimeoutError as e:
         # Handle timeout specifically
         logger.error(f"Agent timed out: {e}")
@@ -39,8 +39,10 @@ Example usage:
 
 from __future__ import annotations
 
+from karenina.exceptions import KareninaError
 
-class PortError(Exception):
+
+class PortError(KareninaError):
     """Base exception for all port-related errors.
 
     All port errors inherit from this class, allowing unified exception
@@ -51,14 +53,12 @@ class PortError(Exception):
 
     Example:
         try:
-            await agent.run(messages)
+            await agent.arun(messages)
         except PortError as e:
-            print(f"Port error: {e}")
+            logger.error(f"Port error: {e}")
     """
 
-    def __init__(self, message: str) -> None:
-        self.message = message
-        super().__init__(message)
+    pass
 
 
 class AdapterUnavailableError(PortError):

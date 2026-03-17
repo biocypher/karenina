@@ -12,7 +12,7 @@ Tests cover:
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     BaseAnswer,
     CallableTrait,
     LLMRubricTrait,
@@ -34,7 +34,7 @@ def test_question_with_minimal_fields() -> None:
 
     assert q.question == "What is 2+2?"
     assert q.raw_answer == "4"
-    assert q.tags == []
+    assert q.keywords == []
     assert q.few_shot_examples is None
 
 
@@ -67,11 +67,15 @@ def test_question_different_text_different_id() -> None:
 
 
 @pytest.mark.unit
-def test_question_with_tags() -> None:
-    """Test Question with tags."""
-    q = Question(question="Test?", raw_answer="Answer", tags=["math", "easy"])
+def test_question_with_keywords() -> None:
+    """Test Question with keywords and backward compatibility with tags."""
+    # New keywords parameter
+    q = Question(question="Test?", raw_answer="Answer", keywords=["math", "easy"])
+    assert q.keywords == ["math", "easy"]
 
-    assert q.tags == ["math", "easy"]
+    # Backward compat: legacy tags parameter is converted to keywords
+    q_legacy = Question(question="Test?", raw_answer="Answer", tags=["math", "easy"])
+    assert q_legacy.keywords == ["math", "easy"]
 
 
 @pytest.mark.unit
@@ -102,6 +106,55 @@ def test_question_empty_raw_answer_raises_validation_error() -> None:
         Question(question="Test?", raw_answer="")
 
     assert "raw_answer" in str(exc_info.value).lower()
+
+
+# =============================================================================
+# QuestionRegistryEntry Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_question_registry_entry_lifecycle() -> None:
+    """Test QuestionRegistryEntry creation, update, and field verification."""
+    from karenina.schemas.entities.question import QuestionRegistryEntry
+
+    # Default creation
+    entry = QuestionRegistryEntry()
+    assert entry.finished is False
+    assert isinstance(entry.date_added, str)
+    assert isinstance(entry.date_modified, str)
+
+    # Creation with explicit values
+    entry2 = QuestionRegistryEntry(finished=True, date_added="2026-01-01T00:00:00", date_modified="2026-01-01T00:00:00")
+    assert entry2.finished is True
+    assert entry2.date_added == "2026-01-01T00:00:00"
+
+    # Mutation of finished status
+    entry2.finished = False
+    assert entry2.finished is False
+    entry2.finished = True
+    assert entry2.finished is True
+
+    # Extra fields are forbidden
+    with pytest.raises(ValidationError):
+        QuestionRegistryEntry(finished=True, extra_field="not_allowed")
+
+
+@pytest.mark.unit
+def test_question_tags_backward_compat() -> None:
+    """Test that legacy tags parameter maps to keywords on Question model."""
+    # tags= is accepted and converted to keywords
+    q = Question(question="Test?", raw_answer="A", tags=["a", "b"])
+    assert q.keywords == ["a", "b"]
+
+    # None values in tags are filtered out
+    q2 = Question(question="Test?", raw_answer="A", tags=["a", None, "b"])
+    assert q2.keywords == ["a", "b"]
+
+    # When both tags and keywords are provided, keywords takes precedence
+    q3 = Question(question="Test?", raw_answer="A", keywords=["x"], tags=["y"])
+    # The validator only converts tags when keywords is absent
+    assert q3.keywords == ["x"]
 
 
 # =============================================================================
@@ -213,13 +266,12 @@ def test_llm_rubric_trait_deep_judgment_fields() -> None:
 
 @pytest.mark.unit
 def test_llm_rubric_trait_default_higher_is_better() -> None:
-    """Test that higher_is_better defaults to True for legacy data."""
-    # Using model_validate to simulate loading from dict
+    """Test that higher_is_better defaults to True when None or missing."""
     trait = LLMRubricTrait.model_validate(
         {
             "name": "test",
             "kind": "boolean",
-            "higher_is_better": None,  # Legacy: missing or None
+            "higher_is_better": None,
         }
     )
 
@@ -486,7 +538,7 @@ def test_base_answer_verify_regex() -> None:
     """Test BaseAnswer.verify_regex() method."""
     from typing import ClassVar
 
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     class Answer(BaseAnswer):
         value: str
@@ -536,7 +588,7 @@ def test_question_serialization_roundtrip() -> None:
     original = Question(
         question="What is AI?",
         raw_answer="Artificial Intelligence",
-        tags=["tech", "ml"],
+        keywords=["tech", "ml"],
     )
 
     # Serialize to dict
@@ -547,9 +599,21 @@ def test_question_serialization_roundtrip() -> None:
 
     assert restored.question == original.question
     assert restored.raw_answer == original.raw_answer
-    assert restored.tags == original.tags
+    assert restored.keywords == original.keywords
     # ID is computed, should be the same
     assert restored.id == original.id
+
+    # Verify serialized dict contains the new field names
+    assert "keywords" in data
+    assert data["keywords"] == ["tech", "ml"]
+    # New intrinsic fields are present in serialization
+    assert "date_created" in data
+    assert "date_modified" in data
+    assert "answer_template" in data
+    assert "author" in data
+    assert "sources" in data
+    assert "custom_metadata" in data
+    assert "question_rubric" in data
 
 
 @pytest.mark.unit
@@ -605,7 +669,7 @@ def test_regex_trait_serialization_roundtrip() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_returns_class() -> None:
     """Test that capture_answer_source returns the same class."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     class CustomAnswer(BaseAnswer):
         value: str
@@ -621,7 +685,7 @@ def test_capture_answer_source_returns_class() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_calls_method_when_exists() -> None:
     """Test that capture_answer_source calls set_source_code_from_notebook if present."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     # Track if method was called
     method_called = {"called": False}
@@ -644,7 +708,7 @@ def test_capture_answer_source_calls_method_when_exists() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_no_error_without_method() -> None:
     """Test that capture_answer_source doesn't error when method is missing."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     class PlainAnswer(BaseAnswer):
         value: str
@@ -660,7 +724,7 @@ def test_capture_answer_source_no_error_without_method() -> None:
 @pytest.mark.unit
 def test_capture_answer_source_as_decorator() -> None:
     """Test that capture_answer_source works as a decorator."""
-    from karenina.schemas.domain.answer import BaseAnswer
+    from karenina.schemas.entities.answer import BaseAnswer
 
     method_called = {"called": False}
 

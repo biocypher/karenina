@@ -45,6 +45,8 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from karenina.exceptions import McpError
+
 
 class McpHttpServerConfig(TypedDict, total=False):
     """SDK configuration for HTTP/Streamable HTTP MCP servers."""
@@ -140,12 +142,12 @@ def convert_mcp_config(
     return result
 
 
-class McpConfigValidationError(Exception):
+class McpConfigValidationError(McpError):
     """Raised when MCP configuration is invalid."""
 
     def __init__(self, message: str, server_name: str | None = None) -> None:
-        self.server_name = server_name
         super().__init__(message)
+        self.server_name = server_name
 
 
 def validate_mcp_config(config: dict[str, McpServerConfig]) -> list[str]:

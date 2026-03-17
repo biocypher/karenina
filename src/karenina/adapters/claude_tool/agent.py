@@ -35,7 +35,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
-from karenina.schemas.workflow.models import ModelConfig
+from karenina.schemas.config import ModelConfig
 
 from .mcp import connect_all_mcp_servers, get_all_mcp_tools
 from .messages import (
@@ -69,7 +69,7 @@ class ClaudeToolAgentAdapter:
     - Usage metadata aggregation across turns
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-haiku",
         ...     model_name="claude-haiku-4-5",
@@ -77,7 +77,7 @@ class ClaudeToolAgentAdapter:
         ...     interface="claude_tool"
         ... )
         >>> adapter = ClaudeToolAgentAdapter(config)
-        >>> result = await adapter.run(
+        >>> result = await adapter.arun(
         ...     messages=[Message.user("What files are in /tmp?")],
         ...     mcp_servers={
         ...         "open-targets": {
@@ -105,7 +105,14 @@ class ClaudeToolAgentAdapter:
         if self._async_client is None:
             from anthropic import AsyncAnthropic
 
-            self._async_client = AsyncAnthropic()
+            # Build kwargs for Anthropic client (api_key, base_url from config)
+            kwargs: dict[str, Any] = {}
+            if self._config.anthropic_api_key:
+                kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
+            if self._config.anthropic_base_url:
+                kwargs["base_url"] = self._config.anthropic_base_url
+
+            self._async_client = AsyncAnthropic(**kwargs)
         return self._async_client
 
     def _extract_final_response(self, trace_messages: list[Message]) -> str:
@@ -126,7 +133,7 @@ class ClaudeToolAgentAdapter:
 
         return "[No final response extracted]"
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -169,7 +176,16 @@ class ClaudeToolAgentAdapter:
                 sessions = await connect_all_mcp_servers(exit_stack, mcp_servers)
                 mcp_tool_list = await get_all_mcp_tools(sessions)
 
+                # Apply tool filter from model config or tools parameter
+                tool_filter_names: set[str] | None = None
+                if self._config.mcp_tool_filter:
+                    tool_filter_names = set(self._config.mcp_tool_filter)
+                    logger.info(f"Restricting Claude Tool agent to MCP tools: {self._config.mcp_tool_filter}")
+
                 for server_name, session, mcp_tool in mcp_tool_list:
+                    if tool_filter_names and mcp_tool.name not in tool_filter_names:
+                        logger.debug(f"Skipping MCP tool '{mcp_tool.name}' (not in tool filter)")
+                        continue
                     wrapped = wrap_mcp_tool(session, mcp_tool, server_name, collector=collector)
                     all_tools.append(wrapped)
                     logger.debug(f"Added MCP tool '{mcp_tool.name}' from server '{server_name}'")
@@ -358,14 +374,14 @@ class ClaudeToolAgentAdapter:
             actual_model=actual_model,
         )
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper for run().
+        """Synchronous wrapper for arun().
 
         Args:
             messages: Initial conversation messages.
@@ -381,13 +397,13 @@ class ClaudeToolAgentAdapter:
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.run, messages, tools, mcp_servers, config)
+            return portal.call(self.arun, messages, tools, mcp_servers, config)
 
         try:
             asyncio.get_running_loop()
 
             def run_in_thread() -> AgentResult:
-                return asyncio.run(self.run(messages, tools, mcp_servers, config))
+                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
             timeout = config.timeout if config and config.timeout else 600
             with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -395,7 +411,7 @@ class ClaudeToolAgentAdapter:
                 return future.result(timeout=timeout)
 
         except RuntimeError:
-            return asyncio.run(self.run(messages, tools, mcp_servers, config))
+            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
     async def aclose(self) -> None:
         """Close underlying HTTP client resources.

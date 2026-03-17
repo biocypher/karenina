@@ -1,7 +1,11 @@
 """
 ADeLe trait conversion and registry.
 
-Converts parsed ADeLe rubrics into LLMRubricTrait objects with kind="literal".
+Converts parsed ADeLe (Annotated Demand Levels) rubrics into
+LLMRubricTrait objects with kind="literal".
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ from __future__ import annotations
 import functools
 from importlib import resources
 
-from karenina.schemas.domain.rubric import LLMRubricTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
 
 from .parser import AdeleRubric, parse_adele_file
 

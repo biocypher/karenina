@@ -24,7 +24,7 @@ from karenina.benchmark.verification.evaluators.trace.sufficiency import (
 from karenina.benchmark.verification.utils.error_helpers import is_retryable_error
 from karenina.ports import LLMResponse
 from karenina.ports.usage import UsageMetadata
-from karenina.schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
 from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
 
 

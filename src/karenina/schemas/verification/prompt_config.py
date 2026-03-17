@@ -5,7 +5,7 @@ calls via JSON presets. Each field maps to a PromptTask category, with
 fallback logic for grouped tasks (rubric_* and dj_* prefixes).
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PromptConfig(BaseModel):
@@ -19,6 +19,8 @@ class PromptConfig(BaseModel):
         - ``rubric_*`` tasks fall back to ``rubric_evaluation``
         - ``dj_*`` tasks fall back to ``deep_judgment``
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     generation: str | None = Field(
         default=None,

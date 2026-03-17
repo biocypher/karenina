@@ -13,11 +13,12 @@ Supported Interfaces:
     - openrouter: Routes through LangChain adapter
     - openai_endpoint: Routes through LangChain adapter
     - claude_agent_sdk: Uses Claude Agent SDK adapter (when available)
+    - claude_tool: Uses Claude Tool adapter with native structured output
     - manual: Returns ManualAdapter (raises error if invoked)
 
 Example:
     >>> from karenina.adapters import get_agent, get_llm, get_parser
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>>
     >>> config = ModelConfig(
     ...     id="claude-sonnet",
@@ -32,13 +33,13 @@ Example:
     >>>
     >>> # Use them (check interface before using for manual)
     >>> if config.interface != "manual":
-    ...     result = await agent.run(messages=[Message.user("Hello!")])
+    ...     result = await agent.arun(messages=[Message.user("Hello!")])
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, register_adapter
 from karenina.ports import (
@@ -49,13 +50,15 @@ from karenina.ports import (
 )
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 # Import at runtime for validation function (not circular since ModelConfig is only TYPE_CHECKING)
-from karenina.schemas.workflow.models import INTERFACES_NO_PROVIDER_REQUIRED
+from karenina.schemas.config import INTERFACES_NO_PROVIDER_REQUIRED
 
 # Type alias for interface values
-InterfaceType = Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"]
+InterfaceType: TypeAlias = Literal[
+    "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
+]
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +198,11 @@ def get_llm(
         )
 
     adapter = spec.llm_factory(model_config)
+    if not isinstance(adapter, LLMPort):
+        raise AdapterUnavailableError(
+            message=f"LLM adapter for interface '{interface}' does not implement LLMPort protocol",
+            reason=f"Adapter {type(adapter).__name__} is missing required methods",
+        )
     register_adapter(adapter)
     return adapter
 
@@ -234,7 +242,7 @@ def get_agent(
         ... )
         >>> agent = get_agent(config)
         >>> if config.interface != "manual":
-        ...     result = await agent.run(
+        ...     result = await agent.arun(
         ...         messages=[Message.user("What files are in /tmp?")],
         ...         mcp_servers={"filesystem": {"type": "http", "url": "http://localhost:8080"}}
         ...     )
@@ -273,6 +281,11 @@ def get_agent(
         )
 
     adapter = spec.agent_factory(model_config)
+    if not isinstance(adapter, AgentPort):
+        raise AdapterUnavailableError(
+            message=f"Agent adapter for interface '{interface}' does not implement AgentPort protocol",
+            reason=f"Adapter {type(adapter).__name__} is missing required methods",
+        )
     register_adapter(adapter)
     return adapter
 
@@ -353,6 +366,11 @@ def get_parser(
         )
 
     adapter = spec.parser_factory(model_config)
+    if not isinstance(adapter, ParserPort):
+        raise AdapterUnavailableError(
+            message=f"Parser adapter for interface '{interface}' does not implement ParserPort protocol",
+            reason=f"Adapter {type(adapter).__name__} is missing required methods",
+        )
     register_adapter(adapter)
     return adapter
 

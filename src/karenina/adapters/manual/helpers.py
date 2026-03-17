@@ -3,9 +3,16 @@
 These functions provide convenient access to the global ManualTraceManager singleton.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from .manager import ManualTraceManager, _trace_manager, get_trace_manager
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .traces import ManualTraces
 
 
 def load_manual_traces(json_data: dict[str, Any]) -> None:
@@ -100,8 +107,59 @@ def get_manual_trace_manager() -> ManualTraceManager:
     return _trace_manager
 
 
+def load_manual_traces_from_file(trace_file: Path, benchmark: Any) -> ManualTraces:
+    """
+    Load manual traces from JSON file and create ManualTraces object.
+
+    Args:
+        trace_file: Path to JSON file with traces (question_hash -> trace_string mapping)
+        benchmark: Benchmark for question mapping
+
+    Returns:
+        ManualTraces object populated with traces
+
+    Raises:
+        FileNotFoundError: If trace file doesn't exist
+        json.JSONDecodeError: If JSON is invalid
+        ValueError: If trace data is not a dict
+        ManualTraceError: If trace validation fails
+
+    Example JSON format:
+        {
+            "936dbc8755f623c951d96ea2b03e13bc": "Answer for question 1",
+            "8f2e2b1e4d5c6a7b8c9d0e1f2a3b4c5d": "Answer for question 2"
+        }
+    """
+    import json
+    from pathlib import Path
+
+    from .traces import ManualTraces
+
+    trace_file = Path(trace_file)
+
+    if not trace_file.exists():
+        raise FileNotFoundError(f"Manual traces file not found: {trace_file}")
+
+    # Load JSON
+    with open(trace_file) as f:
+        traces_data = json.load(f)
+
+    # Validate it's a dictionary
+    if not isinstance(traces_data, dict):
+        raise ValueError(f"Invalid trace file format: expected JSON object (dict), got {type(traces_data).__name__}")
+
+    # Load into global manager (validation happens here)
+    load_manual_traces(traces_data)
+
+    # Create ManualTraces object linked to benchmark
+    manual_traces = ManualTraces(benchmark)
+
+    return manual_traces
+
+
 __all__ = [
     "load_manual_traces",
+    "load_manual_traces_from_file",
     "get_manual_trace",
     "has_manual_trace",
     "clear_manual_traces",

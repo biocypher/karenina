@@ -1,13 +1,61 @@
 site_name: Karenina Documentation
 site_description: Technical documentation for the Karenina LLM benchmarking library
-site_url: https://example.com
-repo_url: https://github.com/example/karenina
-repo_name: karenina
+site_url: https://biocypher.github.io/karenina/
+repo_url: https://github.com/biocypher/karenina
+repo_name: biocypher/karenina
+
+exclude_docs: |
+  _archive/
+  # Jupytext .md companion files — notebooks are the canonical source
+  getting-started/quickstart.md
+  getting-started/quickstart-taskeval.md
+  getting-started/quickstart-scenarios.md
+  workflows/task-eval/index.md
+  core_concepts/answer-templates.md
+  core_concepts/verification-primitives.md
+  core_concepts/rubrics/llm-traits.md
+  core_concepts/rubrics/literal-traits.md
+  core_concepts/rubrics/regex-traits.md
+  core_concepts/rubrics/callable-traits.md
+  core_concepts/rubrics/metric-traits.md
+  core_concepts/template-vs-rubric.md
+  workflows/creating-benchmarks/factual-qa-benchmark.md
+  workflows/creating-benchmarks/full-evaluation-benchmark.md
+  workflows/creating-benchmarks/quality-assessment-benchmark.md
+  workflows/creating-benchmarks/choosing-rubric-traits.md
+  workflows/creating-benchmarks/scaled-authoring.md
+  workflows/creating-benchmarks/ai-assisted-authoring.md
+  workflows/running-verification/basic-verification.md
+  workflows/running-verification/full-evaluation.md
+  workflows/running-verification/multi-model-comparison.md
+  workflows/running-verification/deep-judgment.md
+  workflows/running-verification/mcp-agent-evaluation.md
+  workflows/running-verification/manual-interface-workflow.md
+  workflows/analyzing-results/dataframe-analysis.md
+  core_concepts/questions-and-benchmarks/benchmarks.md
+  core_concepts/questions-and-benchmarks/questions.md
+  core_concepts/verification-pipeline.md
+  core_concepts/prompt-assembly.md
+  core_concepts/manual-interface.md
+  core_concepts/adele.md
+  core_concepts/few-shot.md
+  core_concepts/task-eval.md
+  core_concepts/evaluation-modes.md
+  core_concepts/mcp-overview.md
+  core_concepts/results-and-scoring.md
+  core_concepts/rubrics/agentic-traits.md
+  core_concepts/agentic-evaluation.md
+  workflows/running-verification/agentic-evaluation.md
+  core_concepts/scenarios/building-scenarios.md
+  core_concepts/scenarios/outcome-criteria.md
+  core_concepts/scenarios/state-and-routing.md
+  workflows/scenarios/sycophancy-tutorial.md
 
 theme:
   name: material
   features:
     - navigation.tabs
+    - navigation.indexes
     - navigation.sections
     - navigation.expand
     - navigation.path
@@ -36,7 +84,7 @@ plugins:
       include_source: true
       execute: false  # We pre-execute notebooks
       allow_errors: false
-      include: ["notebooks/*.ipynb", "notebooks/**/*.ipynb"]
+      include: ["*.ipynb"]
       ignore: []
       kernel_name: python3
       theme: auto
@@ -48,6 +96,11 @@ plugins:
           - hide-input
         remove_all_outputs_tags:
           - hide-output
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
   - mkdocstrings:
       handlers:
         python:
@@ -110,40 +163,126 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Home: index.md
-  - About: about.md
-  - Installation: install.md
-  - Quick Start: quickstart.md
-  - User Guides:
-    - Defining a Benchmark: using-karenina/defining-benchmark.md
-    - Adding Questions: using-karenina/adding-questions.md
-    - Accessing and Filtering: using-karenina/accessing-filtering.md
-    - Templates: using-karenina/templates.md
-    - Rubrics: using-karenina/rubrics.md
-    - Model Configuration: using-karenina/model-configuration.md
-    - Running Verification: using-karenina/verification.md
-    - Analyzing Results with DataFrames: using-karenina/analyzing-results-dataframes.md
-    - DataFrame Quick Reference: using-karenina/dataframe-quick-reference.md
-    - CLI Verification: using-karenina/cli-verification.md
-    - Saving and Loading: using-karenina/saving-loading.md
+  - Home:
+    - home/index.md
+    - Philosophy: home/philosophy.md
+    - Reading Paths: home/reading-paths.md
+  - Getting Started:
+    - getting-started/index.md
+    - Installation: getting-started/installation.md
+    - "Quick Start: Q/A Benchmark": notebooks/quickstart.ipynb
+    - "Quick Start: Scenarios": notebooks/quickstart-scenarios.ipynb
+    - "Quick Start: TaskEval": notebooks/quickstart-taskeval.ipynb
+    - Workspace Init: getting-started/workspace-init.md
+  - Core Concepts:
+    - Overview: core_concepts/index.md
+    - Questions & Benchmarks:
+      - Overview: core_concepts/questions-and-benchmarks/index.md
+      - Benchmarks: notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb
+      - Questions: notebooks/core_concepts/questions-and-benchmarks/questions.ipynb
+      - "Checkpoints: The Memory of Evaluation": core_concepts/questions-and-benchmarks/checkpoints.md
+    - TaskEval: notebooks/core_concepts/task-eval.ipynb
+    - Answer Templates: notebooks/core_concepts/answer-templates.ipynb
+    - Verification Primitives: notebooks/core_concepts/verification-primitives.ipynb
+    - Rubric Traits:
+      - Overview: core_concepts/rubrics/index.md
+      - LLM Traits: notebooks/core_concepts/rubrics/llm-traits.ipynb
+      - Regex Traits: notebooks/core_concepts/rubrics/regex-traits.ipynb
+      - Callable Traits: notebooks/core_concepts/rubrics/callable-traits.ipynb
+      - Metric Traits: notebooks/core_concepts/rubrics/metric-traits.ipynb
+      - Agentic Traits: notebooks/core_concepts/rubrics/agentic-traits.ipynb
+    - Scenarios:
+      - Overview: core_concepts/scenarios/index.md
+      - Building Scenarios: notebooks/core_concepts/scenarios/building-scenarios.ipynb
+      - Outcome Criteria: notebooks/core_concepts/scenarios/outcome-criteria.ipynb
+      - State and Routing: notebooks/core_concepts/scenarios/state-and-routing.ipynb
+    - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
+    - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
+    - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
+    - Question Context:
+      - ADeLe: notebooks/core_concepts/adele.ipynb
+      - Few-Shot: notebooks/core_concepts/few-shot.ipynb
+    - Pipeline:
+      - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
+      - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
+      - Agentic Evaluation: notebooks/core_concepts/agentic-evaluation.ipynb
+    - Infrastructure:
+      - Adapters: core_concepts/adapters.md
+      - MCP Overview: notebooks/core_concepts/mcp-overview.ipynb
+      - Manual Interface: notebooks/core_concepts/manual-interface.ipynb
+  - Workflows:
+    - workflows/index.md
+    - Evaluating with TaskEval: notebooks/task-eval/index.ipynb
+    - Configuration:
+      - Overview: workflows/configuration/index.md
+      - Environment Variables: workflows/configuration/environment-variables.md
+      - Presets: workflows/configuration/presets.md
+    - Creating Benchmarks:
+      - Overview: workflows/creating-benchmarks/index.md
+      - Factual QA Benchmark: notebooks/creating-benchmarks/factual-qa-benchmark.ipynb
+      - Full Evaluation Benchmark: notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb
+      - Quality Assessment: notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb
+      - Choosing Rubric Traits: notebooks/creating-benchmarks/choosing-rubric-traits.ipynb
+      - Scaled Authoring: notebooks/creating-benchmarks/scaled-authoring.ipynb
+    - Running Verification:
+      - Overview: workflows/running-verification/index.md
+      - Basic Verification: notebooks/running-verification/basic-verification.ipynb
+      - Full Evaluation: notebooks/running-verification/full-evaluation.ipynb
+      - Multi-Model Comparison: notebooks/running-verification/multi-model-comparison.ipynb
+      - Deep Judgment: notebooks/running-verification/deep-judgment.ipynb
+      - MCP Agent Evaluation: notebooks/running-verification/mcp-agent-evaluation.ipynb
+      - Manual Interface: notebooks/running-verification/manual-interface-workflow.ipynb
+      - Agentic Evaluation: notebooks/running-verification/agentic-evaluation.ipynb
+    - Analyzing Results:
+      - Overview: workflows/analyzing-results/index.md
+      - Verification Result: workflows/analyzing-results/verification-result.md
+      - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
+      - Exporting: workflows/analyzing-results/exporting.md
+      - Iterating: workflows/analyzing-results/iterating.md
+    - Scenarios:
+      - Sycophancy Tutorial: notebooks/scenarios/sycophancy-tutorial.ipynb
+  - Reference:
+    - reference/index.md
+    - Configuration Reference:
+      - Overview: reference/configuration/index.md
+      - Environment Variables: reference/configuration/env-vars.md
+      - VerificationConfig: reference/configuration/verification-config.md
+      - ModelConfig: reference/configuration/model-config.md
+      - PromptConfig: reference/configuration/prompt-config.md
+      - Preset Schema: reference/configuration/preset-schema.md
+    - CLI Reference:
+      - Overview: reference/cli/index.md
+      - verify: reference/cli/verify.md
+      - verify-status: reference/cli/verify-status.md
+      - preset: reference/cli/preset.md
+      - serve: reference/cli/serve.md
+      - init: reference/cli/init.md
+      - optimize: reference/cli/optimize.md
+    - API Reference: reference/api/
+  - Advanced:
+    - advanced.md
+    - Pipeline:
+      - Overview: advanced-pipeline/index.md
+      - Stages: advanced-pipeline/stages.md
+      - Deep Judgment (Templates): advanced-pipeline/deep-judgment-templates.md
+      - Deep Judgment (Rubrics): advanced-pipeline/deep-judgment-rubrics.md
+      - Prompt Assembly: advanced-pipeline/prompt-assembly.md
+      - Custom Stages: advanced-pipeline/custom-stages.md
+      - Agentic Evaluation: advanced-pipeline/agentic-evaluation.md
+      - Agentic Rubric Evaluation: advanced-pipeline/agentic-rubric-evaluation.md
+    - Adapters:
+      - Overview: advanced-adapters/index.md
+      - Ports: advanced-adapters/ports.md
+      - Available Adapters: advanced-adapters/available-adapters.md
+      - MCP Integration: advanced-adapters/mcp-integration.md
+      - Writing Adapters: advanced-adapters/writing-adapters.md
+  - Contributing:
+    - contributing.md
 
-  - Features:
-    - Overview: features.md
-    - Advanced Features:
-      - Deep-Judgment: advanced/deep-judgment.md
-      - Abstention Detection: advanced/abstention-detection.md
-      - Embedding Check: advanced/embedding-check.md
-      - TaskEval: advanced/task-eval.md
-      - Configuration Presets: advanced/presets.md
-      - Few-Shot Prompting: advanced/few-shot.md
-      - Manual Traces: advanced/manual-traces.md
-      - MCP Integration: advanced/mcp-integration.md
-      - System Integration: advanced/integration.md
-  - Configuration: configuration.md
-  - API Reference: api-reference.md
-  - Troubleshooting: troubleshooting.md
+extra_css:
+  - stylesheets/extra.css
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/example/karenina
+      link: https://github.com/biocypher/karenina

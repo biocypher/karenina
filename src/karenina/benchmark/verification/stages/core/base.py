@@ -18,14 +18,21 @@ Logging Convention:
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
-from .....schemas.domain import Rubric
-from .....schemas.verification import PromptConfig
-from .....schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import PromptConfig
+from karenina.schemas.verification.config import (
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
+)
 
 if TYPE_CHECKING:
-    from ...utils.trace_usage_tracker import UsageTracker
+    from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +66,7 @@ class ArtifactKeys:
     RAW_ANSWER = "RawAnswer"
     TEMPLATE_VALIDATION_ERROR = "template_validation_error"
     TEMPLATE_EVALUATOR = "template_evaluator"
+    TEMPLATE_MODE = "template_mode"  # "classic", "verified", or "mixed"
 
     # Model Identification
     ANSWERING_MODEL_STR = "answering_model_str"
@@ -181,6 +189,22 @@ class ArtifactKeys:
     TIMESTAMP = "timestamp"
     EXECUTION_TIME = "execution_time"
 
+    # ==========================================================================
+    # Agentic Parsing
+    # ==========================================================================
+
+    INVESTIGATION_TRACE = "investigation_trace"
+    WORKSPACE_PATH = "workspace_path"
+    AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
+
+    # ==========================================================================
+    # Agentic Rubric Evaluation
+    # ==========================================================================
+
+    AGENTIC_RUBRIC_EVALUATION_PERFORMED = "agentic_rubric_evaluation_performed"
+    AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
+    AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
+
 
 @dataclass
 class VerificationContext:
@@ -191,55 +215,35 @@ class VerificationContext:
     the final VerificationResult. Stages read from and write to this context.
 
     Attributes:
-        # Identity & Metadata
-        question_id: Unique identifier for the question
-        template_id: MD5 hash of template code
-        question_text: The question to verify
-        template_code: Python code defining the Answer class
-
-        # Configuration
-        answering_model: Configuration for the answering LLM
-        parsing_model: Configuration for the parsing LLM
-        rubric: Optional rubric for evaluation
-        keywords: Keywords associated with the question
-
-        # Run Metadata
-        run_name: Optional run name for tracking
-        replicate: Replicate number (1, 2, 3, ...) for repeated runs of the same question
-
-        # Feature Flags
-        few_shot_enabled: Whether few-shot prompting is enabled
-        abstention_enabled: Whether abstention detection is enabled
-        sufficiency_enabled: Whether trace sufficiency detection is enabled
-        deep_judgment_enabled: Whether deep-judgment parsing is enabled
-
-        # Rubric Configuration
-        rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits ("batch" or "sequential")
-
-        # Deep-Judgment Configuration
-        deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute
-        deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts
-        deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation
-        deep_judgment_search_enabled: Whether search enhancement is enabled
-        deep_judgment_search_tool: Search tool name or callable
-
-        # Few-Shot Configuration
-        few_shot_examples: List of question-answer pairs for few-shot prompting
-
-        # Answer Caching
+        question_id: Unique identifier for the question.
+        template_id: MD5 hash of template code.
+        question_text: The question to verify.
+        template_code: Python code defining the Answer class.
+        answering_model: Configuration for the answering LLM.
+        parsing_model: Configuration for the parsing LLM.
+        rubric: Optional rubric for evaluation.
+        keywords: Keywords associated with the question.
+        run_name: Optional run name for tracking.
+        replicate: Replicate number (1, 2, 3, ...) for repeated runs of the same question.
+        few_shot_enabled: Whether few-shot prompting is enabled.
+        abstention_enabled: Whether abstention detection is enabled.
+        sufficiency_enabled: Whether trace sufficiency detection is enabled.
+        deep_judgment_enabled: Whether deep-judgment parsing is enabled.
+        rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
+            ("batch" or "sequential").
+        deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
+        deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts.
+        deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation.
+        deep_judgment_search_enabled: Whether search enhancement is enabled.
+        deep_judgment_search_tool: Search tool name or callable.
+        few_shot_examples: List of question-answer pairs for few-shot prompting.
         cached_answer_data: Optional cached answer data from previous generation.
             If provided, GenerateAnswerStage will use this instead of calling LLM.
             Used to share answers across multiple judges.
-
-        # Artifacts (populated by stages)
-        artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.)
-
-        # Result Builder (accumulates VerificationResult fields)
-        result_builder: Dictionary accumulating result fields
-
-        # Error Tracking
-        error: Optional error message if pipeline fails
-        completed_without_errors: Whether pipeline completed successfully
+        artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.).
+        result_builder: Dictionary accumulating result fields.
+        error: Optional error message if pipeline fails.
+        completed_without_errors: Whether pipeline completed successfully.
     """
 
     # Identity & Metadata
@@ -269,9 +273,9 @@ class VerificationContext:
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
 
     # Deep-Judgment Configuration
-    deep_judgment_max_excerpts_per_attribute: int = 3
-    deep_judgment_fuzzy_match_threshold: float = 0.80
-    deep_judgment_excerpt_retry_attempts: int = 2
+    deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS
+    deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
+    deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
     deep_judgment_search_enabled: bool = False
     deep_judgment_search_tool: str | Any = "tavily"
 
@@ -279,14 +283,17 @@ class VerificationContext:
     deep_judgment_rubric_mode: str = "disabled"  # Mode: disabled, enable_all, use_checkpoint, custom
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts
     deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
-    deep_judgment_rubric_max_excerpts_default: int = 7
-    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80
-    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2
+    deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
     deep_judgment_rubric_search_enabled: bool = False
     deep_judgment_rubric_search_tool: str | Any = "tavily"
 
     # Prompt Configuration
     prompt_config: PromptConfig | None = None
+
+    # Extraction Hints Configuration
+    include_extraction_hints: bool = True
 
     # Few-Shot Configuration
     few_shot_examples: list[dict[str, str]] | None = None
@@ -297,6 +304,27 @@ class VerificationContext:
 
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None
+
+    # Agentic Parsing Configuration
+    agentic_parsing: bool = False
+    agentic_judge_context: str = "workspace_only"
+    agentic_parsing_max_turns: int = 15
+    agentic_parsing_timeout: float = 120.0
+
+    # Agentic Rubric Configuration
+    agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
+    agentic_rubric_parallel: bool = False
+
+    # Scenario
+    scenario_turn: int | None = None
+
+    # Workspace
+    question_workspace_path: str | None = None  # Raw relative path from Question
+    workspace_path: Path | None = None  # Resolved effective path (set by GenerateAnswer)
+    workspace_is_copy: bool = False  # True if workspace is a copy/fresh dir (safe to delete)
+    workspace_root: Path | None = None
+    workspace_copy: bool = True
+    workspace_cleanup: bool = True
 
     # Artifacts (populated by stages)
     artifacts: dict[str, Any] = field(default_factory=dict)
@@ -514,7 +542,7 @@ class BaseVerificationStage(ABC):
         Returns:
             UsageTracker instance (from context or newly created)
         """
-        from ...utils.trace_usage_tracker import UsageTracker
+        from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 
         usage_tracker: UsageTracker | None = context.get_artifact("usage_tracker")
         if usage_tracker is None:

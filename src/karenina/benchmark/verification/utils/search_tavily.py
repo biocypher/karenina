@@ -23,7 +23,7 @@ from typing import Any
 
 from pydantic import SecretStr
 
-from ....schemas import SearchResultItem
+from karenina.schemas import SearchResultItem
 
 logger = logging.getLogger(__name__)
 

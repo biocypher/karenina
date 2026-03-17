@@ -11,7 +11,7 @@ from karenina.integrations.gepa.prompts.defaults import (
 )
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 # Type alias for GEPA frontier tracking strategies
 FrontierType = Literal["instance", "objective", "hybrid", "cartesian"]

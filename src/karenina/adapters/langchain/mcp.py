@@ -8,7 +8,7 @@ see karenina.utils.mcp.
 
 Example:
     >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
-    >>> client, tools = await create_mcp_client_and_tools(mcp_urls)
+    >>> client, tools = await acreate_mcp_client_and_tools(mcp_urls)
     >>> # tools are LangChain Tool objects ready for agent use
     >>> print(f"Loaded {len(tools)} tools")
 """
@@ -16,24 +16,28 @@ Example:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
-import threading
+from contextlib import AsyncExitStack
 from typing import Any
 
+from karenina.exceptions import McpClientError, McpTimeoutError
+from karenina.ports.agent import MCPHttpServerConfig
 from karenina.utils.mcp.tools import apply_tool_description_overrides
 
 logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [
+    "acreate_mcp_client_and_tools",
+    "acreate_persistent_mcp_tools",
     "create_mcp_client_and_tools",
-    "sync_create_mcp_client_and_tools",
     "cleanup_mcp_client",
     "apply_tool_description_overrides",
 ]
 
 
-async def create_mcp_client_and_tools(
+async def acreate_mcp_client_and_tools(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
     tool_description_overrides: dict[str, str] | None = None,
@@ -63,7 +67,7 @@ async def create_mcp_client_and_tools(
 
     Example:
         >>> mcp_urls = {"biocontext": "https://mcp.biocontext.ai/mcp/"}
-        >>> client, tools = await create_mcp_client_and_tools(mcp_urls)
+        >>> client, tools = await acreate_mcp_client_and_tools(mcp_urls)
         >>> print(f"Loaded {len(tools)} tools")
 
         >>> # Filter to specific tools
@@ -108,14 +112,96 @@ async def create_mcp_client_and_tools(
         return client, tools
 
     except TimeoutError as e:
-        raise Exception(
-            "MCP server connection timed out after 30 seconds. Check server availability and network connection."
+        raise McpTimeoutError(
+            "MCP server connection timed out after 30 seconds. Check server availability and network connection.",
+            timeout_seconds=30,
         ) from e
     except Exception as e:
-        raise Exception(f"Failed to create MCP client or fetch tools: {e}") from e
+        raise McpClientError(f"Failed to create MCP client or fetch tools: {e}") from e
 
 
-def sync_create_mcp_client_and_tools(
+async def acreate_persistent_mcp_tools(
+    mcp_urls_dict: dict[str, str],
+    exit_stack: AsyncExitStack,
+    tool_filter: list[str] | None = None,
+    tool_description_overrides: dict[str, str] | None = None,
+) -> list[Any]:
+    """Create LangChain tools bound to persistent MCP sessions.
+
+    Unlike acreate_mcp_client_and_tools which creates tools that open a new
+    MCP session per tool call, this function creates persistent sessions that
+    stay alive for the duration of the exit_stack. This eliminates the per-call
+    connection overhead (4 HTTP round-trips per tool call).
+
+    Args:
+        mcp_urls_dict: Dictionary mapping server names to MCP server URLs.
+        exit_stack: AsyncExitStack that manages session lifecycles. Sessions
+            remain open until the exit stack closes.
+        tool_filter: Optional list of tool names to include.
+        tool_description_overrides: Optional dict mapping tool names to custom
+            descriptions.
+
+    Returns:
+        List of LangChain-compatible Tool objects bound to persistent sessions.
+
+    Raises:
+        ImportError: If required packages are not installed.
+        McpTimeoutError: If connecting to MCP servers times out.
+        McpClientError: If connection or tool loading fails.
+    """
+    try:
+        from langchain_mcp_adapters.tools import load_mcp_tools
+    except ImportError as e:
+        raise ImportError(
+            "langchain-mcp-adapters package is required for MCP support. Install it with: uv add langchain-mcp-adapters"
+        ) from e
+
+    from karenina.utils.mcp.client import connect_mcp_session
+
+    all_tools: list[Any] = []
+
+    try:
+        for server_name, url in mcp_urls_dict.items():
+            config: MCPHttpServerConfig = {"type": "http", "url": url}
+
+            # Create persistent session (registered with exit_stack for cleanup)
+            session = await asyncio.wait_for(
+                connect_mcp_session(exit_stack, config),
+                timeout=30.0,
+            )
+
+            # Load tools bound to this persistent session
+            server_tools = await asyncio.wait_for(
+                load_mcp_tools(session, server_name=server_name),
+                timeout=30.0,
+            )
+            all_tools.extend(server_tools)
+
+            logger.debug(f"Loaded {len(server_tools)} tools from '{server_name}' with persistent session")
+
+    except TimeoutError as e:
+        raise McpTimeoutError(
+            "MCP server connection timed out after 30 seconds. Check server availability and network connection.",
+            timeout_seconds=30,
+        ) from e
+    except Exception as e:
+        raise McpClientError(f"Failed to create persistent MCP session or fetch tools: {e}") from e
+
+    # Filter tools if tool_filter is provided
+    if tool_filter is not None:
+        allowed_tools = set(tool_filter)
+        all_tools = [tool for tool in all_tools if getattr(tool, "name", None) in allowed_tools]
+
+    # Apply tool description overrides if provided
+    if tool_description_overrides:
+        all_tools = apply_tool_description_overrides(all_tools, tool_description_overrides)
+
+    logger.info(f"Created {len(all_tools)} persistent MCP tools across {len(mcp_urls_dict)} servers")
+
+    return all_tools
+
+
+def create_mcp_client_and_tools(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
     tool_description_overrides: dict[str, str] | None = None,
@@ -136,7 +222,9 @@ def sync_create_mcp_client_and_tools(
         Tuple of (client, tools) as in create_mcp_client_and_tools
 
     Raises:
-        Same exceptions as create_mcp_client_and_tools
+        ImportError: If langchain-mcp-adapters is not installed.
+        McpTimeoutError: If MCP client creation times out.
+        McpClientError: If MCP client creation or tool fetching fails.
     """
     from typing import cast
 
@@ -147,7 +235,7 @@ def sync_create_mcp_client_and_tools(
         portal = get_async_portal()
         if portal is not None:
             portal_result = portal.call(
-                create_mcp_client_and_tools, mcp_urls_dict, tool_filter, tool_description_overrides
+                acreate_mcp_client_and_tools, mcp_urls_dict, tool_filter, tool_description_overrides
             )
             return cast(tuple[Any, list[Any]], portal_result)
     except ImportError:
@@ -155,41 +243,27 @@ def sync_create_mcp_client_and_tools(
 
     # Check if we're already in an async context
     try:
-        current_loop = asyncio.get_running_loop()
-        if current_loop:
-            # We're in an async context, need to run in a separate thread
-            def run_in_thread() -> tuple[Any, list[Any]]:
-                return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
+        asyncio.get_running_loop()
 
-            result: list[tuple[Any, list[Any]] | None] = [None]
-            exception: list[Exception | None] = [None]
+        # Use ThreadPoolExecutor to avoid nested event loop issues
+        def run_in_thread() -> tuple[Any, list[Any]]:
+            return asyncio.run(acreate_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
-            def thread_target() -> None:
-                try:
-                    result[0] = run_in_thread()
-                except Exception as e:
-                    exception[0] = e
-
-            thread = threading.Thread(target=thread_target)
-            thread.start()
-            thread.join(timeout=45.0)
-
-            if thread.is_alive():
-                raise Exception("MCP client creation timed out after 45 seconds")
-
-            if exception[0]:
-                raise exception[0]
-
-            if result[0] is None:
-                raise Exception("MCP client creation failed without exception")
-
-            return result[0]
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(run_in_thread)
+            try:
+                return future.result(timeout=45)
+            except TimeoutError as e:
+                raise McpTimeoutError(
+                    "MCP client creation timed out after 45 seconds",
+                    timeout_seconds=45,
+                ) from e
     except RuntimeError:
         # No event loop running, safe to create new one
         pass
 
     # Create new event loop and run the async function
-    return asyncio.run(create_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
+    return asyncio.run(acreate_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
 
 def cleanup_mcp_client(client: Any) -> None:
@@ -202,7 +276,7 @@ def cleanup_mcp_client(client: Any) -> None:
         client: MCP client instance (MultiServerMCPClient or similar)
 
     Example:
-        >>> client, tools = sync_create_mcp_client_and_tools(mcp_urls)
+        >>> client, tools = create_mcp_client_and_tools(mcp_urls)
         >>> # ... use client ...
         >>> cleanup_mcp_client(client)
     """

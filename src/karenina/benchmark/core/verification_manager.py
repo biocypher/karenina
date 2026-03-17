@@ -2,18 +2,21 @@
 
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .base import BenchmarkBase
     from .rubrics import RubricManager
 
-from ...schemas.workflow import (
+from karenina.schemas.entities.question import QuestionRegistryEntry
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
-    VerificationResultSet,
 )
+
 from ..verification import run_verification_batch
 from ..verification.utils.template_validation import validate_answer_template
 
@@ -33,6 +36,7 @@ class VerificationManager:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        workspace_root: "Path | None" = None,
     ) -> VerificationResultSet:
         """
         Run verification on the benchmark using existing execution system.
@@ -43,13 +47,18 @@ class VerificationManager:
             run_name: Optional run name for tracking
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
+            workspace_root: Root directory for task workspaces (from Benchmark).
 
         Returns:
             VerificationResultSet containing all verification results
         """
         # If no question IDs provided, verify all finished questions
         if question_ids is None:
-            question_ids = [q_id for q_id, q in self.base._questions_cache.items() if q.get("finished", False)]
+            question_ids = [
+                q_id
+                for q_id in self.base._questions_cache
+                if self.base._question_registry.get(q_id, QuestionRegistryEntry()).finished
+            ]
 
         # Validate that all requested questions exist and are ready
         for q_id in question_ids:
@@ -81,7 +90,7 @@ class VerificationManager:
                     question_rubric_dict = question_rubric_raw
                 # If it's a list of trait objects, convert to Rubric and dump
                 elif isinstance(question_rubric_raw, list):
-                    from ...schemas.domain.rubric import (
+                    from karenina.schemas.entities.rubric import (
                         CallableTrait,
                         LLMRubricTrait,
                         MetricRubricTrait,
@@ -113,6 +122,7 @@ class VerificationManager:
                 few_shot_examples=q_data.get("few_shot_examples"),
                 question_rubric=question_rubric_dict,
                 keywords=q_data.get("keywords"),
+                workspace_path=q_data.get("workspace_path"),
             )
             templates.append(template)
 
@@ -135,7 +145,7 @@ class VerificationManager:
                 # This is called BEFORE starting each task to show current item being processed
                 percentage = ((current - 1) / total) * 100 if total > 0 else 0
                 if result:
-                    message = f"Verifying {result.question_id} ({current}/{total})"
+                    message = f"Verifying {result.metadata.question_id} ({current}/{total})"
                     progress_callback(percentage, message)
 
             batch_progress_callback = adapter
@@ -150,6 +160,7 @@ class VerificationManager:
             storage_url=storage_url,
             benchmark_name=self.base.name,
             progress_callback=batch_progress_callback,
+            workspace_root=workspace_root,
         )
 
         return results

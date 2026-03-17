@@ -21,6 +21,8 @@ import os
 from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from ..schemas.verification.config import DEFAULT_ASYNC_ENABLED, DEFAULT_ASYNC_MAX_WORKERS
+
 if TYPE_CHECKING:
     from anyio.from_thread import BlockingPortal
 
@@ -44,13 +46,13 @@ def read_async_config() -> tuple[bool, int]:
         ...     invoker.max_workers = max_workers
     """
     # Read async_enabled
-    async_enabled = True  # Default
+    async_enabled = DEFAULT_ASYNC_ENABLED
     env_val = os.getenv("KARENINA_ASYNC_ENABLED")
     if env_val is not None:
         async_enabled = env_val.lower() in ("true", "1", "yes")
 
     # Read max_workers
-    max_workers = 2  # Default
+    max_workers = DEFAULT_ASYNC_MAX_WORKERS
     env_val = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
     if env_val is not None:
         with contextlib.suppress(ValueError):
@@ -80,7 +82,7 @@ def get_max_workers(override: int | None = None) -> int:
         with contextlib.suppress(ValueError):
             return int(env_val)
 
-    return 2  # Default
+    return DEFAULT_ASYNC_MAX_WORKERS
 
 
 async def run_with_semaphore(

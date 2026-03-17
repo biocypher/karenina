@@ -25,7 +25,7 @@ import pytest
 from pydantic import Field
 
 from karenina import Benchmark
-from karenina.schemas.domain import (
+from karenina.schemas.entities import (
     BaseAnswer,
     LLMRubricTrait,
     RegexTrait,
@@ -326,7 +326,7 @@ class TestTemplateRubricStorageCombined:
         # Add question with template
         template_code = """
 from pydantic import Field
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 class Answer(BaseAnswer):
     value: str = Field(description="The extracted value")

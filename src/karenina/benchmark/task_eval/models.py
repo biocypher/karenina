@@ -1,29 +1,30 @@
 """Data models for TaskEval."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
+if TYPE_CHECKING:
+    pass
+
 # Import VerificationResult for use in StepEval
-from ...schemas.workflow import VerificationResult
+from karenina.schemas.verification import VerificationResult
 
 
 class LogEvent(BaseModel):
     """Single log event in TaskEval."""
 
+    model_config = {"arbitrary_types_allowed": True}
+
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     level: Literal["debug", "info", "warn", "error"]
-    text: str
+    text: str = ""
     tags: list[str] | None = None
-    payload: dict[str, Any] | None = None
-    # New fields for agent output logging
-    question_id: str | None = Field(default=None, description="Question this log answers")
-    is_agent_output: bool = Field(default=False, description="Whether this is agent output to be evaluated")
-    output_type: str | None = Field(default=None, description="Type of output: answer, reasoning, analysis, etc.")
-    # Dict trace support
-    is_dict_structured: bool = Field(default=False, description="Whether this log is from a dict trace")
-    dict_keys: list[str] | None = Field(default=None, description="Keys from dict trace for quick access")
+    trace_messages: list[Any] | None = Field(
+        default=None,
+        description="List of Message objects representing a structured conversation trace",
+    )
 
 
 class StepEval(BaseModel):
@@ -49,24 +50,28 @@ class StepEval(BaseModel):
 
             for i, result in enumerate(results):
                 result_num = f"[{i + 1}]" if len(results) > 1 else ""
+                template = result.template
+                rubric = result.rubric
 
                 # Verification status
-                if result.verify_result:
+                verify_result = template.verify_result if template else None
+                if verify_result:
                     status = "✓ PASSED"
-                elif result.verify_result is False:
+                elif verify_result is False:
                     status = "✗ FAILED"
                 else:
                     status = "⚠ NO RESULT"
                 lines.append(f"{indent}  {result_num} Status: {status}")
 
                 # Show full output (no truncation)
-                output = result.raw_llm_response
+                output = template.raw_llm_response if template else None
                 lines.append(f'{indent}  {result_num} Output: "{output}"')
 
                 # Show LLM and manual rubric traits
-                if result.verify_rubric:
+                all_trait_scores = rubric.get_all_trait_scores() if rubric else None
+                if all_trait_scores:
                     llm_manual_traits = []
-                    for k, v in result.verify_rubric.items():
+                    for k, v in all_trait_scores.items():
                         if isinstance(v, bool):
                             llm_manual_traits.append(f"{k}={'✓' if v else '✗'}")
                         else:
@@ -74,8 +79,8 @@ class StepEval(BaseModel):
                     lines.append(f"{indent}  {result_num} Rubric: {', '.join(llm_manual_traits)}")
 
                 # Show metric traits separately with confusion matrix and metrics
-                if result.metric_trait_confusion_lists:
-                    for trait_name, confusion in result.metric_trait_confusion_lists.items():
+                if rubric and rubric.metric_trait_confusion_lists:
+                    for trait_name, confusion in rubric.metric_trait_confusion_lists.items():
                         counts = []
                         for bucket in ["tp", "fp", "fn", "tn"]:
                             if bucket in confusion:
@@ -83,22 +88,22 @@ class StepEval(BaseModel):
                         lines.append(f"{indent}  {result_num} Metric [{trait_name}]: {', '.join(counts)}")
 
                         # Show computed metrics
-                        if result.metric_trait_metrics and trait_name in result.metric_trait_metrics:
-                            metrics = result.metric_trait_metrics[trait_name]
+                        if rubric.metric_trait_scores and trait_name in rubric.metric_trait_scores:
+                            metrics = rubric.metric_trait_scores[trait_name]
                             metric_strs = [f"{k}={v:.3f}" for k, v in metrics.items()]
                             lines.append(f"{indent}      {result_num} Metrics: {', '.join(metric_strs)}")
 
                 # Show special verification features
-                if result.abstention_detected:
+                if template and template.abstention_detected:
                     lines.append(f"{indent}  {result_num} ⚠ Abstention detected")
-                if result.embedding_override_applied:
+                if template and template.embedding_override_applied:
                     lines.append(
-                        f"{indent}  {result_num} ✓ Embedding check overrode failure (similarity: {result.embedding_similarity_score:.3f})"
+                        f"{indent}  {result_num} ✓ Embedding check overrode failure (similarity: {template.embedding_similarity_score:.3f})"
                     )
 
                 # Show error if present
-                if result.error:
-                    lines.append(f"{indent}  {result_num} Error: {result.error}")
+                if result.metadata.error:
+                    lines.append(f"{indent}  {result_num} Error: {result.metadata.error}")
 
                 if i < len(results) - 1:
                     lines.append("")  # Separator between multiple results
@@ -139,31 +144,35 @@ class StepEval(BaseModel):
 
         for _trace_id, results in self.verification_results.items():
             total_results += len(results)
-            if any(result.verify_result for result in results):
+            if any(result.template and result.template.verify_result for result in results):
                 passed_traces += 1
 
             # Count template verification and rubric traits separately
             for result in results:
+                template = result.template
+                rubric = result.rubric
+
                 # Template verification (structural validation)
-                if result.template_verification_performed:
+                if template and template.template_verification_performed:
                     template_verification_total += 1
-                    if result.verify_result:
+                    if template.verify_result:
                         template_verification_passed += 1
 
                 # Rubric evaluation (qualitative assessment)
-                if result.rubric_evaluation_performed:
+                if rubric and rubric.rubric_evaluation_performed:
                     # Count LLM and manual rubric traits
-                    if result.verify_rubric:
-                        for score in result.verify_rubric.values():
+                    all_trait_scores = rubric.get_all_trait_scores()
+                    if all_trait_scores:
+                        for score in all_trait_scores.values():
                             rubric_traits_total += 1
                             if score is True or (isinstance(score, int) and score > 0):
                                 rubric_traits_passed += 1
 
                     # Count metric traits
-                    if result.metric_trait_metrics:
-                        rubric_traits_total += len(result.metric_trait_metrics)
+                    if rubric.metric_trait_scores:
+                        rubric_traits_total += len(rubric.metric_trait_scores)
                         rubric_traits_passed += len(
-                            result.metric_trait_metrics
+                            rubric.metric_trait_scores
                         )  # All computed metrics count as "passed"
 
         return {
@@ -190,6 +199,8 @@ class StepEval(BaseModel):
 
         Returns:
             dict: Mapping trace_id to aggregated results:
+
+                ```python
                 {
                     "trace_id": {
                         "llm": {"clarity": 4.5, "analysis_quality": 3.2},
@@ -203,15 +214,18 @@ class StepEval(BaseModel):
                     },
                     ...
                 }
+                ```
 
         Example:
-            >>> step_eval = StepEval()
-            >>> step_eval.verification_results = {
-            ...     "trace_1": [result1, result2, result3]
-            ... }
-            >>> aggregated = step_eval.aggregate_rubric_results()
-            >>> aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
-            4.333
+            ```python
+            step_eval = StepEval()
+            step_eval.verification_results = {
+                "trace_1": [result1, result2, result3]
+            }
+            aggregated = step_eval.aggregate_rubric_results()
+            aggregated["trace_1"]["llm"]["clarity"]  # Averaged score
+            # 4.333
+            ```
         """
         aggregated = {}
 
@@ -235,7 +249,7 @@ class StepEval(BaseModel):
             dict: Aggregated rubric results with failed replicate count
         """
         # Filter out failed replicates
-        successful_results = [r for r in results if r.completed_without_errors]
+        successful_results = [r for r in results if r.metadata.completed_without_errors]
         failed_count = len(results) - len(successful_results)
 
         if not successful_results:
@@ -653,16 +667,20 @@ class TaskEvalResult(BaseModel):
             for trace_id, results in self.global_eval.verification_results.items():
                 lines.append(f"### Trace: {trace_id}")
                 for i, result in enumerate(results):
-                    status_emoji = "✅" if result.verify_result else "❌"
-                    lines.append(f"- {status_emoji} Result {i + 1}: {'PASSED' if result.verify_result else 'FAILED'}")
+                    template = result.template
+                    rubric = result.rubric
+                    verify_result = template.verify_result if template else None
+                    status_emoji = "✅" if verify_result else "❌"
+                    lines.append(f"- {status_emoji} Result {i + 1}: {'PASSED' if verify_result else 'FAILED'}")
 
                     # Show rubric traits
-                    if result.verify_rubric:
-                        lines.append(f"  - Rubric: {', '.join(f'{k}={v}' for k, v in result.verify_rubric.items())}")
+                    all_trait_scores = rubric.get_all_trait_scores() if rubric else None
+                    if all_trait_scores:
+                        lines.append(f"  - Rubric: {', '.join(f'{k}={v}' for k, v in all_trait_scores.items())}")
 
                     # Show metric traits
-                    if result.metric_trait_metrics:
-                        for trait_name, metrics in result.metric_trait_metrics.items():
+                    if rubric and rubric.metric_trait_scores:
+                        for trait_name, metrics in rubric.metric_trait_scores.items():
                             metrics_str = ", ".join(f"{k}={v:.3f}" for k, v in metrics.items())
                             lines.append(f"  - Metric [{trait_name}]: {metrics_str}")
                 lines.append("")

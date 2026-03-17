@@ -39,11 +39,11 @@ class ManualInterfaceError(PortError):
     `interface != "manual"` before attempting adapter operations.
 
     Attributes:
-        operation: The operation that was attempted (e.g., "agent.run_sync()").
+        operation: The operation that was attempted (e.g., "agent.run()").
 
     Example:
         >>> try:
-        ...     agent.run_sync(messages)  # Manual interface
+        ...     agent.run(messages)  # Manual interface
         ... except ManualInterfaceError as e:
         ...     print(f"Cannot {e.operation}: manual interface uses pre-recorded traces")
     """
@@ -73,7 +73,7 @@ class ManualTraceNotFoundError(PortError):
 
     Example:
         >>> try:
-        ...     result = agent.run_sync(
+        ...     result = agent.run(
         ...         messages=[...],
         ...         config=AgentConfig(question_hash="abc123...")
         ...     )

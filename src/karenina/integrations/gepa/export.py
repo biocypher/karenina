@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from karenina.integrations.gepa.config import OptimizationTarget
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.verification.config import VerificationConfig
+    from karenina.schemas.verification import VerificationConfig
 
 
 def export_to_preset(

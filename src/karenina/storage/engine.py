@@ -4,6 +4,7 @@ This module provides functions for creating and managing SQLAlchemy engines
 and sessions, including automatic database and table creation.
 """
 
+import logging
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -16,6 +17,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from .base import Base
 from .db_config import DBConfig
 from .views import create_all_views
+
+logger = logging.getLogger(__name__)
 
 # Global cache for engines (one per storage URL)
 _engine_cache: dict[str, Engine] = {}

@@ -5,7 +5,8 @@ Detects when LLMs refuse to answer or abstain from responding.
 
 from typing import Any
 
-from ...evaluators import detect_abstention
+from karenina.benchmark.verification.evaluators import detect_abstention
+
 from ..core.base import ArtifactKeys, VerificationContext
 from ..core.check_stage_base import BaseCheckStage
 

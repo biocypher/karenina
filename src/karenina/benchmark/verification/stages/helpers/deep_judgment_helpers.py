@@ -7,8 +7,8 @@ These are extracted from rubric_evaluation.py to reduce clutter in the stage fil
 import logging
 from typing import Any
 
-from .....schemas.domain import LLMRubricTrait
-from .....schemas.workflow.verification.config import DeepJudgmentTraitConfig
+from karenina.schemas.entities import LLMRubricTrait
+from karenina.schemas.verification import DeepJudgmentTraitConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -23,10 +23,11 @@ def resolve_deep_judgment_config_for_trait(
     Resolve deep judgment configuration for a single trait based on mode hierarchy.
 
     Resolution priority (first match wins):
-    1. disabled mode: Deep judgment OFF
+    1. disabled mode: Deep judgment OFF globally, but traits with
+       deep_judgment_enabled=True are honored (trait-level opt-in).
     2. enable_all mode: Deep judgment ON for all traits (respects global excerpt toggle)
     3. use_checkpoint mode: Use settings from trait object (loaded from checkpoint)
-    4. custom mode: Look up trait in config dict (question-specific → global → disabled)
+    4. custom mode: Look up trait in config dict (question-specific, then global, then disabled)
 
     Args:
         trait: The rubric trait to resolve configuration for
@@ -40,7 +41,24 @@ def resolve_deep_judgment_config_for_trait(
     logger.debug(f"Resolving deep judgment config for trait '{trait.name}', mode='{mode}'")
 
     if mode == "disabled":
-        # Explicit: Deep judgment OFF
+        # Default mode: deep judgment OFF globally, but honor trait-level opt-in.
+        # If a trait was constructed with deep_judgment_enabled=True (either in code
+        # or loaded from a checkpoint), respect that setting. This allows per-trait
+        # deep judgment without requiring the user to set a global mode.
+        if trait.deep_judgment_enabled:
+            logger.debug(
+                "Trait '%s' has deep_judgment_enabled=True; honoring trait-level "
+                "settings despite global mode='disabled'",
+                trait.name,
+            )
+            return DeepJudgmentTraitConfig(
+                enabled=True,
+                excerpt_enabled=trait.deep_judgment_excerpt_enabled,
+                max_excerpts=trait.deep_judgment_max_excerpts,
+                fuzzy_match_threshold=trait.deep_judgment_fuzzy_match_threshold,
+                excerpt_retry_attempts=trait.deep_judgment_excerpt_retry_attempts,
+                search_enabled=trait.deep_judgment_search_enabled,
+            )
         return DeepJudgmentTraitConfig(enabled=False)
 
     elif mode == "enable_all":

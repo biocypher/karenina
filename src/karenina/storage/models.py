@@ -7,6 +7,7 @@ Note: VerificationResultModel is auto-generated from Pydantic schemas
 and is defined in generated_models.py to keep it in sync with domain models.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     # VerificationResultModel is dynamically generated, so we import it for type checking
@@ -79,7 +82,11 @@ class QuestionModel(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     question_text: Mapped[str] = mapped_column(Text, nullable=False)  # Removed unique=True for composite key
     raw_answer: Mapped[str] = mapped_column(Text, nullable=False)
-    tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    answer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keywords: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    author: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    sources: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
+    custom_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     few_shot_examples: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, nullable=True)
 
     # Timestamps

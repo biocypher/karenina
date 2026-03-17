@@ -10,6 +10,7 @@ For simple LLM calls without tools, use LLMPort instead.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
 
 if TYPE_CHECKING:
@@ -122,6 +123,10 @@ class AgentConfig:
             other adapters.
         extra: Additional adapter-specific configuration options.
             Keys and values depend on the specific adapter implementation.
+        workspace_path: Optional working directory for the agent. When set,
+            the adapter should ensure the agent operates within this directory.
+            Enforcement is adapter-specific: the Claude SDK uses cwd for real
+            isolation; other adapters inject the path into the system prompt.
 
     Example:
         >>> config = AgentConfig(
@@ -145,6 +150,7 @@ class AgentConfig:
     timeout: float | None = None
     question_hash: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    workspace_path: Path | None = None
 
 
 @dataclass
@@ -220,7 +226,7 @@ class AgentPort(Protocol):
     Example:
         >>> # Using an AgentPort implementation
         >>> agent: AgentPort = get_agent(model_config)
-        >>> result = await agent.run(
+        >>> result = await agent.arun(
         ...     messages=[Message.user("What files are in the repo?")],
         ...     mcp_servers={
         ...         "filesystem": {
@@ -240,7 +246,7 @@ class AgentPort(Protocol):
           conversation data in different formats for backward compatibility
     """
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -274,16 +280,16 @@ class AgentPort(Protocol):
         """
         ...
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper for run().
+        """Synchronous wrapper for arun().
 
-        Convenience method that wraps the async `run()` method for use in
+        Convenience method that wraps the async `arun()` method for use in
         synchronous contexts. Uses asyncio.run() internally.
 
         Args:
@@ -296,10 +302,12 @@ class AgentPort(Protocol):
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as run().
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If the execution exceeds the timeout.
+            AgentResponseError: If the response is malformed or invalid.
 
         Note:
             This method creates a new event loop. Do not call from within
-            an existing async context - use `run()` directly instead.
+            an existing async context - use `arun()` directly instead.
         """
         ...

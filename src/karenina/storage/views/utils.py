@@ -4,8 +4,12 @@ Provides shared functions for creating and dropping database views with
 SQLite/PostgreSQL dialect handling, eliminating boilerplate across view modules.
 """
 
+import logging
+
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["create_view_safe", "drop_view_safe"]
 
@@ -34,6 +38,7 @@ def create_view_safe(
     with engine.begin() as conn:
         conn.execute(text(f"DROP VIEW IF EXISTS {view_name}"))
         conn.execute(text(f"CREATE VIEW {view_name} AS {sql}"))
+    logger.debug("Created view %s (%s dialect)", view_name, engine.dialect.name)
 
 
 def drop_view_safe(engine: Engine, view_name: str) -> None:
@@ -47,3 +52,4 @@ def drop_view_safe(engine: Engine, view_name: str) -> None:
     """
     with engine.begin() as conn:
         conn.execute(text(f"DROP VIEW IF EXISTS {view_name}"))
+    logger.debug("Dropped view %s", view_name)

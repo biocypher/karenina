@@ -4,10 +4,12 @@ This module provides the main Benchmark class for creating, loading,
 saving, and executing benchmarks in JSON-LD format.
 
 This is the refactored version that uses the core submodule managers
-while maintaining 100% backward compatibility.
+while maintaining 100% backward compatibility. Business logic for
+template generation, GEPA optimization, repr formatting, and schema
+conversion is in benchmark_helpers.py.
 """
 
-import json
+import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -15,16 +17,18 @@ from typing import TYPE_CHECKING, Any, Union
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
     from ..schemas.checkpoint import SchemaOrgQuestion
-    from ..schemas.domain import Question
+    from ..schemas.entities import Question
 
-from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from ..schemas.workflow import (
+from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from ..schemas.entities.rubric import AgenticRubricTrait
+from ..schemas.results import VerificationResultSet
+from ..schemas.scenario.definition import ScenarioDefinition
+from ..schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
-    VerificationResultSet,
 )
-from .authoring.answers.generator import generate_answer_template, load_answer_templates_from_json
+from . import benchmark_helpers as _helpers
 from .core import (
     BenchmarkBase,
     ExportManager,
@@ -36,6 +40,8 @@ from .core import (
     VerificationManager,
 )
 from .core.questions import _NOT_PROVIDED
+
+logger = logging.getLogger(__name__)
 
 
 class Benchmark:
@@ -57,6 +63,7 @@ class Benchmark:
         description: str = "",
         version: str = "0.1.0",
         creator: str = "Karenina Benchmarking System",
+        workspace_root: Path | None = None,
     ):
         """
         Initialize a new benchmark.
@@ -66,11 +73,13 @@ class Benchmark:
             description: Description of the benchmark
             version: Version of the benchmark content
             creator: Creator name or organization
+            workspace_root: Root directory containing task workspaces.
+                Question workspace paths are resolved relative to this root.
+                Not persisted in the checkpoint (it is a local filesystem path).
         """
-        # Initialize the base class
         self._base = BenchmarkBase(name, description, version, creator)
-
-        # Initialize managers
+        self._workspace_root = workspace_root
+        self._scenarios: dict[str, ScenarioDefinition] = {}
         self._metadata_manager = MetadataManager(self._base)
         self._question_manager = QuestionManager(self._base)
         self._rubric_manager = RubricManager(self._base)
@@ -79,6 +88,52 @@ class Benchmark:
         self._verification_manager = VerificationManager(self._base, self._rubric_manager)
         self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
 
+    def _init_managers(self) -> None:
+        """Initialize all managers from self._base (used by load/clone)."""
+        if not hasattr(self, "_scenarios"):
+            self._scenarios = {}
+        self._metadata_manager = MetadataManager(self._base)
+        self._question_manager = QuestionManager(self._base)
+        self._rubric_manager = RubricManager(self._base)
+        self._template_manager = TemplateManager(self._base)
+        self._results_manager = ResultsManager(self._base)
+        self._verification_manager = VerificationManager(self._base, self._rubric_manager)
+        self._export_manager = ExportManager(self._base, self._template_manager, self._rubric_manager)
+        self._rebuild_scenarios()
+
+    def _rebuild_scenarios(self) -> None:
+        """Rebuild _scenarios cache from checkpoint hasPart data."""
+        from ..scenario.checkpoint import schema_org_to_scenario
+
+        has_part = self._base._checkpoint.hasPart
+        if not has_part:
+            return
+
+        # Validate homogeneity: cannot have both questions and scenarios
+        if self._base._questions_cache:
+            raise ValueError(
+                "Checkpoint contains both questions and scenarios; this is not supported. "
+                "A benchmark must contain either standalone questions or scenarios, not both."
+            )
+
+        for schema_org in has_part:
+            defn = schema_org_to_scenario(schema_org)
+            self._scenarios[defn.name] = defn
+
+    @property
+    def workspace_root(self) -> Path | None:
+        """Root directory for task workspaces (not persisted in checkpoint)."""
+        return self._workspace_root
+
+    def set_workspace_root(self, path: Path) -> None:
+        """Set the root directory for task workspaces.
+
+        Args:
+            path: Directory containing task workspace subdirectories.
+                Question workspace paths are resolved relative to this root.
+        """
+        self._workspace_root = path
+
     @classmethod
     def create(
         cls,
@@ -86,52 +141,24 @@ class Benchmark:
         description: str = "",
         version: str = "0.1.0",
         creator: str = "Karenina Benchmarking System",
+        workspace_root: Path | None = None,
     ) -> "Benchmark":
-        """
-        Create a new benchmark (alias for constructor).
-
-        Args:
-            name: Name of the benchmark
-            description: Description of the benchmark
-            version: Version of the benchmark content
-            creator: Creator name or organization
-
-        Returns:
-            A new Benchmark instance
-        """
-        return cls(name, description, version, creator)
+        """Create a new benchmark (alias for constructor)."""
+        return cls(name, description, version, creator, workspace_root=workspace_root)
 
     @classmethod
-    def load(cls, path: Path) -> "Benchmark":
-        """
-        Load a benchmark from a JSON-LD file.
+    def load(cls, path: Path, workspace_root: Path | None = None) -> "Benchmark":
+        """Load a benchmark from a JSON-LD file.
 
         Args:
-            path: Path to the JSON-LD benchmark file
-
-        Returns:
-            A Benchmark instance loaded from the file
-
-        Raises:
-            ValueError: If the file is not valid JSON-LD
-            FileNotFoundError: If the file doesn't exist
+            path: Path to the JSON-LD benchmark file.
+            workspace_root: Optional root directory for task workspaces.
         """
-        # Load using base class
         base = BenchmarkBase.load(path)
-
-        # Create new instance and replace base
         instance = cls.__new__(cls)
         instance._base = base
-
-        # Initialize managers
-        instance._metadata_manager = MetadataManager(instance._base)
-        instance._question_manager = QuestionManager(instance._base)
-        instance._rubric_manager = RubricManager(instance._base)
-        instance._template_manager = TemplateManager(instance._base)
-        instance._results_manager = ResultsManager(instance._base)
-        instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
-        instance._export_manager = ExportManager(instance._base, instance._template_manager, instance._rubric_manager)
-
+        instance._workspace_root = workspace_root
+        instance._init_managers()
         return instance
 
     def save(self, path: Path) -> None:
@@ -139,41 +166,24 @@ class Benchmark:
         self._base.save(path)
 
     def save_to_db(self, storage: str, checkpoint_path: Path | None = None) -> "Benchmark":
-        """Save this benchmark to a database.
-
-        Args:
-            storage: Database storage URL (e.g., "sqlite:///example.db")
-            checkpoint_path: Optional path to the checkpoint file
-
-        Returns:
-            The same benchmark instance (for chaining)
-        """
+        """Save this benchmark to a database."""
         from typing import cast
 
         from ..storage import save_benchmark
 
-        # save_benchmark returns just the benchmark when detect_duplicates_only=False (default)
         result = save_benchmark(self, storage, checkpoint_path)
-        # Type cast since we know detect_duplicates_only=False returns Benchmark, not tuple
         return cast("Benchmark", result)
 
     @classmethod
     def load_from_db(cls, benchmark_name: str, storage: str) -> "Benchmark":
-        """Load a benchmark from a database.
-
-        Args:
-            benchmark_name: Name of the benchmark to load
-            storage: Database storage URL
-
-        Returns:
-            Loaded Benchmark instance
-        """
+        """Load a benchmark from a database."""
         from ..storage import load_benchmark
 
         result = load_benchmark(benchmark_name, storage, load_config=False)
         return result  # type: ignore[return-value]
 
-    # Question management methods - delegate to QuestionManager
+    # ── Question management ──────────────────────────────────────────────
+
     def add_question(
         self,
         question: Union[str, "Question"],
@@ -185,28 +195,18 @@ class Benchmark:
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
         few_shot_examples: list[dict[str, str]] | None = None,
+        answer_notes: str | None = None,
     ) -> str:
         """Add a question to the benchmark.
 
-        This method supports three usage patterns:
-        1. Traditional kwargs: add_question("What is 2+2?", "4", ...)
-        2. Question object: add_question(Question(...), ...)
-        3. Answer class: add_question("What is 2+2?", "4", answer_template=AnswerClass)
-
-        Args:
-            question: Either the question text (str) or a Question object
-            raw_answer: The expected answer text (required if question is str)
-            answer_template: Optional Python code (str), Answer class (type), or None
-            question_id: Optional question ID (will be generated if not provided)
-            finished: Whether the template is finished (auto-set to True if answer_template provided)
-            author: Optional author information
-            sources: Optional source documents
-            custom_metadata: Optional custom metadata
-            few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
-
-        Returns:
-            The question ID
+        Raises:
+            ValueError: If scenarios already exist (homogeneous enforcement).
         """
+        if self._scenarios:
+            raise ValueError(
+                "Cannot add standalone questions to a scenario benchmark. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
         return self._question_manager.add_question(
             question,
             raw_answer,
@@ -217,6 +217,7 @@ class Benchmark:
             sources,
             custom_metadata,
             few_shot_examples,
+            answer_notes=answer_notes,
         )
 
     def get_question_ids(self) -> list[str]:
@@ -228,15 +229,7 @@ class Benchmark:
         return self._question_manager.get_question(question_id)
 
     def get_all_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
-        """
-        Get all questions in the benchmark.
-
-        Args:
-            ids_only: If True, return only question IDs. If False (default), return full question objects.
-
-        Returns:
-            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
-        """
+        """Get all questions in the benchmark."""
         return self._question_manager.get_all_questions(ids_only)
 
     def get_question_as_object(self, question_id: str) -> "Question":
@@ -324,27 +317,11 @@ class Benchmark:
         return self._question_manager.toggle_finished(question_id)
 
     def get_unfinished_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
-        """
-        Get questions that are not marked as finished.
-
-        Args:
-            ids_only: If True, return only question IDs. If False (default), return full question objects.
-
-        Returns:
-            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
-        """
+        """Get questions that are not marked as finished."""
         return self._question_manager.get_unfinished_questions(ids_only)
 
     def get_finished_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
-        """
-        Get questions that are marked as finished.
-
-        Args:
-            ids_only: If True, return only question IDs. If False (default), return full question objects.
-
-        Returns:
-            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
-        """
+        """Get questions that are marked as finished."""
         return self._question_manager.get_finished_questions(ids_only)
 
     def filter_questions(
@@ -358,20 +335,11 @@ class Benchmark:
         """Filter questions based on criteria."""
         return self._question_manager.filter_questions(finished, has_template, has_rubric, author, custom_filter)
 
-    def filter_by_metadata(
-        self,
-        field_path: str,
-        value: Any,
-        match_mode: str = "exact",
-    ) -> list[dict[str, Any]]:
+    def filter_by_metadata(self, field_path: str, value: Any, match_mode: str = "exact") -> list[dict[str, Any]]:
         """Filter questions by a metadata field using dot notation."""
         return self._question_manager.filter_by_metadata(field_path, value, match_mode)
 
-    def filter_by_custom_metadata(
-        self,
-        match_all: bool = True,
-        **criteria: Any,
-    ) -> list[dict[str, Any]]:
+    def filter_by_custom_metadata(self, match_all: bool = True, **criteria: Any) -> list[dict[str, Any]]:
         """Filter questions by custom metadata fields with AND/OR logic."""
         return self._question_manager.filter_by_custom_metadata(match_all, **criteria)
 
@@ -394,15 +362,120 @@ class Benchmark:
         """Get questions that have question-specific rubrics."""
         return self._question_manager.get_questions_with_rubric()
 
-    def count_by_field(
-        self,
-        field_path: str,
-        questions: list[dict[str, Any]] | None = None,
-    ) -> dict[Any, int]:
+    def count_by_field(self, field_path: str, questions: list[dict[str, Any]] | None = None) -> dict[Any, int]:
         """Count questions grouped by a field value using dot notation."""
         return self._question_manager.count_by_field(field_path, questions)
 
-    # Template management methods - delegate to TemplateManager
+    # ── Scenario management ─────────────────────────────────────────────
+
+    @property
+    def is_scenario_benchmark(self) -> bool:
+        """True if this benchmark contains scenarios instead of standalone questions."""
+        return len(self._scenarios) > 0
+
+    @property
+    def scenario_count(self) -> int:
+        """Return the number of scenarios in the benchmark."""
+        return len(self._scenarios)
+
+    def add_scenario(self, scenario: "ScenarioDefinition | Any") -> None:
+        """Add a scenario to the benchmark.
+
+        Accepts either a ScenarioDefinition (frozen) or a Scenario builder
+        (which will be validated and frozen automatically).
+
+        Args:
+            scenario: A ScenarioDefinition or a Scenario builder instance.
+
+        Raises:
+            ValueError: If standalone questions already exist (homogeneous enforcement),
+                or if a scenario with the same name already exists.
+        """
+        if self._base._questions_cache:
+            raise ValueError(
+                "Cannot add scenarios to a benchmark that already contains standalone questions. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
+
+        # Accept Scenario builder: call validate() to get a ScenarioDefinition
+        if not isinstance(scenario, ScenarioDefinition):
+            scenario = scenario.validate()
+
+        if scenario.name in self._scenarios:
+            raise ValueError(f"Scenario '{scenario.name}' already exists")
+
+        self._scenarios[scenario.name] = scenario
+
+        # Write to checkpoint (checkpoint is source of truth)
+        from ..scenario.checkpoint import scenario_to_schema_org
+        from ..schemas.checkpoint import SchemaOrgPropertyValue
+
+        schema_org = scenario_to_schema_org(scenario)
+        if self._base._checkpoint.hasPart is None:
+            self._base._checkpoint.hasPart = []
+        self._base._checkpoint.hasPart.append(schema_org)
+
+        # Set benchmark_type flag (once)
+        props = self._base._checkpoint.additionalProperty or []
+        if not any(p.name == "benchmark_type" for p in props):
+            if self._base._checkpoint.additionalProperty is None:
+                self._base._checkpoint.additionalProperty = []
+            self._base._checkpoint.additionalProperty.append(
+                SchemaOrgPropertyValue(name="benchmark_type", value="scenario")
+            )
+
+    def get_scenarios(self) -> list[ScenarioDefinition]:
+        """Get all scenario definitions.
+
+        Returns:
+            List of ScenarioDefinition instances.
+        """
+        return list(self._scenarios.values())
+
+    def get_scenario(self, name: str) -> ScenarioDefinition:
+        """Get a scenario by name.
+
+        Args:
+            name: The scenario name.
+
+        Returns:
+            The ScenarioDefinition.
+
+        Raises:
+            KeyError: If no scenario with that name exists.
+        """
+        try:
+            return self._scenarios[name]
+        except KeyError:
+            raise KeyError(f"Scenario '{name}' not found") from None
+
+    def remove_scenario(self, name: str) -> None:
+        """Remove a scenario by name.
+
+        Args:
+            name: The scenario name.
+
+        Raises:
+            KeyError: If no scenario with that name exists.
+        """
+        try:
+            del self._scenarios[name]
+        except KeyError:
+            raise KeyError(f"Scenario '{name}' not found") from None
+
+        # Remove from checkpoint
+        if self._base._checkpoint.hasPart:
+            self._base._checkpoint.hasPart = [s for s in self._base._checkpoint.hasPart if s.name != name]
+            if not self._base._checkpoint.hasPart:
+                self._base._checkpoint.hasPart = None
+                # Clear benchmark_type flag when no scenarios remain
+                if self._base._checkpoint.additionalProperty:
+                    self._base._checkpoint.additionalProperty = [
+                        p for p in self._base._checkpoint.additionalProperty if p.name != "benchmark_type"
+                    ]
+
+    # ── Template management ──────────────────────────────────────────────
+
     def add_answer_template(self, question_id: str, template_code: str) -> None:
         """Add or update an answer template for a question."""
         self._template_manager.add_answer_template(question_id, template_code)
@@ -415,28 +488,25 @@ class Benchmark:
         """Get template code for a question."""
         return self._template_manager.get_template(question_id)
 
-    def update_template(self, question_id: str, template_code: str) -> None:
-        """Update existing template."""
+    def update_template(self, question_id: str, template_code: str | type) -> None:
+        """Update existing template.
+
+        Args:
+            question_id: The question ID
+            template_code: Python code defining the Answer class, or a BaseAnswer subclass
+        """
         self._template_manager.update_template(question_id, template_code)
 
     def copy_template(self, from_id: str, to_id: str) -> None:
         """Copy template from one question to another."""
         self._template_manager.copy_template(from_id, to_id)
 
-    def get_finished_templates(self) -> list[FinishedTemplate]:
+    def get_finished_templates(self, question_ids: set[str] | None = None) -> list[FinishedTemplate]:
         """Get all finished templates for verification."""
-        return self._template_manager.get_finished_templates()
+        return self._template_manager.get_finished_templates(question_ids=question_ids)
 
     def get_missing_templates(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
-        """
-        Get questions that don't have non-default templates.
-
-        Args:
-            ids_only: If True, return only question IDs. If False (default), return full question objects.
-
-        Returns:
-            List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
-        """
+        """Get questions that don't have non-default templates."""
         return self._template_manager.get_missing_templates(ids_only)
 
     def apply_global_template(self, template_code: str) -> list[str]:
@@ -447,7 +517,8 @@ class Benchmark:
         """Validate all templates are valid Python code."""
         return self._template_manager.validate_templates()
 
-    # Template generation methods using LLMs
+    # ── Template generation (delegated to benchmark_helpers) ─────────────
+
     def generate_template_for_question(
         self,
         question_id: str,
@@ -459,89 +530,18 @@ class Benchmark:
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Generate an answer template for a specific question using LLM.
-
-        Args:
-            question_id: The question ID to generate template for
-            model: The model to use for generation (default: gemini-2.0-flash)
-            model_provider: The provider of the model (default: google_genai)
-            temperature: The temperature for generation (default: 0)
-            interface: The interface to use (default: langchain)
-            force_regenerate: If True, regenerate even if template exists (default: False)
-            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
-            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
-
-        Returns:
-            Dict with 'success', 'template_code', 'error', and 'raw_response' keys
-
-        Raises:
-            ValueError: If question_id not found
-        """
-        # Check if question exists
-        if question_id not in self._questions_cache:
-            raise ValueError(f"Question not found: {question_id}")
-
-        # Check if template already exists and force_regenerate is False
-        if not force_regenerate and self.has_template(question_id):
-            return {
-                "success": True,
-                "template_code": self.get_template(question_id),
-                "error": "Template already exists (use force_regenerate=True to override)",
-                "raw_response": None,
-                "skipped": True,
-            }
-
-        try:
-            question_data = self._questions_cache[question_id]
-            question_text = question_data.get("question", "")
-            raw_answer = question_data.get("raw_answer", "")
-
-            # Generate template using the generator function
-            template_code = generate_answer_template(
-                question=question_text,
-                raw_answer=raw_answer,
-                model=model,
-                model_provider=model_provider,
-                temperature=temperature,
-                interface=interface,
-                endpoint_base_url=endpoint_base_url,
-                endpoint_api_key=endpoint_api_key,
-            )
-
-            # Template code is now returned directly from the generator
-            # No need to extract code blocks as the new generator returns ready-to-use code
-
-            # If no code blocks found, return error
-            if not template_code.strip():
-                return {
-                    "success": False,
-                    "template_code": "",
-                    "error": "No valid code blocks found in LLM response",
-                    "raw_response": template_code,
-                    "skipped": False,
-                }
-
-            # Save the template to the benchmark
-            self.add_answer_template(question_id, template_code)
-            error_msg = None
-
-            return {
-                "success": True,
-                "template_code": template_code,
-                "error": error_msg,
-                "raw_response": template_code,
-                "skipped": False,
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "template_code": "",
-                "error": str(e),
-                "raw_response": None,
-                "skipped": False,
-            }
+        """Generate an answer template for a specific question using LLM."""
+        return _helpers.generate_template_for_question(
+            self,
+            question_id,
+            model,
+            model_provider,
+            temperature,
+            interface,
+            force_regenerate,
+            endpoint_base_url,
+            endpoint_api_key,
+        )
 
     def generate_templates(
         self,
@@ -555,60 +555,19 @@ class Benchmark:
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
     ) -> dict[str, dict[str, Any]]:
-        """
-        Generate templates for multiple questions using LLM.
-
-        Args:
-            question_ids: List of question IDs to generate templates for
-            model: The model to use for generation
-            model_provider: The provider of the model
-            temperature: The temperature for generation
-            interface: The interface to use
-            force_regenerate: If True, regenerate even if templates exist
-            progress_callback: Optional callback for progress updates (percentage, message)
-            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
-            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
-
-        Returns:
-            Dict mapping question_id to generation result dict
-
-        Raises:
-            ValueError: If any question_id not found
-        """
-        # Validate all question IDs first
-        invalid_ids = [qid for qid in question_ids if qid not in self._questions_cache]
-        if invalid_ids:
-            raise ValueError(f"Questions not found: {invalid_ids}")
-
-        results = {}
-        total_questions = len(question_ids)
-
-        for i, question_id in enumerate(question_ids):
-            # Update progress
-            if progress_callback:
-                percentage = (i / total_questions) * 100
-                question_text = self._questions_cache[question_id].get("question", "")
-                message = f"Processing: {question_text[:50]}..."
-                progress_callback(percentage, message)
-
-            # Generate template for this question
-            result = self.generate_template_for_question(
-                question_id=question_id,
-                model=model,
-                model_provider=model_provider,
-                temperature=temperature,
-                interface=interface,
-                force_regenerate=force_regenerate,
-                endpoint_base_url=endpoint_base_url,
-                endpoint_api_key=endpoint_api_key,
-            )
-            results[question_id] = result
-
-        # Final progress update
-        if progress_callback:
-            progress_callback(100.0, "Template generation completed")
-
-        return results
+        """Generate templates for multiple questions using LLM."""
+        return _helpers.generate_templates(
+            self,
+            question_ids,
+            model,
+            model_provider,
+            temperature,
+            interface,
+            force_regenerate,
+            progress_callback,
+            endpoint_base_url,
+            endpoint_api_key,
+        )
 
     def generate_all_templates(
         self,
@@ -622,125 +581,47 @@ class Benchmark:
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
     ) -> dict[str, dict[str, Any]]:
-        """
-        Generate templates for all questions in the benchmark using LLM.
-
-        Args:
-            model: The model to use for generation
-            model_provider: The provider of the model
-            temperature: The temperature for generation
-            interface: The interface to use
-            force_regenerate: If True, regenerate even if templates exist
-            progress_callback: Optional callback for progress updates
-            only_missing: If True, only generate for questions without templates
-            endpoint_base_url: Base URL for openai_endpoint interface (e.g., http://localhost:11434/v1)
-            endpoint_api_key: API key for openai_endpoint interface (required, not read from env)
-
-        Returns:
-            Dict mapping question_id to generation result dict
-        """
-        if only_missing and not force_regenerate:
-            # Get questions that don't have templates
-            from typing import cast
-
-            question_ids = cast(list[str], self.get_missing_templates(ids_only=True))
-        else:
-            # Get all question IDs
-            question_ids = self.get_question_ids()
-
-        if not question_ids:
-            return {}
-
-        return self.generate_templates(
-            question_ids=question_ids,
-            model=model,
-            model_provider=model_provider,
-            temperature=temperature,
-            interface=interface,
-            force_regenerate=force_regenerate,
-            progress_callback=progress_callback,
-            endpoint_base_url=endpoint_base_url,
-            endpoint_api_key=endpoint_api_key,
+        """Generate templates for all questions in the benchmark using LLM."""
+        return _helpers.generate_all_templates(
+            self,
+            model,
+            model_provider,
+            temperature,
+            interface,
+            force_regenerate,
+            progress_callback,
+            only_missing,
+            endpoint_base_url,
+            endpoint_api_key,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:
-        """
-        Export all generated templates to a JSON file.
-
-        Args:
-            file_path: Path where to save the JSON file
-
-        The exported format is compatible with load_answer_templates_from_json.
-        """
-        templates_dict = {}
-
-        for question_id in self.get_question_ids():
-            if self.has_template(question_id):
-                templates_dict[question_id] = self.get_template(question_id)
-
-        with file_path.open("w") as f:
-            json.dump(templates_dict, f, indent=2)
+        """Export all generated templates to a JSON file."""
+        _helpers.export_generated_templates(self, file_path)
 
     def import_generated_templates(self, file_path: Path, force_overwrite: bool = False) -> dict[str, bool]:
-        """
-        Import templates from a JSON file generated by export_generated_templates.
+        """Import templates from a JSON file generated by export_generated_templates."""
+        return _helpers.import_generated_templates(self, file_path, force_overwrite)
 
-        Args:
-            file_path: Path to the JSON file to load
-            force_overwrite: If True, overwrite existing templates
+    # ── Rubric management ────────────────────────────────────────────────
 
-        Returns:
-            Dict mapping question_id to success status (True if imported, False if skipped)
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If file format is invalid
-        """
-        # Load templates using the generator function
-        answer_templates = load_answer_templates_from_json(str(file_path), return_blocks=True)
-        if isinstance(answer_templates, tuple):
-            _, code_blocks = answer_templates
-        else:
-            raise ValueError("Unable to load code blocks from JSON file")
-
-        results = {}
-
-        for question_id, template_code in code_blocks.items():
-            # Check if question exists in benchmark
-            if question_id not in self._questions_cache:
-                results[question_id] = False
-                continue
-
-            # Check if template already exists
-            if not force_overwrite and self.has_template(question_id):
-                results[question_id] = False
-                continue
-
-            try:
-                # Add template to benchmark
-                self.add_answer_template(question_id, template_code)
-                results[question_id] = True
-            except Exception:
-                results[question_id] = False
-
-        return results
-
-    # Rubric management methods - delegate to RubricManager
-    def add_global_rubric_trait(self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait) -> None:
+    def add_global_rubric_trait(
+        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+    ) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
 
     def add_question_rubric_trait(
-        self, question_id: str, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait
+        self,
+        question_id: str,
+        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)
 
     def set_global_rubric(self, rubric: Rubric) -> None:
         """Set the complete global rubric (replaces existing)."""
-        # Clear existing global rubric
         self.clear_global_rubric()
-        # Add all traits from the rubric
         for trait in rubric.llm_traits:
             self.add_global_rubric_trait(trait)
         for regex_trait in rubric.regex_traits:
@@ -749,12 +630,12 @@ class Benchmark:
             self.add_global_rubric_trait(callable_trait)
         for metric_trait in rubric.metric_traits:
             self.add_global_rubric_trait(metric_trait)
+        for agentic_trait in rubric.agentic_traits:
+            self.add_global_rubric_trait(agentic_trait)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
-        # Clear existing question rubric
         self.remove_question_rubric(question_id)
-        # Add all traits from the rubric
         for trait in rubric.llm_traits:
             self.add_question_rubric_trait(question_id, trait)
         for regex_trait in rubric.regex_traits:
@@ -763,6 +644,8 @@ class Benchmark:
             self.add_question_rubric_trait(question_id, callable_trait)
         for metric_trait in rubric.metric_traits:
             self.add_question_rubric_trait(question_id, metric_trait)
+        for agentic_trait in rubric.agentic_traits:
+            self.add_question_rubric_trait(question_id, agentic_trait)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""
@@ -784,7 +667,8 @@ class Benchmark:
         """Validate all rubrics are properly configured."""
         return self._rubric_manager.validate_rubrics()
 
-    # Verification methods - delegate to VerificationManager
+    # ── Verification ─────────────────────────────────────────────────────
+
     def run_verification(
         self,
         config: VerificationConfig,
@@ -793,42 +677,162 @@ class Benchmark:
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
     ) -> VerificationResultSet:
-        """Run verification on the benchmark using existing execution system."""
+        """Run verification on the benchmark using existing execution system.
+
+        For scenario benchmarks, dispatches to ``_run_scenario_verification``
+        which iterates over the scenario x model cross-product.
+        For standalone question benchmarks, delegates to VerificationManager.
+        """
+        if self.is_scenario_benchmark:
+            return self._run_scenario_verification(
+                config=config,
+                run_name=run_name,
+                async_enabled=async_enabled,
+                progress_callback=progress_callback,
+            )
         return self._verification_manager.run_verification(
-            config, question_ids, run_name, async_enabled, progress_callback
+            config,
+            question_ids,
+            run_name,
+            async_enabled,
+            progress_callback,
+            workspace_root=self._workspace_root,
         )
 
-    # Results management methods - delegate to ResultsManager
+    def _run_scenario_verification(
+        self,
+        config: VerificationConfig,
+        run_name: str | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> VerificationResultSet:
+        """Run verification for scenario benchmarks.
+
+        Creates a ScenarioManager and iterates over the cross-product of
+        scenarios, answering models, and parsing models. When ``async_enabled``
+        is True and there are multiple task combinations, uses
+        ``asyncio.gather`` with ``manager.arun()`` for parallel execution.
+
+        Args:
+            config: Verification configuration.
+            run_name: Optional run name for tracking.
+            async_enabled: If True, run combinations in parallel via asyncio.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            VerificationResultSet containing all per-turn results.
+        """
+        from ..scenario.manager import ScenarioManager
+
+        manager = ScenarioManager()
+        global_rubric = self._rubric_manager.get_global_rubric()
+        all_results: list[VerificationResult] = []
+
+        # Build the list of (scenario, answering_model, parsing_model) combos
+        combos = [
+            (scenario_def, ans_model, parse_model)
+            for scenario_def in self._scenarios.values()
+            for ans_model in config.answering_models
+            for parse_model in config.parsing_models
+        ]
+
+        if async_enabled and len(combos) > 1:
+            all_results = self._run_scenario_parallel(
+                manager=manager,
+                combos=combos,
+                config=config,
+                run_name=run_name,
+                global_rubric=global_rubric,
+                progress_callback=progress_callback,
+            )
+        else:
+            for scenario_def, ans_model, parse_model in combos:
+                exec_result = manager.run(
+                    scenario=scenario_def,
+                    config=config,
+                    base_answering_model=ans_model,
+                    base_parsing_model=parse_model,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    progress_callback=progress_callback,
+                )
+                all_results.extend(exec_result.turn_results)
+
+        return VerificationResultSet(results=all_results)
+
+    def _run_scenario_parallel(
+        self,
+        manager: Any,
+        combos: list[tuple[Any, Any, Any]],
+        config: VerificationConfig,
+        run_name: str | None,
+        global_rubric: "Rubric | None",
+        progress_callback: Callable[..., None] | None,
+    ) -> list[VerificationResult]:
+        """Run scenario combinations in parallel via asyncio.gather.
+
+        Args:
+            manager: ScenarioManager instance.
+            combos: List of (scenario, answering_model, parsing_model) tuples.
+            config: Verification configuration.
+            run_name: Optional run name.
+            global_rubric: Optional global rubric.
+            progress_callback: Optional progress callback.
+
+        Returns:
+            Flat list of all per-turn VerificationResults.
+        """
+        import asyncio
+
+        async def _gather() -> list[VerificationResult]:
+            coros = [
+                manager.arun(
+                    scenario=scenario_def,
+                    config=config,
+                    base_answering_model=ans_model,
+                    base_parsing_model=parse_model,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    progress_callback=progress_callback,
+                )
+                for scenario_def, ans_model, parse_model in combos
+            ]
+            exec_results = await asyncio.gather(*coros, return_exceptions=True)
+            results: list[VerificationResult] = []
+            for er in exec_results:
+                if isinstance(er, BaseException):
+                    logger.warning(
+                        "Scenario execution raised an exception: %s",
+                        er,
+                    )
+                    continue
+                results.extend(er.turn_results)
+            return results
+
+        # If there is already a running event loop, run in a thread
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _gather())
+                return future.result()
+        else:
+            return asyncio.run(_gather())
+
+    # ── Results management ───────────────────────────────────────────────
+
     def store_verification_results(
         self,
         results: VerificationResultSet | dict[str, VerificationResult],
         run_name: str | None = None,
     ) -> None:
-        """
-        Store verification results in the benchmark metadata.
-
-        Args:
-            results: VerificationResultSet or dict mapping result keys to VerificationResult objects
-            run_name: Optional run name for tracking
-        """
-        # Convert VerificationResultSet to dict format for storage
-        if isinstance(results, VerificationResultSet):
-            # Generate keys for results (needed for storage)
-            results_dict = {}
-            for i, result in enumerate(results):
-                # Create a key similar to the old format
-                key = f"{result.metadata.question_id}_{result.metadata.answering_model}_{result.metadata.parsing_model}"
-                if result.metadata.replicate is not None:
-                    key += f"_rep{result.metadata.replicate}"
-                if result.metadata.timestamp:
-                    key += f"_{result.metadata.timestamp}"
-                # Handle potential duplicates by appending index
-                if key in results_dict:
-                    key += f"_{i}"
-                results_dict[key] = result
-            self._results_manager.store_verification_results(results_dict, run_name)
-        else:
-            self._results_manager.store_verification_results(results, run_name)
+        """Store verification results in the benchmark metadata."""
+        _helpers.store_verification_results(self, results, run_name)
 
     def get_verification_results(
         self,
@@ -891,7 +895,8 @@ class Benchmark:
         """Get verification statistics for each run."""
         return self._results_manager.get_results_statistics_by_run()
 
-    # GEPA optimization methods
+    # ── GEPA optimization (delegated to benchmark_helpers) ───────────────
+
     def optimize(
         self,
         targets: list[str],
@@ -913,12 +918,6 @@ class Benchmark:
         """
         Optimize text components using GEPA with karenina verification as the metric.
 
-        This high-level method handles the full optimization workflow:
-        1. Splits the benchmark into train/val (and optional test) sets
-        2. Creates a KareninaAdapter for GEPA
-        3. Runs GEPA optimization with multi-objective Pareto tracking
-        4. Tracks results and optionally exports preset
-
         Requires the 'gepa' optional dependency: pip install karenina[gepa]
 
         Args:
@@ -932,23 +931,15 @@ class Benchmark:
             reflection_model: Model for GEPA's reflection LLM (default: openai/gpt-4o)
             max_metric_calls: Maximum GEPA optimization iterations (default: 150)
             objective_config: Configuration for multi-objective optimization dimensions.
-                If None, uses default (template + all rubric traits as objectives).
-            frontier_type: GEPA Pareto frontier tracking strategy:
-                'instance' (per example), 'objective' (per metric - recommended),
-                'hybrid' (both), or 'cartesian' (per example × metric).
+            frontier_type: GEPA Pareto frontier tracking strategy.
             seed_prompts: Optional initial prompts. If None, uses empty strings.
             tracker_path: Optional path to SQLite file for tracking optimization history
             export_preset_path: Optional path to export optimized config as preset
             progress_callback: Optional callback for progress updates (percentage, message)
-            verbose: If True, display detailed progress during optimization including
-                     iteration updates, score improvements, and a final summary
+            verbose: If True, display detailed progress during optimization
 
         Returns:
             KareninaOutput with optimized prompts and metrics
-
-        Raises:
-            ImportError: If GEPA is not installed
-            ValueError: If invalid targets or split ratios
 
         Example:
             >>> result = benchmark.optimize(
@@ -957,188 +948,32 @@ class Benchmark:
             ...     max_metric_calls=100,
             ... )
             >>> print(f"Improvement: {result.improvement:.1%}")
-            >>> print(f"Optimized prompt: {result.answering_system_prompt}")
         """
-        # Import GEPA integration components
-        try:
-            from karenina.integrations.gepa import (
-                GEPA_AVAILABLE,
-                KareninaAdapter,
-                KareninaOutput,
-                ObjectiveConfig,
-                OptimizationRun,
-                OptimizationTarget,
-                OptimizationTracker,
-                VerboseLogger,
-                export_to_preset,
-                split_benchmark,
-            )
-        except ImportError as e:
-            raise ImportError(
-                "GEPA integration components not available. Install with: pip install karenina[gepa]"
-            ) from e
-
-        if not GEPA_AVAILABLE:
-            raise ImportError("gepa package is required for optimization. Install with: pip install gepa")
-
-        # Import GEPA
-        try:
-            import gepa
-        except ImportError as e:
-            raise ImportError("gepa package is required for optimization. Install with: pip install gepa") from e
-
-        # Validate targets
-        valid_targets = {t.value for t in OptimizationTarget}
-        for target in targets:
-            if target not in valid_targets:
-                raise ValueError(f"Invalid target '{target}'. Valid targets: {valid_targets}")
-
-        # Convert string targets to OptimizationTarget enum
-        opt_targets = [OptimizationTarget(t) for t in targets]
-
-        # Create default config if not provided
-        if config is None:
-            from karenina.schemas.workflow import ModelConfig
-
-            config = VerificationConfig(
-                answering_models=[ModelConfig(id="answerer-gpt4o", model_name="gpt-4o", model_provider="openai")],
-                parsing_models=[ModelConfig(id="parser-gpt4o-mini", model_name="gpt-4o-mini", model_provider="openai")],
-                evaluation_mode="template_only",
-            )
-
-        # Split benchmark
-        split = split_benchmark(
+        return _helpers.run_optimize(
             self,
-            train_ratio=train_ratio,
-            val_ratio=val_ratio,
-            test_ratio=test_ratio,
-            seed=seed,
+            targets,
+            config,
+            train_ratio,
+            val_ratio,
+            test_ratio,
+            seed,
+            reflection_model,
+            max_metric_calls,
+            objective_config,
+            frontier_type,
+            seed_prompts,
+            tracker_path,
+            export_preset_path,
+            progress_callback,
+            verbose,
         )
-
-        if progress_callback:
-            progress_callback(5.0, f"Split benchmark: {len(split.train)} train, {len(split.val)} val")
-
-        # Create adapter with multi-objective config
-        if objective_config is None:
-            objective_config = ObjectiveConfig()  # Default: template + all rubric traits
-        adapter = KareninaAdapter(
-            benchmark=self,
-            base_config=config,
-            targets=opt_targets,
-            objective_config=objective_config,
-        )
-
-        # Prepare seed candidate
-        seed_candidate = seed_prompts or {}
-        for target in targets:
-            if target not in seed_candidate:
-                seed_candidate[target] = ""
-
-        if progress_callback:
-            progress_callback(10.0, "Starting GEPA optimization...")
-
-        # Create verbose logger if enabled
-        verbose_logger: VerboseLogger | None = None
-        if verbose:
-            verbose_logger = VerboseLogger(max_iterations=max_metric_calls)
-
-        # Run GEPA optimization with multi-objective Pareto tracking
-        result: Any = gepa.optimize(  # type: ignore[attr-defined]
-            seed_candidate=seed_candidate,
-            trainset=split.train,
-            valset=split.val,
-            adapter=adapter,
-            reflection_lm=reflection_model,
-            max_metric_calls=max_metric_calls,
-            frontier_type=frontier_type,
-            logger=verbose_logger,
-            display_progress_bar=verbose,
-        )
-
-        # Print verbose summary if enabled
-        if verbose_logger:
-            verbose_logger.print_summary()
-
-        # Build output from GEPAResult
-        optimized_prompts = result.best_candidate if hasattr(result, "best_candidate") else {}
-        # GEPAResult tracks val_aggregate_scores; best_idx gives the best candidate index
-        best_idx = result.best_idx if hasattr(result, "best_idx") else 0
-        val_score = result.val_aggregate_scores[best_idx] if result.val_aggregate_scores else 0.0
-        # Get baseline (seed) score - it's the first candidate's score
-        baseline_score = result.val_aggregate_scores[0] if result.val_aggregate_scores else 0.0
-        # Train score not directly available from GEPAResult; use val_score as proxy
-        train_score = val_score
-
-        # Calculate improvement relative to baseline
-        improvement = (val_score - baseline_score) / baseline_score if baseline_score > 0 else val_score
-
-        # Run test set evaluation if available
-        test_score: float | None = None
-        if split.test:
-            if progress_callback:
-                progress_callback(90.0, "Evaluating on test set...")
-
-            test_results = adapter.evaluate(split.test, optimized_prompts, capture_traces=False)
-            test_score = sum(test_results.scores) / len(test_results.scores) if test_results.scores else 0.0
-
-        output = KareninaOutput(
-            answering_system_prompt=optimized_prompts.get("answering_system_prompt"),
-            parsing_instructions=optimized_prompts.get("parsing_instructions"),
-            mcp_tool_descriptions={k[9:]: v for k, v in optimized_prompts.items() if k.startswith("mcp_tool_")} or None,
-            train_score=train_score,
-            val_score=val_score,
-            test_score=test_score,
-            improvement=improvement,
-        )
-
-        # Track results if path provided
-        if tracker_path:
-            tracker = OptimizationTracker(tracker_path)
-            run = OptimizationRun(
-                benchmark_name=self.name,
-                targets=targets,
-                seed_prompts=seed_prompts or {},
-                optimized_prompts=optimized_prompts,
-                train_score=train_score,
-                val_score=val_score,
-                test_score=test_score,
-                improvement=improvement,
-                reflection_model=reflection_model,
-                metric_calls=max_metric_calls,
-                best_generation=getattr(result, "best_generation", 0),
-                total_generations=getattr(result, "total_generations", 0),
-            )
-            tracker.log_run(run)
-
-        # Export preset if path provided
-        if export_preset_path:
-            export_to_preset(
-                optimized_prompts,
-                config,
-                Path(export_preset_path),
-                opt_targets,
-            )
-
-        if progress_callback:
-            progress_callback(100.0, f"Optimization complete. Improvement: {improvement:.1%}")
-
-        return output
 
     def optimization_history(
         self,
         tracker_path: Path | str = "~/.karenina/optimization_history.db",
         limit: int = 20,
     ) -> list["OptimizationRun"]:
-        """
-        Get optimization history for this benchmark.
-
-        Args:
-            tracker_path: Path to SQLite database with optimization history
-            limit: Maximum number of runs to return
-
-        Returns:
-            List of OptimizationRun records for this benchmark
-        """
+        """Get optimization history for this benchmark."""
         try:
             from karenina.integrations.gepa import OptimizationTracker
         except ImportError:
@@ -1147,7 +982,8 @@ class Benchmark:
         tracker = OptimizationTracker(tracker_path)
         return tracker.list_runs(benchmark_name=self.name, limit=limit)
 
-    # Metadata management methods - delegate to MetadataManager
+    # ── Metadata management ──────────────────────────────────────────────
+
     def get_custom_property(self, name: str) -> Any:
         """Get a custom property from benchmark metadata."""
         return self._metadata_manager.get_custom_property(name)
@@ -1168,7 +1004,8 @@ class Benchmark:
         """Set multiple custom properties at once."""
         self._metadata_manager.set_multiple_custom_properties(properties)
 
-    # Export and reporting methods - delegate to ExportManager
+    # ── Export and reporting ──────────────────────────────────────────────
+
     def to_dict(self) -> dict[str, Any]:
         """Export benchmark as a plain dictionary."""
         return self._export_manager.to_dict()
@@ -1200,32 +1037,20 @@ class Benchmark:
     def clone(self) -> "Benchmark":
         """Create a deep copy of the benchmark."""
         cloned_base = self._export_manager.clone()
-
-        # Create new instance and replace base
         instance = Benchmark.__new__(Benchmark)
         instance._base = cloned_base
-
-        # Initialize managers
-        instance._metadata_manager = MetadataManager(instance._base)
-        instance._question_manager = QuestionManager(instance._base)
-        instance._rubric_manager = RubricManager(instance._base)
-        instance._template_manager = TemplateManager(instance._base)
-        instance._results_manager = ResultsManager(instance._base)
-        instance._verification_manager = VerificationManager(instance._base, instance._rubric_manager)
-        instance._export_manager = ExportManager(instance._base, instance._template_manager, instance._rubric_manager)
-
+        instance._workspace_root = self._workspace_root
+        instance._init_managers()
         return instance
 
     def validate(self) -> tuple[bool, str]:
         """Validate the benchmark structure and all templates."""
         from .verification.utils.validation import validate_answer_template
 
-        # Validate benchmark structure
         is_valid, error_msg = self._base.validate()
         if not is_valid:
             return False, error_msg
 
-        # Validate all templates using the verification system (like original)
         for q_id, q_data in self._questions_cache.items():
             template_code = q_data.get("answer_template")
             if template_code is not None:
@@ -1240,7 +1065,8 @@ class Benchmark:
         """Set benchmark metadata."""
         self._base.set_metadata(**metadata)
 
-    # Base class property delegation
+    # ── Base class property delegation ───────────────────────────────────
+
     @property
     def _checkpoint(self) -> Any:
         """Get the raw JSON-LD checkpoint data (for backward compatibility)."""
@@ -1250,6 +1076,11 @@ class Benchmark:
     def _questions_cache(self) -> dict[str, Any]:
         """Get the questions cache (for backward compatibility)."""
         return self._base._questions_cache
+
+    @property
+    def _question_registry(self) -> dict[str, Any]:
+        """Get the question registry (for backward compatibility)."""
+        return self._base._question_registry
 
     def _get_item_id(self, item: Any) -> str:
         """Get the ID for a DataFeedItem (for backward compatibility)."""
@@ -1275,7 +1106,6 @@ class Benchmark:
 
     @name.setter
     def name(self, value: str) -> None:
-        """Set the benchmark name."""
         self._base.name = value
 
     @property
@@ -1285,7 +1115,6 @@ class Benchmark:
 
     @description.setter
     def description(self, value: str) -> None:
-        """Set the benchmark description."""
         self._base.description = value
 
     @property
@@ -1295,7 +1124,6 @@ class Benchmark:
 
     @version.setter
     def version(self, value: str) -> None:
-        """Set the benchmark version."""
         self._base.version = value
 
     @property
@@ -1305,7 +1133,6 @@ class Benchmark:
 
     @creator.setter
     def creator(self, value: str) -> None:
-        """Set the benchmark creator."""
         self._base.creator = value
 
     @property
@@ -1315,7 +1142,6 @@ class Benchmark:
 
     @id.setter
     def id(self, value: str | None) -> None:
-        """Set the benchmark ID."""
         self._base.id = value
 
     @property
@@ -1325,7 +1151,6 @@ class Benchmark:
 
     @created_at.setter
     def created_at(self, value: str) -> None:
-        """Set the creation timestamp."""
         self._base.created_at = value
 
     @property
@@ -1335,7 +1160,6 @@ class Benchmark:
 
     @modified_at.setter
     def modified_at(self, value: str) -> None:
-        """Set the last modification timestamp."""
         self._base.modified_at = value
 
     @property
@@ -1350,8 +1174,8 @@ class Benchmark:
 
     @property
     def is_empty(self) -> bool:
-        """Check if the benchmark has no questions."""
-        return self._base.is_empty
+        """Check if the benchmark has no questions and no scenarios."""
+        return len(self._base._questions_cache) == 0 and len(self._scenarios) == 0
 
     @property
     def is_complete(self) -> bool:
@@ -1362,190 +1186,20 @@ class Benchmark:
         """Get completion progress as percentage (0-100)."""
         return self._base.get_progress()
 
-    # Magic methods for better usability
+    # ── Magic methods ────────────────────────────────────────────────────
+
     def __repr__(self) -> str:
-        """
-        Developer-friendly representation with detailed statistics.
-
-        Shows metadata, content stats, rubric breakdown, sample questions,
-        and readiness status in a structured multi-line format.
-        """
-        lines = ["Benchmark("]
-
-        # === METADATA ===
-        lines.append("  === METADATA ===")
-        lines.append(f"  Name: {self._base.name}")
-        lines.append(f"  Version: {self._base.version}")
-        lines.append(f"  Creator: {self._base.creator}")
-        lines.append(f"  Created: {self._base.created_at}")
-        lines.append(f"  Modified: {self._base.modified_at}")
-
-        # Collect unique keywords
-        all_questions_data = self.get_all_questions(ids_only=False)
-        assert isinstance(all_questions_data, list)
-        unique_keywords: set[str] = set()
-        for q in all_questions_data:
-            if isinstance(q, dict):
-                keywords = q.get("keywords", [])
-                if keywords:
-                    unique_keywords.update(keywords)
-
-        if unique_keywords:
-            keyword_list = sorted(unique_keywords)
-            keywords_str = ", ".join(keyword_list)
-            lines.append(f"  Keywords: {keywords_str} ({len(keyword_list)} total)")
-        else:
-            lines.append("  Keywords: none")
-
-        # === CONTENT ===
-        lines.append("")
-        lines.append("  === CONTENT ===")
-        summary = self._export_manager.get_summary()
-        progress = summary["progress_percentage"]
-        lines.append(
-            f"  Questions: {self._base.question_count} total, "
-            f"{self._base.finished_count} finished ({progress:.1f}% complete)"
-        )
-        lines.append(f"  Templates: {summary['has_template_count']}/{self._base.question_count} questions")
-
-        # === RUBRICS ===
-        lines.append("")
-        lines.append("  === RUBRICS ===")
-        global_rubric = self._rubric_manager.get_global_rubric()
-
-        if global_rubric:
-            # Count traits by type in global rubric
-            llm_count = len(global_rubric.llm_traits)
-            regex_count = len(global_rubric.regex_traits)
-            metric_count = len(global_rubric.metric_traits)
-            callable_count = len(global_rubric.callable_traits)
-
-            total_traits = llm_count + regex_count + metric_count + callable_count
-            lines.append(f"  Global Rubric: {total_traits} traits")
-            trait_breakdown = []
-            if llm_count > 0:
-                trait_breakdown.append(f"LLM: {llm_count}")
-            if regex_count > 0:
-                trait_breakdown.append(f"Regex: {regex_count}")
-            if metric_count > 0:
-                trait_breakdown.append(f"Metric: {metric_count}")
-            if callable_count > 0:
-                trait_breakdown.append(f"Callable: {callable_count}")
-
-            if trait_breakdown:
-                lines.append(f"    └─ {', '.join(trait_breakdown)}")
-        else:
-            lines.append("  Global Rubric: none")
-
-        # Question-specific rubrics
-        questions_with_rubrics = []
-        total_llm = total_regex = total_metric = total_callable = 0
-
-        for q in all_questions_data:
-            if not isinstance(q, dict):
-                continue
-            question_rubric = self._rubric_manager.get_question_rubric(q["id"])
-            if question_rubric and len(question_rubric) > 0:
-                questions_with_rubrics.append(q["id"])
-                # Count traits by type
-                for trait in question_rubric:
-                    if isinstance(trait, LLMRubricTrait):
-                        total_llm += 1
-                    elif isinstance(trait, RegexTrait):
-                        total_regex += 1
-                    elif isinstance(trait, MetricRubricTrait):
-                        total_metric += 1
-                    elif isinstance(trait, CallableTrait):
-                        total_callable += 1
-
-        if questions_with_rubrics:
-            lines.append(f"  Question-Specific: {len(questions_with_rubrics)} questions with rubrics")
-            trait_breakdown = []
-            if total_llm > 0:
-                trait_breakdown.append(f"LLM: {total_llm} total")
-            if total_regex > 0:
-                trait_breakdown.append(f"Regex: {total_regex} total")
-            if total_metric > 0:
-                trait_breakdown.append(f"Metric: {total_metric} total")
-            if total_callable > 0:
-                trait_breakdown.append(f"Callable: {total_callable} total")
-
-            if trait_breakdown:
-                lines.append(f"    └─ {', '.join(trait_breakdown)}")
-        else:
-            lines.append("  Question-Specific: none")
-
-        # === QUESTIONS ===
-        lines.append("")
-        if self._base.question_count == 0:
-            lines.append("  === QUESTIONS ===")
-            lines.append("  (empty benchmark)")
-        else:
-            display_count = min(3, len(all_questions_data))
-            lines.append(f"  === QUESTIONS (showing {display_count} of {self._base.question_count}) ===")
-
-            for idx, q_item in enumerate(all_questions_data[:display_count], 1):
-                if not isinstance(q_item, dict):
-                    continue
-
-                # Question text (truncate to 80 chars)
-                question_text = q_item.get("question", "")
-                if len(question_text) > 80:
-                    question_text = question_text[:77] + "..."
-
-                # Keywords
-                keywords = q_item.get("keywords", [])
-                keywords_str = f" [{', '.join(keywords)}]" if keywords else ""
-
-                lines.append(f"  {idx}. {question_text}{keywords_str}")
-
-                # Raw answer (truncate to 80 chars)
-                raw_answer = q_item.get("raw_answer", "")
-                if raw_answer:
-                    if len(raw_answer) > 80:
-                        raw_answer = raw_answer[:77] + "..."
-                    lines.append(f"     → {raw_answer}")
-                else:
-                    lines.append("     → (no answer yet)")
-
-                # Add blank line between questions
-                if idx < display_count:
-                    lines.append("")
-
-            # Show remaining count
-            if self._base.question_count > display_count:
-                remaining = self._base.question_count - display_count
-                lines.append(f"  ... ({remaining} more)")
-
-        # === READINESS ===
-        if not self._base.is_complete:
-            lines.append("")
-            lines.append("  === READINESS ===")
-            readiness = self._export_manager.check_readiness()
-
-            if readiness["ready_for_verification"]:
-                lines.append("  Status: Ready for verification")
-            else:
-                lines.append("  Status: Not ready for verification")
-                lines.append("  Issues:")
-
-                if readiness["missing_templates_count"] > 0:
-                    lines.append(f"    - {readiness['missing_templates_count']} questions missing templates")
-
-                unfinished_count = int(readiness["unfinished_count"])
-                if unfinished_count > 0:
-                    lines.append(f"    - {unfinished_count} questions not finished")
-
-        lines.append(")")
-
-        return "\n".join(lines)
+        """Developer-friendly representation with detailed statistics."""
+        return _helpers.build_repr(self)
 
     def __str__(self) -> str:
         """String representation (same as repr for developer-friendly output)."""
         return self.__repr__()
 
     def __len__(self) -> int:
-        """Return the number of questions in the benchmark."""
+        """Return the number of questions or scenarios in the benchmark."""
+        if self._scenarios:
+            return len(self._scenarios)
         return len(self._base)
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
@@ -1557,111 +1211,44 @@ class Benchmark:
         return question_id in self._base
 
     def __getitem__(self, key: str | int | slice) -> "SchemaOrgQuestion | list[SchemaOrgQuestion]":
-        """
-        Get question(s) as SchemaOrgQuestion object(s) using bracket notation.
+        """Get question(s) as SchemaOrgQuestion object(s) using bracket notation."""
+        from ..schemas.entities.question import QuestionRegistryEntry
 
-        Supports:
-        - String key: Get question by ID (returns SchemaOrgQuestion)
-        - Integer key: Get question by index (returns SchemaOrgQuestion)
-        - Slice: Get multiple questions by slice (returns list[SchemaOrgQuestion])
-
-        Args:
-            key: Question ID (str), index (int), or slice
-
-        Returns:
-            Single SchemaOrgQuestion or list of SchemaOrgQuestion objects
-
-        Raises:
-            ValueError: If question ID not found
-            IndexError: If index out of range
-            TypeError: If key type not supported
-        """
-
-        # Handle string keys (question ID)
         if isinstance(key, str):
             question_data = self._base[key]
-            return self._convert_to_schema_org_question(question_data)
-
-        # Handle integer keys (index)
+            finished = self._base._question_registry.get(key, QuestionRegistryEntry()).finished
+            return _helpers.convert_to_schema_org_question(question_data, finished=finished)
         elif isinstance(key, int):
             question_ids = self.get_question_ids()
-            original_key = key  # Store original for error message
+            original_key = key
             if key < 0:
-                key += len(question_ids)  # Support negative indexing
+                key += len(question_ids)
             if not 0 <= key < len(question_ids):
                 raise IndexError(f"Question index {original_key} out of range (0-{len(question_ids) - 1})")
             question_id = question_ids[key]
             question_data = self._base[question_id]
-            return self._convert_to_schema_org_question(question_data)
-
-        # Handle slice objects
+            finished = self._base._question_registry.get(question_id, QuestionRegistryEntry()).finished
+            return _helpers.convert_to_schema_org_question(question_data, finished=finished)
         elif isinstance(key, slice):
             question_ids = self.get_question_ids()
             selected_ids = question_ids[key]
-            return [self._convert_to_schema_org_question(self._base[qid]) for qid in selected_ids]
-
+            return [
+                _helpers.convert_to_schema_org_question(
+                    self._base[qid],
+                    finished=self._base._question_registry.get(qid, QuestionRegistryEntry()).finished,
+                )
+                for qid in selected_ids
+            ]
         else:
             raise TypeError(f"Invalid key type {type(key)}. Expected str, int, or slice.")
 
     def _convert_to_schema_org_question(self, question_data: dict[str, Any]) -> "SchemaOrgQuestion":
-        """
-        Convert internal question dictionary to SchemaOrgQuestion object.
+        """Convert internal question dictionary to SchemaOrgQuestion object."""
+        from ..schemas.entities.question import QuestionRegistryEntry
 
-        Args:
-            question_data: Internal question dictionary
-
-        Returns:
-            SchemaOrgQuestion object
-        """
-        from ..schemas.checkpoint import (
-            SchemaOrgAnswer,
-            SchemaOrgPropertyValue,
-            SchemaOrgQuestion,
-            SchemaOrgSoftwareSourceCode,
-        )
-        from ..utils.checkpoint import convert_rubric_trait_to_rating
-
-        # Create answer object using model_validate to handle aliased fields
-        accepted_answer = SchemaOrgAnswer.model_validate(
-            {"@id": f"{question_data['id']}-answer", "text": question_data["raw_answer"]}
-        )
-
-        # Create software source code (template) object using model_validate
-        has_part = SchemaOrgSoftwareSourceCode.model_validate(
-            {
-                "@id": f"{question_data['id']}-template",
-                "name": f"{question_data['question'][:30]}... Answer Template",
-                "text": question_data.get("answer_template", ""),
-            }
-        )
-
-        # Convert question-specific rubric traits to ratings
-        ratings = None
-        if question_data.get("question_rubric"):
-            ratings = [
-                convert_rubric_trait_to_rating(trait, "question-specific") for trait in question_data["question_rubric"]
-            ]
-
-        # Create additional properties from custom metadata
-        additional_properties = []
-        if question_data.get("finished") is not None:
-            additional_properties.append(SchemaOrgPropertyValue(name="finished", value=question_data["finished"]))
-
-        if question_data.get("custom_metadata"):
-            for key, value in question_data["custom_metadata"].items():
-                additional_properties.append(SchemaOrgPropertyValue(name=f"custom_{key}", value=value))
-
-        # Create SchemaOrgQuestion object using model_validate
-        return SchemaOrgQuestion.model_validate(
-            {
-                "@id": question_data["id"],
-                "text": question_data["question"],
-                "acceptedAnswer": accepted_answer,
-                "hasPart": has_part,
-                "rating": ratings,
-                "additionalProperty": additional_properties if additional_properties else None,
-            }
-        )
+        q_id = question_data.get("id", "")
+        finished = self._base._question_registry.get(q_id, QuestionRegistryEntry()).finished
+        return _helpers.convert_to_schema_org_question(question_data, finished=finished)
 
     def __eq__(self, other: object) -> bool:
         """Compare two benchmarks for equality."""

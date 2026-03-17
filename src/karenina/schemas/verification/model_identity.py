@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from karenina.schemas.config.models import ModelConfig
@@ -25,6 +25,8 @@ class ModelIdentity(BaseModel):
     Captures all dimensions that make a model configuration unique:
     interface, model name, and (for answering models) MCP tool names.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     interface: str = Field(..., json_schema_extra={"max_length": 50})
     model_name: str = Field(..., json_schema_extra={"max_length": 255})

@@ -19,7 +19,7 @@ from pydantic import SecretStr
 from .prompts import SUMMARIZATION, build_question_context
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import AgentMiddlewareConfig
+    from karenina.schemas.config import AgentMiddlewareConfig
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +278,7 @@ def build_agent_middleware(
         ToolRetryMiddleware,
     )
 
-    from karenina.schemas.workflow.models import AgentMiddlewareConfig
+    from karenina.schemas.config import AgentMiddlewareConfig
 
     if config is None:
         config = AgentMiddlewareConfig()

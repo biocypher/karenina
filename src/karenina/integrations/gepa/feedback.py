@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING, Any
 
 from karenina.adapters.factory import get_llm
 from karenina.ports import LLMPort, Message
-from karenina.schemas.workflow import INTERFACES_NO_PROVIDER_REQUIRED
+from karenina.schemas.config import INTERFACES_NO_PROVIDER_REQUIRED
 
 if TYPE_CHECKING:
     from karenina.integrations.gepa.data_types import KareninaTrajectory
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 
 from karenina.integrations.gepa.prompts.feedback import (
@@ -34,7 +34,7 @@ class LLMFeedbackGenerator:
     more actionable feedback than simple programmatic string concatenation.
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="feedback-llm",
         ...     model_provider="openai",

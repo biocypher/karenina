@@ -6,11 +6,14 @@ including a fixture-backed LLM client that replays captured responses.
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import AIMessage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -198,7 +201,7 @@ class FixtureBackedLLMClient:
                     return data
             except (json.JSONDecodeError, OSError) as e:
                 # Log warning but continue searching
-                print(f"Warning: Failed to load fixture {fixture_path}: {e}")
+                logger.warning("Failed to load fixture %s: %s", fixture_path, e)
 
         return None
 

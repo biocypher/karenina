@@ -35,6 +35,12 @@ class VerificationResultMetadata(BaseModel):
     run_name: str | None = None
     replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
 
+    # Scenario linking metadata (all nullable; None for standalone questions)
+    scenario_id: str | None = None
+    scenario_node: str | None = None
+    scenario_turn: int | None = None
+    scenario_path: list[str] | None = None
+
     @property
     def answering_model(self) -> str:
         """Backward-compatible accessor returning answering model display string."""
@@ -120,6 +126,13 @@ class VerificationResultTemplate(BaseModel):
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
+    # Agentic parsing
+    investigation_trace: str | None = Field(
+        default=None,
+        description="Raw trace from the agentic judge investigation step, if agentic parsing was used.",
+    )
+    agentic_parsing_performed: bool = False  # Whether agentic parsing was used
+
     # Abstention
     abstention_check_performed: bool = False  # Whether abstention check was attempted
     abstention_detected: bool | None = None  # Whether model refused/abstained from answering
@@ -181,7 +194,19 @@ class VerificationResultRubric(BaseModel):
     # Structure: {"trait_name": {"tp": ["excerpt1", ...], "tn": [...], "fp": [...], "fn": [...]}}
     # Each trait has four lists (TP/TN/FP/FN) containing extracted excerpts from the answer
 
-    def get_all_trait_scores(self) -> dict[str, int | bool | dict[str, float]]:
+    # Agentic trait evaluation
+    agentic_trait_scores: dict[str, int | bool | float | str | list[Any] | None] | None = Field(
+        default=None,
+        description="Scores from agentic rubric traits. Keyed by trait name.",
+    )
+    agentic_trait_investigation_traces: dict[str, str] | None = Field(
+        default=None,
+        description="Investigation traces from agentic rubric traits. "
+        "Each trace is the raw agent investigation output string. "
+        "Keyed by trait name.",
+    )
+
+    def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
         """
         Get all trait scores across all trait types in a flat dictionary.
 
@@ -193,7 +218,7 @@ class VerificationResultRubric(BaseModel):
                     "feature_identification": {"precision": 1.0, "recall": 1.0, "f1": 1.0}
                 }
         """
-        scores: dict[str, int | bool | dict[str, float]] = {}
+        scores: dict[str, int | bool | float | str | list[Any] | dict[str, float] | None] = {}
 
         if self.llm_trait_scores:
             scores.update(self.llm_trait_scores)
@@ -203,6 +228,8 @@ class VerificationResultRubric(BaseModel):
             scores.update(self.callable_trait_scores)
         if self.metric_trait_scores:
             scores.update(self.metric_trait_scores)
+        if self.agentic_trait_scores:
+            scores.update(self.agentic_trait_scores)
 
         return scores
 
@@ -225,6 +252,8 @@ class VerificationResultRubric(BaseModel):
             return (self.callable_trait_scores[name], "callable")
         if self.metric_trait_scores and name in self.metric_trait_scores:
             return (self.metric_trait_scores[name], "metric")
+        if self.agentic_trait_scores and name in self.agentic_trait_scores:
+            return (self.agentic_trait_scores[name], "agentic")
         return None
 
     def get_llm_trait_labels(self) -> dict[str, str]:

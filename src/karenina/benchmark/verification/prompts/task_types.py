@@ -74,3 +74,11 @@ class PromptTask(str, Enum):
 
     DJ_RUBRIC_SCORE_EXTRACTION = "dj_rubric_score_extraction"
     """Stage 3: Extracts the final score from deep judgment reasoning."""
+
+    # --- Agentic rubric trait evaluation ---
+
+    RUBRIC_AGENTIC_TRAIT_INVESTIGATION = "rubric_agentic_trait_investigation"
+    """Agent investigates response/workspace to evaluate an agentic rubric trait."""
+
+    RUBRIC_AGENTIC_TRAIT_EXTRACTION = "rubric_agentic_trait_extraction"
+    """Extracts the final score from an agentic rubric investigation trace."""

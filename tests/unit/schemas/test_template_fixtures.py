@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from karenina.schemas.domain import BaseAnswer
+from karenina.schemas.entities import BaseAnswer
 
 # Import each template fixture for testing
 # Note: Templates must be imported as modules and the Answer class extracted

@@ -44,7 +44,7 @@ from .usage import extract_sdk_usage
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class ClaudeSDKAgentAdapter:
     - Usage metadata extraction from SDK responses
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-sonnet",
         ...     model_name="claude-sonnet-4-20250514",
@@ -72,7 +72,7 @@ class ClaudeSDKAgentAdapter:
         ...     interface="claude_agent_sdk"
         ... )
         >>> adapter = ClaudeSDKAgentAdapter(config)
-        >>> result = await adapter.run(
+        >>> result = await adapter.arun(
         ...     messages=[Message.user("What files are in /tmp?")],
         ...     mcp_servers={
         ...         "filesystem": {
@@ -165,6 +165,21 @@ class ClaudeSDKAgentAdapter:
                 # Don't override critical options
                 if key not in ("permission_mode", "max_turns", "mcp_servers", "allowed_tools"):
                     options_kwargs[key] = value
+
+        # Build env dict for Anthropic settings (api_key, base_url)
+        # The Claude Agent SDK reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL from env
+        env_vars: dict[str, str] = {}
+        if self._config.anthropic_api_key:
+            env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
+        if self._config.anthropic_base_url:
+            env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
+
+        if env_vars:
+            options_kwargs["env"] = env_vars
+
+        # Wire workspace_path to SDK's cwd for filesystem isolation
+        if config.workspace_path:
+            options_kwargs["cwd"] = str(config.workspace_path)
 
         return ClaudeAgentOptions(**options_kwargs)
 
@@ -277,7 +292,7 @@ class ClaudeSDKAgentAdapter:
 
         return mcp_servers
 
-    async def run(
+    async def arun(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
@@ -405,14 +420,14 @@ class ClaudeSDKAgentAdapter:
             actual_model=actual_model,
         )
 
-    def run_sync(
+    def run(
         self,
         messages: list[Message],
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
-        """Synchronous wrapper for run().
+        """Synchronous wrapper for arun().
 
         Args:
             messages: Initial conversation messages.
@@ -424,14 +439,16 @@ class ClaudeSDKAgentAdapter:
             AgentResult from the agent execution.
 
         Raises:
-            Same exceptions as run().
+            AgentExecutionError: If the agent fails during execution.
+            AgentTimeoutError: If execution exceeds the timeout.
+            AgentResponseError: If the response is malformed or invalid.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.run, messages, tools, mcp_servers, config)
+            return portal.call(self.arun, messages, tools, mcp_servers, config)
 
         # No portal - check if we're in an async context
         try:
@@ -439,7 +456,7 @@ class ClaudeSDKAgentAdapter:
             # We're in an async context - use ThreadPoolExecutor
 
             def run_in_thread() -> AgentResult:
-                return asyncio.run(self.run(messages, tools, mcp_servers, config))
+                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
             timeout = config.timeout if config and config.timeout else 600
             with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -448,7 +465,7 @@ class ClaudeSDKAgentAdapter:
 
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.run(messages, tools, mcp_servers, config))
+            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
     async def aclose(self) -> None:
         """Close underlying resources.

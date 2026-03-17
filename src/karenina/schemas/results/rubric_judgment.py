@@ -98,15 +98,17 @@ class RubricJudgmentResults(BaseModel):
             pandas.DataFrame: Exploded DataFrame with one row per (trait × excerpt)
 
         Example:
-            >>> result_set = benchmark.run_verification_new(config)["question_id"]
-            >>> rubric_judgments = result_set.get_rubric_judgments_results()
-            >>> df = rubric_judgments.to_dataframe()
-            >>> # Analyze per-excerpt confidence
-            >>> df.groupby("trait_name")["excerpt_confidence"].mean()
-            >>> # Examine traits with validation failures
-            >>> df[df["trait_validation_failed"] == True][["trait_name", "trait_excerpt_retries"]]
-            >>> # Study hallucination risks
-            >>> df[df["excerpt_hallucination_risk"].notna()][["excerpt_text", "excerpt_hallucination_risk"]]
+            ```python
+            result_set = benchmark.run_verification_new(config)["question_id"]
+            rubric_judgments = result_set.get_rubric_judgments_results()
+            df = rubric_judgments.to_dataframe()
+            # Analyze per-excerpt confidence
+            df.groupby("trait_name")["excerpt_confidence"].mean()
+            # Examine traits with validation failures
+            df[df["trait_validation_failed"] == True][["trait_name", "trait_excerpt_retries"]]
+            # Study hallucination risks
+            df[df["excerpt_hallucination_risk"].notna()][["excerpt_text", "excerpt_hallucination_risk"]]
+            ```
         """
         import pandas as pd
 

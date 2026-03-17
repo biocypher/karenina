@@ -1,11 +1,14 @@
 """
 ADeLe Question Classifier.
 
-Classifies questions using ADeLe rubrics via LLM-as-judge.
+Classifies questions using ADeLe (Annotated Demand Levels) rubrics via LLM-as-judge.
 This module adapts the existing LLMTraitEvaluator infrastructure
 to evaluate questions (instead of answers) against ADeLe dimensions.
 
 All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
+
+ADeLe rubrics from Zhou et al. (2025), arXiv:2503.06378.
+https://kinds-of-intelligence-cfi.github.io/ADELE/
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ from .schemas import QuestionClassificationResult
 from .traits import ADELE_TRAIT_NAMES, get_adele_trait
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ class QuestionClassifier:
     def __init__(
         self,
         llm: LLMPort | None = None,
-        model_name: str = "claude-3-5-haiku-latest",
+        model_name: str = "claude-haiku-4-5",
         provider: str = "anthropic",
         temperature: float = 0.0,
         interface: str = "langchain",
@@ -73,7 +76,7 @@ class QuestionClassifier:
             llm: Optional pre-initialized LLMPort instance. If not provided,
                  one will be created using model_config or individual params.
             model_name: Model name to use if llm not provided.
-                       Defaults to claude-3-5-haiku-latest for efficiency.
+                       Defaults to claude-haiku-4-5 for efficiency.
             provider: Model provider to use if llm not provided.
             temperature: Temperature for LLM calls. Defaults to 0.0 for
                         deterministic classifications.
@@ -119,7 +122,7 @@ class QuestionClassifier:
             from pydantic import SecretStr
 
             from karenina.adapters.factory import get_llm
-            from karenina.schemas.workflow.models import ModelConfig
+            from karenina.schemas.config import ModelConfig
 
             # Use provided model_config or create one from individual params
             if self._model_config is not None:
@@ -179,7 +182,7 @@ class QuestionClassifier:
 
         This is faster and cheaper but may be less accurate for complex questions.
         """
-        from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from karenina.schemas.outputs import BatchLiteralClassifications
 
         # Build prompts for question classification
         system_prompt = self._build_system_prompt()
@@ -224,7 +227,7 @@ class QuestionClassifier:
         LLMParallelInvoker for significant speedup. Otherwise, calls run
         sequentially (legacy behavior).
         """
-        from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from karenina.schemas.outputs import SingleLiteralClassification
 
         scores: dict[str, int] = {}
         labels: dict[str, str] = {}
@@ -386,7 +389,7 @@ class QuestionClassifier:
 
     def _build_user_prompt_single_trait(self, question_text: str, trait: Any) -> str:
         """Build user prompt for single-trait question classification."""
-        from karenina.schemas.workflow.rubric_outputs import SingleLiteralClassification
+        from karenina.schemas.outputs import SingleLiteralClassification
 
         if trait.kind != "literal" or trait.classes is None:
             raise ValueError(f"Trait {trait.name} is not a literal trait with classes")
@@ -417,7 +420,7 @@ class QuestionClassifier:
 
     def _build_user_prompt(self, question_text: str, traits: list[Any]) -> str:
         """Build user prompt for question classification."""
-        from karenina.schemas.workflow.rubric_outputs import BatchLiteralClassifications
+        from karenina.schemas.outputs import BatchLiteralClassifications
 
         traits_description = []
         example_classifications: list[dict[str, str]] = []

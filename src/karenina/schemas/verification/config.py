@@ -1,14 +1,15 @@
 """Verification configuration model."""
 
 import contextlib
+import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..config.models import (
-    INTERFACE_LANGCHAIN,
     INTERFACES_NO_PROVIDER_REQUIRED,
     FewShotConfig,
     ModelConfig,
@@ -23,11 +24,29 @@ from .config_presets import (
 )
 from .prompt_config import PromptConfig
 
+logger = logging.getLogger(__name__)
+
 # Default system prompts for answering and parsing models
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
 DEFAULT_PARSING_SYSTEM_PROMPT = (
     "You are a validation assistant. Parse and validate responses against the given Pydantic template."
 )
+
+# Default embedding check settings
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+DEFAULT_EMBEDDING_THRESHOLD = 0.85
+
+# Default async execution settings
+DEFAULT_ASYNC_ENABLED = True
+DEFAULT_ASYNC_MAX_WORKERS = 2
+
+# Default deep-judgment settings
+DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS = 3
+DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD = 0.80
+DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS = 2
+
+# Default deep-judgment rubric settings
+DEFAULT_RUBRIC_MAX_EXCERPTS = 7
 
 
 class DeepJudgmentTraitConfig(BaseModel):
@@ -36,6 +55,8 @@ class DeepJudgmentTraitConfig(BaseModel):
 
     This model validates trait-level deep judgment settings used in custom mode.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
     excerpt_enabled: bool = True
@@ -85,33 +106,38 @@ class VerificationConfig(BaseModel):
     # Sufficiency detection settings
     sufficiency_enabled: bool = False  # Enable trace sufficiency detection
 
+    # Extraction hint settings (controls whether hints are appended to the parsing prompt)
+    include_extraction_hints: bool = True  # Include extraction hints in the parsing prompt
+
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
-    embedding_check_model: str = "all-MiniLM-L6-v2"  # SentenceTransformer model for embeddings
-    embedding_check_threshold: float = 0.85  # Similarity threshold (0.0-1.0)
+    embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
+    embedding_check_threshold: float = DEFAULT_EMBEDDING_THRESHOLD  # Similarity threshold (0.0-1.0)
 
     # Async execution settings
-    async_enabled: bool = True  # Enable parallel execution
-    async_max_workers: int = 2  # Number of parallel workers
+    async_enabled: bool = DEFAULT_ASYNC_ENABLED  # Enable parallel execution
+    async_max_workers: int = DEFAULT_ASYNC_MAX_WORKERS  # Number of parallel workers
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
-    deep_judgment_max_excerpts_per_attribute: int = 3  # Max excerpts to extract per attribute
-    deep_judgment_fuzzy_match_threshold: float = 0.80  # Similarity threshold for excerpt validation
-    deep_judgment_excerpt_retry_attempts: int = 2  # Additional retry attempts for excerpt validation
+    deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
+    deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Similarity threshold
+    deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
 
     # Search-enhanced deep-judgment settings (validate excerpts against external evidence)
     deep_judgment_search_enabled: bool = False  # Enable search validation for excerpts
-    deep_judgment_search_tool: str | Any = "tavily"  # Search tool name or callable instance
+    deep_judgment_search_tool: str | Callable[..., Any] = "tavily"  # Search tool name or callable instance
     # Supported built-in tools: "tavily"
     # Can also pass any callable: (str | list[str]) -> (str | list[str])
     # Examples: langchain tools, MCP tools, custom functions
 
     # Deep-judgment rubric settings (global defaults for per-trait configuration)
-    deep_judgment_rubric_max_excerpts_default: int = 7  # Default max excerpts per trait (higher than templates)
-    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80  # Default fuzzy match threshold for traits
-    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2  # Default retry attempts for trait excerpts
-    deep_judgment_rubric_search_tool: str | Any = "tavily"  # Search tool for rubric hallucination detection
+    deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS  # Max excerpts per trait
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Fuzzy match
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
+    deep_judgment_rubric_search_tool: str | Callable[..., Any] = (
+        "tavily"  # Search tool for rubric hallucination detection
+    )
 
     # Deep-judgment rubric configuration modes (NEW - runtime control of deep judgment)
     deep_judgment_rubric_mode: Literal["disabled", "enable_all", "use_checkpoint", "custom"] = "disabled"
@@ -140,12 +166,73 @@ class VerificationConfig(BaseModel):
     # Per-task-type prompt instructions (optional user-injected instructions for each pipeline stage)
     prompt_config: PromptConfig | None = None
 
+    # Agentic parsing
+    agentic_parsing: bool = Field(
+        default=False,
+        description=(
+            "Enable agentic parsing (Stage 7b). The judge uses tools to "
+            "independently verify artifacts before extracting structured data."
+        ),
+    )
+    agentic_judge_context: Literal["workspace_only", "trace_and_workspace", "trace_only"] = Field(
+        default="workspace_only",
+        description=(
+            "What context the investigation agent receives. "
+            "'workspace_only': question + workspace path (maximum independence). "
+            "'trace_and_workspace': answering agent trace + workspace path. "
+            "'trace_only': equivalent to classical Stage 7a parsing."
+        ),
+    )
+    agentic_parsing_max_turns: int = Field(
+        default=15,
+        description="Max turns for the investigation agent.",
+    )
+    agentic_parsing_timeout: float = Field(
+        default=120.0,
+        description="Timeout in seconds for the investigation agent.",
+    )
+
+    # Agentic rubric evaluation
+    agentic_rubric_strategy: Literal["individual", "shared"] = Field(
+        "individual",
+        description="How to evaluate agentic rubric traits. "
+        "'individual': one agent session per trait (robust, isolated). "
+        "'shared': one agent session for all traits (efficient, shared context).",
+    )
+    agentic_rubric_parallel: bool = Field(
+        False,
+        description="Enable parallel evaluation of agentic rubric traits. "
+        "Only applies to 'individual' strategy. Each trait gets a concurrent agent session.",
+    )
+
+    # Workspace (workspace_root lives on Benchmark, not here)
+    workspace_copy: bool = Field(
+        default=True,
+        description=(
+            "When True, pre-existing question workspaces are copied to a "
+            "sibling working directory before execution, protecting the "
+            "original for re-runs. When False, the pipeline works directly "
+            "in the original directory (destructive)."
+        ),
+    )
+    workspace_cleanup: bool = Field(
+        default=True,
+        description=(
+            "Whether to delete working copies after the run. Only applies to "
+            "copied or auto-created workspaces, never to original source "
+            "directories."
+        ),
+    )
+
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
+    # Scenario execution settings
+    scenario_turn_limit: int = 20  # Max turns before forced termination in scenario execution
+
     def __init__(self, **data: Any) -> None:
         """
-        Initialize with backward compatibility for single model configs.
+        Initialize with environment variable support and default system prompts.
 
         Configuration precedence (highest to lowest):
         1. Explicit arguments (including preset values)
@@ -163,7 +250,7 @@ class VerificationConfig(BaseModel):
             env_val = os.getenv("EMBEDDING_CHECK_MODEL")
             if env_val is not None:
                 data["embedding_check_model"] = env_val
-            # else: let Pydantic use field default ("all-MiniLM-L6-v2")
+            # else: let Pydantic use field default (DEFAULT_EMBEDDING_MODEL)
 
         if "embedding_check_threshold" not in data:
             env_val = os.getenv("EMBEDDING_CHECK_THRESHOLD")
@@ -171,14 +258,14 @@ class VerificationConfig(BaseModel):
                 # Invalid env var value will let Pydantic use field default (0.85)
                 with contextlib.suppress(ValueError):
                     data["embedding_check_threshold"] = float(env_val)
-            # else: let Pydantic use field default (0.85)
+            # else: let Pydantic use field default (DEFAULT_EMBEDDING_THRESHOLD)
 
         # Read environment variables for async execution settings (only if not explicitly provided AND env var is set)
         if "async_enabled" not in data:
             env_val = os.getenv("KARENINA_ASYNC_ENABLED")
             if env_val is not None:
                 data["async_enabled"] = env_val.lower() in ("true", "1", "yes")
-            # else: let Pydantic use field default (True)
+            # else: let Pydantic use field default (DEFAULT_ASYNC_ENABLED)
 
         if "async_max_workers" not in data:
             env_val = os.getenv("KARENINA_ASYNC_MAX_WORKERS")
@@ -186,45 +273,7 @@ class VerificationConfig(BaseModel):
                 # Invalid env var value will let Pydantic use field default (2)
                 with contextlib.suppress(ValueError):
                     data["async_max_workers"] = int(env_val)
-            # else: let Pydantic use field default (2)
-
-        # If legacy single model fields are provided, convert to arrays
-        if "answering_models" not in data and any(k.startswith("answering_") for k in data):
-            answering_model = ModelConfig(
-                id="answering-legacy",
-                model_provider=data.get("answering_model_provider") or None,
-                model_name=data.get("answering_model_name", ""),
-                temperature=data.get("answering_temperature", 0.1),
-                interface=data.get("answering_interface", INTERFACE_LANGCHAIN),
-                system_prompt=data.get("answering_system_prompt", DEFAULT_ANSWERING_SYSTEM_PROMPT),
-            )
-            data["answering_models"] = [answering_model]
-
-        if "parsing_models" not in data and any(k.startswith("parsing_") for k in data):
-            parsing_model = ModelConfig(
-                id="parsing-legacy",
-                model_provider=data.get("parsing_model_provider") or None,
-                model_name=data.get("parsing_model_name", ""),
-                temperature=data.get("parsing_temperature", 0.1),
-                interface=data.get("parsing_interface", INTERFACE_LANGCHAIN),
-                system_prompt=data.get("parsing_system_prompt", DEFAULT_PARSING_SYSTEM_PROMPT),
-            )
-            data["parsing_models"] = [parsing_model]
-
-        # Convert legacy few-shot fields to new FewShotConfig
-        if "few_shot_config" not in data and any(
-            k in data for k in ["few_shot_enabled", "few_shot_mode", "few_shot_k"]
-        ):
-            few_shot_enabled = data.get("few_shot_enabled", False)
-            few_shot_mode = data.get("few_shot_mode", "all")
-            few_shot_k = data.get("few_shot_k", 3)
-
-            # Create FewShotConfig from legacy settings
-            data["few_shot_config"] = FewShotConfig(
-                enabled=few_shot_enabled,
-                global_mode=few_shot_mode,
-                global_k=few_shot_k,
-            )
+            # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
 
         # Apply default system prompts to models that don't have one
         if "answering_models" in data:
@@ -344,6 +393,34 @@ class VerificationConfig(BaseModel):
                 raise ValueError(
                     "Search tool must be either a supported tool name string "
                     "or a callable with signature (str | list[str]) -> (str | list[str])"
+                )
+
+        # Agentic parsing validation
+        if self.agentic_parsing:
+            # Check parsing model interface supports AgentPort
+            from karenina.adapters.registry import AdapterRegistry
+
+            for pm in self.parsing_models:
+                spec = AdapterRegistry.get_spec(pm.interface)
+                if spec is None or spec.agent_factory is None:
+                    raise ValueError(
+                        "agentic_parsing=True requires an interface with "
+                        f"AgentPort support, but '{pm.interface}' does not provide one."
+                    )
+
+            # Agentic parsing is not supported in rubric_only mode
+            if self.evaluation_mode == "rubric_only":
+                raise ValueError(
+                    "agentic_parsing=True is not supported with "
+                    "evaluation_mode='rubric_only'. Use 'template_only' or "
+                    "'template_and_rubric'."
+                )
+
+            # Warn about trace_only being equivalent to Stage 7a
+            if self.agentic_judge_context == "trace_only":
+                logger.warning(
+                    "agentic_parsing=True with agentic_judge_context='trace_only' "
+                    "is equivalent to classical parsing (Stage 7a)."
                 )
 
     def __repr__(self) -> str:
@@ -481,10 +558,10 @@ class VerificationConfig(BaseModel):
 
     def is_few_shot_enabled(self) -> bool:
         """
-        Check if few-shot prompting is enabled (backward compatible).
+        Check if few-shot prompting is enabled.
 
         Returns:
-            True if few-shot is enabled in any format
+            True if few-shot is enabled
         """
         config = self.get_few_shot_config()
         return config is not None and config.enabled
@@ -533,3 +610,266 @@ class VerificationConfig(BaseModel):
     def from_preset(cls, filepath: Path) -> "VerificationConfig":
         """Load a VerificationConfig from a preset file. Delegates to config_presets.load_preset."""
         return load_preset(filepath)
+
+    @classmethod
+    def from_overrides(
+        cls,
+        base: "VerificationConfig | None" = None,
+        *,
+        # Model configuration
+        answering_model: str | None = None,
+        answering_provider: str | None = None,
+        answering_id: str | None = None,
+        answering_interface: str | None = None,
+        parsing_model: str | None = None,
+        parsing_provider: str | None = None,
+        parsing_id: str | None = None,
+        parsing_interface: str | None = None,
+        temperature: float | None = None,
+        manual_traces: Any | None = None,
+        # Execution settings
+        replicate_count: int | None = None,
+        # Feature flags
+        abstention: bool | None = None,
+        sufficiency: bool | None = None,
+        embedding_check: bool | None = None,
+        deep_judgment: bool | None = None,
+        # Evaluation settings
+        evaluation_mode: str | None = None,
+        embedding_threshold: float | None = None,
+        embedding_model: str | None = None,
+        async_execution: bool | None = None,
+        async_workers: int | None = None,
+        # Trace filtering
+        use_full_trace_for_template: bool | None = None,
+        use_full_trace_for_rubric: bool | None = None,
+        # Deep judgment rubric settings
+        deep_judgment_rubric_mode: str | None = None,
+        deep_judgment_rubric_excerpts: bool | None = None,
+        deep_judgment_rubric_max_excerpts: int | None = None,
+        deep_judgment_rubric_fuzzy_threshold: float | None = None,
+        deep_judgment_rubric_retry_attempts: int | None = None,
+        deep_judgment_rubric_search: bool | None = None,
+        deep_judgment_rubric_search_tool: str | None = None,
+        deep_judgment_rubric_config: dict[str, Any] | None = None,
+    ) -> "VerificationConfig":
+        """
+        Create a VerificationConfig by applying overrides to an optional base config.
+
+        Implements the hierarchy: overrides > base config > defaults.
+        Parameters set to None are not applied (base or default value is preserved).
+
+        This is the canonical way to construct a VerificationConfig with selective
+        overrides, usable by CLI, server, and programmatic callers.
+
+        Args:
+            base: Optional base config (e.g., from a preset). If None, starts from defaults.
+            answering_model: Override for the answering model name.
+            answering_provider: Override for the answering model provider.
+            answering_id: Override for the answering model identifier.
+            answering_interface: Override for the answering adapter interface.
+            parsing_model: Override for the parsing model name.
+            parsing_provider: Override for the parsing model provider.
+            parsing_id: Override for the parsing model identifier.
+            parsing_interface: Override for the parsing adapter interface.
+            temperature: Override for the LLM temperature.
+            manual_traces: Override for manual traces data.
+            replicate_count: Override for the number of replicates.
+            abstention: Override for abstention detection flag.
+            sufficiency: Override for sufficiency checking flag.
+            embedding_check: Override for embedding check flag.
+            deep_judgment: Override for deep judgment flag.
+            evaluation_mode: Override for evaluation mode.
+            embedding_threshold: Override for embedding similarity threshold.
+            embedding_model: Override for embedding model name.
+            async_execution: Override for async execution flag.
+            async_workers: Override for number of async workers.
+            use_full_trace_for_template: Override for full trace template flag.
+            use_full_trace_for_rubric: Override for full trace rubric flag.
+            deep_judgment_rubric_mode: Override for deep judgment rubric mode.
+            deep_judgment_rubric_excerpts: Override for rubric excerpts flag.
+            deep_judgment_rubric_max_excerpts: Override for max rubric excerpts.
+            deep_judgment_rubric_fuzzy_threshold: Override for rubric fuzzy threshold.
+            deep_judgment_rubric_retry_attempts: Override for rubric retry attempts.
+            deep_judgment_rubric_search: Override for rubric search flag.
+            deep_judgment_rubric_search_tool: Override for rubric search tool.
+            deep_judgment_rubric_config: Override for rubric config dict.
+
+        Returns:
+            A new VerificationConfig with overrides applied.
+        """
+        # Start with base config dump or empty dict
+        config_dict: dict[str, Any] = base.model_dump() if base else {}
+
+        # --- Scalar overrides (None = don't override) ---
+
+        # Replicate count
+        if replicate_count is not None:
+            config_dict["replicate_count"] = replicate_count
+        elif not base:
+            config_dict["replicate_count"] = 1
+
+        # Feature flags
+        if abstention is not None:
+            config_dict["abstention_enabled"] = abstention
+        if sufficiency is not None:
+            config_dict["sufficiency_enabled"] = sufficiency
+        if embedding_check is not None:
+            config_dict["embedding_check_enabled"] = embedding_check
+        if deep_judgment is not None:
+            config_dict["deep_judgment_enabled"] = deep_judgment
+
+        # Evaluation settings
+        if evaluation_mode is not None:
+            config_dict["evaluation_mode"] = evaluation_mode
+            config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
+        if embedding_threshold is not None:
+            config_dict["embedding_check_threshold"] = embedding_threshold
+        if embedding_model is not None:
+            config_dict["embedding_check_model"] = embedding_model
+        if async_execution is not None:
+            config_dict["async_enabled"] = async_execution
+        if async_workers is not None:
+            config_dict["async_max_workers"] = async_workers
+
+        # Trace filtering
+        if use_full_trace_for_template is not None:
+            config_dict["use_full_trace_for_template"] = use_full_trace_for_template
+        if use_full_trace_for_rubric is not None:
+            config_dict["use_full_trace_for_rubric"] = use_full_trace_for_rubric
+
+        # Deep judgment rubric settings
+        if deep_judgment_rubric_mode is not None:
+            config_dict["deep_judgment_rubric_mode"] = deep_judgment_rubric_mode
+        if deep_judgment_rubric_excerpts is not None:
+            config_dict["deep_judgment_rubric_global_excerpts"] = deep_judgment_rubric_excerpts
+        if deep_judgment_rubric_max_excerpts is not None:
+            config_dict["deep_judgment_rubric_max_excerpts_default"] = deep_judgment_rubric_max_excerpts
+        if deep_judgment_rubric_fuzzy_threshold is not None:
+            config_dict["deep_judgment_rubric_fuzzy_match_threshold_default"] = deep_judgment_rubric_fuzzy_threshold
+        if deep_judgment_rubric_retry_attempts is not None:
+            config_dict["deep_judgment_rubric_excerpt_retry_attempts_default"] = deep_judgment_rubric_retry_attempts
+        if deep_judgment_rubric_search is not None:
+            config_dict["deep_judgment_rubric_search_enabled"] = deep_judgment_rubric_search
+        if deep_judgment_rubric_search_tool is not None:
+            config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
+        if deep_judgment_rubric_config is not None:
+            config_dict["deep_judgment_rubric_config"] = deep_judgment_rubric_config
+
+        # --- Model configuration ---
+        # Determine the unified interface (answering and parsing may differ)
+        ans_interface = answering_interface
+        par_interface = parsing_interface
+        # If only a single 'interface' concept was provided via answering_interface,
+        # it's already split by the caller. No implicit sharing here.
+
+        answering_has_overrides = any(
+            [
+                answering_model is not None,
+                answering_provider is not None,
+                ans_interface is not None,
+            ]
+        )
+
+        parsing_has_overrides = any(
+            [
+                parsing_model is not None,
+                parsing_provider is not None,
+                par_interface is not None,
+            ]
+        )
+
+        if answering_has_overrides:
+            config_dict["answering_models"] = [
+                cls._build_model_config_dict(
+                    base_models=base.answering_models if base else None,
+                    model_name=answering_model,
+                    provider=answering_provider,
+                    model_id=answering_id,
+                    temperature=temperature,
+                    interface=ans_interface,
+                    manual_traces=manual_traces,
+                    default_model="gpt-4.1-mini",
+                    default_provider="openai",
+                    default_interface="langchain",
+                )
+            ]
+        elif manual_traces is not None:
+            # Manual interface requested via manual_traces without explicit model overrides
+            config_dict["answering_models"] = [ModelConfig(interface="manual", manual_traces=manual_traces)]
+
+        if parsing_has_overrides:
+            config_dict["parsing_models"] = [
+                cls._build_model_config_dict(
+                    base_models=base.parsing_models if base else None,
+                    model_name=parsing_model,
+                    provider=parsing_provider,
+                    model_id=parsing_id,
+                    temperature=temperature,
+                    interface=par_interface,
+                    manual_traces=None,  # Parsing model never uses manual interface
+                    default_model="gpt-4.1-mini",
+                    default_provider="openai",
+                    default_interface="langchain",
+                )
+            ]
+
+        return cls(**config_dict)
+
+    @classmethod
+    def _build_model_config_dict(
+        cls,
+        *,
+        base_models: list[ModelConfig] | None,
+        model_name: str | None,
+        provider: str | None,
+        model_id: str | None,
+        temperature: float | None,
+        interface: str | None,
+        manual_traces: Any | None,
+        default_model: str,
+        default_provider: str,
+        default_interface: str,
+    ) -> ModelConfig:
+        """
+        Build a ModelConfig by applying overrides to an optional base model.
+
+        If base_models is provided, uses the first model as the starting point and
+        applies only non-None overrides. If no base, constructs from scratch with defaults.
+
+        Returns:
+            A new ModelConfig instance.
+        """
+        if interface == "manual" and manual_traces is not None:
+            return ModelConfig(interface="manual", manual_traces=manual_traces)
+
+        if base_models:
+            # Start from base model, apply overrides
+            base_model = base_models[0].model_dump()
+            if model_name is not None:
+                base_model["model_name"] = model_name
+            if provider is not None:
+                base_model["model_provider"] = provider
+            if model_id is not None:
+                base_model["id"] = model_id
+            if temperature is not None:
+                base_model["temperature"] = temperature
+            if interface is not None:
+                base_model["interface"] = interface
+            return ModelConfig(**base_model)
+
+        # No base — build from scratch
+        from typing import Literal, cast
+
+        InterfaceType = Literal[
+            "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
+        ]
+        final_interface = cast(InterfaceType, interface or default_interface)
+
+        return ModelConfig(
+            model_name=model_name or default_model,
+            model_provider=provider or default_provider,
+            interface=final_interface,
+            temperature=temperature if temperature is not None else 0.1,
+            id=model_id,
+        )

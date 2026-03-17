@@ -12,9 +12,9 @@ from .client import (
     get_all_mcp_tools,
 )
 from .tools import (
+    afetch_tool_descriptions,
     apply_tool_description_overrides,
     fetch_tool_descriptions,
-    sync_fetch_tool_descriptions,
 )
 
 __all__ = [
@@ -23,7 +23,7 @@ __all__ = [
     "connect_all_mcp_servers",
     "get_all_mcp_tools",
     # Tool description utilities
+    "afetch_tool_descriptions",
     "fetch_tool_descriptions",
-    "sync_fetch_tool_descriptions",
     "apply_tool_description_overrides",
 ]

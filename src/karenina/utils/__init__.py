@@ -22,10 +22,12 @@ from .checkpoint import (
 )
 from .code import extract_and_combine_codeblocks
 from .errors import is_retryable_error
+from .file_ops import atomic_write
 from .json_extraction import extract_json_from_response
 from .messages import append_error_feedback
 from .retry import TRANSIENT_RETRY, create_transient_retry, log_retry
 from .testing import FixtureBackedLLMClient, MockResponse, MockUsage
+from .version import get_karenina_version
 
 __all__ = [
     # Answer caching
@@ -60,4 +62,8 @@ __all__ = [
     "FixtureBackedLLMClient",
     "MockResponse",
     "MockUsage",
+    # File operations
+    "atomic_write",
+    # Version utilities
+    "get_karenina_version",
 ]

@@ -6,7 +6,7 @@ without errors. It serves as a smoke test for the integration test infrastructur
 
 import pytest
 
-from karenina.schemas.domain import BaseAnswer, Rubric
+from karenina.schemas.entities import BaseAnswer, Rubric
 
 # =============================================================================
 # Model Config Fixture Tests

@@ -14,7 +14,7 @@ Key features:
 - Structured output with Pydantic models
 
 Example:
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>> from karenina.adapters.factory import get_agent
     >>>
     >>> config = ModelConfig(
@@ -24,7 +24,7 @@ Example:
     ...     interface="claude_tool",
     ... )
     >>> agent = get_agent(config)
-    >>> result = await agent.run(
+    >>> result = await agent.arun(
     ...     messages=[Message.user("What genes are associated with breast cancer?")],
     ...     mcp_servers={
     ...         "open-targets": {

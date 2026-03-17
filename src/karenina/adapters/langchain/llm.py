@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 
 class LangChainLLMAdapter:
@@ -58,7 +58,7 @@ class LangChainLLMAdapter:
     - Structured output via with_structured_output()
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-sonnet",
         ...     model_name="claude-sonnet-4-20250514",

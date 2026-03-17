@@ -3,13 +3,24 @@
 Main entry point for running verification using the stage-based pipeline architecture.
 """
 
+import logging
+from pathlib import Path
 from typing import Any
 
-from ...schemas.domain import Rubric
-from ...schemas.verification import PromptConfig
-from ...schemas.workflow import ModelConfig, VerificationResult
-from ...utils.checkpoint import generate_template_id
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import PromptConfig, VerificationResult
+from karenina.schemas.verification.config import (
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
+)
+from karenina.utils.checkpoint import generate_template_id
+
 from .stages import StageOrchestrator, VerificationContext
+
+logger = logging.getLogger(__name__)
 
 
 def run_single_model_verification(
@@ -29,18 +40,18 @@ def run_single_model_verification(
     sufficiency_enabled: bool = False,
     deep_judgment_enabled: bool = False,
     rubric_evaluation_strategy: str = "batch",
-    deep_judgment_max_excerpts_per_attribute: int = 3,
-    deep_judgment_fuzzy_match_threshold: float = 0.80,
-    deep_judgment_excerpt_retry_attempts: int = 2,
+    deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     deep_judgment_search_enabled: bool = False,
     deep_judgment_search_tool: str | Any = "tavily",
     # Deep-judgment rubric configuration (NEW)
     deep_judgment_rubric_mode: str = "disabled",
     deep_judgment_rubric_global_excerpts: bool = True,
     deep_judgment_rubric_config: dict[str, Any] | None = None,
-    deep_judgment_rubric_max_excerpts_default: int = 7,
-    deep_judgment_rubric_fuzzy_match_threshold_default: float = 0.80,
-    deep_judgment_rubric_excerpt_retry_attempts_default: int = 2,
+    deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS,
+    deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     deep_judgment_rubric_search_enabled: bool = False,
     deep_judgment_rubric_search_tool: str | Any = "tavily",
     evaluation_mode: str = "template_only",
@@ -50,6 +61,18 @@ def run_single_model_verification(
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
+    # Agentic parsing configuration
+    agentic_parsing: bool = False,
+    agentic_judge_context: str = "workspace_only",
+    agentic_parsing_max_turns: int = 15,
+    agentic_parsing_timeout: float = 120.0,
+    workspace_root: Path | None = None,
+    workspace_copy: bool = True,
+    workspace_cleanup: bool = True,
+    question_workspace_path: str | None = None,
+    # Agentic rubric evaluation configuration
+    agentic_rubric_strategy: str = "individual",
+    agentic_rubric_parallel: bool = False,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -147,6 +170,18 @@ def run_single_model_verification(
         use_full_trace_for_rubric=use_full_trace_for_rubric,
         # Answer Caching
         cached_answer_data=cached_answer_data,
+        # Agentic Parsing
+        agentic_parsing=agentic_parsing,
+        agentic_judge_context=agentic_judge_context,
+        agentic_parsing_max_turns=agentic_parsing_max_turns,
+        agentic_parsing_timeout=agentic_parsing_timeout,
+        question_workspace_path=question_workspace_path,
+        workspace_root=workspace_root,
+        workspace_copy=workspace_copy,
+        workspace_cleanup=workspace_cleanup,
+        # Agentic Rubric
+        agentic_rubric_strategy=agentic_rubric_strategy,
+        agentic_rubric_parallel=agentic_rubric_parallel,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
@@ -167,7 +202,13 @@ def run_single_model_verification(
     # If rubric is provided and mode is template_only, upgrade to template_and_rubric
     if (
         rubric
-        and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
+        and (
+            rubric.llm_traits
+            or rubric.regex_traits
+            or rubric.callable_traits
+            or rubric.metric_traits
+            or rubric.agentic_traits
+        )
         and evaluation_mode == "template_only"
     ):
         evaluation_mode = "template_and_rubric"
@@ -179,6 +220,7 @@ def run_single_model_verification(
         sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
         evaluation_mode=evaluation_mode,
+        agentic_parsing=agentic_parsing,
     )
 
     # Execute verification pipeline

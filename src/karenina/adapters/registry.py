@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,9 @@ _active_adapters: list[Any] = []
 
 # Lock for thread-safe access to _active_adapters
 _adapters_lock = threading.Lock()
+
+# Lock for thread-safe lazy initialization of the AdapterRegistry
+_registry_lock = threading.RLock()
 
 
 def register_adapter(adapter: Any) -> None:
@@ -165,6 +168,14 @@ class AdapterSpec:
     # Additional metadata
     supports_mcp: bool = False
     supports_tools: bool = False
+
+    # True when the underlying runtime is itself an agent with built-in tools
+    # (e.g. Claude Code). For these adapters, the LLMPort path loses tool
+    # call traces because the runtime executes tools internally. The pipeline
+    # should prefer the AgentPort path to capture the full conversation.
+    # False for scaffolded adapters (LangChain, Claude Tool) where the adapter
+    # explicitly orchestrates each tool call turn.
+    natively_agentic: bool = False
 
 
 class AdapterRegistry:
@@ -299,36 +310,46 @@ class AdapterRegistry:
 
     @classmethod
     def _ensure_initialized(cls) -> None:
-        """Ensure all registration modules have been loaded."""
+        """Ensure all registration modules have been loaded.
+
+        Uses double-checked locking to be thread-safe without paying the lock
+        cost on every call after initialization is complete.
+        """
         if cls._initialized:
             return
 
-        # Import registration modules to trigger self-registration
-        # This happens lazily on first registry access
-        try:
-            from karenina.adapters.langchain import registration as _lc  # noqa: F401
-        except ImportError:
-            logger.debug("LangChain registration module not available")
+        with _registry_lock:
+            # Double-check after acquiring the lock
+            if cls._initialized:
+                return
 
-        try:
-            from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
-        except ImportError:
-            logger.debug("Claude Agent SDK registration module not available")
+            # Import registration modules to trigger self-registration
+            # This happens lazily on first registry access
+            try:
+                from karenina.adapters.langchain import registration as _lc  # noqa: F401
+            except ImportError:
+                logger.debug("LangChain registration module not available")
 
-        try:
-            from karenina.adapters.manual import registration as _manual  # noqa: F401
-        except ImportError:
-            logger.debug("Manual registration module not available")
+            try:
+                from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
+            except ImportError:
+                logger.debug("Claude Agent SDK registration module not available")
 
-        try:
-            from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
-        except ImportError:
-            logger.debug("Claude Tool registration module not available")
+            try:
+                from karenina.adapters.manual import registration as _manual  # noqa: F401
+            except ImportError:
+                logger.debug("Manual registration module not available")
 
-        cls._initialized = True
+            try:
+                from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
+            except ImportError:
+                logger.debug("Claude Tool registration module not available")
+
+            cls._initialized = True
 
     @classmethod
     def _reset(cls) -> None:
         """Reset the registry (for testing only)."""
-        cls._specs.clear()
-        cls._initialized = False
+        with _registry_lock:
+            cls._specs.clear()
+            cls._initialized = False

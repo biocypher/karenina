@@ -17,7 +17,7 @@ from rich.table import Table
 
 from karenina.schemas import VerificationConfig
 
-from .utils import get_preset_path, list_presets
+from .utils import cli_error, get_preset_path, list_presets
 
 # Create preset app
 preset_app = typer.Typer(name="preset", help="Manage verification presets")
@@ -87,11 +87,9 @@ def show_preset(name_or_path: Annotated[str, typer.Argument(help="Preset name or
         console.print(f"  Deep judgment enabled: {config.deep_judgment_enabled}")
 
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     except Exception as e:
-        console.print(f"[red]Error loading preset: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"loading preset: {e}", e)
 
 
 @preset_app.command(name="delete")
@@ -116,8 +114,6 @@ def delete_preset(name_or_path: Annotated[str, typer.Argument(help="Preset name 
         console.print("[green]✓ Preset deleted successfully![/green]")
 
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(str(e), e)
     except Exception as e:
-        console.print(f"[red]Error deleting preset: {e}[/red]")
-        raise typer.Exit(code=1) from e
+        cli_error(f"deleting preset: {e}", e)

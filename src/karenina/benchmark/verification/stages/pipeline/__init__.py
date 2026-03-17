@@ -1,6 +1,6 @@
 """Pipeline stage implementations.
 
-This package contains all 13 verification pipeline stages:
+This package contains all verification pipeline stages:
 
 | # | Stage | Description |
 |---|-------|-------------|
@@ -10,16 +10,20 @@ This package contains all 13 verification pipeline stages:
 | 4 | TraceValidationAutoFailStage | Auto-fail if trace doesn't end with AI |
 | 5 | AbstentionCheckStage | Detect model refusals |
 | 6 | SufficiencyCheckStage | Detect insufficient responses |
-| 7 | ParseTemplateStage | Parse response into Pydantic schema |
+| 7a | ParseTemplateStage | Parse response into Pydantic schema |
+| 7b | AgenticParseTemplateStage | Agentic investigation + extraction |
 | 8 | VerifyTemplateStage | Run verify() method |
 | 9 | EmbeddingCheckStage | Semantic similarity fallback |
 | 10 | DeepJudgmentAutoFailStage | Excerpt validation for templates |
-| 11 | RubricEvaluationStage | Evaluate rubric traits |
+| 11a | RubricEvaluationStage | Evaluate rubric traits |
+| 11b | AgenticRubricEvaluationStage | Agentic rubric investigation + scoring |
 | 12 | DeepJudgmentRubricAutoFailStage | Excerpt validation for rubrics |
 | 13 | FinalizeResultStage | Build VerificationResult |
 """
 
 from .abstention_check import AbstentionCheckStage
+from .agentic_parse_template import AgenticParseTemplateStage
+from .agentic_rubric_evaluation import AgenticRubricEvaluationStage
 from .deep_judgment_autofail import DeepJudgmentAutoFailStage
 from .deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from .embedding_check import EmbeddingCheckStage
@@ -41,6 +45,8 @@ __all__ = [
     "AbstentionCheckStage",
     "SufficiencyCheckStage",
     "ParseTemplateStage",
+    "AgenticParseTemplateStage",
+    "AgenticRubricEvaluationStage",
     "VerifyTemplateStage",
     "EmbeddingCheckStage",
     "DeepJudgmentAutoFailStage",

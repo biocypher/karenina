@@ -9,7 +9,8 @@ import logging
 from abc import abstractmethod
 from typing import Any
 
-from .....schemas.verification.model_identity import ModelIdentity
+from karenina.schemas.verification.model_identity import ModelIdentity
+
 from .base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)

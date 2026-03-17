@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
-from karenina.schemas.workflow.models import ModelConfig
+from karenina.schemas.config import ModelConfig
 
 from .llm import ClaudeToolLLMAdapter
 
@@ -41,7 +41,7 @@ class ClaudeToolParserAdapter:
     constrains model output to match the Pydantic schema exactly.
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> from pydantic import BaseModel, Field
 
         >>> class Answer(BaseModel):

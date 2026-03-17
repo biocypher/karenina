@@ -16,7 +16,7 @@ class TestClaudeToolAdapterInitialization:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a mock ModelConfig for claude_tool interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-tool",
@@ -118,7 +118,7 @@ class TestProtocolCompliance:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a ModelConfig for claude_tool interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-tool",
@@ -181,14 +181,14 @@ class TestProtocolCompliance:
         assert hasattr(adapter, "run")
         assert callable(adapter.run)
 
-    def test_agent_adapter_has_run_sync_method(self, model_config: Any) -> None:
-        """Test agent adapter has run_sync method."""
+    def test_agent_adapter_has_arun_method(self, model_config: Any) -> None:
+        """Test agent adapter has arun method."""
         from karenina.adapters.claude_tool import ClaudeToolAgentAdapter
 
         adapter = ClaudeToolAgentAdapter(model_config)
 
-        assert hasattr(adapter, "run_sync")
-        assert callable(adapter.run_sync)
+        assert hasattr(adapter, "arun")
+        assert callable(adapter.arun)
 
     def test_parser_adapter_has_parse_to_pydantic_method(self, model_config: Any) -> None:
         """Test parser adapter has parse_to_pydantic method."""
@@ -215,7 +215,7 @@ class TestFactoryIntegration:
     @pytest.fixture
     def claude_tool_config(self) -> Any:
         """Create a ModelConfig for claude_tool interface."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-claude-tool",

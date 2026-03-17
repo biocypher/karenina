@@ -15,7 +15,7 @@ Test scenarios:
 
 import pytest
 
-from karenina.schemas.domain import RegexTrait
+from karenina.schemas.entities import RegexTrait
 
 # =============================================================================
 # Basic Pattern Matching Tests

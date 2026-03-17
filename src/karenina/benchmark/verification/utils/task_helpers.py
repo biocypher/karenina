@@ -7,8 +7,8 @@ few-shot resolution, and preview result creation.
 import logging
 from typing import Any
 
-from ....schemas.domain import Rubric
-from ....schemas.workflow import (
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
     VerificationResult,
@@ -48,7 +48,7 @@ def merge_rubrics_for_task(
             logger.warning(f"Failed to parse question rubric for {template.question_id}: {e}")
 
     try:
-        from ....schemas import merge_rubrics
+        from karenina.schemas import merge_rubrics
 
         return merge_rubrics(global_rubric, question_rubric)
     except ValueError as e:
@@ -90,21 +90,23 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
     that the task is "starting" (not yet completed).
 
     Args:
-        task: Task dictionary with question_id, question_text, and model info
+        task: Task dictionary with question_id, question_text, model info, and optional replicate
 
     Returns:
-        VerificationResult with preview metadata
+        VerificationResult with preview metadata including replicate info
     """
     from karenina.schemas.verification.model_identity import ModelIdentity
 
     answering_identity = ModelIdentity.from_model_config(task["answering_model"], role="answering")
     parsing_identity = ModelIdentity.from_model_config(task["parsing_model"], role="parsing")
+    replicate = task.get("replicate")  # May be None for single-replicate runs
 
     preview_result_id = VerificationResultMetadata.compute_result_id(
         question_id=task["question_id"],
         answering=answering_identity,
         parsing=parsing_identity,
         timestamp="",  # Empty timestamp indicates "starting" event
+        replicate=replicate,
     )
     return VerificationResult(
         metadata=VerificationResultMetadata(
@@ -117,6 +119,7 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
             execution_time=0.0,
             timestamp="",  # Empty timestamp indicates "starting" event
             result_id=preview_result_id,
+            replicate=replicate,
         )
     )
 
@@ -157,4 +160,14 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
         # Prompt configuration
         "prompt_config": getattr(config, "prompt_config", None),
+        # Agentic parsing configuration
+        "agentic_parsing": getattr(config, "agentic_parsing", False),
+        "agentic_judge_context": getattr(config, "agentic_judge_context", "workspace_only"),
+        "agentic_parsing_max_turns": getattr(config, "agentic_parsing_max_turns", 15),
+        "agentic_parsing_timeout": getattr(config, "agentic_parsing_timeout", 120.0),
+        "workspace_copy": getattr(config, "workspace_copy", True),
+        "workspace_cleanup": getattr(config, "workspace_cleanup", True),
+        # Agentic rubric evaluation configuration
+        "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
+        "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),
     }

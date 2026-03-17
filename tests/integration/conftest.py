@@ -21,8 +21,8 @@ from pydantic import BaseModel
 from karenina.benchmark.verification.evaluators import RubricEvaluator, TemplateEvaluator
 from karenina.ports import LLMPort, LLMResponse
 from karenina.ports.usage import UsageMetadata
-from karenina.schemas.domain import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
-from karenina.schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
 
 # Import FixtureBackedLLMClient from root conftest
 from tests.conftest import FixtureBackedLLMClient

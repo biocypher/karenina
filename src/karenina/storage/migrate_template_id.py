@@ -14,6 +14,7 @@ Usage:
     python -m karenina.storage.migrate_template_id <database_path>
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -21,6 +22,8 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
 from ..utils.checkpoint import generate_template_id
+
+logger = logging.getLogger(__name__)
 
 
 def migrate_database(db_path: str) -> None:
@@ -38,7 +41,7 @@ def migrate_database(db_path: str) -> None:
     if not db_file.exists():
         raise ValueError(f"Database file not found: {db_path}")
 
-    print(f"🔍 Inspecting database: {db_path}")
+    logger.info("Inspecting database: %s", db_path)
     engine = create_engine(f"sqlite:///{db_path}")
 
     # Check current schema
@@ -49,16 +52,16 @@ def migrate_database(db_path: str) -> None:
     vr_columns = [col["name"] for col in inspector.get_columns("verification_results")]
 
     if "template_id" in bq_columns and "template_id" in vr_columns:
-        print("✅ Database already migrated (template_id columns exist)")
+        logger.info("Database already migrated (template_id columns exist)")
         return
 
-    print("🔧 Starting migration...")
+    logger.info("Starting migration...")
 
     with Session(engine) as session:
         try:
             # Step 1: Add template_id column to benchmark_questions if not exists
             if "template_id" not in bq_columns:
-                print("  📝 Adding template_id column to benchmark_questions...")
+                logger.info("Adding template_id column to benchmark_questions...")
                 session.execute(
                     text(
                         """
@@ -70,7 +73,7 @@ def migrate_database(db_path: str) -> None:
                 session.commit()
 
                 # Populate template_id values from existing answer_template data
-                print("  🔄 Populating template_id values...")
+                logger.info("Populating template_id values...")
                 result = session.execute(text("SELECT id, answer_template FROM benchmark_questions"))
                 rows = result.fetchall()
                 for row in rows:
@@ -82,11 +85,11 @@ def migrate_database(db_path: str) -> None:
                         {"tid": template_id, "bid": bq_id},
                     )
                 session.commit()
-                print(f"  ✅ Updated {len(rows)} benchmark_questions rows")
+                logger.info("Updated %d benchmark_questions rows", len(rows))
 
             # Step 2: Add template_id column to verification_results if not exists
             if "template_id" not in vr_columns:
-                print("  📝 Adding template_id column to verification_results...")
+                logger.info("Adding template_id column to verification_results...")
                 session.execute(
                     text(
                         """
@@ -99,7 +102,7 @@ def migrate_database(db_path: str) -> None:
 
                 # Populate template_id values by looking up from benchmark_questions
                 # This assumes verification results are linked to benchmark questions
-                print("  🔄 Populating verification template_id from benchmark_questions...")
+                logger.info("Populating verification template_id from benchmark_questions...")
                 session.execute(
                     text(
                         """
@@ -117,10 +120,10 @@ def migrate_database(db_path: str) -> None:
                     )
                 )
                 session.commit()
-                print("  ✅ Updated verification_results template_id values")
+                logger.info("Updated verification_results template_id values")
 
             # Step 3: Recreate benchmark_questions table with new constraint
-            print("  🔨 Recreating benchmark_questions with composite constraint...")
+            logger.info("Recreating benchmark_questions with composite constraint...")
 
             # Create new table with correct schema
             session.execute(
@@ -166,15 +169,15 @@ def migrate_database(db_path: str) -> None:
             session.execute(text("CREATE INDEX idx_benchmark_finished ON benchmark_questions(benchmark_id, finished)"))
 
             session.commit()
-            print("  ✅ Recreated benchmark_questions table")
+            logger.info("Recreated benchmark_questions table")
 
             # Step 4: Note about questions table
-            print("  ℹ️  Note: questions.question_text UNIQUE constraint removed in new schema")
-            print("      Existing databases keep the constraint for compatibility")
-            print("      New entries can have duplicate question_text as long as template_id differs")
+            logger.info("Note: questions.question_text UNIQUE constraint removed in new schema")
+            logger.info("Existing databases keep the constraint for compatibility")
+            logger.info("New entries can have duplicate question_text as long as template_id differs")
 
             session.commit()
-            print("✅ Migration completed successfully!")
+            logger.info("Migration completed successfully!")
 
         except Exception as e:
             session.rollback()

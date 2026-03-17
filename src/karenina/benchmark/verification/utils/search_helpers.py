@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ....schemas import SearchResultItem
+    from karenina.schemas import SearchResultItem
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def parse_tool_output(raw_result: Any) -> list["SearchResultItem"]:
         Returns empty list on failure rather than raising.
     """
     # Import here to avoid circular imports
-    from ....schemas import SearchResultItem
+    from karenina.schemas import SearchResultItem
 
     # Case 1: Already a list of SearchResultItem
     if isinstance(raw_result, list) and all(isinstance(item, SearchResultItem) for item in raw_result):

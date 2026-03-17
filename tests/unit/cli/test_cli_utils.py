@@ -7,10 +7,9 @@ Tests cover:
 - parse_question_indices() - parsing question index strings
 - validate_output_path() - output path validation
 - filter_templates_by_indices() - filtering templates by index
-- filter_templates_by_ids() - filtering templates by ID
 - create_export_job() - creating VerificationJob for export
 - get_traces_path() - trace file path resolution
-- load_manual_traces_from_file() - loading manual traces
+- load_manual_traces_from_file() - loading manual traces (from karenina.adapters.manual)
 
 All tests use temp directories and avoid external dependencies.
 """
@@ -21,24 +20,25 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from karenina.adapters.manual import load_manual_traces_from_file
 from karenina.cli.utils import (
     _get_presets_directory,
     create_export_job,
-    filter_templates_by_ids,
     filter_templates_by_indices,
     get_preset_path,
     get_traces_path,
     list_presets,
-    load_manual_traces_from_file,
     parse_question_indices,
     validate_output_path,
 )
+from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.verification import (
+    FinishedTemplate,
+    VerificationConfig,
+    VerificationResult,
+    VerificationResultMetadata,
+)
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.workflow.verification.api_models import FinishedTemplate
-from karenina.schemas.workflow.verification.config import VerificationConfig
-from karenina.schemas.workflow.verification.result import VerificationResult
-from karenina.schemas.workflow.verification.result_components import VerificationResultMetadata
-from karenina.schemas.workflow.verification_result_set import VerificationResultSet
 
 
 # Helper function to create minimal FinishedTemplate
@@ -198,23 +198,11 @@ def test_get_preset_path_direct_absolute_path(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_get_preset_path_direct_relative_path(tmp_path: Path) -> None:
     """Test get_preset_path with relative path that exists."""
-    # Create a temporary file in the actual working directory
-    import tempfile
+    preset_file = tmp_path / "preset.json"
+    preset_file.write_text("{}")
 
-    # Create temp file
-    fd, temp_path = tempfile.mkstemp(suffix=".json", text=True)
-    try:
-        # Write some content
-        with open(fd, "w") as f:
-            f.write("{}")
-
-        # Test that direct path works
-        result = get_preset_path(temp_path)
-        assert result == Path(temp_path).resolve()
-    finally:
-        # Clean up
-        if Path(temp_path).exists():
-            Path(temp_path).unlink()
+    result = get_preset_path(str(preset_file))
+    assert result == preset_file.resolve()
 
 
 @pytest.mark.unit
@@ -469,73 +457,6 @@ def test_filter_templates_by_indices_preserves_order() -> None:
 
 
 # =============================================================================
-# filter_templates_by_ids Tests
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_empty() -> None:
-    """Test filtering with empty IDs returns empty list."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-    ]
-    result = filter_templates_by_ids(templates, [])
-    assert result == []
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_single() -> None:
-    """Test filtering by single ID."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-        _make_template("q-3"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-2"])
-    assert len(result) == 1
-    assert result[0].question_id == "q-2"
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_multiple() -> None:
-    """Test filtering by multiple IDs."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-        _make_template("q-3"),
-        _make_template("q-4"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-1", "q-3", "q-4"])
-    assert len(result) == 3
-    assert [t.question_id for t in result] == ["q-1", "q-3", "q-4"]
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_nonexistent() -> None:
-    """Test filtering with non-existent IDs returns subset."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-1", "q-99"])
-    assert len(result) == 1
-    assert result[0].question_id == "q-1"
-
-
-@pytest.mark.unit
-def test_filter_templates_by_ids_preserves_order() -> None:
-    """Test filtering preserves original order."""
-    templates = [
-        _make_template("q-1"),
-        _make_template("q-2"),
-        _make_template("q-3"),
-    ]
-    result = filter_templates_by_ids(templates, ["q-3", "q-1"])
-    assert [t.question_id for t in result] == ["q-1", "q-3"]
-
-
-# =============================================================================
 # create_export_job Tests
 # =============================================================================
 
@@ -543,7 +464,7 @@ def test_filter_templates_by_ids_preserves_order() -> None:
 @pytest.mark.unit
 def test_create_export_job_basic() -> None:
     """Test creating basic export job."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -595,7 +516,7 @@ def test_create_export_job_basic() -> None:
 @pytest.mark.unit
 def test_create_export_job_with_failures() -> None:
     """Test creating export job with some failures."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -643,7 +564,7 @@ def test_create_export_job_with_failures() -> None:
 @pytest.mark.unit
 def test_create_export_job_default_run_name() -> None:
     """Test creating export job with empty run name uses default."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -688,7 +609,7 @@ def test_create_export_job_default_run_name() -> None:
 @pytest.mark.unit
 def test_create_export_job_generates_uuid() -> None:
     """Test creating export job generates UUID."""
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
     result_set = VerificationResultSet(
         results=[
@@ -810,8 +731,8 @@ def test_load_manual_traces_from_file_valid(tmp_path: Path) -> None:
     mock_benchmark = MagicMock()
 
     with (
-        patch("karenina.adapters.manual.load_manual_traces"),
-        patch("karenina.adapters.manual.ManualTraces", return_value="mock_manual_traces") as MockManualTraces,
+        patch("karenina.adapters.manual.helpers.load_manual_traces"),
+        patch("karenina.adapters.manual.traces.ManualTraces", return_value="mock_manual_traces") as MockManualTraces,
     ):
         result = load_manual_traces_from_file(trace_file, mock_benchmark)
         assert result == "mock_manual_traces"

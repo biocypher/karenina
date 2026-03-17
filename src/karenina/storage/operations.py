@@ -5,17 +5,20 @@ verification runs, and results to/from the database.
 """
 
 import hashlib
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from ...schemas.workflow import VerificationResult
+    from karenina.schemas.verification import VerificationResult
+
     from ..benchmark.benchmark import Benchmark
 
 from sqlalchemy import Select, select
 
+from ..schemas.entities.question import QuestionRegistryEntry as _QuestionRegistryEntry
 from ..utils.checkpoint import generate_template_id
 from .converters import orm_to_pydantic, pydantic_to_orm, update_orm_from_pydantic
 from .db_config import DBConfig
@@ -33,6 +36,8 @@ from .rubric_serializer import (
     serialize_question_rubric_from_cache,
     serialize_rubric,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def save_benchmark(
@@ -146,15 +151,20 @@ def save_benchmark(
                         id=question_id,
                         question_text=question_text,
                         raw_answer=q_data["raw_answer"],
-                        tags=q_data.get("keywords", []),  # Note: keywords key used for tags
+                        answer_notes=q_data.get("answer_notes"),
+                        keywords=q_data.get("keywords", []),
                         few_shot_examples=q_data.get("few_shot_examples"),
+                        author=q_data.get("author"),
+                        sources=q_data.get("sources"),
+                        custom_metadata=q_data.get("custom_metadata"),
                     )
                     session.add(question_model)
                     added_questions_this_session.add(question_id)
 
             # Create or update benchmark-question association
             answer_template = q_data.get("answer_template", "")
-            finished = q_data.get("finished", False)
+            # Read finished status from the question registry (not the cache dict)
+            finished = benchmark._base._question_registry.get(question_id, _QuestionRegistryEntry()).finished
             keywords = q_data.get("keywords", [])
 
             # Compute template_id from answer_template (composite key component)
@@ -167,7 +177,7 @@ def save_benchmark(
                     question_rubric_dict = serialize_question_rubric_from_cache(q_data["question_rubric"])
                 except Exception as e:
                     # Log warning but continue - rubric is optional
-                    print(f"Warning: Failed to serialize rubric for question {question_id}: {e}")
+                    logger.warning("Failed to serialize rubric for question %s: %s", question_id, e)
                     question_rubric_dict = None
 
             # Check if association already exists (composite key: benchmark_id + question_id + template_id)
@@ -195,11 +205,11 @@ def save_benchmark(
                                 "old_version": {
                                     "question": existing_question.question_text,
                                     "raw_answer": existing_question.raw_answer,
+                                    "answer_notes": existing_question.answer_notes,
                                     "answer_template": existing_bq.answer_template or "",
                                     "original_answer_template": existing_bq.original_answer_template or "",
                                     "finished": existing_bq.finished,
-                                    "tags": existing_question.tags or [],
-                                    "keywords": existing_bq.keywords or [],
+                                    "keywords": existing_bq.keywords or existing_question.keywords or [],
                                     "few_shot_examples": existing_question.few_shot_examples,
                                     "question_rubric": existing_bq.question_rubric,
                                     "last_modified": (
@@ -211,10 +221,10 @@ def save_benchmark(
                                 "new_version": {
                                     "question": question_text,
                                     "raw_answer": q_data["raw_answer"],
+                                    "answer_notes": q_data.get("answer_notes"),
                                     "answer_template": answer_template,
                                     "original_answer_template": q_data.get("original_answer_template", answer_template),
                                     "finished": finished,
-                                    "tags": q_data.get("tags", []),
                                     "keywords": keywords,
                                     "few_shot_examples": q_data.get("few_shot_examples"),
                                     "question_rubric": question_rubric_dict,
@@ -276,7 +286,7 @@ def load_benchmark(
     """
     # Import here to avoid circular imports
     from ..benchmark.benchmark import Benchmark
-    from ..schemas.domain import Question
+    from ..schemas.entities import Question
 
     # Convert storage URL to DBConfig if needed
     db_config = DBConfig(storage_url=storage) if isinstance(storage, str) else storage
@@ -320,18 +330,22 @@ def load_benchmark(
             ).scalar_one()
 
             # Create Question object
-            # Use keywords from BenchmarkQuestionModel if available, fall back to QuestionModel.tags
-            keywords_list: list[str | None] = []
+            # Use keywords from BenchmarkQuestionModel if available, fall back to QuestionModel.keywords
+            keywords_list: list[str] = []
             if bq.keywords:
-                keywords_list = list(bq.keywords)
-            elif question_model.tags:
-                keywords_list = list(question_model.tags)
+                keywords_list = [k for k in bq.keywords if k is not None]
+            elif question_model.keywords:
+                keywords_list = [k for k in question_model.keywords if k is not None]
 
             question = Question(
                 question=question_model.question_text,
                 raw_answer=question_model.raw_answer,
-                tags=keywords_list,
+                keywords=keywords_list,
                 few_shot_examples=question_model.few_shot_examples,
+                answer_notes=question_model.answer_notes,
+                author=question_model.author,
+                sources=question_model.sources,
+                custom_metadata=question_model.custom_metadata,
             )
 
             # Add question to benchmark with template
@@ -596,10 +610,12 @@ def _model_to_verification_result(model: VerificationResultModel) -> "Verificati
     automatically reconstruct the nested Pydantic model from the
     flat SQLAlchemy model.
     """
-    from karenina.schemas.workflow import VerificationResult
+    from typing import cast
+
+    from karenina.schemas.verification import VerificationResult
 
     # Use auto-converter to reconstruct nested Pydantic model from flat ORM
-    return orm_to_pydantic(model, VerificationResult, FLATTEN_CONFIG)
+    return cast(VerificationResult, orm_to_pydantic(model, VerificationResult, FLATTEN_CONFIG))
 
 
 def import_verification_results(
@@ -613,8 +629,6 @@ def import_verification_results(
 
     Supports:
     - v2.x format: {format_version: "2.0"/"2.1", metadata, shared_data, results}
-    - Legacy unified format: {metadata, results}
-    - Legacy array format: [result1, result2, ...]
 
     Args:
         json_data: Parsed JSON data from export file
@@ -629,37 +643,23 @@ def import_verification_results(
     Raises:
         ValueError: If benchmark not found or JSON format unrecognized
     """
-    from karenina.schemas.workflow import VerificationResult
+    from karenina.schemas.verification import VerificationResult
 
     # Initialize database if auto_create is enabled
     if db_config.auto_create:
         init_database(db_config)
 
     # Detect format version
-    format_version = json_data.get("format_version", "1.0")
+    format_version = json_data.get("format_version")
 
     # Extract results and metadata based on format
     if format_version in ("2.0", "2.1"):
         results_list = json_data.get("results", [])
         metadata = json_data.get("metadata", {})
         shared_data = json_data.get("shared_data", {})
-    elif "metadata" in json_data and "results" in json_data:
-        # Legacy unified format
-        results_list = json_data.get("results", [])
-        metadata = json_data.get("metadata", {})
-        shared_data = {}
-        format_version = "1.0"
-    elif isinstance(json_data, list):
-        # Legacy array format
-        results_list = json_data
-        metadata = {}
-        shared_data = {}
-        format_version = "legacy"
     else:
         raise ValueError(
-            "Unrecognized JSON format. Expected v2.0 format with 'format_version' key, "
-            "legacy unified format with 'metadata' and 'results' keys, "
-            "or legacy array format."
+            f"Unsupported checkpoint format. Expected format_version '2.0' or '2.1'. Got: {format_version!r}"
         )
 
     if not results_list:
@@ -732,7 +732,7 @@ def import_verification_results(
                     resolved_qid = question_id_map.get(text_hash)
 
                 if not resolved_qid:
-                    print(f"Warning: Question not found in DB for ID '{original_qid}', skipping")
+                    logger.warning("Question not found in DB for ID '%s', skipping", original_qid)
                     skipped_count += 1
                     continue
 
@@ -751,7 +751,7 @@ def import_verification_results(
 
             except Exception as e:
                 # Log warning but continue with other results
-                print(f"Warning: Failed to import result: {e}")
+                logger.warning("Failed to import result: %s", e, exc_info=True)
                 skipped_count += 1
 
         # Update run counts

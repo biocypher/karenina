@@ -20,7 +20,7 @@ class TestLangChainParserAdapter:
     @pytest.fixture
     def model_config(self) -> Any:
         """Create a mock ModelConfig."""
-        from karenina.schemas.workflow.models import ModelConfig
+        from karenina.schemas.config import ModelConfig
 
         return ModelConfig(
             id="test-parser",

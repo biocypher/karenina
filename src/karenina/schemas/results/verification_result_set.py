@@ -371,7 +371,7 @@ class VerificationResultSet(BaseModel):
 
             # Build answering model key with MCP if present
             if by in ("answering", "both"):
-                mcp_servers = result.answering_mcp_servers
+                mcp_servers = result.template.answering_mcp_servers if result.template else None
                 if mcp_servers and len(mcp_servers) > 0:
                     answering_key = f"{answering_model} + MCP[{','.join(sorted(mcp_servers))}]"
                 else:
@@ -1008,11 +1008,12 @@ class VerificationResultSet(BaseModel):
 
             **Tool Usage Statistics** (if agents used):
             - tool_usage_stats: Dict with {tools, total_traces_with_tools, total_tool_calls}
-              where tools maps tool name to {total_calls, traces_using, avg_calls_per_trace}
+                where tools maps tool name to {total_calls, traces_using, avg_calls_per_trace}
 
             **Trace Length Statistics** (if agents used):
-            - trace_length_stats: Dict with {median_iterations, mean_iterations, std_iterations, min_iterations, max_iterations, num_traces}
-              Iteration counts (AI message cycles) for agent traces
+            - trace_length_stats: Dict with {median_iterations, mean_iterations, std_iterations,
+                min_iterations, max_iterations, num_traces}.
+                Iteration counts (AI message cycles) for agent traces.
 
         Example:
             ```python

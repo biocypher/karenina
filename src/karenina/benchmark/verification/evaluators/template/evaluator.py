@@ -12,19 +12,21 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from .....adapters import get_llm, get_parser
-from .....ports import LLMPort
-from .....schemas.domain import BaseAnswer
-from .....schemas.verification.model_identity import ModelIdentity
-from .....schemas.workflow import ModelConfig
-from ...prompts import PromptAssembler, PromptTask
-from ...prompts.parsing.parsing_instructions import TemplatePromptBuilder
-from ...utils import prepare_evaluation_input
+from karenina.adapters import get_llm, get_parser
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
+from karenina.benchmark.verification.utils import prepare_evaluation_input
+from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
+from karenina.ports import LLMPort
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.verification.model_identity import ModelIdentity
+
 from .results import FieldVerificationResult, ParseResult, RegexVerificationResult
 
 if TYPE_CHECKING:
-    from .....ports import ParserPort
-    from .....schemas.verification import PromptConfig
+    from karenina.ports import ParserPort
+    from karenina.schemas.verification import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,7 @@ class TemplateEvaluator:
         answer_class: type[BaseAnswer],
         raw_answer_class: type[BaseAnswer] | None = None,
         prompt_config: "PromptConfig | None" = None,
+        include_extraction_hints: bool = False,
     ):
         """
         Initialize the template evaluator.
@@ -78,6 +81,8 @@ class TemplateEvaluator:
             answer_class: The Answer class (with question ID injected) for parsing
             raw_answer_class: The RawAnswer class (before ID injection) for ground truth extraction
             prompt_config: Optional per-task-type user instructions for prompt assembly
+            include_extraction_hints: Whether to inject per-field extraction hints from
+                VerifiedField metadata into the judge's system prompt.
 
         Raises:
             ValueError: If model configuration is invalid (validated by adapter factory)
@@ -85,6 +90,7 @@ class TemplateEvaluator:
         """
         self.model_config = model_config
         self._prompt_config = prompt_config
+        self._include_extraction_hints = include_extraction_hints
         self.answer_class: type[BaseAnswer] = answer_class
         self.raw_answer_class: type[BaseAnswer] = raw_answer_class or answer_class
 
@@ -264,6 +270,7 @@ class TemplateEvaluator:
             system_text = self._prompt_builder.build_system_prompt(
                 has_tool_traces=False,
                 ground_truth=self._get_ground_truth(),
+                extraction_hints=self._get_extraction_hints(),
             )
             user_text = self._prompt_builder.build_user_prompt(
                 question_text=question_text,
@@ -284,7 +291,7 @@ class TemplateEvaluator:
                 user_text=user_text,
                 user_instructions=user_instructions,
                 instruction_context={
-                    "json_schema": self.answer_class.model_json_schema(),
+                    "json_schema": build_parsing_schema(self.answer_class),
                     "format_instructions": "",
                 },
             )
@@ -318,13 +325,36 @@ class TemplateEvaluator:
         if not self._should_expose_ground_truth():
             return None
         try:
-            from ...utils.template_parsing_helpers import create_test_instance_from_answer_class
+            from karenina.benchmark.verification.utils.template_parsing_helpers import (
+                create_test_instance_from_answer_class,
+            )
 
             _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             return ground_truth
         except Exception as e:
-            logger.warning(f"Could not extract ground truth: {e}")
+            logger.warning("Could not extract ground truth: %s", e)
             return None
+
+    def _get_extraction_hints(self) -> dict[str, str] | None:
+        """Collect extraction hints from VerifiedField metadata.
+
+        Reads extraction_hint from each VerificationMeta attached to the answer class.
+        Returns None if hints are disabled or no hints are defined on any field.
+
+        Returns:
+            Mapping of field name to extraction hint string, or None if not applicable.
+        """
+        if not self._include_extraction_hints:
+            return None
+        try:
+            verified_fields = self.answer_class._get_verified_fields()
+        except Exception as e:
+            logger.warning("Could not read verified fields for extraction hints: %s", e)
+            return None
+        hints = {
+            name: meta.extraction_hint for name, meta in verified_fields.items() if meta.extraction_hint is not None
+        }
+        return hints if hints else None
 
     # ========================================================================
     # Deep Judgment Parsing (via composition)
@@ -353,7 +383,8 @@ class TemplateEvaluator:
         """
         from langchain_core.output_parsers import PydanticOutputParser
 
-        from .....schemas.workflow import VerificationConfig
+        from karenina.schemas.verification import VerificationConfig
+
         from .deep_judgment import deep_judgment_parse
 
         result = ParseResult()
@@ -380,15 +411,18 @@ class TemplateEvaluator:
         ground_truth = None
         if self._should_expose_ground_truth():
             try:
-                from ...utils.template_parsing_helpers import create_test_instance_from_answer_class
+                from karenina.benchmark.verification.utils.template_parsing_helpers import (
+                    create_test_instance_from_answer_class,
+                )
 
                 _, ground_truth = create_test_instance_from_answer_class(self.raw_answer_class)
             except Exception as e:
-                logger.warning(f"Could not extract ground truth: {e}")
+                logger.warning("Could not extract ground truth: %s", e)
 
         combined_system_prompt = self._prompt_builder.build_system_prompt(
             has_tool_traces=False,
             ground_truth=ground_truth,
+            extraction_hints=self._get_extraction_hints(),
         )
 
         # Apply adapter + user instructions via PromptAssembler
@@ -403,7 +437,7 @@ class TemplateEvaluator:
             user_text="",
             user_instructions=user_instructions,
             instruction_context={
-                "json_schema": self.answer_class.model_json_schema(),
+                "json_schema": build_parsing_schema(self.answer_class),
                 "format_instructions": format_instructions,
             },
         )

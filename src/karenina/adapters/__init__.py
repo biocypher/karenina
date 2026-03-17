@@ -9,7 +9,9 @@ application code.
 
 Available adapters:
     - LangChain: Wraps existing LangChain/LangGraph infrastructure
-    - Claude SDK: (Planned) Native Anthropic Agent SDK support
+    - Claude Agent SDK: Native Anthropic Agent SDK support
+    - Claude Tool: Claude-specific tool use with native structured output
+    - Manual: Manual trace replay for testing and debugging
 
 Factory functions:
     - get_llm: Create an LLMPort implementation for a given model config
@@ -22,11 +24,11 @@ Parallel invokers:
 
 Example:
     >>> from karenina.adapters import get_agent, get_llm
-    >>> from karenina.schemas.workflow.models import ModelConfig
+    >>> from karenina.schemas.config import ModelConfig
     >>>
     >>> config = ModelConfig(model="claude-sonnet-4-20250514", provider="anthropic")
     >>> agent = get_agent(config)
-    >>> result = await agent.run(messages=[Message.user("Hello!")])
+    >>> result = await agent.arun(messages=[Message.user("Hello!")])
 """
 
 from typing import TYPE_CHECKING, Any

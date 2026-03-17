@@ -15,13 +15,24 @@ from .api_models import (
 )
 from .config import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
+    DEFAULT_ASYNC_ENABLED,
+    DEFAULT_ASYNC_MAX_WORKERS,
+    DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
+    DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
+    DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_THRESHOLD,
     DEFAULT_PARSING_SYSTEM_PROMPT,
+    DEFAULT_RUBRIC_MAX_EXCERPTS,
     DeepJudgmentTraitConfig,
     VerificationConfig,
 )
 from .config_presets import (
     create_preset_structure,
+    get_default_presets_dir,
+    list_preset_files,
     load_preset,
+    resolve_preset_path,
     sanitize_model_config,
     sanitize_preset_name,
     save_preset,
@@ -50,12 +61,23 @@ from .result_components import (
 __all__ = [
     # Constants
     "DEFAULT_ANSWERING_SYSTEM_PROMPT",
+    "DEFAULT_ASYNC_ENABLED",
+    "DEFAULT_ASYNC_MAX_WORKERS",
+    "DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD",
+    "DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS",
+    "DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS",
+    "DEFAULT_EMBEDDING_MODEL",
+    "DEFAULT_EMBEDDING_THRESHOLD",
     "DEFAULT_PARSING_SYSTEM_PROMPT",
+    "DEFAULT_RUBRIC_MAX_EXCERPTS",
     # Configuration
     "VerificationConfig",
     "DeepJudgmentTraitConfig",
     "PromptConfig",
     # Preset utilities
+    "get_default_presets_dir",
+    "list_preset_files",
+    "resolve_preset_path",
     "sanitize_model_config",
     "sanitize_preset_name",
     "validate_preset_metadata",

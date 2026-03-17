@@ -5,55 +5,30 @@ CRUD operations and metadata management. Filtering and search operations
 are delegated to QuestionQueryBuilder for single responsibility.
 """
 
-import ast
 import inspect
+import logging
+import textwrap
 from collections.abc import Iterator
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
 
 if TYPE_CHECKING:
-    from ...schemas.domain import Question
+    from karenina.schemas.entities import Question
+
     from .base import BenchmarkBase
 
-from ...utils.checkpoint import add_question_to_benchmark
+from karenina.schemas.entities.question import QuestionRegistryEntry
+from karenina.utils.checkpoint import add_question_to_benchmark
+
 from .question_query import QuestionQueryBuilder
+
+logger = logging.getLogger(__name__)
 
 # Sentinel value to detect if finished parameter was explicitly provided
 _NOT_PROVIDED = object()
 
-
-def _rename_answer_class_to_standard(source_code: str, original_class_name: str) -> str:
-    """
-    Rename a BaseAnswer subclass to 'Answer' in source code.
-
-    This allows users to define classes with any name (e.g., VenetoclaxAnswer),
-    but stores them with the standard 'Answer' name that the verification system expects.
-
-    Args:
-        source_code: The source code containing the class definition
-        original_class_name: The original name of the class to rename
-
-    Returns:
-        Modified source code with the class renamed to 'Answer'
-    """
-    # If already named "Answer", no change needed
-    if original_class_name == "Answer":
-        return source_code
-
-    try:
-        tree = ast.parse(source_code)
-
-        # Find and rename the class definition
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == original_class_name:
-                node.name = "Answer"
-
-        # Convert back to source code
-        return ast.unparse(tree)
-    except Exception:
-        # If AST parsing fails, fall back to simple string replacement
-        # This is a safety net but should rarely be needed
-        return source_code.replace(f"class {original_class_name}(", "class Answer(")
+# Default registry entry for lookups when a question is not yet in the registry
+_DEFAULT_REGISTRY_ENTRY = QuestionRegistryEntry()
 
 
 class QuestionManager:
@@ -94,6 +69,7 @@ class QuestionManager:
         sources: list[dict[str, Any]] | None = None,
         custom_metadata: dict[str, Any] | None = None,
         few_shot_examples: list[dict[str, str]] | None = None,
+        answer_notes: str | None = None,
     ) -> str:
         """
         Add a question to the benchmark.
@@ -113,16 +89,17 @@ class QuestionManager:
             sources: Optional source documents
             custom_metadata: Optional custom metadata
             few_shot_examples: Optional list of few-shot examples with 'question' and 'answer' keys
+            answer_notes: Optional notes for interpreting the answer
 
         Returns:
             The question ID
 
         Examples:
             # Traditional usage with kwargs
-            q_id = manager.add_question("What is Python?", "A programming language")
+            q_id = manager.add_question("What is Python?", "A programming language", answer_notes="A general-purpose language")
 
             # New usage with Question object
-            q_obj = Question(question="What is Python?", raw_answer="A programming language")
+            q_obj = Question(question="What is Python?", raw_answer="A programming language", answer_notes="A general-purpose language")
             q_id = manager.add_question(q_obj)
 
             # New usage with Answer class - automatically marked as finished
@@ -132,10 +109,7 @@ class QuestionManager:
             q_id = manager.add_question("What is 6*7?", "42", answer_template=MyAnswer)
         """
         # Import Question class here to avoid circular imports
-        from ...schemas.domain import Question
-
-        # Track whether user provided an answer template (before we set default)
-        user_provided_template = answer_template is not None
+        from karenina.schemas.entities import Question
 
         # Handle Question object input
         if isinstance(question, Question):
@@ -144,16 +118,22 @@ class QuestionManager:
             # Use the Question object's auto-generated ID if no ID provided
             if question_id is None:
                 question_id = question.id
-            # Extract tags/keywords if provided
-            keywords = [tag for tag in question.tags if tag is not None] if question.tags else None
+            # Extract keywords if provided
+            keywords = question.keywords if question.keywords else None
             # Use few-shot examples from Question object if not overridden
             if few_shot_examples is None:
                 few_shot_examples = question.few_shot_examples
+            # Use answer notes from Question object if not overridden
+            if answer_notes is None:
+                answer_notes = question.answer_notes
+            # Extract workspace path for coding benchmarks
+            workspace_path = question.workspace_path
         elif isinstance(question, str):
             # Traditional string input
             question_text = question
             raw_answer_text = raw_answer or ""
             keywords = None
+            workspace_path = None
 
             # Validate required parameters for string input
             if raw_answer is None:
@@ -166,14 +146,11 @@ class QuestionManager:
         if answer_template is not None:
             if inspect.isclass(answer_template):
                 # Import BaseAnswer here to avoid circular imports
-                from ...schemas.domain import BaseAnswer
+                from karenina.schemas.entities import BaseAnswer
 
                 # Validate that it's an Answer class
                 if not issubclass(answer_template, BaseAnswer):
                     raise TypeError(f"answer_template class must inherit from BaseAnswer, got {answer_template}")
-
-                # Capture the original class name for renaming
-                original_class_name = getattr(answer_template, "__name__", "Answer")
 
                 # Convert Answer class to source code string
                 try:
@@ -182,9 +159,7 @@ class QuestionManager:
                     if source_code is None:
                         source_code = inspect.getsource(answer_template)
 
-                    # Rename the class to "Answer" for verification system compatibility
-                    # This allows users to use any class name (e.g., VenetoclaxAnswer)
-                    answer_template = _rename_answer_class_to_standard(source_code, original_class_name)
+                    answer_template = textwrap.dedent(source_code)
                 except (OSError, TypeError) as e:
                     class_name = getattr(answer_template, "__name__", "Unknown")
                     raise ValueError(
@@ -204,12 +179,10 @@ class QuestionManager:
         # At this point, answer_template is guaranteed to be a string
         assert isinstance(answer_template, str), "answer_template should be a string at this point"
 
-        # Auto-set finished flag if user provided a template but didn't explicitly set finished
-        # This enables backend usage (like ManualTraces) to skip the manual mark_finished() call
-        # Frontend behavior is preserved since it always explicitly passes finished=False
+        # Default finished=True for backend/API usage — questions added programmatically
+        # are ready for verification. Frontend always explicitly passes finished=False.
         if finished is _NOT_PROVIDED:
-            # User didn't provide finished parameter - auto-set based on template presence
-            finished = bool(user_provided_template)
+            finished = True
         # else: User explicitly provided finished value, use it as-is
 
         # Type narrowing: finished is guaranteed to be bool at this point
@@ -228,6 +201,8 @@ class QuestionManager:
             custom_metadata,
             keywords,  # Pass keywords from Question object if available
             few_shot_examples,
+            answer_notes=answer_notes,
+            workspace_path=workspace_path,
         )
 
         # Update cache
@@ -244,11 +219,12 @@ class QuestionManager:
         Returns:
             True if question was removed, False if not found
         """
-        # Remove from cache
+        # Remove from cache and registry
         if question_id not in self.base._questions_cache:
             return False
 
         del self.base._questions_cache[question_id]
+        self.base._question_registry.pop(question_id, None)
 
         # Remove from checkpoint data
         items_to_remove = []
@@ -321,14 +297,22 @@ class QuestionManager:
         Raises:
             ValueError: If question not found
         """
-        from ...schemas.domain import Question
+        from karenina.schemas.entities import Question
 
         q_data = self.get_question(question_id)
         return Question(
             question=q_data["question"],
             raw_answer=q_data["raw_answer"],
-            tags=q_data.get("keywords", []) or [],
+            keywords=q_data.get("keywords", []) or [],
             few_shot_examples=q_data.get("few_shot_examples"),
+            date_created=q_data.get("date_created", ""),
+            date_modified=q_data.get("date_modified", ""),
+            answer_template=q_data.get("answer_template"),
+            answer_notes=q_data.get("answer_notes"),
+            author=q_data.get("author"),
+            sources=q_data.get("sources"),
+            custom_metadata=q_data.get("custom_metadata"),
+            question_rubric=q_data.get("question_rubric"),
         )
 
     def get_all_questions_as_objects(self) -> list["Question"]:
@@ -340,7 +324,7 @@ class QuestionManager:
         """
         from typing import cast
 
-        from ...schemas.domain import Question
+        from karenina.schemas.entities import Question
 
         objects = []
         for q_data in cast(list[dict[str, Any]], self.get_all_questions()):
@@ -348,8 +332,16 @@ class QuestionManager:
                 Question(
                     question=q_data["question"],
                     raw_answer=q_data["raw_answer"],
-                    tags=q_data.get("keywords", []) or [],
+                    keywords=q_data.get("keywords", []) or [],
                     few_shot_examples=q_data.get("few_shot_examples"),
+                    date_created=q_data.get("date_created", ""),
+                    date_modified=q_data.get("date_modified", ""),
+                    answer_template=q_data.get("answer_template"),
+                    answer_notes=q_data.get("answer_notes"),
+                    author=q_data.get("author"),
+                    sources=q_data.get("sources"),
+                    custom_metadata=q_data.get("custom_metadata"),
+                    question_rubric=q_data.get("question_rubric"),
                 )
             )
         return objects
@@ -365,7 +357,7 @@ class QuestionManager:
         Returns:
             The question ID that was assigned
         """
-        from ...schemas.domain import Question
+        from karenina.schemas.entities import Question
 
         if not isinstance(question_obj, Question):
             raise ValueError("question_obj must be a Question instance")
@@ -377,22 +369,20 @@ class QuestionManager:
         if question_id in self.base._questions_cache:
             raise ValueError(f"Question with ID {question_id} already exists")
 
-        # Add to benchmark using existing add_question method with the Question object's ID
+        # Add to benchmark using existing add_question method with the Question object
+        # Pass the Question object directly so add_question extracts all fields (including answer_notes)
         self.add_question(
-            question=question_obj.question,
-            raw_answer=question_obj.raw_answer,
+            question=question_obj,
             question_id=question_id,  # Use the Question object's auto-generated ID
-            few_shot_examples=question_obj.few_shot_examples,
             **metadata,
         )
 
         # Add keywords separately if provided
-        if question_obj.tags:
+        if question_obj.keywords:
             # Update the question with keywords
             for item in self.base._checkpoint.dataFeedElement:
                 if self.base._get_item_id(item) == question_id:
-                    # Convert tags to appropriate format, filtering out None values
-                    item.keywords = [tag for tag in question_obj.tags if tag is not None]
+                    item.item.keywords = list(question_obj.keywords)
                     break
             # Rebuild cache to reflect changes
             self.base._rebuild_cache()
@@ -468,13 +458,14 @@ class QuestionManager:
             ValueError: If question not found
         """
         question_data = self.get_question(question_id)
+        registry_entry = self.base._question_registry.get(question_id)
         return {
             "id": question_data["id"],
             "question": question_data["question"],
             "raw_answer": question_data["raw_answer"],
             "date_created": question_data["date_created"],
             "date_modified": question_data["date_modified"],
-            "finished": question_data.get("finished", False),
+            "finished": registry_entry.finished if registry_entry else False,
             "author": question_data.get("author"),
             "sources": question_data.get("sources"),
             "custom_metadata": question_data.get("custom_metadata", {}),
@@ -596,7 +587,13 @@ class QuestionManager:
             ValueError: If question not found
         """
         question_data = self.get_question(question_id)
-        return {"created": question_data["date_created"], "modified": question_data["date_modified"]}
+        registry_entry = self.base._question_registry.get(question_id)
+        return {
+            "created": question_data["date_created"],
+            "modified": question_data["date_modified"],
+            "date_added": registry_entry.date_added if registry_entry else question_data["date_created"],
+            "registry_modified": registry_entry.date_modified if registry_entry else question_data["date_modified"],
+        }
 
     def clear_questions(self) -> int:
         """
@@ -607,6 +604,7 @@ class QuestionManager:
         """
         count = len(self.base._questions_cache)
         self.base._questions_cache.clear()
+        self.base._question_registry.clear()
         self.base._checkpoint.dataFeedElement.clear()
         self.base._checkpoint.dateModified = datetime.now().isoformat()
         return count
@@ -638,17 +636,17 @@ class QuestionManager:
 
     def mark_finished(self, question_id: str) -> None:
         """Mark a question as finished."""
-        if question_id in self.base._questions_cache:
-            # Update cache
-            self.base._questions_cache[question_id]["finished"] = True
+        if question_id in self.base._question_registry:
+            self.base._question_registry[question_id].finished = True
+            self.base._question_registry[question_id].date_modified = datetime.now().isoformat()
             # Update underlying JSON-LD structure
             self.base._update_question_property(question_id, "finished", True)
 
     def mark_unfinished(self, question_id: str) -> None:
         """Mark a question as unfinished."""
-        if question_id in self.base._questions_cache:
-            # Update cache
-            self.base._questions_cache[question_id]["finished"] = False
+        if question_id in self.base._question_registry:
+            self.base._question_registry[question_id].finished = False
+            self.base._question_registry[question_id].date_modified = datetime.now().isoformat()
             # Update underlying JSON-LD structure
             self.base._update_question_property(question_id, "finished", False)
 
@@ -675,13 +673,13 @@ class QuestionManager:
         Raises:
             ValueError: If question not found
         """
-        if question_id not in self.base._questions_cache:
+        if question_id not in self.base._question_registry:
             raise ValueError(f"Question not found: {question_id}")
 
-        current_status = self.base._questions_cache[question_id].get("finished", False)
-        new_status = not current_status
-        # Update cache
-        self.base._questions_cache[question_id]["finished"] = new_status
+        entry = self.base._question_registry[question_id]
+        new_status = not entry.finished
+        entry.finished = new_status
+        entry.date_modified = datetime.now().isoformat()
         # Update underlying JSON-LD structure
         self.base._update_question_property(question_id, "finished", new_status)
         return new_status
@@ -697,9 +695,17 @@ class QuestionManager:
             List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
         """
         if ids_only:
-            return [q_id for q_id, q_data in self.base._questions_cache.items() if not q_data.get("finished", False)]
+            return [
+                q_id
+                for q_id in self.base._questions_cache
+                if not self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
         else:
-            return [q_data for q_data in self.base._questions_cache.values() if not q_data.get("finished", False)]
+            return [
+                q_data
+                for q_id, q_data in self.base._questions_cache.items()
+                if not self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
 
     def get_finished_questions(self, ids_only: bool = False) -> list[str] | list[dict[str, Any]]:
         """
@@ -712,9 +718,17 @@ class QuestionManager:
             List of question IDs (if ids_only=True) or list of question dictionaries (if ids_only=False)
         """
         if ids_only:
-            return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("finished", False)]
+            return [
+                q_id
+                for q_id in self.base._questions_cache
+                if self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
         else:
-            return [q_data for q_data in self.base._questions_cache.values() if q_data.get("finished", False)]
+            return [
+                q_data
+                for q_id, q_data in self.base._questions_cache.items()
+                if self.base._question_registry.get(q_id, _DEFAULT_REGISTRY_ENTRY).finished
+            ]
 
     def filter_questions(
         self,

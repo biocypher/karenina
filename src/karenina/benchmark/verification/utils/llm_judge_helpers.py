@@ -16,9 +16,8 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from karenina.ports import LLMResponse
 from karenina.utils.json_extraction import strip_markdown_fences
-
-from ....ports import LLMResponse
 
 logger = logging.getLogger(__name__)
 

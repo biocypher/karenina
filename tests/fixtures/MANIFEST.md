@@ -149,7 +149,7 @@ benchmark = Benchmark.load(minimal_checkpoint)
 
 ### Template Fixtures
 ```python
-from karenina.schemas.domain import load_template_module
+from karenina.schemas.entities import load_template_module
 from pathlib import Path
 
 template_module = load_template_module(

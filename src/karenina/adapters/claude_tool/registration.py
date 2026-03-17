@@ -21,7 +21,7 @@ from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, Ada
 
 if TYPE_CHECKING:
     from karenina.ports import AgentPort, LLMPort, ParserPort
-    from karenina.schemas.workflow.models import ModelConfig
+    from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 

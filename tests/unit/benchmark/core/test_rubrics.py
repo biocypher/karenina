@@ -10,10 +10,20 @@ Tests cover:
 """
 
 import pytest
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import Field as PydanticField
+from pydantic import ValidationError
 
 from karenina import Benchmark
 from karenina.benchmark.core.rubrics import RubricManager
-from karenina.schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from karenina.schemas.entities import (
+    AgenticRubricTrait,
+    CallableTrait,
+    LLMRubricTrait,
+    MetricRubricTrait,
+    RegexTrait,
+    Rubric,
+)
 
 
 @pytest.mark.unit
@@ -524,9 +534,9 @@ class TestGetRubricStatistics:
 
         stats = manager.get_rubric_statistics()
         assert stats["questions_with_rubrics"] == 1
-        # Note: question_rubric is stored as dict with 4 keys (llm_traits, regex_traits, etc.)
+        # Note: question_rubric is stored as dict with 5 keys (llm_traits, regex_traits, callable_traits, metric_traits, agentic_traits)
         # So even with 1 trait, it counts the dict keys
-        assert stats["total_question_traits"] == 4
+        assert stats["total_question_traits"] == 5
 
 
 @pytest.mark.unit
@@ -766,3 +776,67 @@ class TestHasRubric:
 
         # Question inherits global rubric
         assert manager.has_rubric(q_id) is True
+
+
+# ---------------------------------------------------------------------------
+# Template-kind support in Rubric container methods
+# ---------------------------------------------------------------------------
+
+
+class _ContainerFindings(PydanticBaseModel):
+    count: int = PydanticField(description="Count")
+    found: bool = PydanticField(description="Found")
+
+
+@pytest.mark.unit
+class TestRubricContainerTemplateKind:
+    def test_get_trait_directionalities_returns_none_for_template(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Test.",
+            kind=_ContainerFindings,
+            higher_is_better=None,
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        dirs = rubric.get_trait_directionalities()
+        assert dirs["test"] is None
+
+    def test_validate_evaluation_handles_dot_expanded_keys(self):
+        trait = AgenticRubricTrait(
+            name="test",
+            description="Test.",
+            kind=_ContainerFindings,
+            higher_is_better=None,
+        )
+        rubric = Rubric(agentic_traits=[trait])
+        evaluation = {
+            "test.count": 5,
+            "test.found": True,
+        }
+        result = rubric.validate_evaluation(evaluation)
+        assert result is True
+
+    def test_validate_trait_names_rejects_dots_in_non_template(self):
+        with pytest.raises(ValidationError, match="contains '.'"):
+            Rubric(
+                agentic_traits=[
+                    AgenticRubricTrait(
+                        name="bad.name",
+                        description="Test.",
+                        kind="boolean",
+                    ),
+                ]
+            )
+
+    def test_validate_trait_names_rejects_dots_in_template_name(self):
+        with pytest.raises(ValidationError, match="contains '.'"):
+            Rubric(
+                agentic_traits=[
+                    AgenticRubricTrait(
+                        name="bad.name",
+                        description="Test.",
+                        kind=_ContainerFindings,
+                        higher_is_better=None,
+                    ),
+                ]
+            )

@@ -40,7 +40,7 @@ class MetadataManager:
             name: Property name
             value: Property value
         """
-        from ...schemas.checkpoint import SchemaOrgPropertyValue
+        from karenina.schemas.checkpoint import SchemaOrgPropertyValue
 
         if not self.base._checkpoint.additionalProperty:
             self.base._checkpoint.additionalProperty = []

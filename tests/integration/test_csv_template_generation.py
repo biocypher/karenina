@@ -13,7 +13,7 @@ from pydantic import SecretStr
 
 from karenina.benchmark.authoring.answers.generator import generate_answer_template
 from karenina.benchmark.authoring.questions.extractor import extract_questions_from_file
-from karenina.schemas.workflow import ModelConfig
+from karenina.schemas.config import ModelConfig
 
 
 @pytest.fixture
@@ -121,15 +121,16 @@ def test_template_generation_with_openai_endpoint(csv_file_path: Path, openai_en
 
         # Generate template using the mocked endpoint
         template_code = generate_answer_template(
-            question=first_question.question,
-            raw_answer=first_question.raw_answer,
+            question_obj=first_question,
             config=openai_endpoint_config,
         )
 
         # Verify the template was generated
         assert template_code, "Template code is empty"
         assert "class Answer(BaseAnswer):" in template_code, "Template doesn't contain Answer class"
-        assert "def verify(self)" in template_code, "Template doesn't contain verify method"
+        # VerifiedField-based templates have no manual verify() method;
+        # BaseAnswer auto-generates it from the VerifiedField metadata.
+        assert "VerifiedField(" in template_code, "Template doesn't use VerifiedField"
 
 
 @pytest.mark.slow
@@ -155,8 +156,7 @@ def test_batch_template_generation(csv_file_path: Path, openai_endpoint_config, 
             question, _ = questions_with_metadata[i]
 
             template_code = generate_answer_template(
-                question=question.question,
-                raw_answer=question.raw_answer,
+                question_obj=question,
                 config=openai_endpoint_config,
             )
 

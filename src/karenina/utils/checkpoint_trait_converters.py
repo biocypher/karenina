@@ -8,32 +8,39 @@ and the schema.org Rating format used in JSON-LD checkpoints.
 import base64
 import json
 import logging
-from typing import Literal, cast
+from typing import Any, Literal, cast
+
+from pydantic import BaseModel
 
 from ..schemas.checkpoint import (
     JsonLdCheckpoint,
     SchemaOrgPropertyValue,
     SchemaOrgRating,
 )
-from ..schemas.domain import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.domain.rubric import TraitKind
+from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities.rubric import AgenticRubricTrait, TraitKind
 
 logger = logging.getLogger(__name__)
 
 
 def convert_rubric_trait_to_rating(
-    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait, rubric_type: str = "global"
+    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+    rubric_type: str = "global",
 ) -> SchemaOrgRating:
     """
     Convert an internal trait to a schema.org Rating.
 
     Args:
-        trait: The trait to convert (LLM, regex, callable, or metric)
+        trait: The trait to convert (LLM, regex, callable, metric, or agentic)
         rubric_type: Either 'global' or 'question-specific'
 
     Returns:
         A SchemaOrgRating object
     """
+    # Handle AgenticRubricTrait (must be before LLMRubricTrait check)
+    if isinstance(trait, AgenticRubricTrait):
+        return _convert_agentic_trait_to_rating(trait, rubric_type)
+
     # Handle MetricRubricTrait
     if isinstance(trait, MetricRubricTrait):
         return _convert_metric_trait_to_rating(trait, rubric_type)
@@ -71,7 +78,9 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
         description=trait.description,
         bestRating=1.0,  # Metrics are in 0-1 range
         worstRating=0.0,
-        additionalType="GlobalMetricRubricTrait" if rubric_type == "global" else "QuestionSpecificMetricRubricTrait",
+        additionalType="karenina:GlobalMetricRubricTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificMetricRubricTrait",
         additionalProperty=additional_props,
     )
 
@@ -91,7 +100,9 @@ def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> Schem
         description=trait.description,
         bestRating=1,
         worstRating=0,
-        additionalType="GlobalRegexTrait" if rubric_type == "global" else "QuestionSpecificRegexTrait",
+        additionalType="karenina:GlobalRegexTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificRegexTrait",
         additionalProperty=additional_props,
     )
 
@@ -126,7 +137,57 @@ def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) ->
         description=trait.description,
         bestRating=best_rating,
         worstRating=worst_rating,
-        additionalType="GlobalCallableTrait" if rubric_type == "global" else "QuestionSpecificCallableTrait",
+        additionalType="karenina:GlobalCallableTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificCallableTrait",
+        additionalProperty=additional_props,
+    )
+
+
+def _convert_agentic_trait_to_rating(trait: AgenticRubricTrait, rubric_type: str) -> SchemaOrgRating:
+    """Convert AgenticRubricTrait to SchemaOrgRating."""
+    # Serialize template kind as a dict with JSON Schema; pass string kinds through
+    kind_value: Any
+    if trait.is_template_kind:
+        template_cls = cast(type[BaseModel], trait.kind)
+        kind_value = {"type": "template", "schema": template_cls.model_json_schema()}
+    else:
+        kind_value = trait.kind
+
+    additional_props = [
+        SchemaOrgPropertyValue(name="kind", value=kind_value),
+        SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
+        SchemaOrgPropertyValue(name="context_mode", value=trait.context_mode),
+        SchemaOrgPropertyValue(name="materialize_trace", value=trait.materialize_trace),
+        SchemaOrgPropertyValue(name="persist_trace", value=trait.persist_trace),
+        SchemaOrgPropertyValue(name="max_turns", value=trait.max_turns),
+        SchemaOrgPropertyValue(name="timeout_seconds", value=trait.timeout_seconds),
+    ]
+
+    if trait.classes is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="classes", value=trait.classes))
+    if trait.model_override is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="model_override", value=trait.model_override.model_dump()))
+
+    # Determine best/worst rating based on kind
+    if trait.is_template_kind:
+        best_rating, worst_rating = 0.0, 0.0
+    elif trait.kind == "boolean":
+        best_rating, worst_rating = 1.0, 0.0
+    elif trait.kind == "literal" and trait.max_score is not None and trait.min_score is not None:
+        best_rating, worst_rating = float(trait.max_score), float(trait.min_score)
+    else:
+        best_rating = float(trait.max_score) if trait.max_score is not None else 5.0
+        worst_rating = float(trait.min_score) if trait.min_score is not None else 1.0
+
+    return SchemaOrgRating(
+        name=trait.name,
+        description=trait.description,
+        bestRating=best_rating,
+        worstRating=worst_rating,
+        additionalType="karenina:GlobalAgenticRubricTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificAgenticRubricTrait",
         additionalProperty=additional_props,
     )
 
@@ -168,7 +229,9 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             description=trait.description,
             bestRating=1,
             worstRating=0,
-            additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
+            additionalType="karenina:GlobalRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificRubricTrait",
             additionalProperty=additional_props,
         )
     elif trait.kind == "literal":
@@ -183,7 +246,9 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             description=trait.description,
             bestRating=float(trait.max_score) if trait.max_score is not None else 0.0,
             worstRating=float(trait.min_score) if trait.min_score is not None else 0.0,
-            additionalType="GlobalLLMRubricTrait" if rubric_type == "global" else "QuestionSpecificLLMRubricTrait",
+            additionalType="karenina:GlobalLLMRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificLLMRubricTrait",
             additionalProperty=additional_props,
         )
     else:  # score
@@ -195,14 +260,16 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
             description=trait.description,
             bestRating=float(max_score),
             worstRating=float(min_score),
-            additionalType="GlobalRubricTrait" if rubric_type == "global" else "QuestionSpecificRubricTrait",
+            additionalType="karenina:GlobalRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificRubricTrait",
             additionalProperty=additional_props,
         )
 
 
 def convert_rating_to_rubric_trait(
     rating: SchemaOrgRating,
-) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | None:
+) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait:
     """
     Convert a schema.org Rating back to a rubric trait.
 
@@ -210,32 +277,43 @@ def convert_rating_to_rubric_trait(
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A LLMRubricTrait, RegexTrait, CallableTrait, or MetricRubricTrait object,
-        or None if the trait type is unsupported (e.g., deprecated ManualRubricTrait)
+        A LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait, or AgenticRubricTrait object
+
+    Raises:
+        ValueError: If the rating has an unrecognized additionalType
     """
+    # Check if it's an AgenticRubricTrait
+    if rating.additionalType in [
+        "karenina:GlobalAgenticRubricTrait",
+        "karenina:QuestionSpecificAgenticRubricTrait",
+    ]:
+        return _convert_rating_to_agentic_trait(rating)
+
     # Check if it's a MetricRubricTrait
-    if rating.additionalType in ["GlobalMetricRubricTrait", "QuestionSpecificMetricRubricTrait"]:
+    if rating.additionalType in ["karenina:GlobalMetricRubricTrait", "karenina:QuestionSpecificMetricRubricTrait"]:
         return _convert_rating_to_metric_trait(rating)
 
     # Handle RegexTrait
-    if rating.additionalType in ["GlobalRegexTrait", "QuestionSpecificRegexTrait"]:
+    if rating.additionalType in ["karenina:GlobalRegexTrait", "karenina:QuestionSpecificRegexTrait"]:
         return _convert_rating_to_regex_trait(rating)
 
     # Handle CallableTrait
-    if rating.additionalType in ["GlobalCallableTrait", "QuestionSpecificCallableTrait"]:
+    if rating.additionalType in ["karenina:GlobalCallableTrait", "karenina:QuestionSpecificCallableTrait"]:
         return _convert_rating_to_callable_trait(rating)
 
-    # Unsupported trait type - log warning and skip
-    if rating.additionalType in ["GlobalManualRubricTrait", "QuestionSpecificManualRubricTrait"]:
-        logger.warning(
-            "Skipping unsupported trait '%s' (type: %s). ManualRubricTrait has been deprecated.",
-            rating.name,
-            rating.additionalType,
-        )
-        return None
+    # Handle LLMRubricTrait (default for GlobalRubricTrait, QuestionSpecificRubricTrait,
+    # GlobalLLMRubricTrait, QuestionSpecificLLMRubricTrait)
+    known_llm_types = [
+        "karenina:GlobalRubricTrait",
+        "karenina:QuestionSpecificRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:QuestionSpecificLLMRubricTrait",
+    ]
+    if rating.additionalType in known_llm_types or rating.additionalType is None:
+        return _convert_rating_to_llm_trait(rating)
 
-    # Handle LLMRubricTrait (default case, also handles GlobalLLMRubricTrait/QuestionSpecificLLMRubricTrait)
-    return _convert_rating_to_llm_trait(rating)
+    msg = f"Unrecognized rubric trait type: '{rating.additionalType}' (trait: '{rating.name}')"
+    raise ValueError(msg)
 
 
 def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrait:
@@ -447,6 +525,67 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         )
 
 
+def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTrait:
+    """Convert SchemaOrgRating to AgenticRubricTrait."""
+    kind: Any = "boolean"
+    higher_is_better: bool | None = True
+    context_mode: Literal["workspace_only", "trace_and_workspace", "trace_only"] = "trace_and_workspace"
+    materialize_trace = False
+    persist_trace = False
+    max_turns = 15
+    timeout_seconds = 120
+    classes: dict[str, str] | None = None
+    model_override = None
+
+    if rating.additionalProperty:
+        for prop in rating.additionalProperty:
+            if prop.name == "kind":
+                # Pass value through directly; the field_validator on
+                # AgenticRubricTrait handles both string literals and
+                # {"type": "template", "schema": ...} dicts.
+                kind = prop.value
+            elif prop.name == "higher_is_better":
+                higher_is_better = prop.value
+            elif prop.name == "context_mode":
+                context_mode = cast(Literal["workspace_only", "trace_and_workspace", "trace_only"], prop.value)
+            elif prop.name == "materialize_trace":
+                materialize_trace = prop.value
+            elif prop.name == "persist_trace":
+                persist_trace = prop.value
+            elif prop.name == "max_turns":
+                max_turns = prop.value
+            elif prop.name == "timeout_seconds":
+                timeout_seconds = prop.value
+            elif prop.name == "classes":
+                if isinstance(prop.value, dict):
+                    classes = prop.value
+                elif isinstance(prop.value, str):
+                    try:
+                        classes = json.loads(prop.value)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse classes JSON for agentic trait '%s'", rating.name)
+            elif prop.name == "model_override" and isinstance(prop.value, dict):
+                from ..schemas.config.models import ModelConfig
+
+                model_override = ModelConfig(**prop.value)
+
+    return AgenticRubricTrait(
+        name=rating.name,
+        description=rating.description or "",
+        kind=kind,
+        higher_is_better=higher_is_better,
+        context_mode=context_mode,
+        materialize_trace=materialize_trace,
+        persist_trace=persist_trace,
+        max_turns=max_turns,
+        timeout_seconds=timeout_seconds,
+        min_score=int(rating.worstRating),
+        max_score=int(rating.bestRating),
+        classes=classes,
+        model_override=model_override,
+    )
+
+
 def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> None:
     """
     Strip deep judgment configuration from all LLM rubric traits in a checkpoint.
@@ -462,7 +601,7 @@ def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> 
     if checkpoint.rating:
         for rating in checkpoint.rating:
             if (
-                rating.additionalType in ["GlobalRubricTrait", "QuestionSpecificRubricTrait"]
+                rating.additionalType in ["karenina:GlobalRubricTrait", "karenina:QuestionSpecificRubricTrait"]
                 and rating.additionalProperty
             ):
                 # Filter out deep judgment properties
@@ -478,7 +617,7 @@ def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> 
         if item.item.rating:
             for rating in item.item.rating:
                 if (
-                    rating.additionalType in ["QuestionSpecificRubricTrait", "GlobalRubricTrait"]
+                    rating.additionalType in ["karenina:QuestionSpecificRubricTrait", "karenina:GlobalRubricTrait"]
                     and rating.additionalProperty
                 ):
                     # Filter out deep judgment properties

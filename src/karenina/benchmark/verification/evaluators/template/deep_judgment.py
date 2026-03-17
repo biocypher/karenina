@@ -25,19 +25,19 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from karenina.benchmark.verification.prompts.assembler import PromptAssembler
+from karenina.benchmark.verification.prompts.task_types import PromptTask
+from karenina.ports import LLMPort, ParserPort
+from karenina.ports.capabilities import PortCapabilities
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.shared import SearchResultItem
+from karenina.schemas.verification import VerificationConfig
 from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
 
-from .....ports import LLMPort, ParserPort
-from .....ports.capabilities import PortCapabilities
-from .....schemas.domain import BaseAnswer
-from .....schemas.shared import SearchResultItem
-from .....schemas.workflow import ModelConfig, VerificationConfig
-from ...prompts.assembler import PromptAssembler
-from ...prompts.task_types import PromptTask
-
 if TYPE_CHECKING:
-    from .....schemas.verification.prompt_config import PromptConfig
-from ...prompts.deep_judgment.template import (
+    from karenina.schemas.verification.prompt_config import PromptConfig
+from karenina.benchmark.verification.prompts.deep_judgment.template import (
     build_assessment_system_prompt,
     build_assessment_user_prompt,
     build_excerpt_system_prompt,
@@ -45,15 +45,15 @@ from ...prompts.deep_judgment.template import (
     build_reasoning_system_prompt,
     build_reasoning_user_prompt,
 )
-from ...utils.search_provider import create_search_tool
-from ...utils.template_parsing_helpers import (
+from karenina.benchmark.verification.utils.search_provider import create_search_tool
+from karenina.benchmark.verification.utils.template_parsing_helpers import (
     _extract_attribute_descriptions,
     _extract_attribute_names_from_class,
     _format_search_results_for_llm,
     format_excerpts_for_reasoning,
     format_reasoning_for_parsing,
 )
-from ...utils.trace_fuzzy_match import fuzzy_match_excerpt
+from karenina.benchmark.verification.utils.trace_fuzzy_match import fuzzy_match_excerpt
 
 logger = logging.getLogger(__name__)
 
@@ -93,25 +93,27 @@ def deep_judgment_parse(
 
     Returns:
         Tuple of (parsed_answer, excerpts, reasoning, metadata):
-        - parsed_answer: BaseAnswer instance (same as standard parsing)
-        - excerpts: Dict mapping attribute names to lists of excerpt objects
-          Structure: {"attr": [{"text": str, "confidence": "low|medium|high", "similarity_score": float}]}
-          Empty list [] indicates no excerpts found (valid for refusals)
-        - reasoning: Dict mapping attribute names to reasoning text
-          Structure: {"attr": "reasoning explaining excerpt→value mapping"}
-        - metadata: Dict with execution info
-          Structure: {"stages_completed": [...], "model_calls": int, ...}
+        - parsed_answer: BaseAnswer instance (same as standard parsing).
+        - excerpts: Dict mapping attribute names to lists of excerpt objects.
+            Structure: `{"attr": [{"text": str, "confidence": "low|medium|high", "similarity_score": float}]}`.
+            Empty list `[]` indicates no excerpts found (valid for refusals).
+        - reasoning: Dict mapping attribute names to reasoning text.
+            Structure: `{"attr": "reasoning explaining excerpt->value mapping"}`.
+        - metadata: Dict with execution info.
+            Structure: `{"stages_completed": [...], "model_calls": int, ...}`.
 
     Raises:
         ValueError: If excerpt JSON parsing fails after all retries
         ParseError: If Stage 3 parsing fails after all adapter retries
 
     Example:
-        >>> parsed, excerpts, reasoning, meta = deep_judgment_parse(...)
-        >>> excerpts["drug_target"]
-        [{"text": "targets BCL-2", "confidence": "high", "similarity_score": 0.95}]
-        >>> reasoning["drug_target"]
-        "The excerpt clearly states BCL-2 as the target..."
+        ```python
+        parsed, excerpts, reasoning, meta = deep_judgment_parse(...)
+        excerpts["drug_target"]
+        # [{"text": "targets BCL-2", "confidence": "high", "similarity_score": 0.95}]
+        reasoning["drug_target"]
+        # "The excerpt clearly states BCL-2 as the target..."
+        ```
     """
     # Extract attribute names from template (excludes 'id', 'correct', 'regex')
     attribute_names = _extract_attribute_names_from_class(RawAnswer)

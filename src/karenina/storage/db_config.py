@@ -4,7 +4,11 @@ This module defines the DBConfig class for managing database connections
 and configuration settings.
 """
 
+import logging
+
 from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 class DBConfig(BaseModel):

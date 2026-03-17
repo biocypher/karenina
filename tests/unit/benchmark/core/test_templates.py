@@ -245,6 +245,65 @@ class TestUpdateTemplate:
 
         assert "Updated" in manager.get_template(q_id)
 
+    def test_update_template_with_class(self) -> None:
+        """Test that update_template accepts a BaseAnswer subclass."""
+        from pydantic import Field
+
+        from karenina.schemas.entities import BaseAnswer
+
+        class Answer(BaseAnswer):
+            target: str = Field(description="Drug target")
+
+            def model_post_init(self, __context):
+                self.correct = {"target": "BCL2"}
+
+            def verify(self) -> bool:
+                return self.target.strip().upper() == self.correct["target"].upper()
+
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("What is the drug target?", "BCL2")
+        manager.add_answer_template(q_id, VALID_TEMPLATE)
+
+        # Update with a class instead of a string
+        manager.update_template(q_id, Answer)
+
+        result = manager.get_template(q_id)
+        assert "target" in result
+        assert "BCL2" in result
+
+    def test_update_template_with_custom_class_name_preserves_name(self) -> None:
+        """Test that a custom class name is preserved (not renamed to Answer)."""
+        from pydantic import Field
+
+        from karenina.schemas.entities import BaseAnswer
+
+        class VenetoclaxAnswer(BaseAnswer):
+            target: str = Field(description="Drug target")
+
+            def verify(self) -> bool:
+                return len(self.target) > 0
+
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("What is the drug target?", "BCL2")
+        manager.update_template(q_id, VenetoclaxAnswer)
+
+        result = manager.get_template(q_id)
+        assert "class VenetoclaxAnswer(" in result
+
+    def test_update_template_with_non_baseanswer_class_raises(self) -> None:
+        """Test that passing a non-BaseAnswer class raises TypeError."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("Test?", "Answer")
+
+        with pytest.raises(TypeError, match="must inherit from BaseAnswer"):
+            manager.update_template(q_id, str)
+
 
 @pytest.mark.unit
 class TestCopyTemplate:
@@ -304,7 +363,7 @@ class TestGetFinishedTemplates:
         benchmark = Benchmark.create(name="test")
         manager = TemplateManager(benchmark)
 
-        benchmark.add_question("Test?", "Answer")
+        benchmark.add_question("Test?", "Answer", finished=False)
 
         templates = manager.get_finished_templates()
 
@@ -318,14 +377,63 @@ class TestGetFinishedTemplates:
         q_id = benchmark.add_question("What is 2+2?", "4")
         manager.add_answer_template(q_id, VALID_TEMPLATE)
 
-        # Mark as finished by setting finished flag in cache
-        benchmark._questions_cache[q_id]["finished"] = True
-
         templates = manager.get_finished_templates()
 
         assert len(templates) == 1
         assert templates[0].question_id == q_id
         assert templates[0].template_code == VALID_TEMPLATE
+
+    def test_get_finished_filtered_by_question_ids(self) -> None:
+        """Test filtering finished templates by question IDs."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q1 = benchmark.add_question("Question 1?", "Answer 1")
+        q2 = benchmark.add_question("Question 2?", "Answer 2")
+        q3 = benchmark.add_question("Question 3?", "Answer 3")
+        for q_id in [q1, q2, q3]:
+            manager.add_answer_template(q_id, VALID_TEMPLATE)
+        # Set finished after all template additions (add_answer_template triggers _rebuild_cache)
+        for q_id in [q1, q2, q3]:
+            benchmark._base._question_registry[q_id].finished = True
+
+        templates = manager.get_finished_templates(question_ids={q1, q3})
+
+        assert len(templates) == 2
+        returned_ids = {t.question_id for t in templates}
+        assert q1 in returned_ids
+        assert q3 in returned_ids
+        assert q2 not in returned_ids
+
+    def test_get_finished_filtered_by_nonexistent_ids(self) -> None:
+        """Test filtering with non-existent IDs returns empty list."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q_id = benchmark.add_question("Question?", "Answer")
+        manager.add_answer_template(q_id, VALID_TEMPLATE)
+        benchmark._base._question_registry[q_id].finished = True
+
+        templates = manager.get_finished_templates(question_ids={"nonexistent"})
+
+        assert templates == []
+
+    def test_get_finished_none_question_ids_returns_all(self) -> None:
+        """Test that None question_ids returns all finished templates."""
+        benchmark = Benchmark.create(name="test")
+        manager = TemplateManager(benchmark)
+
+        q1 = benchmark.add_question("Question 1?", "Answer 1")
+        q2 = benchmark.add_question("Question 2?", "Answer 2")
+        for q_id in [q1, q2]:
+            manager.add_answer_template(q_id, VALID_TEMPLATE)
+        # Set finished after all template additions
+        for q_id in [q1, q2]:
+            benchmark._base._question_registry[q_id].finished = True
+
+        templates = manager.get_finished_templates(question_ids=None)
+
+        assert len(templates) == 2
 
     def test_get_finished_truncates_long_preview(self) -> None:
         """Test that long questions are truncated in preview."""
@@ -335,7 +443,7 @@ class TestGetFinishedTemplates:
         long_question = "This is a very long question text that exceeds one hundred characters and should be truncated in the preview field"
         q_id = benchmark.add_question(long_question, "Answer")
         manager.add_answer_template(q_id, VALID_TEMPLATE)
-        benchmark._questions_cache[q_id]["finished"] = True
+        benchmark._base._question_registry[q_id].finished = True
 
         templates = manager.get_finished_templates()
 

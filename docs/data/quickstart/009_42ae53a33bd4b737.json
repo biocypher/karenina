@@ -1,0 +1,64 @@
+{
+  "sequence": 9,
+  "prompt_hash": "42ae53a33bd4b737",
+  "model": "claude-haiku-4-5",
+  "request": {
+    "messages": [
+      {
+        "type": "system",
+        "content": "You craft instructional text for judge models who must parse a candidate response to a question. For every attribute in the provided ground-truth specification, produce a short, direct description that explains exactly what the judge should read for in the response and how to answer. Highlight boolean expectations clearly.\n\nGuidelines:\n- Reference attribute names verbatim.\n- Mention the expected type implicitly via phrasing (e.g., \"Answer with true or false if ...\" for booleans, \"Provide the count of ...\" for numeric fields).\n- For boolean attributes checking concept presence, allow semantic equivalence and related terms rather than requiring exact string matches. Focus on whether the underlying concept is conveyed.\n- When relevant, reference concrete response-focused examples such as \"Number of interacting genes mentioned in the response\" or \"Does the response cite a control group?\" to reinforce that extraction happens from the candidate answer.\n- For string fields that may have formatting variations (capitalization, abbreviations, whitespace), provide an extraction_hint describing normalization that should be applied.\n- Stay concise (<= 2 sentences per attribute for description, <= 1 sentence for extraction_hint).\n- Return only valid JSON.\n\nExample output:\n{{\n  \"field_descriptions\": [\n    {{\n      \"name\": \"count_of_items\",\n      \"description\": \"Provide an integer equal to the number of items mentioned in the response.\",\n      \"extraction_hint\": null\n    }},\n    {{\n      \"name\": \"drug_target\",\n      \"description\": \"Extract the primary protein target mentioned in the response.\",\n      \"extraction_hint\": \"Normalize to uppercase gene symbol format (e.g., BCL2 not Bcl-2)\"\n    }},\n    {{\n      \"name\": \"mentions_first_concept\",\n      \"description\": \"Answer with true if the response refers to the first concept or semantically related terms; otherwise answer false.\",\n      \"extraction_hint\": null\n    }}\n  ]\n}}"
+      },
+      {
+        "type": "human",
+        "content": "Question:\nHow many protein subunits does hemoglobin A have?\n\nReference Answer:\n4\n\nGround-truth attribute specification:\n{\"attributes\": [{\"name\": \"hemoglobin_a_subunit_count\", \"type\": \"int\"}]}\n\nProduce JSON with key `field_descriptions` containing a list of objects. Each object must have `name` (matching an attribute name), `description` (instructional text for the judge), and `extraction_hint` (optional normalization guidance, or null if not needed).\n\nEnsure descriptions communicate type expectations, especially emphasizing when boolean values should be used to flag presence of concepts. For boolean concept checks, focus on semantic meaning rather than exact word matching. Make it explicit that the judge is reading the candidate response to this question.\n\nReturn only valid JSON."
+      }
+    ]
+  },
+  "response": {
+    "content": [
+      {
+        "id": "toolu_01Toa5rVDGUiWPvR6FgeLrYe",
+        "input": {
+          "field_descriptions": [
+            {
+              "name": "hemoglobin_a_subunit_count",
+              "description": "Extract the integer count of protein subunits that the response states hemoglobin A contains.",
+              "extraction_hint": "Ensure the value is a whole number; if the response provides the answer as a word (e.g., 'four'), convert it to the corresponding numeral (4)."
+            }
+          ]
+        },
+        "name": "AttributeDescriptions",
+        "type": "tool_use",
+        "caller": {
+          "type": "direct"
+        }
+      }
+    ],
+    "id": "lc_run--2e9a9672-96e2-4dcb-909f-2b58092dbc09-0",
+    "tool_calls": [
+      {
+        "name": "AttributeDescriptions",
+        "args": {
+          "field_descriptions": [
+            {
+              "name": "hemoglobin_a_subunit_count",
+              "description": "Extract the integer count of protein subunits that the response states hemoglobin A contains.",
+              "extraction_hint": "Ensure the value is a whole number; if the response provides the answer as a word (e.g., 'four'), convert it to the corresponding numeral (4)."
+            }
+          ]
+        },
+        "id": "toolu_01Toa5rVDGUiWPvR6FgeLrYe",
+        "type": "tool_call"
+      }
+    ],
+    "usage_metadata": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    "response_metadata": {
+      "model_name": "claude-haiku-4-5-20251001",
+      "stop_reason": "tool_use"
+    }
+  }
+}

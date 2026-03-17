@@ -5,10 +5,9 @@ types in the frontend (karenina-gui), enabling seamless data exchange
 between Python library and GUI.
 """
 
-from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # Schema.org Person type
@@ -54,17 +53,30 @@ class SchemaOrgRating(BaseModel):
     ratingValue: float | None = None  # Only present in evaluation results
     ratingExplanation: str | None = None  # Only present in evaluation results
     additionalType: Literal[
-        "GlobalRubricTrait",
-        "QuestionSpecificRubricTrait",
-        "GlobalRegexTrait",
-        "QuestionSpecificRegexTrait",
-        "GlobalCallableTrait",
-        "QuestionSpecificCallableTrait",
-        "GlobalMetricRubricTrait",
-        "QuestionSpecificMetricRubricTrait",
-        "GlobalLLMRubricTrait",  # For literal kind LLM traits
-        "QuestionSpecificLLMRubricTrait",  # For literal kind LLM traits
+        "karenina:GlobalRubricTrait",
+        "karenina:QuestionSpecificRubricTrait",
+        "karenina:GlobalRegexTrait",
+        "karenina:QuestionSpecificRegexTrait",
+        "karenina:GlobalCallableTrait",
+        "karenina:QuestionSpecificCallableTrait",
+        "karenina:GlobalMetricRubricTrait",
+        "karenina:QuestionSpecificMetricRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:QuestionSpecificLLMRubricTrait",
+        "karenina:GlobalAgenticRubricTrait",
+        "karenina:QuestionSpecificAgenticRubricTrait",
     ]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_additional_type(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Add karenina: prefix if missing (for old-format checkpoints)."""
+        if isinstance(data, dict):
+            at = data.get("additionalType", "")
+            if at and not at.startswith("karenina:"):
+                data["additionalType"] = f"karenina:{at}"
+        return data
+
     additionalProperty: list[SchemaOrgPropertyValue] | None = None  # For metric trait instructions
 
 
@@ -77,7 +89,7 @@ class SchemaOrgSoftwareSourceCode(BaseModel):
     name: str
     text: str  # The actual Python code as string
     programmingLanguage: Literal["Python"] = "Python"
-    codeRepository: str | None = "karenina-benchmarks"
+    codeRepository: str | None = None
 
 
 # Schema.org Answer
@@ -100,18 +112,21 @@ class SchemaOrgQuestion(BaseModel):
     hasPart: SchemaOrgSoftwareSourceCode  # The Pydantic template
     rating: list[SchemaOrgRating] | None = None  # Question-specific rubric traits
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
+    keywords: list[str] | None = None
 
 
 # Schema.org DataFeedItem
 class SchemaOrgDataFeedItem(BaseModel):
     """Schema.org DataFeedItem for timestamped questions."""
 
+    model_config = ConfigDict(extra="ignore")
+
     type: Literal["DataFeedItem"] = Field(alias="@type", default="DataFeedItem")
     id: str | None = Field(alias="@id", default=None)
     dateCreated: str  # ISO timestamp
     dateModified: str  # ISO timestamp
+    keywords: list[str] | None = None  # Deprecated: kept for loading old checkpoints
     item: SchemaOrgQuestion
-    keywords: list[str] | None = None  # Schema.org keywords property
 
 
 # Dataset metadata
@@ -145,6 +160,58 @@ class SchemaOrgDataFeed(BaseModel):
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
 
+# Schema.org Scenario models for multi-turn benchmark persistence
+class SchemaOrgScenarioNode(BaseModel):
+    """Schema.org node within a scenario, wrapping a Question."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: Literal["karenina:ScenarioNode"] = Field(alias="@type", default="karenina:ScenarioNode")
+    nodeId: str
+    question: SchemaOrgQuestion
+    modelOverride: dict[str, Any] | None = None
+    toolFilter: dict[str, Any] | None = None
+    stateUpdateSource: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SchemaOrgScenarioEdge(BaseModel):
+    """Edge between scenario nodes with optional condition."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    source: str
+    target: str
+    condition: dict[str, Any] | list[dict[str, Any]] | None = None
+    conditionSource: str | None = None
+
+
+class SchemaOrgScenarioOutcome(BaseModel):
+    """Outcome criterion for scenario evaluation."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    description: str = ""
+    check: dict[str, Any] | None = None
+    evaluateSource: str | None = None
+
+
+class SchemaOrgScenario(BaseModel):
+    """Schema.org Scenario container stored in DataFeed.hasPart."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: Literal["karenina:Scenario"] = Field(alias="@type", default="karenina:Scenario")
+    name: str
+    description: str = ""
+    entryNode: str
+    nodes: dict[str, SchemaOrgScenarioNode]
+    edges: list[SchemaOrgScenarioEdge]
+    outcomeCriteria: list[SchemaOrgScenarioOutcome] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 # Main JSON-LD checkpoint format
 class JsonLdContext(BaseModel):
     """JSON-LD context definition."""
@@ -166,48 +233,22 @@ class JsonLdCheckpoint(BaseModel):
     dateModified: str
     rating: list[SchemaOrgRating] | None = None  # Global rubric
     dataFeedElement: list[SchemaOrgDataFeedItem]  # Questions
+    hasPart: list[SchemaOrgScenario] | None = None  # Scenarios
     additionalProperty: list[SchemaOrgPropertyValue] | None = None
 
-    class Config:
-        """Pydantic config for JSON-LD compatibility."""
-
-        populate_by_name = True  # Allow both @type and type
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None,
-        }
+    model_config = ConfigDict(populate_by_name=True)
 
 
 # Standard JSON-LD context for schema.org
 SCHEMA_ORG_CONTEXT = {
     "@version": 1.1,
-    "@vocab": "http://schema.org/",
-    "DataFeed": "DataFeed",
-    "DataFeedItem": "DataFeedItem",
-    "Question": "Question",
-    "Answer": "Answer",
-    "SoftwareSourceCode": "SoftwareSourceCode",
-    "Rating": "Rating",
-    "PropertyValue": "PropertyValue",
-    "version": "version",
-    "name": "name",
-    "description": "description",
-    "creator": "creator",
-    "dateCreated": "dateCreated",
-    "dateModified": "dateModified",
+    "@vocab": "https://schema.org/",
+    "karenina": "urn:karenina:vocab:",
     "dataFeedElement": {"@id": "dataFeedElement", "@container": "@set"},
     "item": {"@id": "item", "@type": "@id"},
-    "text": "text",
     "acceptedAnswer": {"@id": "acceptedAnswer", "@type": "@id"},
-    "programmingLanguage": "programmingLanguage",
-    "codeRepository": "codeRepository",
-    "rating": {"@id": "rating", "@container": "@set"},
-    "bestRating": "bestRating",
-    "worstRating": "worstRating",
-    "ratingExplanation": "ratingExplanation",
-    "additionalType": "additionalType",
+    "rating": {"@id": "contentRating", "@container": "@set"},
     "additionalProperty": {"@id": "additionalProperty", "@container": "@set"},
-    "value": "value",
-    "url": "url",
-    "identifier": "identifier",
+    "hasPart": {"@id": "hasPart", "@container": "@set"},
     "keywords": {"@id": "keywords", "@container": "@set"},
 }

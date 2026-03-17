@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
-from karenina.schemas.workflow.models import ModelConfig
+from karenina.schemas.config import ModelConfig
 from karenina.utils.messages import append_error_feedback
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
@@ -50,7 +50,7 @@ class ClaudeToolLLMAdapter:
     with exponential backoff for connection errors, timeouts, rate limits, and 5xx errors).
 
     Example:
-        >>> from karenina.schemas.workflow.models import ModelConfig
+        >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(
         ...     id="claude-haiku",
         ...     model_name="claude-haiku-4-5",
@@ -96,8 +96,15 @@ class ClaudeToolLLMAdapter:
         if self._client is None:
             from anthropic import Anthropic
 
+            # Build kwargs for Anthropic client (api_key, base_url from config)
+            kwargs: dict[str, Any] = {}
+            if self._config.anthropic_api_key:
+                kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
+            if self._config.anthropic_base_url:
+                kwargs["base_url"] = self._config.anthropic_base_url
+
             # SDK handles retries automatically (default: 2 retries with exponential backoff)
-            self._client = Anthropic()
+            self._client = Anthropic(**kwargs)
         return self._client
 
     def _get_async_client(self) -> Any:
@@ -105,8 +112,15 @@ class ClaudeToolLLMAdapter:
         if self._async_client is None:
             from anthropic import AsyncAnthropic
 
+            # Build kwargs for Anthropic client (api_key, base_url from config)
+            kwargs: dict[str, Any] = {}
+            if self._config.anthropic_api_key:
+                kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
+            if self._config.anthropic_base_url:
+                kwargs["base_url"] = self._config.anthropic_base_url
+
             # SDK handles retries automatically (default: 2 retries with exponential backoff)
-            self._async_client = AsyncAnthropic()
+            self._async_client = AsyncAnthropic(**kwargs)
         return self._async_client
 
     @property

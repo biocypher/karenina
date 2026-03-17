@@ -6,9 +6,12 @@ Manages stage execution, dependencies, and error handling.
 import logging
 import time
 
-from .....schemas.domain import Rubric
-from .....schemas.workflow import VerificationResult
+from karenina.schemas.entities import Rubric
+from karenina.schemas.verification import VerificationResult
+
 from ..pipeline.abstention_check import AbstentionCheckStage
+from ..pipeline.agentic_parse_template import AgenticParseTemplateStage
+from ..pipeline.agentic_rubric_evaluation import AgenticRubricEvaluationStage
 from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage
 from ..pipeline.deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
 from ..pipeline.embedding_check import EmbeddingCheckStage
@@ -56,6 +59,7 @@ class StageOrchestrator:
         9. EmbeddingCheckStage (optional, after verify)
         10. DeepJudgmentAutoFailStage (optional, after verify)
         11. RubricEvaluationStage (optional, after generate)
+        11b. AgenticRubricEvaluationStage (optional, after rubric evaluation)
         12. DeepJudgmentRubricAutoFailStage (optional, after rubric)
         13. FinalizeResultStage (always last)
     """
@@ -82,6 +86,7 @@ class StageOrchestrator:
         sufficiency_enabled: bool = False,
         deep_judgment_enabled: bool = False,
         evaluation_mode: str = "template_only",
+        agentic_parsing: bool = False,
     ) -> "StageOrchestrator":
         """
         Build orchestrator from configuration.
@@ -98,6 +103,8 @@ class StageOrchestrator:
                 - "template_only": Template verification only (default)
                 - "template_and_rubric": Template verification + rubric evaluation
                 - "rubric_only": Skip template, only evaluate rubrics
+            agentic_parsing: Whether to use agentic parsing (Stage 7b) instead of
+                classical parsing (Stage 7a). Requires AgentPort support.
 
         Returns:
             Configured StageOrchestrator instance
@@ -125,6 +132,10 @@ class StageOrchestrator:
                 # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
                 stages.append(DeepJudgmentRubricAutoFailStage())
 
+            # Stage 11b: Agentic rubric evaluation
+            if rubric and rubric.agentic_traits:
+                stages.append(AgenticRubricEvaluationStage())
+
             # Finalize result (always last)
             stages.append(FinalizeResultStage())
 
@@ -150,13 +161,12 @@ class StageOrchestrator:
             if sufficiency_enabled:
                 stages.append(SufficiencyCheckStage())
 
-            # Template parsing and verification
-            stages.extend(
-                [
-                    ParseTemplateStage(),
-                    VerifyTemplateStage(),
-                ]
-            )
+            # Template parsing: classical or agentic
+            if agentic_parsing:
+                stages.append(AgenticParseTemplateStage())
+            else:
+                stages.append(ParseTemplateStage())
+            stages.append(VerifyTemplateStage())
 
             # Optional verification enhancement stages
             # Note: Embedding check stage has its own should_run() logic
@@ -175,6 +185,10 @@ class StageOrchestrator:
                 stages.append(RubricEvaluationStage())
                 # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
                 stages.append(DeepJudgmentRubricAutoFailStage())
+
+            # Stage 11b: Agentic rubric evaluation (after Stage 11)
+            if evaluation_mode == "template_and_rubric" and rubric and rubric.agentic_traits:
+                stages.append(AgenticRubricEvaluationStage())
 
             # Finalize result (always last)
             stages.append(FinalizeResultStage())
