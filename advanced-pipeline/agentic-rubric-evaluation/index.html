@@ -14950,6 +14950,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#_extract_template" class="md-nav__link">
+    <span class="md-ellipsis">
+      _extract_template()
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -15109,18 +15118,69 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-key-file-reference" class="md-nav__link">
+  <a href="#8-trace-materialization" class="md-nav__link">
     <span class="md-ellipsis">
-      8. Key File Reference
+      8. Trace Materialization
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Trace Materialization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_write_trace_file-staticmethod" class="md-nav__link">
+    <span class="md-ellipsis">
+      _write_trace_file staticmethod
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-level-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage-Level Lifecycle
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompt-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prompt Behavior
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interaction-with-context-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interaction with Context Modes
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-key-file-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Key File Reference
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#9-next-steps" class="md-nav__link">
+  <a href="#10-next-steps" class="md-nav__link">
     <span class="md-ellipsis">
-      9. Next Steps
+      10. Next Steps
     </span>
   </a>
   
@@ -15481,6 +15541,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#_extract_template" class="md-nav__link">
+    <span class="md-ellipsis">
+      _extract_template()
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -15640,18 +15709,69 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-key-file-reference" class="md-nav__link">
+  <a href="#8-trace-materialization" class="md-nav__link">
     <span class="md-ellipsis">
-      8. Key File Reference
+      8. Trace Materialization
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Trace Materialization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_write_trace_file-staticmethod" class="md-nav__link">
+    <span class="md-ellipsis">
+      _write_trace_file staticmethod
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-level-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stage-Level Lifecycle
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompt-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prompt Behavior
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interaction-with-context-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interaction with Context Modes
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-key-file-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Key File Reference
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#9-next-steps" class="md-nav__link">
+  <a href="#10-next-steps" class="md-nav__link">
     <span class="md-ellipsis">
-      9. Next Steps
+      10. Next Steps
     </span>
   </a>
   
@@ -15759,10 +15879,20 @@
 <td><code>SingleLiteralClassification</code></td>
 <td><code>.classification</code> (str, then resolved to int index)</td>
 </tr>
+<tr>
+<td><code>type[BaseModel]</code> (template kind)</td>
+<td>The user's <code>BaseModel</code> subclass</td>
+<td><code>.model_dump()</code> (dict of all fields)</td>
+</tr>
 </tbody>
 </table>
 <p>For <code>literal</code> traits, <code>_resolve_literal_index()</code> maps the classification string to its position in the <code>trait.classes</code> dict. If the classification does not match any defined class, it returns <code>-1</code>.</p>
+<p>For template kind traits, <code>run_extraction()</code> delegates to <code>_extract_template()</code> instead of the standard extraction flow. See Section 2.1 below.</p>
 <p>The extraction prompt includes kind-specific context: score range for <code>score</code> traits, class descriptions for <code>literal</code> traits.</p>
+<h3 id="_extract_template">_extract_template()<a class="headerlink" href="#_extract_template" title="Permanent link">&para;</a></h3>
+<p>This method handles extraction for template kind traits. Instead of building a score-extraction prompt, it sends the investigation trace to <code>ParserPort.parse_to_pydantic()</code> with the user's <code>BaseModel</code> subclass as the target schema. The parser produces a populated instance of that class, and the method returns <code>model_dump()</code> of the result.</p>
+<p>The system prompt instructs the parser to fill every field based on evidence from the investigation. Field descriptions on the <code>BaseModel</code> guide the parser toward correct extraction, making well-described fields important for accuracy.</p>
+<p>The returned dict is stored in <code>agentic_trait_scores</code> with dot-notation keys: each field becomes <code>{trait_name}.{field_name}</code>. This flattening happens in Stage 11b's <code>_execute_individual</code> (or <code>_execute_shared</code>) after <code>evaluate_trait()</code> returns.</p>
 <h2 id="3-strategy-dispatch">3. Strategy Dispatch<a class="headerlink" href="#3-strategy-dispatch" title="Permanent link">&para;</a></h2>
 <p><strong>File</strong>: <code>src/karenina/benchmark/verification/stages/pipeline/agentic_rubric_evaluation.py</code>.</p>
 <p>The stage's <code>execute()</code> method reads <code>context.agentic_rubric_strategy</code> (default: <code>"individual"</code>) and dispatches accordingly.</p>
@@ -15999,7 +16129,27 @@
 </tr>
 </tbody>
 </table>
-<h2 id="8-key-file-reference">8. Key File Reference<a class="headerlink" href="#8-key-file-reference" title="Permanent link">&para;</a></h2>
+<h2 id="8-trace-materialization">8. Trace Materialization<a class="headerlink" href="#8-trace-materialization" title="Permanent link">&para;</a></h2>
+<p>When any <code>AgenticRubricTrait</code> in the rubric has <code>materialize_trace=True</code>, Stage 11b writes the answering agent trace to a file instead of inlining it in the investigation prompt. This is useful for long traces that would consume excessive context.</p>
+<h3 id="_write_trace_file-staticmethod">_write_trace_file staticmethod<a class="headerlink" href="#_write_trace_file-staticmethod" title="Permanent link">&para;</a></h3>
+<p><strong>File</strong>: <code>benchmark/verification/stages/pipeline/agentic_rubric_evaluation.py</code></p>
+<p><code>_write_trace_file()</code> places the trace file under <code>&lt;workspace&gt;/.karenina/traces/</code> when a workspace path is available. If no workspace is set, it creates a temporary directory as a fallback. The filename encodes the question ID and, when present, the scenario turn number. The method returns the <code>Path</code> to the written file.</p>
+<h3 id="stage-level-lifecycle">Stage-Level Lifecycle<a class="headerlink" href="#stage-level-lifecycle" title="Permanent link">&para;</a></h3>
+<p>The stage handles materialization in a single pass, not per-trait:</p>
+<ol>
+<li>Before evaluating any trait, the stage checks <code>any(t.materialize_trace for t in traits)</code>. If true, it calls <code>_write_trace_file()</code> once.</li>
+<li>The resulting <code>trace_file_path</code> is passed to <code>evaluate_trait()</code> for every trait (regardless of whether that specific trait has <code>materialize_trace=True</code>). The evaluator checks <code>trait.materialize_trace</code> before using the path.</li>
+<li>After all evaluations complete, the stage checks <code>any(t.persist_trace for t in traits)</code>. If no trait requests persistence, the trace file is deleted. If any trait sets <code>persist_trace=True</code>, the file remains.</li>
+</ol>
+<h3 id="prompt-behavior">Prompt Behavior<a class="headerlink" href="#prompt-behavior" title="Permanent link">&para;</a></h3>
+<p>When <code>materialize_trace=True</code> and a <code>trace_file_path</code> is available, <code>_run_investigation()</code> replaces the inline trace with a reference:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>The full agent trace is saved to: /path/to/.karenina/traces/trace_q_xyz.txt
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Use file tools (grep, search, read) to examine it.
+</span></code></pre></div>
+<p>This allows the investigation agent to selectively search the trace using file tools rather than processing the entire trace in its context window.</p>
+<h3 id="interaction-with-context-modes">Interaction with Context Modes<a class="headerlink" href="#interaction-with-context-modes" title="Permanent link">&para;</a></h3>
+<p><code>materialize_trace=True</code> requires <code>context_mode</code> to include the trace (<code>"trace_only"</code> or <code>"trace_and_workspace"</code>). Setting it with <code>context_mode="workspace_only"</code> raises a <code>ValueError</code> at validation time, because there is no trace to materialize.</p>
+<h2 id="9-key-file-reference">9. Key File Reference<a class="headerlink" href="#9-key-file-reference" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -16054,7 +16204,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="9-next-steps">9. Next Steps<a class="headerlink" href="#9-next-steps" title="Permanent link">&para;</a></h2>
+<h2 id="10-next-steps">10. Next Steps<a class="headerlink" href="#10-next-steps" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../core_concepts/rubrics/agentic-traits/">Agentic Traits</a>: conceptual overview and usage guide</li>
 <li><a href="../agentic-evaluation/">Agentic Evaluation</a>: Stage 7b internals (agentic template parsing)</li>

@@ -19224,9 +19224,7 @@ in testing scenarios or when switching databases. This function is thread-safe.<
 
             <details class="quote">
               <summary>Source code in <code>src/karenina/storage/rubric_serializer.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-198">198</a></span>
-<span class="normal"><a href="#__codelineno-0-199">199</a></span>
-<span class="normal"><a href="#__codelineno-0-200">200</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-200">200</a></span>
 <span class="normal"><a href="#__codelineno-0-201">201</a></span>
 <span class="normal"><a href="#__codelineno-0-202">202</a></span>
 <span class="normal"><a href="#__codelineno-0-203">203</a></span>
@@ -19264,47 +19262,49 @@ in testing scenarios or when switching databases. This function is thread-safe.<
 <span class="normal"><a href="#__codelineno-0-235">235</a></span>
 <span class="normal"><a href="#__codelineno-0-236">236</a></span>
 <span class="normal"><a href="#__codelineno-0-237">237</a></span>
-<span class="normal"><a href="#__codelineno-0-238">238</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-198"><a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="k">def</span><span class="w"> </span><span class="nf">deserialize_rubric_from_dict</span><span class="p">(</span><span class="n">rubric_data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-199"><a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Deserialize a Rubric object from dictionary format.</span>
-</span><span id="__span-0-200"><a id="__codelineno-0-200" name="__codelineno-0-200"></a>
-</span><span id="__span-0-201"><a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-202"><a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">        rubric_data: Dictionary with serialized traits (from database)</span>
-</span><span id="__span-0-203"><a id="__codelineno-0-203" name="__codelineno-0-203"></a>
-</span><span id="__span-0-204"><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-205"><a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">        Rubric instance, or None if rubric_data is None/empty</span>
-</span><span id="__span-0-206"><a id="__codelineno-0-206" name="__codelineno-0-206"></a>
-</span><span id="__span-0-207"><a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">    Raises:</span>
-</span><span id="__span-0-208"><a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">        ValueError: If rubric_data contains unsupported &#39;manual_traits&#39; key</span>
-</span><span id="__span-0-209"><a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-210"><a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">rubric_data</span><span class="p">:</span>
-</span><span id="__span-0-211"><a id="__codelineno-0-211" name="__codelineno-0-211"></a>        <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-0-212"><a id="__codelineno-0-212" name="__codelineno-0-212"></a>
-</span><span id="__span-0-213"><a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">..schemas.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rubric</span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span>
+<span class="normal"><a href="#__codelineno-0-240">240</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-200"><a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="k">def</span><span class="w"> </span><span class="nf">deserialize_rubric_from_dict</span><span class="p">(</span><span class="n">rubric_data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-201"><a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Deserialize a Rubric object from dictionary format.</span>
+</span><span id="__span-0-202"><a id="__codelineno-0-202" name="__codelineno-0-202"></a>
+</span><span id="__span-0-203"><a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-204"><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">        rubric_data: Dictionary with serialized traits (from database)</span>
+</span><span id="__span-0-205"><a id="__codelineno-0-205" name="__codelineno-0-205"></a>
+</span><span id="__span-0-206"><a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-207"><a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">        Rubric instance, or None if rubric_data is None/empty</span>
+</span><span id="__span-0-208"><a id="__codelineno-0-208" name="__codelineno-0-208"></a>
+</span><span id="__span-0-209"><a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">    Raises:</span>
+</span><span id="__span-0-210"><a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">        ValueError: If rubric_data contains unsupported &#39;manual_traits&#39; key</span>
+</span><span id="__span-0-211"><a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-212"><a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">rubric_data</span><span class="p">:</span>
+</span><span id="__span-0-213"><a id="__codelineno-0-213" name="__codelineno-0-213"></a>        <span class="k">return</span> <span class="kc">None</span>
 </span><span id="__span-0-214"><a id="__codelineno-0-214" name="__codelineno-0-214"></a>
-</span><span id="__span-0-215"><a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="c1"># Check for unsupported old format</span>
-</span><span id="__span-0-216"><a id="__codelineno-0-216" name="__codelineno-0-216"></a>    <span class="k">if</span> <span class="s2">&quot;manual_traits&quot;</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="p">:</span>
-</span><span id="__span-0-217"><a id="__codelineno-0-217" name="__codelineno-0-217"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-218"><a id="__codelineno-0-218" name="__codelineno-0-218"></a>            <span class="s2">&quot;Rubric contains unsupported &#39;manual_traits&#39;. Please migrate your database using the migration script.&quot;</span>
-</span><span id="__span-0-219"><a id="__codelineno-0-219" name="__codelineno-0-219"></a>        <span class="p">)</span>
-</span><span id="__span-0-220"><a id="__codelineno-0-220" name="__codelineno-0-220"></a>
-</span><span id="__span-0-221"><a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="c1"># Deserialize each trait type</span>
-</span><span id="__span-0-222"><a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="n">llm_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_llm_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
-</span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="n">regex_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_regex_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;regex_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
-</span><span id="__span-0-224"><a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="n">callable_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_callable_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;callable_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
-</span><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="n">metric_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_metric_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;metric_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
-</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="n">agentic_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_agentic_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;agentic_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
-</span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a>
-</span><span id="__span-0-228"><a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="c1"># Return None if no traits found</span>
-</span><span id="__span-0-229"><a id="__codelineno-0-229" name="__codelineno-0-229"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">llm_traits</span> <span class="ow">or</span> <span class="n">regex_traits</span> <span class="ow">or</span> <span class="n">callable_traits</span> <span class="ow">or</span> <span class="n">metric_traits</span> <span class="ow">or</span> <span class="n">agentic_traits</span><span class="p">):</span>
-</span><span id="__span-0-230"><a id="__codelineno-0-230" name="__codelineno-0-230"></a>        <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-0-231"><a id="__codelineno-0-231" name="__codelineno-0-231"></a>
-</span><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a>    <span class="k">return</span> <span class="n">Rubric</span><span class="p">(</span>
-</span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a>        <span class="n">llm_traits</span><span class="o">=</span><span class="n">llm_traits</span><span class="p">,</span>
-</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>        <span class="n">regex_traits</span><span class="o">=</span><span class="n">regex_traits</span><span class="p">,</span>
-</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a>        <span class="n">callable_traits</span><span class="o">=</span><span class="n">callable_traits</span><span class="p">,</span>
-</span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="n">metric_traits</span><span class="o">=</span><span class="n">metric_traits</span><span class="p">,</span>
-</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>        <span class="n">agentic_traits</span><span class="o">=</span><span class="n">agentic_traits</span><span class="p">,</span>
-</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="p">)</span>
+</span><span id="__span-0-215"><a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">..schemas.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rubric</span>
+</span><span id="__span-0-216"><a id="__codelineno-0-216" name="__codelineno-0-216"></a>
+</span><span id="__span-0-217"><a id="__codelineno-0-217" name="__codelineno-0-217"></a>    <span class="c1"># Check for unsupported old format</span>
+</span><span id="__span-0-218"><a id="__codelineno-0-218" name="__codelineno-0-218"></a>    <span class="k">if</span> <span class="s2">&quot;manual_traits&quot;</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="p">:</span>
+</span><span id="__span-0-219"><a id="__codelineno-0-219" name="__codelineno-0-219"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+</span><span id="__span-0-220"><a id="__codelineno-0-220" name="__codelineno-0-220"></a>            <span class="s2">&quot;Rubric contains unsupported &#39;manual_traits&#39;. Please migrate your database using the migration script.&quot;</span>
+</span><span id="__span-0-221"><a id="__codelineno-0-221" name="__codelineno-0-221"></a>        <span class="p">)</span>
+</span><span id="__span-0-222"><a id="__codelineno-0-222" name="__codelineno-0-222"></a>
+</span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="c1"># Deserialize each trait type</span>
+</span><span id="__span-0-224"><a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="n">llm_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_llm_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+</span><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="n">regex_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_regex_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;regex_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="n">callable_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_callable_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;callable_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+</span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a>    <span class="n">metric_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_metric_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;metric_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+</span><span id="__span-0-228"><a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="n">agentic_traits</span> <span class="o">=</span> <span class="p">[</span><span class="n">_deserialize_agentic_trait</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;agentic_traits&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+</span><span id="__span-0-229"><a id="__codelineno-0-229" name="__codelineno-0-229"></a>
+</span><span id="__span-0-230"><a id="__codelineno-0-230" name="__codelineno-0-230"></a>    <span class="c1"># Return None if no traits found</span>
+</span><span id="__span-0-231"><a id="__codelineno-0-231" name="__codelineno-0-231"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">llm_traits</span> <span class="ow">or</span> <span class="n">regex_traits</span> <span class="ow">or</span> <span class="n">callable_traits</span> <span class="ow">or</span> <span class="n">metric_traits</span> <span class="ow">or</span> <span class="n">agentic_traits</span><span class="p">):</span>
+</span><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a>        <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a>
+</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="k">return</span> <span class="n">Rubric</span><span class="p">(</span>
+</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a>        <span class="n">llm_traits</span><span class="o">=</span><span class="n">llm_traits</span><span class="p">,</span>
+</span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="n">regex_traits</span><span class="o">=</span><span class="n">regex_traits</span><span class="p">,</span>
+</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>        <span class="n">callable_traits</span><span class="o">=</span><span class="n">callable_traits</span><span class="p">,</span>
+</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>        <span class="n">metric_traits</span><span class="o">=</span><span class="n">metric_traits</span><span class="p">,</span>
+</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="n">agentic_traits</span><span class="o">=</span><span class="n">agentic_traits</span><span class="p">,</span>
+</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -23622,9 +23622,7 @@ It's safe to call multiple times (idempotent).</p>
 
             <details class="quote">
               <summary>Source code in <code>src/karenina/storage/rubric_serializer.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-241">241</a></span>
-<span class="normal"><a href="#__codelineno-0-242">242</a></span>
-<span class="normal"><a href="#__codelineno-0-243">243</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-243">243</a></span>
 <span class="normal"><a href="#__codelineno-0-244">244</a></span>
 <span class="normal"><a href="#__codelineno-0-245">245</a></span>
 <span class="normal"><a href="#__codelineno-0-246">246</a></span>
@@ -23651,36 +23649,38 @@ It's safe to call multiple times (idempotent).</p>
 <span class="normal"><a href="#__codelineno-0-267">267</a></span>
 <span class="normal"><a href="#__codelineno-0-268">268</a></span>
 <span class="normal"><a href="#__codelineno-0-269">269</a></span>
-<span class="normal"><a href="#__codelineno-0-270">270</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-241"><a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="k">def</span><span class="w"> </span><span class="nf">serialize_question_rubric_from_cache</span><span class="p">(</span>
-</span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>    <span class="n">rubric_data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialize question rubric from cache format to database format.</span>
-</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a>
-</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">        rubric_data: Rubric data dict with &#39;llm_traits&#39;, &#39;regex_traits&#39;, etc. keys</span>
-</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a>
-</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">        Dictionary with serialized traits for database storage, or None if empty</span>
-</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">rubric_data</span><span class="p">:</span>
-</span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a>        <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a>
-</span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">llm_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
-</span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="n">regex_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;regex_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
-</span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">callable_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;callable_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
-</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="n">metric_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;metric_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
-</span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">agentic_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;agentic_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
-</span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>
-</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">llm_traits</span> <span class="ow">or</span> <span class="n">regex_traits</span> <span class="ow">or</span> <span class="n">callable_traits</span> <span class="ow">or</span> <span class="n">metric_traits</span> <span class="ow">or</span> <span class="n">agentic_traits</span><span class="p">):</span>
-</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>        <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>
-</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="k">return</span> <span class="n">serialize_rubric_to_dict</span><span class="p">(</span>
-</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="n">llm_traits</span><span class="o">=</span><span class="n">llm_traits</span><span class="p">,</span>
-</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>        <span class="n">regex_traits</span><span class="o">=</span><span class="n">regex_traits</span><span class="p">,</span>
-</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>        <span class="n">callable_traits</span><span class="o">=</span><span class="n">callable_traits</span><span class="p">,</span>
-</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>        <span class="n">metric_traits</span><span class="o">=</span><span class="n">metric_traits</span><span class="p">,</span>
-</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="n">agentic_traits</span><span class="o">=</span><span class="n">agentic_traits</span><span class="p">,</span>
-</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="k">def</span><span class="w"> </span><span class="nf">serialize_question_rubric_from_cache</span><span class="p">(</span>
+</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>    <span class="n">rubric_data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialize question rubric from cache format to database format.</span>
+</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>
+</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">        rubric_data: Rubric data dict with &#39;llm_traits&#39;, &#39;regex_traits&#39;, etc. keys</span>
+</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>
+</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">        Dictionary with serialized traits for database storage, or None if empty</span>
+</span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">rubric_data</span><span class="p">:</span>
+</span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>        <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a>
+</span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a>    <span class="n">llm_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;llm_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
+</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="n">regex_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;regex_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
+</span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">callable_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;callable_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
+</span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">metric_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;metric_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
+</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="n">agentic_traits</span> <span class="o">=</span> <span class="n">rubric_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;agentic_traits&quot;</span><span class="p">,</span> <span class="p">[])</span>
+</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>
+</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">llm_traits</span> <span class="ow">or</span> <span class="n">regex_traits</span> <span class="ow">or</span> <span class="n">callable_traits</span> <span class="ow">or</span> <span class="n">metric_traits</span> <span class="ow">or</span> <span class="n">agentic_traits</span><span class="p">):</span>
+</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>        <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>
+</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="k">return</span> <span class="n">serialize_rubric_to_dict</span><span class="p">(</span>
+</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>        <span class="n">llm_traits</span><span class="o">=</span><span class="n">llm_traits</span><span class="p">,</span>
+</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>        <span class="n">regex_traits</span><span class="o">=</span><span class="n">regex_traits</span><span class="p">,</span>
+</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="n">callable_traits</span><span class="o">=</span><span class="n">callable_traits</span><span class="p">,</span>
+</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>        <span class="n">metric_traits</span><span class="o">=</span><span class="n">metric_traits</span><span class="p">,</span>
+</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>        <span class="n">agentic_traits</span><span class="o">=</span><span class="n">agentic_traits</span><span class="p">,</span>
+</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

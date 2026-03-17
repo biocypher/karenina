@@ -1403,18 +1403,36 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#54-reading-results" class="md-nav__link">
+  <a href="#54-template-kind-agentic-evaluation-with-structured-output" class="md-nav__link">
     <span class="md-ellipsis">
-      5.4 Reading Results
+      5.4 Template Kind: Agentic Evaluation with Structured Output
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#55-score-validation" class="md-nav__link">
+  <a href="#55-trace-materialization" class="md-nav__link">
     <span class="md-ellipsis">
-      5.5 Score Validation
+      5.5 Trace Materialization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-reading-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.6 Reading Results
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-score-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.7 Score Validation
     </span>
   </a>
   
@@ -15539,18 +15557,36 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#54-reading-results" class="md-nav__link">
+  <a href="#54-template-kind-agentic-evaluation-with-structured-output" class="md-nav__link">
     <span class="md-ellipsis">
-      5.4 Reading Results
+      5.4 Template Kind: Agentic Evaluation with Structured Output
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#55-score-validation" class="md-nav__link">
+  <a href="#55-trace-materialization" class="md-nav__link">
     <span class="md-ellipsis">
-      5.5 Score Validation
+      5.5 Trace Materialization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-reading-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.6 Reading Results
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-score-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.7 Score Validation
     </span>
   </a>
   
@@ -16134,17 +16170,17 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </tr>
 <tr>
 <td><code>kind</code></td>
-<td><code>"boolean"</code> / <code>"score"</code> / <code>"literal"</code></td>
+<td><code>"boolean"</code> / <code>"score"</code> / <code>"literal"</code> / <code>type[BaseModel]</code></td>
 <td>Yes</td>
 <td></td>
-<td>Shape of the result</td>
+<td>Shape of the result. String literals produce scalar scores; a <code>BaseModel</code> subclass (template kind) produces structured multi-field findings (see Section 5.4)</td>
 </tr>
 <tr>
 <td><code>higher_is_better</code></td>
-<td><code>bool</code></td>
+<td><code>bool \| None</code></td>
 <td>Yes</td>
 <td></td>
-<td>Whether higher values indicate better performance</td>
+<td>Whether higher values indicate better performance. Must be <code>None</code> for template kind, because structured results have no single direction</td>
 </tr>
 <tr>
 <td><code>min_score</code></td>
@@ -16196,6 +16232,18 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <td><code>int</code></td>
 <td><code>120</code></td>
 <td>Wall-clock timeout for the investigation step</td>
+</tr>
+<tr>
+<td><code>materialize_trace</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Write the answering agent trace to a file in the workspace instead of inlining it in the investigation prompt. The investigation agent receives the file path and can use grep/search tools on it. Requires <code>context_mode</code> that includes the trace (<code>"trace_only"</code> or <code>"trace_and_workspace"</code>). See Section 5.5</td>
+</tr>
+<tr>
+<td><code>persist_trace</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>When <code>True</code>, the materialized trace file is kept after evaluation. When <code>False</code> (default), cleaned up after evaluation completes</td>
 </tr>
 <tr>
 <td><code>model_override</code></td>
@@ -16503,12 +16551,14 @@ print(f"Score range: {test_quality.min_score}-{test_quality.max_score}")</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="54-reading-results">5.4 Reading Results<a class="anchor-link" href="#54-reading-results">¶</a></h3><p>After verification, agentic trait scores and investigation traces are stored in <code>VerificationResult.rubric</code>. The following cells use the <code>_mock_result</code> from the hidden setup cell.</p>
+<h3 id="54-template-kind-agentic-evaluation-with-structured-output">5.4 Template Kind: Agentic Evaluation with Structured Output<a class="anchor-link" href="#54-template-kind-agentic-evaluation-with-structured-output">¶</a></h3><p>The scalar kinds (boolean, score, literal) force each trait to produce a single value. Template kind removes that constraint: you pass a Pydantic <code>BaseModel</code> subclass as <code>kind</code>, and the investigation agent populates the entire schema on the fly. The result is a structured, multi-field evaluation output whose shape you define.</p>
+<p>This is the same investigate-then-extract pattern as scalar kinds, but the extraction step parses the investigation trace into your Pydantic class rather than into a single boolean, integer, or class index. You get the full power of agentic evaluation (tool use, multi-step reasoning, workspace access) combined with the expressiveness of a Pydantic template.</p>
+<p>The potential is broad: any evaluation question that naturally produces multiple related findings can be captured in a single trait instead of being split across several scalar traits or lost to free-text summaries. Compliance audits that need to flag several criteria at once, code reviews that track multiple quality dimensions, trace analyses that count and categorize patterns: all become a single trait with a schema that matches the evaluation's natural shape.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=9cbfe304">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=d2729323">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16526,20 +16576,93 @@ print(f"Score range: {test_quality.min_score}-{test_quality.max_score}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Access agentic trait scores</span>
-<span class="n">rubric</span> <span class="o">=</span> <span class="n">_mock_result</span><span class="o">.</span><span class="n">rubric</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">"Agentic trait scores:"</span><span class="p">,</span> <span class="n">rubric</span><span class="o">.</span><span class="n">agentic_trait_scores</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgenticRubricTrait</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CodeQualityFindings</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The agent investigates the workspace and fills this in."""</span>
+
+    <span class="n">has_type_hints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"True if the code uses type annotations on function signatures."</span>
+    <span class="p">)</span>
+    <span class="n">test_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of test functions found in test files."</span>
+    <span class="p">)</span>
+    <span class="n">external_dependencies</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Third-party packages imported by the code."</span>
+    <span class="p">)</span>
+
+
+<span class="n">trait</span> <span class="o">=</span> <span class="n">AgenticRubricTrait</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"code_quality"</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+        <span class="s2">"Examine the Python files in the workspace. Check whether functions "</span>
+        <span class="s2">"have type annotations. Count the test functions. List every "</span>
+        <span class="s2">"third-party package that is imported."</span>
+    <span class="p">),</span>
+    <span class="n">kind</span><span class="o">=</span><span class="n">CodeQualityFindings</span><span class="p">,</span>
+    <span class="n">higher_is_better</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># required: no single direction for multi-field output</span>
+    <span class="n">context_mode</span><span class="o">=</span><span class="s2">"trace_and_workspace"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Trait: </span><span class="si">{</span><span class="n">trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Template kind: </span><span class="si">{</span><span class="n">trait</span><span class="o">.</span><span class="n">is_template_kind</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Fields: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">CodeQualityFindings</span><span class="o">.</span><span class="n">model_fields</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4"># Access agentic trait scores
-rubric = _mock_result.rubric
-print("Agentic trait scores:", rubric.agentic_trait_scores)</div>
+<div class="clipboard-copy-txt" id="cell-4">from pydantic import BaseModel, Field
+from karenina.schemas.entities.rubric import AgenticRubricTrait
+
+
+class CodeQualityFindings(BaseModel):
+    """The agent investigates the workspace and fills this in."""
+
+    has_type_hints: bool = Field(
+        description="True if the code uses type annotations on function signatures."
+    )
+    test_count: int = Field(
+        description="Number of test functions found in test files."
+    )
+    external_dependencies: list[str] = Field(
+        description="Third-party packages imported by the code."
+    )
+
+
+trait = AgenticRubricTrait(
+    name="code_quality",
+    description=(
+        "Examine the Python files in the workspace. Check whether functions "
+        "have type annotations. Count the test functions. List every "
+        "third-party package that is imported."
+    ),
+    kind=CodeQualityFindings,
+    higher_is_better=None,  # required: no single direction for multi-field output
+    context_mode="trace_and_workspace",
+)
+
+print(f"Trait: {trait.name}")
+print(f"Template kind: {trait.is_template_kind}")
+print(f"Fields: {list(CodeQualityFindings.model_fields.keys())}")</div>
 </div>
 </div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=184409bf">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Because the output has multiple fields with potentially different meanings, <code>higher_is_better</code> is set to <code>None</code>. Results are stored as flat dot-notation keys in <code>agentic_trait_scores</code> (<code>code_quality.has_type_hints</code>, <code>code_quality.test_count</code>, <code>code_quality.external_dependencies</code>), making them easy to access in DataFrames and downstream analysis.</p>
+<h3 id="55-trace-materialization">5.5 Trace Materialization<a class="anchor-link" href="#55-trace-materialization">¶</a></h3><p>Agent traces from multi-turn agentic workflows can be very large. Rather than embedding the entire trace in the investigation prompt, <code>materialize_trace=True</code> writes it to a file and gives the investigation agent the file path. The agent can then use file tools (grep, search, read) to examine the trace selectively, which is both more efficient and more effective for targeted analysis.</p>
+<p>Set <code>persist_trace=True</code> to keep the file after evaluation for inspection or debugging; by default it is cleaned up.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=73f8a003">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=b1debdcd">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16557,22 +16680,44 @@ print("Agentic trait scores:", rubric.agentic_trait_scores)</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Access investigation traces</span>
-<span class="k">for</span> <span class="n">trait_name</span><span class="p">,</span> <span class="n">trace</span> <span class="ow">in</span> <span class="n">rubric</span><span class="o">.</span><span class="n">agentic_trait_investigation_traces</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">--- </span><span class="si">{</span><span class="n">trait_name</span><span class="si">}</span><span class="s2"> ---"</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="n">trace</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">materialized</span> <span class="o">=</span> <span class="n">AgenticRubricTrait</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"trace_review"</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">"Review the agent trace for tool call patterns."</span><span class="p">,</span>
+    <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
+    <span class="n">higher_is_better</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">context_mode</span><span class="o">=</span><span class="s2">"trace_only"</span><span class="p">,</span>
+    <span class="n">materialize_trace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">persist_trace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># keep the file for inspection after evaluation</span>
+<span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5"># Access investigation traces
-for trait_name, trace in rubric.agentic_trait_investigation_traces.items():
-    print(f"\n--- {trait_name} ---")
-    print(trace)</div>
+<div class="clipboard-copy-txt" id="cell-5">materialized = AgenticRubricTrait(
+    name="trace_review",
+    description="Review the agent trace for tool call patterns.",
+    kind="boolean",
+    higher_is_better=True,
+    context_mode="trace_only",
+    materialize_trace=True,
+    persist_trace=True,  # keep the file for inspection after evaluation
+)</div>
 </div>
 </div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=07e7ef8a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Trace materialization requires a context mode that includes the trace (<code>"trace_only"</code> or <code>"trace_and_workspace"</code>). It pairs naturally with template kind: the investigation agent greps a large trace for specific patterns, and the structured Pydantic output captures exactly the findings you care about.</p>
+<h3 id="56-reading-results">5.6 Reading Results<a class="anchor-link" href="#56-reading-results">¶</a></h3><p>After verification, agentic trait scores and investigation traces are stored in <code>VerificationResult.rubric</code>. The following cells use the <code>_mock_result</code> from the hidden setup cell.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=aecf6b4c">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=9cbfe304">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16590,20 +16735,20 @@ for trait_name, trace in rubric.agentic_trait_investigation_traces.items():
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Use get_all_trait_scores() to get a flat dict across all trait types</span>
-<span class="n">all_scores</span> <span class="o">=</span> <span class="n">rubric</span><span class="o">.</span><span class="n">get_all_trait_scores</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">"All trait scores:"</span><span class="p">,</span> <span class="n">all_scores</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Access agentic trait scores</span>
+<span class="n">rubric</span> <span class="o">=</span> <span class="n">_mock_result</span><span class="o">.</span><span class="n">rubric</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"Agentic trait scores:"</span><span class="p">,</span> <span class="n">rubric</span><span class="o">.</span><span class="n">agentic_trait_scores</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6"># Use get_all_trait_scores() to get a flat dict across all trait types
-all_scores = rubric.get_all_trait_scores()
-print("All trait scores:", all_scores)</div>
+<div class="clipboard-copy-txt" id="cell-6"># Access agentic trait scores
+rubric = _mock_result.rubric
+print("Agentic trait scores:", rubric.agentic_trait_scores)</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=b56fe801">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=73f8a003">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16621,13 +16766,77 @@ print("All trait scores:", all_scores)</div>
 </div>
 </clipboard-copy>
 </div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Access investigation traces</span>
+<span class="k">for</span> <span class="n">trait_name</span><span class="p">,</span> <span class="n">trace</span> <span class="ow">in</span> <span class="n">rubric</span><span class="o">.</span><span class="n">agentic_trait_investigation_traces</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">--- </span><span class="si">{</span><span class="n">trait_name</span><span class="si">}</span><span class="s2"> ---"</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">trace</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-7"># Access investigation traces
+for trait_name, trace in rubric.agentic_trait_investigation_traces.items():
+    print(f"\n--- {trait_name} ---")
+    print(trace)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=aecf6b4c">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Use get_all_trait_scores() to get a flat dict across all trait types</span>
+<span class="n">all_scores</span> <span class="o">=</span> <span class="n">rubric</span><span class="o">.</span><span class="n">get_all_trait_scores</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"All trait scores:"</span><span class="p">,</span> <span class="n">all_scores</span><span class="p">)</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-8"># Use get_all_trait_scores() to get a flat dict across all trait types
+all_scores = rubric.get_all_trait_scores()
+print("All trait scores:", all_scores)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=b56fe801">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-9">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Look up a single trait by name</span>
 <span class="n">found</span> <span class="o">=</span> <span class="n">rubric</span><span class="o">.</span><span class="n">get_trait_by_name</span><span class="p">(</span><span class="s2">"logistic_regression_library"</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">found</span><span class="p">:</span>
     <span class="n">value</span><span class="p">,</span> <span class="n">trait_type</span> <span class="o">=</span> <span class="n">found</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Value: </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">, Type: </span><span class="si">{</span><span class="n">trait_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7"># Look up a single trait by name
+<div class="clipboard-copy-txt" id="cell-9"># Look up a single trait by name
 found = rubric.get_trait_by_name("logistic_regression_library")
 if found:
     value, trait_type = found
@@ -16644,7 +16853,7 @@ if found:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="55-score-validation">5.5 Score Validation<a class="anchor-link" href="#55-score-validation">¶</a></h3><p>Like <code>LLMRubricTrait</code>, agentic traits provide a <code>validate_score</code> method that checks whether a given value is valid for the trait's kind and range.</p>
+<h3 id="57-score-validation">5.7 Score Validation<a class="anchor-link" href="#57-score-validation">¶</a></h3><p>Like <code>LLMRubricTrait</code>, agentic traits provide a <code>validate_score</code> method that checks whether a given value is valid for the trait's kind and range.</p>
 </div>
 </div>
 </div>
@@ -16657,7 +16866,7 @@ if found:
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-10">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -16680,7 +16889,7 @@ if found:
 <span class="nb">print</span><span class="p">(</span><span class="n">library_trait</span><span class="o">.</span><span class="n">validate_score</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>     <span class="c1"># True (error state)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">library_trait</span><span class="o">.</span><span class="n">validate_score</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>      <span class="c1"># False (out of range)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8"># Boolean trait: only accepts bool
+<div class="clipboard-copy-txt" id="cell-10"># Boolean trait: only accepts bool
 print(runs_cleanly.validate_score(True))    # True
 print(runs_cleanly.validate_score(1))       # False (int rejected for boolean)
 
