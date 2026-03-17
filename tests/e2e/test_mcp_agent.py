@@ -38,6 +38,7 @@ def test_mcp_agent_middleware_signature() -> None:
 
     from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
     from karenina.adapters.langchain.middleware import build_agent_middleware
+    from karenina.exceptions import McpTimeoutError
     from karenina.schemas.config import AgentMiddlewareConfig
 
     # Create fixture-backed LLM client
@@ -48,7 +49,7 @@ def test_mcp_agent_middleware_signature() -> None:
     mcp_urls = {"opentargets": "https://mcp.platform.opentargets.org/mcp"}
     try:
         _, tools = create_mcp_client_and_tools(mcp_urls, None, None)
-    except (TimeoutError, ConnectionError, OSError) as e:
+    except (TimeoutError, ConnectionError, OSError, McpTimeoutError) as e:
         pytest.skip(f"MCP server unavailable: {e}")
 
     assert len(tools) > 0, "Should retrieve tools from MCP server"
