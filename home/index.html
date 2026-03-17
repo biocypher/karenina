@@ -15235,30 +15235,27 @@
 <p><strong>Karenina</strong> is an open-source Python framework that simplifies how you define, run, and share LLM evaluations. It covers the full evaluation spectrum: simple factual Q&amp;A, tool-augmented interactions where models use external tools via <a href="../notebooks/core_concepts/mcp-overview/">MCP</a>, and fully <a href="../notebooks/core_concepts/agentic-evaluation/">agentic coding and data analysis tasks</a> where both the answering model and the judge operate in a real workspace with file and code access.</p>
 <p>Its core idea is formalizing ground truth as structured <a href="../notebooks/core_concepts/answer-templates/">answer templates</a>: Pydantic models that encode what a correct response looks like, letting a <a href="philosophy/#the-llm-as-judge-approach">Judge LLM</a> parse free-form responses into those schemas for programmatic verification. Combined with <a href="../core_concepts/rubrics/">rubrics</a> for quality assessment and support for classical methods like regex, Karenina provides a flexible <a href="../notebooks/core_concepts/verification-pipeline/">evaluation pipeline</a> from quick checks to complex multi-trait scoring. It supports three evaluation modes:</p>
 <ul>
-<li><strong><a href="../core_concepts/questions-and-benchmarks/">Q/A Benchmark</a></strong> (closed-loop): Define questions, generate responses, and evaluate them through a staged verification pipeline.</li>
-<li><strong><a href="../core_concepts/scenarios/">Scenarios</a></strong> (closed-loop, multi-turn): Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.</li>
-<li><strong><a href="../notebooks/core_concepts/task-eval/">TaskEval</a></strong> (open-loop): Supply pre-recorded outputs from any source and evaluate them using the same pipeline.</li>
+<li><strong><a href="../core_concepts/questions-and-benchmarks/">Q/A Benchmark</a></strong>: Define questions and answer pairs, generate responses, and evaluate them through a staged verification pipeline.</li>
+<li><strong><a href="../core_concepts/scenarios/">Scenarios</a></strong>: Define conversation graphs with branching paths and outcome criteria to evaluate behavior across multiple turns.</li>
+<li><strong><a href="../notebooks/core_concepts/task-eval/">TaskEval</a></strong>: Supply pre-recorded outputs from any source and evaluate them using the same pipeline.</li>
 </ul>
 <p><strong>New here?</strong> Start with the <strong><a href="../notebooks/quickstart/">Quick Start: Q/A Benchmark</a></strong> to run your first evaluation end-to-end, the <strong><a href="../notebooks/quickstart-scenarios/">Quick Start: Scenarios</a></strong> to build a multi-turn evaluation with branching, or the <strong><a href="../notebooks/quickstart-taskeval/">Quick Start: TaskEval</a></strong> if you already have outputs to evaluate.</p>
 <h2 id="why-this-approach">Why This Approach<a class="headerlink" href="#why-this-approach" title="Permanent link">&para;</a></h2>
 <ol>
 <li>
-<p><strong>Naturalistic evaluation.</strong> Traditional benchmarks force models into artificial formats (multiple-choice letters, regex-compliant strings) that differ from real-world usage and signal to the model that it is being evaluated. In Karenina, the answering model is never constrained: it produces the same kind of response a real user would receive. A separate <a href="philosophy/#the-llm-as-judge-approach">Judge LLM</a> evaluates the natural response after the fact.</p>
+<p><strong>Naturalistic evaluation that measures what you care about.</strong> Traditional benchmarks force models into artificial formats (multiple-choice letters, regex-compliant strings) that differ from real-world usage and signal to the model that it is being evaluated. Public benchmarks also create incentives for providers to optimize for the test rather than for real-world usefulness. In Karenina, the answering model is never constrained: it produces the same kind of response a real user would receive. A separate <a href="philosophy/#the-llm-as-judge-approach">Judge LLM</a> evaluates the natural response after the fact. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment.</p>
 </li>
 <li>
-<p><strong>Portable, self-contained benchmarks.</strong> Each <a href="../core_concepts/questions-and-benchmarks/">question</a> carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single <a href="../core_concepts/questions-and-benchmarks/checkpoints/">portable checkpoint</a> that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.</p>
+<p><strong>Self-contained benchmarks.</strong> Each <a href="../core_concepts/questions-and-benchmarks/">question</a> carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single <a href="../core_concepts/questions-and-benchmarks/checkpoints/">portable checkpoint</a> that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.</p>
 </li>
 <li>
-<p><strong>Bootstrapped authoring.</strong> LLMs can <a href="../notebooks/creating-benchmarks/scaled-authoring/">auto-generate evaluation code</a> from a simple spreadsheet of questions and answers, bootstrapping benchmark creation in minutes. Quality checks are defined declaratively, so adding them requires no custom infrastructure.</p>
+<p><strong>Spreadsheet-to-benchmark in minutes.</strong> LLMs <a href="../notebooks/creating-benchmarks/scaled-authoring/">translate plain-text questions and answers</a> into runnable evaluation code, accelerating benchmark creation from hours of manual work to minutes. This shifts human effort from writing boilerplate to curating high-quality evaluation criteria. Quality checks are defined declaratively, so adding them requires no custom infrastructure.</p>
 </li>
 <li>
 <p><strong>Expressivity.</strong> <a href="../notebooks/core_concepts/answer-templates/">Templates</a> combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic). <a href="../core_concepts/scenarios/">Scenarios</a> extend this expressivity to multi-turn conversations: define branching evaluation graphs where each turn's result determines the next question, then assert compound outcome criteria over the full conversation (e.g., "the model answered correctly on turn 1 and resisted a sycophantic challenge on turn 2").</p>
 </li>
 <li>
 <p><strong>Agentic evaluation, not just Q&amp;A.</strong> Modern LLM deployments increasingly involve agents that write code, run tests, and produce file artifacts. Karenina evaluates these workflows natively: the answering model operates in a <a href="../notebooks/core_concepts/agentic-evaluation/#2-workspaces">workspace</a> with tool access, and an independent <a href="../notebooks/core_concepts/agentic-evaluation/#4-two-step-agentic-judging-stage-7b">judge agent</a> inspects the resulting artifacts (files created, tests passed, code compiled) rather than relying on the conversation trace alone. The same template and rubric primitives apply whether the task is a factual question or a multi-step coding challenge.</p>
-</li>
-<li>
-<p><strong>Benchmarks that measure what you care about.</strong> Public benchmarks create incentives for model providers to optimize for the test rather than for real-world usefulness. By lowering the cost of creating domain-specific evaluations, Karenina lets teams build internal suites that measure the capabilities that actually matter for their deployment. When anyone can spin up a benchmark on their own terms, evaluation becomes harder to game, creating a race to the top where genuine model improvement is the only winning strategy.</p>
 </li>
 </ol>
 <h2 id="documentation-structure">Documentation Structure<a class="headerlink" href="#documentation-structure" title="Permanent link">&para;</a></h2>
@@ -15334,7 +15331,7 @@
 <tbody>
 <tr>
 <td>Compare LLM performance across consistent criteria</td>
-<td>Q/A Benchmark</td>
+<td><a href="../core_concepts/questions-and-benchmarks/">Q/A Benchmark</a></td>
 </tr>
 <tr>
 <td>Evaluate free-form outputs with structured logic (not string matching)</td>
@@ -15346,23 +15343,23 @@
 </tr>
 <tr>
 <td>Run hundreds of questions across multiple models automatically</td>
-<td>Q/A Benchmark</td>
+<td><a href="../core_concepts/questions-and-benchmarks/">Q/A Benchmark</a></td>
 </tr>
 <tr>
 <td>Share portable evaluation suites that anyone can re-run</td>
-<td>Q/A Benchmark</td>
+<td><a href="../core_concepts/questions-and-benchmarks/">Q/A Benchmark</a></td>
 </tr>
 <tr>
 <td>Evaluate coding or data analysis tasks with workspace artifacts</td>
-<td>Q/A Benchmark</td>
+<td><a href="../core_concepts/questions-and-benchmarks/">Q/A Benchmark</a></td>
 </tr>
 <tr>
 <td>Score agent workflow outputs after execution</td>
-<td>TaskEval</td>
+<td><a href="../notebooks/core_concepts/task-eval/">TaskEval</a></td>
 </tr>
 <tr>
 <td>Evaluate multi-step agent traces per phase</td>
-<td>TaskEval</td>
+<td><a href="../notebooks/core_concepts/task-eval/">TaskEval</a></td>
 </tr>
 <tr>
 <td>Test sycophancy resistance across multi-turn conversation paths</td>

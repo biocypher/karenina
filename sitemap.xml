@@ -157,6 +157,38 @@
          <lastmod>2026-03-17</lastmod>
     </url>
     <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/abstention-detection/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/deep-judgment/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/embedding-check/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/few-shot/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/manual-traces/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/mcp-integration/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/presets/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/advanced/task-eval/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
          <loc>https://biocypher.github.io/karenina/notebooks/analyzing-results/database-persistence/</loc>
          <lastmod>2026-03-17</lastmod>
     </url>
@@ -289,6 +321,50 @@
          <lastmod>2026-03-17</lastmod>
     </url>
     <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/01_gepa_quickstart/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/02_configuration/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/03_data_splitting/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/04_scoring_deep_dive/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/05_karenina_adapter/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/06_feedback_generation/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/07_tracking_runs/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/08_export_and_reuse/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/09_full_optimization_workflow/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/10_mcp_tool_optimization/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/gepa/11_verbose_real_optimization/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
          <loc>https://biocypher.github.io/karenina/notebooks/running-verification/agentic-evaluation/</loc>
          <lastmod>2026-03-17</lastmod>
     </url>
@@ -342,6 +418,42 @@
     </url>
     <url>
          <loc>https://biocypher.github.io/karenina/notebooks/task-eval/quality-assessment/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/accessing-filtering/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/adding-questions/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/analyzing-results-dataframes/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/defining-benchmark/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/model-configuration/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/rubrics/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/saving-loading/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/templates/</loc>
+         <lastmod>2026-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://biocypher.github.io/karenina/notebooks/using-karenina/verification/</loc>
          <lastmod>2026-03-17</lastmod>
     </url>
     <url>

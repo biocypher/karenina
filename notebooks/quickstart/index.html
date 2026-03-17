@@ -713,9 +713,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-add-questions" class="md-nav__link">
+  <a href="#step-2-add-questions-and-answers-pairs" class="md-nav__link">
     <span class="md-ellipsis">
-      Step 2: Add Questions
+      Step 2: Add Questions and Answers pairs
     </span>
   </a>
   
@@ -732,18 +732,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#automatic-generation" class="md-nav__link">
+  <a href="#case-a-automatic-generation" class="md-nav__link">
     <span class="md-ellipsis">
-      Automatic Generation
+      Case A: Automatic Generation
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#manual-definition-class-based" class="md-nav__link">
+  <a href="#case-b-manual-definition-class-based" class="md-nav__link">
     <span class="md-ellipsis">
-      Manual Definition (Class-Based)
+      Case B: Manual Definition (Class-Based)
     </span>
   </a>
   
@@ -767,7 +767,7 @@
           <li class="md-nav__item">
   <a href="#global-trait-evaluated-for-every-question" class="md-nav__link">
     <span class="md-ellipsis">
-      Global Trait (evaluated for every question)
+      Global Trait: evaluated for every question
     </span>
   </a>
   
@@ -776,7 +776,7 @@
           <li class="md-nav__item">
   <a href="#question-specific-trait-evaluated-for-one-question" class="md-nav__link">
     <span class="md-ellipsis">
-      Question-Specific Trait (evaluated for one question)
+      Question-Specific Trait: evaluated for one question
     </span>
   </a>
   
@@ -15361,9 +15361,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-add-questions" class="md-nav__link">
+  <a href="#step-2-add-questions-and-answers-pairs" class="md-nav__link">
     <span class="md-ellipsis">
-      Step 2: Add Questions
+      Step 2: Add Questions and Answers pairs
     </span>
   </a>
   
@@ -15380,18 +15380,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#automatic-generation" class="md-nav__link">
+  <a href="#case-a-automatic-generation" class="md-nav__link">
     <span class="md-ellipsis">
-      Automatic Generation
+      Case A: Automatic Generation
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#manual-definition-class-based" class="md-nav__link">
+  <a href="#case-b-manual-definition-class-based" class="md-nav__link">
     <span class="md-ellipsis">
-      Manual Definition (Class-Based)
+      Case B: Manual Definition (Class-Based)
     </span>
   </a>
   
@@ -15415,7 +15415,7 @@
           <li class="md-nav__item">
   <a href="#global-trait-evaluated-for-every-question" class="md-nav__link">
     <span class="md-ellipsis">
-      Global Trait (evaluated for every question)
+      Global Trait: evaluated for every question
     </span>
   </a>
   
@@ -15424,7 +15424,7 @@
           <li class="md-nav__item">
   <a href="#question-specific-trait-evaluated-for-one-question" class="md-nav__link">
     <span class="md-ellipsis">
-      Question-Specific Trait (evaluated for one question)
+      Question-Specific Trait: evaluated for one question
     </span>
   </a>
   
@@ -16054,7 +16054,7 @@ print(f"Created benchmark: {benchmark.name}")</div>
 <p><strong>Learn more</strong>: <a href="../workflows/creating-benchmarks/index.md">Creating Benchmarks</a> · <a href="../core_concepts/index.md">Core Concepts</a></p>
 </blockquote>
 <hr/>
-<h2 id="step-2-add-questions">Step 2: Add Questions<a class="anchor-link" href="#step-2-add-questions">¶</a></h2><p>Each question has a text prompt and a reference answer (the ground truth).</p>
+<h2 id="step-2-add-questions-and-answers-pairs">Step 2: Add Questions and Answers pairs<a class="anchor-link" href="#step-2-add-questions-and-answers-pairs">¶</a></h2><p>Each question has a text prompt and a reference answer (the ground truth).</p>
 </div>
 </div>
 </div>
@@ -16157,14 +16157,14 @@ print(f"Added {len(question_ids)} questions")</div>
 <p><strong>Learn more</strong>: <a href="creating-benchmarks/factual-qa-benchmark.ipynb">Factual QA Benchmark</a> — including bulk import from Excel, CSV, and TSV files</p>
 </blockquote>
 <hr/>
-<h2 id="step-3-write-answer-templates">Step 3: Write Answer Templates<a class="anchor-link" href="#step-3-write-answer-templates">¶</a></h2><p>Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each field uses <code>VerifiedField</code> to declare:</p>
+<h2 id="step-3-write-answer-templates">Step 3: Write Answer Templates<a class="anchor-link" href="#step-3-write-answer-templates">¶</a></h2><p>Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. At its core, designing a template means establishing the exact <strong>validation logic used to evaluate the model's answers.</strong> Each field uses <code>VerifiedField</code> to declare:</p>
 <ol>
 <li>A <strong>description</strong> that tells the judge what to extract</li>
 <li>The <strong>ground truth</strong> value (what a correct answer looks like)</li>
 <li>A <strong>verification primitive</strong> (<code>verify_with</code>) that checks the extracted value against ground truth</li>
 </ol>
 <p>The class must inherit from <code>BaseAnswer</code>.</p>
-<h3 id="automatic-generation">Automatic Generation<a class="anchor-link" href="#automatic-generation">¶</a></h3><p>The fastest way to get started is to let Karenina generate templates for you using an LLM. This analyses each question and its reference answer, then produces a complete template:</p>
+<h3 id="case-a-automatic-generation">Case A: Automatic Generation<a class="anchor-link" href="#case-a-automatic-generation">¶</a></h3><p>The fastest way to get started is to let Karenina generate templates for you using an LLM. This analyses each question and its reference answer, then produces a complete template:</p>
 </div>
 </div>
 </div>
@@ -16266,15 +16266,15 @@ print(generated_code)</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>class Answer(BaseAnswer):
-    chromosome_count: int = Field(description="Provide the integer count of chromosomes in a human somatic cell as stated or implied in the response. The expected answer is 46.")
+<pre>from karenina.schemas.entities import BaseAnswer, VerifiedField, NumericExact
 
-    def model_post_init(self, __context):
-        self.correct = {"chromosome_count": 46}
 
-    def verify(self) -&gt; bool:
-        return self.chromosome_count == self.correct["chromosome_count"]
-
+class Answer(BaseAnswer):
+    chromosome_count: int = VerifiedField(
+        description="Extract the integer number of chromosomes stated in the response as the count present in a human somatic cell.",
+        ground_truth=46,
+        verify_with=NumericExact(),
+    )
 </pre>
 </div>
 </div>
@@ -16288,7 +16288,7 @@ print(generated_code)</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="manual-definition-class-based">Manual Definition (Class-Based)<a class="anchor-link" href="#manual-definition-class-based">¶</a></h3><p>When you need precise control over verification logic, define templates as Python classes and pass them directly. Each field uses <code>VerifiedField</code> to declare what to extract, the correct answer, and how to compare:</p>
+<h3 id="case-b-manual-definition-class-based">Case B: Manual Definition (Class-Based)<a class="anchor-link" href="#case-b-manual-definition-class-based">¶</a></h3><p>Alternatively, when you need precise control over verification logic, define templates as Python classes and pass them directly. Each field uses <code>VerifiedField</code> to declare what to extract, the correct answer, and how to compare:</p>
 </div>
 </div>
 </div>
@@ -16383,7 +16383,7 @@ print("Updated template for Venetoclax question with class-based definition")</d
 <hr/>
 <h2 id="step-4-add-rubric-traits">Step 4: Add Rubric Traits<a class="anchor-link" href="#step-4-add-rubric-traits">¶</a></h2><p>While templates verify <strong>correctness</strong>, rubrics assess <strong>quality</strong> — properties of the raw response like conciseness, safety, or format compliance.</p>
 <p>Karenina supports four trait types: LLM, regex, callable, and metric. Here we use two.</p>
-<h3 id="global-trait-evaluated-for-every-question">Global Trait (evaluated for every question)<a class="anchor-link" href="#global-trait-evaluated-for-every-question">¶</a></h3>
+<h3 id="global-trait-evaluated-for-every-question">Global Trait: evaluated for every question<a class="anchor-link" href="#global-trait-evaluated-for-every-question">¶</a></h3>
 </div>
 </div>
 </div>
@@ -16452,7 +16452,7 @@ print("Added global rubric trait: Conciseness (score 1-5)")</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="question-specific-trait-evaluated-for-one-question">Question-Specific Trait (evaluated for one question)<a class="anchor-link" href="#question-specific-trait-evaluated-for-one-question">¶</a></h3><p>This regex trait checks that the Venetoclax answer mentions the BCL2 protein:</p>
+<h3 id="question-specific-trait-evaluated-for-one-question">Question-Specific Trait: evaluated for one question<a class="anchor-link" href="#question-specific-trait-evaluated-for-one-question">¶</a></h3><p>This LLM trait checks that the Venetoclax answer discusses the drug's safety profile:</p>
 </div>
 </div>
 </div>
@@ -16475,43 +16475,43 @@ print("Added global rubric trait: Conciseness (score 1-5)")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMRubricTrait</span>
 
-<span class="n">venetoclax_qid</span> <span class="o">=</span> <span class="n">question_ids</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># The Venetoclax question</span>
+<span class="n">venetoclax_qid</span> <span class="o">=</span> <span class="n">question_ids</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># "What is the approved drug target of Venetoclax?"</span>
 
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_question_rubric_trait</span><span class="p">(</span>
     <span class="n">venetoclax_qid</span><span class="p">,</span>
-    <span class="n">RegexTrait</span><span class="p">(</span>
-        <span class="n">name</span><span class="o">=</span><span class="s2">"Contains BCL2"</span><span class="p">,</span>
+    <span class="n">LLMRubricTrait</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">"Discusses Safety Profile"</span><span class="p">,</span>
         <span class="n">description</span><span class="o">=</span><span class="p">(</span>
-            <span class="s2">"The response explicitly mentions the gene symbol BCL2 (exact case-sensitive "</span>
-            <span class="s2">"match). This verifies the model uses the standard HGNC symbol rather than "</span>
-            <span class="s2">"only informal variants like 'Bcl-2' or 'B-cell lymphoma 2'."</span>
+            <span class="s2">"Answer True if the response discusses the safety profile of venetoclax, "</span>
+            <span class="s2">"including any mention of adverse effects, toxicity, contraindications, "</span>
+            <span class="s2">"or risk factors. Answer False if the response omits safety considerations "</span>
+            <span class="s2">"entirely."</span>
         <span class="p">),</span>
-        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\bBCL2\b"</span><span class="p">,</span>
-        <span class="n">case_sensitive</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
     <span class="p">),</span>
 <span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added regex trait 'Contains BCL2' to question </span><span class="si">{</span><span class="n">venetoclax_qid</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added LLM trait 'Discusses Safety Profile' to question </span><span class="si">{</span><span class="n">venetoclax_qid</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import RegexTrait
+<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import LLMRubricTrait
 
-venetoclax_qid = question_ids[1]  # The Venetoclax question
+venetoclax_qid = question_ids[1]  # "What is the approved drug target of Venetoclax?"
 
 benchmark.add_question_rubric_trait(
     venetoclax_qid,
-    RegexTrait(
-        name="Contains BCL2",
+    LLMRubricTrait(
+        name="Discusses Safety Profile",
         description=(
-            "The response explicitly mentions the gene symbol BCL2 (exact case-sensitive "
-            "match). This verifies the model uses the standard HGNC symbol rather than "
-            "only informal variants like 'Bcl-2' or 'B-cell lymphoma 2'."
+            "Answer True if the response discusses the safety profile of venetoclax, "
+            "including any mention of adverse effects, toxicity, contraindications, "
+            "or risk factors. Answer False if the response omits safety considerations "
+            "entirely."
         ),
-        pattern=r"\bBCL2\b",
-        case_sensitive=True,
+        kind="boolean",
     ),
 )
-print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")</div>
+print(f"Added LLM trait 'Discusses Safety Profile' to question {venetoclax_qid}")</div>
 </div>
 </div>
 </div>
@@ -16523,7 +16523,7 @@ print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>Added regex trait 'Contains BCL2' to question urn:uuid:question-what-is-the-approved-drug-target-of-venetoclax-2a9de717
+<pre>Added LLM trait 'Discusses Safety Profile' to question urn:uuid:question-what-is-the-approved-drug-target-of-venetoclax-2a9de717
 </pre>
 </div>
 </div>
@@ -16531,7 +16531,7 @@ print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4a6aaf7a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=df622370">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16546,7 +16546,7 @@ print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")</div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=6020c3a3">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=c98d6b61">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16647,7 +16647,7 @@ print(f"Verification complete — {len(results.results)} results")</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=028c648c">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4dc7d93a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16663,7 +16663,7 @@ print(f"Verification complete — {len(results.results)} results")</div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=8e49ed59">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=ce420fd2">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16746,7 +16746,7 @@ df_templates[["question_id", "field_name", "gt_value", "llm_value", "field_match
 <tr>
 <th>2</th>
 <td>urn:uuid:question-how-many-protein-subunits-do...</td>
-<td>num_protein_subunits</td>
+<td>hemoglobin_a_subunit_count</td>
 <td>4</td>
 <td>4</td>
 <td>True</td>
@@ -16760,7 +16760,7 @@ df_templates[["question_id", "field_name", "gt_value", "llm_value", "field_match
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9664c305">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4a6aaf7a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -16897,21 +16897,21 @@ df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]</div>
 <th>1</th>
 <td>urn:uuid:question-what-is-the-approved-drug-ta...</td>
 <td>Conciseness</td>
-<td>2</td>
+<td>3</td>
 <td>llm_score</td>
 </tr>
 <tr>
 <th>2</th>
 <td>urn:uuid:question-what-is-the-approved-drug-ta...</td>
-<td>Contains BCL2</td>
-<td>True</td>
-<td>regex</td>
+<td>Discusses Safety Profile</td>
+<td>False</td>
+<td>llm_binary</td>
 </tr>
 <tr>
 <th>3</th>
 <td>urn:uuid:question-how-many-protein-subunits-do...</td>
 <td>Conciseness</td>
-<td>5</td>
+<td>4</td>
 <td>llm_score</td>
 </tr>
 </tbody>

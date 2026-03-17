@@ -17,13 +17,13 @@
   "response": {
     "content": [
       {
-        "id": "toolu_018pG6ea89jejVaSLAGZpbLG",
+        "id": "toolu_01Dzo2qjPR1scW9hiaPxsfWS",
         "input": {
           "field_descriptions": [
             {
               "name": "chromosome_count",
-              "description": "Extract the integer number of chromosomes stated in the response as the answer to how many chromosomes are in a human somatic cell.",
-              "extraction_hint": "Normalize to a single integer value; if the response provides a range or multiple values, use the primary or most directly stated number."
+              "description": "Extract the integer number of chromosomes stated in the response as the count present in a human somatic cell.",
+              "extraction_hint": "Ensure the value is a whole number; if the response provides a range or multiple values, use the primary or most directly stated count."
             }
           ]
         },
@@ -34,7 +34,7 @@
         }
       }
     ],
-    "id": "lc_run--d710b4ac-048c-417a-a0c6-d6816fd6b12a-0",
+    "id": "lc_run--183f04e5-8bd9-4a6a-a747-30adb2af4270-0",
     "tool_calls": [
       {
         "name": "AttributeDescriptions",
@@ -42,12 +42,12 @@
           "field_descriptions": [
             {
               "name": "chromosome_count",
-              "description": "Extract the integer number of chromosomes stated in the response as the answer to how many chromosomes are in a human somatic cell.",
-              "extraction_hint": "Normalize to a single integer value; if the response provides a range or multiple values, use the primary or most directly stated number."
+              "description": "Extract the integer number of chromosomes stated in the response as the count present in a human somatic cell.",
+              "extraction_hint": "Ensure the value is a whole number; if the response provides a range or multiple values, use the primary or most directly stated count."
             }
           ]
         },
-        "id": "toolu_018pG6ea89jejVaSLAGZpbLG",
+        "id": "toolu_01Dzo2qjPR1scW9hiaPxsfWS",
         "type": "tool_call"
       }
     ],
