@@ -173,10 +173,26 @@ class DeepAgentsAgentAdapter:
         if system_prompt:
             agent_kwargs["system_prompt"] = system_prompt
 
+        # Configure backend for real filesystem access when workspace is available
+        workspace_path = config.workspace_path
+        if workspace_path:
+            from deepagents.backends import FilesystemBackend
+
+            agent_kwargs["backend"] = FilesystemBackend(root_dir=str(workspace_path))
+            logger.info("Using FilesystemBackend with root_dir=%s", workspace_path)
+        else:
+            # Default: use FilesystemBackend rooted at cwd for real filesystem access.
+            # StateBackend (virtual/in-memory) is NOT suitable for benchmarking because
+            # the agent cannot see real files on disk.
+            from deepagents.backends import FilesystemBackend
+
+            agent_kwargs["backend"] = FilesystemBackend()
+            logger.info("Using FilesystemBackend with default root (cwd)")
+
         # Pass through extra config to create_deep_agent
         if config.extra:
             for key, value in config.extra.items():
-                if key not in ("model", "system_prompt"):
+                if key not in ("model", "system_prompt", "backend"):
                     agent_kwargs[key] = value
 
         # Create the agent
