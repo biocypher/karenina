@@ -92,6 +92,10 @@ embeddings = [
 gepa = [
     "gepa>=0.0.24",  # For GEPA prompt optimization integration
 ]
+deep-agents = [
+    "deepagents>=0.4.0",
+    "langchain-mcp-adapters>=0.1.0",
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"
