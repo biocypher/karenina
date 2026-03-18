@@ -26,6 +26,7 @@ import logging
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -177,6 +178,11 @@ class AdapterSpec:
     # explicitly orchestrates each tool call turn.
     natively_agentic: bool = False
 
+    # If False, model_provider is not required for this interface.
+    # Used by validate_model_config() to replace the hardcoded
+    # INTERFACES_NO_PROVIDER_REQUIRED list.
+    requires_provider: bool = True
+
 
 class AdapterRegistry:
     """Central registry for adapter specifications.
@@ -319,38 +325,74 @@ class AdapterRegistry:
             return
 
         with _registry_lock:
-            # Double-check after acquiring the lock
             if cls._initialized:
                 return
 
-            # Import registration modules to trigger self-registration
-            # This happens lazily on first registry access
-            try:
-                from karenina.adapters.langchain import registration as _lc  # noqa: F401
-            except ImportError:
-                logger.debug("LangChain registration module not available")
-
-            try:
-                from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
-            except ImportError:
-                logger.debug("Claude Agent SDK registration module not available")
-
-            try:
-                from karenina.adapters.manual import registration as _manual  # noqa: F401
-            except ImportError:
-                logger.debug("Manual registration module not available")
-
-            try:
-                from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
-            except ImportError:
-                logger.debug("Claude Tool registration module not available")
-
-            try:
-                from karenina.adapters.langchain_deep_agents import registration as _da  # noqa: F401
-            except ImportError:
-                logger.debug("LangChain Deep Agents registration module not available")
-
+            cls._load_builtins()
+            cls._discover_entry_points()
             cls._initialized = True
+
+    @classmethod
+    def _load_builtins(cls) -> None:
+        """Import built-in registration modules.
+
+        Each module calls AdapterRegistry.register() at import time.
+        ImportError is caught per-adapter so missing optional dependencies
+        do not block other adapters.
+        """
+        try:
+            from karenina.adapters.langchain import registration as _lc  # noqa: F401
+        except ImportError:
+            logger.debug("LangChain registration module not available")
+
+        try:
+            from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
+        except ImportError:
+            logger.debug("Claude Agent SDK registration module not available")
+
+        try:
+            from karenina.adapters.manual import registration as _manual  # noqa: F401
+        except ImportError:
+            logger.debug("Manual registration module not available")
+
+        try:
+            from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
+        except ImportError:
+            logger.debug("Claude Tool registration module not available")
+
+        try:
+            from karenina.adapters.langchain_deep_agents import registration as _da  # noqa: F401
+        except ImportError:
+            logger.debug("LangChain Deep Agents registration module not available")
+
+    @classmethod
+    def _discover_entry_points(cls) -> None:
+        """Discover and load external adapters via ``karenina.adapters`` entry points.
+
+        Entry points whose name conflicts with an already-registered
+        (built-in) interface are skipped with a warning.
+        """
+        for ep in entry_points(group="karenina.adapters"):
+            if ep.name in cls._specs:
+                logger.warning(
+                    "External adapter '%s' conflicts with built-in interface, skipping",
+                    ep.name,
+                )
+                continue
+            try:
+                ep.load()
+                logger.debug("Loaded external adapter: %s", ep.name)
+            except ValueError:
+                logger.warning(
+                    "External adapter '%s' conflicts with another external adapter, skipping",
+                    ep.name,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to load external adapter '%s'",
+                    ep.name,
+                    exc_info=True,
+                )
 
     @classmethod
     def _reset(cls) -> None:
