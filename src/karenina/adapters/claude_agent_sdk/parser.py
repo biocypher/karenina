@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
-from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
+from karenina.ports import Message, ParseError, ParsePortResult, ParserPort
 from karenina.ports.capabilities import PortCapabilities
 
 if TYPE_CHECKING:
@@ -196,16 +196,10 @@ class ClaudeSDKParserAdapter:
         if result is None:
             raise ParseError("No ResultMessage received from SDK")
 
-        # Extract usage from ResultMessage if available
-        usage = UsageMetadata()
-        if hasattr(result, "usage") and result.usage:
-            ru = result.usage
-            usage = UsageMetadata(
-                input_tokens=getattr(ru, "input_tokens", 0),
-                output_tokens=getattr(ru, "output_tokens", 0),
-                total_tokens=getattr(ru, "input_tokens", 0) + getattr(ru, "output_tokens", 0),
-                model=self._config.model_name,
-            )
+        # Extract usage from ResultMessage using shared utility
+        from karenina.adapters.claude_agent_sdk.usage import extract_sdk_usage
+
+        usage = extract_sdk_usage(result, model=self._config.model_name)
 
         # Check for structured output failure
         # SDK returns subtype='error_max_structured_output_retries' on validation failure
