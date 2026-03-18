@@ -21,9 +21,18 @@ class SimpleAnswer(BaseModel):
 class TestDeepAgentsParserAdapter:
     @pytest.mark.asyncio
     async def test_aparse_to_pydantic_with_structured_output(self, deep_agents_model_config, monkeypatch):
-        """Test parsing with structured output returning a dict."""
+        """Test parsing with structured output returning a dict (include_raw=True format)."""
+        from langchain_core.messages import AIMessage
+
+        # include_raw=True returns {"raw": AIMessage, "parsed": dict, "parsing_error": None}
         mock_structured_model = MagicMock()
-        mock_structured_model.ainvoke = AsyncMock(return_value={"value": "42"})
+        mock_structured_model.ainvoke = AsyncMock(
+            return_value={
+                "raw": AIMessage(content='{"value": "42"}'),
+                "parsed": {"value": "42"},
+                "parsing_error": None,
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.with_structured_output = MagicMock(return_value=mock_structured_model)
@@ -46,9 +55,17 @@ class TestDeepAgentsParserAdapter:
     @pytest.mark.asyncio
     async def test_aparse_to_pydantic_with_pydantic_response(self, deep_agents_model_config, monkeypatch):
         """Test parsing when structured output returns a Pydantic model directly."""
+        from langchain_core.messages import AIMessage
+
         answer = SimpleAnswer(value="hello")
         mock_structured_model = MagicMock()
-        mock_structured_model.ainvoke = AsyncMock(return_value=answer)
+        mock_structured_model.ainvoke = AsyncMock(
+            return_value={
+                "raw": AIMessage(content='{"value": "hello"}'),
+                "parsed": answer,
+                "parsing_error": None,
+            }
+        )
 
         mock_model = MagicMock()
         mock_model.with_structured_output = MagicMock(return_value=mock_structured_model)

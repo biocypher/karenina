@@ -26,6 +26,7 @@ from karenina.ports import (
     MCPServerConfig,
     Message,
     Tool,
+    UsageMetadata,
 )
 
 from .errors import wrap_deep_agents_error
@@ -241,8 +242,21 @@ class DeepAgentsAgentAdapter:
         # Extract messages from result
         lc_messages: list[Any] = result.get("messages", [])
 
-        if not lc_messages:
+        if not lc_messages and not limit_reached:
             raise AgentResponseError("No messages received from Deep Agents")
+
+        # If limit was reached but no messages, return a partial result
+        if not lc_messages and limit_reached:
+            return AgentResult(
+                final_response="[Agent hit recursion limit before producing a response]",
+                raw_trace="[Note: Recursion limit reached, no response produced]",
+                trace_messages=[],
+                usage=UsageMetadata(model=self._config.model_name),
+                turns=0,
+                limit_reached=True,
+                session_id=None,
+                actual_model=self._config.model_name,
+            )
 
         # Build raw_trace (legacy string format)
         raw_trace = deep_agents_messages_to_raw_trace(lc_messages)

@@ -105,34 +105,40 @@ class DeepAgentsParserAdapter:
         chat_model = create_chat_model(self._config)
 
         try:
-            structured_model = chat_model.with_structured_output(schema)
-            response = await structured_model.ainvoke(lc_messages)
+            # Use include_raw=True to get the AIMessage alongside the parsed output.
+            # This is critical for usage tracking: without it, with_structured_output
+            # returns only the parsed dict/model, losing the AIMessage.response_metadata
+            # where token counts live.
+            structured_model = chat_model.with_structured_output(schema, include_raw=True)
+            raw_response = await structured_model.ainvoke(lc_messages)
         except Exception as e:
             logger.warning("Structured output failed, falling back to text extraction: %s", e)
             response = await chat_model.ainvoke(lc_messages)
             return self._extract_from_text(response, schema)
 
-        # Response should be a Pydantic model or dict
-        usage = self._extract_usage_from_response(response)
+        # include_raw=True returns {"raw": AIMessage, "parsed": dict/model, "parsing_error": ...}
+        parsed_output = raw_response.get("parsed") if isinstance(raw_response, dict) else raw_response
+        raw_msg = raw_response.get("raw") if isinstance(raw_response, dict) else None
+        usage = self._extract_usage_from_response(raw_msg) if raw_msg else UsageMetadata(model=self._config.model_name)
 
-        if isinstance(response, schema):
-            return ParsePortResult(parsed=response, usage=usage)
+        if isinstance(parsed_output, schema):
+            return ParsePortResult(parsed=parsed_output, usage=usage)
 
-        if isinstance(response, dict):
+        if isinstance(parsed_output, dict):
             try:
-                parsed = schema.model_validate(response)
+                parsed = schema.model_validate(parsed_output)
                 return ParsePortResult(parsed=parsed, usage=usage)
             except Exception as e:
                 raise ParseError(f"Failed to validate structured output: {e}") from e
 
-        if isinstance(response, BaseModel):
+        if isinstance(parsed_output, BaseModel):
             try:
-                parsed = schema.model_validate(response.model_dump())
+                parsed = schema.model_validate(parsed_output.model_dump())
                 return ParsePortResult(parsed=parsed, usage=usage)
             except Exception as e:
                 raise ParseError(f"Failed to convert structured output to target schema: {e}") from e
 
-        raise ParseError(f"Unexpected response type from structured output: {type(response).__name__}")
+        raise ParseError(f"Unexpected response type from structured output: {type(parsed_output).__name__}")
 
     def _extract_from_text(self, response: Any, schema: type[T]) -> ParsePortResult[T]:
         """Extract structured data from a text response (fallback path).
