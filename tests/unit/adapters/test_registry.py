@@ -2,7 +2,7 @@
 
 This module tests the AdapterRegistry and verifies consistency between:
 - Registry-registered interfaces
-- ModelConfig Literal type definition
+- BUILTIN_INTERFACES constant
 - Interface constants in factory module
 """
 
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import get_args
 
 import pytest
 
@@ -138,30 +137,24 @@ class TestAdapterRegistry:
 class TestRegistryConsistency:
     """Tests to verify consistency between registry and other interface definitions."""
 
-    def test_model_config_literal_matches_registry(self) -> None:
-        """Verify ModelConfig Literal type includes all registered interfaces.
+    def test_builtin_interfaces_matches_registry(self) -> None:
+        """Verify BUILTIN_INTERFACES constant includes all built-in registered interfaces.
 
-        This test ensures the hardcoded Literal type in ModelConfig stays in sync
+        This test ensures the BUILTIN_INTERFACES constant stays in sync
         with the dynamically registered adapters in the registry.
         """
         from karenina.adapters.registry import AdapterRegistry
-        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.config.models import BUILTIN_INTERFACES
 
         # Get interfaces from registry
         registry_interfaces = AdapterRegistry.get_interfaces()
 
-        # Get interfaces from ModelConfig Literal type
-        interface_field = ModelConfig.model_fields["interface"]
-        literal_type = interface_field.annotation
-        literal_interfaces = set(get_args(literal_type))
-
-        # Verify they match
-        assert literal_interfaces == registry_interfaces, (
-            f"ModelConfig Literal type is out of sync with registry.\\n"
-            f"Literal has: {sorted(literal_interfaces)}\\n"
-            f"Registry has: {sorted(registry_interfaces)}\\n"
-            f"Missing from Literal: {sorted(registry_interfaces - literal_interfaces)}\\n"
-            f"Extra in Literal: {sorted(literal_interfaces - registry_interfaces)}"
+        # BUILTIN_INTERFACES should be a subset of registry (external plugins may add more)
+        assert BUILTIN_INTERFACES.issubset(registry_interfaces), (
+            f"BUILTIN_INTERFACES has entries not in registry.\n"
+            f"BUILTIN_INTERFACES: {sorted(BUILTIN_INTERFACES)}\n"
+            f"Registry has: {sorted(registry_interfaces)}\n"
+            f"Missing from registry: {sorted(BUILTIN_INTERFACES - registry_interfaces)}"
         )
 
     def test_factory_constants_match_registry(self) -> None:

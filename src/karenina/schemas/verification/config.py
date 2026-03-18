@@ -10,7 +10,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..config.models import (
-    INTERFACES_NO_PROVIDER_REQUIRED,
     FewShotConfig,
     ModelConfig,
 )
@@ -323,13 +322,12 @@ class VerificationConfig(BaseModel):
         for model in self.answering_models + self.parsing_models:
             if not model.model_name:
                 raise ValueError(f"Model name is required in model configuration (model: {model.id})")
-            # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
-            if model.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model.model_provider:
-                raise ValueError(
-                    f"Model provider is required for interface '{model.interface}'. "
-                    f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers. "
-                    f"(model: {model.id})"
-                )
+            # Model provider requirement is defined per-adapter via AdapterSpec.requires_provider
+            from karenina.adapters.registry import AdapterRegistry
+
+            spec = AdapterRegistry.get_spec(model.interface)
+            if spec is not None and spec.requires_provider and not model.model_provider:
+                raise ValueError(f"Model provider is required for interface '{model.interface}'. (model: {model.id})")
             # System prompt is required for verification (not validated by factory)
             if not model.system_prompt:
                 raise ValueError(f"System prompt is required for model {model.id}")
@@ -858,13 +856,8 @@ class VerificationConfig(BaseModel):
                 base_model["interface"] = interface
             return ModelConfig(**base_model)
 
-        # No base — build from scratch
-        from typing import Literal, cast
-
-        InterfaceType = Literal[
-            "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
-        ]
-        final_interface = cast(InterfaceType, interface or default_interface)
+        # No base: build from scratch
+        final_interface = interface or default_interface
 
         return ModelConfig(
             model_name=model_name or default_model,

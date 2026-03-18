@@ -135,7 +135,7 @@ class QuestionClassifier:
                     model_name=self._model_name,
                     model_provider=self._provider,
                     temperature=self._temperature,
-                    interface=self._interface,  # type: ignore[arg-type]  # Runtime validated Literal
+                    interface=self._interface,
                     endpoint_base_url=self._endpoint_base_url,
                     endpoint_api_key=api_key,
                 )

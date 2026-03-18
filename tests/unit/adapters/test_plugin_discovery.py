@@ -9,12 +9,20 @@ import pytest
 from karenina.adapters.registry import AdapterRegistry, AdapterSpec
 
 
-@pytest.fixture(autouse=True)
-def _reset_registry():
-    """Reset registry before and after each test."""
-    AdapterRegistry._reset()
+@pytest.fixture()
+def _isolate_registry():
+    """Save and restore registry state around a test.
+
+    Use this for tests that need an empty registry (e.g., conflict detection).
+    Do NOT use for tests that rely on built-in adapters being registered.
+    """
+    saved_specs = dict(AdapterRegistry._specs)
+    saved_initialized = AdapterRegistry._initialized
+    AdapterRegistry._specs = {}
+    AdapterRegistry._initialized = False
     yield
-    AdapterRegistry._reset()
+    AdapterRegistry._specs = saved_specs
+    AdapterRegistry._initialized = saved_initialized
 
 
 class TestAdapterSpecRequiresProvider:
@@ -30,27 +38,43 @@ class TestAdapterSpecRequiresProvider:
 
 
 class TestLoadBuiltins:
-    """Tests for _load_builtins() method."""
+    """Tests for built-in adapter registration.
 
-    def test_load_builtins_registers_known_interfaces(self):
-        AdapterRegistry._load_builtins()
-        assert "langchain" in AdapterRegistry._specs
-        assert "manual" in AdapterRegistry._specs
+    These tests use the real initialized registry (no isolation)
+    because built-in registration modules are cached in sys.modules
+    and cannot be re-executed by re-calling _load_builtins().
+    """
 
-    def test_load_builtins_sets_requires_provider_correctly(self):
-        AdapterRegistry._load_builtins()
-        lc_spec = AdapterRegistry._specs.get("langchain")
+    def test_builtins_register_known_interfaces(self):
+        """After initialization, all built-in interfaces are registered."""
+        interfaces = AdapterRegistry.get_interfaces()
+        assert "langchain" in interfaces
+        assert "manual" in interfaces
+        assert "claude_tool" in interfaces
+        assert "claude_agent_sdk" in interfaces
+        assert "langchain_deep_agents" in interfaces
+        assert "openrouter" in interfaces
+        assert "openai_endpoint" in interfaces
+
+    def test_builtins_set_requires_provider_correctly(self):
+        """Built-in specs have correct requires_provider values."""
+        lc_spec = AdapterRegistry.get_spec("langchain")
         assert lc_spec is not None
         assert lc_spec.requires_provider is True
 
-        manual_spec = AdapterRegistry._specs.get("manual")
+        manual_spec = AdapterRegistry.get_spec("manual")
         assert manual_spec is not None
         assert manual_spec.requires_provider is False
+
+        claude_tool_spec = AdapterRegistry.get_spec("claude_tool")
+        assert claude_tool_spec is not None
+        assert claude_tool_spec.requires_provider is False
 
 
 class TestDiscoverEntryPoints:
     """Tests for _discover_entry_points() method."""
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_discover_loads_external_adapter(self):
         """Mock an entry point that registers a fake adapter."""
         fake_spec = AdapterSpec(
@@ -73,8 +97,9 @@ class TestDiscoverEntryPoints:
 
         assert "fake_external" in AdapterRegistry._specs
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_discover_skips_builtin_conflict(self):
-        """Entry point conflicting with a built-in is skipped."""
+        """Entry point conflicting with a registered adapter is skipped."""
         builtin_spec = AdapterSpec(interface="langchain", description="Built-in")
         AdapterRegistry.register(builtin_spec)
 
@@ -89,6 +114,7 @@ class TestDiscoverEntryPoints:
 
         mock_ep.load.assert_not_called()
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_discover_handles_external_vs_external_conflict(self):
         """Two entry points registering the same interface: second is skipped."""
         spec = AdapterSpec(interface="dupe", description="First")
@@ -122,6 +148,7 @@ class TestDiscoverEntryPoints:
         assert call_count == 2
         assert AdapterRegistry._specs["dupe"].description == "First"
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_discover_handles_load_failure(self):
         """Entry point that raises on load is skipped gracefully."""
         mock_ep = MagicMock()
@@ -136,6 +163,7 @@ class TestDiscoverEntryPoints:
 
         assert "broken" not in AdapterRegistry._specs
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_discover_with_no_entry_points(self):
         """No entry points installed: no error, no new specs."""
         initial_count = len(AdapterRegistry._specs)
@@ -154,17 +182,18 @@ class TestManualRegistration:
 
     def test_manual_register_and_lookup(self):
         spec = AdapterSpec(
-            interface="custom",
+            interface="custom_test_adapter",
             description="Custom adapter",
             requires_provider=False,
         )
-        AdapterRegistry.register(spec)
+        AdapterRegistry.register(spec, force=True)
 
-        result = AdapterRegistry.get_spec("custom")
+        result = AdapterRegistry.get_spec("custom_test_adapter")
         assert result is not None
-        assert result.interface == "custom"
+        assert result.interface == "custom_test_adapter"
         assert result.requires_provider is False
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_manual_register_blocks_duplicate(self):
         spec = AdapterSpec(interface="custom", description="First")
         AdapterRegistry.register(spec)
@@ -172,6 +201,7 @@ class TestManualRegistration:
         with pytest.raises(ValueError, match="already registered"):
             AdapterRegistry.register(AdapterSpec(interface="custom", description="Second"))
 
+    @pytest.mark.usefixtures("_isolate_registry")
     def test_manual_register_with_force_overwrites(self):
         spec1 = AdapterSpec(interface="custom", description="First")
         AdapterRegistry.register(spec1)
