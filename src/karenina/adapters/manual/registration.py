@@ -36,6 +36,7 @@ _manual_spec = AdapterSpec(
     routes_to=None,
     supports_mcp=False,
     supports_tools=False,
+    requires_provider=False,
 )
 
 AdapterRegistry.register(_manual_spec)
