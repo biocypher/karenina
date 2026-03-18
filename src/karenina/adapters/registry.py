@@ -339,31 +339,24 @@ class AdapterRegistry:
         Each module calls AdapterRegistry.register() at import time.
         ImportError is caught per-adapter so missing optional dependencies
         do not block other adapters.
+
+        Uses importlib.import_module() with fully-qualified names to bypass
+        any __getattr__ hooks on parent package __init__.py files.
         """
-        try:
-            from karenina.adapters.langchain import registration as _lc  # noqa: F401
-        except ImportError:
-            logger.debug("LangChain registration module not available")
+        import importlib
 
-        try:
-            from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
-        except ImportError:
-            logger.debug("Claude Agent SDK registration module not available")
-
-        try:
-            from karenina.adapters.manual import registration as _manual  # noqa: F401
-        except ImportError:
-            logger.debug("Manual registration module not available")
-
-        try:
-            from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
-        except ImportError:
-            logger.debug("Claude Tool registration module not available")
-
-        try:
-            from karenina.adapters.langchain_deep_agents import registration as _da  # noqa: F401
-        except ImportError:
-            logger.debug("LangChain Deep Agents registration module not available")
+        _builtin_registration_modules = [
+            "karenina.adapters.langchain.registration",
+            "karenina.adapters.claude_agent_sdk.registration",
+            "karenina.adapters.manual.registration",
+            "karenina.adapters.claude_tool.registration",
+            "karenina.adapters.langchain_deep_agents.registration",
+        ]
+        for mod_name in _builtin_registration_modules:
+            try:
+                importlib.import_module(mod_name)
+            except ImportError:
+                logger.debug("Built-in registration module not available: %s", mod_name)
 
     @classmethod
     def _discover_entry_points(cls) -> None:
@@ -396,7 +389,24 @@ class AdapterRegistry:
 
     @classmethod
     def _reset(cls) -> None:
-        """Reset the registry (for testing only)."""
+        """Reset the registry (for testing only).
+
+        Clears all registered specs, resets the initialization flag, and removes
+        built-in registration modules from sys.modules so _load_builtins() can
+        re-execute their top-level register() calls on the next _ensure_initialized()
+        call.
+        """
+        import sys
+
+        _builtin_registration_modules = [
+            "karenina.adapters.langchain.registration",
+            "karenina.adapters.claude_agent_sdk.registration",
+            "karenina.adapters.manual.registration",
+            "karenina.adapters.claude_tool.registration",
+            "karenina.adapters.langchain_deep_agents.registration",
+        ]
         with _registry_lock:
             cls._specs.clear()
             cls._initialized = False
+            for mod in _builtin_registration_modules:
+                sys.modules.pop(mod, None)
