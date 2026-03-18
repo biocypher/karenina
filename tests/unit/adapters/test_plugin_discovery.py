@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from karenina.adapters.registry import AdapterRegistry, AdapterSpec
+from karenina.schemas.config.models import BUILTIN_INTERFACES, ModelConfig
 
 
 @pytest.fixture()
@@ -210,3 +211,112 @@ class TestManualRegistration:
         AdapterRegistry.register(spec2, force=True)
 
         assert AdapterRegistry._specs["custom"].description == "Second"
+
+
+class TestModelConfigInterfaceValidation:
+    """Tests for ModelConfig runtime interface validation."""
+
+    def test_builtin_interface_accepted(self):
+        """Built-in interfaces are accepted by ModelConfig."""
+        config = ModelConfig(
+            id="test",
+            interface="langchain",
+            model_name="test-model",
+            model_provider="openai",
+        )
+        assert config.interface == "langchain"
+
+    def test_unknown_interface_rejected(self):
+        """Unknown interface raises ValueError with helpful message."""
+        with pytest.raises(ValueError, match="Unknown interface 'nonexistent'"):
+            ModelConfig(
+                id="test",
+                model_name="test",
+                model_provider="test",
+                interface="nonexistent",
+            )
+
+    def test_unknown_interface_lists_registered(self):
+        """Error message includes list of registered interfaces."""
+        with pytest.raises(ValueError, match="Registered interfaces:"):
+            ModelConfig(
+                id="test",
+                model_name="test",
+                model_provider="test",
+                interface="nonexistent",
+            )
+
+    def test_dynamically_registered_interface_accepted(self):
+        """An interface registered at runtime is accepted by ModelConfig."""
+        spec = AdapterSpec(
+            interface="dynamic_test",
+            description="Dynamic test adapter",
+            requires_provider=False,
+        )
+        AdapterRegistry.register(spec, force=True)
+
+        config = ModelConfig(
+            id="test",
+            model_name="test",
+            interface="dynamic_test",
+        )
+        assert config.interface == "dynamic_test"
+
+
+class TestBuiltinInterfacesConstant:
+    """Tests for BUILTIN_INTERFACES consistency."""
+
+    def test_builtin_interfaces_subset_of_registry(self):
+        """BUILTIN_INTERFACES must be a subset of registered interfaces."""
+        registered = AdapterRegistry.get_interfaces()
+        assert BUILTIN_INTERFACES.issubset(registered), (
+            f"BUILTIN_INTERFACES has entries not in registry: {BUILTIN_INTERFACES - registered}"
+        )
+
+    def test_builtin_interfaces_contains_expected(self):
+        """BUILTIN_INTERFACES contains the known built-in names."""
+        assert "langchain" in BUILTIN_INTERFACES
+        assert "manual" in BUILTIN_INTERFACES
+        assert "claude_agent_sdk" in BUILTIN_INTERFACES
+
+
+class TestRequiresProviderIntegration:
+    """Tests for requires_provider integration with validate_model_config."""
+
+    def test_interface_without_provider_when_not_required(self):
+        """Interface with requires_provider=False accepts missing provider."""
+        spec = AdapterSpec(
+            interface="no_provider_test",
+            description="Test no provider",
+            requires_provider=False,
+        )
+        AdapterRegistry.register(spec, force=True)
+
+        config = ModelConfig(
+            id="test",
+            model_name="test",
+            interface="no_provider_test",
+        )
+        assert config.model_provider is None
+
+    def test_interface_without_provider_when_required(self):
+        """Interface with requires_provider=True rejects missing provider."""
+        from unittest.mock import MagicMock
+
+        from karenina.adapters.factory import validate_model_config
+        from karenina.ports import AdapterUnavailableError
+
+        spec = AdapterSpec(
+            interface="needs_provider_test",
+            description="Test needs provider",
+            requires_provider=True,
+        )
+        AdapterRegistry.register(spec, force=True)
+
+        mock_config = MagicMock()
+        mock_config.interface = "needs_provider_test"
+        mock_config.model_name = "test"
+        mock_config.model_provider = None
+
+        with pytest.raises(AdapterUnavailableError, match="Model provider is required"):
+            validate_model_config(mock_config)
