@@ -113,6 +113,16 @@ class VerificationManager:
                     )
                     question_rubric_dict = rubric.model_dump()
 
+            # Convert question_dynamic_rubric to dict if needed
+            question_dynamic_rubric_dict = None
+            question_dynamic_rubric_raw = q_data.get("question_dynamic_rubric")
+            if question_dynamic_rubric_raw is not None:
+                if isinstance(question_dynamic_rubric_raw, dict):
+                    question_dynamic_rubric_dict = question_dynamic_rubric_raw
+                else:
+                    # Already a DynamicRubric object; dump to dict
+                    question_dynamic_rubric_dict = question_dynamic_rubric_raw.model_dump()
+
             template = FinishedTemplate(
                 question_id=q_id,
                 question_text=q_data["question"],
@@ -121,13 +131,15 @@ class VerificationManager:
                 last_modified=q_data.get("dateModified", datetime.now().isoformat()),
                 few_shot_examples=q_data.get("few_shot_examples"),
                 question_rubric=question_rubric_dict,
+                question_dynamic_rubric=question_dynamic_rubric_dict,
                 keywords=q_data.get("keywords"),
                 workspace_path=q_data.get("workspace_path"),
             )
             templates.append(template)
 
-        # Get global rubric
+        # Get global rubric and global dynamic rubric
         global_rubric = self.rubric_manager.get_global_rubric()
+        global_dynamic_rubric = self.rubric_manager.get_global_dynamic_rubric()
 
         # Determine storage_url from config if db_config is present
         storage_url = None
@@ -156,6 +168,7 @@ class VerificationManager:
             config=config,
             run_name=run_name,
             global_rubric=global_rubric,
+            global_dynamic_rubric=global_dynamic_rubric,
             async_enabled=async_enabled,  # Can override env var
             storage_url=storage_url,
             benchmark_name=self.base.name,

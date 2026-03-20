@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ..schemas.entities import Question
 
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from ..schemas.entities.rubric import AgenticRubricTrait
+from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from ..schemas.results import VerificationResultSet
 from ..schemas.scenario.definition import ScenarioDefinition
 from ..schemas.verification import (
@@ -666,6 +666,31 @@ class Benchmark:
     def validate_rubrics(self) -> tuple[bool, list[str]]:
         """Validate all rubrics are properly configured."""
         return self._rubric_manager.validate_rubrics()
+
+    # ── Dynamic rubric management ──────────────────────────────────────
+
+    def get_global_dynamic_rubric(self) -> DynamicRubric | None:
+        """Get the global dynamic rubric from the benchmark."""
+        return self._rubric_manager.get_global_dynamic_rubric()
+
+    def set_global_dynamic_rubric(self, dynamic_rubric: DynamicRubric | None) -> None:
+        """Set or clear the global dynamic rubric.
+
+        Args:
+            dynamic_rubric: The DynamicRubric to set, or None to clear.
+        """
+        self._base._global_dynamic_rubric = dynamic_rubric
+
+    def get_merged_dynamic_rubric_for_question(self, question_id: str) -> DynamicRubric | None:
+        """Get merged dynamic rubric for a question (global + question-specific).
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Merged DynamicRubric or None if neither global nor question-level exists.
+        """
+        return self._rubric_manager.get_merged_dynamic_rubric_for_question(question_id)
 
     # ── Verification ─────────────────────────────────────────────────────
 
