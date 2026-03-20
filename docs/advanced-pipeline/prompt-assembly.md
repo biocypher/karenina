@@ -183,6 +183,7 @@ Each `PromptTask` enum value identifies a distinct LLM call in the pipeline. The
 | `dj_rubric_hallucination` | DeepJudgmentRubricAutoFail | Assess per-excerpt hallucination risk |
 | `dj_rubric_reasoning` | DeepJudgmentRubricAutoFail | Generate trait evaluation reasoning |
 | `dj_rubric_score_extraction` | DeepJudgmentRubricAutoFail | Extract final score from reasoning |
+| `rubric_dynamic_presence_check` | RubricEvaluation (pre-processing) | Batch concept presence check for [DynamicRubric](../core_concepts/rubrics/index.md#6-dynamic-rubric) traits |
 
 ## PortCapabilities
 

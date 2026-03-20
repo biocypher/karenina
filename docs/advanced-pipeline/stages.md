@@ -473,11 +473,12 @@ Evaluates the response against qualitative rubric criteria. This stage is indepe
 
 ### What It Does
 
-1. Selects the evaluation input:
+1. **Dynamic rubric resolution** (if a [DynamicRubric](../core_concepts/rubrics/index.md#6-dynamic-rubric) is attached): before evaluating any traits, the stage runs a presence check. It collects all non-agentic traits from the dynamic rubric, sends them to the parsing LLM in a single batch call using `PresenceCheckPromptBuilder` and the `RUBRIC_DYNAMIC_PRESENCE_CHECK` [PromptTask](prompt-assembly.md#prompttask-values), and receives a `ConceptPresenceResult`. Traits whose concept is present are promoted into `context.rubric`; absent traits are recorded in `dynamic_rubric_skipped_traits`. Name conflicts between dynamic and static rubric traits raise `ValueError`.
+2. Selects the evaluation input:
    - Full trace (if `use_full_trace_for_rubric=True`)
    - Extracted final AI message only (if False)
-2. Resolves deep judgment configuration for LLM traits (per-trait settings based on mode)
-3. Evaluates each trait type:
+3. Resolves deep judgment configuration for LLM traits (per-trait settings based on mode)
+4. Evaluates each trait type:
 
 | Trait Type | Evaluation Method | Returns |
 |-----------|------------------|---------|
@@ -501,6 +502,8 @@ Evaluates the response against qualitative rubric criteria. This stage is indepe
 | `callable_trait_scores` | `rubric` | Results for callable traits |
 | `metric_trait_scores` | `rubric` | Precision/recall/F1 per metric trait |
 | `metric_trait_confusion_lists` | `rubric` | TP/FN/FP/TN lists per metric trait |
+| `dynamic_rubric_promoted_traits` | `rubric` | Names of dynamic traits that passed presence check |
+| `dynamic_rubric_skipped_traits` | `rubric` | Mapping of skipped trait names to skip reasons |
 
 Deep judgment rubric fields (when applicable):
 
