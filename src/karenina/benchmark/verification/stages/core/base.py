@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import PromptConfig
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -256,6 +257,7 @@ class VerificationContext:
     answering_model: ModelConfig
     parsing_model: ModelConfig
     rubric: Rubric | None = None
+    dynamic_rubric: DynamicRubric | None = None
     keywords: list[str] | None = None
     raw_answer: str | None = None
 
