@@ -69,6 +69,7 @@ _RUBRIC_TASKS = [
     "rubric_literal_trait_batch",
     "rubric_literal_trait_single",
     "rubric_metric_trait",
+    "rubric_dynamic_presence_check",
 ]
 _LANGCHAIN_INTERFACES = ["langchain", "openrouter", "openai_endpoint"]
 
