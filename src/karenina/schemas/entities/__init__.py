@@ -42,12 +42,14 @@ from .question import Question, QuestionRegistryEntry
 from .rubric import (
     AgenticRubricTrait,
     CallableTrait,
+    DynamicRubric,
     LLMRubricTrait,
     MetricRubricTrait,
     RegexTrait,
     Rubric,
     RubricEvaluation,
     TraitKind,
+    merge_dynamic_rubrics,
     merge_rubrics,
 )
 from .template_spec import TemplateFieldSpec, TemplateSpec, VerifyStrategySpec
@@ -101,6 +103,7 @@ __all__ = [
     "QuestionRegistryEntry",
     # Rubrics
     "Rubric",
+    "DynamicRubric",
     "LLMRubricTrait",
     "RegexTrait",
     "CallableTrait",
@@ -109,4 +112,5 @@ __all__ = [
     "RubricEvaluation",
     "TraitKind",
     "merge_rubrics",
+    "merge_dynamic_rubrics",
 ]

@@ -149,3 +149,30 @@ class BatchLiteralClassifications(BaseModel):
             Dictionary mapping trait names to class names.
         """
         return {item.trait_name: item.class_name for item in self.classifications}
+
+
+# ========== Dynamic Rubric Models ==========
+
+
+class ConceptPresenceItem(BaseModel):
+    """Presence check result for a single concept."""
+
+    trait_name: str = Field(description="Name of the trait whose concept was checked")
+    present: bool = Field(description="True if the concept is meaningfully present in the response")
+
+
+class ConceptPresenceResult(BaseModel):
+    """Result of concept presence check for dynamic rubric traits.
+
+    Uses list-of-items pattern (not dict) to avoid Anthropic SDK dict schema issue.
+    """
+
+    results: list[ConceptPresenceItem] = Field(description="List of presence check results, one per dynamic trait")
+
+    def to_dict(self) -> dict[str, bool]:
+        """Convert to trait_name -> present mapping.
+
+        Returns:
+            Dictionary mapping trait names to presence booleans.
+        """
+        return {item.trait_name: item.present for item in self.results}
