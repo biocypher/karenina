@@ -345,6 +345,11 @@ class AdapterRegistry:
             except ImportError:
                 logger.debug("Claude Tool registration module not available")
 
+            try:
+                from karenina.adapters.langchain_deep_agents import registration as _da  # noqa: F401
+            except ImportError:
+                logger.debug("LangChain Deep Agents registration module not available")
+
             cls._initialized = True
 
     @classmethod

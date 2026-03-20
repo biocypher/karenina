@@ -202,6 +202,7 @@ INTERFACE_LANGCHAIN = "langchain"
 INTERFACE_OPENAI_ENDPOINT = "openai_endpoint"
 INTERFACE_CLAUDE_AGENT_SDK = "claude_agent_sdk"
 INTERFACE_CLAUDE_TOOL = "claude_tool"
+INTERFACE_LANGCHAIN_DEEP_AGENTS = "langchain_deep_agents"
 INTERFACES_NO_PROVIDER_REQUIRED = [
     INTERFACE_OPENROUTER,
     INTERFACE_MANUAL,
@@ -564,9 +565,15 @@ class ModelConfig(BaseModel):
     model_name: str | None = None  # Optional - defaults to "manual" for manual interface
     temperature: float = 0.1
     max_tokens: int = 8192  # Maximum tokens for model response
-    interface: Literal["langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"] = (
-        "langchain"
-    )
+    interface: Literal[
+        "langchain",
+        "openrouter",
+        "manual",
+        "openai_endpoint",
+        "claude_agent_sdk",
+        "claude_tool",
+        "langchain_deep_agents",
+    ] = "langchain"
     system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs

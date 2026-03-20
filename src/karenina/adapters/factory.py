@@ -57,7 +57,7 @@ from karenina.schemas.config import INTERFACES_NO_PROVIDER_REQUIRED
 
 # Type alias for interface values
 InterfaceType: TypeAlias = Literal[
-    "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
+    "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool", "langchain_deep_agents"
 ]
 
 logger = logging.getLogger(__name__)

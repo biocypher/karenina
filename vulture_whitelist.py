@@ -23,3 +23,12 @@ def _whitelist_schema(schema):
 
 # create_verbose_logger parameters kept for API backwards compatibility
 # These are consumed via _ = param pattern to avoid vulture warnings
+
+
+# Pytest fixtures used as side-effect-only parameters in conformance tests.
+# The fixture sets up mocks before arun() is called; the parameter name in the
+# test method signature is required by pytest to inject it, but the test body
+# does not reference it directly.
+def _whitelist_conformance_fixtures(mock_deep_agents_agent_result):
+    """Whitelist for conformance test fixture parameters (test_agent_port.py)."""
+    _ = mock_deep_agents_agent_result
