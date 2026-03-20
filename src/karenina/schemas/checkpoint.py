@@ -65,6 +65,8 @@ class SchemaOrgRating(BaseModel):
         "karenina:QuestionSpecificLLMRubricTrait",
         "karenina:GlobalAgenticRubricTrait",
         "karenina:QuestionSpecificAgenticRubricTrait",
+        "karenina:GlobalDynamicRubricTrait",
+        "karenina:QuestionSpecificDynamicRubricTrait",
     ]
 
     @model_validator(mode="before")

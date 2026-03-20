@@ -22,9 +22,11 @@ from ..schemas.checkpoint import (
     SchemaOrgSoftwareSourceCode,
 )
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.entities.rubric import AgenticRubricTrait
+from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from .checkpoint_trait_converters import (
+    convert_dynamic_rubric_to_ratings,
     convert_rating_to_rubric_trait,
+    convert_ratings_to_dynamic_rubric,
     convert_rubric_trait_to_rating,
     strip_deep_judgment_config_from_checkpoint,
 )
@@ -38,12 +40,16 @@ __all__ = [
     "generate_template_id",
     "convert_rubric_trait_to_rating",
     "convert_rating_to_rubric_trait",
+    "convert_dynamic_rubric_to_ratings",
+    "convert_ratings_to_dynamic_rubric",
     "strip_deep_judgment_config_from_checkpoint",
     "create_jsonld_benchmark",
     "add_question_to_benchmark",
     "add_global_rubric_to_benchmark",
+    "add_global_dynamic_rubric_to_benchmark",
     "extract_questions_from_benchmark",
     "extract_global_rubric_from_benchmark",
+    "extract_global_dynamic_rubric_from_benchmark",
     "validate_jsonld_benchmark",
 ]
 
@@ -451,6 +457,54 @@ def extract_global_rubric_from_benchmark(
     return traits if traits else None
 
 
+def add_global_dynamic_rubric_to_benchmark(
+    benchmark: JsonLdCheckpoint,
+    dynamic_rubric: DynamicRubric,
+) -> None:
+    """Add a global dynamic rubric to a benchmark.
+
+    Dynamic rubric traits are stored alongside regular rubric traits in the
+    ``rating`` array, distinguished by their ``@type`` discriminator
+    (``karenina:GlobalDynamicRubricTrait``).
+
+    Args:
+        benchmark: The benchmark to modify.
+        dynamic_rubric: The DynamicRubric to serialize into the checkpoint.
+    """
+    ratings = convert_dynamic_rubric_to_ratings(dynamic_rubric, "global")
+
+    # Append to existing ratings (preserving any regular rubric traits)
+    if benchmark.rating is None:
+        benchmark.rating = []
+    benchmark.rating.extend(ratings)
+    benchmark.dateModified = datetime.now().isoformat()
+
+
+def extract_global_dynamic_rubric_from_benchmark(
+    benchmark: JsonLdCheckpoint,
+) -> DynamicRubric | None:
+    """Extract global dynamic rubric traits from a benchmark.
+
+    Filters the ``rating`` array for entries tagged with
+    ``karenina:GlobalDynamicRubricTrait`` and reconstructs the DynamicRubric.
+
+    Args:
+        benchmark: The benchmark to extract from.
+
+    Returns:
+        DynamicRubric if any dynamic traits are found, otherwise None.
+    """
+    if not benchmark.rating:
+        return None
+
+    dynamic_ratings = [r for r in benchmark.rating if r.additionalType == "karenina:GlobalDynamicRubricTrait"]
+
+    if not dynamic_ratings:
+        return None
+
+    return convert_ratings_to_dynamic_rubric(dynamic_ratings)
+
+
 def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
     """
     Validate a JSON-LD benchmark structure.
@@ -495,6 +549,8 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                             "karenina:QuestionSpecificMetricRubricTrait",
                             "karenina:GlobalLLMRubricTrait",
                             "karenina:QuestionSpecificLLMRubricTrait",
+                            "karenina:GlobalDynamicRubricTrait",
+                            "karenina:QuestionSpecificDynamicRubricTrait",
                         ]:
                             return (
                                 False,
@@ -510,6 +566,7 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                     "karenina:GlobalCallableTrait",
                     "karenina:GlobalMetricRubricTrait",
                     "karenina:GlobalLLMRubricTrait",
+                    "karenina:GlobalDynamicRubricTrait",
                 ]:
                     return (
                         False,
