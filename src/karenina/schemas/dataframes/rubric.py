@@ -95,11 +95,13 @@ class RubricDataFrameBuilder:
         import pandas as pd
 
         rows = []
+        row_result_ids: list[str] = []  # Parallel list tracking which result produced each row
 
         for result in self._results:
             if result.rubric is None or not result.rubric.rubric_evaluation_performed:
                 # No rubric data - create single row with minimal info
                 rows.append(self._create_empty_rubric_row(result))
+                row_result_ids.append(result.metadata.result_id)
                 continue
 
             # Process LLM traits
@@ -134,16 +136,19 @@ class RubricDataFrameBuilder:
                         continue
 
                     rows.append(self._create_llm_trait_row(result, trait_name, trait_score, score_type, trait_label))
+                    row_result_ids.append(result.metadata.result_id)
 
             # Process regex traits
             if trait_type in ("regex", "all") and result.rubric.regex_trait_scores:
                 for trait_name, trait_score in result.rubric.regex_trait_scores.items():
                     rows.append(self._create_regex_trait_row(result, trait_name, trait_score))
+                    row_result_ids.append(result.metadata.result_id)
 
             # Process callable traits
             if trait_type in ("callable", "all") and result.rubric.callable_trait_scores:
                 for trait_name, trait_score in result.rubric.callable_trait_scores.items():
                     rows.append(self._create_callable_trait_row(result, trait_name, trait_score))
+                    row_result_ids.append(result.metadata.result_id)
 
             # Process metric traits (EXPLODED by metric)
             if trait_type in ("metric", "all") and result.rubric.metric_trait_scores:
@@ -158,18 +163,92 @@ class RubricDataFrameBuilder:
                         rows.append(
                             self._create_metric_trait_row(result, trait_name, metric_name, metric_score, confusion_data)
                         )
+                        row_result_ids.append(result.metadata.result_id)
 
             # Process agentic traits
             if trait_type in ("agentic", "all") and result.rubric.agentic_trait_scores:
                 for trait_name, agentic_score in result.rubric.agentic_trait_scores.items():
                     rows.append(self._create_agentic_trait_row(result, trait_name, agentic_score))
+                    row_result_ids.append(result.metadata.result_id)
 
         df = pd.DataFrame(rows)
+
+        # Add dynamic rubric _skipped columns if any result has dynamic rubric data
+        df = self._add_dynamic_rubric_skipped_columns(df, row_result_ids)
 
         # Reorder columns for consistent structure
         column_order = self._get_column_order(df)
 
         return df[column_order]
+
+    def _add_dynamic_rubric_skipped_columns(self, df: Any, row_result_ids: list[str]) -> Any:
+        """Add {trait_name}_skipped columns for dynamic rubric metadata.
+
+        When at least one result in the dataset has dynamic rubric data
+        (promoted or skipped traits), this method adds boolean companion
+        columns indicating whether each dynamic trait was skipped (True),
+        promoted (False), or not applicable (NaN).
+
+        Args:
+            df: The DataFrame to augment with _skipped columns.
+            row_result_ids: Parallel list mapping each DataFrame row to
+                its source result_id, built during row construction.
+
+        Returns:
+            The DataFrame, potentially with new _skipped columns appended.
+        """
+        import numpy as np
+
+        if df.empty:
+            return df
+
+        # Collect all dynamic trait names and per-result status
+        has_dynamic_data = False
+        all_dynamic_traits: set[str] = set()
+
+        for result in self._results:
+            if result.rubric is None:
+                continue
+            if result.rubric.dynamic_rubric_skipped_traits:
+                has_dynamic_data = True
+                all_dynamic_traits.update(result.rubric.dynamic_rubric_skipped_traits.keys())
+            if result.rubric.dynamic_rubric_promoted_traits:
+                has_dynamic_data = True
+                all_dynamic_traits.update(result.rubric.dynamic_rubric_promoted_traits)
+
+        if not has_dynamic_data or not all_dynamic_traits:
+            return df
+
+        # Build a mapping from result_id to dynamic rubric status.
+        # Each result maps to: trait_name -> True (skipped) / False (promoted)
+        result_dynamic_status: dict[str, dict[str, bool]] = {}
+        for result in self._results:
+            if result.rubric is None:
+                continue
+            key = result.metadata.result_id
+            status: dict[str, bool] = {}
+            if result.rubric.dynamic_rubric_skipped_traits:
+                for trait_name in result.rubric.dynamic_rubric_skipped_traits:
+                    status[trait_name] = True
+            if result.rubric.dynamic_rubric_promoted_traits:
+                for trait_name in result.rubric.dynamic_rubric_promoted_traits:
+                    status[trait_name] = False
+            if status:
+                result_dynamic_status[key] = status
+
+        # Add _skipped columns for each dynamic trait (sorted for determinism)
+        for trait_name in sorted(all_dynamic_traits):
+            col_name = f"{trait_name}_skipped"
+            values = []
+            for rid in row_result_ids:
+                rid_status = result_dynamic_status.get(rid)
+                if rid_status is None or trait_name not in rid_status:
+                    values.append(np.nan)
+                else:
+                    values.append(rid_status[trait_name])
+            df[col_name] = values
+
+        return df
 
     def _get_column_order(self, df: Any) -> list[str]:
         """
