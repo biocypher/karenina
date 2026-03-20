@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("deepagents", reason="deepagents not installed")
+pytest.importorskip("langchain_core", reason="langchain-core not installed")
+
 from karenina.schemas.config import ModelConfig
 
 

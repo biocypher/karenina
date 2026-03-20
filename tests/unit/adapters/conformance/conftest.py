@@ -39,11 +39,20 @@ def mock_model_config_for_interface():
 
 
 # --- Deep Agents adapter fixtures (mocked) ---
+# These fixtures require deepagents and langchain_core to be installed.
+# Tests that use them will be skipped if the packages are missing.
+
+
+def _skip_if_no_deep_agents():
+    """Skip if deepagents or langchain_core are not installed."""
+    pytest.importorskip("deepagents", reason="deepagents not installed")
+    pytest.importorskip("langchain_core", reason="langchain-core not installed")
 
 
 @pytest.fixture
 def deep_agents_agent_adapter():
     """DeepAgentsAgentAdapter with mocked create_deep_agent."""
+    _skip_if_no_deep_agents()
     from karenina.adapters.langchain_deep_agents.agent import DeepAgentsAgentAdapter
 
     config = ModelConfig(
@@ -59,6 +68,7 @@ def deep_agents_agent_adapter():
 @pytest.fixture
 def deep_agents_llm_adapter():
     """DeepAgentsLLMAdapter instance."""
+    _skip_if_no_deep_agents()
     from karenina.adapters.langchain_deep_agents.llm import DeepAgentsLLMAdapter
 
     config = ModelConfig(
@@ -74,6 +84,7 @@ def deep_agents_llm_adapter():
 @pytest.fixture
 def deep_agents_parser_adapter():
     """DeepAgentsParserAdapter instance."""
+    _skip_if_no_deep_agents()
     from karenina.adapters.langchain_deep_agents.parser import DeepAgentsParserAdapter
 
     config = ModelConfig(
@@ -89,6 +100,7 @@ def deep_agents_parser_adapter():
 @pytest.fixture
 def deep_agents_message_converter():
     """DeepAgentsMessageConverter instance."""
+    _skip_if_no_deep_agents()
     from karenina.adapters.langchain_deep_agents.messages import DeepAgentsMessageConverter
 
     return DeepAgentsMessageConverter()
@@ -97,6 +109,7 @@ def deep_agents_message_converter():
 @pytest.fixture
 def mock_deep_agents_agent_result(monkeypatch):
     """Monkeypatch create_deep_agent and create_chat_model for mocked arun()."""
+    _skip_if_no_deep_agents()
     from langchain_core.messages import AIMessage
 
     mock_result = {

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("langchain_core", reason="langchain-core not installed")
+
 from karenina.adapters.langchain_deep_agents.trace import deep_agents_messages_to_raw_trace
 
 
