@@ -46,6 +46,7 @@ class LLMRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description shown to user/LLM")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     kind: TraitKind = Field(..., description="Type of trait: 'boolean', 'score', or 'literal'")
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
@@ -185,6 +186,7 @@ class RegexTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     pattern: str = Field(..., description="Regex pattern to match against text")
     case_sensitive: bool = Field(True, description="Whether pattern matching should be case sensitive")
     invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
@@ -264,6 +266,7 @@ class CallableTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     kind: TraitKind = Field(..., description="Type of evaluation: 'boolean' for pass/fail, 'score' for numeric")
     callable_code: bytes = Field(..., description="Serialized callable function (cloudpickle)")
     min_score: int | None = Field(None, description="Minimum score value (required if kind='score')")
@@ -309,6 +312,7 @@ class CallableTrait(BaseModel):
         func: Callable[[str], bool | int],
         kind: TraitKind,
         description: str | None = None,
+        summary: str | None = None,
         min_score: int | None = None,
         max_score: int | None = None,
         invert_result: bool = False,
@@ -322,6 +326,7 @@ class CallableTrait(BaseModel):
             func: Function that takes a string (the verification trace/answer text) and returns bool or int
             kind: Type of evaluation - 'boolean' or 'score'
             description: Optional trait description
+            summary: Short concept label for dynamic rubric presence check
             min_score: Minimum score (required if kind='score')
             max_score: Maximum score (required if kind='score')
             invert_result: Whether to invert boolean result (only for kind='boolean')
@@ -358,6 +363,7 @@ class CallableTrait(BaseModel):
         return cls(
             name=name,
             description=description,
+            summary=summary,
             kind=kind,
             callable_code=callable_code,
             min_score=min_score,
@@ -480,6 +486,7 @@ class MetricRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     evaluation_mode: Literal["tp_only", "full_matrix"] = Field(
         "tp_only", description="Evaluation mode: tp_only (only TP defined) or full_matrix (TP+TN defined)"
     )
@@ -594,6 +601,7 @@ class AgenticRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     kind: Literal["boolean", "score", "literal"] | type[BaseModel]
     higher_is_better: bool | None = Field(
         ...,

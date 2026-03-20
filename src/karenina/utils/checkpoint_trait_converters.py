@@ -351,6 +351,7 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
     return MetricRubricTrait(
         name=rating.name,
         description=rating.description,
+        summary=None,
         evaluation_mode=evaluation_mode,
         metrics=metrics,
         tp_instructions=tp_instructions,
@@ -381,6 +382,7 @@ def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
     return RegexTrait(
         name=rating.name,
         description=rating.description,
+        summary=None,
         pattern=pattern,
         case_sensitive=case_sensitive,
         invert_result=invert_result,
@@ -416,6 +418,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
     return CallableTrait(
         name=rating.name,
         description=rating.description,
+        summary=None,
         kind=kind,
         callable_code=callable_code,
         min_score=min_score,
@@ -479,6 +482,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         return LLMRubricTrait(
             name=rating.name,
             description=rating.description,
+            summary=None,
             kind="literal",
             classes=classes,
             min_score=None,  # Auto-derived by model validator
@@ -495,6 +499,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         return LLMRubricTrait(
             name=rating.name,
             description=rating.description,
+            summary=None,
             kind="boolean",
             min_score=None,
             max_score=None,
@@ -511,6 +516,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         return LLMRubricTrait(
             name=rating.name,
             description=rating.description,
+            summary=None,
             kind="score",
             min_score=int(rating.worstRating),
             max_score=int(rating.bestRating),
@@ -572,6 +578,7 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
     return AgenticRubricTrait(
         name=rating.name,
         description=rating.description or "",
+        summary=None,
         kind=kind,
         higher_is_better=higher_is_better,
         context_mode=context_mode,
