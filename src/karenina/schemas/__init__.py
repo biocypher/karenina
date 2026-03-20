@@ -45,7 +45,6 @@ from .config import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
     INTERFACE_OPENROUTER,
-    INTERFACES_NO_PROVIDER_REQUIRED,
     FewShotConfig,
     ModelConfig,
     QuestionFewShotConfig,
@@ -191,7 +190,6 @@ __all__ = [
     "INTERFACE_OPENROUTER",
     "INTERFACE_MANUAL",
     "INTERFACE_LANGCHAIN",
-    "INTERFACES_NO_PROVIDER_REQUIRED",
     # Verification configuration
     "DEFAULT_ANSWERING_SYSTEM_PROMPT",
     "DEFAULT_PARSING_SYSTEM_PROMPT",

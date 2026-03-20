@@ -112,6 +112,7 @@ _claude_tool_spec = AdapterSpec(
     fallback_interface="langchain",
     supports_mcp=True,
     supports_tools=True,
+    requires_provider=False,
 )
 
 # Register with the AdapterRegistry

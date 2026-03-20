@@ -85,6 +85,7 @@ _openrouter_spec = AdapterSpec(
     routes_to="langchain",  # Indicates this routes to langchain
     supports_mcp=True,
     supports_tools=True,
+    requires_provider=False,
 )
 
 AdapterRegistry.register(_openrouter_spec)
@@ -102,6 +103,7 @@ _openai_endpoint_spec = AdapterSpec(
     routes_to="langchain",  # Indicates this routes to langchain
     supports_mcp=True,
     supports_tools=True,
+    requires_provider=False,
 )
 
 AdapterRegistry.register(_openai_endpoint_spec)

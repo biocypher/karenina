@@ -203,13 +203,17 @@ INTERFACE_OPENAI_ENDPOINT = "openai_endpoint"
 INTERFACE_CLAUDE_AGENT_SDK = "claude_agent_sdk"
 INTERFACE_CLAUDE_TOOL = "claude_tool"
 INTERFACE_LANGCHAIN_DEEP_AGENTS = "langchain_deep_agents"
-INTERFACES_NO_PROVIDER_REQUIRED = [
-    INTERFACE_OPENROUTER,
-    INTERFACE_MANUAL,
-    INTERFACE_OPENAI_ENDPOINT,
-    INTERFACE_CLAUDE_AGENT_SDK,
-    INTERFACE_CLAUDE_TOOL,
-]
+BUILTIN_INTERFACES: frozenset[str] = frozenset(
+    {
+        INTERFACE_LANGCHAIN,
+        INTERFACE_OPENROUTER,
+        INTERFACE_MANUAL,
+        INTERFACE_OPENAI_ENDPOINT,
+        INTERFACE_CLAUDE_AGENT_SDK,
+        INTERFACE_CLAUDE_TOOL,
+        INTERFACE_LANGCHAIN_DEEP_AGENTS,
+    }
+)
 
 
 class QuestionFewShotConfig(BaseModel):
@@ -565,15 +569,7 @@ class ModelConfig(BaseModel):
     model_name: str | None = None  # Optional - defaults to "manual" for manual interface
     temperature: float = 0.1
     max_tokens: int = 8192  # Maximum tokens for model response
-    interface: Literal[
-        "langchain",
-        "openrouter",
-        "manual",
-        "openai_endpoint",
-        "claude_agent_sdk",
-        "claude_tool",
-        "langchain_deep_agents",
-    ] = "langchain"
+    interface: str = "langchain"
     system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
     max_retries: int = 2  # Optional max retries for template generation
     mcp_urls_dict: dict[str, str] | None = None  # Optional MCP server URLs
@@ -636,3 +632,46 @@ class ModelConfig(BaseModel):
                 raise ValueError("model_name is required for non-manual interfaces")
 
         return self
+
+    @model_validator(mode="after")
+    def validate_interface_registered(self) -> "ModelConfig":
+        """Validate that the interface is registered in AdapterRegistry.
+
+        Skips validation while the registry is initializing to avoid
+        re-entrant initialization when registration modules create ModelConfig
+        instances during _load_builtins().
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        # During initialization, registration modules may create ModelConfig
+        # instances (e.g., in tests or default configs). Skip validation to
+        # avoid re-entrant calls into _ensure_initialized() via the RLock.
+        if AdapterRegistry._initializing:
+            return self
+
+        if AdapterRegistry.get_spec(self.interface) is None:
+            registered = AdapterRegistry.get_interfaces()
+            raise ValueError(f"Unknown interface '{self.interface}'. Registered interfaces: {sorted(registered)}")
+        return self
+
+
+def _get_interfaces_no_provider_required() -> list[str]:
+    """Deprecated. Use AdapterSpec.requires_provider instead."""
+    import warnings
+
+    warnings.warn(
+        "INTERFACES_NO_PROVIDER_REQUIRED is deprecated. "
+        "Use AdapterRegistry.get_spec(interface).requires_provider instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from karenina.adapters.registry import AdapterRegistry
+
+    AdapterRegistry._ensure_initialized()
+    return [name for name, spec in AdapterRegistry._specs.items() if not spec.requires_provider]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "INTERFACES_NO_PROVIDER_REQUIRED":
+        return _get_interfaces_no_provider_required()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

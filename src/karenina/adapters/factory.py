@@ -39,7 +39,7 @@ Example:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any
 
 from karenina.adapters.registry import AdapterAvailability, AdapterRegistry, register_adapter
 from karenina.ports import (
@@ -51,14 +51,6 @@ from karenina.ports import (
 
 if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
-
-# Import at runtime for validation function (not circular since ModelConfig is only TYPE_CHECKING)
-from karenina.schemas.config import INTERFACES_NO_PROVIDER_REQUIRED
-
-# Type alias for interface values
-InterfaceType: TypeAlias = Literal[
-    "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool", "langchain_deep_agents"
-]
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +89,12 @@ def validate_model_config(model_config: ModelConfig | None) -> None:
     if not model_config.model_name:
         raise AdapterUnavailableError("Model name is required in model configuration", reason="missing_model_name")
 
-    # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
-    if model_config.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model_config.model_provider:
+    # Check provider requirement from adapter spec (if interface is registered).
+    # Unknown interfaces are handled by the factory functions via check_availability.
+    spec = AdapterRegistry.get_spec(model_config.interface)
+    if spec is not None and spec.requires_provider and not model_config.model_provider:
         raise AdapterUnavailableError(
-            f"Model provider is required for interface '{model_config.interface}'. "
-            f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers.",
+            f"Model provider is required for interface '{model_config.interface}'.",
             reason="missing_model_provider",
         )
 
@@ -167,7 +160,7 @@ def get_llm(
     # Validate config has required fields
     validate_model_config(model_config)
 
-    interface = model_config.interface
+    interface: str = model_config.interface
 
     # Check availability
     availability = AdapterRegistry.check_availability(interface)
@@ -178,7 +171,7 @@ def get_llm(
                 f"Adapter for interface '{interface}' unavailable: {availability.reason}. "
                 f"Falling back to '{availability.fallback_interface}'."
             )
-            interface = cast(InterfaceType, availability.fallback_interface)
+            interface = availability.fallback_interface
             # Transform the config so the adapter only sees interfaces it handles
             model_config = model_config.model_copy(update={"interface": interface})
         else:
@@ -250,7 +243,7 @@ def get_agent(
     # Validate config has required fields
     validate_model_config(model_config)
 
-    interface = model_config.interface
+    interface: str = model_config.interface
 
     # Check availability
     availability = AdapterRegistry.check_availability(interface)
@@ -261,7 +254,7 @@ def get_agent(
                 f"Agent adapter for interface '{interface}' unavailable: {availability.reason}. "
                 f"Falling back to '{availability.fallback_interface}'."
             )
-            interface = cast(InterfaceType, availability.fallback_interface)
+            interface = availability.fallback_interface
             # Transform the config so the adapter only sees interfaces it handles
             model_config = model_config.model_copy(update={"interface": interface})
         else:
@@ -335,7 +328,7 @@ def get_parser(
     # Validate config has required fields
     validate_model_config(model_config)
 
-    interface = model_config.interface
+    interface: str = model_config.interface
 
     # Check availability
     availability = AdapterRegistry.check_availability(interface)
@@ -346,7 +339,7 @@ def get_parser(
                 f"Parser adapter for interface '{interface}' unavailable: {availability.reason}. "
                 f"Falling back to '{availability.fallback_interface}'."
             )
-            interface = cast(InterfaceType, availability.fallback_interface)
+            interface = availability.fallback_interface
             # Transform the config so the adapter only sees interfaces it handles
             model_config = model_config.model_copy(update={"interface": interface})
         else:
