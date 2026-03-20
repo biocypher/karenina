@@ -278,6 +278,10 @@ class FinalizeResultStage(BaseVerificationStage):
             agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
             agentic_trait_traces = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
 
+            # Get dynamic rubric metadata (populated by presence check pre-processing)
+            dynamic_skipped = context.get_result_field(ArtifactKeys.DYNAMIC_RUBRIC_SKIPPED_TRAITS)
+            dynamic_promoted = context.get_result_field(ArtifactKeys.DYNAMIC_RUBRIC_PROMOTED_TRAITS)
+
             rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
                 rubric_evaluation_strategy=context.get_result_field(ArtifactKeys.RUBRIC_EVALUATION_STRATEGY),
@@ -289,6 +293,8 @@ class FinalizeResultStage(BaseVerificationStage):
                 metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
                 agentic_trait_scores=agentic_trait_scores,
                 agentic_trait_investigation_traces=agentic_trait_traces,
+                dynamic_rubric_skipped_traits=dynamic_skipped,
+                dynamic_rubric_promoted_traits=dynamic_promoted,
             )
 
         # Create deep-judgment subclass (if enabled)

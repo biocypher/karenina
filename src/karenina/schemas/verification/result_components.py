@@ -206,6 +206,10 @@ class VerificationResultRubric(BaseModel):
         "Keyed by trait name.",
     )
 
+    # Dynamic rubric metadata (populated when a DynamicRubric presence check runs)
+    dynamic_rubric_skipped_traits: dict[str, str] | None = None  # Traits skipped with reasons
+    dynamic_rubric_promoted_traits: list[str] | None = None  # Traits promoted after presence check
+
     def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
         """
         Get all trait scores across all trait types in a flat dictionary.
