@@ -1064,12 +1064,12 @@ class DynamicRubric(BaseModel):
         Returns:
             The concept text string (summary or description).
         """
-        summary: str | None = getattr(trait, "summary", None)
+        summary = getattr(trait, "summary", None)
         if summary is not None:
-            return summary
-        description: str | None = getattr(trait, "description", None)
+            return str(summary)
+        description = getattr(trait, "description", None)
         if description is not None:
-            return description
+            return str(description)
         # Should not happen if validation passed, but guard defensively
         return trait.name
 
