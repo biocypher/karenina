@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 if TYPE_CHECKING:
     from karenina.schemas.entities.rubric import (
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         RegexTrait,
     )
 
-    AnyTrait = LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+    AnyTrait: TypeAlias = LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
 
 logger = logging.getLogger(__name__)
 

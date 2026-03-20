@@ -1,31 +1,49 @@
 """Rubric evaluation stage.
 
-Evaluates LLM responses against qualitative rubric criteria.
+Evaluates LLM responses against qualitative rubric criteria. When a
+dynamic rubric is present, a concept presence check is run first: only
+traits whose concepts appear in the response are promoted into the
+static rubric for evaluation; absent traits are skipped.
 """
 
 import logging
+from dataclasses import asdict
+from typing import Any
 
+from karenina.adapters import get_llm
 from karenina.benchmark.verification.evaluators import RubricEvaluator
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.prompts.rubric.presence_check import PresenceCheckPromptBuilder
 from karenina.benchmark.verification.utils import prepare_evaluation_input
+from karenina.benchmark.verification.utils.llm_judge_helpers import extract_judge_result
+from karenina.ports import LLMResponse
+from karenina.ports.capabilities import PortCapabilities
+from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import (
+    CallableTrait,
+    LLMRubricTrait,
+    MetricRubricTrait,
+    RegexTrait,
+)
+from karenina.schemas.outputs.rubric import ConceptPresenceResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 from ..helpers.deep_judgment_helpers import apply_deep_judgment_config_to_traits
 
-# Set up logger
 logger = logging.getLogger(__name__)
 
 
 class RubricEvaluationStage(BaseVerificationStage):
-    """
-    Evaluates answer against rubric criteria.
+    """Evaluates answer against rubric criteria.
 
     This stage:
-    1. Only runs if rubric is configured
-    2. Creates RubricEvaluator with parsing model
-    3. Evaluates standard rubric traits (score/binary)
-    4. Evaluates metric traits separately (confusion matrix analysis)
-    5. Handles evaluation errors gracefully (doesn't fail pipeline)
+    1. Resolves dynamic rubric traits via concept presence check (if configured)
+    2. Only runs if rubric is configured (static or promoted from dynamic)
+    3. Creates RubricEvaluator with parsing model
+    4. Evaluates standard rubric traits (score/binary)
+    5. Evaluates metric traits separately (confusion matrix analysis)
+    6. Handles evaluation errors gracefully (does not fail pipeline)
 
     Requires:
         - "raw_llm_response": Raw LLM response text (for evaluation)
@@ -34,6 +52,8 @@ class RubricEvaluationStage(BaseVerificationStage):
         - "rubric_result": Dict of trait scores (dict or None)
         - "metric_confusion_lists": Confusion lists per metric trait (dict or None)
         - "metric_results": Computed metrics per metric trait (dict or None)
+        - "dynamic_rubric_promoted_traits": List of promoted trait names (list or None)
+        - "dynamic_rubric_skipped_traits": Dict of skipped trait name to reason (dict or None)
 
     Error Handling:
         Rubric evaluation errors are non-fatal. If evaluation fails,
@@ -65,13 +85,12 @@ class RubricEvaluationStage(BaseVerificationStage):
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
-        """
-        Run only if rubric is configured and has traits.
+        """Run if rubric has traits or dynamic rubric has non-agentic traits.
 
         Rubric evaluation is independent of other verification stages,
         so it runs even if template verification failed.
 
-        However, if trace validation failed (trace doesn't end with AI message)
+        However, if trace validation failed (trace does not end with AI message)
         and we need to extract the final AI message (use_full_trace_for_rubric=False),
         then skip rubric evaluation since extraction would fail.
 
@@ -79,6 +98,18 @@ class RubricEvaluationStage(BaseVerificationStage):
         """
         if not super().should_run(context):
             return False
+
+        # Check dynamic rubric first: if it has non-agentic traits, the stage
+        # must run so _resolve_dynamic_rubric can promote them into context.rubric.
+        if context.dynamic_rubric and not context.dynamic_rubric.is_empty():
+            has_non_agentic = (
+                context.dynamic_rubric.llm_traits
+                or context.dynamic_rubric.regex_traits
+                or context.dynamic_rubric.callable_traits
+                or context.dynamic_rubric.metric_traits
+            )
+            if has_non_agentic:
+                return True
 
         rubric = context.rubric
         if rubric is None:
@@ -93,16 +124,16 @@ class RubricEvaluationStage(BaseVerificationStage):
         trace_validation_failed = context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False)
         if trace_validation_failed and not context.use_full_trace_for_rubric:
             logger.info(
-                f"Skipping rubric evaluation for question {context.question_id}: "
-                f"trace validation failed and use_full_trace_for_rubric=False"
+                "Skipping rubric evaluation for question %s: "
+                "trace validation failed and use_full_trace_for_rubric=False",
+                context.question_id,
             )
             return False
 
         return True
 
     def execute(self, context: VerificationContext) -> None:
-        """
-        Evaluate answer against rubric.
+        """Evaluate answer against rubric.
 
         Args:
             context: Verification context
@@ -112,6 +143,8 @@ class RubricEvaluationStage(BaseVerificationStage):
             - Sets result fields for rubric metadata
             - Does NOT set context.error on rubric evaluation failure
         """
+        self._resolve_dynamic_rubric(context)
+
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         rubric = context.rubric
 
@@ -126,7 +159,7 @@ class RubricEvaluationStage(BaseVerificationStage):
         rubric_evaluation_input, extraction_error = prepare_evaluation_input(trace_input, use_full_trace)
 
         if extraction_error is not None:
-            # Extraction failed - mark as error and stop
+            # Extraction failed; mark as error and stop
             error_msg = f"Rubric evaluation: {extraction_error}"
             logger.error(error_msg)
             context.mark_error(error_msg)
@@ -140,6 +173,18 @@ class RubricEvaluationStage(BaseVerificationStage):
         llm_trait_labels = None
         metric_confusion_lists = None
         metric_results = None
+
+        # If rubric is None after dynamic resolution (all traits absent), skip evaluation
+        if rubric is None or not any(
+            [rubric.llm_traits, rubric.regex_traits, rubric.callable_traits, rubric.metric_traits]
+        ):
+            logger.info(
+                "No evaluable rubric traits for question %s after dynamic resolution; skipping evaluation",
+                context.question_id,
+            )
+            self._store_results(context, rubric_result, llm_trait_labels, metric_confusion_lists, metric_results)
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
+            return
 
         # Build model string for tracking via ModelIdentity
         parsing_model = context.parsing_model
@@ -176,7 +221,7 @@ class RubricEvaluationStage(BaseVerificationStage):
             if configured_rubric is not None:
                 if has_deep_judgment_traits:
                     # Route to deep judgment evaluation
-                    logger.info(f"Deep judgment enabled for rubric traits in question {context.question_id}")
+                    logger.info("Deep judgment enabled for rubric traits in question %s", context.question_id)
 
                     # Create a minimal VerificationConfig for deep judgment settings
                     from karenina.schemas.verification import VerificationConfig
@@ -245,8 +290,10 @@ class RubricEvaluationStage(BaseVerificationStage):
                         if usage_metadata:
                             usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
                     logger.debug(
-                        f"Deep judgment used {total_model_calls} model calls with {total_retries} retries, "
-                        f"tracked {len(usage_metadata_list)} usage metadata entries"
+                        "Deep judgment used %d model calls with %d retries, tracked %d usage metadata entries",
+                        total_model_calls,
+                        total_retries,
+                        len(usage_metadata_list),
                     )
 
                 else:
@@ -265,10 +312,14 @@ class RubricEvaluationStage(BaseVerificationStage):
             # Evaluate metric traits separately
             if rubric is not None and rubric.metric_traits:
                 logger.info(
-                    f"Evaluating {len(rubric.metric_traits)} metric trait(s) for question {context.question_id}"
+                    "Evaluating %d metric trait(s) for question %s",
+                    len(rubric.metric_traits),
+                    context.question_id,
                 )
                 for trait in rubric.metric_traits:
-                    logger.debug(f"  - Trait: {trait.name} (mode: {trait.evaluation_mode}, metrics: {trait.metrics})")
+                    logger.debug(
+                        "  - Trait: %s (mode: %s, metrics: %s)", trait.name, trait.evaluation_mode, trait.metrics
+                    )
 
                 metric_confusion_lists, metric_results, metric_usage_metadata_list = evaluator.evaluate_metric_traits(
                     question=context.question_text,
@@ -282,33 +333,252 @@ class RubricEvaluationStage(BaseVerificationStage):
                         usage_tracker.track_call("rubric_evaluation", parsing_model_str, usage_metadata)
 
                 logger.info(
-                    f"Metric evaluation complete. Results: {list(metric_results.keys()) if metric_results else 'None'}"
+                    "Metric evaluation complete. Results: %s",
+                    list(metric_results.keys()) if metric_results else "None",
                 )
                 if metric_results:
                     for trait_name, metrics in metric_results.items():
-                        logger.debug(f"     {trait_name}: {metrics}")
+                        logger.debug("     %s: %s", trait_name, metrics)
 
         except (ValueError, RuntimeError) as e:
             # Handle specific rubric evaluator errors (non-fatal)
             logger.warning(
-                f"Rubric evaluator initialization/configuration failed for question {context.question_id}: {e}"
+                "Rubric evaluator initialization/configuration failed for question %s: %s",
+                context.question_id,
+                e,
             )
             rubric_result = None  # type: ignore[assignment]
         except Exception as e:
             # Don't fail the entire verification if rubric evaluation fails
-            logger.warning(f"Rubric evaluation failed for question {context.question_id}: {e}")
+            logger.warning("Rubric evaluation failed for question %s: %s", context.question_id, e)
             rubric_result = None  # type: ignore[assignment]
 
-        # Store results (even if None)
+        self._store_results(context, rubric_result, llm_trait_labels, metric_confusion_lists, metric_results)
+
+        # Store updated usage tracker for next stages
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
+
+    # ------------------------------------------------------------------
+    # Dynamic rubric resolution
+    # ------------------------------------------------------------------
+
+    def _resolve_dynamic_rubric(self, context: VerificationContext) -> None:
+        """Resolve dynamic rubric: call LLM for concept presence, promote or skip traits.
+
+        For each non-agentic trait in the dynamic rubric, this method checks whether
+        its concept is present in the response and either promotes it into
+        ``context.rubric`` or records it as skipped. The ``rubric_trait_names``
+        filter is applied after presence checking: a trait that is present but
+        excluded by the filter is skipped with an appropriate reason.
+
+        Name conflicts between dynamic and static rubric traits raise ValueError
+        so that duplicate evaluation does not silently produce wrong results.
+
+        Args:
+            context: Verification context (modified in-place).
+
+        Raises:
+            ValueError: If a dynamic trait name collides with an existing
+                static rubric trait name.
+        """
+        dynamic = context.dynamic_rubric
+        if dynamic is None or dynamic.is_empty():
+            return
+
+        # Collect non-agentic traits only (agentic traits are handled by a separate stage)
+        non_agentic_traits = (
+            list(dynamic.llm_traits)
+            + list(dynamic.regex_traits)
+            + list(dynamic.callable_traits)
+            + list(dynamic.metric_traits)
+        )
+
+        if not non_agentic_traits:
+            return
+
+        # Check for name conflicts with existing static rubric
+        static_names = set()
+        if context.rubric is not None:
+            static_names = set(context.rubric.get_trait_names())
+        dynamic_names = {t.name for t in non_agentic_traits}
+        conflicts = static_names & dynamic_names
+        if conflicts:
+            raise ValueError(f"Dynamic rubric trait names conflict with static rubric: {conflicts}")
+
+        # Call LLM for presence check
+        presence_map = self._call_presence_check(context, non_agentic_traits)
+
+        # Partition traits into promoted vs skipped
+        promoted_names: list[str] = []
+        skipped: dict[str, str] = {}
+        trait_filter = set(context.rubric_trait_names) if context.rubric_trait_names else None
+
+        promote_llm: list[Any] = []
+        promote_regex: list[Any] = []
+        promote_callable: list[Any] = []
+        promote_metric: list[Any] = []
+
+        for trait in non_agentic_traits:
+            present = presence_map.get(trait.name, False)
+            if not present:
+                skipped[trait.name] = "concept not present in response"
+                continue
+            if trait_filter is not None and trait.name not in trait_filter:
+                skipped[trait.name] = "excluded by rubric_trait_names filter"
+                continue
+
+            # Promote: route to the correct list by type
+            promoted_names.append(trait.name)
+            if isinstance(trait, LLMRubricTrait):
+                promote_llm.append(trait)
+            elif isinstance(trait, RegexTrait):
+                promote_regex.append(trait)
+            elif isinstance(trait, CallableTrait):
+                promote_callable.append(trait)
+            elif isinstance(trait, MetricRubricTrait):
+                promote_metric.append(trait)
+
+        # Merge promoted traits into context.rubric
+        if promoted_names:
+            if context.rubric is None:
+                context.rubric = Rubric()
+            context.rubric = context.rubric.model_copy(
+                update={
+                    "llm_traits": list(context.rubric.llm_traits) + promote_llm,
+                    "regex_traits": list(context.rubric.regex_traits) + promote_regex,
+                    "callable_traits": list(context.rubric.callable_traits) + promote_callable,
+                    "metric_traits": list(context.rubric.metric_traits) + promote_metric,
+                }
+            )
+
+        # Record artifacts for downstream consumers and result serialization
+        context.set_artifact(ArtifactKeys.DYNAMIC_RUBRIC_PROMOTED_TRAITS, promoted_names or None)
+        context.set_artifact(ArtifactKeys.DYNAMIC_RUBRIC_SKIPPED_TRAITS, skipped or None)
+        context.set_result_field(ArtifactKeys.DYNAMIC_RUBRIC_PROMOTED_TRAITS, promoted_names or None)
+        context.set_result_field(ArtifactKeys.DYNAMIC_RUBRIC_SKIPPED_TRAITS, skipped or None)
+
+        logger.info(
+            "Dynamic rubric resolved for question %s: promoted=%s, skipped=%s",
+            context.question_id,
+            promoted_names,
+            list(skipped.keys()),
+        )
+
+    def _call_presence_check(
+        self,
+        context: VerificationContext,
+        traits: list[Any],
+    ) -> dict[str, bool]:
+        """Call the LLM to check concept presence for dynamic rubric traits.
+
+        Uses the parsing model, PresenceCheckPromptBuilder for prompts,
+        PromptAssembler with PromptTask.RUBRIC_DYNAMIC_PRESENCE_CHECK,
+        and ConceptPresenceResult as the structured output schema.
+
+        The response text is extracted the same way as for rubric evaluation
+        (respecting ``use_full_trace_for_rubric``).
+
+        Args:
+            context: Verification context.
+            traits: Non-agentic traits requiring presence checking.
+
+        Returns:
+            Mapping of trait name to presence boolean.
+        """
+        # Determine response text (same logic as rubric evaluation input)
+        raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        use_full_trace = context.use_full_trace_for_rubric
+        trace_messages = context.get_artifact(ArtifactKeys.TRACE_MESSAGES)
+        trace_input = trace_messages if trace_messages else raw_llm_response
+        response_text, extraction_error = prepare_evaluation_input(trace_input, use_full_trace)
+
+        if extraction_error is not None:
+            logger.warning(
+                "Cannot extract response text for presence check (question %s): %s. "
+                "Marking all dynamic traits as absent.",
+                context.question_id,
+                extraction_error,
+            )
+            return {t.name: False for t in traits}
+
+        # Build prompts
+        builder = PresenceCheckPromptBuilder()
+        system_text = builder.build_system_prompt()
+        user_text = builder.build_user_prompt(traits, response_text)
+        example_json = builder.build_example_json(traits)
+
+        # Assemble with tri-section pattern
+        parsing_model = context.parsing_model
+        assembler = PromptAssembler(
+            task=PromptTask.RUBRIC_DYNAMIC_PRESENCE_CHECK,
+            interface=parsing_model.interface,
+            capabilities=PortCapabilities(),
+        )
+
+        user_instructions = None
+        if context.prompt_config is not None:
+            user_instructions = context.prompt_config.get_for_task(PromptTask.RUBRIC_DYNAMIC_PRESENCE_CHECK.value)
+
+        instruction_context: dict[str, object] = {
+            "json_schema": ConceptPresenceResult.model_json_schema(),
+            "example_json": example_json,
+            "output_format_hint": 'Return a JSON object with a "results" key containing presence booleans.',
+        }
+
+        messages = assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=user_instructions,
+            instruction_context=instruction_context,
+        )
+
+        # Invoke structured LLM
+        detection_config = parsing_model.model_copy(update={"temperature": 0.0})
+        llm = get_llm(detection_config)
+        structured_llm = llm.with_structured_output(ConceptPresenceResult)
+        response: LLMResponse = structured_llm.invoke(messages)
+
+        # Track usage
+        usage_tracker = self.get_or_create_usage_tracker(context)
+        usage_metadata = asdict(response.usage) if response.usage else {}
+        if usage_metadata:
+            model_str = ModelIdentity.from_model_config(parsing_model, role="parsing").display_string
+            usage_tracker.track_call("dynamic_rubric_presence_check", model_str, usage_metadata)
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
+
+        # Extract result
+        result = extract_judge_result(response, ConceptPresenceResult, "results")
+        if result is not None:
+            return result.to_dict()
+
+        # Fallback: if structured output failed, try raw
+        if isinstance(response.raw, ConceptPresenceResult):
+            return response.raw.to_dict()
+
+        logger.warning(
+            "Presence check returned unexpected output for question %s. Marking all dynamic traits as absent.",
+            context.question_id,
+        )
+        return {t.name: False for t in traits}
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _store_results(
+        context: VerificationContext,
+        rubric_result: dict[str, Any] | None,
+        llm_trait_labels: dict[str, str] | None,
+        metric_confusion_lists: dict[str, Any] | None,
+        metric_results: dict[str, Any] | None,
+    ) -> None:
+        """Store rubric evaluation results into context artifacts and result builder."""
         context.set_artifact(ArtifactKeys.RUBRIC_RESULT, rubric_result)
         context.set_artifact(ArtifactKeys.LLM_TRAIT_LABELS, llm_trait_labels)
         context.set_artifact(ArtifactKeys.METRIC_CONFUSION_LISTS, metric_confusion_lists)
         context.set_artifact(ArtifactKeys.METRIC_RESULTS, metric_results)
 
-        # Store updated usage tracker for next stages
-        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
-
-        # Store in result builder
         context.set_result_field(ArtifactKeys.VERIFY_RUBRIC, rubric_result)
         context.set_result_field(ArtifactKeys.LLM_TRAIT_LABELS, llm_trait_labels)
         context.set_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS, metric_confusion_lists)
