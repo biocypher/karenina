@@ -28,7 +28,7 @@ from typing import Literal
 from pydantic import Field
 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ContainsAny,
     ExactMatch,

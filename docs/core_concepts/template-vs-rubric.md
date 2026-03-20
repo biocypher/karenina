@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -71,7 +71,7 @@ The judge's role varies by field type. With `str` fields, the judge acts as a pu
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import ExactMatch
+from karenina.schemas.primitives import ExactMatch
 
 
 class Answer(BaseAnswer):
@@ -281,7 +281,7 @@ Consider the question: *"Which is the putative target of venetoclax?"*
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import BooleanMatch
+from karenina.schemas.primitives import BooleanMatch
 
 
 class VenetoclaxAnswer(BaseAnswer):

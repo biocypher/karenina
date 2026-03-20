@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -37,7 +37,7 @@ from pathlib import Path
 from pydantic import Field
 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
     NumericTolerance,
@@ -182,7 +182,7 @@ print(f"Q3 added with template: {q3_id[:50]}...")
 The `mode="absolute"` setting means the extracted value must be within 0.5 of 37.0 (i.e., 36.5 to 37.5). For exact counts where only one value is correct, use `NumericTolerance(tolerance=0, mode="absolute")`. Here is the same pattern applied to a chromosome count with an `int` field:
 
 ```python
-from karenina.schemas.entities.primitives import NumericExact
+from karenina.schemas.primitives import NumericExact
 
 # Example: exact numeric match
 class Answer(BaseAnswer):

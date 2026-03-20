@@ -260,7 +260,7 @@ Each field uses a `VerifiedField` with a verification primitive that checks the 
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import BooleanMatch, NumericTolerance
+from karenina.schemas.primitives import BooleanMatch, NumericTolerance
 
 TEMPLATE_CODE = '''
 class LogisticRegressionAnswer(BaseAnswer):
