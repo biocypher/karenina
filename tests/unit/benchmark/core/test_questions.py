@@ -155,7 +155,7 @@ class TestAddQuestion:
         benchmark = Benchmark.create(name="test")
         manager = QuestionManager(benchmark._base)
 
-        with pytest.raises(TypeError, match="question must be either a string or Question"):
+        with pytest.raises(TypeError, match="question must be a string, dict, or Question"):
             manager.add_question(123, "4")
 
     def test_add_question_with_metadata(self) -> None:
@@ -1247,6 +1247,119 @@ class TestCountByField:
 
         assert counts.get("easy") == 1
         assert counts.get("hard") == 1
+
+
+@pytest.mark.unit
+class TestDictInput:
+    """Tests for dict-based add_question input."""
+
+    def test_add_question_with_dict(self) -> None:
+        """Test adding a question via dict."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        q_id = manager.add_question(
+            {
+                "question": "What is 2+2?",
+                "raw_answer": "4",
+            }
+        )
+
+        q = manager.get_question(q_id)
+        assert q["question"] == "What is 2+2?"
+        assert q["raw_answer"] == "4"
+
+    def test_add_question_dict_with_all_fields(self) -> None:
+        """Test dict input with optional fields."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        q_id = manager.add_question(
+            {
+                "question": "What is BCL2?",
+                "raw_answer": "A protein.",
+                "answer_notes": "Anti-apoptotic protein",
+                "few_shot_examples": [{"question": "What is p53?", "answer": "Tumor suppressor"}],
+                "author": {"name": "Test"},
+            }
+        )
+
+        q = manager.get_question(q_id)
+        assert q["question"] == "What is BCL2?"
+        assert q["answer_notes"] == "Anti-apoptotic protein"
+
+    def test_add_question_dict_missing_question_key_raises(self) -> None:
+        """Test that dict without 'question' key raises ValueError."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        with pytest.raises(ValueError, match="must contain a 'question' key"):
+            manager.add_question({"raw_answer": "4"})
+
+    def test_add_question_dict_missing_raw_answer_raises(self) -> None:
+        """Test that dict without 'raw_answer' raises ValueError."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        with pytest.raises(ValueError, match="raw_answer is required"):
+            manager.add_question({"question": "What is 2+2?"})
+
+    def test_add_question_dict_kwarg_fallback(self) -> None:
+        """Test that kwargs serve as fallback for missing dict keys."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        q_id = manager.add_question(
+            {"question": "What is 2+2?"},
+            raw_answer="4",
+        )
+
+        q = manager.get_question(q_id)
+        assert q["raw_answer"] == "4"
+
+
+@pytest.mark.unit
+class TestAddQuestions:
+    """Tests for add_questions (bulk) method."""
+
+    def test_add_questions_bulk(self) -> None:
+        """Test adding multiple questions at once."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        ids = manager.add_questions(
+            [
+                {"question": "Q1?", "raw_answer": "A1"},
+                {"question": "Q2?", "raw_answer": "A2"},
+                {"question": "Q3?", "raw_answer": "A3"},
+            ]
+        )
+
+        assert len(ids) == 3
+        assert len(manager.get_question_ids()) == 3
+
+    def test_add_questions_empty_list(self) -> None:
+        """Test adding empty list returns empty list."""
+        benchmark = Benchmark.create(name="test")
+        manager = QuestionManager(benchmark._base)
+
+        ids = manager.add_questions([])
+
+        assert ids == []
+
+    def test_add_questions_via_facade(self) -> None:
+        """Test add_questions is accessible on the Benchmark facade."""
+        benchmark = Benchmark.create(name="test")
+
+        ids = benchmark.add_questions(
+            [
+                {"question": "Q1?", "raw_answer": "A1"},
+                {"question": "Q2?", "raw_answer": "A2"},
+            ]
+        )
+
+        assert len(ids) == 2
+        assert len(benchmark.get_question_ids()) == 2
 
 
 @pytest.mark.unit

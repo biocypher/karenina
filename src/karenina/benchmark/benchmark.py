@@ -186,7 +186,7 @@ class Benchmark:
 
     def add_question(
         self,
-        question: Union[str, "Question"],
+        question: Union[str, dict[str, Any], "Question"],
         raw_answer: str | None = None,
         answer_template: str | type | None = None,
         question_id: str | None = None,
@@ -198,6 +198,9 @@ class Benchmark:
         answer_notes: str | None = None,
     ) -> str:
         """Add a question to the benchmark.
+
+        Accepts a question string, a Question object, or a dict with keys
+        ``question`` and ``raw_answer`` (plus any optional kwargs).
 
         Raises:
             ValueError: If scenarios already exist (homogeneous enforcement).
@@ -219,6 +222,28 @@ class Benchmark:
             few_shot_examples,
             answer_notes=answer_notes,
         )
+
+    def add_questions(self, questions_data: list[dict[str, Any]]) -> list[str]:
+        """Add multiple questions at once.
+
+        Each dict is passed to ``add_question()``, so all dict keys supported
+        there are accepted here.
+
+        Args:
+            questions_data: List of dicts with question data.
+
+        Returns:
+            List of question IDs that were created.
+
+        Raises:
+            ValueError: If scenarios already exist (homogeneous enforcement).
+        """
+        if self._scenarios:
+            raise ValueError(
+                "Cannot add standalone questions to a scenario benchmark. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
+        return self._question_manager.add_questions(questions_data)
 
     def get_question_ids(self) -> list[str]:
         """Get all question IDs in the benchmark."""
