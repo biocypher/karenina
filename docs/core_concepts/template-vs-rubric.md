@@ -269,8 +269,6 @@ The `evaluation_mode` field on [VerificationConfig](../../../reference/configura
 | `template_and_rubric` | Yes | Yes | All 13 stages | Correctness + quality assessment |
 | `rubric_only` | No | Yes | Stages 1-2, 11-13 (template stages skipped) | Quality-only evaluation; no correct answer needed |
 
-Setting `evaluation_mode` to `template_and_rubric` or `rubric_only` automatically requires `rubric_enabled=True`. These two fields are validated together; a mismatch raises a `ValueError` at configuration time.
-
 For details on configuring evaluation modes, see [Evaluation Modes](../evaluation-modes/).
 
 ## 7. Worked Example: Both Together

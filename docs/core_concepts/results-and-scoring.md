@@ -55,7 +55,7 @@ with patch.dict("sys.modules", mock_modules):
 # Two questions, two answering models, one replicate each = 4 results.
 # ---------------------------------------------------------------------------
 
-answering_a = ModelIdentity(interface="langchain", model_name="claude-sonnet-4-5-20250514")
+answering_a = ModelIdentity(interface="langchain", model_name="claude-sonnet-4-6")
 answering_b = ModelIdentity(interface="langchain", model_name="gpt-4.1-mini-2025-04-14")
 parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5-20251001")
 
@@ -217,7 +217,7 @@ Models are identified by a composite `ModelIdentity` object, not a plain string.
 | Field | Description |
 |-------|-------------|
 | `interface` | The adapter interface (e.g., `"langchain"`, `"claude_sdk"`) |
-| `model_name` | The model name (e.g., `"claude-sonnet-4-5-20250514"`) |
+| `model_name` | The model name (e.g., `"claude-sonnet-4-6"`) |
 | `tools` | Sorted list of MCP server names (answering models only; always `[]` for parsing) |
 
 ```python

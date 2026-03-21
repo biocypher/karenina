@@ -38,7 +38,7 @@ The `config` key contains a `VerificationConfig` dictionary. All fields are docu
 **Included in presets:**
 
 - Model configurations (`answering_models`, `parsing_models`) — sanitized per interface
-- Evaluation settings (`evaluation_mode`, `rubric_enabled`, `replicate_count`, etc.)
+- Evaluation settings (`evaluation_mode`, `replicate_count`, etc.)
 - Feature flags (`abstention_enabled`, `sufficiency_enabled`, `embedding_check_enabled`, etc.)
 - Deep judgment settings (template and rubric)
 - Async execution settings (`async_enabled`, `async_max_workers`)
@@ -134,7 +134,6 @@ A preset with two answering models, template + rubric evaluation, and deep judgm
     "replicate_count": 1,
     "parsing_only": false,
     "evaluation_mode": "template_and_rubric",
-    "rubric_enabled": true,
     "rubric_trait_names": null,
     "rubric_evaluation_strategy": "batch",
     "use_full_trace_for_template": false,

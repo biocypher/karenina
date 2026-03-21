@@ -306,7 +306,6 @@ config = VerificationConfig(
         )
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 results = benchmark.run_verification(config)

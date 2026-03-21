@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -163,7 +163,6 @@ config = VerificationConfig(
     ],
     # Evaluation mode
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     # Quality checks
     abstention_enabled=True,
     sufficiency_enabled=True,
@@ -173,7 +172,6 @@ config = VerificationConfig(
 )
 
 print(f"Mode:       {config.evaluation_mode}")
-print(f"Rubric:     {config.rubric_enabled}")
 print(f"Abstention: {config.abstention_enabled}")
 print(f"Sufficiency:{config.sufficiency_enabled}")
 print(f"Embedding:  {config.embedding_check_enabled}")
@@ -206,7 +204,6 @@ config_with_prompts = VerificationConfig(
                     temperature=0.0)
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     prompt_config=prompt_config,
 )
 
@@ -241,7 +238,6 @@ config_override = VerificationConfig.from_overrides(
 )
 
 print(f"Mode: {config_override.evaluation_mode}")
-print(f"Rubric: {config_override.rubric_enabled}")
 ```
 
 ### CLI with Preset + Overrides
@@ -351,7 +347,6 @@ config = VerificationConfig(
                     model_provider="anthropic", interface="langchain")
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 results = benchmark.run_verification(config)

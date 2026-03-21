@@ -35,18 +35,11 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `evaluation_mode` | `Literal["template_only", "template_and_rubric", "rubric_only"]` | `"template_only"` | Determines which pipeline stages run. `template_only`: template verification only. `template_and_rubric`: both template and rubric evaluation. `rubric_only`: skip template verification, evaluate rubrics on raw response. |
-| `rubric_enabled` | `bool` | `False` | Master switch for rubric evaluation. Must be `True` when `evaluation_mode` is `template_and_rubric` or `rubric_only`. Must be `False` when `evaluation_mode` is `template_only`. |
+| `evaluation_mode` | `Literal["template_only", "template_and_rubric", "rubric_only"]` | `"template_only"` | Determines which pipeline stages run. `template_only`: template verification only. `template_and_rubric`: both template and rubric evaluation. `rubric_only`: skip template verification, evaluate rubrics on raw response. When set to `template_and_rubric` or `rubric_only`, rubric evaluation is automatically enabled. |
 | `rubric_trait_names` | `list[str] \| None` | `None` | Optional filter to evaluate only specific rubric traits by name. When `None`, all traits are evaluated. |
 | `rubric_evaluation_strategy` | `Literal["batch", "sequential"] \| None` | `"batch"` | How LLM rubric traits are evaluated. `batch`: all LLM traits in a single call (efficient, requires JSON output). `sequential`: traits evaluated one-by-one (more reliable, higher cost). |
 | `agentic_rubric_strategy` | `Literal["individual", "shared"]` | `"individual"` | How agentic rubric traits are evaluated. `individual`: one agent per trait (default, most reliable). `shared`: one agent evaluates all traits that share a model (efficient, but falls back to individual when models differ). |
 | `agentic_rubric_parallel` | `bool` | `False` | Reserved for future use. When implemented, will allow parallel evaluation of independent agentic traits. |
-
-**Validation rules:**
-
-- `evaluation_mode="rubric_only"` requires `rubric_enabled=True`
-- `evaluation_mode="template_and_rubric"` requires `rubric_enabled=True`
-- `evaluation_mode="template_only"` requires `rubric_enabled=False`
 
 ---
 
@@ -230,7 +223,7 @@ config = VerificationConfig.from_overrides(
 | `sufficiency` | `sufficiency_enabled` | Enable sufficiency detection |
 | `embedding_check` | `embedding_check_enabled` | Enable embedding check |
 | `deep_judgment` | `deep_judgment_enabled` | Enable template deep judgment |
-| `evaluation_mode` | `evaluation_mode` + `rubric_enabled` | Sets both evaluation mode and rubric flag |
+| `evaluation_mode` | `evaluation_mode` | Sets the evaluation mode |
 | `embedding_threshold` | `embedding_check_threshold` | Embedding similarity threshold |
 | `embedding_model` | `embedding_check_model` | Embedding model name |
 | `async_execution` | `async_enabled` | Enable async execution |

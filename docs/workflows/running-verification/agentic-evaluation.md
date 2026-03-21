@@ -624,7 +624,6 @@ rubric_config = VerificationConfig(
         ),
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     agentic_rubric_strategy="individual",
     agentic_parsing=True,
     agentic_judge_context="workspace_only",
@@ -640,7 +639,6 @@ Three settings control agentic rubric evaluation:
 | Field | Value | Description |
 |-------|-------|-------------|
 | `evaluation_mode` | `"template_and_rubric"` | Runs both template verification (Stages 7/8) and rubric evaluation (Stage 11) |
-| `rubric_enabled` | `True` | Required when `evaluation_mode` includes rubric evaluation |
 | `agentic_rubric_strategy` | `"individual"` | Each agentic trait gets its own agent session. The alternative, `"shared"`, evaluates all agentic traits in a single session. |
 
 ### Run Verification and Inspect Rubric Results

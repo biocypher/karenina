@@ -35,7 +35,6 @@ A preset file is a JSON wrapper around a `VerificationConfig` dictionary:
     ],
     "parsing_models": [...],
     "replicate_count": 1,
-    "rubric_enabled": false,
     "evaluation_mode": "template_only",
     "deep_judgment_enabled": false,
     "abstention_enabled": false,
@@ -85,7 +84,6 @@ config = VerificationConfig(
     answering_models=[model],
     parsing_models=[model],
     replicate_count=3,
-    rubric_enabled=True,
     deep_judgment_enabled=True,
 )
 

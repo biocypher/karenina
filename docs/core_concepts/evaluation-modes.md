@@ -145,39 +145,26 @@ template_and_rubric_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 rubric_only_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="rubric_only",
-    rubric_enabled=True,
 )
 ```
 
 ```python tags=["hide-cell"]
 assert template_only_config.evaluation_mode == "template_only"
-assert template_only_config.rubric_enabled is False
 assert template_and_rubric_config.evaluation_mode == "template_and_rubric"
-assert template_and_rubric_config.rubric_enabled is True
 assert rubric_only_config.evaluation_mode == "rubric_only"
-assert rubric_only_config.rubric_enabled is True
 ```
 
 ## 5. Detailed Reference
 
 ### Configuration rules
 
-`VerificationConfig` enforces these combinations:
-
-| `evaluation_mode` | Required `rubric_enabled` |
-|---|---|
-| `template_only` | `False` |
-| `template_and_rubric` | `True` |
-| `rubric_only` | `True` |
-
-If you use `VerificationConfig.from_overrides(...)`, setting `evaluation_mode` automatically sets `rubric_enabled` to the matching value.
+`evaluation_mode` alone controls which evaluation paths are active. Setting it to `template_and_rubric` or `rubric_only` automatically enables rubric evaluation; no separate flag is needed.
 
 ### Result-shape guidance
 
