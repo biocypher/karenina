@@ -385,10 +385,13 @@ class VerificationConfig(BaseModel):
 
             for pm in self.parsing_models:
                 spec = AdapterRegistry.get_spec(pm.interface)
-                if spec is None or spec.agent_factory is None:
+                if spec is None or spec.agent_tier != "deep_agent":
+                    tier = spec.agent_tier if spec else "unknown"
                     raise ValueError(
-                        "agentic_parsing=True requires an interface with "
-                        f"AgentPort support, but '{pm.interface}' does not provide one."
+                        f"agentic_parsing=True requires an interface with "
+                        f"agent_tier='deep_agent', but '{pm.interface}' has "
+                        f"agent_tier='{tier}'. Use 'claude_agent_sdk' or "
+                        f"'langchain_deep_agents' instead."
                     )
 
             # Agentic parsing is not supported in rubric_only mode
