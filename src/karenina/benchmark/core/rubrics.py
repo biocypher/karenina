@@ -7,9 +7,11 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
 
 from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from karenina.schemas.entities.rubric import AgenticRubricTrait
+from karenina.schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, merge_dynamic_rubrics
 from karenina.utils.checkpoint import (
+    add_global_dynamic_rubric_to_benchmark,
     add_global_rubric_to_benchmark,
+    extract_global_dynamic_rubric_from_benchmark,
     extract_global_rubric_from_benchmark,
 )
 
@@ -421,3 +423,72 @@ class RubricManager:
         else:
             merged_rubric = self.get_merged_rubric_for_question(question_id)
             return merged_rubric is not None
+
+    # ── Dynamic rubric support ──────────────────────────────────────────
+
+    def get_global_dynamic_rubric(self) -> DynamicRubric | None:
+        """Get the global dynamic rubric from the benchmark.
+
+        Checks the checkpoint first (for rubrics loaded from file), then falls
+        back to the in-memory attribute (for rubrics set programmatically).
+
+        Returns:
+            DynamicRubric object or None.
+        """
+        # Try checkpoint first (loaded from file)
+        from_checkpoint = extract_global_dynamic_rubric_from_benchmark(self.base._checkpoint)
+        if from_checkpoint is not None:
+            return from_checkpoint
+
+        # Fall back to in-memory attribute (set via set_global_dynamic_rubric)
+        return getattr(self.base, "_global_dynamic_rubric", None)
+
+    def set_global_dynamic_rubric_in_checkpoint(self, dynamic_rubric: DynamicRubric) -> None:
+        """Persist a global dynamic rubric into the checkpoint.
+
+        Removes any existing dynamic rubric traits from the checkpoint rating
+        array, then writes the new ones.
+
+        Args:
+            dynamic_rubric: The DynamicRubric to serialize.
+        """
+        # Remove existing dynamic rubric ratings
+        if self.base._checkpoint.rating:
+            self.base._checkpoint.rating = [
+                r for r in self.base._checkpoint.rating if r.additionalType != "karenina:GlobalDynamicRubricTrait"
+            ]
+
+        add_global_dynamic_rubric_to_benchmark(self.base._checkpoint, dynamic_rubric)
+
+    def get_question_dynamic_rubric(self, question_id: str) -> DynamicRubric | None:
+        """Get question-specific dynamic rubric.
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            DynamicRubric object or None if no question dynamic rubric.
+        """
+        if question_id in self.base._questions_cache:
+            raw = self.base._questions_cache[question_id].get("question_dynamic_rubric")
+            if raw is None:
+                return None
+            if isinstance(raw, DynamicRubric):
+                return raw
+            # Deserialize dict to DynamicRubric
+            if isinstance(raw, dict):
+                return DynamicRubric.model_validate(raw)
+        return None
+
+    def get_merged_dynamic_rubric_for_question(self, question_id: str) -> DynamicRubric | None:
+        """Get merged dynamic rubric for a question (global + question-specific).
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Merged DynamicRubric, or None if neither global nor question-level exists.
+        """
+        global_dynamic = self.get_global_dynamic_rubric()
+        question_dynamic = self.get_question_dynamic_rubric(question_id)
+        return merge_dynamic_rubrics(global_dynamic, question_dynamic)

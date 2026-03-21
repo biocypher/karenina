@@ -333,7 +333,6 @@ config_rubric_dj = VerificationConfig(
                     temperature=0.0)
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     deep_judgment_rubric_mode="enable_all",
 )
 

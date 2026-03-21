@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric, merge_dynamic_rubrics
 from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
@@ -37,7 +38,7 @@ def merge_rubrics_for_task(
     Returns:
         Merged rubric or None if rubrics are disabled
     """
-    if not getattr(config, "rubric_enabled", False):
+    if not config.rubric_enabled:
         return None
 
     question_rubric = None
@@ -54,6 +55,46 @@ def merge_rubrics_for_task(
     except ValueError as e:
         logger.error(f"Error merging rubrics for {template.question_id}: {e}")
         return global_rubric
+
+
+def merge_dynamic_rubrics_for_task(
+    global_dynamic_rubric: DynamicRubric | None,
+    template: FinishedTemplate,
+    config: VerificationConfig,
+) -> DynamicRubric | None:
+    """Merge global and question-specific dynamic rubrics for a task.
+
+    Mirrors :func:`merge_rubrics_for_task` for the dynamic rubric variant.
+    Deserializes the question-level dict into a DynamicRubric, then delegates
+    to :func:`merge_dynamic_rubrics` for the actual merge.
+
+    Args:
+        global_dynamic_rubric: Optional global dynamic rubric applied to all questions.
+        template: The finished template containing question-specific dynamic rubric.
+        config: Verification configuration with rubric settings.
+
+    Returns:
+        Merged DynamicRubric or None if rubrics are disabled or absent.
+    """
+    if not config.rubric_enabled:
+        return None
+
+    question_dynamic_rubric = None
+    if template.question_dynamic_rubric:
+        try:
+            question_dynamic_rubric = DynamicRubric.model_validate(template.question_dynamic_rubric)
+        except Exception as e:
+            logger.warning(
+                "Failed to parse question dynamic rubric for %s: %s",
+                template.question_id,
+                e,
+            )
+
+    try:
+        return merge_dynamic_rubrics(global_dynamic_rubric, question_dynamic_rubric)
+    except ValueError as e:
+        logger.error("Error merging dynamic rubrics for %s: %s", template.question_id, e)
+        return global_dynamic_rubric
 
 
 def resolve_few_shot_for_task(

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal, Union
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
     from karenina.schemas.entities import Question, Rubric
+    from karenina.schemas.entities.rubric import DynamicRubric
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
@@ -64,13 +65,15 @@ class TaskEval:
         self.callable_registry = callable_registry or {}
         self.merge_strategy: Literal["concatenate", "traces_only"] = merge_strategy
 
-        # Storage for logs, questions, and rubrics
+        # Storage for logs, questions, rubrics, and dynamic rubrics
         self.global_logs: list[LogEvent] = []
         self.step_logs: dict[str, list[LogEvent]] = {}
         self.global_questions: list[dict[str, Any] | Question] = []
         self.step_questions: dict[str, list[dict[str, Any] | Question]] = {}
         self.global_rubrics: list[Rubric] = []
         self.step_rubrics: dict[str, list[Rubric]] = {}
+        self.global_dynamic_rubrics: list[DynamicRubric] = []
+        self.step_dynamic_rubrics: dict[str, list[DynamicRubric]] = {}
 
     # =============================================================================
     # CORE API METHODS
@@ -258,6 +261,24 @@ class TaskEval:
         else:
             self.global_rubrics.append(rubric_obj)
 
+    def add_dynamic_rubric(self, dynamic_rubric: "DynamicRubric", step_id: str | None = None) -> None:
+        """Add a dynamic rubric for conditional quality evaluation.
+
+        Dynamic rubrics gate each trait on concept presence in the response.
+        Traits whose concept is absent are skipped; present traits are promoted
+        into the standard rubric and evaluated normally.
+
+        Args:
+            dynamic_rubric: DynamicRubric object with conditional traits
+            step_id: Optional step ID for step-specific dynamic rubrics
+        """
+        if step_id:
+            if step_id not in self.step_dynamic_rubrics:
+                self.step_dynamic_rubrics[step_id] = []
+            self.step_dynamic_rubrics[step_id].append(dynamic_rubric)
+        else:
+            self.global_dynamic_rubrics.append(dynamic_rubric)
+
     def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
         """Register a callable function for manual trait evaluation.
 
@@ -397,13 +418,20 @@ class TaskEval:
         if step_id:
             questions = self.step_questions.get(step_id, [])
             rubrics = self.step_rubrics.get(step_id, [])
+            dynamic_rubrics = self.step_dynamic_rubrics.get(step_id, [])
             logs = self.step_logs.get(step_id, [])
         else:
             questions = self.global_questions
             rubrics = self.global_rubrics
+            dynamic_rubrics = self.global_dynamic_rubrics
             logs = self.global_logs
 
-        return EvaluationContext(questions=questions, logs=logs, merged_rubric=self._merge_rubrics(rubrics))
+        return EvaluationContext(
+            questions=questions,
+            logs=logs,
+            merged_rubric=self._merge_rubrics(rubrics),
+            merged_dynamic_rubric=self._merge_dynamic_rubrics(dynamic_rubrics),
+        )
 
     def _normalize_question(self, question: Union[dict[str, Any], "Question"]) -> dict[str, Any]:
         """Normalize a question to dict format for evaluation.
@@ -420,6 +448,8 @@ class TaskEval:
                 "keywords": question.keywords,
                 "few_shot_examples": question.few_shot_examples,
                 "answer_template": getattr(question, "answer_template", None),
+                "question_rubric": getattr(question, "question_rubric", None),
+                "question_dynamic_rubric": getattr(question, "question_dynamic_rubric", None),
             }
         return question
 
@@ -462,14 +492,19 @@ class TaskEval:
                 or context.merged_rubric.regex_traits
                 or context.merged_rubric.callable_traits
                 or context.merged_rubric.metric_traits
+                or context.merged_rubric.agentic_traits
             )
         )
 
-        if has_templates and has_rubrics:
+        has_dynamic_rubrics = bool(context.merged_dynamic_rubric and not context.merged_dynamic_rubric.is_empty())
+
+        any_rubric = has_rubrics or has_dynamic_rubrics
+
+        if has_templates and any_rubric:
             return "template_and_rubric"
         elif has_templates:
             return "template_only"
-        elif has_rubrics:
+        elif any_rubric:
             return "rubric_only"
         else:
             raise ValueError(
@@ -538,6 +573,7 @@ class TaskEval:
                     response_text=concatenated_logs,
                     parsing_model=config.parsing_models[0],
                     rubric=context.merged_rubric,
+                    dynamic_rubric=context.merged_dynamic_rubric,
                     evaluation_mode=evaluation_mode,
                     error_context=f"rubric-only logs{step_suffix}",
                     trace_messages=trace_messages,
@@ -554,12 +590,18 @@ class TaskEval:
                 if evaluation_mode != "rubric_only" and not answer_template:
                     continue
 
+                # Merge per-question dynamic rubric with context-level dynamic rubric
+                effective_dynamic_rubric = self._resolve_question_dynamic_rubric(
+                    question_dict, context.merged_dynamic_rubric
+                )
+
                 self._evaluate_and_store(
                     step_eval=step_eval,
                     question_dict=question_dict,
                     response_text=concatenated_logs,
                     parsing_model=config.parsing_models[0],
                     rubric=context.merged_rubric,
+                    dynamic_rubric=effective_dynamic_rubric,
                     evaluation_mode=evaluation_mode,
                     error_context=f"question {question_id}{step_suffix}",
                     trace_messages=trace_messages,
@@ -575,6 +617,7 @@ class TaskEval:
         response_text: str,
         parsing_model: ModelConfig,
         rubric: "Rubric | None",
+        dynamic_rubric: "DynamicRubric | None",
         evaluation_mode: str,
         error_context: str,
         trace_messages: "list[Message] | None" = None,
@@ -588,6 +631,7 @@ class TaskEval:
             response_text: The logged text to evaluate
             parsing_model: Model to use for parsing/evaluation
             rubric: Rubric with evaluation traits (optional)
+            dynamic_rubric: DynamicRubric with conditional traits (optional)
             evaluation_mode: One of "template_only", "rubric_only", "template_and_rubric"
             error_context: Context string for error messages
             trace_messages: Optional list of Message objects for the trace
@@ -602,6 +646,7 @@ class TaskEval:
                 response_text=response_text,
                 parsing_model=parsing_model,
                 rubric=rubric,
+                dynamic_rubric=dynamic_rubric,
                 evaluation_mode=evaluation_mode,
                 trace_messages=trace_messages,
                 agent_metrics=agent_metrics,
@@ -624,6 +669,7 @@ class TaskEval:
         response_text: str,
         parsing_model: ModelConfig,
         rubric: "Rubric | None",
+        dynamic_rubric: "DynamicRubric | None" = None,
         evaluation_mode: str = "template_only",
         trace_messages: "list[Message] | None" = None,
         agent_metrics: dict[str, Any] | None = None,
@@ -635,6 +681,7 @@ class TaskEval:
             response_text: The logged text to evaluate
             parsing_model: Model to use for parsing/evaluation
             rubric: Rubric with evaluation traits (optional)
+            dynamic_rubric: DynamicRubric with conditional traits (optional)
             evaluation_mode: One of "template_only", "rubric_only", "template_and_rubric"
             trace_messages: Optional list of Message objects for the trace
             agent_metrics: Optional agent execution metrics
@@ -701,6 +748,7 @@ class Answer(BaseAnswer):
             answering_model=mock_answering_model,
             parsing_model=parsing_model,
             rubric=rubric,
+            dynamic_rubric=dynamic_rubric,
             cached_answer_data=cached_answer_data,
             abstention_enabled=True,
             rubric_evaluation_strategy="batch",
@@ -726,6 +774,7 @@ class Answer(BaseAnswer):
             return None
 
         from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from karenina.schemas.entities.rubric import AgenticRubricTrait
 
         # Check for trait name conflicts first (across all trait types)
         all_trait_names = []
@@ -738,6 +787,8 @@ class Answer(BaseAnswer):
                 all_trait_names.append(callable_trait.name)
             for metric_trait in rubric.metric_traits:
                 all_trait_names.append(metric_trait.name)
+            for agentic_trait in rubric.agentic_traits:
+                all_trait_names.append(agentic_trait.name)
 
         # Find duplicates
         seen = set()
@@ -758,6 +809,7 @@ class Answer(BaseAnswer):
         unique_regex_traits: dict[str, RegexTrait] = {}
         unique_callable_traits: dict[str, CallableTrait] = {}
         unique_metric_traits: dict[str, MetricRubricTrait] = {}
+        unique_agentic_traits: dict[str, AgenticRubricTrait] = {}
         for rubric in rubrics:
             for trait in rubric.llm_traits:
                 unique_llm_traits[trait.name] = trait
@@ -767,13 +819,80 @@ class Answer(BaseAnswer):
                 unique_callable_traits[callable_trait.name] = callable_trait
             for metric_trait in rubric.metric_traits:
                 unique_metric_traits[metric_trait.name] = metric_trait
+            for agentic_trait in rubric.agentic_traits:
+                unique_agentic_traits[agentic_trait.name] = agentic_trait
 
         return Rubric(
             llm_traits=list(unique_llm_traits.values()),
             regex_traits=list(unique_regex_traits.values()),
             callable_traits=list(unique_callable_traits.values()),
             metric_traits=list(unique_metric_traits.values()),
+            agentic_traits=list(unique_agentic_traits.values()),
         )
+
+    def _merge_dynamic_rubrics(self, dynamic_rubrics: "list[DynamicRubric]") -> "DynamicRubric | None":
+        """Merge multiple dynamic rubrics into a single DynamicRubric.
+
+        Delegates to the schema-layer merge function which concatenates traits
+        and rejects name collisions.
+
+        Args:
+            dynamic_rubrics: List of DynamicRubric objects to merge.
+
+        Returns:
+            Merged DynamicRubric, or None if the list is empty.
+        """
+        if not dynamic_rubrics:
+            return None
+
+        from karenina.schemas.entities.rubric import merge_dynamic_rubrics
+
+        result = dynamic_rubrics[0]
+        for dr in dynamic_rubrics[1:]:
+            result = merge_dynamic_rubrics(result, dr)  # type: ignore[assignment]
+        return result
+
+    def _resolve_question_dynamic_rubric(
+        self,
+        question_dict: dict[str, Any],
+        context_dynamic_rubric: "DynamicRubric | None",
+    ) -> "DynamicRubric | None":
+        """Merge per-question dynamic rubric with context-level dynamic rubric.
+
+        Mirrors the Benchmark path's merge_dynamic_rubrics_for_task behavior:
+        deserializes the question-level dict, then merges with the context-level
+        dynamic rubric.
+
+        Args:
+            question_dict: Normalized question dictionary.
+            context_dynamic_rubric: The merged dynamic rubric from the evaluation context.
+
+        Returns:
+            Merged DynamicRubric, or the context-level one if no per-question rubric exists.
+        """
+        question_dr_dict = question_dict.get("question_dynamic_rubric")
+        if not question_dr_dict:
+            return context_dynamic_rubric
+
+        from karenina.schemas.entities.rubric import DynamicRubric, merge_dynamic_rubrics
+
+        try:
+            question_dr = DynamicRubric.model_validate(question_dr_dict)
+        except Exception as e:
+            question_id = question_dict.get("id", "unknown")
+            logger.warning(
+                "Failed to parse question dynamic rubric for %s: %s",
+                question_id,
+                e,
+            )
+            return context_dynamic_rubric
+
+        try:
+            return merge_dynamic_rubrics(context_dynamic_rubric, question_dr)
+        except ValueError as e:
+            question_id = question_dict.get("id", "unknown")
+            logger.error("Error merging dynamic rubrics for %s: %s", question_id, e)
+            return context_dynamic_rubric
 
     def _build_result(self, step_eval: StepEval, step_id: str | None) -> TaskEvalResult:
         """Build the final TaskEvalResult."""
@@ -793,7 +912,14 @@ class Answer(BaseAnswer):
 class EvaluationContext:
     """Container for evaluation context data."""
 
-    def __init__(self, questions: list[Any], logs: list[LogEvent], merged_rubric: "Rubric | None"):
+    def __init__(
+        self,
+        questions: list[Any],
+        logs: list[LogEvent],
+        merged_rubric: "Rubric | None",
+        merged_dynamic_rubric: "DynamicRubric | None" = None,
+    ):
         self.questions = questions
         self.logs = logs
         self.merged_rubric = merged_rubric
+        self.merged_dynamic_rubric = merged_dynamic_rubric

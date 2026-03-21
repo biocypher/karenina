@@ -200,43 +200,6 @@ def test_validation_allows_empty_provider_for_openrouter() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    "evaluation_mode,rubric_enabled,error_match",
-    [
-        ("rubric_only", False, "evaluation_mode='rubric_only' requires rubric_enabled=True"),
-        ("template_and_rubric", False, "evaluation_mode='template_and_rubric' requires rubric_enabled=True"),
-        ("template_only", True, "evaluation_mode='template_only' is incompatible with rubric_enabled=True"),
-    ],
-    ids=[
-        "rubric_only_requires_rubric",
-        "template_and_rubric_requires_rubric",
-        "template_only_incompatible_with_rubric",
-    ],
-)
-def test_validation_evaluation_mode_rubric_consistency(
-    evaluation_mode: str, rubric_enabled: bool, error_match: str
-) -> None:
-    """Test that evaluation_mode and rubric_enabled settings are consistent."""
-    with pytest.raises(ValueError, match=error_match):
-        VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            evaluation_mode=evaluation_mode,
-            rubric_enabled=rubric_enabled,
-            parsing_only=True,
-        )
-
-
-@pytest.mark.unit
 def test_validation_invalid_search_tool_name() -> None:
     """Test that validation rejects unknown search tool names."""
     with pytest.raises(ValueError, match="Unknown search tool"):
@@ -497,7 +460,6 @@ def test_repr_shows_features() -> None:
             )
         ],
         evaluation_mode="template_and_rubric",
-        rubric_enabled=True,
         abstention_enabled=True,
         deep_judgment_enabled=True,
     )

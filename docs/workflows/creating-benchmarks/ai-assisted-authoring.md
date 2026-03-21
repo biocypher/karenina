@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -42,7 +42,7 @@ from karenina.benchmark.authoring.answers.builder import AnswerBuilder
 
 # Realistic generated template code (matches actual generator output format)
 _GENERATED_CODE = '''from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import BooleanMatch
+from karenina.schemas.primitives import BooleanMatch
 
 class Answer(BaseAnswer):
     identifies_target: bool = VerifiedField(

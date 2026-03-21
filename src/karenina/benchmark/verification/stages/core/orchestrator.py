@@ -7,6 +7,7 @@ import logging
 import time
 
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import VerificationResult
 
 from ..pipeline.abstention_check import AbstentionCheckStage
@@ -87,6 +88,7 @@ class StageOrchestrator:
         deep_judgment_enabled: bool = False,
         evaluation_mode: str = "template_only",
         agentic_parsing: bool = False,
+        dynamic_rubric: DynamicRubric | None = None,
     ) -> "StageOrchestrator":
         """
         Build orchestrator from configuration.
@@ -105,11 +107,22 @@ class StageOrchestrator:
                 - "rubric_only": Skip template, only evaluate rubrics
             agentic_parsing: Whether to use agentic parsing (Stage 7b) instead of
                 classical parsing (Stage 7a). Requires AgentPort support.
+            dynamic_rubric: Optional dynamic rubric whose traits are conditionally
+                evaluated based on concept presence in the response.
 
         Returns:
             Configured StageOrchestrator instance
         """
         stages: StageList = []
+
+        # Check whether the dynamic rubric contributes non-agentic or agentic traits
+        _dynamic_has_non_agentic = dynamic_rubric is not None and (
+            dynamic_rubric.llm_traits
+            or dynamic_rubric.regex_traits
+            or dynamic_rubric.callable_traits
+            or dynamic_rubric.metric_traits
+        )
+        _dynamic_has_agentic = dynamic_rubric is not None and bool(dynamic_rubric.agentic_traits)
 
         if evaluation_mode == "rubric_only":
             # Rubric-only mode: Skip template verification stages
@@ -127,13 +140,16 @@ class StageOrchestrator:
                 stages.append(AbstentionCheckStage())
 
             # Rubric evaluation (required for rubric_only mode)
-            if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits):
+            _rubric_has_non_agentic = rubric and (
+                rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits
+            )
+            if _rubric_has_non_agentic or _dynamic_has_non_agentic:
                 stages.append(RubricEvaluationStage())
                 # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
                 stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation
-            if rubric and rubric.agentic_traits:
+            if (rubric and rubric.agentic_traits) or _dynamic_has_agentic:
                 stages.append(AgenticRubricEvaluationStage())
 
             # Finalize result (always last)
@@ -177,17 +193,18 @@ class StageOrchestrator:
                 stages.append(DeepJudgmentAutoFailStage())
 
             # Rubric evaluation (for template_and_rubric mode)
-            if (
-                evaluation_mode == "template_and_rubric"
-                and rubric
-                and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
-            ):
+            _rubric_has_non_agentic = rubric and (
+                rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits
+            )
+            if evaluation_mode == "template_and_rubric" and (_rubric_has_non_agentic or _dynamic_has_non_agentic):
                 stages.append(RubricEvaluationStage())
                 # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
                 stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation (after Stage 11)
-            if evaluation_mode == "template_and_rubric" and rubric and rubric.agentic_traits:
+            if evaluation_mode == "template_and_rubric" and (
+                (rubric and rubric.agentic_traits) or _dynamic_has_agentic
+            ):
                 stages.append(AgenticRubricEvaluationStage())
 
             # Finalize result (always last)

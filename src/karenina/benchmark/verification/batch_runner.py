@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import (
     FinishedTemplate,
@@ -29,6 +30,7 @@ from .utils.resource_helpers import cleanup_resources
 from .utils.storage_helpers import auto_save_results
 from .utils.task_helpers import (
     extract_feature_flags,
+    merge_dynamic_rubrics_for_task,
     merge_rubrics_for_task,
     resolve_few_shot_for_task,
 )
@@ -45,6 +47,7 @@ def generate_task_queue(
     templates: list[FinishedTemplate],
     config: VerificationConfig,
     global_rubric: Rubric | None = None,
+    global_dynamic_rubric: DynamicRubric | None = None,
     run_name: str | None = None,
     workspace_root: Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -58,6 +61,7 @@ def generate_task_queue(
         templates: List of finished templates to verify
         config: Verification configuration with models and settings
         global_rubric: Optional global rubric for evaluation
+        global_dynamic_rubric: Optional global dynamic rubric for evaluation
         run_name: Optional name for this verification run
 
     Returns:
@@ -68,6 +72,9 @@ def generate_task_queue(
     for template in templates:
         # Prepare rubric for this question
         rubric = merge_rubrics_for_task(global_rubric, template, config)
+
+        # Prepare dynamic rubric for this question
+        dynamic_rubric = merge_dynamic_rubrics_for_task(global_dynamic_rubric, template, config)
 
         # Resolve few-shot examples
         few_shot = resolve_few_shot_for_task(template, config)
@@ -94,6 +101,7 @@ def generate_task_queue(
                         "replicate": replicate,
                         # Context
                         "rubric": rubric,
+                        "dynamic_rubric": dynamic_rubric,
                         "keywords": template.keywords,
                         "question_workspace_path": template.workspace_path,
                         "few_shot_examples": few_shot,
@@ -191,6 +199,7 @@ def execute_task(
             run_name=task.get("run_name"),
             replicate=task["replicate"],
             rubric=task["rubric"],
+            dynamic_rubric=task.get("dynamic_rubric"),
             keywords=task.get("keywords"),
             raw_answer=task.get("raw_answer"),
             few_shot_examples=task.get("few_shot_examples"),
@@ -259,6 +268,7 @@ def run_verification_batch(
     config: VerificationConfig,
     run_name: str | None = None,
     global_rubric: Rubric | None = None,
+    global_dynamic_rubric: DynamicRubric | None = None,
     async_enabled: bool | None = None,
     max_workers: int | None = None,
     storage_url: str | None = None,
@@ -276,6 +286,7 @@ def run_verification_batch(
         config: Verification configuration with models and settings
         run_name: Optional name for this run (auto-generated if not provided)
         global_rubric: Optional global rubric for evaluation
+        global_dynamic_rubric: Optional global dynamic rubric for evaluation
         async_enabled: Whether to run in parallel (defaults to KARENINA_ASYNC_ENABLED env var)
         max_workers: Maximum parallel workers (defaults to KARENINA_ASYNC_MAX_WORKERS env var)
         storage_url: Optional database URL for auto-save
@@ -287,6 +298,16 @@ def run_verification_batch(
     Returns:
         VerificationResultSet containing all verification results
     """
+    # Guard: parsing_only is designed for TaskEval, which bypasses the batch
+    # runner entirely. Using it here would silently produce 0 tasks because
+    # the task queue iterates over answering_models (which is empty).
+    if config.parsing_only:
+        raise ValueError(
+            "parsing_only=True is not supported in the batch verification path. "
+            "Use TaskEval for evaluating pre-recorded responses, or provide "
+            "answering_models for the standard Benchmark pipeline."
+        )
+
     # Generate run name if not provided
     if run_name is None:
         import uuid
@@ -307,6 +328,7 @@ def run_verification_batch(
         templates=templates,
         config=config,
         global_rubric=global_rubric,
+        global_dynamic_rubric=global_dynamic_rubric,
         run_name=run_name,
         workspace_root=workspace_root,
     )

@@ -21,6 +21,7 @@ class FinishedTemplate(BaseModel):
     last_modified: str
     finished: bool = True
     question_rubric: dict[str, Any] | None = None  # Question-specific rubric as dict
+    question_dynamic_rubric: dict[str, Any] | None = None  # Question-specific dynamic rubric as dict
     keywords: list[str] | None = None  # Keywords associated with the question
     few_shot_examples: list[dict[str, str]] | None = None  # Few-shot examples for this question
     workspace_path: str | None = None  # Relative workspace path from Question

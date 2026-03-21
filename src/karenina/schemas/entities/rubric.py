@@ -3,6 +3,7 @@ Rubric data models for qualitative evaluation traits.
 """
 
 import base64
+import logging
 import re
 import warnings
 from collections.abc import Callable
@@ -16,6 +17,8 @@ from karenina.schemas.entities._template_validation import _validate_template_fi
 
 if TYPE_CHECKING:
     from karenina.schemas.config.models import ModelConfig
+
+logger = logging.getLogger(__name__)
 
 TraitKind = Literal["boolean", "score", "literal"]
 
@@ -46,6 +49,7 @@ class LLMRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description shown to user/LLM")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     kind: TraitKind = Field(..., description="Type of trait: 'boolean', 'score', or 'literal'")
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
@@ -185,6 +189,7 @@ class RegexTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     pattern: str = Field(..., description="Regex pattern to match against text")
     case_sensitive: bool = Field(True, description="Whether pattern matching should be case sensitive")
     invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
@@ -264,6 +269,7 @@ class CallableTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     kind: TraitKind = Field(..., description="Type of evaluation: 'boolean' for pass/fail, 'score' for numeric")
     callable_code: bytes = Field(..., description="Serialized callable function (cloudpickle)")
     min_score: int | None = Field(None, description="Minimum score value (required if kind='score')")
@@ -309,6 +315,7 @@ class CallableTrait(BaseModel):
         func: Callable[[str], bool | int],
         kind: TraitKind,
         description: str | None = None,
+        summary: str | None = None,
         min_score: int | None = None,
         max_score: int | None = None,
         invert_result: bool = False,
@@ -322,6 +329,7 @@ class CallableTrait(BaseModel):
             func: Function that takes a string (the verification trace/answer text) and returns bool or int
             kind: Type of evaluation - 'boolean' or 'score'
             description: Optional trait description
+            summary: Short concept label for dynamic rubric presence check
             min_score: Minimum score (required if kind='score')
             max_score: Maximum score (required if kind='score')
             invert_result: Whether to invert boolean result (only for kind='boolean')
@@ -358,6 +366,7 @@ class CallableTrait(BaseModel):
         return cls(
             name=name,
             description=description,
+            summary=summary,
             kind=kind,
             callable_code=callable_code,
             min_score=min_score,
@@ -480,6 +489,7 @@ class MetricRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     evaluation_mode: Literal["tp_only", "full_matrix"] = Field(
         "tp_only", description="Evaluation mode: tp_only (only TP defined) or full_matrix (TP+TN defined)"
     )
@@ -594,6 +604,7 @@ class AgenticRubricTrait(BaseModel):
 
     name: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
+    summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
     kind: Literal["boolean", "score", "literal"] | type[BaseModel]
     higher_is_better: bool | None = Field(
         ...,
@@ -973,4 +984,137 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
         callable_traits=merged_callable_traits,
         metric_traits=merged_metric_traits,
         agentic_traits=merged_agentic_traits,
+    )
+
+
+# Type alias for the union of all trait types stored in DynamicRubric
+_AnyTrait = LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+
+
+class DynamicRubric(BaseModel):
+    """Rubric whose traits are conditionally evaluated based on concept presence.
+
+    Unlike a regular Rubric (evaluated unconditionally), a DynamicRubric gates
+    each trait on whether its concept is detected in the response. Every trait
+    must carry either a ``summary`` or ``description`` so that the presence
+    check prompt can describe the concept to the judge LLM.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    llm_traits: list[LLMRubricTrait] = Field(default_factory=list)
+    regex_traits: list[RegexTrait] = Field(default_factory=list)
+    callable_traits: list[CallableTrait] = Field(default_factory=list)
+    metric_traits: list[MetricRubricTrait] = Field(default_factory=list)
+    agentic_traits: list[AgenticRubricTrait] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_concept_text(self) -> "DynamicRubric":
+        """Ensure every trait has text usable for concept presence checking.
+
+        Each trait must have at least one of ``summary`` or ``description``.
+        If ``summary`` is None but ``description`` exists, a warning is logged
+        because ``summary`` is the preferred short label for the presence check
+        prompt. If both are None, the trait cannot participate in presence
+        checking and a ``ValueError`` is raised.
+        """
+        for trait in self._all_traits():
+            has_summary = getattr(trait, "summary", None) is not None
+            has_description = getattr(trait, "description", None) is not None
+
+            if not has_summary and not has_description:
+                raise ValueError(
+                    f"Dynamic rubric trait '{trait.name}' has neither summary nor description. "
+                    "At least one is required for concept presence checking."
+                )
+            if not has_summary and has_description:
+                logger.warning(
+                    "Dynamic rubric trait '%s' has no summary; falling back to description "
+                    "for concept presence text. Consider adding a short summary.",
+                    trait.name,
+                )
+        return self
+
+    def _all_traits(self) -> list[_AnyTrait]:
+        """Return a flat list of all traits across every type."""
+        result: list[_AnyTrait] = []
+        result.extend(self.llm_traits)
+        result.extend(self.regex_traits)
+        result.extend(self.callable_traits)
+        result.extend(self.metric_traits)
+        result.extend(self.agentic_traits)
+        return result
+
+    def get_trait_names(self) -> list[str]:
+        """Return names of all traits in type order: llm, regex, callable, metric, agentic."""
+        return [trait.name for trait in self._all_traits()]
+
+    def is_empty(self) -> bool:
+        """Return True if this dynamic rubric contains no traits."""
+        return len(self._all_traits()) == 0
+
+    def resolve_concept_text(self, trait: _AnyTrait) -> str:
+        """Return the text to use for concept presence checking.
+
+        Prefers ``summary`` when set; falls back to ``description``.
+
+        Args:
+            trait: A trait instance from this dynamic rubric.
+
+        Returns:
+            The concept text string (summary or description).
+        """
+        summary = getattr(trait, "summary", None)
+        if summary is not None:
+            return str(summary)
+        description = getattr(trait, "description", None)
+        if description is not None:
+            return str(description)
+        # Should not happen if validation passed, but guard defensively
+        return trait.name
+
+
+def merge_dynamic_rubrics(
+    global_dynamic: "DynamicRubric | None",
+    question_dynamic: "DynamicRubric | None",
+) -> "DynamicRubric | None":
+    """Merge global and question-specific dynamic rubrics.
+
+    Mirrors :func:`merge_rubrics` for the dynamic rubric variant. Traits from
+    both sources are concatenated. Name collisions (across all trait types) are
+    rejected.
+
+    Args:
+        global_dynamic: The global dynamic rubric (applied to all questions).
+        question_dynamic: Question-specific dynamic rubric.
+
+    Returns:
+        Merged DynamicRubric with traits from both sources, or None if both are None.
+
+    Raises:
+        ValueError: If there are trait name conflicts between global and question dynamic rubrics.
+    """
+    if not global_dynamic and not question_dynamic:
+        return None
+
+    if not global_dynamic:
+        return question_dynamic
+
+    if not question_dynamic:
+        return global_dynamic
+
+    # Check for trait name conflicts across all trait types
+    global_names = set(global_dynamic.get_trait_names())
+    question_names = set(question_dynamic.get_trait_names())
+    conflicts = global_names.intersection(question_names)
+
+    if conflicts:
+        raise ValueError(f"Trait name conflicts between global and question dynamic rubrics: {conflicts}")
+
+    return DynamicRubric(
+        llm_traits=list(global_dynamic.llm_traits) + list(question_dynamic.llm_traits),
+        regex_traits=list(global_dynamic.regex_traits) + list(question_dynamic.regex_traits),
+        callable_traits=list(global_dynamic.callable_traits) + list(question_dynamic.callable_traits),
+        metric_traits=list(global_dynamic.metric_traits) + list(question_dynamic.metric_traits),
+        agentic_traits=list(global_dynamic.agentic_traits) + list(question_dynamic.agentic_traits),
     )

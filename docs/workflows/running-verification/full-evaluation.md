@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -163,7 +163,6 @@ config = VerificationConfig(
     ],
     # Evaluation mode
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     # Quality checks
     abstention_enabled=True,
     sufficiency_enabled=True,
@@ -173,7 +172,6 @@ config = VerificationConfig(
 )
 
 print(f"Mode:       {config.evaluation_mode}")
-print(f"Rubric:     {config.rubric_enabled}")
 print(f"Abstention: {config.abstention_enabled}")
 print(f"Sufficiency:{config.sufficiency_enabled}")
 print(f"Embedding:  {config.embedding_check_enabled}")
@@ -206,7 +204,6 @@ config_with_prompts = VerificationConfig(
                     temperature=0.0)
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     prompt_config=prompt_config,
 )
 
@@ -241,7 +238,6 @@ config_override = VerificationConfig.from_overrides(
 )
 
 print(f"Mode: {config_override.evaluation_mode}")
-print(f"Rubric: {config_override.rubric_enabled}")
 ```
 
 ### CLI with Preset + Overrides
@@ -304,6 +300,65 @@ for result in results:
               f"Similarity: {t.embedding_similarity_score:.2f}  "
               f"Override: {t.embedding_override_applied}")
 ```
+
+---
+
+## Dynamic Rubric
+
+A [DynamicRubric](../../core_concepts/rubrics/index.md#6-dynamic-rubric) allows conditional rubric evaluation: traits are only scored when their concept is detected in the response. Attach a `DynamicRubric` to individual questions so that traits irrelevant to a particular response are skipped rather than evaluated against unrelated content.
+
+```python
+from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+dynamic = DynamicRubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="interaction_safety",
+            summary="drug interaction warnings",
+            description="Answer True if the response includes drug interaction warnings.",
+            kind="boolean",
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="dosing_clarity",
+            summary="dosing instructions",
+            description="Rate dosing clarity from 1 to 5.",
+            kind="score",
+            higher_is_better=True,
+        ),
+    ],
+)
+
+# Attach per-question
+benchmark.add_question(
+    question="What is the recommended treatment for condition X?",
+    raw_answer="Drug A, 500mg twice daily",
+    dynamic_rubric=dynamic,
+)
+
+# Run with rubric mode enabled
+config = VerificationConfig(
+    answering_models=[
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
+                    model_provider="anthropic", interface="langchain")
+    ],
+    parsing_models=[
+        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
+                    model_provider="anthropic", interface="langchain")
+    ],
+    evaluation_mode="template_and_rubric",
+)
+
+results = benchmark.run_verification(config)
+
+# Inspect dynamic rubric metadata
+for result in results:
+    if result.rubric:
+        print(f"Promoted: {result.rubric.dynamic_rubric_promoted_traits}")
+        print(f"Skipped:  {result.rubric.dynamic_rubric_skipped_traits}")
+```
+
+The presence check runs automatically at the start of Stage 11 (RubricEvaluation). Skipped traits do not incur evaluation cost. Static rubric traits (attached via `benchmark.set_global_rubric()`) are always evaluated; only dynamic rubric traits are gated by presence.
 
 ---
 

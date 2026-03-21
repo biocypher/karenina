@@ -9,6 +9,7 @@ from typing import Any
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import PromptConfig, VerificationResult
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -32,6 +33,7 @@ def run_single_model_verification(
     run_name: str | None = None,
     replicate: int | None = None,
     rubric: Rubric | None = None,
+    dynamic_rubric: DynamicRubric | None = None,
     keywords: list[str] | None = None,
     raw_answer: str | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
@@ -134,6 +136,7 @@ def run_single_model_verification(
         answering_model=answering_model,
         parsing_model=parsing_model,
         rubric=rubric,
+        dynamic_rubric=dynamic_rubric,
         keywords=keywords,
         raw_answer=raw_answer,
         # Run Metadata
@@ -198,24 +201,24 @@ def run_single_model_verification(
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
     context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
-    # Determine evaluation mode automatically if not explicitly set
-    # If rubric is provided and mode is template_only, upgrade to template_and_rubric
-    if (
-        rubric
-        and (
-            rubric.llm_traits
-            or rubric.regex_traits
-            or rubric.callable_traits
-            or rubric.metric_traits
-            or rubric.agentic_traits
-        )
-        and evaluation_mode == "template_only"
-    ):
+    # Determine evaluation mode automatically if not explicitly set.
+    # If rubric or dynamic_rubric is provided and mode is template_only,
+    # upgrade to template_and_rubric.
+    _has_rubric_traits = rubric and (
+        rubric.llm_traits
+        or rubric.regex_traits
+        or rubric.callable_traits
+        or rubric.metric_traits
+        or rubric.agentic_traits
+    )
+    _has_dynamic_rubric_traits = dynamic_rubric is not None and not dynamic_rubric.is_empty()
+    if (_has_rubric_traits or _has_dynamic_rubric_traits) and evaluation_mode == "template_only":
         evaluation_mode = "template_and_rubric"
 
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
         rubric=rubric,
+        dynamic_rubric=dynamic_rubric,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,

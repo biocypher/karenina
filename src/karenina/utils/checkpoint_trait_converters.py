@@ -18,7 +18,7 @@ from ..schemas.checkpoint import (
     SchemaOrgRating,
 )
 from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.entities.rubric import AgenticRubricTrait, TraitKind
+from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, TraitKind
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +351,7 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
     return MetricRubricTrait(
         name=rating.name,
         description=rating.description,
+        summary=None,
         evaluation_mode=evaluation_mode,
         metrics=metrics,
         tp_instructions=tp_instructions,
@@ -381,6 +382,7 @@ def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
     return RegexTrait(
         name=rating.name,
         description=rating.description,
+        summary=None,
         pattern=pattern,
         case_sensitive=case_sensitive,
         invert_result=invert_result,
@@ -416,6 +418,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
     return CallableTrait(
         name=rating.name,
         description=rating.description,
+        summary=None,
         kind=kind,
         callable_code=callable_code,
         min_score=min_score,
@@ -479,6 +482,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         return LLMRubricTrait(
             name=rating.name,
             description=rating.description,
+            summary=None,
             kind="literal",
             classes=classes,
             min_score=None,  # Auto-derived by model validator
@@ -495,6 +499,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         return LLMRubricTrait(
             name=rating.name,
             description=rating.description,
+            summary=None,
             kind="boolean",
             min_score=None,
             max_score=None,
@@ -511,6 +516,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         return LLMRubricTrait(
             name=rating.name,
             description=rating.description,
+            summary=None,
             kind="score",
             min_score=int(rating.worstRating),
             max_score=int(rating.bestRating),
@@ -572,6 +578,7 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
     return AgenticRubricTrait(
         name=rating.name,
         description=rating.description or "",
+        summary=None,
         kind=kind,
         higher_is_better=higher_is_better,
         context_mode=context_mode,
@@ -584,6 +591,156 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
         classes=classes,
         model_override=model_override,
     )
+
+
+def convert_dynamic_rubric_to_ratings(
+    dynamic_rubric: "DynamicRubric",
+    rubric_type: str = "global",
+) -> list[SchemaOrgRating]:
+    """Convert a DynamicRubric to a list of SchemaOrgRating objects.
+
+    Each trait in the DynamicRubric is serialized using the existing per-type
+    converter, then re-tagged with the dynamic rubric ``@type`` discriminator.
+    The ``summary`` field is preserved in ``additionalProperty`` so that
+    concept presence checking can work after deserialization.
+
+    Args:
+        dynamic_rubric: The DynamicRubric to serialize.
+        rubric_type: Either 'global' or 'question-specific'.
+
+    Returns:
+        List of SchemaOrgRating objects.
+    """
+
+    additional_type = (
+        "karenina:GlobalDynamicRubricTrait"
+        if rubric_type == "global"
+        else "karenina:QuestionSpecificDynamicRubricTrait"
+    )
+
+    ratings: list[SchemaOrgRating] = []
+
+    for trait in dynamic_rubric._all_traits():
+        # Delegate to the existing per-type converter to build the rating
+        rating = convert_rubric_trait_to_rating(trait, rubric_type)
+
+        # Re-tag with the dynamic rubric discriminator
+        rating.additionalType = additional_type  # type: ignore[assignment]
+
+        # Inject the trait type tag so we know the original type on deserialization
+        trait_type_tag = _trait_type_tag(trait)
+        props = list(rating.additionalProperty or [])
+        props.append(SchemaOrgPropertyValue(name="dynamic_trait_type", value=trait_type_tag))
+
+        # Persist summary (critical for concept presence checking)
+        summary = getattr(trait, "summary", None)
+        if summary is not None:
+            props.append(SchemaOrgPropertyValue(name="summary", value=summary))
+
+        rating.additionalProperty = props
+        ratings.append(rating)
+
+    return ratings
+
+
+def convert_ratings_to_dynamic_rubric(
+    ratings: list[SchemaOrgRating],
+) -> "DynamicRubric":
+    """Convert a list of SchemaOrgRating objects back to a DynamicRubric.
+
+    This is the inverse of :func:`convert_dynamic_rubric_to_ratings`. Each
+    rating is dispatched to the appropriate per-type converter based on the
+    ``dynamic_trait_type`` property, and the ``summary`` field is restored.
+
+    Args:
+        ratings: List of SchemaOrgRating objects with dynamic rubric @type.
+
+    Returns:
+        A DynamicRubric with all traits restored.
+    """
+    llm_traits: list[LLMRubricTrait] = []
+    regex_traits: list[RegexTrait] = []
+    callable_traits: list[CallableTrait] = []
+    metric_traits: list[MetricRubricTrait] = []
+    agentic_traits: list[AgenticRubricTrait] = []
+
+    for rating in ratings:
+        # Extract dynamic_trait_type and summary from additionalProperty
+        trait_type_tag = "llm"
+        summary: str | None = None
+        clean_props: list[SchemaOrgPropertyValue] = []
+
+        if rating.additionalProperty:
+            for prop in rating.additionalProperty:
+                if prop.name == "dynamic_trait_type":
+                    trait_type_tag = prop.value
+                elif prop.name == "summary":
+                    summary = prop.value
+                else:
+                    clean_props.append(prop)
+
+        # Temporarily restore the per-type additionalType so the existing
+        # converters can dispatch correctly, then convert.
+        original_additional_type = rating.additionalType
+        rating.additionalProperty = clean_props or None
+
+        if trait_type_tag == "llm":
+            rating.additionalType = "karenina:GlobalLLMRubricTrait"
+            llm_t = _convert_rating_to_llm_trait(rating)
+            llm_t.summary = summary
+            llm_traits.append(llm_t)
+        elif trait_type_tag == "regex":
+            rating.additionalType = "karenina:GlobalRegexTrait"
+            regex_t = _convert_rating_to_regex_trait(rating)
+            regex_t.summary = summary
+            regex_traits.append(regex_t)
+        elif trait_type_tag == "callable":
+            rating.additionalType = "karenina:GlobalCallableTrait"
+            callable_t = _convert_rating_to_callable_trait(rating)
+            callable_t.summary = summary
+            callable_traits.append(callable_t)
+        elif trait_type_tag == "metric":
+            rating.additionalType = "karenina:GlobalMetricRubricTrait"
+            metric_t = _convert_rating_to_metric_trait(rating)
+            metric_t.summary = summary
+            metric_traits.append(metric_t)
+        elif trait_type_tag == "agentic":
+            rating.additionalType = "karenina:GlobalAgenticRubricTrait"
+            agentic_t = _convert_rating_to_agentic_trait(rating)
+            agentic_t.summary = summary
+            agentic_traits.append(agentic_t)
+        else:
+            logger.warning(
+                "Unknown dynamic_trait_type '%s' for trait '%s'; skipping.",
+                trait_type_tag,
+                rating.name,
+            )
+
+        # Restore original additionalType (defensive)
+        rating.additionalType = original_additional_type
+
+    return DynamicRubric(
+        llm_traits=llm_traits,
+        regex_traits=regex_traits,
+        callable_traits=callable_traits,
+        metric_traits=metric_traits,
+        agentic_traits=agentic_traits,
+    )
+
+
+def _trait_type_tag(
+    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+) -> str:
+    """Return a short string tag identifying the trait type for serialization."""
+    if isinstance(trait, AgenticRubricTrait):
+        return "agentic"
+    if isinstance(trait, MetricRubricTrait):
+        return "metric"
+    if isinstance(trait, RegexTrait):
+        return "regex"
+    if isinstance(trait, CallableTrait):
+        return "callable"
+    return "llm"
 
 
 def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> None:

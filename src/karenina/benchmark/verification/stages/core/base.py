@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import PromptConfig
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -205,6 +206,13 @@ class ArtifactKeys:
     AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
     AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
 
+    # ==========================================================================
+    # Dynamic Rubric Presence Check
+    # ==========================================================================
+
+    DYNAMIC_RUBRIC_PROMOTED_TRAITS = "dynamic_rubric_promoted_traits"
+    DYNAMIC_RUBRIC_SKIPPED_TRAITS = "dynamic_rubric_skipped_traits"
+
 
 @dataclass
 class VerificationContext:
@@ -256,6 +264,7 @@ class VerificationContext:
     answering_model: ModelConfig
     parsing_model: ModelConfig
     rubric: Rubric | None = None
+    dynamic_rubric: DynamicRubric | None = None
     keywords: list[str] | None = None
     raw_answer: str | None = None
 
@@ -271,6 +280,7 @@ class VerificationContext:
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
+    rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
 
     # Deep-Judgment Configuration
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS

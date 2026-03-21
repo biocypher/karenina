@@ -298,6 +298,39 @@ df = rubric_with_dj.to_dataframe()
 print(f"Rubric DataFrame columns: {len(df.columns)}")
 ```
 
+## Dynamic Rubric Columns
+
+When a [DynamicRubric](../../core_concepts/rubrics/index.md#6-dynamic-rubric) is used, the rubric DataFrame includes additional `{trait_name}_skipped` boolean columns. These columns indicate whether each dynamic trait was skipped (`True`) or promoted and evaluated (`False`) for a given result. If a result did not involve a dynamic rubric, the column value is `NaN`.
+
+```python
+rubric_results = results.get_rubrics_results()
+df = rubric_results.to_dataframe()
+
+# Check for _skipped columns
+skipped_cols = [c for c in df.columns if c.endswith("_skipped")]
+if skipped_cols:
+    print("Dynamic rubric skip columns:", skipped_cols)
+    print(df[["question_id", "trait_name"] + skipped_cols].head())
+```
+
+The underlying `VerificationResultRubric` stores two fields for dynamic rubric metadata:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dynamic_rubric_skipped_traits` | `dict[str, str]` or `None` | Mapping of skipped trait names to skip reasons (e.g., `"concept not present in response"` or `"excluded by rubric_trait_names filter"`) |
+| `dynamic_rubric_promoted_traits` | `list[str]` or `None` | Names of traits that passed the presence check and were evaluated |
+
+Access these fields directly on a result:
+
+```python
+for result in results:
+    if result.rubric and result.rubric.dynamic_rubric_skipped_traits:
+        for trait, reason in result.rubric.dynamic_rubric_skipped_traits.items():
+            print(f"  Skipped {trait}: {reason}")
+    if result.rubric and result.rubric.dynamic_rubric_promoted_traits:
+        print(f"  Evaluated: {result.rubric.dynamic_rubric_promoted_traits}")
+```
+
 ## Common Analysis Patterns
 
 ### Model Comparison

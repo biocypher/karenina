@@ -82,3 +82,8 @@ class PromptTask(str, Enum):
 
     RUBRIC_AGENTIC_TRAIT_EXTRACTION = "rubric_agentic_trait_extraction"
     """Extracts the final score from an agentic rubric investigation trace."""
+
+    # --- Dynamic rubric presence check ---
+
+    RUBRIC_DYNAMIC_PRESENCE_CHECK = "rubric_dynamic_presence_check"
+    """Batch presence check for dynamic rubric trait concepts."""

@@ -151,7 +151,86 @@ All trait types (except MetricRubricTrait, where metrics are inherently "higher 
 
 This field is used by analysis tools and DataFrame builders to correctly interpret and aggregate rubric results. It is also crucial for the GEPA optimization procedure, which relies on `higher_is_better` to determine the direction of improvement when optimizing prompts against rubric scores. GEPA documentation is forthcoming.
 
-## 6. Next Steps
+## 6. Dynamic Rubric
+
+A **DynamicRubric** is a conditional rubric whose traits are only evaluated when their concept is detected in the response. Before rubric evaluation begins, the pipeline sends the response to the parsing LLM with a batch presence check. For each trait, the LLM determines whether the concept described by that trait is meaningfully present. Traits whose concept is absent are skipped entirely; traits whose concept is present are promoted into the standard rubric and evaluated normally.
+
+This is useful when a rubric covers concepts that may or may not appear in a given response. For example, a pharmacology rubric might include traits for drug interactions, dosing information, and contraindications. If the response only discusses dosing, the interaction and contraindication traits are skipped rather than evaluated against irrelevant content.
+
+### The `summary` Field
+
+All five trait types (LLM, regex, callable, metric, agentic) support an optional `summary` field: a short concept label used by the presence check prompt. The presence check prefers `summary` over `description` because it is concise and purpose-built for concept detection. If `summary` is not set, the presence check falls back to `description`. If neither is set, validation raises a `ValueError`.
+
+### How It Works
+
+1. The `DynamicRubric` is attached to a question (or globally to the benchmark).
+2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
+3. The LLM returns a structured `ConceptPresenceResult` indicating which concepts are present.
+4. Traits with `present=True` are promoted into `context.rubric` and evaluated by the standard rubric evaluators.
+5. Traits with `present=False` are recorded in `dynamic_rubric_skipped_traits` with the reason `"concept not present in response"`.
+6. The `dynamic_rubric_promoted_traits` and `dynamic_rubric_skipped_traits` fields are stored on the `VerificationResultRubric` and surfaced in the [rubric DataFrame](../../workflows/analyzing-results/dataframe-analysis.md) as `{trait_name}_skipped` columns.
+
+### Example
+
+```python
+from karenina.schemas.entities.rubric import (
+    DynamicRubric,
+    LLMRubricTrait,
+    RegexTrait,
+)
+
+dynamic = DynamicRubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="interaction_safety",
+            summary="drug interaction warnings",
+            description=(
+                "Answer True if the response includes warnings about potential "
+                "drug interactions. Answer False if no interaction information "
+                "is provided."
+            ),
+            kind="boolean",
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="dosing_clarity",
+            summary="dosing instructions",
+            description=(
+                "Rate the clarity of dosing information from 1 (unclear or missing "
+                "key details) to 5 (precise, unambiguous, includes route, frequency, "
+                "and duration)."
+            ),
+            kind="score",
+            higher_is_better=True,
+        ),
+    ],
+    regex_traits=[
+        RegexTrait(
+            name="has_contraindications",
+            summary="contraindication list",
+            pattern=r"(?i)contraindicated?\b",
+            higher_is_better=True,
+        ),
+    ],
+)
+
+# Attach to a question
+benchmark.add_question(
+    question="What is the recommended treatment for condition X?",
+    raw_answer="Drug A, 500mg twice daily",
+    dynamic_rubric=dynamic,
+)
+```
+
+If the response discusses dosing but not interactions or contraindications, only `dosing_clarity` is evaluated. The other two traits appear in results as skipped.
+
+### Validation Rules
+
+- Every trait must have at least one of `summary` or `description`.
+- Trait names must not conflict with any static rubric trait names on the same question; collisions raise `ValueError`.
+- The `rubric_trait_names` filter (if configured) is applied after the presence check: a present trait excluded by the filter is recorded as skipped with reason `"excluded by rubric_trait_names filter"`.
+
+## 7. Next Steps
 
 - [LLM traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): boolean and score kinds with deep judgment
 - [Literal traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): ordered categorical classification (part of LLM traits)

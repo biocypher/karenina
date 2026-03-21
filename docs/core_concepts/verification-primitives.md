@@ -36,7 +36,7 @@ for mod in [
 
 with patch.dict("sys.modules", mock_modules):
     from karenina.schemas.entities import BaseAnswer, VerifiedField
-    from karenina.schemas.entities.primitives import (
+    from karenina.schemas.primitives import (
         BooleanMatch,
         ContainsAll,
         ContainsAny,
@@ -63,7 +63,7 @@ with patch.dict("sys.modules", mock_modules):
 from typing import Literal
 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ContainsAll,
     ContainsAny,
@@ -802,7 +802,7 @@ for value in ["BCL2", "Bcl-2", "B-cell lymphoma 2", "KRAS"]:
 
 ## 8. Writing Custom Primitives
 
-When none of the 18 built-in primitives fit your verification need, you can write a custom one. Both base classes are in `karenina.schemas.entities.primitives`.
+When none of the 18 built-in primitives fit your verification need, you can write a custom one. Both base classes are in `karenina.schemas.primitives`.
 
 ### Custom Parsed Primitive
 
@@ -810,7 +810,7 @@ Subclass `VerificationPrimitive` and implement `check(extracted, expected) -> bo
 
 ```python
 from typing import Any
-from karenina.schemas.entities.primitives import VerificationPrimitive
+from karenina.schemas.primitives import VerificationPrimitive
 
 
 class CaseInsensitiveContains(VerificationPrimitive):
@@ -825,7 +825,7 @@ class CaseInsensitiveContains(VerificationPrimitive):
 Subclass `TracePrimitive` and implement `check_trace(raw_trace) -> bool`. Expected values are stored as constructor parameters on the primitive, not passed as arguments:
 
 ```python
-from karenina.schemas.entities.primitives import TracePrimitive
+from karenina.schemas.primitives import TracePrimitive
 
 
 class TraceWordCount(TracePrimitive):

@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -71,7 +71,7 @@ The judge's role varies by field type. With `str` fields, the judge acts as a pu
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import ExactMatch
+from karenina.schemas.primitives import ExactMatch
 
 
 class Answer(BaseAnswer):
@@ -269,8 +269,6 @@ The `evaluation_mode` field on [VerificationConfig](../../../reference/configura
 | `template_and_rubric` | Yes | Yes | All 13 stages | Correctness + quality assessment |
 | `rubric_only` | No | Yes | Stages 1-2, 11-13 (template stages skipped) | Quality-only evaluation; no correct answer needed |
 
-Setting `evaluation_mode` to `template_and_rubric` or `rubric_only` automatically requires `rubric_enabled=True`. These two fields are validated together; a mismatch raises a `ValueError` at configuration time.
-
 For details on configuring evaluation modes, see [Evaluation Modes](../evaluation-modes/).
 
 ## 7. Worked Example: Both Together
@@ -281,7 +279,7 @@ Consider the question: *"Which is the putative target of venetoclax?"*
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import BooleanMatch
+from karenina.schemas.primitives import BooleanMatch
 
 
 class VenetoclaxAnswer(BaseAnswer):

@@ -83,6 +83,7 @@ def _deserialize_llm_trait(trait_data: dict[str, Any]) -> Any:
     return LLMRubricTrait(
         name=trait_data["name"],
         description=trait_data.get("description"),
+        summary=trait_data.get("summary"),
         kind=kind,
         higher_is_better=trait_data.get("higher_is_better", True),
         min_score=trait_data.get("min_score", 1) if kind == "score" else None,
@@ -111,6 +112,7 @@ def _deserialize_regex_trait(trait_data: dict[str, Any]) -> Any:
     return RegexTrait(
         name=trait_data["name"],
         description=trait_data.get("description"),
+        summary=trait_data.get("summary"),
         pattern=trait_data.get("pattern", ".*"),
         higher_is_better=trait_data.get("higher_is_better", True),
         case_sensitive=trait_data.get("case_sensitive", True),
@@ -132,6 +134,7 @@ def _deserialize_callable_trait(trait_data: dict[str, Any]) -> Any:
     return CallableTrait(
         name=trait_data["name"],
         description=trait_data.get("description"),
+        summary=trait_data.get("summary"),
         kind=trait_data["kind"],
         callable_code=trait_data["callable_code"],
         higher_is_better=trait_data.get("higher_is_better", True),
@@ -155,6 +158,7 @@ def _deserialize_metric_trait(trait_data: dict[str, Any]) -> Any:
     return MetricRubricTrait(
         name=trait_data["name"],
         description=trait_data.get("description"),
+        summary=trait_data.get("summary"),
         evaluation_mode=trait_data.get("evaluation_mode", "tp_only"),
         metrics=trait_data.get("metrics", []),
         tp_instructions=trait_data.get("tp_instructions", []),
@@ -183,6 +187,7 @@ def _deserialize_agentic_trait(trait_data: dict[str, Any]) -> Any:
     return AgenticRubricTrait(
         name=trait_data["name"],
         description=trait_data.get("description") or "",
+        summary=trait_data.get("summary"),
         kind=trait_data.get("kind", "boolean"),
         higher_is_better=trait_data.get("higher_is_better", True),
         context_mode=trait_data.get("context_mode", "trace_and_workspace"),

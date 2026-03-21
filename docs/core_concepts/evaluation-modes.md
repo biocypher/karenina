@@ -81,11 +81,12 @@ At the orchestration layer, evaluation mode controls which stages `StageOrchestr
 | `DeepJudgmentRubricAutoFail` | No | Optional | Optional |
 | `FinalizeResult` | Yes | Yes | Yes |
 
-Three execution details matter in practice:
+Four execution details matter in practice:
 
 1. `rubric_only` truly skips template stages at the orchestrator level.
 2. `template_and_rubric` evaluates rubrics on the raw response, not on parsed template fields.
 3. Rubric stages are only added when a non-empty `Rubric` is actually attached.
+4. [DynamicRubric](../../../core_concepts/rubrics/) traits participate in `template_and_rubric` and `rubric_only` modes. In `template_only` mode, dynamic rubric traits are ignored because rubric evaluation does not run. The presence check that gates dynamic traits occurs at the start of Stage 11 (RubricEvaluation), so it only executes in modes that include rubric stages.
 
 That means `template_and_rubric` is not "template mode with nicer reporting." It is a combined run with two distinct evaluation paths:
 
@@ -144,39 +145,26 @@ template_and_rubric_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 rubric_only_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="rubric_only",
-    rubric_enabled=True,
 )
 ```
 
 ```python tags=["hide-cell"]
 assert template_only_config.evaluation_mode == "template_only"
-assert template_only_config.rubric_enabled is False
 assert template_and_rubric_config.evaluation_mode == "template_and_rubric"
-assert template_and_rubric_config.rubric_enabled is True
 assert rubric_only_config.evaluation_mode == "rubric_only"
-assert rubric_only_config.rubric_enabled is True
 ```
 
 ## 5. Detailed Reference
 
 ### Configuration rules
 
-`VerificationConfig` enforces these combinations:
-
-| `evaluation_mode` | Required `rubric_enabled` |
-|---|---|
-| `template_only` | `False` |
-| `template_and_rubric` | `True` |
-| `rubric_only` | `True` |
-
-If you use `VerificationConfig.from_overrides(...)`, setting `evaluation_mode` automatically sets `rubric_enabled` to the matching value.
+`evaluation_mode` alone controls which evaluation paths are active. Setting it to `template_and_rubric` or `rubric_only` automatically enables rubric evaluation; no separate flag is needed.
 
 ### Result-shape guidance
 

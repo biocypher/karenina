@@ -43,6 +43,7 @@ class Question(BaseModel):
     sources: list[dict[str, Any]] | None = None
     custom_metadata: dict[str, Any] | None = None
     question_rubric: dict[str, Any] | None = None
+    question_dynamic_rubric: dict[str, Any] | None = None
     workspace_path: str | None = Field(
         default=None,
         description=(

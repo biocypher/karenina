@@ -13,7 +13,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from karenina.adapters import get_agent, get_parser
+from karenina.adapters import get_agent, get_llm, get_parser
 from karenina.ports import AgentConfig, Message
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
@@ -101,6 +101,9 @@ class AgenticTraitEvaluator:
     ) -> str:
         """Launch agent to investigate the response/workspace.
 
+        For ``trace_only`` mode without a workspace, uses LLMPort (single
+        call) instead of AgentPort, since no tool access is needed.
+
         Args:
             trait: The agentic rubric trait to evaluate.
             question_text: The original question text.
@@ -112,12 +115,8 @@ class AgenticTraitEvaluator:
         Returns:
             Raw investigation trace string.
         """
-        agent = get_agent(self._model_config)
-
         system_prompt = (
             "You are an evaluation agent investigating the quality of an LLM response. "
-            "You have access to tools and can examine files, run code, and navigate "
-            "the workspace.\n\n"
             f"Your task: {trait.description}\n\n"
             "After investigating, summarize your findings clearly. Your investigation "
             f"trace will be parsed into a {trait.kind} result."
@@ -143,6 +142,47 @@ class AgenticTraitEvaluator:
             Message.system(system_prompt),
             Message.user("\n".join(user_parts)),
         ]
+
+        # For trace_only without workspace and without materialized trace file,
+        # use LLMPort (no tools needed; trace is inlined in the prompt).
+        # When materialize_trace is active with a file path, the agent needs
+        # file tools to read the trace, so AgentPort is still required.
+        needs_tools = (
+            trait.context_mode != "trace_only"
+            or workspace_path is not None
+            or (trait.materialize_trace and trace_file_path is not None)
+        )
+        if not needs_tools:
+            return self._run_llm_investigation(trait, messages)
+
+        return self._run_agent_investigation(trait, messages, workspace_path)
+
+    def _run_llm_investigation(
+        self,
+        trait: AgenticRubricTrait,
+        messages: list[Message],
+    ) -> str:
+        """Run investigation via LLMPort (single call, no tools).
+
+        Used for trace_only mode where the trace is inlined in the prompt
+        and no workspace tools are needed.
+        """
+        llm = get_llm(self._model_config)
+        result = llm.invoke(messages)
+        logger.info(
+            "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
+            trait.name,
+        )
+        return result.content or ""
+
+    def _run_agent_investigation(
+        self,
+        trait: AgenticRubricTrait,
+        messages: list[Message],
+        workspace_path: Path | str | None,
+    ) -> str:
+        """Run investigation via AgentPort (multi-turn with tools)."""
+        agent = get_agent(self._model_config)
 
         agent_config = AgentConfig(
             max_turns=trait.max_turns,

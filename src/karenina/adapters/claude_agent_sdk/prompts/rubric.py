@@ -38,6 +38,7 @@ _RUBRIC_TASKS = [
     "rubric_literal_trait_batch",
     "rubric_literal_trait_single",
     "rubric_metric_trait",
+    "rubric_dynamic_presence_check",
 ]
 for _task in _RUBRIC_TASKS:
     AdapterInstructionRegistry.register("claude_agent_sdk", _task, _claude_sdk_rubric_factory)

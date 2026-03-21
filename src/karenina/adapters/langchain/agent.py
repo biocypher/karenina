@@ -235,8 +235,7 @@ class LangChainAgentAdapter:
             from langgraph.checkpoint.memory import InMemorySaver
         except ImportError as e:
             raise ImportError(
-                "langchain>=1.1.0 and langgraph are required. "
-                "Install with: uv add 'langchain>=1.1.0' langgraph"
+                "langchain>=1.1.0 and langgraph are required. Install with: uv add 'langchain>=1.1.0' langgraph"
             ) from e
 
         # Auto-detect context size for openai_endpoint interface if not explicitly configured
@@ -361,7 +360,9 @@ class LangChainAgentAdapter:
 
             try:
                 persistent_tools = await acreate_persistent_mcp_tools(
-                    mcp_urls, exit_stack, tool_filter,
+                    mcp_urls,
+                    exit_stack,
+                    tool_filter,
                     self._config.mcp_tool_description_overrides,
                 )
             except Exception as e:
@@ -414,9 +415,7 @@ class LangChainAgentAdapter:
                             try:
                                 agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
                             except TimeoutError as e:
-                                deferred_error = AgentTimeoutError(
-                                    f"Agent execution timed out after {config.timeout}s"
-                                )
+                                deferred_error = AgentTimeoutError(f"Agent execution timed out after {config.timeout}s")
                                 deferred_error.__cause__ = e
                         else:
                             agent_response = await coro

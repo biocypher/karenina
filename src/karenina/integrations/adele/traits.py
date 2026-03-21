@@ -112,6 +112,7 @@ def _adele_rubric_to_trait(rubric: AdeleRubric) -> LLMRubricTrait:
     return LLMRubricTrait(
         name=trait_name,
         description=rubric.header,
+        summary=None,
         kind="literal",
         classes=classes,
         min_score=None,  # Auto-derived by model validator from classes
