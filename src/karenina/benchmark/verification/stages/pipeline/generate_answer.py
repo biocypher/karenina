@@ -223,13 +223,12 @@ class GenerateAnswerStage(BaseVerificationStage):
 
         # Step 2: Determine whether to use AgentPort or LLMPort.
         # Use AgentPort when MCP servers are configured, OR when the adapter
-        # is natively agentic (e.g. Claude Code). Natively agentic runtimes
-        # execute tools internally; the LLMPort path would lose the tool
-        # call trace.
+        # is a deep_agent (e.g. Claude Code). Deep agent runtimes execute tools
+        # internally; the LLMPort path would lose the tool call trace.
         from karenina.adapters.registry import AdapterRegistry
 
         spec = AdapterRegistry.get_spec(answering_model.interface)
-        use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.natively_agentic)
+        use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.agent_tier == "deep_agent")
         answering_agent: AgentPort | None = None
         answering_llm: LLMPort | None = None
 
