@@ -276,7 +276,13 @@ class FinalizeResultStage(BaseVerificationStage):
 
             # Get agentic trait evaluation results (populated by Stage 11b)
             agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
-            agentic_trait_traces = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+            agentic_trait_traces_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+            # Filter out None traces from failed investigations to satisfy dict[str, str] schema
+            agentic_trait_traces = (
+                {k: v for k, v in agentic_trait_traces_raw.items() if v is not None}
+                if agentic_trait_traces_raw
+                else None
+            )
 
             # Get dynamic rubric metadata (populated by presence check pre-processing)
             dynamic_skipped = context.get_result_field(ArtifactKeys.DYNAMIC_RUBRIC_SKIPPED_TRAITS)

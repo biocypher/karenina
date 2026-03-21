@@ -65,21 +65,24 @@ class TestAgenticTraitEvaluator:
     """Tests for the agentic trait evaluator."""
 
     def test_evaluate_single_boolean_trait(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Single boolean trait returns bool score and trace."""
-        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        """Single boolean trait returns bool score and trace.
 
-        fake_agent = MagicMock()
-        fake_agent.run.return_value = _make_agent_result(
-            raw_trace="I investigated and found the code is clean.",
-            turns=3,
-            limit_reached=False,
+        trace_only + workspace_path=None routes through LLMPort, not AgentPort.
+        """
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
+
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(
+            content="I investigated and found the code is clean.",
+            usage=UsageMetadata(input_tokens=100, output_tokens=50),
         )
 
         fake_parser = MagicMock()
         parsed_score = SingleBooleanScore(result=True)
         fake_parser.parse_to_pydantic.return_value = _make_parse_result(parsed_score)
 
-        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
         monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
@@ -97,21 +100,21 @@ class TestAgenticTraitEvaluator:
         assert "investigated" in trace
 
     def test_evaluate_single_score_trait(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Single score trait returns int score."""
+        """Single score trait returns int score (trace_only via LLMPort)."""
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
 
-        fake_agent = MagicMock()
-        fake_agent.run.return_value = _make_agent_result(
-            raw_trace="Code quality is moderate.",
-            turns=5,
-            limit_reached=False,
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(
+            content="Code quality is moderate.",
+            usage=UsageMetadata(input_tokens=100, output_tokens=50),
         )
 
         fake_parser = MagicMock()
         parsed_score = SingleNumericScore(score=3)
         fake_parser.parse_to_pydantic.return_value = _make_parse_result(parsed_score)
 
-        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
         monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
@@ -127,13 +130,13 @@ class TestAgenticTraitEvaluator:
         assert score == 3
 
     def test_evaluate_trait_agent_failure_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Agent failure returns None score and None trace."""
+        """LLM failure returns None score and None trace (trace_only via LLMPort)."""
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait
 
-        fake_agent = MagicMock()
-        fake_agent.run.side_effect = RuntimeError("Agent timed out")
+        fake_llm = MagicMock()
+        fake_llm.invoke.side_effect = RuntimeError("LLM timed out")
 
-        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
         trait = _make_trait()
@@ -151,16 +154,18 @@ class TestAgenticTraitEvaluator:
     def test_extraction_failure_preserves_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Parser failure returns None score but preserves the investigation trace."""
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
 
-        fake_agent = MagicMock()
-        fake_agent.run.return_value = _make_agent_result(
-            raw_trace="I found several issues.",
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(
+            content="I found several issues.",
+            usage=UsageMetadata(input_tokens=100, output_tokens=50),
         )
 
         fake_parser = MagicMock()
         fake_parser.parse_to_pydantic.side_effect = RuntimeError("Parse failed")
 
-        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
         monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
@@ -402,8 +407,12 @@ class TestTraceMaterialization:
         assert "The full inline response text here" not in user_text
 
     def test_no_trace_file_path_uses_inline_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without trace_file_path, the prompt includes inline trace content."""
+        """Without trace_file_path, the prompt includes inline trace content.
+
+        trace_only + workspace_path=None + no trace_file routes via LLMPort.
+        """
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
 
         trait = AgenticRubricTrait(
             name="test_no_mat",
@@ -413,10 +422,12 @@ class TestTraceMaterialization:
             context_mode="trace_only",
         )
 
-        mock_agent_result = _make_agent_result(raw_trace="investigation output")
-        mock_agent = MagicMock()
-        mock_agent.run.return_value = mock_agent_result
-        monkeypatch.setattr(agentic_trait, "get_agent", lambda _: mock_agent)
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = LLMResponse(
+            content="investigation output",
+            usage=UsageMetadata(input_tokens=100, output_tokens=50),
+        )
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _: mock_llm)
 
         mock_parsed = SingleBooleanScore(result=True)
         mock_parse_result = _make_parse_result(mock_parsed)
@@ -433,15 +444,19 @@ class TestTraceMaterialization:
             trace_file_path=None,
         )
 
-        call_args = mock_agent.run.call_args
-        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        call_args = mock_llm.invoke.call_args
+        messages = call_args[0][0]
         user_msgs = [m for m in messages if m.role == Role.USER]
         user_text = user_msgs[0].text
         assert "Inline trace content" in user_text
 
     def test_materialize_false_ignores_trace_file_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When materialize_trace=False, trace_file_path is ignored; inline content is used."""
+        """When materialize_trace=False, trace_file_path is ignored; inline content is used.
+
+        trace_only + workspace_path=None + materialize_trace=False routes via LLMPort.
+        """
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
 
         trait = AgenticRubricTrait(
             name="test_no_flag",
@@ -451,10 +466,12 @@ class TestTraceMaterialization:
             context_mode="trace_only",
         )
 
-        mock_agent_result = _make_agent_result(raw_trace="investigation output")
-        mock_agent = MagicMock()
-        mock_agent.run.return_value = mock_agent_result
-        monkeypatch.setattr(agentic_trait, "get_agent", lambda _: mock_agent)
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = LLMResponse(
+            content="investigation output",
+            usage=UsageMetadata(input_tokens=100, output_tokens=50),
+        )
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _: mock_llm)
 
         mock_parsed = SingleBooleanScore(result=True)
         mock_parse_result = _make_parse_result(mock_parsed)
@@ -471,8 +488,8 @@ class TestTraceMaterialization:
             trace_file_path=Path("/tmp/test_trace.txt"),
         )
 
-        call_args = mock_agent.run.call_args
-        messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+        call_args = mock_llm.invoke.call_args
+        messages = call_args[0][0]
         user_msgs = [m for m in messages if m.role == Role.USER]
         user_text = user_msgs[0].text
         assert "Inline trace content" in user_text
