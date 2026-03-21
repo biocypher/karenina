@@ -38,7 +38,7 @@ def merge_rubrics_for_task(
     Returns:
         Merged rubric or None if rubrics are disabled
     """
-    if not getattr(config, "rubric_enabled", False):
+    if not config.rubric_enabled:
         return None
 
     question_rubric = None
@@ -76,7 +76,7 @@ def merge_dynamic_rubrics_for_task(
     Returns:
         Merged DynamicRubric or None if rubrics are disabled or absent.
     """
-    if not getattr(config, "rubric_enabled", False):
+    if not config.rubric_enabled:
         return None
 
     question_dynamic_rubric = None

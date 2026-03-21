@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from ..config.models import (
     FewShotConfig,
@@ -76,7 +76,6 @@ class VerificationConfig(BaseModel):
     parsing_only: bool = False  # When True, only parsing models are required
 
     # Rubric evaluation settings
-    rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
     rubric_evaluation_strategy: Literal["batch", "sequential"] | None = "batch"
     # - "batch": Evaluate all LLM traits in a single call (efficient, requires JSON output)
@@ -87,6 +86,12 @@ class VerificationConfig(BaseModel):
     # - "template_only": Run template verification only (default behavior)
     # - "template_and_rubric": Run both template verification AND rubric evaluation
     # - "rubric_only": Skip template verification, only evaluate rubrics on raw LLM response
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def rubric_enabled(self) -> bool:
+        """Whether rubric evaluation is enabled. Derived from evaluation_mode."""
+        return self.evaluation_mode in ("template_and_rubric", "rubric_only")
 
     # Trace input control: determines what portion of MCP agent trace is passed to evaluation
     use_full_trace_for_template: bool = (
@@ -289,6 +294,9 @@ class VerificationConfig(BaseModel):
                 elif isinstance(model, dict) and not model.get("system_prompt"):
                     model["system_prompt"] = DEFAULT_PARSING_SYSTEM_PROMPT
 
+        # Strip rubric_enabled from input: now derived from evaluation_mode
+        data.pop("rubric_enabled", None)
+
         super().__init__(**data)
 
         # Validate configuration after initialization
@@ -341,29 +349,6 @@ class VerificationConfig(BaseModel):
             # Check that replicate count is valid
             if self.replicate_count < 1:
                 raise ValueError("Replicate count must be at least 1")
-
-        # Validation for evaluation_mode
-        if self.evaluation_mode == "rubric_only":
-            # Rubric-only mode requires rubric to be enabled
-            if not self.rubric_enabled:
-                raise ValueError(
-                    "evaluation_mode='rubric_only' requires rubric_enabled=True. "
-                    "Rubric-only mode evaluates rubric traits on the raw LLM response without template verification."
-                )
-        elif self.evaluation_mode == "template_and_rubric":
-            # Template + rubric mode requires rubric to be enabled
-            if not self.rubric_enabled:
-                raise ValueError(
-                    "evaluation_mode='template_and_rubric' requires rubric_enabled=True. "
-                    "This mode runs both template verification AND rubric evaluation."
-                )
-        elif self.evaluation_mode == "template_only" and self.rubric_enabled:
-            # Template-only mode should not have rubric enabled (warn about configuration mismatch)
-            raise ValueError(
-                "evaluation_mode='template_only' is incompatible with rubric_enabled=True. "
-                "Use evaluation_mode='template_and_rubric' to run both template verification and rubric evaluation, "
-                "or set rubric_enabled=False for template-only verification."
-            )
 
         # Additional validation for few-shot prompting scenarios
         if self.few_shot_config is not None and self.few_shot_config.enabled:
@@ -720,7 +705,6 @@ class VerificationConfig(BaseModel):
         # Evaluation settings
         if evaluation_mode is not None:
             config_dict["evaluation_mode"] = evaluation_mode
-            config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
         if embedding_threshold is not None:
             config_dict["embedding_check_threshold"] = embedding_threshold
         if embedding_model is not None:

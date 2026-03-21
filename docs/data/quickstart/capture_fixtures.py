@@ -230,7 +230,6 @@ def run_quickstart():
             )
         ],
         evaluation_mode="template_and_rubric",
-        rubric_enabled=True,
     )
     results = benchmark.run_verification(config)
     print(f"Step 5: Verification complete — {len(results.results)} results")

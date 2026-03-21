@@ -5,7 +5,7 @@ Tests cover:
 - Scalar overrides (temperature, replicate_count, feature flags)
 - None overrides don't change base values (validates cli-bugs-001 fix)
 - Model config construction (answering + parsing separately)
-- evaluation_mode auto-sets rubric_enabled
+- evaluation_mode derives rubric_enabled
 - Deep judgment rubric settings
 - Manual traces handling
 """
@@ -44,7 +44,6 @@ def _make_base_config(**kwargs) -> VerificationConfig:
         "embedding_check_enabled": True,
         "embedding_check_threshold": 0.9,
         "evaluation_mode": "template_and_rubric",
-        "rubric_enabled": True,
     }
     defaults.update(kwargs)
     return VerificationConfig(**defaults)
@@ -153,7 +152,7 @@ class TestFromOverridesNoBase:
 @pytest.mark.unit
 @patch("karenina.schemas.verification.config.os.getenv", return_value=None)
 class TestFromOverridesEvaluationMode:
-    """Tests for evaluation_mode and rubric_enabled interaction."""
+    """Tests that rubric_enabled is derived from evaluation_mode."""
 
     def test_evaluation_mode_template_and_rubric_sets_rubric(self, _mock) -> None:
         """evaluation_mode='template_and_rubric' auto-sets rubric_enabled."""
@@ -174,7 +173,7 @@ class TestFromOverridesEvaluationMode:
     def test_evaluation_mode_template_only_disables_rubric(self, _mock) -> None:
         """evaluation_mode='template_only' does not set rubric_enabled."""
         config = VerificationConfig.from_overrides(
-            _make_base_config(rubric_enabled=False, evaluation_mode="template_only"),
+            _make_base_config(evaluation_mode="template_only"),
             evaluation_mode="template_only",
         )
         assert config.rubric_enabled is False

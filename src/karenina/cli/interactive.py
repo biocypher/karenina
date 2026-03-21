@@ -142,7 +142,6 @@ def build_config_interactively(
         default="template_only",
     )
 
-    # Derive rubric_enabled from evaluation_mode
     rubric_enabled = evaluation_mode in ["template_and_rubric", "rubric_only"]
 
     abstention_enabled = Confirm.ask("Enable abstention detection?", default=False)
@@ -234,7 +233,6 @@ def build_config_interactively(
         answering_models=answering_models,
         parsing_models=parsing_models,
         replicate_count=replicate_count,
-        rubric_enabled=rubric_enabled,
         rubric_trait_names=rubric_trait_names,
         evaluation_mode=evaluation_mode,
         abstention_enabled=abstention_enabled,
