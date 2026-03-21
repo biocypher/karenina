@@ -128,6 +128,10 @@ class EmbeddingCheckStage(BaseVerificationStage):
             context.set_artifact(ArtifactKeys.VERIFY_RESULT, verification_result)
             context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
 
+            # Clear failed_stage if verify_result is now passing
+            if verification_result:
+                context.set_result_field(ArtifactKeys.FAILED_STAGE, None)
+
             logger.warning(
                 f"Embedding check override applied for question {context.question_id} "
                 f"(similarity: {similarity_score:.3f})"

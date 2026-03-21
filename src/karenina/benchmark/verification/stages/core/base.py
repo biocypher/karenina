@@ -189,6 +189,7 @@ class ArtifactKeys:
 
     TIMESTAMP = "timestamp"
     EXECUTION_TIME = "execution_time"
+    FAILED_STAGE = "failed_stage"
 
     # ==========================================================================
     # Agentic Parsing
