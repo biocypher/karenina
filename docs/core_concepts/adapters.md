@@ -82,18 +82,18 @@ For complete method signatures and detailed protocol documentation, see [Port Ty
 
 Karenina ships with six interfaces, configured via the `interface` field on `ModelConfig`. The default is `"langchain"`.
 
-| Interface | Backend | MCP | Tools | Parser: Native Structured Output | Natively Agentic | Fallback |
+| Interface | Backend | MCP | Tools | Parser: Native Structured Output | Agent Tier | Fallback |
 |-----------|---------|:---:|:-----:|:-------------------------------:|:----------------:|----------|
-| `langchain` | LangChain (multi-provider) | Yes | Yes | No | No | None |
-| `openrouter` | OpenRouter API (routes to `langchain`) | Yes | Yes | No | No | None |
-| `openai_endpoint` | OpenAI-compatible endpoints (routes to `langchain`) | Yes | Yes | No | No | None |
-| `claude_agent_sdk` | Anthropic Agent SDK via Claude CLI | Yes | Yes | Yes | Yes | `langchain` |
-| `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | No | `langchain` |
-| `manual` | Pre-recorded traces | No | No | N/A | No | None |
+| `langchain` | LangChain (multi-provider) | Yes | Yes | No | `tool_loop` | None |
+| `openrouter` | OpenRouter API (routes to `langchain`) | Yes | Yes | No | `tool_loop` | None |
+| `openai_endpoint` | OpenAI-compatible endpoints (routes to `langchain`) | Yes | Yes | No | `tool_loop` | None |
+| `claude_agent_sdk` | Anthropic Agent SDK via Claude CLI | Yes | Yes | Yes | `deep_agent` | `langchain` |
+| `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | `tool_loop` | `langchain` |
+| `manual` | Pre-recorded traces | No | No | N/A | `tool_loop` | None |
 
 The **"Parser: Native Structured Output"** column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via `with_structured_output()`.
 
-The **"Natively Agentic"** column indicates whether the underlying runtime is itself an agent with built-in tools (e.g. Claude Code). For these adapters, the pipeline always uses `AgentPort` to capture the full tool call trace; using `LLMPort` would lose intermediate tool calls because the runtime handles them internally. Scaffolded adapters (all others) orchestrate each tool call turn explicitly. See [Agentic Evaluation](agentic-evaluation.md) for the full picture.
+The **"Agent Tier"** column indicates the adapter's agent architecture. Adapters with `agent_tier="deep_agent"` wrap a runtime that is itself an agent with built-in tools (e.g. Claude Code); the pipeline always uses `AgentPort` to capture the full tool call trace, because `LLMPort` would lose intermediate tool calls that the runtime handles internally. Adapters with `agent_tier="tool_loop"` orchestrate each tool call turn explicitly. See [Agentic Evaluation](agentic-evaluation.md) for the full picture.
 
 ### 3.1. Interface Categories
 

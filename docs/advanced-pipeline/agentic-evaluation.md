@@ -4,34 +4,34 @@ This page covers the internal machinery of agentic evaluation: how the pipeline 
 
 For a conceptual overview and usage guide, see the [agentic evaluation concept page](../core_concepts/agentic-evaluation.md). For the general pipeline architecture, see [verification-pipeline.md](../core_concepts/verification-pipeline.md).
 
-## 1. AdapterSpec.natively_agentic
+## 1. AdapterSpec.agent_tier
 
 **File**: `src/karenina/adapters/registry.py`, `AdapterSpec` dataclass.
 
 ```python
-natively_agentic: bool = False
+agent_tier: str = "tool_loop"
 ```
 
-This flag distinguishes runtimes that are themselves agents with built-in tools (e.g., Claude Code) from scaffolded adapters where the adapter explicitly orchestrates each tool call turn (LangChain, Claude Tool).
+This field distinguishes runtimes that are themselves agents with built-in tools (e.g., Claude Code, `agent_tier="deep_agent"`) from scaffolded adapters where the adapter explicitly orchestrates each tool call turn (LangChain, Claude Tool, `agent_tier="tool_loop"`).
 
-The `GenerateAnswer` stage (stage 2) checks this flag to decide whether to use `AgentPort` or `LLMPort` for the answering step:
+The `GenerateAnswer` stage (stage 2) checks this field to decide whether to use `AgentPort` or `LLMPort` for the answering step:
 
 ```python
 # generate_answer.py, Step 2
 spec = AdapterRegistry.get_spec(answering_model.interface)
-use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.natively_agentic)
+use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.agent_tier == "deep_agent")
 ```
 
 When `use_agent=True`, the stage calls `AgentPort.run()`, which captures the full conversation trace: tool calls, tool results, and intermediate reasoning. When `False`, it calls `LLMPort.invoke()`, which returns only the final text response.
 
-| Interface | `natively_agentic` | Reason |
+| Interface | `agent_tier` | Reason |
 |-----------|:------------------:|--------|
-| `claude_agent_sdk` | `True` | The Claude CLI binary is itself an agent; the LLMPort path would lose tool call traces |
-| `langchain` | `False` | The adapter orchestrates tool calls explicitly |
-| `claude_tool` | `False` | Same: adapter-orchestrated |
-| `manual` | `False` | Pre-recorded traces; no live agent |
-| `openai_endpoint` | `False` | Routes to `langchain` |
-| `openrouter` | `False` | Routes to `langchain` |
+| `claude_agent_sdk` | `"deep_agent"` | The Claude CLI binary is itself an agent; the LLMPort path would lose tool call traces |
+| `langchain` | `"tool_loop"` | The adapter orchestrates tool calls explicitly |
+| `claude_tool` | `"tool_loop"` | Same: adapter-orchestrated |
+| `manual` | `"tool_loop"` | Pre-recorded traces; no live agent |
+| `openai_endpoint` | `"tool_loop"` | Routes to `langchain` |
+| `openrouter` | `"tool_loop"` | Routes to `langchain` |
 
 See [Adapters](../core_concepts/adapters.md) for the full adapter reference.
 
@@ -290,7 +290,7 @@ Agentic parsing affects several other stages:
 | Stage | Interaction |
 |-------|------------|
 | **ValidateTemplate** (1) | Unaffected. Runs identically; produces the `ANSWER` and `RAW_ANSWER` artifacts that Stage 7b requires. |
-| **GenerateAnswer** (2) | Resolves workspace when `agentic_parsing=True`. Also uses `AgentPort` when `natively_agentic=True`. |
+| **GenerateAnswer** (2) | Resolves workspace when `agentic_parsing=True`. Also uses `AgentPort` when `agent_tier=="deep_agent"`. |
 | **RecursionLimitAutoFail** (3) | If the answering agent hit the recursion limit, Stage 7b skips itself. |
 | **AbstentionCheck** (5) | If abstention is detected, Stage 7b skips itself. |
 | **SufficiencyCheck** (6) | If the response is insufficient, Stage 7b skips itself. |
@@ -303,8 +303,8 @@ Agentic parsing affects several other stages:
 
 | Domain | File (relative to `karenina/src/karenina/`) |
 |--------|------|
-| AdapterSpec with `natively_agentic` | `adapters/registry.py` |
-| Claude SDK registration (sets `natively_agentic=True`) | `adapters/claude_agent_sdk/registration.py` |
+| AdapterSpec with `agent_tier` | `adapters/registry.py` |
+| Claude SDK registration (sets `agent_tier="deep_agent"`) | `adapters/claude_agent_sdk/registration.py` |
 | Workspace resolution and answer generation | `benchmark/verification/stages/pipeline/generate_answer.py` |
 | Agentic parse stage (Stage 7b) | `benchmark/verification/stages/pipeline/agentic_parse_template.py` |
 | Classical parse stage (Stage 7a) | `benchmark/verification/stages/pipeline/parse_template.py` |
