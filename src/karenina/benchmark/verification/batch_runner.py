@@ -298,6 +298,16 @@ def run_verification_batch(
     Returns:
         VerificationResultSet containing all verification results
     """
+    # Guard: parsing_only is designed for TaskEval, which bypasses the batch
+    # runner entirely. Using it here would silently produce 0 tasks because
+    # the task queue iterates over answering_models (which is empty).
+    if config.parsing_only:
+        raise ValueError(
+            "parsing_only=True is not supported in the batch verification path. "
+            "Use TaskEval for evaluating pre-recorded responses, or provide "
+            "answering_models for the standard Benchmark pipeline."
+        )
+
     # Generate run name if not provided
     if run_name is None:
         import uuid
