@@ -712,11 +712,12 @@ class AgenticRubricTrait(BaseModel):
             from karenina.adapters.registry import AdapterRegistry
 
             spec = AdapterRegistry.get_spec(self.model_override.interface)
-            if spec is None or spec.agent_factory is None:
+            if spec is None or spec.agent_tier != "deep_agent":
+                tier = spec.agent_tier if spec else "unknown"
                 raise ValueError(
                     f"model_override interface '{self.model_override.interface}' "
-                    "does not support agent creation (no agent_factory registered). "
-                    "Use an interface that supports AgentPort (e.g. 'claude_agent_sdk')."
+                    f"has agent_tier='{tier}'; agentic traits require "
+                    f"agent_tier='deep_agent'."
                 )
         return self
 

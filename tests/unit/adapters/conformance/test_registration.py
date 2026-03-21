@@ -36,14 +36,16 @@ class TestAdapterRegistrationConformance:
             spec = AdapterRegistry.get_spec(interface)
             assert isinstance(spec.supports_mcp, bool), f"{interface}: supports_mcp not bool"
             assert isinstance(spec.supports_tools, bool), f"{interface}: supports_tools not bool"
-            assert isinstance(spec.natively_agentic, bool), f"{interface}: natively_agentic not bool"
+            assert spec.agent_tier in ("tool_loop", "deep_agent"), (
+                f"{interface}: agent_tier must be 'tool_loop' or 'deep_agent', got '{spec.agent_tier}'"
+            )
 
-    def test_natively_agentic_adapters_support_tools(self, all_registered_interfaces):
-        """Natively agentic adapters should support tools (they handle tool loops internally)."""
+    def test_deep_agent_adapters_support_tools(self, all_registered_interfaces):
+        """Deep agent adapters should support tools (they handle tool loops internally)."""
         for interface in all_registered_interfaces:
             spec = AdapterRegistry.get_spec(interface)
-            if spec.natively_agentic:
-                assert spec.supports_tools, f"{interface} is natively_agentic but doesn't support tools"
+            if spec.agent_tier == "deep_agent":
+                assert spec.supports_tools, f"{interface} has agent_tier='deep_agent' but doesn't support tools"
 
     def test_fallback_interface_is_registered_or_none(self, all_registered_interfaces):
         """If a fallback is specified, it must be a registered interface."""
@@ -60,7 +62,7 @@ class TestAdapterRegistrationConformance:
         spec = AdapterRegistry.get_spec("langchain_deep_agents")
         if spec is None:
             pytest.skip("langchain_deep_agents not registered")
-        assert spec.natively_agentic is True
+        assert spec.agent_tier == "deep_agent"
         assert spec.supports_mcp is True
         assert spec.supports_tools is True
         assert spec.fallback_interface is None

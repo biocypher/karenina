@@ -58,7 +58,7 @@ _deep_agents_spec = AdapterSpec(
     routes_to=None,
     supports_mcp=True,
     supports_tools=True,
-    natively_agentic=True,
+    agent_tier="deep_agent",
 )
 
 AdapterRegistry.register(_deep_agents_spec)

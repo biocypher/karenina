@@ -397,16 +397,17 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Resolve the model to use for a given trait.
 
         Returns trait.model_override if set; otherwise context.parsing_model.
-        Validates that the resolved model's interface has an agent_factory
-        registered. Returns None if no agent support is available (the trait
-        will be skipped).
+        Validates that the resolved model's interface has
+        agent_tier='deep_agent'. Returns None if the interface lacks deep
+        agent support (the trait will be skipped).
         """
         model = trait.model_override or context.parsing_model
         spec = AdapterRegistry.get_spec(model.interface)
-        if spec is None or spec.agent_factory is None:
+        if spec is None or spec.agent_tier != "deep_agent":
             logger.debug(
-                "Interface '%s' has no agent_factory; trait '%s' will be skipped",
+                "Interface '%s' has agent_tier='%s' (not 'deep_agent'); trait '%s' will be skipped",
                 model.interface,
+                spec.agent_tier if spec else "unknown",
                 trait.name,
             )
             return None

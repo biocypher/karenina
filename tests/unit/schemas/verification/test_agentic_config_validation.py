@@ -33,6 +33,28 @@ class TestAgenticParsingValidation:
         )
         assert config.agentic_parsing is True
 
+    def test_agentic_parsing_rejects_tool_loop_interface(self):
+        """agentic_parsing=True should reject interfaces with agent_tier='tool_loop'."""
+        with pytest.raises(ValueError, match="deep_agent"):
+            VerificationConfig(
+                answering_models=[
+                    ModelConfig(
+                        id="a",
+                        model_name="m",
+                        model_provider="anthropic",
+                    )
+                ],
+                parsing_models=[
+                    ModelConfig(
+                        id="p",
+                        model_name="m",
+                        model_provider="anthropic",
+                        interface="langchain",  # agent_tier="tool_loop"
+                    )
+                ],
+                agentic_parsing=True,
+            )
+
     def test_agentic_parsing_not_supported_with_rubric_only(self):
         with pytest.raises(ValueError, match="rubric_only"):
             VerificationConfig(
