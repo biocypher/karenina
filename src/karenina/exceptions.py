@@ -20,6 +20,7 @@ Exception hierarchy::
     │   ├── McpTimeoutError
     │   ├── McpClientError
     │   └── McpConfigValidationError
+    ├── VerificationBatchError       # Partial-failure batch verification errors
     └── BenchmarkConversionError     # Benchmark conversion errors
 
 Domain-specific modules (ports/errors.py, adapters/manual/exceptions.py, etc.)
@@ -28,6 +29,11 @@ re-exports them for convenience and defines the shared base class.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from karenina.schemas.verification.result import VerificationResult
 
 
 class KareninaError(Exception):
@@ -79,3 +85,28 @@ class McpClientError(McpError):
     ) -> None:
         super().__init__(message)
         self.server_name = server_name
+
+
+class VerificationBatchError(KareninaError):
+    """Raised when a batch verification completes with partial failures.
+
+    Stores both the successfully completed results and the per-question
+    errors so callers can inspect partial progress without losing data.
+
+    Args:
+        message: Human-readable summary of the batch failure.
+        partial_results: Mapping of question ID to its completed
+            VerificationResult for questions that succeeded.
+        errors: List of (question_id, exception) pairs for questions
+            that failed during verification.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        partial_results: dict[str, VerificationResult],
+        errors: list[tuple[str, Exception]],
+    ) -> None:
+        super().__init__(message)
+        self.partial_results = partial_results
+        self.errors = errors
