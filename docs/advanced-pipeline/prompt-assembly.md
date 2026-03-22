@@ -169,6 +169,8 @@ Each `PromptTask` enum value identifies a distinct LLM call in the pipeline. The
 |------|---------------|-------------|
 | `generation` | GenerateAnswer | LLM generates a response to the question |
 | `parsing` | ParseTemplate | Judge LLM parses response into template schema |
+| `agentic_parsing_investigation` | AgenticParseTemplate | Investigation agent examines workspace/trace |
+| `agentic_parsing_extraction` | AgenticParseTemplate | Extracts structured answer from investigation trace |
 | `abstention_detection` | AbstentionCheck | Detects model refusal |
 | `sufficiency_detection` | SufficiencyCheck | Checks response completeness |
 | `rubric_llm_trait_batch` | RubricEvaluation | Batched boolean/score LLM traits |
@@ -176,6 +178,8 @@ Each `PromptTask` enum value identifies a distinct LLM call in the pipeline. The
 | `rubric_literal_trait_batch` | RubricEvaluation | Batched literal (categorical) traits |
 | `rubric_literal_trait_single` | RubricEvaluation | Sequential single literal trait |
 | `rubric_metric_trait` | RubricEvaluation | Metric trait (confusion matrix) |
+| `rubric_agentic_trait_investigation` | AgenticRubricEvaluation | Agent investigates response/workspace for rubric trait |
+| `rubric_agentic_trait_extraction` | AgenticRubricEvaluation | Extracts score from agentic investigation trace |
 | `dj_template_excerpt_extraction` | DeepJudgmentAutoFail | Extract verbatim excerpts per attribute |
 | `dj_template_hallucination` | DeepJudgmentAutoFail | Assess hallucination risk via search |
 | `dj_template_reasoning` | DeepJudgmentAutoFail | Generate reasoning for excerpt-to-attribute mapping |

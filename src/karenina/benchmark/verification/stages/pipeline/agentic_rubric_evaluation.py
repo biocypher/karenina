@@ -13,6 +13,8 @@ from typing import Any
 
 from karenina.adapters.registry import AdapterRegistry
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.ports import PortCapabilities
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 
@@ -200,7 +202,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 traces[trait.name] = None
                 continue
 
-            evaluator = AgenticTraitEvaluator(model_config=model)
+            evaluator = AgenticTraitEvaluator(
+                model_config=model,
+                prompt_config=context.prompt_config,
+            )
             score, trace = evaluator.evaluate_trait(
                 trait=trait,
                 question_text=context.question_text,
@@ -256,7 +261,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
 
         # Build a combined investigation prompt
-        evaluator = AgenticTraitEvaluator(model_config=first_model)
+        evaluator = AgenticTraitEvaluator(
+            model_config=first_model,
+            prompt_config=context.prompt_config,
+        )
         valid_traits = [trait for trait, _ in valid]
 
         combined_desc_parts = [f"- {trait.name}: {trait.description}" for trait in valid_traits]
@@ -271,10 +279,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         # Run a single shared investigation
         try:
             from karenina.adapters import get_agent
-            from karenina.ports import AgentConfig, Message
+            from karenina.ports import AgentConfig
 
             agent = get_agent(first_model)
-            system_prompt = (
+            system_text = (
                 "You are an evaluation agent investigating the quality of an LLM "
                 "response. You have access to tools and can examine files, run "
                 "code, and navigate the workspace.\n\n"
@@ -292,10 +300,24 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             if workspace_path and include_workspace:
                 user_parts.append(f"\nWorkspace directory: {workspace_path}")
 
-            messages = [
-                Message.system(system_prompt),
-                Message.user("\n".join(user_parts)),
-            ]
+            user_text = "\n".join(user_parts)
+
+            # Assemble with adapter + user instructions
+            assembler = PromptAssembler(
+                task=PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION,
+                interface=first_model.interface,
+                capabilities=PortCapabilities(),
+            )
+            user_instructions = (
+                context.prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION.value)
+                if context.prompt_config
+                else None
+            )
+            messages = assembler.assemble(
+                system_text=system_text,
+                user_text=user_text,
+                user_instructions=user_instructions,
+            )
 
             agent_config = AgentConfig(
                 max_turns=shared_max_turns,

@@ -47,6 +47,13 @@ class PromptConfig(BaseModel):
             "rubric_metric_trait)."
         ),
     )
+    agentic_parsing: str | None = Field(
+        default=None,
+        description=(
+            "Fallback instructions for agentic parsing tasks "
+            "(agentic_parsing_investigation, agentic_parsing_extraction)."
+        ),
+    )
     deep_judgment: str | None = Field(
         default=None,
         description=(
@@ -82,6 +89,10 @@ class PromptConfig(BaseModel):
         # Fallback: rubric_* tasks → rubric_evaluation
         if task_value.startswith("rubric_"):
             return self.rubric_evaluation
+
+        # Fallback: agentic_parsing_* tasks → agentic_parsing
+        if task_value.startswith("agentic_parsing_"):
+            return self.agentic_parsing
 
         # Fallback: dj_* tasks → deep_judgment
         if task_value.startswith("dj_"):

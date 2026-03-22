@@ -147,7 +147,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -175,7 +175,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -207,7 +207,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         traits = [
@@ -237,7 +237,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -286,7 +286,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(
@@ -330,7 +330,7 @@ class TestTemplateKindFlattening:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         trait = AgenticRubricTrait(
@@ -364,7 +364,7 @@ class TestTemplateKindFlattening:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait(name="quality", kind="boolean")])

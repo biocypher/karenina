@@ -10,8 +10,9 @@ import logging
 from typing import Any
 
 from karenina.adapters import get_agent, get_parser
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
-from karenina.ports import AgentConfig, Message
+from karenina.ports import AgentConfig, PortCapabilities
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
 
@@ -154,7 +155,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         agent = get_agent(context.parsing_model)
         schema_json = json.dumps(clean_schema, indent=2)
 
-        system_prompt = (
+        system_text = (
             "You are a verification agent evaluating whether an AI coding "
             "assistant correctly completed a task. You have access to the "
             "file system and can execute code.\n\n"
@@ -183,10 +184,25 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                 f"\nWorkspace directory: {context.workspace_path}",
             )
 
-        messages = [
-            Message.system(system_prompt),
-            Message.user("\n".join(user_parts)),
-        ]
+        user_text = "\n".join(user_parts)
+
+        # Assemble with adapter + user instructions
+        assembler = PromptAssembler(
+            task=PromptTask.AGENTIC_PARSING_INVESTIGATION,
+            interface=context.parsing_model.interface,
+            capabilities=PortCapabilities(),
+        )
+        user_instructions = (
+            context.prompt_config.get_for_task(PromptTask.AGENTIC_PARSING_INVESTIGATION.value)
+            if context.prompt_config
+            else None
+        )
+        messages = assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=user_instructions,
+            instruction_context={"json_schema": clean_schema},
+        )
 
         agent_config = AgentConfig(
             max_turns=context.agentic_parsing_max_turns,
@@ -223,15 +239,34 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         parser = get_parser(context.parsing_model)
         schema_json = json.dumps(clean_schema, indent=2)
 
-        messages = [
-            Message.system(
-                "You are a structured data extraction assistant. "
-                "Extract the findings from the investigation report into "
-                "the exact JSON schema provided.\n\n"
-                f"Schema:\n{schema_json}"
-            ),
-            Message.user(f"Investigation report:\n\n{investigation_trace}"),
-        ]
+        system_text = (
+            "You are a structured data extraction assistant. "
+            "Extract the findings from the investigation report into "
+            "the exact JSON schema provided.\n\n"
+            f"Schema:\n{schema_json}"
+        )
+        user_text = f"Investigation report:\n\n{investigation_trace}"
+
+        # Assemble with adapter + user instructions
+        assembler = PromptAssembler(
+            task=PromptTask.AGENTIC_PARSING_EXTRACTION,
+            interface=context.parsing_model.interface,
+            capabilities=parser.capabilities,
+        )
+        user_instructions = (
+            context.prompt_config.get_for_task(PromptTask.AGENTIC_PARSING_EXTRACTION.value)
+            if context.prompt_config
+            else None
+        )
+        messages = assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=user_instructions,
+            instruction_context={
+                "json_schema": clean_schema,
+                "format_instructions": "",
+            },
+        )
 
         parse_result = parser.parse_to_pydantic(messages, answer_class)
         return parse_result.parsed

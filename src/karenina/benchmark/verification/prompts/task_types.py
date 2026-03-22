@@ -25,6 +25,14 @@ class PromptTask(str, Enum):
     PARSING = "parsing"
     """Judge LLM parses the raw response into a structured answer template."""
 
+    # --- Agentic template parsing ---
+
+    AGENTIC_PARSING_INVESTIGATION = "agentic_parsing_investigation"
+    """Investigation agent examines workspace/trace to evaluate answer template."""
+
+    AGENTIC_PARSING_EXTRACTION = "agentic_parsing_extraction"
+    """Extracts structured answer from agentic investigation trace."""
+
     # --- Trace-level quality checks ---
 
     ABSTENTION_DETECTION = "abstention_detection"
