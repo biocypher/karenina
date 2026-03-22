@@ -212,8 +212,11 @@ class VerificationResultRubric(BaseModel):
     dynamic_rubric_promoted_traits: list[str] | None = None  # Traits promoted after presence check
 
     def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
-        """
-        Get all trait scores across all trait types in a flat dictionary.
+        """Get all trait scores across all trait types in a flat dictionary.
+
+        If cross-type same-name traits exist (e.g., an LLM trait and a regex
+        trait both named "quality"), later types overwrite earlier ones. Access
+        the individual ``*_trait_scores`` dicts directly in that case.
 
         Returns:
             dict: All trait scores, e.g.:

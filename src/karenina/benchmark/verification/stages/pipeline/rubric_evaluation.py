@@ -396,14 +396,21 @@ class RubricEvaluationStage(BaseVerificationStage):
         if not non_agentic_traits:
             return
 
-        # Check for name conflicts with existing static rubric
-        static_names = set()
+        # Check for same-type name conflicts with existing static rubric.
+        # Cross-type overlaps are allowed (results use type-segregated dicts).
         if context.rubric is not None:
-            static_names = set(context.rubric.get_trait_names())
-        dynamic_names = {t.name for t in non_agentic_traits}
-        conflicts = static_names & dynamic_names
-        if conflicts:
-            raise ValueError(f"Dynamic rubric trait names conflict with static rubric: {conflicts}")
+            static_by_type: dict[type, set[str]] = {
+                LLMRubricTrait: {t.name for t in context.rubric.llm_traits},
+                RegexRubricTrait: {t.name for t in context.rubric.regex_traits},
+                CallableRubricTrait: {t.name for t in context.rubric.callable_traits},
+                MetricRubricTrait: {t.name for t in context.rubric.metric_traits},
+            }
+            for trait in non_agentic_traits:
+                names = static_by_type.get(type(trait), set())
+                if trait.name in names:
+                    raise ValueError(
+                        f"Dynamic {type(trait).__name__} trait '{trait.name}' conflicts with static rubric"
+                    )
 
         # Call LLM for presence check
         presence_map = self._call_presence_check(context, non_agentic_traits)

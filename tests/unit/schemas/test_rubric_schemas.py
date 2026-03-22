@@ -551,11 +551,8 @@ def test_merge_rubrics_with_conflict_raises_error() -> None:
     global_rubric = Rubric(llm_traits=[global_trait])
     question_rubric = Rubric(llm_traits=[question_trait])
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValueError, match="Same-type trait name conflicts"):
         merge_rubrics(global_rubric, question_rubric)
-
-    assert "Trait name conflicts" in str(exc_info.value)
-    assert "clarity" in str(exc_info.value)
 
 
 @pytest.mark.unit
@@ -600,6 +597,75 @@ def test_merge_rubrics_all_trait_types() -> None:
         "has_citation",
         "entity_check",
     }
+
+
+# =============================================================================
+# Intra-Rubric Duplicate Name Validation (Issue 128)
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_rubric_rejects_duplicate_llm_trait_names() -> None:
+    """Duplicate LLM trait names within one Rubric raise at construction."""
+    t1 = LLMRubricTrait(name="safety", kind="boolean", higher_is_better=True)
+    t2 = LLMRubricTrait(name="safety", kind="score", min_score=1, max_score=5, higher_is_better=True)
+    with pytest.raises(ValidationError, match="Duplicate llm trait name 'safety'"):
+        Rubric(llm_traits=[t1, t2])
+
+
+@pytest.mark.unit
+def test_rubric_rejects_duplicate_regex_trait_names() -> None:
+    """Duplicate regex trait names within one Rubric raise at construction."""
+    t1 = RegexRubricTrait(name="has_email", pattern=r"\S+@\S+", higher_is_better=True)
+    t2 = RegexRubricTrait(name="has_email", pattern=r".+@.+", higher_is_better=True)
+    with pytest.raises(ValidationError, match="Duplicate regex trait name 'has_email'"):
+        Rubric(regex_traits=[t1, t2])
+
+
+@pytest.mark.unit
+def test_rubric_allows_cross_type_same_name() -> None:
+    """Same name across different types is allowed (type-segregated storage)."""
+    llm = LLMRubricTrait(name="quality", kind="boolean", higher_is_better=True)
+    regex = RegexRubricTrait(name="quality", pattern=r"quality", higher_is_better=True)
+    rubric = Rubric(llm_traits=[llm], regex_traits=[regex])
+    assert len(rubric.get_trait_names()) == 2
+
+
+@pytest.mark.unit
+def test_dynamic_rubric_rejects_duplicate_llm_trait_names() -> None:
+    """Duplicate LLM trait names within one DynamicRubric raise at construction."""
+    from karenina.schemas.entities.rubric import DynamicRubric
+
+    t1 = LLMRubricTrait(name="safety", kind="boolean", higher_is_better=True, summary="s")
+    t2 = LLMRubricTrait(name="safety", kind="score", min_score=1, max_score=5, higher_is_better=True, summary="s")
+    with pytest.raises(ValidationError, match="Duplicate llm trait name 'safety'"):
+        DynamicRubric(llm_traits=[t1, t2])
+
+
+# =============================================================================
+# Cross-Type Merge Allowed (Issue 183)
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_merge_rubrics_cross_type_same_name_allowed() -> None:
+    """Cross-type same-name traits merge without error."""
+    global_rubric = Rubric(regex_traits=[RegexRubricTrait(name="quality", pattern=r"quality", higher_is_better=True)])
+    question_rubric = Rubric(llm_traits=[LLMRubricTrait(name="quality", kind="boolean", higher_is_better=True)])
+    merged = merge_rubrics(global_rubric, question_rubric)
+    assert len(merged.regex_traits) == 1
+    assert len(merged.llm_traits) == 1
+
+
+@pytest.mark.unit
+def test_merge_rubrics_same_type_same_name_rejected() -> None:
+    """Same-type same-name traits are rejected even if config differs."""
+    global_rubric = Rubric(llm_traits=[LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)])
+    question_rubric = Rubric(
+        llm_traits=[LLMRubricTrait(name="clarity", kind="score", min_score=1, max_score=5, higher_is_better=True)]
+    )
+    with pytest.raises(ValueError, match="Same-type trait name conflicts.*llm:clarity"):
+        merge_rubrics(global_rubric, question_rubric)
 
 
 @pytest.mark.unit
@@ -806,15 +872,16 @@ class TestRubricAgenticTraitSupport:
     def test_merge_rubrics_detects_agentic_name_conflict(self):
         r1 = Rubric(agentic_traits=[self._make_agentic_trait("dup")])
         r2 = Rubric(agentic_traits=[self._make_agentic_trait("dup")])
-        with pytest.raises(ValueError, match="Trait name conflicts"):
+        with pytest.raises(ValueError, match="Same-type trait name conflicts"):
             merge_rubrics(r1, r2)
 
-    def test_merge_rubrics_cross_type_name_conflict(self):
-        """Agentic trait name colliding with LLM trait name is detected."""
+    def test_merge_rubrics_cross_type_allowed(self):
+        """Cross-type same-name traits are allowed (type-segregated storage)."""
         r1 = Rubric(llm_traits=[LLMRubricTrait(name="shared", kind="boolean")])
         r2 = Rubric(agentic_traits=[self._make_agentic_trait("shared")])
-        with pytest.raises(ValueError, match="Trait name conflicts"):
-            merge_rubrics(r1, r2)
+        merged = merge_rubrics(r1, r2)
+        assert len(merged.llm_traits) == 1
+        assert len(merged.agentic_traits) == 1
 
     def test_validate_evaluation_includes_agentic(self):
         """validate_evaluation checks agentic trait scores."""

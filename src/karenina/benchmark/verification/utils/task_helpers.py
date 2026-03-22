@@ -46,15 +46,11 @@ def merge_rubrics_for_task(
         try:
             question_rubric = Rubric.model_validate(template.question_rubric)
         except Exception as e:
-            logger.warning(f"Failed to parse question rubric for {template.question_id}: {e}")
+            logger.warning("Failed to parse question rubric for %s: %s", template.question_id, e)
 
-    try:
-        from karenina.schemas import merge_rubrics
+    from karenina.schemas import merge_rubrics
 
-        return merge_rubrics(global_rubric, question_rubric)
-    except ValueError as e:
-        logger.error(f"Error merging rubrics for {template.question_id}: {e}")
-        return global_rubric
+    return merge_rubrics(global_rubric, question_rubric)
 
 
 def merge_dynamic_rubrics_for_task(
@@ -90,11 +86,7 @@ def merge_dynamic_rubrics_for_task(
                 e,
             )
 
-    try:
-        return merge_dynamic_rubrics(global_dynamic_rubric, question_dynamic_rubric)
-    except ValueError as e:
-        logger.error("Error merging dynamic rubrics for %s: %s", template.question_id, e)
-        return global_dynamic_rubric
+    return merge_dynamic_rubrics(global_dynamic_rubric, question_dynamic_rubric)
 
 
 def resolve_few_shot_for_task(

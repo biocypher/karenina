@@ -771,12 +771,34 @@ class Rubric(BaseModel):
 
     @model_validator(mode="after")
     def validate_trait_names(self) -> "Rubric":
-        """Reject dots in agentic trait names to avoid dot-notation collisions.
+        """Reject duplicate trait names within each type and dots in agentic names.
 
-        Template kind traits produce dot-expanded keys (``trait.field``). A trait
-        named ``"foo.bar"`` would be ambiguous: is it a single trait or the
-        ``bar`` field of trait ``foo``?
+        Each trait type list must have unique names. Cross-type name overlaps
+        are allowed because results are stored in type-segregated dicts
+        (``llm_trait_scores``, ``regex_trait_scores``, etc.).
+
+        Dots in agentic trait names are rejected because template kind traits
+        produce dot-expanded keys (``trait.field``). A trait named ``"foo.bar"``
+        would be ambiguous.
         """
+        type_lists: list[tuple[str, list[Any]]] = [
+            ("llm", self.llm_traits),
+            ("regex", self.regex_traits),
+            ("callable", self.callable_traits),
+            ("metric", self.metric_traits),
+            ("agentic", self.agentic_traits),
+        ]
+        for type_label, traits in type_lists:
+            seen: set[str] = set()
+            for trait in traits:
+                if trait.name in seen:
+                    raise ValueError(
+                        f"Duplicate {type_label} trait name '{trait.name}' "
+                        f"within the same rubric. Trait names must be unique "
+                        f"per type."
+                    )
+                seen.add(trait.name)
+
         for trait in self.agentic_traits:
             if "." in trait.name:
                 raise ValueError(
@@ -944,18 +966,23 @@ class RubricEvaluation(BaseModel):
 
 
 def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | None") -> "Rubric | None":
-    """
-    Merge global and question-specific rubrics.
+    """Merge global and question-specific rubrics.
+
+    Same-type trait name collisions (e.g., both rubrics have an LLM trait
+    named "safety") raise ``ValueError``. Cross-type collisions (e.g., global
+    regex trait "quality" + question LLM trait "quality") are allowed because
+    results are stored in type-segregated dicts.
 
     Args:
-        global_rubric: The global rubric (applied to all questions)
-        question_rubric: Question-specific rubric (overrides/adds to global)
+        global_rubric: The global rubric (applied to all questions).
+        question_rubric: Question-specific rubric (adds to global).
 
     Returns:
-        Merged rubric with global traits + question-specific traits, or None if both are None
+        Merged rubric, or None if both are None.
 
     Raises:
-        ValueError: If there are trait name conflicts between global and question rubrics
+        ValueError: If a trait name appears in both rubrics within the same
+            trait type.
     """
     if not global_rubric and not question_rubric:
         return None
@@ -966,27 +993,31 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     if not question_rubric:
         return global_rubric
 
-    # Check for trait name conflicts (across all trait types)
-    global_all_names = set(global_rubric.get_trait_names())
-    question_all_names = set(question_rubric.get_trait_names())
-    conflicts = global_all_names.intersection(question_all_names)
+    # Check per-type name collisions
+    type_pairs: list[tuple[str, list[Any], list[Any]]] = [
+        ("llm", global_rubric.llm_traits, question_rubric.llm_traits),
+        ("regex", global_rubric.regex_traits, question_rubric.regex_traits),
+        ("callable", global_rubric.callable_traits, question_rubric.callable_traits),
+        ("metric", global_rubric.metric_traits, question_rubric.metric_traits),
+        ("agentic", global_rubric.agentic_traits, question_rubric.agentic_traits),
+    ]
+    all_conflicts: list[str] = []
+    for type_label, g_traits, q_traits in type_pairs:
+        g_names = {t.name for t in g_traits}
+        q_names = {t.name for t in q_traits}
+        overlap = g_names & q_names
+        if overlap:
+            all_conflicts.extend(f"{type_label}:{name}" for name in sorted(overlap))
 
-    if conflicts:
-        raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
-
-    # Merge all trait types separately
-    merged_traits = list(global_rubric.llm_traits) + list(question_rubric.llm_traits)
-    merged_regex_traits = list(global_rubric.regex_traits) + list(question_rubric.regex_traits)
-    merged_callable_traits = list(global_rubric.callable_traits) + list(question_rubric.callable_traits)
-    merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
-    merged_agentic_traits = list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits)
+    if all_conflicts:
+        raise ValueError(f"Same-type trait name conflicts between global and question rubrics: {all_conflicts}")
 
     return Rubric(
-        llm_traits=merged_traits,
-        regex_traits=merged_regex_traits,
-        callable_traits=merged_callable_traits,
-        metric_traits=merged_metric_traits,
-        agentic_traits=merged_agentic_traits,
+        llm_traits=list(global_rubric.llm_traits) + list(question_rubric.llm_traits),
+        regex_traits=list(global_rubric.regex_traits) + list(question_rubric.regex_traits),
+        callable_traits=list(global_rubric.callable_traits) + list(question_rubric.callable_traits),
+        metric_traits=list(global_rubric.metric_traits) + list(question_rubric.metric_traits),
+        agentic_traits=list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits),
     )
 
 
@@ -1010,6 +1041,32 @@ class DynamicRubric(BaseModel):
     callable_traits: list[CallableRubricTrait] = Field(default_factory=list)
     metric_traits: list[MetricRubricTrait] = Field(default_factory=list)
     agentic_traits: list[AgenticRubricTrait] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_trait_names(self) -> "DynamicRubric":
+        """Reject duplicate trait names within each type.
+
+        Mirrors ``Rubric.validate_trait_names``. Cross-type overlaps are
+        allowed; same-type duplicates are not.
+        """
+        type_lists: list[tuple[str, list[Any]]] = [
+            ("llm", self.llm_traits),
+            ("regex", self.regex_traits),
+            ("callable", self.callable_traits),
+            ("metric", self.metric_traits),
+            ("agentic", self.agentic_traits),
+        ]
+        for type_label, traits in type_lists:
+            seen: set[str] = set()
+            for trait in traits:
+                if trait.name in seen:
+                    raise ValueError(
+                        f"Duplicate {type_label} trait name '{trait.name}' "
+                        f"within the same dynamic rubric. Trait names must be "
+                        f"unique per type."
+                    )
+                seen.add(trait.name)
+        return self
 
     @model_validator(mode="after")
     def validate_concept_text(self) -> "DynamicRubric":
@@ -1083,9 +1140,8 @@ def merge_dynamic_rubrics(
 ) -> "DynamicRubric | None":
     """Merge global and question-specific dynamic rubrics.
 
-    Mirrors :func:`merge_rubrics` for the dynamic rubric variant. Traits from
-    both sources are concatenated. Name collisions (across all trait types) are
-    rejected.
+    Mirrors :func:`merge_rubrics` for the dynamic rubric variant. Same-type
+    name collisions are rejected; cross-type overlaps are allowed.
 
     Args:
         global_dynamic: The global dynamic rubric (applied to all questions).
@@ -1095,7 +1151,8 @@ def merge_dynamic_rubrics(
         Merged DynamicRubric with traits from both sources, or None if both are None.
 
     Raises:
-        ValueError: If there are trait name conflicts between global and question dynamic rubrics.
+        ValueError: If a trait name appears in both rubrics within the same
+            trait type.
     """
     if not global_dynamic and not question_dynamic:
         return None
@@ -1106,13 +1163,23 @@ def merge_dynamic_rubrics(
     if not question_dynamic:
         return global_dynamic
 
-    # Check for trait name conflicts across all trait types
-    global_names = set(global_dynamic.get_trait_names())
-    question_names = set(question_dynamic.get_trait_names())
-    conflicts = global_names.intersection(question_names)
+    type_pairs: list[tuple[str, list[Any], list[Any]]] = [
+        ("llm", global_dynamic.llm_traits, question_dynamic.llm_traits),
+        ("regex", global_dynamic.regex_traits, question_dynamic.regex_traits),
+        ("callable", global_dynamic.callable_traits, question_dynamic.callable_traits),
+        ("metric", global_dynamic.metric_traits, question_dynamic.metric_traits),
+        ("agentic", global_dynamic.agentic_traits, question_dynamic.agentic_traits),
+    ]
+    all_conflicts: list[str] = []
+    for type_label, g_traits, q_traits in type_pairs:
+        g_names = {t.name for t in g_traits}
+        q_names = {t.name for t in q_traits}
+        overlap = g_names & q_names
+        if overlap:
+            all_conflicts.extend(f"{type_label}:{name}" for name in sorted(overlap))
 
-    if conflicts:
-        raise ValueError(f"Trait name conflicts between global and question dynamic rubrics: {conflicts}")
+    if all_conflicts:
+        raise ValueError(f"Same-type trait name conflicts between global and question dynamic rubrics: {all_conflicts}")
 
     return DynamicRubric(
         llm_traits=list(global_dynamic.llm_traits) + list(question_dynamic.llm_traits),
