@@ -1,6 +1,7 @@
 """Tests for verification primitives."""
 
 import pytest
+from pydantic import ValidationError
 
 from karenina.schemas.primitives import (
     BooleanMatch,
@@ -177,6 +178,16 @@ class TestNumericTolerance:
         p = NumericTolerance(tolerance=0.1, mode="relative")
         assert p.check(5.5, 5.0) is True
 
+    def test_unknown_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            NumericTolerance(tolerance=0.1, mode="bogus")
+
+    def test_valid_modes_accepted(self):
+        p_rel = NumericTolerance(tolerance=0.1, mode="relative")
+        assert p_rel.mode == "relative"
+        p_abs = NumericTolerance(tolerance=0.1, mode="absolute")
+        assert p_abs.mode == "absolute"
+
 
 @pytest.mark.unit
 class TestNumericRange:
@@ -301,6 +312,15 @@ class TestDateTolerance:
     def test_outside_tolerance(self):
         p = DateTolerance(tolerance=1, unit="days")
         assert p.check("2024-01-15", "2024-01-20") is False
+
+    def test_unknown_unit_rejected(self):
+        with pytest.raises(ValidationError):
+            DateTolerance(tolerance=3, unit="weeks")
+
+    def test_valid_units_accepted(self):
+        for unit in ("days", "hours", "minutes"):
+            p = DateTolerance(tolerance=1, unit=unit)
+            assert p.unit == unit
 
 
 @pytest.mark.unit

@@ -12,7 +12,7 @@ import logging
 from collections.abc import Callable
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class AtLeastN(BaseModel):
     """N or more child conditions must pass."""
 
     type: Literal["at_least_n"] = "at_least_n"
-    n: int
+    n: int = Field(ge=0)
     conditions: list[Any] = []
 
 
