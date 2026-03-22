@@ -701,10 +701,20 @@ class Benchmark:
     def set_global_dynamic_rubric(self, dynamic_rubric: DynamicRubric | None) -> None:
         """Set or clear the global dynamic rubric.
 
+        Persists the rubric to the checkpoint so it survives save/load cycles.
+
         Args:
             dynamic_rubric: The DynamicRubric to set, or None to clear.
         """
         self._base._global_dynamic_rubric = dynamic_rubric
+        if dynamic_rubric is not None:
+            self._rubric_manager.set_global_dynamic_rubric_in_checkpoint(dynamic_rubric)
+        else:
+            # Clear from checkpoint: remove dynamic rubric ratings
+            if self._base._checkpoint.rating:
+                self._base._checkpoint.rating = [
+                    r for r in self._base._checkpoint.rating if r.additionalType != "karenina:GlobalDynamicRubricTrait"
+                ]
 
     def get_merged_dynamic_rubric_for_question(self, question_id: str) -> DynamicRubric | None:
         """Get merged dynamic rubric for a question (global + question-specific).
