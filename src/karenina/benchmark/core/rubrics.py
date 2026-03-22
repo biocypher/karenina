@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from .base import BenchmarkBase
 
 from karenina.schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
-from karenina.schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, merge_dynamic_rubrics
+from karenina.schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, merge_dynamic_rubrics, merge_rubrics
 from karenina.utils.checkpoint import (
     add_global_dynamic_rubric_to_benchmark,
     add_global_rubric_to_benchmark,
@@ -112,64 +112,54 @@ class RubricManager:
         return None
 
     def get_merged_rubric_for_question(self, question_id: str) -> Rubric | None:
-        """
-        Get merged rubric for a question (global + question-specific traits).
+        """Get merged rubric for a question (global + question-specific traits).
+
+        Delegates to :func:`merge_rubrics` so that the merge semantics are
+        identical to the verification pipeline path. Same-type trait name
+        collisions raise ``ValueError``.
 
         Args:
-            question_id: The question ID
+            question_id: The question ID.
 
         Returns:
-            Merged rubric with both global and question-specific traits, or None if no rubrics
-        """
-        # Get global rubric traits
-        global_traits = extract_global_rubric_from_benchmark(self.base._checkpoint) or []
+            Merged rubric, or None if neither global nor question rubric exists.
 
-        # Get question-specific rubric traits
-        question_traits: list[
-            LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
-        ] = []
+        Raises:
+            ValueError: If global and question rubrics share a trait name
+                within the same trait type.
+        """
+        global_rubric = self.get_global_rubric()
+
+        question_rubric: Rubric | None = None
         if question_id in self.base._questions_cache:
             q_data = self.base._questions_cache[question_id]
-            question_rubric = q_data.get("question_rubric")
-            if question_rubric:
-                # question_rubric is stored as a dict with llm_traits, regex_traits, etc.
-                if isinstance(question_rubric, dict):
-                    question_traits.extend(question_rubric.get("llm_traits", []))
-                    question_traits.extend(question_rubric.get("regex_traits", []))
-                    question_traits.extend(question_rubric.get("callable_traits", []))
-                    question_traits.extend(question_rubric.get("metric_traits", []))
-                    question_traits.extend(question_rubric.get("agentic_traits", []))
-                elif isinstance(question_rubric, list):
-                    # Backwards compatibility if it's already a flat list
-                    question_traits = question_rubric
+            raw = q_data.get("question_rubric")
+            if raw:
+                if isinstance(raw, dict):
+                    question_rubric = Rubric(
+                        llm_traits=raw.get("llm_traits", []),
+                        regex_traits=raw.get("regex_traits", []),
+                        callable_traits=raw.get("callable_traits", []),
+                        metric_traits=raw.get("metric_traits", []),
+                        agentic_traits=raw.get("agentic_traits", []),
+                    )
+                elif isinstance(raw, list):
+                    # Backwards compatibility: flat trait list
+                    llm = [t for t in raw if isinstance(t, LLMRubricTrait)]
+                    regex = [t for t in raw if isinstance(t, RegexRubricTrait)]
+                    callbl = [t for t in raw if isinstance(t, CallableRubricTrait)]
+                    metric = [t for t in raw if isinstance(t, MetricRubricTrait)]
+                    agentic = [t for t in raw if isinstance(t, AgenticRubricTrait)]
+                    if llm or regex or callbl or metric or agentic:
+                        question_rubric = Rubric(
+                            llm_traits=llm,
+                            regex_traits=regex,
+                            callable_traits=callbl,
+                            metric_traits=metric,
+                            agentic_traits=agentic,
+                        )
 
-        # Merge traits (question-specific traits override global ones with same name)
-        merged_traits = list(global_traits)  # Start with global traits
-
-        # Add question-specific traits, replacing any with the same name
-        for q_trait in question_traits:
-            # Remove any global trait with the same name
-            merged_traits = [t for t in merged_traits if t.name != q_trait.name]
-            # Add the question-specific trait
-            merged_traits.append(q_trait)
-
-        # Return merged rubric if we have any traits
-        if merged_traits:
-            # Separate traits by type
-            llm_traits = [t for t in merged_traits if isinstance(t, LLMRubricTrait)]
-            regex_traits = [t for t in merged_traits if isinstance(t, RegexRubricTrait)]
-            callable_traits = [t for t in merged_traits if isinstance(t, CallableRubricTrait)]
-            metric_traits = [t for t in merged_traits if isinstance(t, MetricRubricTrait)]
-            agentic_traits = [t for t in merged_traits if isinstance(t, AgenticRubricTrait)]
-            return Rubric(
-                llm_traits=llm_traits,
-                regex_traits=regex_traits,
-                callable_traits=callable_traits,
-                metric_traits=metric_traits,
-                agentic_traits=agentic_traits,
-            )
-
-        return None
+        return merge_rubrics(global_rubric, question_rubric)
 
     def clear_global_rubric(self) -> bool:
         """

@@ -282,8 +282,8 @@ class TestGetMergedRubricForQuestion:
         assert merged is not None
         assert len(merged.llm_traits) == 2
 
-    def test_merged_rubric_question_overrides_global(self) -> None:
-        """Test question trait overrides global trait with same name."""
+    def test_merged_rubric_rejects_same_type_collision(self) -> None:
+        """Test same-type trait name collision raises ValueError."""
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
@@ -310,12 +310,8 @@ class TestGetMergedRubricForQuestion:
             ),
         )
 
-        merged = manager.get_merged_rubric_for_question(q_id)
-        assert merged is not None
-        assert len(merged.regex_traits) == 1
-        # Question's pattern should override
-        assert merged.regex_traits[0].pattern == r"[A-Z]+"
-        assert merged.regex_traits[0].description == "Question pattern"
+        with pytest.raises(ValueError, match="Same-type trait name conflicts"):
+            manager.get_merged_rubric_for_question(q_id)
 
 
 @pytest.mark.unit

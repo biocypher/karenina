@@ -335,12 +335,13 @@ class TestMergeDynamicRubrics:
         with pytest.raises(ValueError, match="safety"):
             merge_dynamic_rubrics(global_dr, question_dr)
 
-    def test_cross_type_name_collision_raises(self) -> None:
-        """Name collision between different trait types raises ValueError."""
+    def test_cross_type_name_allowed(self) -> None:
+        """Cross-type same-name traits merge without error (type-segregated storage)."""
         global_dr = DynamicRubric(llm_traits=[_make_llm_trait("check", summary="LLM check")])
         question_dr = DynamicRubric(regex_traits=[_make_regex_trait("check", summary="Regex check")])
-        with pytest.raises(ValueError, match="check"):
-            merge_dynamic_rubrics(global_dr, question_dr)
+        result = merge_dynamic_rubrics(global_dr, question_dr)
+        assert len(result.llm_traits) == 1
+        assert len(result.regex_traits) == 1
 
     def test_merged_result_is_new_instance(self) -> None:
         """Merged result is a new DynamicRubric, not one of the inputs."""
