@@ -198,6 +198,9 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `keywords` | `list[str] \| None` | Keywords associated with the question |
 | `completed_without_errors` | `bool` | Whether the pipeline ran without errors |
 | `error` | `str \| None` | Error message if something went wrong |
+| `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
+| `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
+| `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |
 
 ```python
 meta = result.metadata
@@ -286,6 +289,9 @@ print(f"Embedding similarity score:  {tmpl.embedding_similarity_score}")
 | `parsed_llm_response` | `dict \| None` | Fields extracted by the Judge LLM |
 | `parsed_gt_response` | `dict \| None` | Ground truth parsed into the same template fields |
 | `verify_granular_result` | `Any \| None` | Per-field verification detail (if `verify_granular()` is implemented) |
+| `field_verification_error` | `str \| None` | Error message if `verify()` raised an exception (non-fatal) |
+| `field_results` | `dict[str, bool] \| None` | Per-field primitive verification results (from `_compute_field_results()`) |
+| `composition_strategy` | `str \| None` | Composition strategy used: `"all_of"`, `"any_of"`, or `"at_least_n(N)"` |
 
 ### 3.3. Optional Check Results
 

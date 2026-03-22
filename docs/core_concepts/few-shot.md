@@ -412,7 +412,18 @@ print(f"Validation errors: {errors}")
 | `external_examples` | `list[dict[str, str]] \| None` | `None` | Question-specific external examples |
 | `excluded_examples` | `list[str \| int] \| None` | `None` | Indices or hashes of examples to exclude |
 
-## 12. Next Steps
+## 12. Provenance in Results
+
+When few-shot is active, the verification result records provenance metadata so you can trace which results used few-shot prompting:
+
+| Field | Location | Description |
+|-------|----------|-------------|
+| `few_shot_enabled` | `result.metadata` | `True` if few-shot was active for this verification |
+| `few_shot_example_count` | `result.metadata` | Number of resolved examples (0 if disabled) |
+
+These fields enable filtering and grouping in analysis (e.g., comparing accuracy with and without few-shot examples across the same benchmark).
+
+## 13. Next Steps
 
 - [Answer Templates](../answer-templates/): what few-shot examples help the answering model produce
 - [Verification Pipeline](../verification-pipeline/): where GenerateAnswer fits in the 13-stage pipeline

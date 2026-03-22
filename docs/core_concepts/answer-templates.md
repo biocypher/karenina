@@ -799,9 +799,18 @@ class Answer(BaseAnswer):
 
 In this example, verification passes if the target is correct, *or* if both the mechanism and approval status are correct.
 
-### 6.2. Weighted Scoring Is Separate
+### 6.2. Composition-Aware Granular Scoring
 
-Composition rules control the pass/fail verdict from `verify()`. Weighted scoring from `verify_granular()` is computed independently using the `weight` parameter on each `VerifiedField`. The two mechanisms serve different purposes: `verify()` determines whether a response passes the benchmark question; `verify_granular()` provides a finer-grained score for analysis.
+Composition rules control the pass/fail verdict from `verify()`. The `verify_granular()` score is computed using the `weight` parameter on each `VerifiedField`, and its scoring logic honors the composition strategy:
+
+| Strategy | `verify_granular()` behavior |
+|----------|------------------------------|
+| Default (no strategy, implicit AllOf) | Flat weighted average: sum of passing weights / total weight |
+| `AnyOf` | Max single passing field weight / total weight |
+| `AtLeastN(n)` | Sum of top-N passing field weights / total weight |
+| `AllOf` (explicit) | Flat weighted average (same as default) |
+
+For example, with three equal-weight fields and `AnyOf`, if only one field passes, `verify()` returns `True` (AnyOf semantics) and `verify_granular()` returns `0.333` (one weight out of three). Without composition awareness, this was the same value, but the semantic alignment between `verify()` and `verify_granular()` is now consistent: both respect the strategy.
 
 ## 7. Writing Good Field Descriptions
 
@@ -1184,7 +1193,7 @@ The embedding check result is stored alongside the template result. When semanti
 
 | Scenario | What happens | Result |
 |----------|-------------|--------|
-| `verify()` raises an exception | Pipeline catches it, marks context as error | Not pass or fail; recorded as **error** |
+| `verify()` raises an exception | Pipeline catches it; error string stored in `field_verification_error` | `verify_result=False`, `verify_granular_result=None`, `completed_without_errors=True` (non-fatal) |
 | Judge returns `None` for a `str` field | Pydantic validation fails at parse time | Parsing failure; `verify()` never runs |
 | `verify_granular()` raises | Caught and logged as warning | Does NOT fail verification; granular score is absent |
 | Template validation fails (missing `verify()`, bad `self.correct`) | Stage 1 error; all subsequent stages skip | Error before any LLM calls |

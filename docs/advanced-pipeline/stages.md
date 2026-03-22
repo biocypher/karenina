@@ -363,7 +363,8 @@ Runs the template's programmatic verification: compares parsed data against grou
 1. **Field verification**: Calls `evaluator.verify_fields(parsed_answer)` which runs the template's `verify()` method comparing parsed values to ground truth
 2. **Regex verification**: Calls `evaluator.verify_regex(parsed_answer, raw_llm_response)` which runs any regex traits defined on the template
 3. **Combination**: `verify_result = field_success AND regex_success`
-4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0)
+4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0). Skipped when `verify()` raised an exception (sets `verify_granular_result=None` to avoid contradictory signals). Granular scoring is composition-aware: AnyOf uses max passing field weight, AtLeastN uses top-N weights.
+5. **Error capture**: If `verify()` raises, the error string is stored in `field_verification_error` (non-fatal; `completed_without_errors` remains `True`)
 
 ### Result Fields
 
@@ -371,7 +372,10 @@ Runs the template's programmatic verification: compares parsed data against grou
 |-------|----------|-------------|
 | `template_verification_performed` | `template` | Whether verification ran |
 | `verify_result` | `template` | Combined pass/fail (field AND regex) |
-| `verify_granular_result` | `template` | Partial credit score (0.0-1.0, if available) |
+| `verify_granular_result` | `template` | Partial credit score (0.0-1.0, if available). `None` when `verify()` raised |
+| `field_verification_error` | `template` | Error string if `verify()` raised an exception |
+| `field_results` | `template` | Per-field primitive pass/fail dict (from `_compute_field_results()`) |
+| `composition_strategy` | `template` | Composition strategy: `"all_of"`, `"any_of"`, `"at_least_n(N)"`, or `None` |
 | `field_verification_result` | internal | Field-only pass/fail |
 | `regex_validations_performed` | `template` | Whether regex checks ran |
 | `regex_validation_results` | `template` | Per-pattern pass/fail |
