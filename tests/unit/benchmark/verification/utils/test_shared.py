@@ -5,14 +5,12 @@ Tests the consolidated utilities:
 - extract_json_from_text(): Extract JSON from mixed text (karenina.utils.json_extraction)
 - extract_balanced_braces(): Extract balanced brace expressions (karenina.utils.json_extraction)
 - is_retryable_error(): Check for transient errors (error_helpers)
-- is_openai_endpoint_llm(): Check for OpenAI-compatible endpoints (llm_detection)
 - parse_tool_output(): Parse search tool output (search_helpers)
 """
 
 import pytest
 
 from karenina.benchmark.verification.utils.error_helpers import is_retryable_error
-from karenina.benchmark.verification.utils.llm_detection import is_openai_endpoint_llm
 from karenina.benchmark.verification.utils.search_helpers import parse_tool_output
 from karenina.schemas import SearchResultItem
 from karenina.utils.json_extraction import (
@@ -246,80 +244,6 @@ def test_is_retryable_error_network_keyword() -> None:
     """Test that network-related errors are retryable."""
     error = Exception("Network unreachable")
     assert is_retryable_error(error) is True
-
-
-# =============================================================================
-# is_openai_endpoint_llm tests
-# =============================================================================
-
-
-# Define mock classes at module level for is_openai_endpoint_llm tests
-class ChatOpenAIEndpoint:
-    """Mock class with the expected endpoint class name."""
-
-    pass
-
-
-class ChatOpenAI:
-    """Mock ChatOpenAI class from langchain_openai module."""
-
-    pass
-
-
-# Simulate a module path with "interface" in it
-ChatOpenAI.__module__ = "langchain_openai"
-
-
-class ChatOpenAIFromInterface(ChatOpenAI):
-    """Mock ChatOpenAI class from an interface module."""
-
-    pass
-
-
-ChatOpenAIFromInterface.__module__ = "some.interface.module"
-
-
-@pytest.mark.unit
-def test_is_openai_endpoint_llm_by_class_name() -> None:
-    """Test detection by class name."""
-    mock_llm = ChatOpenAIEndpoint()
-    assert is_openai_endpoint_llm(mock_llm) is True
-
-
-@pytest.mark.unit
-def test_is_openai_endpoint_llm_by_base_url() -> None:
-    """Test detection by custom base URL."""
-
-    class MockChatOpenAI:
-        openai_api_base = "https://custom-api.example.com/v1"
-
-    MockChatOpenAI.__module__ = "langchain_openai"
-    mock_llm = MockChatOpenAI()
-    assert is_openai_endpoint_llm(mock_llm) is True
-
-
-@pytest.mark.unit
-def test_is_openai_endpoint_llm_official_openai() -> None:
-    """Test that official OpenAI API is not detected as endpoint."""
-
-    class MockChatOpenAI:
-        openai_api_base = "https://api.openai.com/v1"
-
-    MockChatOpenAI.__module__ = "langchain_openai"
-    mock_llm = MockChatOpenAI()
-    assert is_openai_endpoint_llm(mock_llm) is False
-
-
-@pytest.mark.unit
-def test_is_openai_endpoint_llm_no_base_url() -> None:
-    """Test LLM without base URL attribute."""
-
-    class MockChatOpenAI:
-        pass
-
-    MockChatOpenAI.__module__ = "langchain_openai"
-    mock_llm = MockChatOpenAI()
-    assert is_openai_endpoint_llm(mock_llm) is False
 
 
 # =============================================================================
