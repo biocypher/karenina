@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from karenina.benchmark.task_eval import LogEvent, StepEval, TaskEval, TaskEvalResult
 from karenina.benchmark.task_eval.helpers import (
-    convert_string_logs_to_messages,
     merge_logs_and_traces,
 )
 from karenina.ports.messages import Message, Role, ToolUseContent
@@ -251,29 +250,6 @@ class TestAgentMetrics:
 # =============================================================================
 # Helpers Tests
 # =============================================================================
-
-
-@pytest.mark.unit
-class TestHelpers:
-    """Tests for helper functions."""
-
-    def test_convert_string_logs_to_messages(self):
-        """convert_string_logs_to_messages wraps each text as assistant Message."""
-        messages = convert_string_logs_to_messages(["hello", "world"])
-        assert len(messages) == 2
-        assert all(m.role == Role.ASSISTANT for m in messages)
-        assert messages[0].text == "hello"
-        assert messages[1].text == "world"
-
-    def test_convert_string_logs_skips_empty(self):
-        """convert_string_logs_to_messages skips empty strings."""
-        messages = convert_string_logs_to_messages(["hello", "", "world"])
-        assert len(messages) == 2
-
-    def test_convert_string_logs_empty_input(self):
-        """convert_string_logs_to_messages returns empty list for empty input."""
-        messages = convert_string_logs_to_messages([])
-        assert messages == []
 
 
 # =============================================================================
