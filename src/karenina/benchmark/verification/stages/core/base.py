@@ -328,6 +328,9 @@ class VerificationContext:
 
     # Scenario
     scenario_turn: int | None = None
+    scenario_id: str | None = None
+    scenario_node: str | None = None
+    scenario_path: list[str] | None = None
 
     # Workspace
     question_workspace_path: str | None = None  # Raw relative path from Question

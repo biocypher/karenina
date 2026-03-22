@@ -166,6 +166,10 @@ class FinalizeResultStage(BaseVerificationStage):
             result_id=result_id,
             run_name=context.run_name,
             replicate=context.replicate,
+            scenario_id=context.scenario_id,
+            scenario_node=context.scenario_node,
+            scenario_turn=context.scenario_turn,
+            scenario_path=context.scenario_path,
         )
 
         # Build structured trace_messages for storage

@@ -38,6 +38,14 @@ class VerificationResultSet(BaseModel):
     """
 
     results: list[VerificationResult] = Field(description="List of all verification results from the run")
+    scenario_results: list[Any] | None = Field(
+        default=None,
+        description="ScenarioExecutionResult objects from scenario verification runs",
+    )
+    errors: list[tuple[str, BaseException]] | None = Field(
+        default=None,
+        description="Errors from failed scenario executions as (description, exception) tuples",
+    )
 
     model_config = {"arbitrary_types_allowed": True}
 

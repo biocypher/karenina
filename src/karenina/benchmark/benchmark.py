@@ -787,6 +787,8 @@ class Benchmark:
         manager = ScenarioManager()
         global_rubric = self._rubric_manager.get_global_rubric()
         all_results: list[VerificationResult] = []
+        all_scenario_results: list[Any] = []
+        all_errors: list[tuple[str, BaseException]] = []
 
         # Build the list of (scenario, answering_model, parsing_model) combos
         combos = [
@@ -797,7 +799,7 @@ class Benchmark:
         ]
 
         if async_enabled and len(combos) > 1:
-            all_results = self._run_scenario_parallel(
+            parallel_results, parallel_exec_results, parallel_errors = self._run_scenario_parallel(
                 manager=manager,
                 combos=combos,
                 config=config,
@@ -805,6 +807,9 @@ class Benchmark:
                 global_rubric=global_rubric,
                 progress_callback=progress_callback,
             )
+            all_results = parallel_results
+            all_scenario_results = parallel_exec_results
+            all_errors = parallel_errors
         else:
             for scenario_def, ans_model, parse_model in combos:
                 exec_result = manager.run(
@@ -817,8 +822,13 @@ class Benchmark:
                     progress_callback=progress_callback,
                 )
                 all_results.extend(exec_result.turn_results)
+                all_scenario_results.append(exec_result)
 
-        return VerificationResultSet(results=all_results)
+        return VerificationResultSet(
+            results=all_results,
+            scenario_results=all_scenario_results if all_scenario_results else None,
+            errors=all_errors if all_errors else None,
+        )
 
     def _run_scenario_parallel(
         self,
@@ -828,7 +838,7 @@ class Benchmark:
         run_name: str | None,
         global_rubric: "Rubric | None",
         progress_callback: Callable[..., None] | None,
-    ) -> list[VerificationResult]:
+    ) -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
         """Run scenario combinations in parallel via asyncio.gather.
 
         Args:
@@ -840,11 +850,11 @@ class Benchmark:
             progress_callback: Optional progress callback.
 
         Returns:
-            Flat list of all per-turn VerificationResults.
+            Tuple of (turn_results, scenario_exec_results, errors).
         """
         import asyncio
 
-        async def _gather() -> list[VerificationResult]:
+        async def _gather() -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
             coros = [
                 manager.arun(
                     scenario=scenario_def,
@@ -859,15 +869,22 @@ class Benchmark:
             ]
             exec_results = await asyncio.gather(*coros, return_exceptions=True)
             results: list[VerificationResult] = []
-            for er in exec_results:
+            scenario_exec_results: list[Any] = []
+            errors: list[tuple[str, BaseException]] = []
+            for i, er in enumerate(exec_results):
                 if isinstance(er, BaseException):
-                    logger.warning(
-                        "Scenario execution raised an exception: %s",
+                    combo = combos[i]
+                    desc = f"Scenario '{combo[0].name}' with {combo[1].model_name}/{combo[2].model_name}"
+                    logger.error(
+                        "Scenario execution failed: %s: %s",
+                        desc,
                         er,
                     )
+                    errors.append((desc, er))
                     continue
                 results.extend(er.turn_results)
-            return results
+                scenario_exec_results.append(er)
+            return results, scenario_exec_results, errors
 
         # If there is already a running event loop, run in a thread
         try:

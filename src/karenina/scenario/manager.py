@@ -6,7 +6,9 @@ Peer to VerificationManager, following karenina's {Domain}Manager naming.
 from __future__ import annotations
 
 import contextlib
+import copy
 import logging
+import warnings
 from collections.abc import Callable
 from typing import Any, Literal
 
@@ -54,6 +56,15 @@ class ScenarioManager:
         Returns:
             ScenarioExecutionResult with all turn data.
         """
+        if config.evaluation_mode == "rubric_only":
+            warnings.warn(
+                "evaluation_mode='rubric_only' is not supported in scenarios. "
+                "Scenarios always auto-detect evaluation mode from rubric presence. "
+                "The rubric_only setting will be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
+
         # Initialize state
         state = ScenarioState(
             turn=0,
@@ -86,7 +97,7 @@ class ScenarioManager:
             question_msg = Message.user(node.question.question)
             accumulated_messages.append(question_msg)
 
-            # Run the 14-stage verification pipeline for this turn
+            # Run the verification pipeline for this turn
             vr, trace_messages, parsed_answer, raw_response = self._run_turn(
                 node=node,
                 accumulated_messages=accumulated_messages,
@@ -96,6 +107,9 @@ class ScenarioManager:
                 run_name=run_name,
                 global_rubric=global_rubric,
                 turn_index=state.turn,
+                scenario_id=scenario.name,
+                scenario_node=state.current_node,
+                scenario_path=list(path),
             )
 
             # Grow accumulated history with trace
@@ -137,6 +151,7 @@ class ScenarioManager:
 
             # Run state_update if defined (opt-in custom state)
             if node.state_update is not None:
+                snapshot = copy.deepcopy(state.accumulated)
                 try:
                     state.accumulated = node.state_update(
                         state.accumulated,
@@ -144,10 +159,11 @@ class ScenarioManager:
                     )
                 except Exception:
                     logger.warning(
-                        "state_update for node '%s' raised an exception",
+                        "state_update for node '%s' raised; restoring from snapshot",
                         state.current_node,
                         exc_info=True,
                     )
+                    state.accumulated = snapshot
 
             # Update state
             state.turn += 1
@@ -236,6 +252,9 @@ class ScenarioManager:
         run_name: str | None,
         global_rubric: Rubric | None,
         turn_index: int = 0,
+        scenario_id: str | None = None,
+        scenario_node: str | None = None,
+        scenario_path: list[str] | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -285,6 +304,9 @@ class ScenarioManager:
             use_full_trace_for_template=config.use_full_trace_for_template,
             use_full_trace_for_rubric=config.use_full_trace_for_rubric,
             scenario_turn=turn_index,
+            scenario_id=scenario_id,
+            scenario_node=scenario_node,
+            scenario_path=scenario_path,
         )
 
         # Set conversation history artifact (the key integration point).
