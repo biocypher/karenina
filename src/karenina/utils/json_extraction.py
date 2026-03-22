@@ -213,9 +213,13 @@ def extract_json_from_response(text: str) -> str:
     """
     text = text.strip()
 
-    # Try direct parsing first - if it starts with { or [, return as-is
+    # Try direct parsing first: if it starts with { or [, validate before returning
     if text.startswith("{") or text.startswith("["):
-        return text
+        try:
+            json.loads(text)
+            return text
+        except json.JSONDecodeError:
+            pass  # Invalid JSON, fall through to other extraction strategies
 
     # Try to extract from markdown code blocks
     code_block_pattern = r"```(?:json)?\s*\n?([\s\S]*?)\n?```"
