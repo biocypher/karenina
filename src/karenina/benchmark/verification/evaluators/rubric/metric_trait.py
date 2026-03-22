@@ -14,9 +14,7 @@ Two evaluation modes are supported:
 All LLM calls use LLMPort.with_structured_output() for consistent backend abstraction.
 """
 
-import json
 import logging
-import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
@@ -184,54 +182,6 @@ class MetricTraitEvaluator:
         )
 
         return confusion_lists, computed_metrics, usage_metadata
-
-    def _parse_metric_trait_response(self, response: str, trait: MetricRubricTrait) -> dict[str, list[str]]:
-        """
-        Parse the LLM response to extract confusion lists.
-
-        Args:
-            response: Raw LLM response
-            trait: The metric trait being evaluated
-
-        Returns:
-            Dictionary with keys {tp, tn, fp, fn} and list values
-        """
-        # Try to extract JSON from response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in metric trait response: {response[:200]}")
-
-        try:
-            result = json.loads(json_match.group())
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in metric trait response: {e}") from e
-
-        # Initialize all buckets with empty lists
-        confusion_lists: dict[str, list[str]] = {"tp": [], "tn": [], "fp": [], "fn": []}
-
-        # Extract lists from response based on evaluation mode
-        if trait.evaluation_mode == "tp_only":
-            # TP-only mode: Extract TP, FN, FP (TN cannot be computed)
-            if "tp" in result:
-                confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
-            if "fn" in result:
-                confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
-            if "fp" in result:
-                confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
-            # TN remains empty (cannot be computed in tp_only mode)
-
-        else:  # full_matrix mode
-            # Full matrix mode: Extract all four buckets
-            if "tp" in result:
-                confusion_lists["tp"] = result["tp"] if isinstance(result["tp"], list) else []
-            if "fn" in result:
-                confusion_lists["fn"] = result["fn"] if isinstance(result["fn"], list) else []
-            if "tn" in result:
-                confusion_lists["tn"] = result["tn"] if isinstance(result["tn"], list) else []
-            if "fp" in result:
-                confusion_lists["fp"] = result["fp"] if isinstance(result["fp"], list) else []
-
-        return confusion_lists
 
     def _deduplicate_confusion_lists(self, confusion_lists: dict[str, list[str]]) -> dict[str, list[str]]:
         """

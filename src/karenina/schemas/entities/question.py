@@ -37,7 +37,14 @@ class Question(BaseModel):
     date_modified: str = Field(default_factory=lambda: datetime.now().isoformat())
     answer_template: str | None = None
     answer_notes: str | None = Field(
-        default=None, description="Free-text notes about how the answer should be interpreted"
+        default=None,
+        description=(
+            "Free-text notes about how the answer should be interpreted. "
+            "Used by the template generation pipeline to guide field type "
+            "selection and extraction behavior (e.g., overriding the "
+            "boolean-first default). Stored in checkpoints and accepted "
+            "by the API. Not consumed by verification pipeline stages."
+        ),
     )
     author: dict[str, Any] | None = None
     sources: list[dict[str, Any]] | None = None

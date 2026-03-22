@@ -17,9 +17,7 @@ The adapter factory returns the appropriate implementation (LangChainLLMAdapter
 or ClaudeSDKLLMAdapter) based on the model interface configuration.
 """
 
-import json
 import logging
-import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
@@ -326,93 +324,6 @@ class LLMTraitEvaluator:
             # Clamp score to valid range
             clamped_score = max(min_score, min(max_score, int(score)))
             return clamped_score
-
-    def parse_batch_response(self, response: str, traits: list[LLMRubricTrait]) -> dict[str, int | bool]:
-        """
-        Parse the batch evaluation response.
-
-        This is a fallback method for when structured output fails. Usually
-        LLMPort.with_structured_output() handles parsing, but this can be used
-        for manual parsing scenarios.
-
-        Args:
-            response: Raw LLM response text
-            traits: List of traits being evaluated
-
-        Returns:
-            Dictionary mapping trait names to scores
-
-        Raises:
-            ValueError: If parsing fails
-        """
-        # Try to extract JSON from the response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in response: {response}")
-
-        try:
-            result = json.loads(json_match.group())
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in response: {e}") from e
-
-        # Validate and convert the results
-        validated_results: dict[str, int | bool] = {}
-        trait_map = {trait.name: trait for trait in traits}
-
-        for trait_name, score in result.items():
-            if trait_name in trait_map:
-                trait = trait_map[trait_name]
-                validated_score = self._validate_score(score, trait)
-                validated_results[trait_name] = validated_score
-
-        # Add None for missing traits
-        for trait in traits:
-            if trait.name not in validated_results:
-                validated_results[trait.name] = None  # type: ignore[assignment]
-
-        return validated_results
-
-    def parse_single_trait_response(self, response: str, trait: LLMRubricTrait) -> int | bool:
-        """
-        Parse a single trait evaluation response.
-
-        This is a fallback method for when structured output fails. Usually
-        LLMPort.with_structured_output() handles parsing, but this can be used
-        for manual parsing scenarios.
-
-        Args:
-            response: Raw LLM response text
-            trait: The trait being evaluated
-
-        Returns:
-            Parsed score (bool for boolean traits, int for numeric)
-
-        Raises:
-            ValueError: If parsing fails
-        """
-        response = response.strip().lower()
-
-        if trait.kind == "boolean":
-            if response in ["true", "yes", "1"]:
-                return True
-            elif response in ["false", "no", "0"]:
-                return False
-            else:
-                # Try to extract boolean from longer response
-                if "true" in response or "yes" in response:
-                    return True
-                elif "false" in response or "no" in response:
-                    return False
-                else:
-                    raise ValueError(f"Could not parse boolean from: {response}")
-        else:
-            # Extract numeric score
-            numbers = re.findall(r"\d+", response)
-            if not numbers:
-                raise ValueError(f"No numeric score found in: {response}")
-
-            score = int(numbers[0])
-            return self._validate_score(score, trait)
 
     # ========== Literal Trait Evaluation Methods ==========
 
