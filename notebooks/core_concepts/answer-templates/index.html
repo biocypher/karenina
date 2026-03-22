@@ -1294,9 +1294,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#62-weighted-scoring-is-separate" class="md-nav__link">
+  <a href="#62-composition-aware-granular-scoring" class="md-nav__link">
     <span class="md-ellipsis">
-      6.2. Weighted Scoring Is Separate
+      6.2. Composition-Aware Granular Scoring
     </span>
   </a>
   
@@ -11877,8 +11877,6 @@
       
         
       
-        
-      
     
     
     
@@ -12022,29 +12020,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16441,9 +16416,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#62-weighted-scoring-is-separate" class="md-nav__link">
+  <a href="#62-composition-aware-granular-scoring" class="md-nav__link">
     <span class="md-ellipsis">
-      6.2. Weighted Scoring Is Separate
+      6.2. Composition-Aware Granular Scoring
     </span>
   </a>
   
@@ -17444,7 +17419,7 @@ print(f"Granular score:   {parsed.verify_granular():.2f}")</div>
 <tr>
 <td><code>description</code></td>
 <td>Yes</td>
-<td>Instructions for the judge LLM on what to extract from the response</td>
+<td>Instructions for the judge LLM on what to extract from the response. Must be non-empty and non-whitespace; raises <code>ValueError</code> otherwise.</td>
 </tr>
 <tr>
 <td><code>ground_truth</code></td>
@@ -17454,7 +17429,7 @@ print(f"Granular score:   {parsed.verify_granular():.2f}")</div>
 <tr>
 <td><code>verify_with</code></td>
 <td>Yes</td>
-<td>A verification primitive instance (<code>ExactMatch</code>, <code>BooleanMatch</code>, etc.)</td>
+<td>A verification primitive instance (<code>ExactMatch</code>, <code>BooleanMatch</code>, etc.). Cannot be <code>None</code>; raises <code>ValueError</code> if omitted or explicitly set to <code>None</code>.</td>
 </tr>
 <tr>
 <td><code>extraction_hint</code></td>
@@ -19001,7 +18976,34 @@ print(f"verify_granular(): {parsed2.verify_granular():.2f}")</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>In this example, verification passes if the target is correct, <em>or</em> if both the mechanism and approval status are correct.</p>
-<h3 id="62-weighted-scoring-is-separate">6.2. Weighted Scoring Is Separate<a class="anchor-link" href="#62-weighted-scoring-is-separate">¶</a></h3><p>Composition rules control the pass/fail verdict from <code>verify()</code>. Weighted scoring from <code>verify_granular()</code> is computed independently using the <code>weight</code> parameter on each <code>VerifiedField</code>. The two mechanisms serve different purposes: <code>verify()</code> determines whether a response passes the benchmark question; <code>verify_granular()</code> provides a finer-grained score for analysis.</p>
+<h3 id="62-composition-aware-granular-scoring">6.2. Composition-Aware Granular Scoring<a class="anchor-link" href="#62-composition-aware-granular-scoring">¶</a></h3><p>Composition rules control the pass/fail verdict from <code>verify()</code>. The <code>verify_granular()</code> score is computed using the <code>weight</code> parameter on each <code>VerifiedField</code>, and its scoring logic honors the composition strategy:</p>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th><code>verify_granular()</code> behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Default (no strategy, implicit AllOf)</td>
+<td>Flat weighted average: sum of passing weights / total weight</td>
+</tr>
+<tr>
+<td><code>AnyOf</code></td>
+<td>Max single passing field weight / total weight</td>
+</tr>
+<tr>
+<td><code>AtLeastN(n)</code></td>
+<td>Sum of top-N passing field weights / total weight</td>
+</tr>
+<tr>
+<td><code>AllOf</code> (explicit)</td>
+<td>Flat weighted average (same as default)</td>
+</tr>
+</tbody>
+</table>
+<p>For example, with three equal-weight fields and <code>AnyOf</code>, if only one field passes, <code>verify()</code> returns <code>True</code> (AnyOf semantics) and <code>verify_granular()</code> returns <code>0.333</code> (one weight out of three). Without composition awareness, this was the same value, but the semantic alignment between <code>verify()</code> and <code>verify_granular()</code> is now consistent: both respect the strategy.</p>
 <h2 id="7-writing-good-field-descriptions">7. Writing Good Field Descriptions<a class="anchor-link" href="#7-writing-good-field-descriptions">¶</a></h2><h3 id="71-what-the-judge-sees">7.1. What the Judge Sees<a class="anchor-link" href="#71-what-the-judge-sees">¶</a></h3><p>Remember: the judge is the person reading the letter and filling in your form. The <em>only</em> guidance it has is the form itself: the field names, types, and descriptions from your template's JSON schema. The system prompt tells the judge: <em>"Each field's description is authoritative for what and how to extract. Follow field descriptions precisely."</em></p>
 <p>This means your field description <strong>is</strong> your specification. If the instructions next to a blank on your form are vague ("write the answer here"), the form-filler will not know what you want. If they are precise ("write the patient's systolic blood pressure in mmHg, as stated in the clinical note"), the form-filler knows exactly what to look for and how to write it down. Invest time in your descriptions. They are the single most important part of your template, because they are the only thing the judge has to work with.</p>
 <p>For the tradeoff between boolean and string fields, see <a href="#72-ground-truth-exposure-and-judge-anchoring">Ground Truth Exposure and Judge Anchoring</a> below.</p>
@@ -19913,8 +19915,8 @@ print(f"Individual checks:     {result['results']}")</div>
 <tbody>
 <tr>
 <td><code>verify()</code> raises an exception</td>
-<td>Pipeline catches it, marks context as error</td>
-<td>Not pass or fail; recorded as <strong>error</strong></td>
+<td>Pipeline catches it; error string stored in <code>field_verification_error</code></td>
+<td><code>verify_result=False</code>, <code>verify_granular_result=None</code>, <code>completed_without_errors=True</code> (non-fatal)</td>
 </tr>
 <tr>
 <td>Judge returns <code>None</code> for a <code>str</code> field</td>
@@ -19978,7 +19980,8 @@ print(f"Individual checks:     {result['results']}")</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="103-verifiedfield-pitfalls">10.3. VerifiedField pitfalls<a class="anchor-link" href="#103-verifiedfield-pitfalls">¶</a></h3><p><strong>Forgetting <code>description</code></strong>: Unlike <code>Field()</code>, the <code>description</code> parameter is mandatory on <code>VerifiedField</code>. Omitting it raises a <code>TypeError</code>. Every field needs a description because it serves as the judge's extraction instruction.</p>
+<h3 id="103-verifiedfield-pitfalls">10.3. VerifiedField pitfalls<a class="anchor-link" href="#103-verifiedfield-pitfalls">¶</a></h3><p><strong>Empty or missing <code>description</code></strong>: The <code>description</code> parameter is mandatory on <code>VerifiedField</code> and must be a non-empty, non-whitespace string. Omitting it raises a <code>TypeError</code>; passing an empty string or whitespace-only string raises a <code>ValueError</code>. Every field needs a description because it serves as the judge's extraction instruction.</p>
+<p><strong>Passing <code>verify_with=None</code></strong>: The <code>verify_with</code> parameter must be a verification primitive instance. Passing <code>None</code> (whether explicitly or by omission) raises a <code>ValueError</code> with a message prompting you to provide a primitive such as <code>ExactMatch()</code> or <code>BooleanMatch()</code>.</p>
 <p><strong>Mismatched primitive and field type</strong>: Each primitive expects certain field types. Using <code>BooleanMatch()</code> on a <code>str</code> field, or <code>NumericTolerance()</code> on a <code>bool</code> field, will produce unexpected results or errors during verification.</p>
 <p><strong>Trace primitives require <code>bool</code> field type</strong>: <code>TraceRegex</code>, <code>TraceContains</code>, and <code>TraceLength</code> operate on the raw response trace, not on judge-extracted values. Their fields must be typed as <code>bool</code>. Using a <code>str</code> field with a trace primitive will raise an error.</p>
 <p><strong>Wrong normalizer name</strong>: The <code>normalize</code> parameter on <code>ExactMatch</code> and related primitives accepts a list of normalizer names (e.g., <code>["lowercase", "strip"]</code>). Using an unsupported name raises a <code>ValueError</code> at primitive construction time. Check the <a href="verification-primitives.md">Verification Primitives</a> reference for the full list of supported normalizers.</p>

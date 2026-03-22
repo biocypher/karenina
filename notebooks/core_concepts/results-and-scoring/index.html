@@ -11757,8 +11757,6 @@
       
         
       
-        
-      
     
     
     
@@ -11902,29 +11900,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -17084,6 +17059,21 @@ except AttributeError as e:
 <td><code>str \| None</code></td>
 <td>Error message if something went wrong</td>
 </tr>
+<tr>
+<td><code>few_shot_enabled</code></td>
+<td><code>bool</code></td>
+<td>Whether few-shot prompting was active (default <code>False</code>)</td>
+</tr>
+<tr>
+<td><code>few_shot_example_count</code></td>
+<td><code>int</code></td>
+<td>Number of few-shot examples used (default <code>0</code>)</td>
+</tr>
+<tr>
+<td><code>evaluation_mode</code></td>
+<td><code>str \| None</code></td>
+<td>Evaluation mode used (e.g., <code>"template_only"</code>, <code>"template_and_rubric"</code>)</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -17171,7 +17161,7 @@ Success:   True
 </tr>
 <tr>
 <td><code>model_name</code></td>
-<td>The model name (e.g., <code>"claude-sonnet-4-5-20250514"</code>)</td>
+<td>The model name (e.g., <code>"claude-sonnet-4-6"</code>)</td>
 </tr>
 <tr>
 <td><code>tools</code></td>
@@ -17447,6 +17437,21 @@ Embedding similarity score:  0.92
 <td><code>verify_granular_result</code></td>
 <td><code>Any \| None</code></td>
 <td>Per-field verification detail (if <code>verify_granular()</code> is implemented)</td>
+</tr>
+<tr>
+<td><code>field_verification_error</code></td>
+<td><code>str \| None</code></td>
+<td>Error message if <code>verify()</code> raised an exception (non-fatal)</td>
+</tr>
+<tr>
+<td><code>field_results</code></td>
+<td><code>dict[str, bool] \| None</code></td>
+<td>Per-field primitive verification results (from <code>_compute_field_results()</code>)</td>
+</tr>
+<tr>
+<td><code>composition_strategy</code></td>
+<td><code>str \| None</code></td>
+<td>Composition strategy used: <code>"all_of"</code>, <code>"any_of"</code>, or <code>"at_least_n(N)"</code></td>
 </tr>
 </tbody>
 </table>

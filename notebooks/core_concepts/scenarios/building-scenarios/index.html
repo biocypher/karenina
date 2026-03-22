@@ -11610,8 +11610,6 @@
       
         
       
-        
-      
     
     
     
@@ -11755,29 +11753,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16905,14 +16880,15 @@ print(f"Edges: {len(defn3.edges)}")</div>
 </tr>
 </tbody>
 </table>
-<h3 id="43-validation">4.3 Validation<a class="anchor-link" href="#43-validation">¶</a></h3><p><code>validate()</code> runs four structural checks before freezing the graph:</p>
+<h3 id="43-validation">4.3 Validation<a class="anchor-link" href="#43-validation">¶</a></h3><p><code>validate()</code> runs four structural checks before freezing the graph, plus one warning:</p>
 <ol>
 <li>Edge sources and targets must reference registered nodes (or <code>END</code>).</li>
 <li>All nodes must be reachable from the entry node via BFS.</li>
 <li>Every node with conditional edges must also have at least one unconditional fallback edge.</li>
 <li>Nodes with no outbound edges are valid implicit terminals (they terminate the scenario without an explicit <code>END</code> edge).</li>
+<li>If a node has multiple unconditional edges, a <code>UserWarning</code> is emitted. Only the first unconditional edge will be used; the rest are silently ignored. This is a warning, not a hard failure, but it almost always indicates a graph construction error.</li>
 </ol>
-<p>If any check fails, <code>validate()</code> raises <code>ValueError</code> with a description of the problem.</p>
+<p>If any of checks 1 through 4 fails, <code>validate()</code> raises <code>ValueError</code> with a description of the problem.</p>
 <h2 id="5-patterns">5. Patterns<a class="anchor-link" href="#5-patterns">¶</a></h2><h3 id="linear">Linear<a class="anchor-link" href="#linear">¶</a></h3><p>The simplest pattern: nodes run in a fixed sequence. Every edge is unconditional.</p>
 <pre><code>A --&gt; B --&gt; C --&gt; END
 </code></pre>

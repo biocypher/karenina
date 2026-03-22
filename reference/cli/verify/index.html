@@ -11727,8 +11727,6 @@
       
         
       
-        
-      
     
     
     
@@ -11872,29 +11870,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16783,7 +16758,7 @@
 </tr>
 <tr>
 <td><code>1</code></td>
-<td>Error — no templates found, invalid arguments, benchmark load failure, or unexpected error</td>
+<td>Error: no templates found, invalid arguments, benchmark load failure, partial batch failure (<code>VerificationBatchError</code>), or unexpected error</td>
 </tr>
 <tr>
 <td><code>130</code></td>
@@ -16791,6 +16766,7 @@
 </tr>
 </tbody>
 </table>
+<p>If some questions fail while others succeed, the executor raises <code>VerificationBatchError</code> with both <code>partial_results</code> and <code>errors</code>. The CLI catches this, writes any partial results to the output file, and exits with code <code>1</code>. In parallel mode, a timeout also triggers <code>VerificationBatchError</code>.</p>
 <p>When interrupted with Ctrl+C during a progressive save run, the command prints a resume hint:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Interrupted by user.
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>To resume: karenina verify --resume results.json

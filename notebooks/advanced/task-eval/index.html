@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16729,7 +16704,7 @@ for question_id in result_dict.global_eval.verification_results.keys():
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="rubric-types">Rubric Types<a class="anchor-link" href="#rubric-types">¶</a></h2><ul>
 <li><strong>LLMRubricTrait</strong>: Qualitative assessment (score or boolean)</li>
-<li><strong>RegexTrait</strong>: Deterministic pattern matching (boolean)</li>
+<li><strong>RegexRubricTrait</strong>: Deterministic pattern matching (boolean)</li>
 <li><strong>MetricRubricTrait</strong>: Quantitative metrics (precision, recall, F1)</li>
 </ul>
 </div>
@@ -16771,7 +16746,7 @@ for question_id in result_dict.global_eval.verification_results.keys():
         <span class="n">LLMRubricTrait</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"clarity"</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span> <span class="n">min_score</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_score</span><span class="o">=</span><span class="mi">5</span><span class="p">),</span>
     <span class="p">],</span>
     <span class="n">regex_traits</span><span class="o">=</span><span class="p">[</span>
-        <span class="n">RegexTrait</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"has_code"</span><span class="p">,</span> <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"```"</span><span class="p">),</span>
+        <span class="n">RegexRubricTrait</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"has_code"</span><span class="p">,</span> <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"```"</span><span class="p">),</span>
     <span class="p">],</span>
 <span class="p">)</span>
 
@@ -16801,7 +16776,7 @@ comprehensive_rubric = Rubric(
         LLMRubricTrait(name="clarity", kind="score", min_score=1, max_score=5),
     ],
     regex_traits=[
-        RegexTrait(name="has_code", pattern=r"```"),
+        RegexRubricTrait(name="has_code", pattern=r"```"),
     ],
 )
 

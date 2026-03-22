@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16185,12 +16160,12 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <td>Subjective qualities (clarity, tone, completeness)</td>
 </tr>
 <tr>
-<td><strong>RegexTrait</strong></td>
+<td><strong>RegexRubricTrait</strong></td>
 <td>Pattern-matching traits using regular expressions</td>
 <td>Format compliance, keyword presence/absence</td>
 </tr>
 <tr>
-<td><strong>CallableTrait</strong></td>
+<td><strong>CallableRubricTrait</strong></td>
 <td>Custom Python function-based traits</td>
 <td>Complex validation logic (word counts, structure)</td>
 </tr>
@@ -16306,7 +16281,7 @@ kind="boolean"  # Note: use "boolean", not "binary"
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="2-regex-based-traits-regextrait">2. Regex-Based Traits (<code>RegexTrait</code>)<a class="anchor-link" href="#2-regex-based-traits-regextrait">¶</a></h3><p><strong>What they are:</strong> Deterministic pattern-matching traits that check if answers match specific regex patterns. These provide <strong>100% reproducible</strong> validation without any LLM judgment.</p>
+<h3 id="2-regex-based-traits-regexrubrictrait">2. Regex-Based Traits (<code>RegexRubricTrait</code>)<a class="anchor-link" href="#2-regex-based-traits-regexrubrictrait">¶</a></h3><p><strong>What they are:</strong> Deterministic pattern-matching traits that check if answers match specific regex patterns. These provide <strong>100% reproducible</strong> validation without any LLM judgment.</p>
 <p><strong>When to use:</strong></p>
 <ul>
 <li>Checking for <strong>required terminology</strong> or keywords</li>
@@ -16324,8 +16299,8 @@ kind="boolean"  # Note: use "boolean", not "binary"
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>from karenina.schemas import RegexTrait</p>
-<h1 id="answer-must-mention-bh3-proteins">Answer must mention "BH3 proteins"<a class="anchor-link" href="#answer-must-mention-bh3-proteins">¶</a></h1><p>bh3_trait = RegexTrait(
+<p>from karenina.schemas import RegexRubricTrait</p>
+<h1 id="answer-must-mention-bh3-proteins">Answer must mention "BH3 proteins"<a class="anchor-link" href="#answer-must-mention-bh3-proteins">¶</a></h1><p>bh3_trait = RegexRubricTrait(
 name="Mentions BH3 Proteins",
 description="Answer must mention BH3 proteins (the mechanism of BCL2 inhibition)",
 pattern=r"\bBH3\b",
@@ -16390,14 +16365,14 @@ print(f"  BH3 pattern found: {result}")</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="3-callable-traits-callabletrait">3. Callable Traits (<code>CallableTrait</code>)<a class="anchor-link" href="#3-callable-traits-callabletrait">¶</a></h3><p><strong>What they are:</strong> Custom Python function-based traits for complex validation logic that cannot be expressed with regex patterns.</p>
+<h3 id="3-callable-traits-callablerubrictrait">3. Callable Traits (<code>CallableRubricTrait</code>)<a class="anchor-link" href="#3-callable-traits-callablerubrictrait">¶</a></h3><p><strong>What they are:</strong> Custom Python function-based traits for complex validation logic that cannot be expressed with regex patterns.</p>
 <p><strong>When to use:</strong></p>
 <ul>
 <li>Complex validation requiring <strong>Python logic</strong> (word counts, sentence structure analysis)</li>
 <li><strong>Custom scoring algorithms</strong> beyond simple pattern matching</li>
 <li>When regex patterns are too limited but you want deterministic evaluation</li>
 </ul>
-<p><strong>⚠️ SECURITY WARNING</strong>: CallableTrait uses cloudpickle serialization. Only load from trusted sources.</p>
+<p><strong>⚠️ SECURITY WARNING</strong>: CallableRubricTrait uses cloudpickle serialization. Only load from trusted sources.</p>
 </div>
 </div>
 </div>
@@ -16411,8 +16386,8 @@ print(f"  BH3 pattern found: {result}")</p>
 <h1 id="define-evaluation-function">Define evaluation function<a class="anchor-link" href="#define-evaluation-function">¶</a></h1><p>def check_word_count(text: str) -&gt; bool:
 """Check if answer has at least 50 words."""
 return len(text.split()) &gt;= 50</p>
-<h1 id="create-callable-trait">Create callable trait<a class="anchor-link" href="#create-callable-trait">¶</a></h1><p>from karenina.schemas import CallableTrait
-word_count_trait = CallableTrait.from_callable(
+<h1 id="create-callable-trait">Create callable trait<a class="anchor-link" href="#create-callable-trait">¶</a></h1><p>from karenina.schemas import CallableRubricTrait
+word_count_trait = CallableRubricTrait.from_callable(
 name="Minimum Word Count",
 description="Answer must have at least 50 words",
 func=check_word_count,
@@ -16497,11 +16472,11 @@ print(f"  TP instructions: {inflammatory_trait.tp_instructions}")</p>
 </tr>
 <tr>
 <td>Exact keyword or format validation</td>
-<td>Regex-Based (<code>RegexTrait</code>)</td>
+<td>Regex-Based (<code>RegexRubricTrait</code>)</td>
 </tr>
 <tr>
 <td>Complex validation logic</td>
-<td>Callable-Based (<code>CallableTrait</code>)</td>
+<td>Callable-Based (<code>CallableRubricTrait</code>)</td>
 </tr>
 <tr>
 <td>Classification accuracy metrics</td>
@@ -16517,11 +16492,11 @@ print(f"  TP instructions: {inflammatory_trait.tp_instructions}")</p>
 </tr>
 <tr>
 <td>Deterministic pattern matching</td>
-<td>Regex-Based (<code>RegexTrait</code>)</td>
+<td>Regex-Based (<code>RegexRubricTrait</code>)</td>
 </tr>
 <tr>
 <td>Custom scoring algorithms</td>
-<td>Callable-Based (<code>CallableTrait</code>, kind="score")</td>
+<td>Callable-Based (<code>CallableRubricTrait</code>, kind="score")</td>
 </tr>
 </tbody>
 </table>
@@ -16597,11 +16572,11 @@ print(f"  These traits will be evaluated for EVERY question")</p>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>from karenina.schemas import Rubric, RegexTrait</p>
+<p>from karenina.schemas import Rubric, RegexRubricTrait</p>
 <h1 id="this-rubric-is-only-for-the-venetoclax-question">This rubric is ONLY for the Venetoclax question<a class="anchor-link" href="#this-rubric-is-only-for-the-venetoclax-question">¶</a></h1><p>venetoclax_rubric = Rubric(
 name="Drug Mechanism Validation",
 regex_traits=[  # Note: use regex_traits, not traits
-RegexTrait(
+RegexRubricTrait(
 name="Mentions BH3 Proteins",
 description="Answer must mention BH3 proteins",
 pattern=r"\bBH3\b",
@@ -16701,7 +16676,7 @@ if result.rubric.metric_trait_metrics:
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>from karenina import Benchmark
 from karenina.schemas import (
-Rubric, LLMRubricTrait, RegexTrait, MetricRubricTrait,
+Rubric, LLMRubricTrait, RegexRubricTrait, MetricRubricTrait,
 ModelConfig, VerificationConfig
 )</p>
 <h1 id="1-create-benchmark">1. Create benchmark<a class="anchor-link" href="#1-create-benchmark">¶</a></h1><p>benchmark = Benchmark.create(
@@ -16732,7 +16707,7 @@ raw_answer="46"
 <h1 id="question-with-regex-based-question-specific-rubric">Question with regex-based question-specific rubric<a class="anchor-link" href="#question-with-regex-based-question-specific-rubric">¶</a></h1><p>venetoclax_rubric = Rubric(
 name="Drug Mechanism Validation",
 regex_traits=[
-RegexTrait(
+RegexRubricTrait(
 name="Mentions BH3 Proteins",
 description="Answer must mention BH3 proteins",
 pattern=r"\bBH3\b",

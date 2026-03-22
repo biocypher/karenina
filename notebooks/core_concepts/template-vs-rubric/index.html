@@ -11574,8 +11574,6 @@
       
         
       
-        
-      
     
     
     
@@ -11719,29 +11717,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16704,13 +16679,13 @@ print(f"Verified: {parsed.verify()}")</div>
 <td>Classification into ordered categories (e.g., tone: formal/casual/technical)</td>
 </tr>
 <tr>
-<td><strong><a href="../rubrics/regex-traits/">RegexTrait</a></strong></td>
+<td><strong><a href="../rubrics/regex-traits/">RegexRubricTrait</a></strong></td>
 <td><code>bool</code></td>
 <td>No</td>
 <td>Deterministic pattern matching (citations, format compliance)</td>
 </tr>
 <tr>
-<td><strong><a href="../rubrics/callable-traits/">CallableTrait</a></strong></td>
+<td><strong><a href="../rubrics/callable-traits/">CallableRubricTrait</a></strong></td>
 <td><code>bool</code> or <code>int</code></td>
 <td>No</td>
 <td>Custom Python logic (word count, readability, structure checks)</td>
@@ -16779,6 +16754,7 @@ print(f"Verified: {parsed.verify()}")</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseAnswer</span>
 
 
@@ -16802,6 +16778,7 @@ print(f"Verified: {parsed.verify()}")</div>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mechanism_is_sound</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">correct</span><span class="p">[</span><span class="s2">"mechanism_is_sound"</span><span class="p">]</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">from pydantic import Field
+
 from karenina.schemas.entities import BaseAnswer
 
 
@@ -16862,6 +16839,7 @@ class Answer(BaseAnswer):
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseAnswer</span>
 
 
@@ -16885,6 +16863,7 @@ class Answer(BaseAnswer):
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">diagnostic_completeness</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">correct</span><span class="p">[</span><span class="s2">"diagnostic_completeness"</span><span class="p">]</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">from pydantic import Field
+
 from karenina.schemas.entities import BaseAnswer
 
 
@@ -17015,7 +16994,6 @@ class Answer(BaseAnswer):
 </tr>
 </tbody>
 </table>
-<p>Setting <code>evaluation_mode</code> to <code>template_and_rubric</code> or <code>rubric_only</code> automatically requires <code>rubric_enabled=True</code>. These two fields are validated together; a mismatch raises a <code>ValueError</code> at configuration time.</p>
 <p>For details on configuring evaluation modes, see <a href="../evaluation-modes/">Evaluation Modes</a>.</p>
 <h2 id="7-worked-example-both-together">7. Worked Example: Both Together<a class="anchor-link" href="#7-worked-example-both-together">¶</a></h2><p>Consider the question: <em>"Which is the putative target of venetoclax?"</em></p>
 <p><strong>Template</strong> (correctness): extract the drug target and verify it against ground truth.</p>
@@ -17113,7 +17091,7 @@ print(f"Template verdict: {'PASS' if parsed.verify() else 'FAIL'}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexRubricTrait</span>
 
 <span class="c1"># LLM trait: does the response explain the mechanism?</span>
 <span class="n">mechanism_explanation</span> <span class="o">=</span> <span class="n">LLMRubricTrait</span><span class="p">(</span>
@@ -17129,7 +17107,7 @@ print(f"Template verdict: {'PASS' if parsed.verify() else 'FAIL'}")</div>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"LLM trait: </span><span class="si">{</span><span class="n">mechanism_explanation</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (kind=</span><span class="si">{</span><span class="n">mechanism_explanation</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
 
 <span class="c1"># Regex trait: does the response include citations?</span>
-<span class="n">has_citations</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">has_citations</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"has_citations"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"The response includes at least one numbered citation."</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
@@ -17143,7 +17121,7 @@ print(f"Template verdict: {'PASS' if parsed.verify() else 'FAIL'}")</div>
 <span class="n">sample_no_citations</span> <span class="o">=</span> <span class="s2">"Venetoclax targets BCL2, acting as a BH3 mimetic."</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Regex trait '</span><span class="si">{</span><span class="n">has_citations</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">' on sample without citations: </span><span class="si">{</span><span class="n">has_citations</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">sample_no_citations</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait
+<div class="clipboard-copy-txt" id="cell-5">from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait
 
 # LLM trait: does the response explain the mechanism?
 mechanism_explanation = LLMRubricTrait(
@@ -17159,7 +17137,7 @@ mechanism_explanation = LLMRubricTrait(
 print(f"LLM trait: {mechanism_explanation.name} (kind={mechanism_explanation.kind})")
 
 # Regex trait: does the response include citations?
-has_citations = RegexTrait(
+has_citations = RegexRubricTrait(
     name="has_citations",
     description="The response includes at least one numbered citation.",
     pattern=r"\[\d+\]",

@@ -11613,8 +11613,6 @@
       
         
       
-        
-      
     
     
     
@@ -11758,29 +11756,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16608,12 +16583,14 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Standard imports for working with questions</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseAnswer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.question</span><span class="w"> </span><span class="kn">import</span> <span class="n">Question</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseAnswer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">karenina.benchmark</span><span class="w"> </span><span class="kn">import</span> <span class="n">Benchmark</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1"># Standard imports for working with questions
+from karenina.schemas.entities.question import Question
 from karenina.schemas.entities import BaseAnswer
-from karenina.schemas.entities.question import Question</div>
+from karenina.benchmark import Benchmark</div>
 </div>
 </div>
 </div>
@@ -16799,7 +16776,8 @@ q = Question(
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Same:  </span><span class="si">{</span><span class="n">q1</span><span class="o">.</span><span class="n">id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">q2</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="c1"># Under the hood: MD5 of the UTF-8 encoded question text</span>
-<span class="n">manual_id</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">(</span><span class="sa">b</span><span class="s2">"What is the capital of France?"</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="n">manual_id</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">(</span><span class="s2">"What is the capital of France?"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Manual hash: </span><span class="si">{</span><span class="n">manual_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Matches:     </span><span class="si">{</span><span class="n">manual_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">q1</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
@@ -16811,7 +16789,8 @@ print(f"q2.id: {q2.id}")
 print(f"Same:  {q1.id == q2.id}")
 
 # Under the hood: MD5 of the UTF-8 encoded question text
-manual_id = hashlib.md5(b"What is the capital of France?").hexdigest()
+import hashlib
+manual_id = hashlib.md5("What is the capital of France?".encode("utf-8")).hexdigest()
 print(f"Manual hash: {manual_id}")
 print(f"Matches:     {manual_id == q1.id}")</div>
 </div>
@@ -17017,6 +16996,8 @@ class Answer(BaseAnswer):
 </tr>
 </tbody>
 </table>
+<p><strong>Strict schema enforcement:</strong> <code>Question</code> uses <code>extra="forbid"</code>, so any unrecognized fields in the input data will raise a <code>ValidationError</code>. This catches typos and prevents silent data loss from misspelled field names.</p>
+<p><strong>Legacy <code>tags</code> key:</strong> For backward compatibility, the legacy <code>tags</code> key is accepted during construction and automatically converted to <code>keywords</code>. If both <code>tags</code> and <code>keywords</code> are present, <code>keywords</code> takes precedence and <code>tags</code> is discarded.</p>
 <h2 id="6-next-steps">6. Next Steps<a class="anchor-link" href="#6-next-steps">¶</a></h2><ul>
 <li><a href="../benchmarks/">Benchmarks</a>: How questions are grouped into packages.</li>
 <li><a href="../../answer-templates/">Answer Templates</a>: Writing the <code>verify()</code> logic for your questions.</li>

@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -15897,9 +15872,9 @@ _fixtures_by_sequence: dict[int, dict] = {}</p>
 <hr />
 <h2 id="define-regex-traits">Define Regex Traits<a class="headerlink" href="#define-regex-traits" title="Permanent link">&para;</a></h2>
 <p>Regex traits evaluate pattern presence in the raw response text. No LLM call is needed; matching is immediate and deterministic.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">has_citations</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">has_citations</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;has_citations&quot;</span><span class="p">,</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\[\d+\]&quot;</span><span class="p">,</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Response includes numbered citations in bracket notation (e.g., [1], [2]).&quot;</span><span class="p">,</span>
@@ -15907,7 +15882,7 @@ _fixtures_by_sequence: dict[int, dict] = {}</p>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">higher_is_better</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="p">)</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">has_year</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">has_year</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;includes_approval_year&quot;</span><span class="p">,</span>
 </span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\b20\d</span><span class="si">{2}</span><span class="s2">\b&quot;</span><span class="p">,</span>
 </span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Response mentions a specific year (four-digit number starting with 20).&quot;</span><span class="p">,</span>
@@ -15956,9 +15931,9 @@ _fixtures_by_sequence: dict[int, dict] = {}</p>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Registered callables on existing TaskEval&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="create-callabletraits">Create CallableTraits<a class="headerlink" href="#create-callabletraits" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;check_word_count&quot;</span><span class="p">,</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">func</span><span class="o">=</span><span class="n">check_word_count</span><span class="p">,</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;boolean&quot;</span><span class="p">,</span>
@@ -15966,7 +15941,7 @@ _fixtures_by_sequence: dict[int, dict] = {}</p>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;True if the response is between 30 and 200 words.&quot;</span><span class="p">,</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">)</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="n">sentence_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="n">sentence_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;count_sentences&quot;</span><span class="p">,</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">func</span><span class="o">=</span><span class="n">count_sentences</span><span class="p">,</span>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;score&quot;</span><span class="p">,</span>

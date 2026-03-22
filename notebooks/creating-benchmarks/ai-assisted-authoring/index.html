@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16316,9 +16291,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.benchmark.authoring.answers.generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">generate_answer_template</span>
-
-<span class="c1"># Create a Question object</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Create a Question object</span>
 <span class="n">question</span> <span class="o">=</span> <span class="n">Question</span><span class="p">(</span>
     <span class="n">question</span><span class="o">=</span><span class="s2">"What is the putative target of venetoclax?"</span><span class="p">,</span>
     <span class="n">raw_answer</span><span class="o">=</span><span class="s2">"BCL2 (B-cell lymphoma 2), an anti-apoptotic protein"</span><span class="p">,</span>
@@ -16334,8 +16307,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="nb">print</span><span class="p">(</span><span class="s2">"Generated template code:"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">code_string</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1">from karenina.benchmark.authoring.answers.generator import generate_answer_template
-
+<div class="clipboard-copy-txt" id="cell-1">
 # Create a Question object
 question = Question(
     question="What is the putative target of venetoclax?",
@@ -16435,9 +16407,9 @@ class Answer(BaseAnswer):
 <span class="c1"># Inspect the structure</span>
 <span class="n">lines</span> <span class="o">=</span> <span class="n">code_string</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Total lines: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Fields defined: identifies_target, mentions_mechanism"</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Ground truth: identifies_target=True, mentions_mechanism=True"</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Verification: BooleanMatch() for both fields"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"Fields defined: identifies_target, mentions_mechanism"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"Ground truth: identifies_target=True, mentions_mechanism=True"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"Verification: BooleanMatch() for both fields"</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2"># The generated code above defines:
 #   identifies_target: bool   -&gt; VerifiedField with BooleanMatch, ground_truth=True
@@ -16447,9 +16419,9 @@ class Answer(BaseAnswer):
 # Inspect the structure
 lines = code_string.strip().split("\n")
 print(f"Total lines: {len(lines)}")
-print(f"Fields defined: identifies_target, mentions_mechanism")
-print(f"Ground truth: identifies_target=True, mentions_mechanism=True")
-print(f"Verification: BooleanMatch() for both fields")</div>
+print("Fields defined: identifies_target, mentions_mechanism")
+print("Ground truth: identifies_target=True, mentions_mechanism=True")
+print("Verification: BooleanMatch() for both fields")</div>
 </div>
 </div>
 </div>
@@ -17107,7 +17079,7 @@ Save checkpoint
     <span class="o">.</span><span class="n">add_attribute</span><span class="p">(</span><span class="s2">"mentions_hepatic"</span><span class="p">,</span> <span class="s2">"bool"</span><span class="p">,</span> <span class="s2">"Whether hepatic glucose reduction is mentioned"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 <span class="p">)</span>
 <span class="n">benchmark</span><span class="o">.</span><span class="n">update_template</span><span class="p">(</span><span class="n">q2_id</span><span class="p">,</span> <span class="n">metformin_builder</span><span class="o">.</span><span class="n">compile</span><span class="p">())</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Replaced template for metformin question"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Replaced template for metformin question"</span><span class="p">)</span>
 
 <span class="c1"># Step 4: Save</span>
 <span class="n">tmpdir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">()</span>
@@ -17132,7 +17104,7 @@ metformin_builder = (
     .add_attribute("mentions_hepatic", "bool", "Whether hepatic glucose reduction is mentioned", True)
 )
 benchmark.update_template(q2_id, metformin_builder.compile())
-print(f"\nReplaced template for metformin question")
+print("\nReplaced template for metformin question")
 
 # Step 4: Save
 tmpdir = tempfile.mkdtemp()
@@ -17198,9 +17170,11 @@ Templates: 4
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+
 <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">tmpdir</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-10">import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)</div>
 </div>
 </div>

@@ -1789,37 +1789,37 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-natively-agentic-vs-scaffolded-adapters" class="md-nav__link">
+  <a href="#3-deep-agent-vs-tool-loop-adapters" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Natively Agentic vs. Scaffolded Adapters
+      3. Deep Agent vs. Tool Loop Adapters
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="3. Natively Agentic vs. Scaffolded Adapters">
+    <nav class="md-nav" aria-label="3. Deep Agent vs. Tool Loop Adapters">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#31-scaffolded-adapters" class="md-nav__link">
+  <a href="#31-tool-loop-adapters" class="md-nav__link">
     <span class="md-ellipsis">
-      3.1. Scaffolded Adapters
+      3.1. Tool Loop Adapters ()
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#32-natively-agentic-adapters" class="md-nav__link">
+  <a href="#32-deep-agent-adapters" class="md-nav__link">
     <span class="md-ellipsis">
-      3.2. Natively Agentic Adapters
+      3.2. Deep Agent Adapters ()
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#33-the-flag" class="md-nav__link">
+  <a href="#33-the-field" class="md-nav__link">
     <span class="md-ellipsis">
-      3.3. The Flag
+      3.3. The Field
     </span>
   </a>
   
@@ -11652,8 +11652,6 @@
       
         
       
-        
-      
     
     
     
@@ -11797,29 +11795,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16044,37 +16019,37 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-natively-agentic-vs-scaffolded-adapters" class="md-nav__link">
+  <a href="#3-deep-agent-vs-tool-loop-adapters" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Natively Agentic vs. Scaffolded Adapters
+      3. Deep Agent vs. Tool Loop Adapters
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="3. Natively Agentic vs. Scaffolded Adapters">
+    <nav class="md-nav" aria-label="3. Deep Agent vs. Tool Loop Adapters">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#31-scaffolded-adapters" class="md-nav__link">
+  <a href="#31-tool-loop-adapters" class="md-nav__link">
     <span class="md-ellipsis">
-      3.1. Scaffolded Adapters
+      3.1. Tool Loop Adapters ()
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#32-natively-agentic-adapters" class="md-nav__link">
+  <a href="#32-deep-agent-adapters" class="md-nav__link">
     <span class="md-ellipsis">
-      3.2. Natively Agentic Adapters
+      3.2. Deep Agent Adapters ()
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#33-the-flag" class="md-nav__link">
+  <a href="#33-the-field" class="md-nav__link">
     <span class="md-ellipsis">
-      3.3. The Flag
+      3.3. The Field
     </span>
   </a>
   
@@ -16800,11 +16775,11 @@ benchmark.set_workspace_root(Path("/data/tasks"))</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="3-natively-agentic-vs-scaffolded-adapters">3. Natively Agentic vs. Scaffolded Adapters<a class="anchor-link" href="#3-natively-agentic-vs-scaffolded-adapters">¶</a></h2><p>Not all <a href="adapters.md">adapters</a> are equal when it comes to agent capabilities. Karenina distinguishes two categories:</p>
-<h3 id="31-scaffolded-adapters">3.1. Scaffolded Adapters<a class="anchor-link" href="#31-scaffolded-adapters">¶</a></h3><p>Scaffolded adapters (LangChain, Claude Tool) build agent behavior by orchestrating individual LLM calls. The adapter explicitly manages the tool call loop: it sends a message, checks for tool calls in the response, executes the tools, sends the results back, and repeats. Every intermediate step is visible to the adapter and captured in the trace.</p>
-<h3 id="32-natively-agentic-adapters">3.2. Natively Agentic Adapters<a class="anchor-link" href="#32-natively-agentic-adapters">¶</a></h3><p>Natively agentic adapters wrap a runtime that is itself an agent with built-in tools (e.g., Claude Code via <code>claude_agent_sdk</code>). The runtime manages its own tool call loop internally. The adapter hands off a prompt and receives a completed trace.</p>
-<p>This distinction matters for the pipeline. For natively agentic adapters, the pipeline always uses <code>AgentPort</code> (not <code>LLMPort</code>) to generate answers, because the <code>LLMPort</code> path cannot capture the intermediate tool calls that the runtime executes internally. Using <code>LLMPort</code> on a natively agentic adapter would produce a response but lose the full tool call trace.</p>
-<h3 id="33-the-natively_agentic-flag">3.3. The <code>natively_agentic</code> Flag<a class="anchor-link" href="#33-the-natively_agentic-flag">¶</a></h3><p>The flag is declared on <code>AdapterSpec</code> in the <a href="../../src/karenina/adapters/registry.py">adapter registry</a>:</p>
+<h2 id="3-deep-agent-vs-tool-loop-adapters">3. Deep Agent vs. Tool Loop Adapters<a class="anchor-link" href="#3-deep-agent-vs-tool-loop-adapters">¶</a></h2><p>Not all <a href="adapters.md">adapters</a> are equal when it comes to agent capabilities. Karenina distinguishes two tiers via the <code>agent_tier</code> field on <code>AdapterSpec</code>:</p>
+<h3 id="31-tool-loop-adapters-agent_tiertool_loop">3.1. Tool Loop Adapters (<code>agent_tier="tool_loop"</code>)<a class="anchor-link" href="#31-tool-loop-adapters-agent_tiertool_loop">¶</a></h3><p>Tool loop adapters (LangChain, Claude Tool) build agent behavior by orchestrating individual LLM calls. The adapter explicitly manages the tool call loop: it sends a message, checks for tool calls in the response, executes the tools, sends the results back, and repeats. Every intermediate step is visible to the adapter and captured in the trace.</p>
+<h3 id="32-deep-agent-adapters-agent_tierdeep_agent">3.2. Deep Agent Adapters (<code>agent_tier="deep_agent"</code>)<a class="anchor-link" href="#32-deep-agent-adapters-agent_tierdeep_agent">¶</a></h3><p>Deep agent adapters wrap a runtime that is itself an agent with built-in tools (e.g., Claude Code via <code>claude_agent_sdk</code>). The runtime manages its own tool call loop internally. The adapter hands off a prompt and receives a completed trace.</p>
+<p>This distinction matters for the pipeline. For deep agent adapters, the pipeline always uses <code>AgentPort</code> (not <code>LLMPort</code>) to generate answers, because the <code>LLMPort</code> path cannot capture the intermediate tool calls that the runtime executes internally. Using <code>LLMPort</code> on a deep agent adapter would produce a response but lose the full tool call trace.</p>
+<h3 id="33-the-agent_tier-field">3.3. The <code>agent_tier</code> Field<a class="anchor-link" href="#33-the-agent_tier-field">¶</a></h3><p>The field is declared on <code>AdapterSpec</code> in the <a href="../../src/karenina/adapters/registry.py">adapter registry</a>:</p>
 </div>
 </div>
 </div>
@@ -16830,12 +16805,12 @@ benchmark.set_workspace_root(Path("/data/tasks"))</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">AdapterSpec</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Adapter specification in the registry."""</span>
-    <span class="n">natively_agentic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">agent_tier</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"tool_loop"</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">@dataclass
 class AdapterSpec:
     """Adapter specification in the registry."""
-    natively_agentic: bool = False</div>
+    agent_tier: str = "tool_loop"</div>
 </div>
 </div>
 </div>
@@ -16848,8 +16823,8 @@ class AdapterSpec:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>When <code>natively_agentic=True</code>, <code>GenerateAnswerStage</code> (Stage 2) automatically selects the <code>AgentPort</code> path even when no MCP servers are configured. This is the same path used for MCP-enabled answering models; the flag simply makes it the default for adapters that need it.</p>
-<p>Currently, <code>claude_agent_sdk</code> is the only adapter that sets <code>natively_agentic=True</code>.</p>
+<p>When <code>agent_tier="deep_agent"</code>, <code>GenerateAnswerStage</code> (Stage 2) automatically selects the <code>AgentPort</code> path even when no MCP servers are configured. This is the same path used for MCP-enabled answering models; the tier simply makes it the default for adapters that need it.</p>
+<p>Currently, <code>claude_agent_sdk</code> is the only adapter that sets <code>agent_tier="deep_agent"</code>.</p>
 <h2 id="4-two-step-agentic-judging-stage-7b">4. Two-Step Agentic Judging (Stage 7b)<a class="anchor-link" href="#4-two-step-agentic-judging-stage-7b">¶</a></h2><p>When <code>agentic_parsing=True</code> in <a href="../reference/configuration/verification-config/">VerificationConfig</a>, the pipeline replaces the classical <code>ParseTemplateStage</code> (Stage 7a) with <code>AgenticParseTemplateStage</code> (Stage 7b). The two-step process separates investigation from extraction:</p>
 <h3 id="41-step-1-investigation">4.1. Step 1: Investigation<a class="anchor-link" href="#41-step-1-investigation">¶</a></h3><p>An agent (<code>AgentPort</code>) with tool access examines the workspace. It can read files, execute code, run tests, and check outputs. The investigation agent receives:</p>
 <ul>
@@ -17097,7 +17072,7 @@ results = benchmark.run_verification(config)</div>
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>In this example:</p>
 <ol>
-<li>The answering model (<code>coder</code>) runs as a natively agentic adapter (<code>claude_agent_sdk</code>) with access to the workspace. It reads files, writes code, and runs tests.</li>
+<li>The answering model (<code>coder</code>) runs as a deep agent adapter (<code>claude_agent_sdk</code>) with access to the workspace. It reads files, writes code, and runs tests.</li>
 <li>The pipeline copies each question's workspace before the answering agent runs.</li>
 <li>After the answering agent finishes, <code>AgenticParseTemplateStage</code> launches a separate investigation agent with tool access to the (now modified) workspace copy.</li>
 <li>The investigation agent independently verifies the artifacts. It receives only the question and the workspace path (not the answering agent's trace, because <code>agentic_judge_context="workspace_only"</code>).</li>

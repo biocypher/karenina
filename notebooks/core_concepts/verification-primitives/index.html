@@ -11919,8 +11919,6 @@
       
         
       
-        
-      
     
     
     
@@ -12064,29 +12062,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -18157,7 +18132,7 @@ print(f"340 -&gt; {parsed_wrong.verify()}")</div>
 </tr>
 <tr>
 <td><code>mode</code></td>
-<td><code>str</code></td>
+<td><code>Literal["relative", "absolute"]</code></td>
 <td><code>"relative"</code></td>
 <td><code>"relative"</code>: fraction of ground truth; <code>"absolute"</code>: raw difference</td>
 </tr>
@@ -18675,7 +18650,7 @@ print(f"Wrong date:       {parsed_wrong.verify()}")</div>
 </tr>
 <tr>
 <td><code>unit</code></td>
-<td><code>str</code></td>
+<td><code>Literal["days", "hours", "minutes"]</code></td>
 <td><code>"days"</code></td>
 <td>Time unit: <code>"days"</code>, <code>"hours"</code>, or <code>"minutes"</code></td>
 </tr>

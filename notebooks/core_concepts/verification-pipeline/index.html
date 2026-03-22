@@ -11673,8 +11673,6 @@
       
         
       
-        
-      
     
     
     
@@ -11818,29 +11816,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -17113,12 +17088,12 @@ The embedding check stage runs whenever field verification fails. The underlying
 <td style="text-align:center">Yes</td>
 </tr>
 <tr>
-<td><code>RegexTrait</code></td>
+<td><code>RegexRubricTrait</code></td>
 <td>Pattern matching</td>
 <td style="text-align:center">No</td>
 </tr>
 <tr>
-<td><code>CallableTrait</code></td>
+<td><code>CallableRubricTrait</code></td>
 <td>Local Python function</td>
 <td style="text-align:center">No</td>
 </tr>
@@ -17222,7 +17197,7 @@ The embedding check stage runs whenever field verification fails. The underlying
         <span class="p">),</span>
     <span class="p">],</span>
     <span class="n">regex_traits</span><span class="o">=</span><span class="p">[</span>
-        <span class="n">RegexTrait</span><span class="p">(</span>
+        <span class="n">RegexRubricTrait</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="s2">"has_citations"</span><span class="p">,</span>
             <span class="n">description</span><span class="o">=</span><span class="s2">"Has bracket citations"</span><span class="p">,</span>
             <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
@@ -17249,7 +17224,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             description="Has bracket citations",
             pattern=r"\[\d+\]",
@@ -17532,7 +17507,7 @@ rubric_only               →  6 stages: ['GenerateAnswer', 'RecursionLimitAutoF
 <p><strong>Stage 7: ParseTemplate</strong> sends the response and the <code>Answer</code> schema to the Judge LLM. The Judge extracts: <code>{"target": "BCL2"}</code>. A filled <code>Answer</code> instance is stored as <code>parsed_answer</code>. For coding tasks with <code>agentic_parsing=True</code>, this stage is replaced by <code>AgenticParseTemplateStage</code> (Stage 7b), which uses a two-step process: an investigation agent independently verifies workspace artifacts, then a parser extracts structured data from the investigation findings. See <a href="agentic-evaluation.md">Agentic Evaluation</a> for details.</p>
 <p><strong>Stage 8: VerifyTemplate</strong> calls <code>answer.verify()</code>, which compares <code>"BCL2"</code> against the ground truth <code>"BCL2"</code>. Field verification passes. Regex verification (if defined) also runs. <code>verify_result=True</code>.</p>
 <p><strong>Stage 9: EmbeddingCheck</strong> checks <code>field_verification_result</code>. It is <code>True</code>. Stage skips itself (embedding fallback is unnecessary).</p>
-<p><strong>Stage 11: RubricEvaluation</strong> evaluates the attached traits. A <code>RegexTrait</code> for <code>has_citations</code> checks for <code>\[\d+\]</code> in the response. No match: <code>has_citations=False</code>. An <code>LLMRubricTrait</code> for <code>conciseness</code> asks the parsing model to judge. Result: <code>True</code>.</p>
+<p><strong>Stage 11: RubricEvaluation</strong> evaluates the attached traits. A <code>RegexRubricTrait</code> for <code>has_citations</code> checks for <code>\[\d+\]</code> in the response. No match: <code>has_citations=False</code>. An <code>LLMRubricTrait</code> for <code>conciseness</code> asks the parsing model to judge. Result: <code>True</code>.</p>
 <p><strong>Stage 13: FinalizeResult</strong> assembles the <code>VerificationResult</code>:</p>
 <ul>
 <li><code>result.template.verify_result = True</code></li>

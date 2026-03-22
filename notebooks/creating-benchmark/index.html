@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16779,7 +16754,7 @@ print(f"Finished count: {benchmark.finished_count} of {benchmark.question_count}
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span><span class="p">,</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span><span class="p">,</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexRubricTrait</span>
 
 <span class="c1"># Boolean LLM trait — evaluated on every question</span>
 <span class="n">safety_trait</span> <span class="o">=</span> <span class="n">LLMRubricTrait</span><span class="p">(</span>
@@ -16794,7 +16769,7 @@ print(f"Finished count: {benchmark.finished_count} of {benchmark.question_count}
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">safety_trait</span><span class="p">)</span>
 
 <span class="c1"># Regex trait — check for hedging language</span>
-<span class="n">no_hedging</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">no_hedging</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Hedging"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Response should not contain hedging phrases."</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b(I think|I believe|I guess|probably)\b"</span><span class="p">,</span>
@@ -16805,7 +16780,7 @@ print(f"Finished count: {benchmark.finished_count} of {benchmark.question_count}
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">no_hedging</span><span class="p">)</span>
 
 <span class="c1"># Callable trait — minimum word count</span>
-<span class="n">min_words</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">min_words</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Minimum Length"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">&gt;=</span> <span class="mi">10</span><span class="p">,</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
@@ -16819,7 +16794,7 @@ print(f"Finished count: {benchmark.finished_count} of {benchmark.question_count}
 <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">global_rubric</span><span class="o">.</span><span class="n">get_trait_names</span><span class="p">():</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  - </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import CallableTrait, LLMRubricTrait, RegexTrait
+<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import CallableRubricTrait, LLMRubricTrait, RegexRubricTrait
 
 # Boolean LLM trait — evaluated on every question
 safety_trait = LLMRubricTrait(
@@ -16834,7 +16809,7 @@ safety_trait = LLMRubricTrait(
 benchmark.add_global_rubric_trait(safety_trait)
 
 # Regex trait — check for hedging language
-no_hedging = RegexTrait(
+no_hedging = RegexRubricTrait(
     name="No Hedging",
     description="Response should not contain hedging phrases.",
     pattern=r"\b(I think|I believe|I guess|probably)\b",
@@ -16845,7 +16820,7 @@ no_hedging = RegexTrait(
 benchmark.add_global_rubric_trait(no_hedging)
 
 # Callable trait — minimum word count
-min_words = CallableTrait.from_callable(
+min_words = CallableRubricTrait.from_callable(
     name="Minimum Length",
     func=lambda text: len(text.split()) &gt;= 10,
     kind="boolean",

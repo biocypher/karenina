@@ -1761,9 +1761,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#12-next-steps" class="md-nav__link">
+  <a href="#12-provenance-in-results" class="md-nav__link">
     <span class="md-ellipsis">
-      12. Next Steps
+      12. Provenance in Results
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      13. Next Steps
     </span>
   </a>
   
@@ -11619,8 +11628,6 @@
       
         
       
-        
-      
     
     
     
@@ -11764,29 +11771,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16116,9 +16100,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#12-next-steps" class="md-nav__link">
+  <a href="#12-provenance-in-results" class="md-nav__link">
     <span class="md-ellipsis">
-      12. Next Steps
+      12. Provenance in Results
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      13. Next Steps
     </span>
   </a>
   
@@ -17907,7 +17900,30 @@ print(f"Validation errors: {errors}")</div>
 </tr>
 </tbody>
 </table>
-<h2 id="12-next-steps">12. Next Steps<a class="anchor-link" href="#12-next-steps">¶</a></h2><ul>
+<h2 id="12-provenance-in-results">12. Provenance in Results<a class="anchor-link" href="#12-provenance-in-results">¶</a></h2><p>When few-shot is active, the verification result records provenance metadata so you can trace which results used few-shot prompting:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Location</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>few_shot_enabled</code></td>
+<td><code>result.metadata</code></td>
+<td><code>True</code> if few-shot was active for this verification</td>
+</tr>
+<tr>
+<td><code>few_shot_example_count</code></td>
+<td><code>result.metadata</code></td>
+<td>Number of resolved examples (0 if disabled)</td>
+</tr>
+</tbody>
+</table>
+<p>These fields enable filtering and grouping in analysis (e.g., comparing accuracy with and without few-shot examples across the same benchmark).</p>
+<h2 id="13-next-steps">13. Next Steps<a class="anchor-link" href="#13-next-steps">¶</a></h2><ul>
 <li><a href="../answer-templates/">Answer Templates</a>: what few-shot examples help the answering model produce</li>
 <li><a href="../verification-pipeline/">Verification Pipeline</a>: where GenerateAnswer fits in the 13-stage pipeline</li>
 <li><a href="../../../workflows/running-verification/">Running Verification</a>: complete configuration and execution workflow</li>

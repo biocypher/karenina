@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -17347,7 +17322,7 @@ print("Attached answer template with 1 verification field")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexTrait</span><span class="p">,</span> <span class="n">Rubric</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexRubricTrait</span><span class="p">,</span> <span class="n">Rubric</span>
 
 <span class="n">rubric</span> <span class="o">=</span> <span class="n">Rubric</span><span class="p">(</span>
     <span class="n">llm_traits</span><span class="o">=</span><span class="p">[</span>
@@ -17363,7 +17338,7 @@ print("Attached answer template with 1 verification field")</div>
         <span class="p">),</span>
     <span class="p">],</span>
     <span class="n">regex_traits</span><span class="o">=</span><span class="p">[</span>
-        <span class="n">RegexTrait</span><span class="p">(</span>
+        <span class="n">RegexRubricTrait</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="s2">"has_citations"</span><span class="p">,</span>
             <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
             <span class="n">description</span><span class="o">=</span><span class="s2">"Response includes numbered citations in bracket notation."</span><span class="p">,</span>
@@ -17377,7 +17352,7 @@ print("Attached answer template with 1 verification field")</div>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added rubric with </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">rubric</span><span class="o">.</span><span class="n">llm_traits</span><span class="p">)</span><span class="si">}</span><span class="s2"> LLM trait(s) and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">rubric</span><span class="o">.</span><span class="n">regex_traits</span><span class="p">)</span><span class="si">}</span><span class="s2"> regex trait(s)"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-10">from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+<div class="clipboard-copy-txt" id="cell-10">from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
 
 rubric = Rubric(
     llm_traits=[
@@ -17393,7 +17368,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             pattern=r"\[\d+\]",
             description="Response includes numbered citations in bracket notation.",

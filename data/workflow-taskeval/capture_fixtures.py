@@ -118,7 +118,7 @@ def run_workflow_examples():
     from karenina.benchmark.task_eval import TaskEval
     from karenina.schemas.config.models import ModelConfig
     from karenina.schemas.entities import BaseAnswer
-    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
     from karenina.schemas.verification.config import VerificationConfig
 
     # === Main flow (Steps 1-5) ===
@@ -171,7 +171,7 @@ def run_workflow_examples():
             ),
         ],
         regex_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="has_citations",
                 pattern=r"\[\d+\]",
                 description="Response includes numbered citations in bracket notation.",

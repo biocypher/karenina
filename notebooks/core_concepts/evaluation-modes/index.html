@@ -1584,9 +1584,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-next-steps" class="md-nav__link">
+  <a href="#6-mode-tracking-in-results" class="md-nav__link">
     <span class="md-ellipsis">
-      6. Next Steps
+      6. Mode Tracking in Results
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Next Steps
     </span>
   </a>
   
@@ -11565,8 +11574,6 @@
       
         
       
-        
-      
     
     
     
@@ -11710,29 +11717,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16008,9 +15992,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-next-steps" class="md-nav__link">
+  <a href="#6-mode-tracking-in-results" class="md-nav__link">
     <span class="md-ellipsis">
-      6. Next Steps
+      6. Mode Tracking in Results
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Next Steps
     </span>
   </a>
   
@@ -16679,11 +16672,12 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </tr>
 </tbody>
 </table>
-<p>Three execution details matter in practice:</p>
+<p>Four execution details matter in practice:</p>
 <ol>
 <li><code>rubric_only</code> truly skips template stages at the orchestrator level.</li>
 <li><code>template_and_rubric</code> evaluates rubrics on the raw response, not on parsed template fields.</li>
 <li>Rubric stages are only added when a non-empty <code>Rubric</code> is actually attached.</li>
+<li><a href="../../../core_concepts/rubrics/">DynamicRubric</a> traits participate in <code>template_and_rubric</code> and <code>rubric_only</code> modes. In <code>template_only</code> mode, dynamic rubric traits are ignored because rubric evaluation does not run. The presence check that gates dynamic traits occurs at the start of Stage 11 (RubricEvaluation), so it only executes in modes that include rubric stages.</li>
 </ol>
 <p>That means <code>template_and_rubric</code> is not "template mode with nicer reporting." It is a combined run with two distinct evaluation paths:</p>
 <pre><code>raw response
@@ -16774,14 +16768,12 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
     <span class="n">answering_models</span><span class="o">=</span><span class="n">answering</span><span class="p">,</span>
     <span class="n">parsing_models</span><span class="o">=</span><span class="n">parsing</span><span class="p">,</span>
     <span class="n">evaluation_mode</span><span class="o">=</span><span class="s2">"template_and_rubric"</span><span class="p">,</span>
-    <span class="n">rubric_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">rubric_only_config</span> <span class="o">=</span> <span class="n">VerificationConfig</span><span class="p">(</span>
     <span class="n">answering_models</span><span class="o">=</span><span class="n">answering</span><span class="p">,</span>
     <span class="n">parsing_models</span><span class="o">=</span><span class="n">parsing</span><span class="p">,</span>
     <span class="n">evaluation_mode</span><span class="o">=</span><span class="s2">"rubric_only"</span><span class="p">,</span>
-    <span class="n">rubric_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">answering = [
@@ -16809,14 +16801,12 @@ template_and_rubric_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 rubric_only_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="rubric_only",
-    rubric_enabled=True,
 )</div>
 </div>
 </div>
@@ -16830,30 +16820,7 @@ rubric_only_config = VerificationConfig(
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="5-detailed-reference">5. Detailed Reference<a class="anchor-link" href="#5-detailed-reference">¶</a></h2><h3 id="configuration-rules">Configuration rules<a class="anchor-link" href="#configuration-rules">¶</a></h3><p><code>VerificationConfig</code> enforces these combinations:</p>
-<table>
-<thead>
-<tr>
-<th><code>evaluation_mode</code></th>
-<th>Required <code>rubric_enabled</code></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>template_only</code></td>
-<td><code>False</code></td>
-</tr>
-<tr>
-<td><code>template_and_rubric</code></td>
-<td><code>True</code></td>
-</tr>
-<tr>
-<td><code>rubric_only</code></td>
-<td><code>True</code></td>
-</tr>
-</tbody>
-</table>
-<p>If you use <code>VerificationConfig.from_overrides(...)</code>, setting <code>evaluation_mode</code> automatically sets <code>rubric_enabled</code> to the matching value.</p>
+<h2 id="5-detailed-reference">5. Detailed Reference<a class="anchor-link" href="#5-detailed-reference">¶</a></h2><h3 id="configuration-rules">Configuration rules<a class="anchor-link" href="#configuration-rules">¶</a></h3><p><code>evaluation_mode</code> alone controls which evaluation paths are active. Setting it to <code>template_and_rubric</code> or <code>rubric_only</code> automatically enables rubric evaluation; no separate flag is needed.</p>
 <h3 id="result-shape-guidance">Result-shape guidance<a class="anchor-link" href="#result-shape-guidance">¶</a></h3><p>When rubric evaluation runs, rubric outputs are stored under <code>result.rubric</code>.</p>
 <p>When template stages do not run, Karenina still returns a <code>template</code> section with the raw response and related metadata, but template-specific correctness fields behave differently:</p>
 <ul>
@@ -16869,7 +16836,8 @@ rubric_only_config = VerificationConfig(
 <li>both -&gt; <code>template_and_rubric</code></li>
 </ul>
 <p>In <code>rubric_only</code>, <code>TaskEval</code> can evaluate logs even when no explicit template is attached; internally it creates a minimal synthetic template so the shared pipeline can still run.</p>
-<h2 id="6-next-steps">6. Next Steps<a class="anchor-link" href="#6-next-steps">¶</a></h2><ul>
+<h2 id="6-mode-tracking-in-results">6. Mode Tracking in Results<a class="anchor-link" href="#6-mode-tracking-in-results">¶</a></h2><p>The <code>evaluation_mode</code> used for each verification is stored in <code>result.metadata.evaluation_mode</code>. This lets you distinguish results produced under different modes when analyzing a benchmark that mixes evaluation strategies across runs.</p>
+<h2 id="7-next-steps">7. Next Steps<a class="anchor-link" href="#7-next-steps">¶</a></h2><ul>
 <li><a href="../template-vs-rubric/">Templates vs Rubrics</a>: the conceptual distinction between correctness and quality</li>
 <li><a href="../answer-templates/">Answer Templates</a>: how parsing and <code>verify()</code> work</li>
 <li><a href="../../../core_concepts/rubrics/">Rubrics</a>: trait types and selection guidance</li>

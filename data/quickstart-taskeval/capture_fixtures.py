@@ -116,7 +116,7 @@ def run_taskeval_quickstart():
     from karenina.benchmark.task_eval import TaskEval
     from karenina.schemas.config.models import ModelConfig
     from karenina.schemas.entities import BaseAnswer, VerifiedField
-    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
     from karenina.schemas.primitives import BooleanMatch
     from karenina.schemas.verification.config import VerificationConfig
 
@@ -173,7 +173,7 @@ def run_taskeval_quickstart():
             ),
         ],
         regex_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="Has Citations",
                 description="The response includes numbered citations in bracket notation (e.g., [1]).",
                 pattern=r"\[\d+\]",

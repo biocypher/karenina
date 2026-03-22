@@ -11607,8 +11607,6 @@
       
         
       
-        
-      
     
     
     
@@ -11752,29 +11750,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16978,9 +16953,9 @@ print(f"Added global trait: {safety_trait.name}")
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 
-<span class="n">citation_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">citation_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Hedging Language"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="p">(</span>
         <span class="s2">"Checks that the response states facts directly without hedging phrases "</span>
@@ -16995,9 +16970,9 @@ print(f"Added global trait: {safety_trait.name}")
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">citation_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added global trait: </span><span class="si">{</span><span class="n">citation_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6">from karenina.schemas import RegexTrait
+<div class="clipboard-copy-txt" id="cell-6">from karenina.schemas import RegexRubricTrait
 
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="No Hedging Language",
     description=(
         "Checks that the response states facts directly without hedging phrases "
@@ -17047,9 +17022,9 @@ print(f"Added global trait: {citation_trait.name}")
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 
-<span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Minimum Length"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">&gt;=</span> <span class="mi">15</span><span class="p">,</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
@@ -17060,9 +17035,9 @@ print(f"Added global trait: {citation_trait.name}")
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">word_count_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added global trait: </span><span class="si">{</span><span class="n">word_count_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import CallableTrait
+<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import CallableRubricTrait
 
-word_count_trait = CallableTrait.from_callable(
+word_count_trait = CallableRubricTrait.from_callable(
     name="Minimum Length",
     func=lambda text: len(text.split()) &gt;= 15,
     kind="boolean",
@@ -17535,15 +17510,15 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 <td>Ordered categorical classification</td>
 </tr>
 <tr>
-<td><code>RegexTrait</code></td>
-<td><code>from karenina.schemas import RegexTrait</code></td>
+<td><code>RegexRubricTrait</code></td>
+<td><code>from karenina.schemas import RegexRubricTrait</code></td>
 <td>No</td>
 <td><code>bool</code></td>
 <td>Pattern matching, format checks</td>
 </tr>
 <tr>
-<td><code>CallableTrait</code></td>
-<td><code>from karenina.schemas import CallableTrait</code></td>
+<td><code>CallableRubricTrait</code></td>
+<td><code>from karenina.schemas import CallableRubricTrait</code></td>
 <td>No</td>
 <td><code>bool</code> or <code>int</code></td>
 <td>Custom Python logic</td>

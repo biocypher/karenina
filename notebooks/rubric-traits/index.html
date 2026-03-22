@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16580,10 +16555,10 @@ They are fast, free, and perfectly reproducible.</p>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 
 <span class="c1"># Check for numbered citations</span>
-<span class="n">citation_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">citation_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Has Citations"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Check that the response includes numbered citations"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
@@ -16594,7 +16569,7 @@ They are fast, free, and perfectly reproducible.</p>
 <span class="nb">print</span><span class="p">(</span><span class="n">citation_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The drug targets BCL2 and KRAS."</span><span class="p">))</span>  <span class="c1"># False</span>
 
 <span class="c1"># Inverted match: check that hedging language is ABSENT</span>
-<span class="n">no_hedging_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">no_hedging_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Hedging"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Ensure the response avoids hedging phrases"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b(maybe|perhaps|possibly|might be|could be)\b"</span><span class="p">,</span>
@@ -16606,10 +16581,10 @@ They are fast, free, and perfectly reproducible.</p>
 <span class="nb">print</span><span class="p">(</span><span class="n">no_hedging_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The answer is 42."</span><span class="p">))</span>  <span class="c1"># True (no hedging)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">no_hedging_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The answer is perhaps 42."</span><span class="p">))</span>  <span class="c1"># False (hedging found)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">from karenina.schemas import RegexTrait
+<div class="clipboard-copy-txt" id="cell-4">from karenina.schemas import RegexRubricTrait
 
 # Check for numbered citations
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="Has Citations",
     description="Check that the response includes numbered citations",
     pattern=r"\[\d+\]",
@@ -16620,7 +16595,7 @@ print(citation_trait.evaluate("The drug targets BCL2 [1] and KRAS [2]."))  # Tru
 print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))  # False
 
 # Inverted match: check that hedging language is ABSENT
-no_hedging_trait = RegexTrait(
+no_hedging_trait = RegexRubricTrait(
     name="No Hedging",
     description="Ensure the response avoids hedging phrases",
     pattern=r"\b(maybe|perhaps|possibly|might be|could be)\b",
@@ -16683,10 +16658,10 @@ to create them — it handles serialization automatically.</p>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 
 <span class="c1"># Boolean callable: minimum word count</span>
-<span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Minimum Word Count"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Response must contain at least 50 words"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">&gt;=</span> <span class="mi">50</span><span class="p">,</span>
@@ -16709,7 +16684,7 @@ to create them — it handles serialization automatically.</p>
     <span class="k">return</span> <span class="nb">len</span><span class="p">([</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sentences</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">strip</span><span class="p">()])</span>
 
 
-<span class="n">sentence_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">sentence_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Sentence Count"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Count the number of sentences in the response"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="n">count_sentences</span><span class="p">,</span>
@@ -16722,10 +16697,10 @@ to create them — it handles serialization automatically.</p>
 <span class="n">sample</span> <span class="o">=</span> <span class="s2">"BCL2 is a proto-oncogene. It regulates apoptosis. It is located on chromosome 18."</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sentences: </span><span class="si">{</span><span class="n">sentence_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>  <span class="c1"># 3</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">from karenina.schemas import CallableTrait
+<div class="clipboard-copy-txt" id="cell-5">from karenina.schemas import CallableRubricTrait
 
 # Boolean callable: minimum word count
-word_count_trait = CallableTrait.from_callable(
+word_count_trait = CallableRubricTrait.from_callable(
     name="Minimum Word Count",
     description="Response must contain at least 50 words",
     func=lambda text: len(text.split()) &gt;= 50,
@@ -16748,7 +16723,7 @@ def count_sentences(text: str) -&gt; int:
     return len([s for s in sentences if s.strip()])
 
 
-sentence_trait = CallableTrait.from_callable(
+sentence_trait = CallableRubricTrait.from_callable(
     name="Sentence Count",
     description="Count the number of sentences in the response",
     func=count_sentences,
@@ -17054,14 +17029,14 @@ Total traits: 9
 </tr>
 <tr>
 <td>Regex</td>
-<td><code>RegexTrait</code></td>
+<td><code>RegexRubricTrait</code></td>
 <td>No</td>
 <td><code>True</code>/<code>False</code></td>
 <td><code>pattern</code>, <code>case_sensitive</code>, <code>invert_result</code></td>
 </tr>
 <tr>
 <td>Callable</td>
-<td><code>CallableTrait</code></td>
+<td><code>CallableRubricTrait</code></td>
 <td>No</td>
 <td><code>bool</code> or <code>int</code></td>
 <td><code>from_callable()</code>, <code>func</code>, <code>kind</code></td>

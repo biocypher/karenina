@@ -1536,6 +1536,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#evaluation-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Evaluation mode
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -11577,8 +11586,6 @@
       
         
       
-        
-      
     
     
     
@@ -11722,29 +11729,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16026,6 +16010,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#evaluation-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Evaluation mode
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -16894,7 +16887,8 @@ print(f"High confidence path: {resolve_next_node(scenario_b.edges_from('ask'), s
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="c-custom-accumulated-state-via-state_update">c. Custom accumulated state via state_update<a class="anchor-link" href="#c-custom-accumulated-state-via-state_update">¶</a></h3><p><code>ScenarioNode</code> accepts an optional <code>state_update</code> callable. After each turn on that node, the engine calls <code>state_update(accumulated, parsed_fields)</code> and replaces <code>accumulated</code> with the returned dict. This allows tracking values across revisits, such as a running count:</p>
+<h3 id="c-custom-accumulated-state-via-state_update">c. Custom accumulated state via state_update<a class="anchor-link" href="#c-custom-accumulated-state-via-state_update">¶</a></h3><p><code>ScenarioNode</code> accepts an optional <code>state_update</code> callable. After each turn on that node, the engine calls <code>state_update(accumulated, parsed_fields)</code> and replaces <code>accumulated</code> with the returned dict. This allows tracking values across revisits, such as a running count.</p>
+<p>Before calling the callback, the engine takes a <code>deepcopy</code> snapshot of <code>accumulated</code>. If the callback raises an exception, the snapshot is restored and the error is logged at <code>warning</code> level. This guarantees that a buggy <code>state_update</code> cannot corrupt accumulated state for subsequent turns.</p>
 </div>
 </div>
 </div>
@@ -17219,6 +17213,7 @@ print(f"ask passed: next is {resolve_next_node(scenario_d.edges_from('synthesize
 </tbody>
 </table>
 <h3 id="turn-limit">Turn limit<a class="anchor-link" href="#turn-limit">¶</a></h3><p><code>VerificationConfig.scenario_turn_limit</code> (default: <code>20</code>) sets the maximum number of turns before the runner terminates the scenario with <code>status="limit_reached"</code>. Set this field in your <code>VerificationConfig</code> to override the default.</p>
+<h3 id="evaluation-mode">Evaluation mode<a class="anchor-link" href="#evaluation-mode">¶</a></h3><p>Scenarios auto-detect evaluation mode per turn based on whether a rubric is present (per-question rubric or global rubric). Setting <code>evaluation_mode='rubric_only'</code> on <code>VerificationConfig</code> has no effect in scenarios: the ScenarioManager ignores it and emits a <code>UserWarning</code> explaining why. If you need rubric-only evaluation, attach rubrics to your questions without answer templates and the auto-detection will select <code>template_and_rubric</code> or <code>template_only</code> as appropriate.</p>
 <h2 id="7-next-steps">7. Next Steps<a class="anchor-link" href="#7-next-steps">¶</a></h2><ul>
 <li><a href="../../../workflows/scenarios/sycophancy-tutorial.md">Sycophancy Tutorial</a>: end-to-end walkthrough of a sycophancy resistance scenario that uses state-driven routing</li>
 <li>Scenario Internals: contributor-level detail on the execution engine is in the karenina-guide skill reference at <code>references/advanced/scenario-internals.md</code>, not a separate docs page</li>

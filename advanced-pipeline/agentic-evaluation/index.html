@@ -11367,8 +11367,6 @@
       
         
       
-        
-      
     
     
     
@@ -11512,29 +11510,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -15412,9 +15387,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-adapterspecnatively_agentic" class="md-nav__link">
+  <a href="#1-adapterspecagent_tier" class="md-nav__link">
     <span class="md-ellipsis">
-      1. AdapterSpec.natively_agentic
+      1. AdapterSpec.agent_tier
     </span>
   </a>
   
@@ -15924,9 +15899,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-adapterspecnatively_agentic" class="md-nav__link">
+  <a href="#1-adapterspecagent_tier" class="md-nav__link">
     <span class="md-ellipsis">
-      1. AdapterSpec.natively_agentic
+      1. AdapterSpec.agent_tier
     </span>
   </a>
   
@@ -16134,54 +16109,54 @@
 <h1 id="agentic-evaluation">Agentic Evaluation<a class="headerlink" href="#agentic-evaluation" title="Permanent link">&para;</a></h1>
 <p>This page covers the internal machinery of agentic evaluation: how the pipeline detects agentic adapters, resolves workspaces, runs the two-step investigation/extraction parse stage, and cleans up afterward. It is for contributors and power users who need to understand what happens under the hood.</p>
 <p>For a conceptual overview and usage guide, see the <a href="../../core_concepts/agentic-evaluation/">agentic evaluation concept page</a>. For the general pipeline architecture, see <a href="../../core_concepts/verification-pipeline/">verification-pipeline.md</a>.</p>
-<h2 id="1-adapterspecnatively_agentic">1. AdapterSpec.natively_agentic<a class="headerlink" href="#1-adapterspecnatively_agentic" title="Permanent link">&para;</a></h2>
+<h2 id="1-adapterspecagent_tier">1. AdapterSpec.agent_tier<a class="headerlink" href="#1-adapterspecagent_tier" title="Permanent link">&para;</a></h2>
 <p><strong>File</strong>: <code>src/karenina/adapters/registry.py</code>, <code>AdapterSpec</code> dataclass.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">natively_agentic</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">agent_tier</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;tool_loop&quot;</span>
 </span></code></pre></div>
-<p>This flag distinguishes runtimes that are themselves agents with built-in tools (e.g., Claude Code) from scaffolded adapters where the adapter explicitly orchestrates each tool call turn (LangChain, Claude Tool).</p>
-<p>The <code>GenerateAnswer</code> stage (stage 2) checks this flag to decide whether to use <code>AgentPort</code> or <code>LLMPort</code> for the answering step:</p>
+<p>This field distinguishes runtimes that are themselves agents with built-in tools (e.g., Claude Code, <code>agent_tier="deep_agent"</code>) from scaffolded adapters where the adapter explicitly orchestrates each tool call turn (LangChain, Claude Tool, <code>agent_tier="tool_loop"</code>).</p>
+<p>The <code>GenerateAnswer</code> stage (stage 2) checks this field to decide whether to use <code>AgentPort</code> or <code>LLMPort</code> for the answering step:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># generate_answer.py, Step 2</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">spec</span> <span class="o">=</span> <span class="n">AdapterRegistry</span><span class="o">.</span><span class="n">get_spec</span><span class="p">(</span><span class="n">answering_model</span><span class="o">.</span><span class="n">interface</span><span class="p">)</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">use_agent</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">answering_model</span><span class="o">.</span><span class="n">mcp_urls_dict</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">spec</span><span class="o">.</span><span class="n">natively_agentic</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">use_agent</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">answering_model</span><span class="o">.</span><span class="n">mcp_urls_dict</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">spec</span><span class="o">.</span><span class="n">agent_tier</span> <span class="o">==</span> <span class="s2">&quot;deep_agent&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>When <code>use_agent=True</code>, the stage calls <code>AgentPort.run()</code>, which captures the full conversation trace: tool calls, tool results, and intermediate reasoning. When <code>False</code>, it calls <code>LLMPort.invoke()</code>, which returns only the final text response.</p>
 <table>
 <thead>
 <tr>
 <th>Interface</th>
-<th style="text-align: center;"><code>natively_agentic</code></th>
+<th style="text-align: center;"><code>agent_tier</code></th>
 <th>Reason</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>claude_agent_sdk</code></td>
-<td style="text-align: center;"><code>True</code></td>
+<td style="text-align: center;"><code>"deep_agent"</code></td>
 <td>The Claude CLI binary is itself an agent; the LLMPort path would lose tool call traces</td>
 </tr>
 <tr>
 <td><code>langchain</code></td>
-<td style="text-align: center;"><code>False</code></td>
+<td style="text-align: center;"><code>"tool_loop"</code></td>
 <td>The adapter orchestrates tool calls explicitly</td>
 </tr>
 <tr>
 <td><code>claude_tool</code></td>
-<td style="text-align: center;"><code>False</code></td>
+<td style="text-align: center;"><code>"tool_loop"</code></td>
 <td>Same: adapter-orchestrated</td>
 </tr>
 <tr>
 <td><code>manual</code></td>
-<td style="text-align: center;"><code>False</code></td>
+<td style="text-align: center;"><code>"tool_loop"</code></td>
 <td>Pre-recorded traces; no live agent</td>
 </tr>
 <tr>
 <td><code>openai_endpoint</code></td>
-<td style="text-align: center;"><code>False</code></td>
+<td style="text-align: center;"><code>"tool_loop"</code></td>
 <td>Routes to <code>langchain</code></td>
 </tr>
 <tr>
 <td><code>openrouter</code></td>
-<td style="text-align: center;"><code>False</code></td>
+<td style="text-align: center;"><code>"tool_loop"</code></td>
 <td>Routes to <code>langchain</code></td>
 </tr>
 </tbody>
@@ -16498,7 +16473,7 @@
 </tr>
 <tr>
 <td><strong>GenerateAnswer</strong> (2)</td>
-<td>Resolves workspace when <code>agentic_parsing=True</code>. Also uses <code>AgentPort</code> when <code>natively_agentic=True</code>.</td>
+<td>Resolves workspace when <code>agentic_parsing=True</code>. Also uses <code>AgentPort</code> when <code>agent_tier=="deep_agent"</code>.</td>
 </tr>
 <tr>
 <td><strong>RecursionLimitAutoFail</strong> (3)</td>
@@ -16540,11 +16515,11 @@
 </thead>
 <tbody>
 <tr>
-<td>AdapterSpec with <code>natively_agentic</code></td>
+<td>AdapterSpec with <code>agent_tier</code></td>
 <td><code>adapters/registry.py</code></td>
 </tr>
 <tr>
-<td>Claude SDK registration (sets <code>natively_agentic=True</code>)</td>
+<td>Claude SDK registration (sets <code>agent_tier="deep_agent"</code>)</td>
 <td><code>adapters/claude_agent_sdk/registration.py</code></td>
 </tr>
 <tr>

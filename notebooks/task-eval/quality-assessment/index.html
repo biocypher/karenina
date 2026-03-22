@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16877,9 +16852,9 @@ print(f"Defined score trait: {scientific_rigor.name} (range {scientific_rigor.mi
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 
-<span class="n">has_citations</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">has_citations</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"has_citations"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Response includes numbered citations in bracket notation (e.g., [1], [2])."</span><span class="p">,</span>
@@ -16887,7 +16862,7 @@ print(f"Defined score trait: {scientific_rigor.name} (range {scientific_rigor.mi
     <span class="n">higher_is_better</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 
-<span class="n">has_year</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">has_year</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"includes_approval_year"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b20\d</span><span class="si">{2}</span><span class="s2">\b"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Response mentions a specific year (four-digit number starting with 20)."</span><span class="p">,</span>
@@ -16897,9 +16872,9 @@ print(f"Defined score trait: {scientific_rigor.name} (range {scientific_rigor.mi
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Defined regex traits: </span><span class="si">{</span><span class="n">has_citations</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">has_year</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">from karenina.schemas.entities.rubric import RegexTrait
+<div class="clipboard-copy-txt" id="cell-5">from karenina.schemas.entities.rubric import RegexRubricTrait
 
-has_citations = RegexTrait(
+has_citations = RegexRubricTrait(
     name="has_citations",
     pattern=r"\[\d+\]",
     description="Response includes numbered citations in bracket notation (e.g., [1], [2]).",
@@ -16907,7 +16882,7 @@ has_citations = RegexTrait(
     higher_is_better=True,
 )
 
-has_year = RegexTrait(
+has_year = RegexRubricTrait(
     name="includes_approval_year",
     pattern=r"\b20\d{2}\b",
     description="Response mentions a specific year (four-digit number starting with 20).",
@@ -17170,9 +17145,9 @@ print("Registered callables on existing TaskEval")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 
-<span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">word_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"check_word_count"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="n">check_word_count</span><span class="p">,</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
@@ -17180,7 +17155,7 @@ print("Registered callables on existing TaskEval")</div>
     <span class="n">description</span><span class="o">=</span><span class="s2">"True if the response is between 30 and 200 words."</span><span class="p">,</span>
 <span class="p">)</span>
 
-<span class="n">sentence_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">sentence_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"count_sentences"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="n">count_sentences</span><span class="p">,</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span>
@@ -17193,9 +17168,9 @@ print("Registered callables on existing TaskEval")</div>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Created callable traits: </span><span class="si">{</span><span class="n">word_count_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">word_count_trait</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2">), "</span>
       <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">sentence_count_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">sentence_count_trait</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-9">from karenina.schemas.entities.rubric import CallableTrait
+<div class="clipboard-copy-txt" id="cell-9">from karenina.schemas.entities.rubric import CallableRubricTrait
 
-word_count_trait = CallableTrait.from_callable(
+word_count_trait = CallableRubricTrait.from_callable(
     name="check_word_count",
     func=check_word_count,
     kind="boolean",
@@ -17203,7 +17178,7 @@ word_count_trait = CallableTrait.from_callable(
     description="True if the response is between 30 and 200 words.",
 )
 
-sentence_count_trait = CallableTrait.from_callable(
+sentence_count_trait = CallableRubricTrait.from_callable(
     name="count_sentences",
     func=count_sentences,
     kind="score",

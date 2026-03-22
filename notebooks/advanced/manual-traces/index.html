@@ -11361,8 +11361,6 @@
       
         
       
-        
-      
     
     
     
@@ -11506,29 +11504,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -17216,14 +17191,14 @@ print(f"Verification complete: {len(results.results)} results")</div>
 </ul>
 <p><strong>LangChain Message Lists</strong>:</p>
 <ol>
-<li><strong>Validation</strong>: Must be list of <code>BaseMessage</code> objects (AIMessage, ToolMessage, etc.)</li>
-<li><strong>Metrics Extraction</strong>:<ul>
+<li><strong>Validation</strong>: Must be list of <code>BaseMessage</code> objects (AIMessage, ToolMessage, etc.)<ul>
+<li>Calls <code>extract_agent_metrics_from_messages(messages)</code> from <code>trace_agent_metrics.py</code></li>
 <li>Calls <code>_extract_agent_metrics(response)</code> from <code>verification_utils.py</code></li>
 <li>Extracts: tool calls, tool failures, iterations</li>
 </ul>
 </li>
 <li><strong>Harmonization</strong>:<ul>
-<li>Calls <code>harmonize_agent_response(response)</code> from <code>mcp_utils.py</code></li>
+<li>Calls <code>harmonize_agent_response(response)</code> from <code>adapters/langchain/trace.py</code></li>
 <li>Converts message list to unified string format</li>
 </ul>
 </li>

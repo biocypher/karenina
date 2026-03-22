@@ -11559,8 +11559,6 @@
       
         
       
-        
-      
     
     
     
@@ -11704,29 +11702,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16476,9 +16451,9 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="1-what-regex-traits-are">1. What Regex Traits Are<a class="anchor-link" href="#1-what-regex-traits-are">¶</a></h2><p>A <code>RegexTrait</code> searches the model's raw response trace for a regex pattern during <a href="../../verification-pipeline/">RubricEvaluation</a> of the <a href="../../verification-pipeline/">verification pipeline</a>. If the pattern is found, the result is <code>True</code>; if not, <code>False</code>. You can invert this logic with <code>invert_result</code> and control case sensitivity with <code>case_sensitive</code>.</p>
+<h2 id="1-what-regex-traits-are">1. What Regex Traits Are<a class="anchor-link" href="#1-what-regex-traits-are">¶</a></h2><p>A <code>RegexRubricTrait</code> searches the model's raw response trace for a regex pattern during <a href="../../verification-pipeline/">RubricEvaluation</a> of the <a href="../../verification-pipeline/">verification pipeline</a>. If the pattern is found, the result is <code>True</code>; if not, <code>False</code>. You can invert this logic with <code>invert_result</code> and control case sensitivity with <code>case_sensitive</code>.</p>
 <p>Regex traits are meant for checks that can be reduced to an <strong>exact textual rule</strong>. Typical examples include whether a response contains bracket citations, follows a required answer tag format, includes a disclaimer string, or avoids a small set of prohibited phrases.</p>
-<p>Use <code>RegexTrait</code> when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer <a href="../llm-traits/">LLM traits</a>. If the check is deterministic but more complex than a regex match, prefer <a href="../callable-traits/">Callable traits</a>.</p>
+<p>Use <code>RegexRubricTrait</code> when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer <a href="../llm-traits/">LLM traits</a>. If the check is deterministic but more complex than a regex match, prefer <a href="../callable-traits/">Callable traits</a>.</p>
 <h3 id="11-philosophy">1.1 Philosophy<a class="anchor-link" href="#11-philosophy">¶</a></h3><p>The most important idea is that the <code>pattern</code> field is the evaluation spec. The regex pattern, not the <code>description</code>, determines what passes and what fails.</p>
 <p>That means good regex traits define <strong>textual contracts</strong>:</p>
 <ul>
@@ -16638,9 +16613,9 @@ r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"</code></pre>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 
-<span class="n">citation_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">citation_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Has Citations"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Check that the response includes numbered citations"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
@@ -16650,9 +16625,9 @@ r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"</code></pre>
 <span class="nb">print</span><span class="p">(</span><span class="n">citation_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The drug targets BCL2 [1] and KRAS [2]."</span><span class="p">))</span>  <span class="c1"># True</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">citation_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The drug targets BCL2 and KRAS."</span><span class="p">))</span>          <span class="c1"># False</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1">from karenina.schemas import RegexTrait
+<div class="clipboard-copy-txt" id="cell-1">from karenina.schemas import RegexRubricTrait
 
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="Has Citations",
     description="Check that the response includes numbered citations",
     pattern=r"\[\d+\]",
@@ -16696,7 +16671,7 @@ print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))          # Fal
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">format_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">format_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Answer Format"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Check that the answer is enclosed in [ANSWER] tags"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[ANSWER\].*?\[/ANSWER\]"</span><span class="p">,</span>
@@ -16706,7 +16681,7 @@ print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))          # Fal
 <span class="nb">print</span><span class="p">(</span><span class="n">format_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The gene is [ANSWER]BCL2[/ANSWER]."</span><span class="p">))</span>  <span class="c1"># True</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">format_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The gene is BCL2."</span><span class="p">))</span>                   <span class="c1"># False</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-2">format_trait = RegexTrait(
+<div class="clipboard-copy-txt" id="cell-2">format_trait = RegexRubricTrait(
     name="Answer Format",
     description="Check that the answer is enclosed in [ANSWER] tags",
     pattern=r"\[ANSWER\].*?\[/ANSWER\]",
@@ -16750,7 +16725,7 @@ print(format_trait.evaluate("The gene is BCL2."))                   # False</div
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">keyword_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">keyword_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Mentions Machine Learning"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Check that the response mentions machine learning"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\bmachine learning\b"</span><span class="p">,</span>
@@ -16762,7 +16737,7 @@ print(format_trait.evaluate("The gene is BCL2."))                   # False</div
 <span class="nb">print</span><span class="p">(</span><span class="n">keyword_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"We used machine learning techniques."</span><span class="p">))</span> <span class="c1"># True</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">keyword_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"We used deep learning techniques."</span><span class="p">))</span>    <span class="c1"># False</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3">keyword_trait = RegexTrait(
+<div class="clipboard-copy-txt" id="cell-3">keyword_trait = RegexRubricTrait(
     name="Mentions Machine Learning",
     description="Check that the response mentions machine learning",
     pattern=r"\bmachine learning\b",
@@ -16809,7 +16784,7 @@ print(keyword_trait.evaluate("We used deep learning techniques."))    # False</d
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">no_hedging_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">no_hedging_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Hedging"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Ensure the response avoids hedging phrases"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b(maybe|perhaps|possibly|might be|could be)\b"</span><span class="p">,</span>
@@ -16821,7 +16796,7 @@ print(keyword_trait.evaluate("We used deep learning techniques."))    # False</d
 <span class="nb">print</span><span class="p">(</span><span class="n">no_hedging_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The answer is 42."</span><span class="p">))</span>         <span class="c1"># True</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">no_hedging_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"The answer is perhaps 42."</span><span class="p">))</span> <span class="c1"># False</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">no_hedging_trait = RegexTrait(
+<div class="clipboard-copy-txt" id="cell-4">no_hedging_trait = RegexRubricTrait(
     name="No Hedging",
     description="Ensure the response avoids hedging phrases",
     pattern=r"\b(maybe|perhaps|possibly|might be|could be)\b",
@@ -16892,7 +16867,7 @@ print(no_hedging_trait.evaluate("The answer is perhaps 42.")) # False</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">prohibited_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">prohibited_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Contains PII"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Detect personally identifiable information (email addresses)"</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"</span><span class="p">,</span>
@@ -16902,7 +16877,7 @@ print(no_hedging_trait.evaluate("The answer is perhaps 42.")) # False</div>
 <span class="nb">print</span><span class="p">(</span><span class="n">prohibited_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"Contact me at user@example.com"</span><span class="p">))</span>  <span class="c1"># True</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">prohibited_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"No personal info here."</span><span class="p">))</span>          <span class="c1"># False</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">prohibited_trait = RegexTrait(
+<div class="clipboard-copy-txt" id="cell-5">prohibited_trait = RegexRubricTrait(
     name="Contains PII",
     description="Detect personally identifiable information (email addresses)",
     pattern=r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
@@ -16960,16 +16935,16 @@ print(prohibited_trait.evaluate("No personal info here."))          # False</div
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span><span class="p">,</span> <span class="n">Rubric</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span><span class="p">,</span> <span class="n">Rubric</span>
 
 <span class="n">quality_rubric</span> <span class="o">=</span> <span class="n">Rubric</span><span class="p">(</span>
     <span class="n">regex_traits</span><span class="o">=</span><span class="p">[</span>
-        <span class="n">RegexTrait</span><span class="p">(</span>
+        <span class="n">RegexRubricTrait</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="s2">"Has Citations"</span><span class="p">,</span>
             <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\[\d+\]"</span><span class="p">,</span>
             <span class="n">higher_is_better</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">),</span>
-        <span class="n">RegexTrait</span><span class="p">(</span>
+        <span class="n">RegexRubricTrait</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="s2">"No Hedging"</span><span class="p">,</span>
             <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b(maybe|perhaps|possibly|might be|could be)\b"</span><span class="p">,</span>
             <span class="n">case_sensitive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -16983,16 +16958,16 @@ print(prohibited_trait.evaluate("No personal info here."))          # False</div
 <span class="k">for</span> <span class="n">trait</span> <span class="ow">in</span> <span class="n">quality_rubric</span><span class="o">.</span><span class="n">regex_traits</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: pattern=</span><span class="si">{</span><span class="n">trait</span><span class="o">.</span><span class="n">pattern</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6">from karenina.schemas import RegexTrait, Rubric
+<div class="clipboard-copy-txt" id="cell-6">from karenina.schemas import RegexRubricTrait, Rubric
 
 quality_rubric = Rubric(
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="Has Citations",
             pattern=r"\[\d+\]",
             higher_is_better=True,
         ),
-        RegexTrait(
+        RegexRubricTrait(
             name="No Hedging",
             pattern=r"\b(maybe|perhaps|possibly|might be|could be)\b",
             case_sensitive=False,
@@ -17041,7 +17016,7 @@ for trait in quality_rubric.regex_traits:
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">try</span><span class="p">:</span>
-    <span class="n">bad_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+    <span class="n">bad_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
         <span class="n">name</span><span class="o">=</span><span class="s2">"Invalid"</span><span class="p">,</span>
         <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"[unclosed"</span><span class="p">,</span>  <span class="c1"># Invalid regex</span>
         <span class="n">higher_is_better</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
@@ -17050,7 +17025,7 @@ for trait in quality_rubric.regex_traits:
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-7">try:
-    bad_trait = RegexTrait(
+    bad_trait = RegexRubricTrait(
         name="Invalid",
         pattern=r"[unclosed",  # Invalid regex
         higher_is_better=True,

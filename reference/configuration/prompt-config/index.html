@@ -3007,6 +3007,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#agentic-parsing-sub-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agentic Parsing Sub-Tasks
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#deep-judgment-sub-tasks" class="md-nav__link">
     <span class="md-ellipsis">
       Deep Judgment Sub-Tasks
@@ -11523,8 +11532,6 @@
       
         
       
-        
-      
     
     
     
@@ -11668,29 +11675,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -15868,6 +15852,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#agentic-parsing-sub-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agentic Parsing Sub-Tasks
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#deep-judgment-sub-tasks" class="md-nav__link">
     <span class="md-ellipsis">
       Deep Judgment Sub-Tasks
@@ -15962,7 +15955,7 @@
 
 <h1 id="promptconfig-reference">PromptConfig Reference<a class="headerlink" href="#promptconfig-reference" title="Permanent link">&para;</a></h1>
 <p>This is the exhaustive reference for all <code>PromptConfig</code> fields. For a tutorial introduction with examples, see <a href="../../../notebooks/running-verification/full-evaluation/">Full Evaluation</a>.</p>
-<p><code>PromptConfig</code> is a Pydantic model with <strong>6 fields</strong> that inject custom user instructions into specific pipeline LLM calls. All fields are optional strings defaulting to <code>None</code>.</p>
+<p><code>PromptConfig</code> is a Pydantic model with <strong>7 fields</strong> that inject custom user instructions into specific pipeline LLM calls. All fields are optional strings defaulting to <code>None</code>.</p>
 <p><strong>Import path:</strong> <code>from karenina.schemas.verification import PromptConfig</code></p>
 <hr />
 <h2 id="fields">Fields<a class="headerlink" href="#fields" title="Permanent link">&para;</a></h2>
@@ -16013,6 +16006,13 @@
 <td><strong>Fallback</strong> instructions for all <code>rubric_*</code> sub-tasks (see <a href="#rubric-evaluation-sub-tasks">Covered Sub-Tasks</a> below). Applied when no direct field matches the specific rubric task.</td>
 </tr>
 <tr>
+<td><code>agentic_parsing</code></td>
+<td><code>str \| None</code></td>
+<td><code>None</code></td>
+<td>Agentic template parsing</td>
+<td><strong>Fallback</strong> instructions for all <code>agentic_parsing_*</code> sub-tasks (see <a href="#agentic-parsing-sub-tasks">Covered Sub-Tasks</a> below). Applied when agentic parsing is enabled and no direct field matches.</td>
+</tr>
+<tr>
 <td><code>deep_judgment</code></td>
 <td><code>str \| None</code></td>
 <td><code>None</code></td>
@@ -16024,7 +16024,7 @@
 <p><strong>Configuration:</strong> <code>extra="forbid"</code> — PromptConfig rejects any fields not listed above.</p>
 <hr />
 <h2 id="direct-vs-fallback-fields">Direct vs Fallback Fields<a class="headerlink" href="#direct-vs-fallback-fields" title="Permanent link">&para;</a></h2>
-<p>The 6 fields fall into two categories:</p>
+<p>The 7 fields fall into two categories:</p>
 <p><strong>Direct fields</strong> (4) — each maps to exactly one pipeline LLM call type:</p>
 <ul>
 <li><code>generation</code> — answer generation</li>
@@ -16032,13 +16032,14 @@
 <li><code>abstention_detection</code> — abstention check</li>
 <li><code>sufficiency_detection</code> — sufficiency check</li>
 </ul>
-<p><strong>Fallback fields</strong> (2) — each covers multiple sub-tasks within a pipeline stage:</p>
+<p><strong>Fallback fields</strong> (3) — each covers multiple sub-tasks within a pipeline stage:</p>
 <ul>
-<li><code>rubric_evaluation</code> — covers 5 rubric evaluation sub-tasks</li>
+<li><code>rubric_evaluation</code> — covers 7 rubric evaluation sub-tasks</li>
+<li><code>agentic_parsing</code> — covers 2 agentic template parsing sub-tasks</li>
 <li><code>deep_judgment</code> — covers 7 deep judgment sub-tasks</li>
 </ul>
 <h3 id="rubric-evaluation-sub-tasks">Rubric Evaluation Sub-Tasks<a class="headerlink" href="#rubric-evaluation-sub-tasks" title="Permanent link">&para;</a></h3>
-<p>The <code>rubric_evaluation</code> field serves as a fallback for these 5 <code>PromptTask</code> values:</p>
+<p>The <code>rubric_evaluation</code> field serves as a fallback for these 7 <code>PromptTask</code> values:</p>
 <table>
 <thead>
 <tr>
@@ -16067,6 +16068,14 @@
 <td><code>rubric_metric_trait</code></td>
 <td>Evaluates a metric rubric trait via confusion matrix extraction</td>
 </tr>
+<tr>
+<td><code>rubric_agentic_trait_investigation</code></td>
+<td>Agent investigates response/workspace to evaluate an agentic rubric trait</td>
+</tr>
+<tr>
+<td><code>rubric_agentic_trait_extraction</code></td>
+<td>Extracts the final score from an agentic rubric investigation trace</td>
+</tr>
 </tbody>
 </table>
 <p>Which sub-tasks run depends on the <code>rubric_evaluation_strategy</code> setting in <code>VerificationConfig</code>:</p>
@@ -16074,6 +16083,27 @@
 <li><code>"batch"</code> (default) — uses <code>*_batch</code> sub-tasks</li>
 <li><code>"sequential"</code> — uses <code>*_single</code> sub-tasks</li>
 </ul>
+<h3 id="agentic-parsing-sub-tasks">Agentic Parsing Sub-Tasks<a class="headerlink" href="#agentic-parsing-sub-tasks" title="Permanent link">&para;</a></h3>
+<p>The <code>agentic_parsing</code> field serves as a fallback for these 2 <code>PromptTask</code> values:</p>
+<table>
+<thead>
+<tr>
+<th>Sub-Task</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agentic_parsing_investigation</code></td>
+<td>Investigation agent examines workspace/trace to evaluate answer template attributes</td>
+</tr>
+<tr>
+<td><code>agentic_parsing_extraction</code></td>
+<td>Extracts structured answer from the agentic investigation trace</td>
+</tr>
+</tbody>
+</table>
+<p>These sub-tasks run only when <code>agentic_parsing=True</code> on <code>VerificationConfig</code>. The investigation step uses an <code>AgentPort</code> with tool access to verify workspace artifacts; the extraction step uses a <code>ParserPort</code> to produce the final structured answer.</p>
 <h3 id="deep-judgment-sub-tasks">Deep Judgment Sub-Tasks<a class="headerlink" href="#deep-judgment-sub-tasks" title="Permanent link">&para;</a></h3>
 <p>The <code>deep_judgment</code> field serves as a fallback for these 7 <code>PromptTask</code> values:</p>
 <table>
@@ -16127,17 +16157,18 @@
 <p>The <code>get_for_task(task_value)</code> method resolves instructions in this order:</p>
 <ol>
 <li><strong>Direct match</strong> — if a PromptConfig field name matches <code>task_value</code> exactly, return that field's value</li>
-<li><strong>Category fallback</strong> — if <code>task_value</code> starts with <code>rubric_</code>, return <code>rubric_evaluation</code>; if it starts with <code>dj_</code>, return <code>deep_judgment</code></li>
+<li><strong>Category fallback</strong> — if <code>task_value</code> starts with <code>rubric_</code>, return <code>rubric_evaluation</code>; if it starts with <code>agentic_parsing_</code>, return <code>agentic_parsing</code>; if it starts with <code>dj_</code>, return <code>deep_judgment</code></li>
 <li><strong>None</strong> — no custom instructions for this task</li>
 </ol>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>get_for_task(&quot;parsing&quot;)                → self.parsing              (direct match)
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>get_for_task(&quot;rubric_llm_trait_batch&quot;) → self.rubric_evaluation    (fallback)
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>get_for_task(&quot;dj_rubric_reasoning&quot;)    → self.deep_judgment        (fallback)
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>get_for_task(&quot;unknown_task&quot;)           → None                      (no match)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>get_for_task(&quot;parsing&quot;)                       → self.parsing              (direct match)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>get_for_task(&quot;rubric_llm_trait_batch&quot;)        → self.rubric_evaluation    (fallback)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>get_for_task(&quot;agentic_parsing_investigation&quot;) → self.agentic_parsing      (fallback)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>get_for_task(&quot;dj_rubric_reasoning&quot;)           → self.deep_judgment        (fallback)
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>get_for_task(&quot;unknown_task&quot;)                  → None                      (no match)
 </span></code></pre></div>
 <hr />
 <h2 id="all-prompttask-values">All PromptTask Values<a class="headerlink" href="#all-prompttask-values" title="Permanent link">&para;</a></h2>
-<p>The complete list of 17 <code>PromptTask</code> enum values recognized by the pipeline, grouped by the PromptConfig field that covers them:</p>
+<p>The complete list of 21 <code>PromptTask</code> enum values recognized by the pipeline, grouped by the PromptConfig field that covers them:</p>
 <table>
 <thead>
 <tr>
@@ -16164,7 +16195,11 @@
 </tr>
 <tr>
 <td><code>rubric_evaluation</code></td>
-<td><code>rubric_llm_trait_batch</code>, <code>rubric_llm_trait_single</code>, <code>rubric_literal_trait_batch</code>, <code>rubric_literal_trait_single</code>, <code>rubric_metric_trait</code></td>
+<td><code>rubric_llm_trait_batch</code>, <code>rubric_llm_trait_single</code>, <code>rubric_literal_trait_batch</code>, <code>rubric_literal_trait_single</code>, <code>rubric_metric_trait</code>, <code>rubric_agentic_trait_investigation</code>, <code>rubric_agentic_trait_extraction</code></td>
+</tr>
+<tr>
+<td><code>agentic_parsing</code></td>
+<td><code>agentic_parsing_investigation</code>, <code>agentic_parsing_extraction</code></td>
 </tr>
 <tr>
 <td><code>deep_judgment</code></td>

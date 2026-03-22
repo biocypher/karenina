@@ -11586,8 +11586,6 @@
       
         
       
-        
-      
     
     
     
@@ -11731,29 +11729,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -17090,9 +17065,9 @@ print(f"Added to Q2: {audience_trait.name} (classes: {list(audience_trait.classe
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 
-<span class="n">disclaimer_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">disclaimer_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Safety Disclaimer"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="p">(</span>
         <span class="s2">"Checks that the response includes a safety disclaimer directing "</span>
@@ -17106,9 +17081,9 @@ print(f"Added to Q2: {audience_trait.name} (classes: {list(audience_trait.classe
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">disclaimer_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added global trait: </span><span class="si">{</span><span class="n">disclaimer_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import RegexTrait
+<div class="clipboard-copy-txt" id="cell-7">from karenina.schemas import RegexRubricTrait
 
-disclaimer_trait = RegexTrait(
+disclaimer_trait = RegexRubricTrait(
     name="Safety Disclaimer",
     description=(
         "Checks that the response includes a safety disclaimer directing "
@@ -17163,7 +17138,7 @@ print(f"Added global trait: {disclaimer_trait.name}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">check_response_length</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
@@ -17175,7 +17150,7 @@ print(f"Added global trait: {disclaimer_trait.name}")</div>
     <span class="n">char_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
     <span class="k">return</span> <span class="mi">200</span> <span class="o">&lt;=</span> <span class="n">char_count</span> <span class="o">&lt;=</span> <span class="mi">2000</span>
 
-<span class="n">length_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">length_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Response Length"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="n">check_response_length</span><span class="p">,</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
@@ -17190,7 +17165,7 @@ print(f"Added global trait: {disclaimer_trait.name}")</div>
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_question_rubric_trait</span><span class="p">(</span><span class="n">q3_id</span><span class="p">,</span> <span class="n">length_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added to Q3: </span><span class="si">{</span><span class="n">length_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8">from karenina.schemas import CallableTrait
+<div class="clipboard-copy-txt" id="cell-8">from karenina.schemas import CallableRubricTrait
 
 
 def check_response_length(text: str) -&gt; bool:
@@ -17202,7 +17177,7 @@ def check_response_length(text: str) -&gt; bool:
     char_count = len(text.strip())
     return 200 &lt;= char_count &lt;= 2000
 
-length_trait = CallableTrait.from_callable(
+length_trait = CallableRubricTrait.from_callable(
     name="Response Length",
     func=check_response_length,
     kind="boolean",
@@ -17231,11 +17206,11 @@ print(f"Added to Q3: {length_trait.name}")</div>
 <p>This trait is <strong>per-question</strong> on Q3 because the length constraint is specific to clinical decision guidance; mechanism explanations (Q1) or evidence summaries (Q2) may have different length expectations.</p>
 <div class="admonition tip">
 <p class="admonition-title">Callable vs regex: where to draw the line</p>
-<p>If the check is pure pattern matching (presence or absence of text), use RegexTrait. If it requires <strong>counting</strong>, <strong>arithmetic</strong>, or <strong>combining multiple conditions</strong>, use CallableTrait. An LLM score trait that asks "rate the response length from 1-5" introduces variance on something you can measure exactly. When precision matters, compute; do not judge.</p>
+<p>If the check is pure pattern matching (presence or absence of text), use RegexRubricTrait. If it requires <strong>counting</strong>, <strong>arithmetic</strong>, or <strong>combining multiple conditions</strong>, use CallableRubricTrait. An LLM score trait that asks "rate the response length from 1-5" introduces variance on something you can measure exactly. When precision matters, compute; do not judge.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Security note</p>
-<p>CallableTrait serializes functions with cloudpickle. Only load benchmarks containing callable traits from trusted sources, as deserialization executes arbitrary Python. Callable traits are not available in the GUI for this reason.</p>
+<p>CallableRubricTrait serializes functions with cloudpickle. Only load benchmarks containing callable traits from trusted sources, as deserialization executes arbitrary Python. Callable traits are not available in the GUI for this reason.</p>
 </div>
 <hr/>
 <h2 id="need-5-precisionrecallf1-metric-trait">Need 5: Precision/Recall/F1 (Metric Trait)<a class="anchor-link" href="#need-5-precisionrecallf1-metric-trait">¶</a></h2><p><strong>The need</strong>: Measure how completely a response covers a checklist of expected items, with quantitative precision and recall.</p>
@@ -17339,7 +17314,7 @@ print(f"Added to Q2: {trial_coverage_trait.name} ({len(trial_coverage_trait.tp_i
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">no_hedging_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">no_hedging_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Clinical Hedging"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="p">(</span>
         <span class="s2">"Checks that the response does not use hedging language that could "</span>
@@ -17354,7 +17329,7 @@ print(f"Added to Q2: {trial_coverage_trait.name} ({len(trial_coverage_trait.tp_i
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">no_hedging_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added global trait: </span><span class="si">{</span><span class="n">no_hedging_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (inverted regex)"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-10">no_hedging_trait = RegexTrait(
+<div class="clipboard-copy-txt" id="cell-10">no_hedging_trait = RegexRubricTrait(
     name="No Clinical Hedging",
     description=(
         "Checks that the response does not use hedging language that could "
@@ -17664,13 +17639,13 @@ shutil.rmtree(tmpdir, ignore_errors=True)</div>
 </tr>
 <tr>
 <td>3. Format validation</td>
-<td>RegexTrait</td>
+<td>RegexRubricTrait</td>
 <td>Global</td>
 <td>All</td>
 </tr>
 <tr>
 <td>4. Complex validation (counting)</td>
-<td>CallableTrait</td>
+<td>CallableRubricTrait</td>
 <td>Per-question</td>
 <td>Q3</td>
 </tr>
@@ -17682,7 +17657,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)</div>
 </tr>
 <tr>
 <td>6. Deterministic check</td>
-<td>RegexTrait (inverted)</td>
+<td>RegexRubricTrait (inverted)</td>
 <td>Global</td>
 <td>All</td>
 </tr>

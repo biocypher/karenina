@@ -11535,8 +11535,6 @@
       
         
       
-        
-      
     
     
     
@@ -11680,29 +11678,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16428,9 +16403,9 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="1-what-callable-traits-are">1. What Callable Traits Are<a class="anchor-link" href="#1-what-callable-traits-are">¶</a></h2><p>A <code>CallableTrait</code> wraps a Python function that runs locally during <a href="../../verification-pipeline/">RubricEvaluation</a> of the <a href="../../verification-pipeline/">verification pipeline</a>. The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.</p>
+<h2 id="1-what-callable-traits-are">1. What Callable Traits Are<a class="anchor-link" href="#1-what-callable-traits-are">¶</a></h2><p>A <code>CallableRubricTrait</code> wraps a Python function that runs locally during <a href="../../verification-pipeline/">RubricEvaluation</a> of the <a href="../../verification-pipeline/">verification pipeline</a>. The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.</p>
 <p>Callable traits are meant for checks that need <strong>custom programmatic logic</strong>. Typical examples include minimum length requirements, repetition checks, sentence counts, heuristic term counts, or custom evaluators that combine multiple strategies under one Python entrypoint.</p>
-<p>Use <code>CallableTrait</code> when the built-in traits do not express the evaluation shape you need cleanly. If the check is an exact text pattern, prefer <a href="../regex-traits/">Regex traits</a>. If the check fits Karenina's built-in semantic judgment path, prefer <a href="../llm-traits/">LLM traits</a>. Reach for <code>CallableTrait</code> when you need custom orchestration, validation, or scoring logic beyond those built-in abstractions.</p>
+<p>Use <code>CallableRubricTrait</code> when the built-in traits do not express the evaluation shape you need cleanly. If the check is an exact text pattern, prefer <a href="../regex-traits/">Regex traits</a>. If the check fits Karenina's built-in semantic judgment path, prefer <a href="../llm-traits/">LLM traits</a>. Reach for <code>CallableRubricTrait</code> when you need custom orchestration, validation, or scoring logic beyond those built-in abstractions.</p>
 <h3 id="11-philosophy">1.1 Philosophy<a class="anchor-link" href="#11-philosophy">¶</a></h3><p>The most important idea is that the Python function is the evaluation spec. In callable traits, the function body defines what counts as success, failure, or score.</p>
 <p>That means good callable traits define <strong>explicit code-level rules</strong>:</p>
 <ul>
@@ -16444,7 +16419,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <li>use <a href="../llm-traits/">LLM traits</a> for Karenina-managed semantic judgment</li>
 <li>use <a href="../metric-traits/">Metric traits</a> for checklist-style precision/recall evaluation</li>
 </ul>
-<p>Reach for <code>CallableTrait</code> when your assessment does not fit those built-in shapes cleanly, or when you need custom orchestration across them.</p>
+<p>Reach for <code>CallableRubricTrait</code> when your assessment does not fit those built-in shapes cleanly, or when you need custom orchestration across them.</p>
 <table>
 <thead>
 <tr>
@@ -16563,7 +16538,7 @@ FinalizeResult → VerificationResult.rubric
 </code></pre>
 <p>Callable traits skip stage 12 (DeepJudgmentRubric), which applies only to <a href="../llm-traits/">LLM traits</a> with <a href="../../../../advanced-pipeline/deep-judgment-rubrics/">deep judgment</a> enabled.</p>
 <p>If your function is pure local code, evaluation is deterministic: the same string input always produces the same result. If your function calls external services, including an LLM, reproducibility, latency, and cost depend on that implementation.</p>
-<h2 id="4-why-from_callable-matters">4. Why <code>from_callable()</code> Matters<a class="anchor-link" href="#4-why-from_callable-matters">¶</a></h2><p>Always use <code>CallableTrait.from_callable()</code> rather than constructing a trait directly. It is the normal authoring interface because it validates the function signature and handles serialization for you.</p>
+<h2 id="4-why-from_callable-matters">4. Why <code>from_callable()</code> Matters<a class="anchor-link" href="#4-why-from_callable-matters">¶</a></h2><p>Always use <code>CallableRubricTrait.from_callable()</code> rather than constructing a trait directly. It is the normal authoring interface because it validates the function signature and handles serialization for you.</p>
 </div>
 </div>
 </div>
@@ -16586,9 +16561,9 @@ FinalizeResult → VerificationResult.rubric
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 
-<span class="n">minimum_length_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">minimum_length_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Minimum Word Count"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Response must contain at least 50 words"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">&gt;=</span> <span class="mi">50</span><span class="p">,</span>
@@ -16602,9 +16577,9 @@ FinalizeResult → VerificationResult.rubric
 <span class="nb">print</span><span class="p">(</span><span class="n">minimum_length_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">short_response</span><span class="p">))</span>  <span class="c1"># False</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">minimum_length_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">long_response</span><span class="p">))</span>   <span class="c1"># True</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1">from karenina.schemas import CallableTrait
+<div class="clipboard-copy-txt" id="cell-1">from karenina.schemas import CallableRubricTrait
 
-minimum_length_trait = CallableTrait.from_callable(
+minimum_length_trait = CallableRubricTrait.from_callable(
     name="Minimum Word Count",
     description="Response must contain at least 50 words",
     func=lambda text: len(text.split()) &gt;= 50,
@@ -16660,7 +16635,7 @@ print(minimum_length_trait.evaluate(long_response))   # True</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">repetition_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">repetition_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Excessive Repetition"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Response should not repeat the same sentence excessively"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">". "</span><span class="p">)))</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">". "</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">,</span>
@@ -16672,7 +16647,7 @@ print(minimum_length_trait.evaluate(long_response))   # True</div>
 <span class="nb">print</span><span class="p">(</span><span class="n">repetition_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"Unique sentence one. Unique sentence two. Unique sentence three."</span><span class="p">))</span>  <span class="c1"># True</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">repetition_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"Repeat this. Repeat this. Repeat this."</span><span class="p">))</span>                            <span class="c1"># False</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-2">repetition_trait = CallableTrait.from_callable(
+<div class="clipboard-copy-txt" id="cell-2">repetition_trait = CallableRubricTrait.from_callable(
     name="No Excessive Repetition",
     description="Response should not repeat the same sentence excessively",
     func=lambda text: len(set(text.split(". "))) &lt; len(text.split(". ")) * 0.5,
@@ -16724,7 +16699,7 @@ print(repetition_trait.evaluate("Repeat this. Repeat this. Repeat this."))      
     <span class="n">sentences</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[.!?]+"</span><span class="p">,</span> <span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
     <span class="k">return</span> <span class="nb">len</span><span class="p">([</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sentences</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">strip</span><span class="p">()])</span>
 
-<span class="n">sentence_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">sentence_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Sentence Count"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Count the number of sentences in the response"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="n">count_sentences</span><span class="p">,</span>
@@ -16743,7 +16718,7 @@ print(repetition_trait.evaluate("Repeat this. Repeat this. Repeat this."))      
     sentences = re.split(r"[.!?]+", text.strip())
     return len([s for s in sentences if s.strip()])
 
-sentence_count_trait = CallableTrait.from_callable(
+sentence_count_trait = CallableRubricTrait.from_callable(
     name="Sentence Count",
     description="Count the number of sentences in the response",
     func=count_sentences,
@@ -16818,7 +16793,7 @@ print(f"Score: {sentence_count_trait.evaluate(sample)}")  # Score: 3</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">error_count_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">error_count_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Grammar Error Count"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Count potential grammar errors (lower is better)"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="n">text</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">"  "</span><span class="p">),</span>
@@ -16830,7 +16805,7 @@ print(f"Score: {sentence_count_trait.evaluate(sample)}")  # Score: 3</div>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Errors: </span><span class="si">{</span><span class="n">error_count_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s1">'Clean  text with  two double  spaces.'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>  <span class="c1"># Errors: 3</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">error_count_trait = CallableTrait.from_callable(
+<div class="clipboard-copy-txt" id="cell-4">error_count_trait = CallableRubricTrait.from_callable(
     name="Grammar Error Count",
     description="Count potential grammar errors (lower is better)",
     func=lambda text: text.count("  "),
@@ -16886,7 +16861,7 @@ print(f"Errors: {error_count_trait.evaluate('Clean  text with  two double  space
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">length_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">length_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Response Length"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">),</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"score"</span><span class="p">,</span>
@@ -16899,7 +16874,7 @@ print(f"Errors: {error_count_trait.evaluate('Clean  text with  two double  space
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Function result: </span><span class="si">{</span><span class="n">func</span><span class="p">(</span><span class="s1">'Hello world'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>  <span class="c1"># Function result: 11</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Trait evaluate:  </span><span class="si">{</span><span class="n">length_trait</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s1">'Hello world'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>  <span class="c1"># Trait evaluate:  11</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">length_trait = CallableTrait.from_callable(
+<div class="clipboard-copy-txt" id="cell-5">length_trait = CallableRubricTrait.from_callable(
     name="Response Length",
     func=lambda text: len(text),
     kind="score",
@@ -16925,7 +16900,7 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <div class="admonition warning">
 <p class="admonition-title">Security Warning</p>
-<p>Deserializing callable code can execute arbitrary Python code. Only load <code>CallableTrait</code> instances from <strong>trusted sources</strong>. This is also why <code>CallableTrait</code> cannot be created via the web API.</p>
+<p>Deserializing callable code can execute arbitrary Python code. Only load <code>CallableRubricTrait</code> instances from <strong>trusted sources</strong>. This is also why <code>CallableRubricTrait</code> cannot be created via the web API.</p>
 </div>
 <h2 id="9-using-callable-traits-in-a-rubric">9. Using Callable Traits in a Rubric<a class="anchor-link" href="#9-using-callable-traits-in-a-rubric">¶</a></h2><p>Callable traits combine with other trait types in a <code>Rubric</code>:</p>
 </div>
@@ -16950,7 +16925,7 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span><span class="p">,</span> <span class="n">Rubric</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span><span class="p">,</span> <span class="n">Rubric</span>
 
 <span class="n">rubric</span> <span class="o">=</span> <span class="n">Rubric</span><span class="p">(</span><span class="n">callable_traits</span><span class="o">=</span><span class="p">[</span>
     <span class="n">minimum_length_trait</span><span class="p">,</span>
@@ -16961,7 +16936,7 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 <span class="k">for</span> <span class="n">trait</span> <span class="ow">in</span> <span class="n">rubric</span><span class="o">.</span><span class="n">callable_traits</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  - </span><span class="si">{</span><span class="n">trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (kind=</span><span class="si">{</span><span class="n">trait</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6">from karenina.schemas import CallableTrait, Rubric
+<div class="clipboard-copy-txt" id="cell-6">from karenina.schemas import CallableRubricTrait, Rubric
 
 rubric = Rubric(callable_traits=[
     minimum_length_trait,

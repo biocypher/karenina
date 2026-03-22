@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://biocypher.github.io/karenina/reference/api/karenina/benchmark/verification/utils/llm_invocation/">
       
       
-        <link rel="prev" href="../llm_detection/">
+        <link rel="prev" href="../error_helpers/">
       
       
         <link rel="next" href="../llm_judge_helpers/">
@@ -11381,8 +11381,6 @@
       
         
       
-        
-      
     
     
     
@@ -11538,29 +11536,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -11619,21 +11594,6 @@
       <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;llm_invocation
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label=" llm_invocation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#karenina.benchmark.verification.utils.llm_invocation-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Functions
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -15768,21 +15728,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" llm_invocation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#karenina.benchmark.verification.utils.llm_invocation-functions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Functions
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -15824,8 +15769,7 @@
 These functions handle common tasks like response parsing and prompt construction.</p>
 <p>Functions provided:
 - Response parsing: _split_parsed_response
-- Prompt construction: _construct_few_shot_prompt
-- Agent metrics: _extract_agent_metrics, _extract_middleware_metrics (from trace_agent_metrics)</p>
+- Prompt construction: _construct_few_shot_prompt</p>
 <p>Note: LLM invocation is now handled by the port/adapter layer:
 - LLMPort.invoke() for simple LLM calls
 - AgentPort.run() for agent invocations (sync) / AgentPort.arun() for async
@@ -15850,7 +15794,7 @@ all template evaluation logic following the evaluator pattern.</p>
 
 
 
-<h3 id="karenina.benchmark.verification.utils.llm_invocation-functions">Functions<a href="#karenina.benchmark.verification.utils.llm_invocation-functions" class="headerlink" title="Permanent link">&para;</a></h3>
+
 
 
 

@@ -11367,8 +11367,6 @@
       
         
       
-        
-      
     
     
     
@@ -11512,29 +11510,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16314,6 +16289,16 @@
 <td>Judge LLM parses response into template schema</td>
 </tr>
 <tr>
+<td><code>agentic_parsing_investigation</code></td>
+<td>AgenticParseTemplate</td>
+<td>Investigation agent examines workspace/trace</td>
+</tr>
+<tr>
+<td><code>agentic_parsing_extraction</code></td>
+<td>AgenticParseTemplate</td>
+<td>Extracts structured answer from investigation trace</td>
+</tr>
+<tr>
 <td><code>abstention_detection</code></td>
 <td>AbstentionCheck</td>
 <td>Detects model refusal</td>
@@ -16347,6 +16332,16 @@
 <td><code>rubric_metric_trait</code></td>
 <td>RubricEvaluation</td>
 <td>Metric trait (confusion matrix)</td>
+</tr>
+<tr>
+<td><code>rubric_agentic_trait_investigation</code></td>
+<td>AgenticRubricEvaluation</td>
+<td>Agent investigates response/workspace for rubric trait</td>
+</tr>
+<tr>
+<td><code>rubric_agentic_trait_extraction</code></td>
+<td>AgenticRubricEvaluation</td>
+<td>Extracts score from agentic investigation trace</td>
 </tr>
 <tr>
 <td><code>dj_template_excerpt_extraction</code></td>

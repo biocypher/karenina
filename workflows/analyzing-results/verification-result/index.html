@@ -2596,9 +2596,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#verificationresultset-fields" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      VerificationResultSet Fields
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verificationresult-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      VerificationResult Overview
     </span>
   </a>
   
@@ -2645,6 +2654,15 @@
   <a href="#execution-fields" class="md-nav__link">
     <span class="md-ellipsis">
       Execution Fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-linking-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario Linking Fields
     </span>
   </a>
   
@@ -11754,8 +11772,6 @@
       
         
       
-        
-      
     
     
     
@@ -11899,29 +11915,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16071,9 +16064,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#verificationresultset-fields" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      VerificationResultSet Fields
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verificationresult-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      VerificationResult Overview
     </span>
   </a>
   
@@ -16120,6 +16122,15 @@
   <a href="#execution-fields" class="md-nav__link">
     <span class="md-ellipsis">
       Execution Fields
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-linking-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario Linking Fields
     </span>
   </a>
   
@@ -16417,32 +16428,76 @@
 
 
 <h1 id="verificationresult-structure">VerificationResult Structure<a class="headerlink" href="#verificationresult-structure" title="Permanent link">&para;</a></h1>
-<p>Every call to <code>run_verification()</code> returns a <code>VerificationResultSet</code> — a collection of <code>VerificationResult</code> objects, one per question verified. This page documents the complete structure of a <code>VerificationResult</code> so you know exactly what data is available for analysis.</p>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Every call to <code>run_verification()</code> returns a <code>VerificationResultSet</code> containing <code>VerificationResult</code> objects, one per question verified. This page documents the complete structure of both <code>VerificationResultSet</code> and <code>VerificationResult</code> so you know exactly what data is available for analysis.</p>
+<h2 id="verificationresultset-fields">VerificationResultSet Fields<a class="headerlink" href="#verificationresultset-fields" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>results</code></td>
+<td><code>list[VerificationResult]</code></td>
+<td>All individual verification results from the run</td>
+</tr>
+<tr>
+<td><code>scenario_results</code></td>
+<td><code>list[ScenarioExecutionResult] \| None</code></td>
+<td>Present only for scenario runs. Each entry is a <code>ScenarioExecutionResult</code> containing the full execution trace (path taken, turn history, outcome criteria results, final state) for one scenario. <code>None</code> for non-scenario verification.</td>
+</tr>
+<tr>
+<td><code>errors</code></td>
+<td><code>list[tuple[str, BaseException]] \| None</code></td>
+<td>Errors from failed scenario executions, as <code>(description, exception)</code> tuples. <code>None</code> when no scenario errors occurred.</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">result_set</span> <span class="o">=</span> <span class="n">benchmark</span><span class="o">.</span><span class="n">run_verification</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Standard question results</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">for</span> <span class="n">vr</span> <span class="ow">in</span> <span class="n">result_set</span><span class="o">.</span><span class="n">results</span><span class="p">:</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">vr</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">question_id</span><span class="p">,</span> <span class="n">vr</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">verify_result</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Scenario-specific data (only present for scenario runs)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">if</span> <span class="n">result_set</span><span class="o">.</span><span class="n">scenario_results</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="k">for</span> <span class="n">sr</span> <span class="ow">in</span> <span class="n">result_set</span><span class="o">.</span><span class="n">scenario_results</span><span class="p">:</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Scenario </span><span class="si">{</span><span class="n">sr</span><span class="o">.</span><span class="n">scenario_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">sr</span><span class="o">.</span><span class="n">status</span><span class="si">}</span><span class="s2">, path=</span><span class="si">{</span><span class="n">sr</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Outcomes: </span><span class="si">{</span><span class="n">sr</span><span class="o">.</span><span class="n">outcome_results</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">if</span> <span class="n">result_set</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="k">for</span> <span class="n">desc</span><span class="p">,</span> <span class="n">exc</span> <span class="ow">in</span> <span class="n">result_set</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed: </span><span class="si">{</span><span class="n">desc</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<hr />
+<h2 id="verificationresult-overview">VerificationResult Overview<a class="headerlink" href="#verificationresult-overview" title="Permanent link">&para;</a></h2>
 <p>A <code>VerificationResult</code> has five top-level sections:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>VerificationResult
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── metadata                    # Always present
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│   ├── question_id, template_id, result_id
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── answering (ModelIdentity), parsing (ModelIdentity)
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── execution_time, timestamp
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   └── completed_without_errors, error
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── template                    # Present when template evaluation ran
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   ├── raw_llm_response, trace_messages
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   ├── parsed_llm_response, parsed_gt_response
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   ├── verify_result, verify_granular_result
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   ├── embedding_*, regex_*, abstention_*, sufficiency_*
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   └── usage_metadata, agent_metrics
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├── rubric                      # Present when rubric evaluation ran
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│   ├── llm_trait_scores, llm_trait_labels
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   ├── regex_trait_scores, callable_trait_scores
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│   └── metric_trait_scores, metric_trait_confusion_lists
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>├── deep_judgment               # Present when deep judgment enabled (templates)
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│   ├── extracted_excerpts, attribute_reasoning
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   └── hallucination_risk_assessment
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>└── deep_judgment_rubric        # Present when deep judgment enabled (rubrics)
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    ├── extracted_rubric_excerpts, rubric_trait_reasoning
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    ├── deep_judgment_rubric_scores, standard_rubric_scores
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    └── trait_metadata, traits_without_valid_excerpts
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>VerificationResult
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├── metadata                    # Always present
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│   ├── question_id, template_id, result_id
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>│   ├── answering (ModelIdentity), parsing (ModelIdentity)
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>│   ├── execution_time, timestamp
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>│   └── completed_without_errors, error
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>├── template                    # Present when template evaluation ran
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>│   ├── raw_llm_response, trace_messages
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>│   ├── parsed_llm_response, parsed_gt_response
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>│   ├── verify_result, verify_granular_result
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>│   ├── embedding_*, regex_*, abstention_*, sufficiency_*
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>│   └── usage_metadata, agent_metrics
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>├── rubric                      # Present when rubric evaluation ran
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>│   ├── llm_trait_scores, llm_trait_labels
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>│   ├── regex_trait_scores, callable_trait_scores
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>│   └── metric_trait_scores, metric_trait_confusion_lists
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>├── deep_judgment               # Present when deep judgment enabled (templates)
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>│   ├── extracted_excerpts, attribute_reasoning
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>│   └── hallucination_risk_assessment
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>└── deep_judgment_rubric        # Present when deep judgment enabled (rubrics)
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    ├── extracted_rubric_excerpts, rubric_trait_reasoning
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    ├── deep_judgment_rubric_scores, standard_rubric_scores
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    └── trait_metadata, traits_without_valid_excerpts
 </span></code></pre></div>
 <p>Plus three shared trace-filtering fields at the root level:</p>
 <table>
@@ -16474,16 +16529,16 @@
 <hr />
 <h2 id="accessing-fields">Accessing Fields<a class="headerlink" href="#accessing-fields" title="Permanent link">&para;</a></h2>
 <p>Fields are accessed through their nested section objects, not directly on the result:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Correct: access through section</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">result</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">question_id</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">verify_result</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">llm_trait_scores</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Optional sections need a None check</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="p">:</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">verify_result</span><span class="p">)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="p">:</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_all_trait_scores</span><span class="p">())</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Correct: access through section</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">result</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">question_id</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">verify_result</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">llm_trait_scores</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Optional sections need a None check</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="p">:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">verify_result</span><span class="p">)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="p">:</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_all_trait_scores</span><span class="p">())</span>
 </span></code></pre></div>
 <hr />
 <h2 id="metadata">Metadata<a class="headerlink" href="#metadata" title="Permanent link">&para;</a></h2>
@@ -16636,6 +16691,46 @@
 </tr>
 </tbody>
 </table>
+<h3 id="scenario-linking-fields">Scenario Linking Fields<a class="headerlink" href="#scenario-linking-fields" title="Permanent link">&para;</a></h3>
+<p>These fields are populated only for results produced by scenario execution. For standalone (non-scenario) questions, all four are <code>None</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scenario_id</code></td>
+<td><code>str \| None</code></td>
+<td>Name of the scenario that produced this result</td>
+</tr>
+<tr>
+<td><code>scenario_node</code></td>
+<td><code>str \| None</code></td>
+<td>Node ID within the scenario graph for this turn</td>
+</tr>
+<tr>
+<td><code>scenario_turn</code></td>
+<td><code>int \| None</code></td>
+<td>Zero-based turn index within the scenario execution</td>
+</tr>
+<tr>
+<td><code>scenario_path</code></td>
+<td><code>list[str] \| None</code></td>
+<td>Ordered list of node IDs visited up to and including this turn</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Scenario results carry linking metadata</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">for</span> <span class="n">vr</span> <span class="ow">in</span> <span class="n">result_set</span><span class="o">.</span><span class="n">results</span><span class="p">:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="k">if</span> <span class="n">vr</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">scenario_id</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Scenario: </span><span class="si">{</span><span class="n">vr</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">scenario_id</span><span class="si">}</span><span class="s2">, &quot;</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>              <span class="sa">f</span><span class="s2">&quot;node: </span><span class="si">{</span><span class="n">vr</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">scenario_node</span><span class="si">}</span><span class="s2">, &quot;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>              <span class="sa">f</span><span class="s2">&quot;turn: </span><span class="si">{</span><span class="n">vr</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">scenario_turn</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 <hr />
 <h2 id="template-results">Template Results<a class="headerlink" href="#template-results" title="Permanent link">&para;</a></h2>
 <p>The <code>template</code> section is present when template evaluation was performed (evaluation mode <code>template_only</code> or <code>template_and_rubric</code>). Access via <code>result.template</code>.</p>
@@ -16684,12 +16779,12 @@
 </tbody>
 </table>
 <p>Example:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span> <span class="ow">and</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">parsed_llm_response</span><span class="p">:</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Extracted:&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">parsed_llm_response</span><span class="p">)</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="c1"># {&quot;tissue&quot;: &quot;pancreas&quot;, &quot;gene&quot;: &quot;KRAS&quot;}</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Expected:&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">parsed_gt_response</span><span class="p">)</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="c1"># {&quot;tissue&quot;: &quot;pancreas&quot;, &quot;gene&quot;: &quot;KRAS&quot;}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span> <span class="ow">and</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">parsed_llm_response</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Extracted:&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">parsed_llm_response</span><span class="p">)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="c1"># {&quot;tissue&quot;: &quot;pancreas&quot;, &quot;gene&quot;: &quot;KRAS&quot;}</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Expected:&quot;</span><span class="p">,</span> <span class="n">result</span><span class="o">.</span><span class="n">template</span><span class="o">.</span><span class="n">parsed_gt_response</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="c1"># {&quot;tissue&quot;: &quot;pancreas&quot;, &quot;gene&quot;: &quot;KRAS&quot;}</span>
 </span></code></pre></div>
 <h3 id="verification-outcomes">Verification Outcomes<a class="headerlink" href="#verification-outcomes" title="Permanent link">&para;</a></h3>
 <table>
@@ -16879,13 +16974,13 @@
 </tbody>
 </table>
 <p>Agent metrics structure (only present when an agent was used):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>               <span class="c1"># Number of agent think-act cycles</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="s2">&quot;tool_calls&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>               <span class="c1"># Total tool invocations</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">&quot;tools_used&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;mcp__brave_search&quot;</span><span class="p">,</span> <span class="s2">&quot;mcp__read_resource&quot;</span><span class="p">],</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="s2">&quot;suspect_failed_tool_calls&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="c1"># Tool calls with error-like output</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="s2">&quot;suspect_failed_tools&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;mcp__brave_search&quot;</span><span class="p">]</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>               <span class="c1"># Number of agent think-act cycles</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="s2">&quot;tool_calls&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>               <span class="c1"># Total tool invocations</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">&quot;tools_used&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;mcp__brave_search&quot;</span><span class="p">,</span> <span class="s2">&quot;mcp__read_resource&quot;</span><span class="p">],</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="s2">&quot;suspect_failed_tool_calls&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="c1"># Tool calls with error-like output</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="s2">&quot;suspect_failed_tools&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;mcp__brave_search&quot;</span><span class="p">]</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="token-usage">Token Usage<a class="headerlink" href="#token-usage" title="Permanent link">&para;</a></h3>
 <table>
@@ -16905,16 +17000,16 @@
 </tbody>
 </table>
 <p>Usage metadata structure:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="s2">&quot;answer_generation&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">150</span><span class="p">,</span> <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="mi">350</span><span class="p">,</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>        <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;claude-haiku-4-5&quot;</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="p">},</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="s2">&quot;parsing&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">80</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="mi">280</span><span class="p">},</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="s2">&quot;rubric_evaluation&quot;</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">},</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="s2">&quot;abstention_check&quot;</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">},</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">600</span><span class="p">,</span> <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">360</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="mi">960</span><span class="p">}</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;answer_generation&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">150</span><span class="p">,</span> <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="mi">350</span><span class="p">,</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;claude-haiku-4-5&quot;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="p">},</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="s2">&quot;parsing&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">80</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="mi">280</span><span class="p">},</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="s2">&quot;rubric_evaluation&quot;</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">},</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="s2">&quot;abstention_check&quot;</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">},</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">600</span><span class="p">,</span> <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">360</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="mi">960</span><span class="p">}</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="p">}</span>
 </span></code></pre></div>
 <hr />
 <h2 id="rubric-results">Rubric Results<a class="headerlink" href="#rubric-results" title="Permanent link">&para;</a></h2>
@@ -17007,14 +17102,14 @@
 </tbody>
 </table>
 <p>Confusion lists structure:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">&quot;feature_extraction&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="s2">&quot;tp&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;feature_A&quot;</span><span class="p">,</span> <span class="s2">&quot;feature_B&quot;</span><span class="p">],</span>  <span class="c1"># True positives</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="s2">&quot;tn&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;irrelevant_1&quot;</span><span class="p">],</span>            <span class="c1"># True negatives</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="s2">&quot;fp&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;hallucinated_1&quot;</span><span class="p">],</span>          <span class="c1"># False positives</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="s2">&quot;fn&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;missed_feature&quot;</span><span class="p">]</span>           <span class="c1"># False negatives</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="p">}</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">&quot;feature_extraction&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>        <span class="s2">&quot;tp&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;feature_A&quot;</span><span class="p">,</span> <span class="s2">&quot;feature_B&quot;</span><span class="p">],</span>  <span class="c1"># True positives</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>        <span class="s2">&quot;tn&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;irrelevant_1&quot;</span><span class="p">],</span>            <span class="c1"># True negatives</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        <span class="s2">&quot;fp&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;hallucinated_1&quot;</span><span class="p">],</span>          <span class="c1"># False positives</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="s2">&quot;fn&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;missed_feature&quot;</span><span class="p">]</span>           <span class="c1"># False negatives</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="p">}</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="convenience-methods">Convenience Methods<a class="headerlink" href="#convenience-methods" title="Permanent link">&para;</a></h3>
 <p>The <code>VerificationResultRubric</code> provides helper methods for working with trait scores:</p>
@@ -17045,19 +17140,19 @@
 </tbody>
 </table>
 <p>Example:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="p">:</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="c1"># Get all scores at once</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">all_scores</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_all_trait_scores</span><span class="p">()</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="c1"># {&quot;clarity&quot;: 4, &quot;has_citations&quot;: True, &quot;extraction&quot;: {&quot;precision&quot;: 1.0, ...}}</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="c1"># Look up a specific trait</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="n">match</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_trait_by_name</span><span class="p">(</span><span class="s2">&quot;clarity&quot;</span><span class="p">)</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="n">value</span><span class="p">,</span> <span class="n">trait_type</span> <span class="o">=</span> <span class="n">match</span>  <span class="c1"># (4, &quot;llm&quot;)</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="c1"># Get literal trait labels</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_llm_trait_labels</span><span class="p">()</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="c1"># {&quot;response_type&quot;: &quot;Factual&quot;, &quot;tone&quot;: &quot;Professional&quot;}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="c1"># Get all scores at once</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">all_scores</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_all_trait_scores</span><span class="p">()</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="c1"># {&quot;clarity&quot;: 4, &quot;has_citations&quot;: True, &quot;extraction&quot;: {&quot;precision&quot;: 1.0, ...}}</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="c1"># Look up a specific trait</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">match</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_trait_by_name</span><span class="p">(</span><span class="s2">&quot;clarity&quot;</span><span class="p">)</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>        <span class="n">value</span><span class="p">,</span> <span class="n">trait_type</span> <span class="o">=</span> <span class="n">match</span>  <span class="c1"># (4, &quot;llm&quot;)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="c1"># Get literal trait labels</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">rubric</span><span class="o">.</span><span class="n">get_llm_trait_labels</span><span class="p">()</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="c1"># {&quot;response_type&quot;: &quot;Factual&quot;, &quot;tone&quot;: &quot;Professional&quot;}</span>
 </span></code></pre></div>
 <hr />
 <h2 id="deep-judgment-templates">Deep Judgment (Templates)<a class="headerlink" href="#deep-judgment-templates" title="Permanent link">&para;</a></h2>
@@ -17127,19 +17222,19 @@
 </tbody>
 </table>
 <p>Excerpt structure:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">&quot;tissue&quot;</span><span class="p">:</span> <span class="p">[</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>        <span class="p">{</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>            <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="s2">&quot;KRAS is most essential in the pancreas&quot;</span><span class="p">,</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>            <span class="s2">&quot;confidence&quot;</span><span class="p">:</span> <span class="s2">&quot;high&quot;</span><span class="p">,</span>           <span class="c1"># &quot;low&quot;, &quot;medium&quot;, or &quot;high&quot;</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>            <span class="s2">&quot;similarity_score&quot;</span><span class="p">:</span> <span class="mf">0.92</span><span class="p">,</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>            <span class="c1"># Only when search enabled:</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>            <span class="s2">&quot;search_results&quot;</span><span class="p">:</span> <span class="s2">&quot;External validation text...&quot;</span><span class="p">,</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            <span class="s2">&quot;hallucination_risk&quot;</span><span class="p">:</span> <span class="s2">&quot;none&quot;</span><span class="p">,</span>   <span class="c1"># &quot;none&quot;, &quot;low&quot;, &quot;medium&quot;, or &quot;high&quot;</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>            <span class="s2">&quot;hallucination_justification&quot;</span><span class="p">:</span> <span class="s2">&quot;Strong external evidence supports this claim&quot;</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="p">}</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="p">]</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="s2">&quot;tissue&quot;</span><span class="p">:</span> <span class="p">[</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>        <span class="p">{</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>            <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="s2">&quot;KRAS is most essential in the pancreas&quot;</span><span class="p">,</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>            <span class="s2">&quot;confidence&quot;</span><span class="p">:</span> <span class="s2">&quot;high&quot;</span><span class="p">,</span>           <span class="c1"># &quot;low&quot;, &quot;medium&quot;, or &quot;high&quot;</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>            <span class="s2">&quot;similarity_score&quot;</span><span class="p">:</span> <span class="mf">0.92</span><span class="p">,</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>            <span class="c1"># Only when search enabled:</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>            <span class="s2">&quot;search_results&quot;</span><span class="p">:</span> <span class="s2">&quot;External validation text...&quot;</span><span class="p">,</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>            <span class="s2">&quot;hallucination_risk&quot;</span><span class="p">:</span> <span class="s2">&quot;none&quot;</span><span class="p">,</span>   <span class="c1"># &quot;none&quot;, &quot;low&quot;, &quot;medium&quot;, or &quot;high&quot;</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>            <span class="s2">&quot;hallucination_justification&quot;</span><span class="p">:</span> <span class="s2">&quot;Strong external evidence supports this claim&quot;</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>        <span class="p">}</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="p">]</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>An empty list <code>[]</code> for an attribute indicates no excerpts were found (e.g., the model refused to answer or no corroborating evidence exists). Reasoning can still exist for attributes without excerpts, explaining why none were found.</p>
 <h3 id="search-enhanced-fields">Search-Enhanced Fields<a class="headerlink" href="#search-enhanced-fields" title="Permanent link">&para;</a></h3>
@@ -17234,15 +17329,15 @@
 </tbody>
 </table>
 <p>Trait metadata structure:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="s2">&quot;clarity&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>        <span class="s2">&quot;stages_completed&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;excerpt_extraction&quot;</span><span class="p">,</span> <span class="s2">&quot;reasoning_generation&quot;</span><span class="p">,</span> <span class="s2">&quot;score_extraction&quot;</span><span class="p">],</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>        <span class="s2">&quot;model_calls&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="s2">&quot;had_excerpts&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        <span class="s2">&quot;excerpt_retry_count&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>        <span class="s2">&quot;excerpt_validation_failed&quot;</span><span class="p">:</span> <span class="kc">False</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="p">}</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="s2">&quot;clarity&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>        <span class="s2">&quot;stages_completed&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;excerpt_extraction&quot;</span><span class="p">,</span> <span class="s2">&quot;reasoning_generation&quot;</span><span class="p">,</span> <span class="s2">&quot;score_extraction&quot;</span><span class="p">],</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>        <span class="s2">&quot;model_calls&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>        <span class="s2">&quot;had_excerpts&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>        <span class="s2">&quot;excerpt_retry_count&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>        <span class="s2">&quot;excerpt_validation_failed&quot;</span><span class="p">:</span> <span class="kc">False</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="p">}</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="auto-fail-and-search-fields">Auto-Fail and Search Fields<a class="headerlink" href="#auto-fail-and-search-fields" title="Permanent link">&para;</a></h3>
 <table>
@@ -17267,12 +17362,12 @@
 </tbody>
 </table>
 <p>Hallucination risk structure:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="s2">&quot;clarity&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>        <span class="s2">&quot;overall_risk&quot;</span><span class="p">:</span> <span class="s2">&quot;low&quot;</span><span class="p">,</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>        <span class="s2">&quot;per_excerpt_risks&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;none&quot;</span><span class="p">,</span> <span class="s2">&quot;low&quot;</span><span class="p">]</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="p">}</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="s2">&quot;clarity&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="s2">&quot;overall_risk&quot;</span><span class="p">:</span> <span class="s2">&quot;low&quot;</span><span class="p">,</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="s2">&quot;per_excerpt_risks&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;none&quot;</span><span class="p">,</span> <span class="s2">&quot;low&quot;</span><span class="p">]</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="p">}</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="aggregate-statistics">Aggregate Statistics<a class="headerlink" href="#aggregate-statistics" title="Permanent link">&para;</a></h3>
 <table>

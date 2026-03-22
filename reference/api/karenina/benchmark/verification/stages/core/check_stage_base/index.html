@@ -11514,8 +11514,6 @@
       
         
       
-        
-      
     
     
     
@@ -11659,29 +11657,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16161,7 +16136,11 @@ shared between AbstentionCheckStage and SufficiencyCheckStage, which are
 <span class="normal"><a href="#__codelineno-0-158">158</a></span>
 <span class="normal"><a href="#__codelineno-0-159">159</a></span>
 <span class="normal"><a href="#__codelineno-0-160">160</a></span>
-<span class="normal"><a href="#__codelineno-0-161">161</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">BaseCheckStage</span><span class="p">(</span><span class="n">BaseVerificationStage</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#__codelineno-0-165">165</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">BaseCheckStage</span><span class="p">(</span><span class="n">BaseVerificationStage</span><span class="p">):</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a><span class="sd">    Abstract base class for check stages (abstention, sufficiency).</span>
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>
@@ -16294,16 +16273,20 @@ shared between AbstentionCheckStage and SufficiencyCheckStage, which are
 </span><span id="__span-0-149"><a id="__codelineno-0-149" name="__codelineno-0-149"></a>            <span class="n">context</span><span class="o">.</span><span class="n">set_artifact</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">VERIFY_RESULT</span><span class="p">,</span> <span class="n">verification_result</span><span class="p">)</span>
 </span><span id="__span-0-150"><a id="__codelineno-0-150" name="__codelineno-0-150"></a>            <span class="n">context</span><span class="o">.</span><span class="n">set_result_field</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">VERIFY_RESULT</span><span class="p">,</span> <span class="n">verification_result</span><span class="p">)</span>
 </span><span id="__span-0-151"><a id="__codelineno-0-151" name="__codelineno-0-151"></a>
-</span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> triggered for question </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">question_id</span><span class="si">}</span><span class="s2"> - overriding result to False&quot;</span><span class="p">)</span>
-</span><span id="__span-0-153"><a id="__codelineno-0-153" name="__codelineno-0-153"></a>
-</span><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154"></a>        <span class="c1"># Store check metadata (both artifact and result field)</span>
-</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_check_performed&quot;</span><span class="p">,</span> <span class="n">check_performed</span><span class="p">)</span>
-</span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_detected&quot;</span><span class="p">,</span> <span class="n">detected</span><span class="p">)</span>
-</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_override_applied&quot;</span><span class="p">,</span> <span class="n">override_applied</span><span class="p">)</span>
-</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_reasoning&quot;</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span>
-</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a>
-</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a>        <span class="c1"># Store updated usage tracker for next stages (artifact only)</span>
-</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a>        <span class="n">context</span><span class="o">.</span><span class="n">set_artifact</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">USAGE_TRACKER</span><span class="p">,</span> <span class="n">usage_tracker</span><span class="p">)</span>
+</span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152"></a>            <span class="c1"># Record which stage caused the auto-fail (first guard wins)</span>
+</span><span id="__span-0-153"><a id="__codelineno-0-153" name="__codelineno-0-153"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="o">.</span><span class="n">get_result_field</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">FAILED_STAGE</span><span class="p">):</span>
+</span><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154"></a>                <span class="n">context</span><span class="o">.</span><span class="n">set_result_field</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">FAILED_STAGE</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155"></a>
+</span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> triggered for question </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">question_id</span><span class="si">}</span><span class="s2"> - overriding result to False&quot;</span><span class="p">)</span>
+</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>
+</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>        <span class="c1"># Store check metadata (both artifact and result field)</span>
+</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_check_performed&quot;</span><span class="p">,</span> <span class="n">check_performed</span><span class="p">)</span>
+</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_detected&quot;</span><span class="p">,</span> <span class="n">detected</span><span class="p">)</span>
+</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_override_applied&quot;</span><span class="p">,</span> <span class="n">override_applied</span><span class="p">)</span>
+</span><span id="__span-0-162"><a id="__codelineno-0-162" name="__codelineno-0-162"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_reasoning&quot;</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span>
+</span><span id="__span-0-163"><a id="__codelineno-0-163" name="__codelineno-0-163"></a>
+</span><span id="__span-0-164"><a id="__codelineno-0-164" name="__codelineno-0-164"></a>        <span class="c1"># Store updated usage tracker for next stages (artifact only)</span>
+</span><span id="__span-0-165"><a id="__codelineno-0-165" name="__codelineno-0-165"></a>        <span class="n">context</span><span class="o">.</span><span class="n">set_artifact</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">USAGE_TRACKER</span><span class="p">,</span> <span class="n">usage_tracker</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
               </details>
 
@@ -16474,7 +16457,11 @@ shared between AbstentionCheckStage and SufficiencyCheckStage, which are
 <span class="normal"><a href="#__codelineno-0-158">158</a></span>
 <span class="normal"><a href="#__codelineno-0-159">159</a></span>
 <span class="normal"><a href="#__codelineno-0-160">160</a></span>
-<span class="normal"><a href="#__codelineno-0-161">161</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">VerificationContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#__codelineno-0-165">165</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">VerificationContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="sd">    Execute the check stage logic.</span>
 </span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>
@@ -16522,16 +16509,20 @@ shared between AbstentionCheckStage and SufficiencyCheckStage, which are
 </span><span id="__span-0-149"><a id="__codelineno-0-149" name="__codelineno-0-149"></a>        <span class="n">context</span><span class="o">.</span><span class="n">set_artifact</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">VERIFY_RESULT</span><span class="p">,</span> <span class="n">verification_result</span><span class="p">)</span>
 </span><span id="__span-0-150"><a id="__codelineno-0-150" name="__codelineno-0-150"></a>        <span class="n">context</span><span class="o">.</span><span class="n">set_result_field</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">VERIFY_RESULT</span><span class="p">,</span> <span class="n">verification_result</span><span class="p">)</span>
 </span><span id="__span-0-151"><a id="__codelineno-0-151" name="__codelineno-0-151"></a>
-</span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> triggered for question </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">question_id</span><span class="si">}</span><span class="s2"> - overriding result to False&quot;</span><span class="p">)</span>
-</span><span id="__span-0-153"><a id="__codelineno-0-153" name="__codelineno-0-153"></a>
-</span><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154"></a>    <span class="c1"># Store check metadata (both artifact and result field)</span>
-</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_check_performed&quot;</span><span class="p">,</span> <span class="n">check_performed</span><span class="p">)</span>
-</span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_detected&quot;</span><span class="p">,</span> <span class="n">detected</span><span class="p">)</span>
-</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_override_applied&quot;</span><span class="p">,</span> <span class="n">override_applied</span><span class="p">)</span>
-</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_reasoning&quot;</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span>
-</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a>
-</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a>    <span class="c1"># Store updated usage tracker for next stages (artifact only)</span>
-</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a>    <span class="n">context</span><span class="o">.</span><span class="n">set_artifact</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">USAGE_TRACKER</span><span class="p">,</span> <span class="n">usage_tracker</span><span class="p">)</span>
+</span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152"></a>        <span class="c1"># Record which stage caused the auto-fail (first guard wins)</span>
+</span><span id="__span-0-153"><a id="__codelineno-0-153" name="__codelineno-0-153"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">context</span><span class="o">.</span><span class="n">get_result_field</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">FAILED_STAGE</span><span class="p">):</span>
+</span><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154"></a>            <span class="n">context</span><span class="o">.</span><span class="n">set_result_field</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">FAILED_STAGE</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155"></a>
+</span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> triggered for question </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">question_id</span><span class="si">}</span><span class="s2"> - overriding result to False&quot;</span><span class="p">)</span>
+</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>
+</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>    <span class="c1"># Store check metadata (both artifact and result field)</span>
+</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_check_performed&quot;</span><span class="p">,</span> <span class="n">check_performed</span><span class="p">)</span>
+</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_detected&quot;</span><span class="p">,</span> <span class="n">detected</span><span class="p">)</span>
+</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_override_applied&quot;</span><span class="p">,</span> <span class="n">override_applied</span><span class="p">)</span>
+</span><span id="__span-0-162"><a id="__codelineno-0-162" name="__codelineno-0-162"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">set_artifact_and_result</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">_reasoning&quot;</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span>
+</span><span id="__span-0-163"><a id="__codelineno-0-163" name="__codelineno-0-163"></a>
+</span><span id="__span-0-164"><a id="__codelineno-0-164" name="__codelineno-0-164"></a>    <span class="c1"># Store updated usage tracker for next stages (artifact only)</span>
+</span><span id="__span-0-165"><a id="__codelineno-0-165" name="__codelineno-0-165"></a>    <span class="n">context</span><span class="o">.</span><span class="n">set_artifact</span><span class="p">(</span><span class="n">ArtifactKeys</span><span class="o">.</span><span class="n">USAGE_TRACKER</span><span class="p">,</span> <span class="n">usage_tracker</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

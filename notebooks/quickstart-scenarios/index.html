@@ -11484,8 +11484,6 @@
       
         
       
-        
-      
     
     
     
@@ -11629,29 +11627,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16724,7 +16699,7 @@ print(f"{len(result_set)} per-turn result(s)")</div>
 <p><strong>Learn more</strong>: <a href="../workflows/running-verification/index.md">Running Verification</a></p>
 </blockquote>
 <hr/>
-<h2 id="step-5-inspect-results">Step 5: Inspect Results<a class="anchor-link" href="#step-5-inspect-results">¶</a></h2><p><code>run_verification</code> on a scenario benchmark returns one <code>VerificationResult</code> per turn. Each result holds the question text, the template parse, and the per-turn <code>verify_result</code>.</p>
+<h2 id="step-5-inspect-results">Step 5: Inspect Results<a class="anchor-link" href="#step-5-inspect-results">¶</a></h2><p><code>run_verification</code> on a scenario benchmark returns a <code>VerificationResultSet</code>. The flat <code>results</code> list contains one <code>VerificationResult</code> per turn. Each result holds the question text, the template parse, and the per-turn <code>verify_result</code>. The result set also provides <code>scenario_results</code> (a list of <code>ScenarioExecutionResult</code> objects with full execution traces and outcome criteria) and <code>errors</code> (a list of <code>(description, exception)</code> tuples for any scenario that failed). Both are <code>None</code> for non-scenario benchmarks.</p>
 </div>
 </div>
 </div>
@@ -16801,7 +16776,8 @@ print(f"{len(result_set)} per-turn result(s)")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">tempfile</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemporaryDirectory</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tempfile</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemporaryDirectory</span>
 
 <span class="k">with</span> <span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">tmpdir</span><span class="p">:</span>
     <span class="n">save_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmpdir</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"sycophancy.jsonld"</span>
@@ -16815,7 +16791,8 @@ print(f"{len(result_set)} per-turn result(s)")</div>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Entry: </span><span class="si">{</span><span class="n">restored</span><span class="o">.</span><span class="n">entry_node</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Outcomes: </span><span class="si">{</span><span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="s1">'name'</span><span class="p">]</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">restored</span><span class="o">.</span><span class="n">outcome_criteria</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6">from tempfile import TemporaryDirectory
+<div class="clipboard-copy-txt" id="cell-6">from pathlib import Path
+from tempfile import TemporaryDirectory
 
 with TemporaryDirectory() as tmpdir:
     save_path = Path(tmpdir) / "sycophancy.jsonld"

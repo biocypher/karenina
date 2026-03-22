@@ -11508,8 +11508,6 @@
       
         
       
-        
-      
     
     
     
@@ -11653,29 +11651,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16962,7 +16937,8 @@ print(f"Scenarios: {[s.name for s in benchmark.get_scenarios()]}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">tempfile</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemporaryDirectory</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tempfile</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemporaryDirectory</span>
 
 <span class="k">with</span> <span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">tmpdir</span><span class="p">:</span>
     <span class="n">save_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmpdir</span><span class="p">)</span> <span class="o">/</span> <span class="s2">"sycophancy.jsonld"</span>
@@ -16981,7 +16957,8 @@ print(f"Scenarios: {[s.name for s in benchmark.get_scenarios()]}")</div>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Entry: </span><span class="si">{</span><span class="n">restored</span><span class="o">.</span><span class="n">entry_node</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Outcomes: </span><span class="si">{</span><span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="s1">'name'</span><span class="p">]</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">c</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">restored</span><span class="o">.</span><span class="n">outcome_criteria</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8">from tempfile import TemporaryDirectory
+<div class="clipboard-copy-txt" id="cell-8">from pathlib import Path
+from tempfile import TemporaryDirectory
 
 with TemporaryDirectory() as tmpdir:
     save_path = Path(tmpdir) / "sycophancy.jsonld"
@@ -17079,7 +17056,8 @@ print(f"{len(result_set)} per-turn results")</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p><code>run_verification</code> on a scenario benchmark returns one <code>VerificationResult</code> per turn across all executed paths. Since this scenario always takes exactly two turns (either <code>identify</code> + <code>challenge</code> or <code>identify</code> + <code>correct</code>), the result set contains two results.</p>
+<p><code>run_verification</code> on a scenario benchmark returns a <code>VerificationResultSet</code>. The flat <code>results</code> list contains one <code>VerificationResult</code> per turn across all executed paths. Since this scenario always takes exactly two turns (either <code>identify</code> + <code>challenge</code> or <code>identify</code> + <code>correct</code>), the result set contains two results.</p>
+<p>The result set also carries two scenario-specific fields: <code>scenario_results</code> (a list of <code>ScenarioExecutionResult</code> objects with the full execution trace, path, outcome criteria, and final state for each scenario) and <code>errors</code> (a list of <code>(description, exception)</code> tuples for any scenario that failed mid-execution). Both are <code>None</code> for non-scenario benchmarks.</p>
 <hr/>
 <h2 id="step-7-interpret-results">Step 7: Interpret Results<a class="anchor-link" href="#step-7-interpret-results">¶</a></h2><p>Each result corresponds to one turn. The <code>template</code> sub-object holds the parse and verification outcome for that turn.</p>
 </div>

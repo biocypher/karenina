@@ -11388,8 +11388,6 @@
       
         
       
-        
-      
     
     
     
@@ -11533,29 +11531,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -15859,7 +15834,7 @@
 </ul>
 <p>Unlike templates, which operate on parsed structured data, rubrics evaluate the <strong>raw response text</strong> directly. See <a href="../../notebooks/core_concepts/template-vs-rubric/">templates vs rubrics</a> for a full comparison of the two evaluation building blocks.</p>
 <p>A <code>Rubric</code> in Karenina is a collector object that gathers traits of different types into separate lists:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rubric</span><span class="p">,</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexTrait</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="n">Rubric</span><span class="p">,</span> <span class="n">LLMRubricTrait</span><span class="p">,</span> <span class="n">RegexRubricTrait</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">rubric</span> <span class="o">=</span> <span class="n">Rubric</span><span class="p">(</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">llm_traits</span><span class="o">=</span><span class="p">[</span>
@@ -15871,7 +15846,7 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="p">),</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="p">],</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">regex_traits</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="n">RegexTrait</span><span class="p">(</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="n">RegexRubricTrait</span><span class="p">(</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;has_citations&quot;</span><span class="p">,</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>            <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The response includes at least one citation.&quot;</span><span class="p">,</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>            <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\[\d+\]&quot;</span><span class="p">,</span>
@@ -15961,14 +15936,14 @@
 <td>Returns index based on class order; <code>higher_is_better</code> controls direction</td>
 </tr>
 <tr>
-<td><a href="../../notebooks/core_concepts/rubrics/regex-traits/"><strong>RegexTrait</strong></a></td>
+<td><a href="../../notebooks/core_concepts/rubrics/regex-traits/"><strong>RegexRubricTrait</strong></a></td>
 <td><code>bool</code></td>
 <td>No</td>
 <td>"Has bracket citations <code>[N]</code>"</td>
 <td>100% reproducible; supports <code>case_sensitive</code> and <code>invert_result</code> options</td>
 </tr>
 <tr>
-<td><a href="../../notebooks/core_concepts/rubrics/callable-traits/"><strong>CallableTrait</strong></a></td>
+<td><a href="../../notebooks/core_concepts/rubrics/callable-traits/"><strong>CallableRubricTrait</strong></a></td>
 <td><code>bool</code> or <code>int</code></td>
 <td>No</td>
 <td>"Under 150 words"</td>
@@ -16022,12 +15997,12 @@
 </tr>
 <tr>
 <td>Exact keyword or format validation</td>
-<td>RegexTrait</td>
+<td>RegexRubricTrait</td>
 <td><a href="../../notebooks/creating-benchmarks/choosing-rubric-traits/#need-3-exact-keywordformat-validation-regex">Regex trait</a></td>
 </tr>
 <tr>
 <td>Complex validation logic (word counts, structure)</td>
-<td>CallableTrait</td>
+<td>CallableRubricTrait</td>
 <td><a href="../../notebooks/creating-benchmarks/choosing-rubric-traits/#need-4-complex-validation-logic-callable">Callable trait</a></td>
 </tr>
 <tr>
@@ -16037,7 +16012,7 @@
 </tr>
 <tr>
 <td>Deterministic, reproducible check</td>
-<td>RegexTrait, or CallableTrait if your function is pure local code</td>
+<td>RegexRubricTrait, or CallableRubricTrait if your function is pure local code</td>
 <td><a href="../../notebooks/creating-benchmarks/choosing-rubric-traits/#need-6-deterministic-reproducible-check-regex-inverted">Inverted regex</a></td>
 </tr>
 <tr>
@@ -16063,12 +16038,12 @@
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>      │
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>      ├─ NO: Can it be expressed as a single regex pattern?
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>      │   │
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      │   ├─ YES → RegexTrait
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>      │   ├─ YES → RegexRubricTrait
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>      │   │        Check presence: higher_is_better=True
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>      │   │        Check absence:  invert_result=True
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>      │   │
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>      │   └─ NO (multiple patterns, numeric logic, conditionals)
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>      │       → CallableTrait
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>      │       → CallableRubricTrait
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>      │         Accepts one str, returns bool or int.
 </span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>      │
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>      └─ YES: Is it a checklist of items the response should cover?
@@ -16118,7 +16093,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.entities.rubric</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">DynamicRubric</span><span class="p">,</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">LLMRubricTrait</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">RegexTrait</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">RegexRubricTrait</span><span class="p">,</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">dynamic</span> <span class="o">=</span> <span class="n">DynamicRubric</span><span class="p">(</span>
@@ -16147,7 +16122,7 @@
 </span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>        <span class="p">),</span>
 </span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>    <span class="p">],</span>
 </span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>    <span class="n">regex_traits</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>        <span class="n">RegexTrait</span><span class="p">(</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>        <span class="n">RegexRubricTrait</span><span class="p">(</span>
 </span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;has_contraindications&quot;</span><span class="p">,</span>
 </span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>            <span class="n">summary</span><span class="o">=</span><span class="s2">&quot;contraindication list&quot;</span><span class="p">,</span>
 </span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>            <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;(?i)contraindicated?\b&quot;</span><span class="p">,</span>

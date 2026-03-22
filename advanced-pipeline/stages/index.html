@@ -11367,8 +11367,6 @@
       
         
       
-        
-      
     
     
     
@@ -11512,29 +11510,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -18198,7 +18173,8 @@
 <li><strong>Field verification</strong>: Calls <code>evaluator.verify_fields(parsed_answer)</code> which runs the template's <code>verify()</code> method comparing parsed values to ground truth</li>
 <li><strong>Regex verification</strong>: Calls <code>evaluator.verify_regex(parsed_answer, raw_llm_response)</code> which runs any regex traits defined on the template</li>
 <li><strong>Combination</strong>: <code>verify_result = field_success AND regex_success</code></li>
-<li><strong>Granular verification</strong>: If the template defines <code>verify_granular()</code>, calls it to get a partial credit score (0.0-1.0)</li>
+<li><strong>Granular verification</strong>: If the template defines <code>verify_granular()</code>, calls it to get a partial credit score (0.0-1.0). Skipped when <code>verify()</code> raised an exception (sets <code>verify_granular_result=None</code> to avoid contradictory signals). Granular scoring is composition-aware: AnyOf uses max passing field weight, AtLeastN uses top-N weights.</li>
+<li><strong>Error capture</strong>: If <code>verify()</code> raises, the error string is stored in <code>field_verification_error</code> (non-fatal; <code>completed_without_errors</code> remains <code>True</code>)</li>
 </ol>
 <h3 id="result-fields_7">Result Fields<a class="headerlink" href="#result-fields_7" title="Permanent link">&para;</a></h3>
 <table>
@@ -18223,7 +18199,22 @@
 <tr>
 <td><code>verify_granular_result</code></td>
 <td><code>template</code></td>
-<td>Partial credit score (0.0-1.0, if available)</td>
+<td>Partial credit score (0.0-1.0, if available). <code>None</code> when <code>verify()</code> raised</td>
+</tr>
+<tr>
+<td><code>field_verification_error</code></td>
+<td><code>template</code></td>
+<td>Error string if <code>verify()</code> raised an exception</td>
+</tr>
+<tr>
+<td><code>field_results</code></td>
+<td><code>template</code></td>
+<td>Per-field primitive pass/fail dict (from <code>_compute_field_results()</code>)</td>
+</tr>
+<tr>
+<td><code>composition_strategy</code></td>
+<td><code>template</code></td>
+<td>Composition strategy: <code>"all_of"</code>, <code>"any_of"</code>, <code>"at_least_n(N)"</code>, or <code>None</code></td>
 </tr>
 <tr>
 <td><code>field_verification_result</code></td>

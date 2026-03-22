@@ -11367,8 +11367,6 @@
       
         
       
-        
-      
     
     
     
@@ -11512,29 +11510,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -15869,11 +15844,11 @@
 </span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    │  Implementations  │    │Implementations│    │ Implementations│
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    └─────────┬────────┘    └──────┬───────┘    └────────┬───────┘
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>              │                     │                     │
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>   ┌──────┬──┴──┬──────┐          ...                   ...
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>   │      │     │      │
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>   ▼      ▼     ▼      ▼
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a> Lang  Claude Claude Manual
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a> Chain  SDK   Tool
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>   ┌──────┬──┴──┬──────┬──────┐    ...                   ...
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>   │      │     │      │      │
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>   ▼      ▼     ▼      ▼      ▼
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a> Lang  Deep  Claude Claude Manual
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a> Chain Agents  SDK   Tool
 </span></code></pre></div>
 <p>The pipeline interacts <strong>only</strong> with the three port protocols. The adapter factory (<code>get_agent</code>, <code>get_parser</code>, <code>get_llm</code>) selects the correct implementation based on the <code>interface</code> field in <code>ModelConfig</code>.</p>
 <hr />
@@ -15921,7 +15896,20 @@
 <li>A fallback interface to use when the primary isn't available</li>
 <li>Capability flags (<code>supports_mcp</code>, <code>supports_tools</code>)</li>
 </ul>
-<p>Registration happens lazily — adapter modules are imported on first registry access, keeping startup lightweight.</p>
+<p>Registration happens lazily via two mechanisms on first registry access, keeping startup lightweight:</p>
+<ol>
+<li>
+<p><strong>Built-in adapters</strong>: The registry imports each built-in adapter's <code>registration.py</code> module (<code>langchain</code>, <code>langchain_deep_agents</code>, <code>claude_agent_sdk</code>, <code>claude_tool</code>, <code>manual</code>). Each import triggers <code>AdapterRegistry.register()</code> with that adapter's <code>AdapterSpec</code>. Missing optional dependencies (e.g., <code>deepagents</code> not installed) are caught per-adapter and do not block other registrations.</p>
+</li>
+<li>
+<p><strong>External adapters via entry points</strong>: After loading built-ins, the registry calls <code>entry_points(group="karenina.adapters")</code> to discover third-party adapter packages. Each entry point's <code>load()</code> function is called, which should register an <code>AdapterSpec</code>. Entry points whose name conflicts with a built-in interface are skipped with a warning.</p>
+</li>
+</ol>
+<p>To register an external adapter, add an entry point to your package's <code>pyproject.toml</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[project.entry-points.</span><span class="s2">&quot;karenina.adapters&quot;</span><span class="k">]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">my_provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_package.registration&quot;</span>
+</span></code></pre></div>
+<p>The entry point module must call <code>AdapterRegistry.register()</code> with an <code>AdapterSpec</code> when imported. See <a href="writing-adapters/">Writing Custom Adapters</a> for the full implementation guide.</p>
 <h3 id="the-factory">The Factory<a class="headerlink" href="#the-factory" title="Permanent link">&para;</a></h3>
 <p>Three factory functions provide the public API:</p>
 <table>
@@ -15958,25 +15946,26 @@
 <li>Fall back automatically if the preferred adapter is unavailable (<code>auto_fallback=True</code> by default)</li>
 <li>Return a port implementation — never <code>None</code></li>
 </ol>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.adapters.factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_agent</span><span class="p">,</span> <span class="n">get_parser</span><span class="p">,</span> <span class="n">get_llm</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelConfig</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">ModelConfig</span><span class="p">(</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="nb">id</span><span class="o">=</span><span class="s2">&quot;answering&quot;</span><span class="p">,</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;claude-sonnet-4-20250514&quot;</span><span class="p">,</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">interface</span><span class="o">=</span><span class="s2">&quot;claude_agent_sdk&quot;</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">agent</span> <span class="o">=</span> <span class="n">get_agent</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>   <span class="c1"># Returns ClaudeSDKAgentAdapter (or LangChain fallback)</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">parser</span> <span class="o">=</span> <span class="n">get_parser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span> <span class="c1"># Returns ClaudeSDKParserAdapter (or LangChain fallback)</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">llm</span> <span class="o">=</span> <span class="n">get_llm</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>       <span class="c1"># Returns ClaudeSDKLLMAdapter (or LangChain fallback)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.adapters.factory</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_agent</span><span class="p">,</span> <span class="n">get_parser</span><span class="p">,</span> <span class="n">get_llm</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelConfig</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">ModelConfig</span><span class="p">(</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="nb">id</span><span class="o">=</span><span class="s2">&quot;answering&quot;</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;claude-sonnet-4-20250514&quot;</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">interface</span><span class="o">=</span><span class="s2">&quot;claude_agent_sdk&quot;</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">agent</span> <span class="o">=</span> <span class="n">get_agent</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>   <span class="c1"># Returns ClaudeSDKAgentAdapter (or LangChain fallback)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">parser</span> <span class="o">=</span> <span class="n">get_parser</span><span class="p">(</span><span class="n">config</span><span class="p">)</span> <span class="c1"># Returns ClaudeSDKParserAdapter (or LangChain fallback)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">llm</span> <span class="o">=</span> <span class="n">get_llm</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>       <span class="c1"># Returns ClaudeSDKLLMAdapter (or LangChain fallback)</span>
 </span></code></pre></div>
 <h3 id="auto-fallback">Auto-Fallback<a class="headerlink" href="#auto-fallback" title="Permanent link">&para;</a></h3>
 <p>When an adapter's dependencies are missing, the factory transparently falls back:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>claude_agent_sdk (Claude CLI not found) → falls back to langchain
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>claude_tool (anthropic package missing) → falls back to langchain
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>langchain (langchain_core not installed) → no fallback (raises error)
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>manual — always available, no fallback needed
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>claude_agent_sdk (Claude CLI not found)       → falls back to langchain
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>claude_tool (anthropic package missing)       → falls back to langchain
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>langchain_deep_agents (deepagents not found)  → no fallback (raises error)
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>langchain (langchain_core not installed)      → no fallback (raises error)
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>manual                                        → always available, no fallback needed
 </span></code></pre></div>
 <hr />
 <h2 id="supported-interfaces">Supported Interfaces<a class="headerlink" href="#supported-interfaces" title="Permanent link">&para;</a></h2>
@@ -15988,6 +15977,7 @@
 <th style="text-align: center;">MCP</th>
 <th style="text-align: center;">Tools</th>
 <th style="text-align: center;">Structured Output</th>
+<th style="text-align: center;">Agent Tier</th>
 <th>Fallback</th>
 </tr>
 </thead>
@@ -15998,6 +15988,16 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">No (JSON fallback)</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>langchain_deep_agents</code></td>
+<td>LangChain Deep Agents (multi-provider)</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes (native)</td>
+<td style="text-align: center;"><code>deep_agent</code></td>
 <td>None</td>
 </tr>
 <tr>
@@ -16006,6 +16006,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">No (JSON fallback)</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td>None</td>
 </tr>
 <tr>
@@ -16014,6 +16015,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">No (JSON fallback)</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td>None</td>
 </tr>
 <tr>
@@ -16022,6 +16024,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes (native)</td>
+<td style="text-align: center;"><code>deep_agent</code></td>
 <td><code>langchain</code></td>
 </tr>
 <tr>
@@ -16030,6 +16033,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes (native)</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td><code>langchain</code></td>
 </tr>
 <tr>
@@ -16038,6 +16042,7 @@
 <td style="text-align: center;">No</td>
 <td style="text-align: center;">No</td>
 <td style="text-align: center;">No</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td>None</td>
 </tr>
 </tbody>
@@ -16053,26 +16058,26 @@
 <hr />
 <h2 id="duck-typing-for-port-compliance">Duck Typing for Port Compliance<a class="headerlink" href="#duck-typing-for-port-compliance" title="Permanent link">&para;</a></h2>
 <p>Adapters implement ports via <strong>duck typing</strong>, not class inheritance. The port protocols are defined as <code>typing.Protocol</code> classes — any object with matching method signatures satisfies the contract:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Port protocol (in karenina/ports/llm.py)</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">LLMPort</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ainvoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span><span class="p">:</span> <span class="o">...</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span><span class="p">:</span> <span class="o">...</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Adapter (in karenina/adapters/langchain/llm.py)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">LangChainLLMAdapter</span><span class="p">:</span>  <span class="c1"># No inheritance from LLMPort</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ainvoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span><span class="p">:</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="c1"># LangChain-specific implementation</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="o">...</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Port protocol (in karenina/ports/llm.py)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">LLMPort</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ainvoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span><span class="p">:</span> <span class="o">...</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span><span class="p">:</span> <span class="o">...</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Adapter (in karenina/adapters/langchain/llm.py)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">LangChainLLMAdapter</span><span class="p">:</span>  <span class="c1"># No inheritance from LLMPort</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">ainvoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Message</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LLMResponse</span><span class="p">:</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="c1"># LangChain-specific implementation</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="o">...</span>
 </span></code></pre></div>
 <p>This means you can create a new adapter without importing the port classes — just implement the right methods. Type checkers verify compliance statically.</p>
 <hr />
 <h2 id="unified-message-format">Unified Message Format<a class="headerlink" href="#unified-message-format" title="Permanent link">&para;</a></h2>
 <p>All ports use a shared <code>Message</code> class from <code>karenina.ports.messages</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.ports.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">Message</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Create messages using factory methods</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">system</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s2">&quot;You are a helpful evaluator.&quot;</span><span class="p">)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">user</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">user</span><span class="p">(</span><span class="s2">&quot;Evaluate this response: ...&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.ports.messages</span><span class="w"> </span><span class="kn">import</span> <span class="n">Message</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Create messages using factory methods</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">system</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s2">&quot;You are a helpful evaluator.&quot;</span><span class="p">)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">user</span> <span class="o">=</span> <span class="n">Message</span><span class="o">.</span><span class="n">user</span><span class="p">(</span><span class="s2">&quot;Evaluate this response: ...&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>Messages support structured content blocks — text, tool use, tool results, and thinking — providing a consistent format across all adapters regardless of the underlying provider's message schema.</p>
 <hr />

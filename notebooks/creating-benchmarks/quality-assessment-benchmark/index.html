@@ -11523,8 +11523,6 @@
       
         
       
-        
-      
     
     
     
@@ -11668,29 +11666,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16849,9 +16824,9 @@ print(f"Added global: {empathy_trait.name}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegexRubricTrait</span>
 
-<span class="n">jargon_trait</span> <span class="o">=</span> <span class="n">RegexTrait</span><span class="p">(</span>
+<span class="n">jargon_trait</span> <span class="o">=</span> <span class="n">RegexRubricTrait</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"No Unexplained Jargon"</span><span class="p">,</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">"Checks that the response doesn't use complex medical terms without explanation."</span><span class="p">,</span>
     <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">"\b(pathogenesis|etiology|contraindicated|pharmacokinetics|bioavailability)\b"</span><span class="p">,</span>
@@ -16862,9 +16837,9 @@ print(f"Added global: {empathy_trait.name}")</div>
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">jargon_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added global: </span><span class="si">{</span><span class="n">jargon_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8">from karenina.schemas import RegexTrait
+<div class="clipboard-copy-txt" id="cell-8">from karenina.schemas import RegexRubricTrait
 
-jargon_trait = RegexTrait(
+jargon_trait = RegexRubricTrait(
     name="No Unexplained Jargon",
     description="Checks that the response doesn't use complex medical terms without explanation.",
     pattern=r"\b(pathogenesis|etiology|contraindicated|pharmacokinetics|bioavailability)\b",
@@ -16910,9 +16885,9 @@ print(f"Added global: {jargon_trait.name}")</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableTrait</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallableRubricTrait</span>
 
-<span class="n">length_trait</span> <span class="o">=</span> <span class="n">CallableTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
+<span class="n">length_trait</span> <span class="o">=</span> <span class="n">CallableRubricTrait</span><span class="o">.</span><span class="n">from_callable</span><span class="p">(</span>
     <span class="n">name</span><span class="o">=</span><span class="s2">"Appropriate Length"</span><span class="p">,</span>
     <span class="n">func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="mi">50</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">&lt;=</span> <span class="mi">300</span><span class="p">,</span>
     <span class="n">kind</span><span class="o">=</span><span class="s2">"boolean"</span><span class="p">,</span>
@@ -16922,9 +16897,9 @@ print(f"Added global: {jargon_trait.name}")</div>
 <span class="n">benchmark</span><span class="o">.</span><span class="n">add_global_rubric_trait</span><span class="p">(</span><span class="n">length_trait</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Added global: </span><span class="si">{</span><span class="n">length_trait</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-9">from karenina.schemas import CallableTrait
+<div class="clipboard-copy-txt" id="cell-9">from karenina.schemas import CallableRubricTrait
 
-length_trait = CallableTrait.from_callable(
+length_trait = CallableRubricTrait.from_callable(
     name="Appropriate Length",
     func=lambda text: 50 &lt;= len(text.split()) &lt;= 300,
     kind="boolean",

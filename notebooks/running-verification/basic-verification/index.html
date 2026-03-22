@@ -11631,8 +11631,6 @@
       
         
       
-        
-      
     
     
     
@@ -11776,29 +11774,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16658,6 +16633,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina</span><span class="w"> </span><span class="kn">import</span> <span class="n">Benchmark</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.verification</span><span class="w"> </span><span class="kn">import</span> <span class="n">VerificationConfig</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">karenina.schemas.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">ModelConfig</span>
 
 <span class="n">benchmark</span> <span class="o">=</span> <span class="n">Benchmark</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">_tmp</span><span class="p">))</span>
 <span class="n">config</span> <span class="o">=</span> <span class="n">VerificationConfig</span><span class="o">.</span><span class="n">from_overrides</span><span class="p">(</span>
@@ -16668,6 +16645,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Verified </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="si">}</span><span class="s2"> questions"</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">from karenina import Benchmark
+from karenina.schemas.verification import VerificationConfig
+from karenina.schemas.config import ModelConfig
 
 benchmark = Benchmark.load(str(_tmp))
 config = VerificationConfig.from_overrides(
@@ -17329,12 +17308,13 @@ print("CLI commands shown in comments above")</div>
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <p>See <a href="../../reference/cli/verify.md">CLI Reference: verify</a> for all options.</p>
 <hr/>
-<h2 id="error-handling">Error Handling<a class="anchor-link" href="#error-handling">¶</a></h2><p>Errors are caught per-question — one failure does not abort the entire run:</p>
+<h2 id="error-handling">Error Handling<a class="anchor-link" href="#error-handling">¶</a></h2><p>Individual question failures do not abort the entire run. Both sequential and parallel executors collect errors as they occur, continue processing the remaining questions, and return partial results. If any questions failed, the executor raises <code>VerificationBatchError</code> after all questions have been attempted. This exception carries two attributes: <code>partial_results</code> (a dict of question ID to <code>VerificationResult</code> for questions that succeeded) and <code>errors</code> (a list of <code>(question_id, exception)</code> pairs for questions that failed).</p>
+<p>Catch <code>VerificationBatchError</code> to access partial results instead of losing them:</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=0885cd8f">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=f0fff820">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -17352,11 +17332,67 @@ print("CLI commands shown in comments above")</div>
 </div>
 </clipboard-copy>
 </div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">karenina.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">VerificationBatchError</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">benchmark</span><span class="o">.</span><span class="n">run_verification</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">VerificationBatchError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">errors</span><span class="p">)</span><span class="si">}</span><span class="s2"> questions failed, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">partial_results</span><span class="p">)</span><span class="si">}</span><span class="s2"> succeeded"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">question_id</span><span class="p">,</span> <span class="n">error</span> <span class="ow">in</span> <span class="n">e</span><span class="o">.</span><span class="n">errors</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">question_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="c1"># Partial results are still usable</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">e</span><span class="o">.</span><span class="n">partial_results</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-14">from karenina.exceptions import VerificationBatchError
+
+try:
+    results = benchmark.run_verification(config)
+except VerificationBatchError as e:
+    print(f"{len(e.errors)} questions failed, {len(e.partial_results)} succeeded")
+    for question_id, error in e.errors:
+        print(f"  {question_id}: {error}")
+    # Partial results are still usable
+    results = e.partial_results</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=0cc8152a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>When all questions succeed, <code>run_verification</code> returns normally. You can also inspect per-question errors on individual results:</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=0885cd8f">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-15">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">completed_without_errors</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error in </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">question_id</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-14">for result in results:
+<div class="clipboard-copy-txt" id="cell-15">for result in results:
     if not result.metadata.completed_without_errors:
         print(f"Error in {result.metadata.question_id}: {result.metadata.error}")</div>
 </div>
@@ -17371,6 +17407,7 @@ print("CLI commands shown in comments above")</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>In parallel mode, <code>VerificationBatchError</code> is also raised if the batch exceeds the configured timeout (<code>ExecutorConfig.timeout_seconds</code>, default 600 seconds). The <code>partial_results</code> attribute contains whichever questions completed before the timeout.</p>
 <table>
 <thead>
 <tr>
@@ -17382,6 +17419,10 @@ print("CLI commands shown in comments above")</div>
 <tr>
 <td><code>KareninaError</code></td>
 <td>Base exception for all karenina errors</td>
+</tr>
+<tr>
+<td><code>VerificationBatchError</code></td>
+<td>One or more questions failed, or parallel batch timed out. Carries <code>partial_results</code> and <code>errors</code>.</td>
 </tr>
 <tr>
 <td><code>PortError</code></td>
@@ -17424,7 +17465,7 @@ print("CLI commands shown in comments above")</div>
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-15">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-16">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -17443,7 +17484,7 @@ print("CLI commands shown in comments above")</div>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Async: </span><span class="si">{</span><span class="n">config_async</span><span class="o">.</span><span class="n">async_enabled</span><span class="si">}</span><span class="s2">, Workers: </span><span class="si">{</span><span class="n">config_async</span><span class="o">.</span><span class="n">async_max_workers</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-15">config_async = VerificationConfig.from_overrides(
+<div class="clipboard-copy-txt" id="cell-16">config_async = VerificationConfig.from_overrides(
     answering_id="claude-haiku-4-5", answering_model="claude-haiku-4-5",
     parsing_id="claude-haiku-4-5", parsing_model="claude-haiku-4-5",
     async_execution=True,

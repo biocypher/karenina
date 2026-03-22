@@ -11646,8 +11646,6 @@
       
         
       
-        
-      
     
     
     
@@ -11791,29 +11789,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16317,7 +16292,7 @@
 </table>
 <p>For complete method signatures and detailed protocol documentation, see <a href="../../../advanced-adapters/ports/">Port Types</a>.</p>
 <h2 id="3-available-interfaces">3. Available Interfaces<a class="headerlink" href="#3-available-interfaces" title="Permanent link">&para;</a></h2>
-<p>Karenina ships with six interfaces, configured via the <code>interface</code> field on <code>ModelConfig</code>. The default is <code>"langchain"</code>.</p>
+<p>Karenina ships with seven interfaces, configured via the <code>interface</code> field on <code>ModelConfig</code>. The default is <code>"langchain"</code>.</p>
 <table>
 <thead>
 <tr>
@@ -16326,7 +16301,7 @@
 <th style="text-align: center;">MCP</th>
 <th style="text-align: center;">Tools</th>
 <th style="text-align: center;">Parser: Native Structured Output</th>
-<th style="text-align: center;">Natively Agentic</th>
+<th style="text-align: center;">Agent Tier</th>
 <th>Fallback</th>
 </tr>
 </thead>
@@ -16337,7 +16312,16 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">No</td>
-<td style="text-align: center;">No</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>langchain_deep_agents</code></td>
+<td>LangChain Deep Agents (multi-provider)</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;">Yes</td>
+<td style="text-align: center;"><code>deep_agent</code></td>
 <td>None</td>
 </tr>
 <tr>
@@ -16346,7 +16330,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">No</td>
-<td style="text-align: center;">No</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td>None</td>
 </tr>
 <tr>
@@ -16355,7 +16339,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">No</td>
-<td style="text-align: center;">No</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td>None</td>
 </tr>
 <tr>
@@ -16364,7 +16348,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
-<td style="text-align: center;">Yes</td>
+<td style="text-align: center;"><code>deep_agent</code></td>
 <td><code>langchain</code></td>
 </tr>
 <tr>
@@ -16373,7 +16357,7 @@
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
 <td style="text-align: center;">Yes</td>
-<td style="text-align: center;">No</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td><code>langchain</code></td>
 </tr>
 <tr>
@@ -16382,18 +16366,19 @@
 <td style="text-align: center;">No</td>
 <td style="text-align: center;">No</td>
 <td style="text-align: center;">N/A</td>
-<td style="text-align: center;">No</td>
+<td style="text-align: center;"><code>tool_loop</code></td>
 <td>None</td>
 </tr>
 </tbody>
 </table>
 <p>The <strong>"Parser: Native Structured Output"</strong> column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via <code>with_structured_output()</code>.</p>
-<p>The <strong>"Natively Agentic"</strong> column indicates whether the underlying runtime is itself an agent with built-in tools (e.g. Claude Code). For these adapters, the pipeline always uses <code>AgentPort</code> to capture the full tool call trace; using <code>LLMPort</code> would lose intermediate tool calls because the runtime handles them internally. Scaffolded adapters (all others) orchestrate each tool call turn explicitly. See <a href="../agentic-evaluation/">Agentic Evaluation</a> for the full picture.</p>
+<p>The <strong>"Agent Tier"</strong> column indicates the adapter's agent architecture. Adapters with <code>agent_tier="deep_agent"</code> wrap a runtime that is itself an agent with built-in tools (e.g. Claude Code); the pipeline always uses <code>AgentPort</code> to capture the full tool call trace, because <code>LLMPort</code> would lose intermediate tool calls that the runtime handles internally. Adapters with <code>agent_tier="tool_loop"</code> orchestrate each tool call turn explicitly. See <a href="../agentic-evaluation/">Agentic Evaluation</a> for the full picture.</p>
 <h3 id="31-interface-categories">3.1. Interface Categories<a class="headerlink" href="#31-interface-categories" title="Permanent link">&para;</a></h3>
-<p>The six interfaces fall into three categories.</p>
+<p>The seven interfaces fall into three categories.</p>
 <p><strong>Native adapters</strong> have their own implementations of all three ports:</p>
 <ul>
 <li><strong><code>langchain</code></strong>: The default. Uses LangChain's <code>init_chat_model</code> and supports all LangChain-compatible providers: Anthropic, OpenAI, Google, and many more. The broadest-compatibility option.</li>
+<li><strong><code>langchain_deep_agents</code></strong>: Uses LangChain Deep Agents (<code>create_deep_agent</code>) for natively agentic evaluation with built-in planning, context management, and subagent orchestration. Supports all LangChain-compatible providers. Operates at the <code>deep_agent</code> tier. Requires: <code>pip install deepagents langchain-mcp-adapters</code>.</li>
 <li><strong><code>claude_agent_sdk</code></strong>: Uses the Claude CLI (<code>claude</code> binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.</li>
 <li><strong><code>claude_tool</code></strong>: Uses the <code>anthropic</code> Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.</li>
 <li><strong><code>manual</code></strong>: Replays pre-recorded traces from <code>ManualTraceManager</code>. Only the agent port is functional; LLM and parser adapters raise <code>ManualInterfaceError</code> if invoked. See <a href="../manual-interface/">Manual Interface</a>.</li>
@@ -16466,6 +16451,10 @@
 <td><code>openai_endpoint</code></td>
 </tr>
 <tr>
+<td>Natively agentic evaluation with planning and subagents</td>
+<td><code>langchain_deep_agents</code></td>
+</tr>
+<tr>
 <td>Claude-only with full native features</td>
 <td><code>claude_agent_sdk</code></td>
 </tr>
@@ -16493,6 +16482,11 @@
 <td><code>langchain</code></td>
 <td>Broadest model coverage; stable default</td>
 <td>Parser uses JSON text parsing (less reliable on complex schemas)</td>
+</tr>
+<tr>
+<td><code>langchain_deep_agents</code></td>
+<td>Full agent runtime with planning, subagents, and native structured output; multi-provider</td>
+<td>Requires <code>deepagents</code> package; no automatic fallback</td>
 </tr>
 <tr>
 <td><code>openrouter</code></td>
@@ -16546,6 +16540,11 @@
 <td><code>langchain</code></td>
 </tr>
 <tr>
+<td><code>langchain_deep_agents</code></td>
+<td><code>deepagents</code> Python package importable</td>
+<td>None (raises <code>AdapterUnavailableError</code>)</td>
+</tr>
+<tr>
 <td><code>langchain</code></td>
 <td><code>langchain_core</code> Python package importable</td>
 <td>None (raises <code>AdapterUnavailableError</code>)</td>
@@ -16595,7 +16594,7 @@
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Provider requirements</p>
-<p>Only the <code>langchain</code> interface requires <code>model_provider</code> to be set. All other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
+<p>The <code>langchain</code> and <code>langchain_deep_agents</code> interfaces require <code>model_provider</code> to be set. All other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
 </div>
 
 <h3 id="factory-functions">Factory Functions<a class="headerlink" href="#factory-functions" title="Permanent link">&para;</a></h3>

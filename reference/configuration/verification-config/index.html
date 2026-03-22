@@ -3029,6 +3029,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#agentic-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agentic Parsing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario Execution
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#additional-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       Additional Configuration
@@ -11592,8 +11610,6 @@
       
         
       
-        
-      
     
     
     
@@ -11737,29 +11753,6 @@
   
   <span class="md-ellipsis">
     error_helpers
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../api/karenina/benchmark/verification/utils/llm_detection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    llm_detection
     
   </span>
   
@@ -16005,6 +15998,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#agentic-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Agentic Parsing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario Execution
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#additional-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       Additional Configuration
@@ -16149,7 +16160,7 @@
 <td><code>replicate_count</code></td>
 <td><code>int</code></td>
 <td><code>1</code></td>
-<td>Number of times to run each question/model combination. Higher values allow measuring variance across runs.</td>
+<td>Number of times to run each question/model combination. Higher values allow measuring variance across runs. Must be &gt;= 1.</td>
 </tr>
 <tr>
 <td><code>parsing_only</code></td>
@@ -16175,13 +16186,7 @@
 <td><code>evaluation_mode</code></td>
 <td><code>Literal["template_only", "template_and_rubric", "rubric_only"]</code></td>
 <td><code>"template_only"</code></td>
-<td>Determines which pipeline stages run. <code>template_only</code>: template verification only. <code>template_and_rubric</code>: both template and rubric evaluation. <code>rubric_only</code>: skip template verification, evaluate rubrics on raw response.</td>
-</tr>
-<tr>
-<td><code>rubric_enabled</code></td>
-<td><code>bool</code></td>
-<td><code>False</code></td>
-<td>Master switch for rubric evaluation. Must be <code>True</code> when <code>evaluation_mode</code> is <code>template_and_rubric</code> or <code>rubric_only</code>. Must be <code>False</code> when <code>evaluation_mode</code> is <code>template_only</code>.</td>
+<td>Determines which pipeline stages run. <code>template_only</code>: template verification only. <code>template_and_rubric</code>: both template and rubric evaluation. <code>rubric_only</code>: skip template verification, evaluate rubrics on raw response. When set to <code>template_and_rubric</code> or <code>rubric_only</code>, rubric evaluation is automatically enabled.</td>
 </tr>
 <tr>
 <td><code>rubric_trait_names</code></td>
@@ -16209,12 +16214,6 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Validation rules:</strong></p>
-<ul>
-<li><code>evaluation_mode="rubric_only"</code> requires <code>rubric_enabled=True</code></li>
-<li><code>evaluation_mode="template_and_rubric"</code> requires <code>rubric_enabled=True</code></li>
-<li><code>evaluation_mode="template_only"</code> requires <code>rubric_enabled=False</code></li>
-</ul>
 <hr />
 <h2 id="trace-filtering">Trace Filtering<a class="headerlink" href="#trace-filtering" title="Permanent link">&para;</a></h2>
 <table>
@@ -16304,7 +16303,7 @@
 <td><code>float</code></td>
 <td><code>0.85</code></td>
 <td><code>EMBEDDING_CHECK_THRESHOLD</code></td>
-<td>Cosine similarity threshold (0.0–1.0). Values above this threshold are considered semantically matching.</td>
+<td>Cosine similarity threshold. Constrained to [0.0, 1.0]. Values above this threshold are considered semantically matching.</td>
 </tr>
 </tbody>
 </table>
@@ -16334,10 +16333,11 @@
 <td><code>int</code></td>
 <td><code>2</code></td>
 <td><code>KARENINA_ASYNC_MAX_WORKERS</code></td>
-<td>Maximum number of concurrent verification workers when async is enabled.</td>
+<td>Maximum number of concurrent verification workers when async is enabled. Must be &gt;= 1.</td>
 </tr>
 </tbody>
 </table>
+<p>Both sequential and parallel execution modes collect per-question errors without aborting. If any questions fail (or the parallel batch exceeds its timeout), <code>VerificationBatchError</code> is raised with <code>partial_results</code> and <code>errors</code> attributes so callers can recover partial progress. See <a href="../../../notebooks/running-verification/basic-verification/">Basic Verification: Error Handling</a> for usage examples.</p>
 <hr />
 <h2 id="deep-judgment-templates">Deep Judgment — Templates<a class="headerlink" href="#deep-judgment-templates" title="Permanent link">&para;</a></h2>
 <table>
@@ -16513,6 +16513,64 @@
 <td><code>bool</code></td>
 <td><code>False</code></td>
 <td>Enable search validation for this trait's excerpts.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="agentic-parsing">Agentic Parsing<a class="headerlink" href="#agentic-parsing" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agentic_parsing</code></td>
+<td><code>bool</code></td>
+<td><code>False</code></td>
+<td>Enable agentic parsing (Stage 7b). The judge uses tools to independently verify artifacts before extracting structured data. Requires a parsing model with <code>agent_tier='deep_agent'</code>.</td>
+</tr>
+<tr>
+<td><code>agentic_judge_context</code></td>
+<td><code>Literal["workspace_only", "trace_and_workspace", "trace_only"]</code></td>
+<td><code>"workspace_only"</code></td>
+<td>What context the investigation agent receives. <code>workspace_only</code>: question + workspace path. <code>trace_and_workspace</code>: answering agent trace + workspace path. <code>trace_only</code>: equivalent to classical Stage 7a parsing.</td>
+</tr>
+<tr>
+<td><code>agentic_parsing_max_turns</code></td>
+<td><code>int</code></td>
+<td><code>15</code></td>
+<td>Max turns for the investigation agent. Must be &gt;= 1.</td>
+</tr>
+<tr>
+<td><code>agentic_parsing_timeout</code></td>
+<td><code>float</code></td>
+<td><code>120.0</code></td>
+<td>Timeout in seconds for the investigation agent. Must be &gt;= 0.0.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="scenario-execution">Scenario Execution<a class="headerlink" href="#scenario-execution" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scenario_turn_limit</code></td>
+<td><code>int</code></td>
+<td><code>20</code></td>
+<td>Maximum turns before forced termination in scenario execution. Must be &gt;= 1.</td>
 </tr>
 </tbody>
 </table>
@@ -16717,8 +16775,8 @@
 </tr>
 <tr>
 <td><code>evaluation_mode</code></td>
-<td><code>evaluation_mode</code> + <code>rubric_enabled</code></td>
-<td>Sets both evaluation mode and rubric flag</td>
+<td><code>evaluation_mode</code></td>
+<td>Sets the evaluation mode</td>
 </tr>
 <tr>
 <td><code>embedding_threshold</code></td>
