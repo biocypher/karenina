@@ -218,6 +218,15 @@ def add_question_to_benchmark(
     Returns:
         The question ID that was added
     """
+    # Extract existing IDs from benchmark
+    existing_ids = set()
+    for item in benchmark.dataFeedElement:
+        if item.id:
+            existing_ids.add(item.id)
+        else:
+            # Generate ID from question text if no ID set
+            existing_ids.add(generate_question_id(item.item.text))
+
     if question_id is None:
         # Generate base ID from question text
         base_id = generate_question_id(question)
@@ -226,18 +235,13 @@ def add_question_to_benchmark(
         question_id = base_id
         counter = 1
 
-        # Extract existing IDs from benchmark
-        existing_ids = set()
-        for item in benchmark.dataFeedElement:
-            if item.id:
-                existing_ids.add(item.id)
-            else:
-                # Generate ID from question text if no ID set
-                existing_ids.add(generate_question_id(item.item.text))
-
         while question_id in existing_ids:
             question_id = f"{base_id}-{counter}"
             counter += 1
+    else:
+        # Explicit ID provided: reject duplicates
+        if question_id in existing_ids:
+            raise ValueError(f"Question with ID {question_id} already exists")
 
     timestamp = datetime.now().isoformat()
 
