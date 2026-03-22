@@ -33,9 +33,42 @@ from .checkpoint_trait_converters import (
 
 logger = logging.getLogger(__name__)
 
+VALID_QUESTION_TRAIT_TYPES: frozenset[str] = frozenset(
+    [
+        "karenina:GlobalRubricTrait",
+        "karenina:QuestionSpecificRubricTrait",
+        "karenina:GlobalRegexTrait",
+        "karenina:QuestionSpecificRegexTrait",
+        "karenina:GlobalCallableTrait",
+        "karenina:QuestionSpecificCallableTrait",
+        "karenina:GlobalMetricRubricTrait",
+        "karenina:QuestionSpecificMetricRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:QuestionSpecificLLMRubricTrait",
+        "karenina:GlobalDynamicRubricTrait",
+        "karenina:QuestionSpecificDynamicRubricTrait",
+        "karenina:GlobalAgenticRubricTrait",
+        "karenina:QuestionSpecificAgenticRubricTrait",
+    ]
+)
+
+VALID_GLOBAL_TRAIT_TYPES: frozenset[str] = frozenset(
+    [
+        "karenina:GlobalRubricTrait",
+        "karenina:GlobalRegexTrait",
+        "karenina:GlobalCallableTrait",
+        "karenina:GlobalMetricRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:GlobalDynamicRubricTrait",
+        "karenina:GlobalAgenticRubricTrait",
+    ]
+)
+
 # Re-export for backward compatibility
 __all__ = [
     "BenchmarkConversionError",
+    "VALID_QUESTION_TRAIT_TYPES",
+    "VALID_GLOBAL_TRAIT_TYPES",
     "generate_question_id",
     "generate_template_id",
     "convert_rubric_trait_to_rating",
@@ -542,20 +575,7 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                 # Validate ratings if present
                 if item.item.rating:
                     for rating in item.item.rating:
-                        if rating.additionalType not in [
-                            "karenina:GlobalRubricTrait",
-                            "karenina:QuestionSpecificRubricTrait",
-                            "karenina:GlobalRegexTrait",
-                            "karenina:QuestionSpecificRegexTrait",
-                            "karenina:GlobalCallableTrait",
-                            "karenina:QuestionSpecificCallableTrait",
-                            "karenina:GlobalMetricRubricTrait",
-                            "karenina:QuestionSpecificMetricRubricTrait",
-                            "karenina:GlobalLLMRubricTrait",
-                            "karenina:QuestionSpecificLLMRubricTrait",
-                            "karenina:GlobalDynamicRubricTrait",
-                            "karenina:QuestionSpecificDynamicRubricTrait",
-                        ]:
+                        if rating.additionalType not in VALID_QUESTION_TRAIT_TYPES:
                             return (
                                 False,
                                 f"Invalid additionalType for rating: {rating.additionalType}",
@@ -564,14 +584,7 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
         # Validate global ratings if present
         if benchmark.rating:
             for rating in benchmark.rating:
-                if rating.additionalType not in [
-                    "karenina:GlobalRubricTrait",
-                    "karenina:GlobalRegexTrait",
-                    "karenina:GlobalCallableTrait",
-                    "karenina:GlobalMetricRubricTrait",
-                    "karenina:GlobalLLMRubricTrait",
-                    "karenina:GlobalDynamicRubricTrait",
-                ]:
+                if rating.additionalType not in VALID_GLOBAL_TRAIT_TYPES:
                     return (
                         False,
                         f"Dataset-level rating must be a global trait type, got {rating.additionalType}",

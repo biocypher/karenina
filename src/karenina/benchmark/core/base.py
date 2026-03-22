@@ -90,15 +90,15 @@ class BenchmarkBase:
 
         return instance
 
-    def save(self, path: Path, save_deep_judgment_config: bool = False) -> None:
+    def save(self, path: Path, save_deep_judgment_config: bool = True) -> None:
         """
         Save the benchmark to a JSON-LD file.
 
         Args:
             path: Path where to save the benchmark
-            save_deep_judgment_config: If True, include deep judgment configuration
-                in LLM rubric traits. If False (default), deep judgment settings
-                are stripped before saving. Default is False for backward compatibility.
+            save_deep_judgment_config: If True (default), include deep judgment
+                configuration in LLM rubric traits. If False, deep judgment
+                settings are stripped before saving.
         """
         from copy import deepcopy
 
