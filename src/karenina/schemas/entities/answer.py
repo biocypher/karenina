@@ -14,6 +14,11 @@ from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
+# Field names that collide with BaseAnswer internal attributes.
+# Subclasses that declare any of these as model fields will get a TypeError
+# at class definition time, preventing cryptic ValidationErrors at runtime.
+_RESERVED_FIELD_NAMES = {"correct"}
+
 
 class BaseAnswer(BaseModel):
     """Base class for all answer templates in Karenina.
@@ -66,6 +71,14 @@ class BaseAnswer(BaseModel):
         get the auto-generated methods; classic templates are left alone.
         """
         super().__pydantic_init_subclass__(**kwargs)
+
+        # Reject reserved field names that would collide with internal attributes
+        reserved_conflicts = _RESERVED_FIELD_NAMES & set(cls.model_fields.keys())
+        if reserved_conflicts:
+            raise TypeError(
+                f"Field name(s) {reserved_conflicts} reserved by BaseAnswer for internal use. "
+                f"Please rename your field(s) to avoid collision."
+            )
 
         verified = cls._get_verified_fields()
         if not verified:
