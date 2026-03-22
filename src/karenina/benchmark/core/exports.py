@@ -188,7 +188,7 @@ class ExportManager:
             "creator": self.base.creator,
             "created_at": self.base.created_at,
             "modified_at": self.base.modified_at,
-            "question_count": float(self.base.question_count),
+            "question_count": self.base.question_count,
             "finished_count": self.base.finished_count,
             "has_template_count": has_template_count,
             "has_rubric_count": has_rubric_count,
