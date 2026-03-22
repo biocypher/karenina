@@ -1,6 +1,6 @@
-"""Integration tests for CallableTrait evaluation.
+"""Integration tests for CallableRubricTrait evaluation.
 
-These tests verify that CallableTrait correctly evaluates custom Python
+These tests verify that CallableRubricTrait correctly evaluates custom Python
 functions against actual LLM response traces, using the integration test fixtures.
 
 Test scenarios:
@@ -16,7 +16,7 @@ and validation. These tests focus on integration with real trace fixtures.
 
 import pytest
 
-from karenina.schemas.entities import CallableTrait, Rubric
+from karenina.schemas.entities import CallableRubricTrait, Rubric
 
 # =============================================================================
 # Boolean Callable Tests with Trace Fixtures
@@ -31,7 +31,7 @@ class TestCallableTraitBooleanWithTraces:
         """Verify callable can detect citation patterns in trace."""
         import re
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="has_citations",
             func=lambda text: bool(re.search(r"\[\d+\]", text)),
             kind="boolean",
@@ -44,7 +44,7 @@ class TestCallableTraitBooleanWithTraces:
         """Verify callable correctly reports no citations."""
         import re
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="has_citations",
             func=lambda text: bool(re.search(r"\[\d+\]", text)),
             kind="boolean",
@@ -66,7 +66,7 @@ class TestCallableTraitBooleanWithTraces:
             ]
             return any(phrase in lower for phrase in abstention_phrases)
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="is_abstention",
             func=is_abstention,
             kind="boolean",
@@ -87,7 +87,7 @@ class TestCallableTraitBooleanWithTraces:
             ]
             return any(phrase in lower for phrase in hedging_phrases)
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="has_hedging",
             func=has_hedging,
             kind="boolean",
@@ -97,7 +97,7 @@ class TestCallableTraitBooleanWithTraces:
 
     def test_callable_detects_gene_mention(self, trace_with_citations: str):
         """Verify callable can detect specific scientific content."""
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="mentions_bcl2",
             func=lambda text: "BCL2" in text or "bcl2" in text.lower(),
             kind="boolean",
@@ -109,7 +109,7 @@ class TestCallableTraitBooleanWithTraces:
         """Verify invert_result works for 'must not contain' patterns."""
         import re
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="citation_free",
             func=lambda text: bool(re.search(r"\[\d+\]", text)),
             kind="boolean",
@@ -137,7 +137,7 @@ class TestCallableTraitScoreWithTraces:
         def count_citations(text: str) -> int:
             return len(re.findall(r"\[\d+\]", text))
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="citation_count",
             func=count_citations,
             kind="score",
@@ -153,7 +153,7 @@ class TestCallableTraitScoreWithTraces:
 
     def test_callable_counts_words(self, trace_with_citations: str):
         """Verify callable can count words in trace."""
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()),
             kind="score",
@@ -173,7 +173,7 @@ class TestCallableTraitScoreWithTraces:
             paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
             return len(paragraphs)
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="paragraph_count",
             func=count_paragraphs,
             kind="score",
@@ -196,7 +196,7 @@ class TestCallableTraitScoreWithTraces:
             avg = sum(len(s.split()) for s in sentences) / len(sentences)
             return int(avg)
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="avg_sentence_words",
             func=avg_sentence_length,
             kind="score",
@@ -216,7 +216,7 @@ class TestCallableTraitScoreWithTraces:
             error_words = ["error", "mistake", "wrong", "incorrect"]
             return sum(lower.count(word) for word in error_words)
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="error_count",
             func=count_errors,
             kind="score",
@@ -241,7 +241,7 @@ class TestCallableTraitEdgeCases:
 
     def test_callable_with_empty_text(self):
         """Verify callable handles empty string input."""
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()),
             kind="score",
@@ -253,7 +253,7 @@ class TestCallableTraitEdgeCases:
 
     def test_callable_with_whitespace_only(self):
         """Verify callable handles whitespace-only input."""
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="has_content",
             func=lambda text: len(text.strip()) > 0,
             kind="boolean",
@@ -267,7 +267,7 @@ class TestCallableTraitEdgeCases:
         def buggy_func(text: str) -> bool:
             raise ValueError("Intentional test error")
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="buggy",
             func=buggy_func,
             kind="boolean",
@@ -293,7 +293,7 @@ class TestCallableTraitEdgeCases:
             )
             return bool(emoji_pattern.search(text))
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="has_emoji",
             func=has_emoji,
             kind="boolean",
@@ -304,7 +304,7 @@ class TestCallableTraitEdgeCases:
 
     def test_callable_with_very_long_text(self):
         """Verify callable handles long text efficiently."""
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="length",
             func=lambda text: len(text),
             kind="score",
@@ -333,7 +333,7 @@ class TestCallableTraitComplexLogic:
         def check_keyword(text: str) -> bool:
             return required_keyword in text
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="has_keyword",
             func=check_keyword,
             kind="boolean",
@@ -350,7 +350,7 @@ class TestCallableTraitComplexLogic:
             has_structure = any(marker in text for marker in ["[1]", "-", "*", "References"])
             return has_content and has_paragraphs and has_structure
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="quality_check",
             func=quality_check,
             kind="boolean",
@@ -376,7 +376,7 @@ class TestCallableTraitComplexLogic:
 
             return min(score, 100)
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="composite_quality",
             func=composite_score,
             kind="score",
@@ -395,20 +395,20 @@ class TestCallableTraitComplexLogic:
 
 @pytest.mark.integration
 class TestCallableTraitWithRubric:
-    """Test CallableTrait integration with Rubric structures."""
+    """Test CallableRubricTrait integration with Rubric structures."""
 
     def test_rubric_with_callable_and_regex_traits(self, trace_with_citations: str):
         """Verify Rubric can contain both callable and regex traits."""
-        from karenina.schemas.entities import RegexTrait
+        from karenina.schemas.entities import RegexRubricTrait
 
-        callable_trait = CallableTrait.from_callable(
+        callable_trait = CallableRubricTrait.from_callable(
             name="word_count_ok",
             func=lambda text: len(text.split()) >= 50,
             kind="boolean",
             description="Has at least 50 words",
         )
 
-        regex_trait = RegexTrait(
+        regex_trait = RegexRubricTrait(
             name="has_citations",
             pattern=r"\[\d+\]",
             description="Has numeric citations",
@@ -426,12 +426,12 @@ class TestCallableTraitWithRubric:
     def test_rubric_with_multiple_callable_traits(self, trace_with_citations: str):
         """Verify Rubric can have multiple callable traits."""
         traits = [
-            CallableTrait.from_callable(
+            CallableRubricTrait.from_callable(
                 name="has_content",
                 func=lambda text: len(text) > 100,
                 kind="boolean",
             ),
-            CallableTrait.from_callable(
+            CallableRubricTrait.from_callable(
                 name="word_count",
                 func=lambda text: len(text.split()),
                 kind="score",
@@ -447,8 +447,8 @@ class TestCallableTraitWithRubric:
         assert rubric.callable_traits[1].evaluate(trace_with_citations) > 0
 
     def test_callable_trait_in_rubric_roundtrip(self, trace_with_citations: str):
-        """Verify CallableTrait survives Rubric serialization."""
-        trait = CallableTrait.from_callable(
+        """Verify CallableRubricTrait survives Rubric serialization."""
+        trait = CallableRubricTrait.from_callable(
             name="test_trait",
             func=lambda text: "BCL2" in text,
             kind="boolean",

@@ -19,7 +19,7 @@ from karenina.schemas.entities import (
     AgenticRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 from karenina.schemas.entities.rubric import DynamicRubric, merge_dynamic_rubrics
 
@@ -39,9 +39,9 @@ def _make_llm_trait(name: str, summary: str | None = None, description: str | No
     )
 
 
-def _make_regex_trait(name: str, summary: str | None = None, description: str | None = None) -> RegexTrait:
-    """Create a minimal RegexTrait for testing."""
-    return RegexTrait(
+def _make_regex_trait(name: str, summary: str | None = None, description: str | None = None) -> RegexRubricTrait:
+    """Create a minimal RegexRubricTrait for testing."""
+    return RegexRubricTrait(
         name=name,
         pattern=r"\btest\b",
         higher_is_better=True,

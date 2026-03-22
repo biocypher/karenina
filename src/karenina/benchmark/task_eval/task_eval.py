@@ -773,7 +773,13 @@ class Answer(BaseAnswer):
         if not rubrics:
             return None
 
-        from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from karenina.schemas.entities import (
+            CallableRubricTrait,
+            LLMRubricTrait,
+            MetricRubricTrait,
+            RegexRubricTrait,
+            Rubric,
+        )
         from karenina.schemas.entities.rubric import AgenticRubricTrait
 
         # Check for trait name conflicts first (across all trait types)
@@ -806,8 +812,8 @@ class Answer(BaseAnswer):
 
         # Combine all traits (now guaranteed to be unique)
         unique_llm_traits: dict[str, LLMRubricTrait] = {}
-        unique_regex_traits: dict[str, RegexTrait] = {}
-        unique_callable_traits: dict[str, CallableTrait] = {}
+        unique_regex_traits: dict[str, RegexRubricTrait] = {}
+        unique_callable_traits: dict[str, CallableRubricTrait] = {}
         unique_metric_traits: dict[str, MetricRubricTrait] = {}
         unique_agentic_traits: dict[str, AgenticRubricTrait] = {}
         for rubric in rubrics:

@@ -18,10 +18,10 @@ from karenina import Benchmark
 from karenina.benchmark.core.rubrics import RubricManager
 from karenina.schemas.entities import (
     AgenticRubricTrait,
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
     Rubric,
 )
 
@@ -60,7 +60,7 @@ class TestAddGlobalRubricTrait:
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
-        trait = RegexTrait(
+        trait = RegexRubricTrait(
             name="has_citation",
             description="Has citation pattern",
             pattern=r"\[\d+\]",
@@ -81,7 +81,7 @@ class TestAddGlobalRubricTrait:
         def simple_check(_: str) -> bool:
             return True
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="simple_check", func=simple_check, kind="boolean", description="Simple callable check"
         )
         manager.add_global_rubric_trait(trait)
@@ -115,7 +115,7 @@ class TestAddGlobalRubricTrait:
             LLMRubricTrait(name="llm", description="LLM trait", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex trait",
                 pattern="test",
@@ -125,7 +125,7 @@ class TestAddGlobalRubricTrait:
             )
         )
         manager.add_global_rubric_trait(
-            CallableTrait.from_callable(
+            CallableRubricTrait.from_callable(
                 name="callable", func=lambda _: True, kind="boolean", description="Callable trait"
             )
         )
@@ -187,7 +187,7 @@ class TestGetGlobalRubric:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex",
                 pattern="test",
@@ -288,7 +288,7 @@ class TestGetMergedRubricForQuestion:
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="pattern",
                 description="Global pattern",
                 pattern=r"\d+",
@@ -300,7 +300,7 @@ class TestGetMergedRubricForQuestion:
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
             q_id,
-            RegexTrait(
+            RegexRubricTrait(
                 name="pattern",
                 description="Question pattern",
                 pattern=r"[A-Z]+",
@@ -449,7 +449,7 @@ class TestValidateRubrics:
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="pattern",
                 description="Has pattern",
                 pattern=r"\w+",
@@ -508,7 +508,7 @@ class TestGetRubricStatistics:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex",
                 pattern="test",
@@ -689,7 +689,7 @@ class TestGetRubricTraitNames:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex",
                 pattern="test",
@@ -699,7 +699,9 @@ class TestGetRubricTraitNames:
             )
         )
         manager.add_global_rubric_trait(
-            CallableTrait.from_callable(name="callable", func=lambda _: True, kind="boolean", description="Callable")
+            CallableRubricTrait.from_callable(
+                name="callable", func=lambda _: True, kind="boolean", description="Callable"
+            )
         )
 
         names = manager.get_rubric_trait_names()

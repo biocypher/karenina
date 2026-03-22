@@ -390,7 +390,7 @@ See [Answer Templates](../../core_concepts/answer-templates.md) for field types,
 Attach a rubric via `add_rubric()`. Each trait evaluates one dimension of the response independently. TaskEval supports all the same trait types as Benchmark.
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
 
 rubric = Rubric(
     llm_traits=[
@@ -406,7 +406,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             pattern=r"\[\d+\]",
             description="Response includes numbered citations in bracket notation.",

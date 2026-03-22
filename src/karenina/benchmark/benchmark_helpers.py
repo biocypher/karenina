@@ -441,7 +441,7 @@ def store_verification_results(
 
 def build_repr(benchmark: Benchmark) -> str:
     """Build the developer-friendly repr string for a Benchmark."""
-    from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+    from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
 
     lines = ["Benchmark("]
 
@@ -522,11 +522,11 @@ def build_repr(benchmark: Benchmark) -> str:
             for trait in question_rubric:
                 if isinstance(trait, LLMRubricTrait):
                     total_llm += 1
-                elif isinstance(trait, RegexTrait):
+                elif isinstance(trait, RegexRubricTrait):
                     total_regex += 1
                 elif isinstance(trait, MetricRubricTrait):
                     total_metric += 1
-                elif isinstance(trait, CallableTrait):
+                elif isinstance(trait, CallableRubricTrait):
                     total_callable += 1
 
     if questions_with_rubrics:

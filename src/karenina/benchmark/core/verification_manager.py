@@ -91,17 +91,17 @@ class VerificationManager:
                 # If it's a list of trait objects, convert to Rubric and dump
                 elif isinstance(question_rubric_raw, list):
                     from karenina.schemas.entities.rubric import (
-                        CallableTrait,
+                        CallableRubricTrait,
                         LLMRubricTrait,
                         MetricRubricTrait,
-                        RegexTrait,
+                        RegexRubricTrait,
                         Rubric,
                     )
 
                     # Separate traits by type
                     llm_traits = [t for t in question_rubric_raw if isinstance(t, LLMRubricTrait)]
-                    regex_traits = [t for t in question_rubric_raw if isinstance(t, RegexTrait)]
-                    callable_traits = [t for t in question_rubric_raw if isinstance(t, CallableTrait)]
+                    regex_traits = [t for t in question_rubric_raw if isinstance(t, RegexRubricTrait)]
+                    callable_traits = [t for t in question_rubric_raw if isinstance(t, CallableRubricTrait)]
                     metric_traits = [t for t in question_rubric_raw if isinstance(t, MetricRubricTrait)]
 
                     # Create Rubric and convert to dict

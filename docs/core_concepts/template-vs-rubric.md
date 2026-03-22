@@ -121,8 +121,8 @@ The verification is entirely programmatic: once the Judge LLM fills in the schem
 | **[LLMRubricTrait](../rubrics/llm-traits/)** (boolean) | `bool` | Yes | Binary quality judgment (safety, conciseness) |
 | **[LLMRubricTrait](../rubrics/llm-traits/)** (score) | `int` | Yes | Numeric rating within a configurable range |
 | **[LLMRubricTrait](../rubrics/llm-traits/)** (literal) | `int` | Yes | Classification into ordered categories (e.g., tone: formal/casual/technical) |
-| **[RegexTrait](../rubrics/regex-traits/)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
-| **[CallableTrait](../rubrics/callable-traits/)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
+| **[RegexRubricTrait](../rubrics/regex-traits/)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
+| **[CallableRubricTrait](../rubrics/callable-traits/)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
 | **[MetricRubricTrait](../rubrics/metric-traits/)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
 
 Rubrics can be attached at the **benchmark level** (applied to every question) or the **question level** (applied to one question). When both are present, Karenina merges them; trait names must be unique across scopes. See [Rubrics](../../../core_concepts/rubrics/) for full details on attachment, scoping, and the `higher_is_better` field.
@@ -301,7 +301,7 @@ print(f"Template verdict: {'PASS' if parsed.verify() else 'FAIL'}")
 **Rubric traits** (quality): assess observable properties of the response.
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait
 
 # LLM trait: does the response explain the mechanism?
 mechanism_explanation = LLMRubricTrait(
@@ -317,7 +317,7 @@ mechanism_explanation = LLMRubricTrait(
 print(f"LLM trait: {mechanism_explanation.name} (kind={mechanism_explanation.kind})")
 
 # Regex trait: does the response include citations?
-has_citations = RegexTrait(
+has_citations = RegexRubricTrait(
     name="has_citations",
     description="The response includes at least one numbered citation.",
     pattern=r"\[\d+\]",

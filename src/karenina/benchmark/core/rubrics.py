@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .base import BenchmarkBase
 
-from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
 from karenina.schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, merge_dynamic_rubrics
 from karenina.utils.checkpoint import (
     add_global_dynamic_rubric_to_benchmark,
@@ -24,7 +24,7 @@ class RubricManager:
         self.base = base
 
     def add_global_rubric_trait(
-        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+        self, trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
     ) -> None:
         """
         Add a global rubric trait to the benchmark.
@@ -39,7 +39,7 @@ class RubricManager:
     def add_question_rubric_trait(
         self,
         question_id: str,
-        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+        trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """
         Add a question-specific rubric trait.
@@ -82,8 +82,8 @@ class RubricManager:
         if traits:
             # Separate traits by type
             llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
-            regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
-            callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
+            regex_traits = [t for t in traits if isinstance(t, RegexRubricTrait)]
+            callable_traits = [t for t in traits if isinstance(t, CallableRubricTrait)]
             metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
             agentic_traits = [t for t in traits if isinstance(t, AgenticRubricTrait)]
             return Rubric(
@@ -97,7 +97,7 @@ class RubricManager:
 
     def get_question_rubric(
         self, question_id: str
-    ) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] | None:
+    ) -> list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait] | None:
         """
         Get question-specific rubric traits.
 
@@ -125,7 +125,9 @@ class RubricManager:
         global_traits = extract_global_rubric_from_benchmark(self.base._checkpoint) or []
 
         # Get question-specific rubric traits
-        question_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] = []
+        question_traits: list[
+            LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
+        ] = []
         if question_id in self.base._questions_cache:
             q_data = self.base._questions_cache[question_id]
             question_rubric = q_data.get("question_rubric")
@@ -155,8 +157,8 @@ class RubricManager:
         if merged_traits:
             # Separate traits by type
             llm_traits = [t for t in merged_traits if isinstance(t, LLMRubricTrait)]
-            regex_traits = [t for t in merged_traits if isinstance(t, RegexTrait)]
-            callable_traits = [t for t in merged_traits if isinstance(t, CallableTrait)]
+            regex_traits = [t for t in merged_traits if isinstance(t, RegexRubricTrait)]
+            callable_traits = [t for t in merged_traits if isinstance(t, CallableRubricTrait)]
             metric_traits = [t for t in merged_traits if isinstance(t, MetricRubricTrait)]
             agentic_traits = [t for t in merged_traits if isinstance(t, AgenticRubricTrait)]
             return Rubric(
@@ -276,7 +278,7 @@ class RubricManager:
                     ):
                         errors.append(f"Question {q_id} score trait '{trait.name}' missing min/max scores")
                     # Check regex traits
-                    if isinstance(trait, RegexTrait) and not trait.pattern:
+                    if isinstance(trait, RegexRubricTrait) and not trait.pattern:
                         errors.append(f"Question {q_id} regex trait '{trait.name}' missing pattern")
                     # Check metric traits
                     if isinstance(trait, MetricRubricTrait) and not trait.metrics:
@@ -321,7 +323,8 @@ class RubricManager:
         return [q_id for q_id, q_data in self.base._questions_cache.items() if q_data.get("question_rubric")]
 
     def set_global_rubric(
-        self, traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait]
+        self,
+        traits: list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait],
     ) -> None:
         """
         Set the global rubric with a list of traits.
@@ -334,7 +337,7 @@ class RubricManager:
     def update_global_rubric_trait(
         self,
         trait_name: str,
-        updated_trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+        updated_trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> bool:
         """
         Update a specific trait in the global rubric.

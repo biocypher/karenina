@@ -12,10 +12,10 @@ from pydantic import BaseModel, Field, ValidationError
 
 from karenina.schemas.entities import (
     AgenticRubricTrait,
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
     Rubric,
     RubricEvaluation,
     merge_rubrics,
@@ -201,12 +201,12 @@ def test_rubric_with_llm_traits() -> None:
 @pytest.mark.unit
 def test_rubric_with_regex_traits() -> None:
     """Test Rubric with regex traits."""
-    trait1 = RegexTrait(
+    trait1 = RegexRubricTrait(
         name="has_email",
         pattern=r"\S+@\S+",
         higher_is_better=True,
     )
-    trait2 = RegexTrait(
+    trait2 = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         higher_is_better=True,
@@ -223,7 +223,7 @@ def test_rubric_with_callable_traits() -> None:
     """Test Rubric with callable traits."""
     import cloudpickle
 
-    trait1 = CallableTrait(
+    trait1 = CallableRubricTrait(
         name="min_length",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda x: len(x) >= 10),
@@ -256,14 +256,14 @@ def test_rubric_with_metric_traits() -> None:
 def test_rubric_get_trait_names() -> None:
     """Test get_trait_names returns all trait names."""
     llm_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
-    regex_trait = RegexTrait(
+    regex_trait = RegexRubricTrait(
         name="has_email",
         pattern=r"\S+@\S+",
         higher_is_better=True,
     )
     import cloudpickle
 
-    callable_trait = CallableTrait(
+    callable_trait = CallableRubricTrait(
         name="min_length",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda x: len(x) >= 10),
@@ -304,7 +304,7 @@ def test_rubric_get_trait_max_scores() -> None:
     )
     import cloudpickle
 
-    trait3 = CallableTrait(
+    trait3 = CallableRubricTrait(
         name="readability",
         kind="score",
         callable_code=cloudpickle.dumps(lambda _: 5),
@@ -327,14 +327,14 @@ def test_rubric_get_trait_max_scores() -> None:
 def test_rubric_get_trait_directionalities() -> None:
     """Test get_trait_directionalities returns higher_is_better values."""
     llm_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
-    regex_trait = RegexTrait(
+    regex_trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
         higher_is_better=True,
     )
     import cloudpickle
 
-    callable_trait = CallableTrait(
+    callable_trait = CallableRubricTrait(
         name="shortness",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda x: len(x) < 100),
@@ -365,14 +365,14 @@ def test_rubric_validate_evaluation_success() -> None:
         max_score=5,
         higher_is_better=True,
     )
-    regex_trait = RegexTrait(
+    regex_trait = RegexRubricTrait(
         name="has_email",
         pattern=r"\S+@\S+",
         higher_is_better=True,
     )
     import cloudpickle
 
-    callable_trait = CallableTrait(
+    callable_trait = CallableRubricTrait(
         name="min_length",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda x: len(x) >= 10),
@@ -562,14 +562,14 @@ def test_merge_rubrics_with_conflict_raises_error() -> None:
 def test_merge_rubrics_all_trait_types() -> None:
     """Test merge_rubrics merges all trait types."""
     global_llm = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
-    global_regex = RegexTrait(
+    global_regex = RegexRubricTrait(
         name="has_email",
         pattern=r"\S+@\S+",
         higher_is_better=True,
     )
 
     question_llm = LLMRubricTrait(name="specificity", kind="boolean", higher_is_better=True)
-    question_regex = RegexTrait(
+    question_regex = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         higher_is_better=True,

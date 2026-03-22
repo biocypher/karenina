@@ -1,7 +1,7 @@
 """Rubric trait conversion utilities for JSON-LD checkpoint format.
 
 This module handles the bidirectional conversion between internal rubric trait
-representations (LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait)
+representations (LLMRubricTrait, RegexRubricTrait, CallableRubricTrait, MetricRubricTrait)
 and the schema.org Rating format used in JSON-LD checkpoints.
 """
 
@@ -17,14 +17,14 @@ from ..schemas.checkpoint import (
     SchemaOrgPropertyValue,
     SchemaOrgRating,
 )
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
 from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, TraitKind
 
 logger = logging.getLogger(__name__)
 
 
 def convert_rubric_trait_to_rating(
-    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+    trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     rubric_type: str = "global",
 ) -> SchemaOrgRating:
     """
@@ -45,12 +45,12 @@ def convert_rubric_trait_to_rating(
     if isinstance(trait, MetricRubricTrait):
         return _convert_metric_trait_to_rating(trait, rubric_type)
 
-    # Handle RegexTrait (always boolean)
-    if isinstance(trait, RegexTrait):
+    # Handle RegexRubricTrait (always boolean)
+    if isinstance(trait, RegexRubricTrait):
         return _convert_regex_trait_to_rating(trait, rubric_type)
 
-    # Handle CallableTrait (can be boolean or score)
-    if isinstance(trait, CallableTrait):
+    # Handle CallableRubricTrait (can be boolean or score)
+    if isinstance(trait, CallableRubricTrait):
         return _convert_callable_trait_to_rating(trait, rubric_type)
 
     # Handle LLMRubricTrait
@@ -85,8 +85,8 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
     )
 
 
-def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> SchemaOrgRating:
-    """Convert RegexTrait to SchemaOrgRating."""
+def _convert_regex_trait_to_rating(trait: RegexRubricTrait, rubric_type: str) -> SchemaOrgRating:
+    """Convert RegexRubricTrait to SchemaOrgRating."""
     # Store regex configuration in additionalProperty
     additional_props = [
         SchemaOrgPropertyValue(name="pattern", value=trait.pattern),
@@ -107,8 +107,8 @@ def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> Schem
     )
 
 
-def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) -> SchemaOrgRating:
-    """Convert CallableTrait to SchemaOrgRating."""
+def _convert_callable_trait_to_rating(trait: CallableRubricTrait, rubric_type: str) -> SchemaOrgRating:
+    """Convert CallableRubricTrait to SchemaOrgRating."""
     # Store callable code and metadata in additionalProperty
     additional_props = [
         SchemaOrgPropertyValue(name="callable_code", value=base64.b64encode(trait.callable_code).decode("utf-8")),
@@ -269,7 +269,7 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
 
 def convert_rating_to_rubric_trait(
     rating: SchemaOrgRating,
-) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait:
+) -> LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait:
     """
     Convert a schema.org Rating back to a rubric trait.
 
@@ -277,7 +277,7 @@ def convert_rating_to_rubric_trait(
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait, or AgenticRubricTrait object
+        A LLMRubricTrait, RegexRubricTrait, CallableRubricTrait, MetricRubricTrait, or AgenticRubricTrait object
 
     Raises:
         ValueError: If the rating has an unrecognized additionalType
@@ -293,11 +293,11 @@ def convert_rating_to_rubric_trait(
     if rating.additionalType in ["karenina:GlobalMetricRubricTrait", "karenina:QuestionSpecificMetricRubricTrait"]:
         return _convert_rating_to_metric_trait(rating)
 
-    # Handle RegexTrait
+    # Handle RegexRubricTrait
     if rating.additionalType in ["karenina:GlobalRegexTrait", "karenina:QuestionSpecificRegexTrait"]:
         return _convert_rating_to_regex_trait(rating)
 
-    # Handle CallableTrait
+    # Handle CallableRubricTrait
     if rating.additionalType in ["karenina:GlobalCallableTrait", "karenina:QuestionSpecificCallableTrait"]:
         return _convert_rating_to_callable_trait(rating)
 
@@ -360,8 +360,8 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
     )
 
 
-def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
-    """Convert SchemaOrgRating to RegexTrait."""
+def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexRubricTrait:
+    """Convert SchemaOrgRating to RegexRubricTrait."""
     # Extract configuration from additionalProperty
     pattern = ""
     case_sensitive = True
@@ -379,7 +379,7 @@ def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
 
-    return RegexTrait(
+    return RegexRubricTrait(
         name=rating.name,
         description=rating.description,
         summary=None,
@@ -390,8 +390,8 @@ def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
     )
 
 
-def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
-    """Convert SchemaOrgRating to CallableTrait."""
+def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableRubricTrait:
+    """Convert SchemaOrgRating to CallableRubricTrait."""
     # Extract configuration from additionalProperty
     callable_code = b""
     kind: Literal["boolean", "score"] = "boolean"
@@ -415,7 +415,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
 
-    return CallableTrait(
+    return CallableRubricTrait(
         name=rating.name,
         description=rating.description,
         summary=None,
@@ -659,8 +659,8 @@ def convert_ratings_to_dynamic_rubric(
         A DynamicRubric with all traits restored.
     """
     llm_traits: list[LLMRubricTrait] = []
-    regex_traits: list[RegexTrait] = []
-    callable_traits: list[CallableTrait] = []
+    regex_traits: list[RegexRubricTrait] = []
+    callable_traits: list[CallableRubricTrait] = []
     metric_traits: list[MetricRubricTrait] = []
     agentic_traits: list[AgenticRubricTrait] = []
 
@@ -729,16 +729,16 @@ def convert_ratings_to_dynamic_rubric(
 
 
 def _trait_type_tag(
-    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+    trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
 ) -> str:
     """Return a short string tag identifying the trait type for serialization."""
     if isinstance(trait, AgenticRubricTrait):
         return "agentic"
     if isinstance(trait, MetricRubricTrait):
         return "metric"
-    if isinstance(trait, RegexTrait):
+    if isinstance(trait, RegexRubricTrait):
         return "regex"
-    if isinstance(trait, CallableTrait):
+    if isinstance(trait, CallableRubricTrait):
         return "callable"
     return "llm"
 

@@ -9,13 +9,15 @@ from typing import TYPE_CHECKING, TypeAlias
 if TYPE_CHECKING:
     from karenina.schemas.entities.rubric import (
         AgenticRubricTrait,
-        CallableTrait,
+        CallableRubricTrait,
         LLMRubricTrait,
         MetricRubricTrait,
-        RegexTrait,
+        RegexRubricTrait,
     )
 
-    AnyTrait: TypeAlias = LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+    AnyTrait: TypeAlias = (
+        LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
+    )
 
 logger = logging.getLogger(__name__)
 

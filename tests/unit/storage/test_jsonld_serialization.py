@@ -17,7 +17,7 @@ import pytest
 from pydantic import ValidationError
 
 from karenina import Benchmark
-from karenina.schemas.entities import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait
 
 # =============================================================================
 # save() Method Tests
@@ -396,7 +396,7 @@ def test_roundtrip_preserves_rubrics(tmp_path: Path) -> None:
     original = Benchmark.create(name="Rubric Test")
 
     # Add a global regex rubric
-    rubric = RegexTrait(
+    rubric = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         case_sensitive=True,
@@ -411,7 +411,7 @@ def test_roundtrip_preserves_rubrics(tmp_path: Path) -> None:
         raw_answer="Answer",
         answer_template="class Answer(BaseAnswer):\n    value: str",
         question_rubric_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="has_url",
                 pattern=r"https?://\S+",
                 higher_is_better=True,

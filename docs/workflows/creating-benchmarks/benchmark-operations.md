@@ -33,7 +33,7 @@ with patch.dict("sys.modules", mock_modules):
     from karenina.benchmark import Benchmark
     from karenina.schemas.entities import BaseAnswer, Rubric
     from karenina.schemas.entities.question import Question
-    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait
+    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait
     from pydantic import Field
 ```
 
@@ -260,7 +260,7 @@ Question-specific traits apply to a single question. When both global and questi
 ```python
 benchmark.add_question_rubric_trait(
     q1_id,
-    RegexTrait(
+    RegexRubricTrait(
         name="mentions_bcl2_family",
         pattern=r"(?i)bcl[-\s]?2\s+family",
         description="Response mentions the BCL2 protein family.",

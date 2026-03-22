@@ -255,7 +255,7 @@ def test_get_questions_by_author() -> None:
 @pytest.mark.unit
 def test_get_questions_with_rubric() -> None:
     """Test get_questions_with_rubric returns questions with rubrics."""
-    from karenina.schemas.entities import RegexTrait
+    from karenina.schemas.entities import RegexRubricTrait
 
     benchmark = Benchmark.create(name="test")
 
@@ -265,7 +265,7 @@ def test_get_questions_with_rubric() -> None:
     benchmark.add_question("Q3?", "A3", question_id="q3", finished=True)
 
     # Add rubric to q1 only
-    trait = RegexTrait(name="test", pattern=r"\w+", higher_is_better=True)
+    trait = RegexRubricTrait(name="test", pattern=r"\w+", higher_is_better=True)
     benchmark.add_question_rubric_trait("q1", trait)
 
     results = benchmark.get_questions_with_rubric()

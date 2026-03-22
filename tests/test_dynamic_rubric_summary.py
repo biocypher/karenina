@@ -11,10 +11,10 @@ import pytest
 
 from karenina.schemas.entities import (
     AgenticRubricTrait,
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 
 # =============================================================================
@@ -80,17 +80,17 @@ class TestLLMRubricTraitSummary:
 
 
 # =============================================================================
-# RegexTrait summary tests
+# RegexRubricTrait summary tests
 # =============================================================================
 
 
 @pytest.mark.unit
 class TestRegexTraitSummary:
-    """Tests for summary field on RegexTrait."""
+    """Tests for summary field on RegexRubricTrait."""
 
     def test_summary_defaults_to_none(self) -> None:
-        """RegexTrait summary field defaults to None."""
-        trait = RegexTrait(
+        """RegexRubricTrait summary field defaults to None."""
+        trait = RegexRubricTrait(
             name="has_citation",
             pattern=r"\[\d+\]",
             higher_is_better=True,
@@ -98,8 +98,8 @@ class TestRegexTraitSummary:
         assert trait.summary is None
 
     def test_summary_can_be_set(self) -> None:
-        """RegexTrait summary can be assigned a string value."""
-        trait = RegexTrait(
+        """RegexRubricTrait summary can be assigned a string value."""
+        trait = RegexRubricTrait(
             name="has_citation",
             pattern=r"\[\d+\]",
             higher_is_better=True,
@@ -108,8 +108,8 @@ class TestRegexTraitSummary:
         assert trait.summary == "Citation presence"
 
     def test_summary_appears_in_model_dump(self) -> None:
-        """RegexTrait model_dump() includes summary key."""
-        trait = RegexTrait(
+        """RegexRubricTrait model_dump() includes summary key."""
+        trait = RegexRubricTrait(
             name="has_citation",
             pattern=r"\[\d+\]",
             higher_is_better=True,
@@ -120,8 +120,8 @@ class TestRegexTraitSummary:
         assert dumped["summary"] == "Citation presence"
 
     def test_summary_none_in_model_dump(self) -> None:
-        """RegexTrait model_dump() includes summary key even when None."""
-        trait = RegexTrait(
+        """RegexRubricTrait model_dump() includes summary key even when None."""
+        trait = RegexRubricTrait(
             name="has_citation",
             pattern=r"\[\d+\]",
             higher_is_better=True,
@@ -131,28 +131,28 @@ class TestRegexTraitSummary:
         assert dumped["summary"] is None
 
     def test_backward_compat_deserialize_without_summary(self) -> None:
-        """Deserializing RegexTrait dict without summary key works, defaulting to None."""
+        """Deserializing RegexRubricTrait dict without summary key works, defaulting to None."""
         data = {
             "name": "has_citation",
             "pattern": r"\[\d+\]",
             "higher_is_better": True,
         }
-        trait = RegexTrait.model_validate(data)
+        trait = RegexRubricTrait.model_validate(data)
         assert trait.summary is None
 
 
 # =============================================================================
-# CallableTrait summary tests
+# CallableRubricTrait summary tests
 # =============================================================================
 
 
 @pytest.mark.unit
 class TestCallableTraitSummary:
-    """Tests for summary field on CallableTrait."""
+    """Tests for summary field on CallableRubricTrait."""
 
     def test_summary_defaults_to_none(self) -> None:
-        """CallableTrait summary field defaults to None."""
-        trait = CallableTrait.from_callable(
+        """CallableRubricTrait summary field defaults to None."""
+        trait = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()) >= 50,
             kind="boolean",
@@ -161,8 +161,8 @@ class TestCallableTraitSummary:
         assert trait.summary is None
 
     def test_summary_can_be_set_via_from_callable(self) -> None:
-        """CallableTrait.from_callable() accepts and stores summary."""
-        trait = CallableTrait.from_callable(
+        """CallableRubricTrait.from_callable() accepts and stores summary."""
+        trait = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()) >= 50,
             kind="boolean",
@@ -172,8 +172,8 @@ class TestCallableTraitSummary:
         assert trait.summary == "Minimum word count"
 
     def test_summary_appears_in_model_dump(self) -> None:
-        """CallableTrait model_dump() includes summary key."""
-        trait = CallableTrait.from_callable(
+        """CallableRubricTrait model_dump() includes summary key."""
+        trait = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()) >= 50,
             kind="boolean",
@@ -185,8 +185,8 @@ class TestCallableTraitSummary:
         assert dumped["summary"] == "Minimum word count"
 
     def test_summary_none_in_model_dump(self) -> None:
-        """CallableTrait model_dump() includes summary key even when None."""
-        trait = CallableTrait.from_callable(
+        """CallableRubricTrait model_dump() includes summary key even when None."""
+        trait = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()) >= 50,
             kind="boolean",
@@ -198,7 +198,7 @@ class TestCallableTraitSummary:
 
     def test_backward_compat_deserialize_without_summary(self) -> None:
         """Round-trip serialization without summary key works, defaulting to None."""
-        original = CallableTrait.from_callable(
+        original = CallableRubricTrait.from_callable(
             name="word_count",
             func=lambda text: len(text.split()) >= 50,
             kind="boolean",
@@ -206,7 +206,7 @@ class TestCallableTraitSummary:
         )
         data = original.model_dump()
         data.pop("summary", None)
-        restored = CallableTrait.model_validate(data)
+        restored = CallableRubricTrait.model_validate(data)
         assert restored.summary is None
 
 

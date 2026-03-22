@@ -21,7 +21,7 @@ Unlike templates, which operate on parsed structured data, rubrics evaluate the 
 A `Rubric` in Karenina is a collector object that gathers traits of different types into separate lists:
 
 ```python
-from karenina.schemas.entities.rubric import Rubric, LLMRubricTrait, RegexTrait
+from karenina.schemas.entities.rubric import Rubric, LLMRubricTrait, RegexRubricTrait
 
 rubric = Rubric(
     llm_traits=[
@@ -33,7 +33,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             description="The response includes at least one citation.",
             pattern=r"\[\d+\]",
@@ -67,8 +67,8 @@ Given the question "Which is the putative target of venetoclax?", a [template](.
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (boolean) | `bool` | Yes | "Mentions safety profile of the drug" | Supports optional [deep judgment](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) for evidence-based evaluation |
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (score) | `int` | Yes | "Rate clarity from 1-5" | Configurable range |
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (literal) | `int` | Yes | "Classify tone as formal/casual/technical" | Returns index based on class order; `higher_is_better` controls direction |
-| [**RegexTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
-| [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
+| [**RegexRubricTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
+| [**CallableRubricTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
 | [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
 | [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (template kind) | structured `dict` | Yes (agent) | "Audit code quality across multiple dimensions" | Agent investigates and populates a Pydantic template you define; captures multi-field evaluation findings in a single trait |
@@ -85,10 +85,10 @@ See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipyn
 |------|-----------|-----------------|
 | Subjective quality (clarity, conciseness, tone) | LLMRubricTrait (boolean or score) | [LLM score trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-1-subjective-quality-llm-score) |
 | Categorical classification (quality tiers, tone levels) | LLMRubricTrait (literal) | [LLM literal trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-2-categorical-classification-llm-literal) |
-| Exact keyword or format validation | RegexTrait | [Regex trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-3-exact-keywordformat-validation-regex) |
-| Complex validation logic (word counts, structure) | CallableTrait | [Callable trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-4-complex-validation-logic-callable) |
+| Exact keyword or format validation | RegexRubricTrait | [Regex trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-3-exact-keywordformat-validation-regex) |
+| Complex validation logic (word counts, structure) | CallableRubricTrait | [Callable trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-4-complex-validation-logic-callable) |
 | Precision/recall/F1 measurement | MetricRubricTrait | [Metric trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-5-precisionrecallf1-metric-trait) |
-| Deterministic, reproducible check | RegexTrait, or CallableTrait if your function is pure local code | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
+| Deterministic, reproducible check | RegexRubricTrait, or CallableRubricTrait if your function is pure local code | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
 | Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment | [Deep judgment](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-7-evidence-based-with-excerpts-llm-boolean--deep-judgment) |
 
 For a hands-on tutorial that walks through each of these needs with a complete example, see [Choosing the Right Rubric Trait Type](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb).
@@ -110,12 +110,12 @@ For a hands-on tutorial that walks through each of these needs with a complete e
       │
       ├─ NO: Can it be expressed as a single regex pattern?
       │   │
-      │   ├─ YES → RegexTrait
+      │   ├─ YES → RegexRubricTrait
       │   │        Check presence: higher_is_better=True
       │   │        Check absence:  invert_result=True
       │   │
       │   └─ NO (multiple patterns, numeric logic, conditionals)
-      │       → CallableTrait
+      │       → CallableRubricTrait
       │         Accepts one str, returns bool or int.
       │
       └─ YES: Is it a checklist of items the response should cover?
@@ -176,7 +176,7 @@ All five trait types (LLM, regex, callable, metric, agentic) support an optional
 from karenina.schemas.entities.rubric import (
     DynamicRubric,
     LLMRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 
 dynamic = DynamicRubric(
@@ -205,7 +205,7 @@ dynamic = DynamicRubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_contraindications",
             summary="contraindication list",
             pattern=r"(?i)contraindicated?\b",

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.entities import Question
 
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
 from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from ..schemas.results import VerificationResultSet
 from ..schemas.scenario.definition import ScenarioDefinition
@@ -631,7 +631,7 @@ class Benchmark:
     # ── Rubric management ────────────────────────────────────────────────
 
     def add_global_rubric_trait(
-        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+        self, trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
     ) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
@@ -639,7 +639,7 @@ class Benchmark:
     def add_question_rubric_trait(
         self,
         question_id: str,
-        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+        trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)

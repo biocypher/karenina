@@ -20,10 +20,10 @@ from karenina.ports import LLMResponse
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.entities import Rubric
 from karenina.schemas.entities.rubric import (
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 from karenina.schemas.outputs.rubric import ConceptPresenceResult
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -431,9 +431,9 @@ class RubricEvaluationStage(BaseVerificationStage):
             promoted_names.append(trait.name)
             if isinstance(trait, LLMRubricTrait):
                 promote_llm.append(trait)
-            elif isinstance(trait, RegexTrait):
+            elif isinstance(trait, RegexRubricTrait):
                 promote_regex.append(trait)
-            elif isinstance(trait, CallableTrait):
+            elif isinstance(trait, CallableRubricTrait):
                 promote_callable.append(trait)
             elif isinstance(trait, MetricRubricTrait):
                 promote_metric.append(trait)

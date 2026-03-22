@@ -28,7 +28,7 @@ from karenina import Benchmark
 from karenina.schemas.entities import (
     BaseAnswer,
     LLMRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
     Rubric,
 )
 
@@ -92,7 +92,7 @@ class TestTemplateParsesRubricFails:
         # Create a confidence rubric that penalizes hedging
         _confidence_rubric = Rubric(
             regex_traits=[
-                RegexTrait(
+                RegexRubricTrait(
                     name="no_hedging",
                     pattern=r"(might|could|possibly|uncertain|not sure)",
                     invert_result=True,  # Passes only if hedging NOT found
@@ -133,12 +133,12 @@ class TestTemplateParsesRubricFails:
         # Create formatting rubric
         _formatting_rubric = Rubric(
             regex_traits=[
-                RegexTrait(
+                RegexRubricTrait(
                     name="no_filler_words",
                     pattern=r"\b(um|like|basically|whatever|lol)\b",
                     invert_result=True,  # Passes only if fillers NOT found
                 ),
-                RegexTrait(
+                RegexRubricTrait(
                     name="proper_punctuation",
                     pattern=r"[A-Z][^.!?]*[.!?]$",  # Sentence starts with capital, ends with punctuation
                 ),
@@ -266,9 +266,9 @@ class TestMixedResults:
         # Rubric with multiple traits
         _rubric = Rubric(
             regex_traits=[
-                RegexTrait(name="has_number", pattern=r"\d+"),  # Will pass
-                RegexTrait(name="has_citation", pattern=r"\[\d+\]"),  # Will pass
-                RegexTrait(
+                RegexRubricTrait(name="has_number", pattern=r"\d+"),  # Will pass
+                RegexRubricTrait(name="has_citation", pattern=r"\[\d+\]"),  # Will pass
+                RegexRubricTrait(
                     name="has_date",
                     pattern=r"\d{4}-\d{2}-\d{2}",
                 ),  # Will fail
@@ -371,7 +371,7 @@ class Answer(BaseAnswer):
                 )
             ],
             regex_traits=[
-                RegexTrait(name="has_answer", pattern=r"\b(answer|result)\b"),
+                RegexRubricTrait(name="has_answer", pattern=r"\b(answer|result)\b"),
             ],
         )
 
@@ -449,8 +449,8 @@ class TestTemplateRubricInteraction:
         # Rubric checks for additional quality
         _rubric = Rubric(
             regex_traits=[
-                RegexTrait(name="has_explanation", pattern=r"because|since|therefore"),
-                RegexTrait(name="proper_units", pattern=r"(meters|kg|seconds|m/s)"),
+                RegexRubricTrait(name="has_explanation", pattern=r"because|since|therefore"),
+                RegexRubricTrait(name="proper_units", pattern=r"(meters|kg|seconds|m/s)"),
             ]
         )
 
@@ -483,7 +483,7 @@ class TestTemplateRubricInteraction:
         # Rubric checks for safety issues
         _safety_rubric = Rubric(
             regex_traits=[
-                RegexTrait(
+                RegexRubricTrait(
                     name="no_harmful_content",
                     pattern=r"(dangerous|harmful|toxic|poison)",
                     invert_result=True,  # Passes only if NOT found

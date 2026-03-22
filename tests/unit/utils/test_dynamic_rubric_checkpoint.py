@@ -7,7 +7,7 @@ the ``summary`` field essential for concept presence checking.
 
 import pytest
 
-from karenina.schemas.entities import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait
 from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.utils.checkpoint import (
     add_global_dynamic_rubric_to_benchmark,
@@ -80,7 +80,7 @@ class TestDynamicRubricConverterRoundTrip:
         """Regex trait with summary survives serialization round-trip."""
         original = DynamicRubric(
             regex_traits=[
-                RegexTrait(
+                RegexRubricTrait(
                     name="has_citations",
                     description="Response includes numbered citations.",
                     summary="Citation presence",
@@ -121,7 +121,7 @@ class TestDynamicRubricConverterRoundTrip:
                 ),
             ],
             regex_traits=[
-                RegexTrait(
+                RegexRubricTrait(
                     name="has_citations",
                     description="Response includes citations.",
                     summary="Citation presence",
@@ -227,7 +227,7 @@ class TestDynamicRubricBenchmarkRoundTrip:
                 ),
             ],
             regex_traits=[
-                RegexTrait(
+                RegexRubricTrait(
                     name="has_citations",
                     description="Response includes citations.",
                     summary="Citation check",

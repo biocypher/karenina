@@ -413,7 +413,13 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
         List of trait objects found in the template (LLM, regex, callable, or metric)
     """
     try:
-        from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from karenina.schemas.entities import (
+            CallableRubricTrait,
+            LLMRubricTrait,
+            MetricRubricTrait,
+            RegexRubricTrait,
+            Rubric,
+        )
 
         from .class_discovery import find_answer_class
         from .template_validation import _build_exec_namespace
@@ -424,8 +430,8 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             {
                 "Rubric": Rubric,
                 "LLMRubricTrait": LLMRubricTrait,
-                "RegexTrait": RegexTrait,
-                "CallableTrait": CallableTrait,
+                "RegexRubricTrait": RegexRubricTrait,
+                "CallableRubricTrait": CallableRubricTrait,
                 "MetricRubricTrait": MetricRubricTrait,
             }
         )
@@ -451,13 +457,15 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             if isinstance(obj, Rubric):
                 # Collect all trait types
                 for llm_trait in obj.llm_traits:
-                    if isinstance(llm_trait, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
+                    if isinstance(
+                        llm_trait, LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait
+                    ):
                         traits_list.append(llm_trait)
                 for regex_trait in obj.regex_traits:
-                    if isinstance(regex_trait, RegexTrait):
+                    if isinstance(regex_trait, RegexRubricTrait):
                         traits_list.append(regex_trait)
                 for callable_trait in obj.callable_traits:
-                    if isinstance(callable_trait, CallableTrait):
+                    if isinstance(callable_trait, CallableRubricTrait):
                         traits_list.append(callable_trait)
                 for metric_trait in obj.metric_traits:
                     if isinstance(metric_trait, MetricRubricTrait):
@@ -466,7 +474,7 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             # If already list of trait objects
             if isinstance(obj, list):
                 for item in obj:
-                    if isinstance(item, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
+                    if isinstance(item, LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait):
                         traits_list.append(item)
                     elif isinstance(item, dict) and "name" in item:
                         # Try to infer trait type and construct it
@@ -475,11 +483,11 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
                                 # LLMRubricTrait
                                 traits_list.append(LLMRubricTrait(**item))
                             elif "pattern" in item:
-                                # RegexTrait
-                                traits_list.append(RegexTrait(**item))
+                                # RegexRubricTrait
+                                traits_list.append(RegexRubricTrait(**item))
                             elif "callable_code" in item:
-                                # CallableTrait
-                                traits_list.append(CallableTrait(**item))
+                                # CallableRubricTrait
+                                traits_list.append(CallableRubricTrait(**item))
                             elif "metrics" in item:
                                 # MetricRubricTrait
                                 traits_list.append(MetricRubricTrait(**item))

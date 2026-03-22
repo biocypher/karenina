@@ -174,7 +174,7 @@ class LLMRubricTrait(BaseModel):
             return min_val <= value <= max_val
 
 
-class RegexTrait(BaseModel):
+class RegexRubricTrait(BaseModel):
     """
     Regex-based evaluation trait for deterministic pattern matching.
 
@@ -242,7 +242,7 @@ class RegexTrait(BaseModel):
             raise RuntimeError(f"Failed to evaluate regex trait '{self.name}': {e}") from e
 
 
-class CallableTrait(BaseModel):
+class CallableRubricTrait(BaseModel):
     """
     Callable-based evaluation trait using custom Python functions.
 
@@ -251,7 +251,7 @@ class CallableTrait(BaseModel):
     expressed as simple regex patterns.
 
     **SECURITY WARNING**: Deserializing callable code can execute arbitrary Python code.
-    Only load CallableTrait instances from trusted sources. CallableTrait cannot be
+    Only load CallableRubricTrait instances from trusted sources. CallableRubricTrait cannot be
     created via the web API for security reasons.
 
     The trait can return either boolean (pass/fail) or numeric score results, matching
@@ -320,9 +320,9 @@ class CallableTrait(BaseModel):
         max_score: int | None = None,
         invert_result: bool = False,
         higher_is_better: bool = True,
-    ) -> "CallableTrait":
+    ) -> "CallableRubricTrait":
         """
-        Create a CallableTrait from a callable function.
+        Create a CallableRubricTrait from a callable function.
 
         Args:
             name: Trait name
@@ -336,7 +336,7 @@ class CallableTrait(BaseModel):
             higher_is_better: Whether higher return values indicate better performance
 
         Returns:
-            CallableTrait instance with serialized function
+            CallableRubricTrait instance with serialized function
 
         Raises:
             ValueError: If function signature is invalid or score parameters are missing
@@ -753,8 +753,10 @@ class Rubric(BaseModel):
     """
 
     llm_traits: list[LLMRubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
-    regex_traits: list[RegexTrait] = Field(default_factory=list, description="List of regex-based evaluation traits")
-    callable_traits: list[CallableTrait] = Field(
+    regex_traits: list[RegexRubricTrait] = Field(
+        default_factory=list, description="List of regex-based evaluation traits"
+    )
+    callable_traits: list[CallableRubricTrait] = Field(
         default_factory=list, description="List of callable function-based evaluation traits"
     )
     metric_traits: list[MetricRubricTrait] = Field(
@@ -854,11 +856,11 @@ class Rubric(BaseModel):
         for llm_trait in self.llm_traits:
             directionalities[llm_trait.name] = llm_trait.higher_is_better
 
-        regex_trait: RegexTrait
+        regex_trait: RegexRubricTrait
         for regex_trait in self.regex_traits:
             directionalities[regex_trait.name] = regex_trait.higher_is_better
 
-        callable_trait: CallableTrait
+        callable_trait: CallableRubricTrait
         for callable_trait in self.callable_traits:
             directionalities[callable_trait.name] = callable_trait.higher_is_better
 
@@ -989,7 +991,7 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
 
 
 # Type alias for the union of all trait types stored in DynamicRubric
-_AnyTrait = LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+_AnyTrait = LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
 
 
 class DynamicRubric(BaseModel):
@@ -1004,8 +1006,8 @@ class DynamicRubric(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     llm_traits: list[LLMRubricTrait] = Field(default_factory=list)
-    regex_traits: list[RegexTrait] = Field(default_factory=list)
-    callable_traits: list[CallableTrait] = Field(default_factory=list)
+    regex_traits: list[RegexRubricTrait] = Field(default_factory=list)
+    callable_traits: list[CallableRubricTrait] = Field(default_factory=list)
     metric_traits: list[MetricRubricTrait] = Field(default_factory=list)
     agentic_traits: list[AgenticRubricTrait] = Field(default_factory=list)
 

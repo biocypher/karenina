@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from karenina.adapters import get_llm
 from karenina.ports import LLMPort
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import CallableRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
 
 from .deep_judgment import RubricDeepJudgmentHandler
 from .llm_trait import LLMTraitEvaluator
@@ -196,7 +196,7 @@ class RubricEvaluator:
     def _evaluate_deterministic_traits(
         self,
         answer: str,
-        traits: list[RegexTrait] | list[CallableTrait],
+        traits: list[RegexRubricTrait] | list[CallableRubricTrait],
         trait_type_name: str,
     ) -> dict[str, bool | int]:
         """
@@ -207,7 +207,7 @@ class RubricEvaluator:
 
         Args:
             answer: The text to evaluate
-            traits: List of traits to evaluate (RegexTrait or CallableTrait)
+            traits: List of traits to evaluate (RegexRubricTrait or CallableRubricTrait)
             trait_type_name: Human-readable name for logging (e.g., "regex", "callable")
 
         Returns:
@@ -227,7 +227,7 @@ class RubricEvaluator:
 
         return results
 
-    def _evaluate_regex_traits(self, answer: str, regex_traits: list[RegexTrait]) -> dict[str, bool]:
+    def _evaluate_regex_traits(self, answer: str, regex_traits: list[RegexRubricTrait]) -> dict[str, bool]:
         """
         Evaluate regex traits using pattern matching.
 
@@ -241,7 +241,9 @@ class RubricEvaluator:
         # Type narrowing: regex traits always return bool
         return self._evaluate_deterministic_traits(answer, regex_traits, "regex")  # type: ignore[return-value]
 
-    def _evaluate_callable_traits(self, answer: str, callable_traits: list[CallableTrait]) -> dict[str, bool | int]:
+    def _evaluate_callable_traits(
+        self, answer: str, callable_traits: list[CallableRubricTrait]
+    ) -> dict[str, bool | int]:
         """
         Evaluate callable traits using custom functions.
 

@@ -171,9 +171,9 @@ print(f"Added global: {empathy_trait.name}")
 Deterministic pattern matching catches unexplained medical jargon without an LLM call.
 
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import RegexRubricTrait
 
-jargon_trait = RegexTrait(
+jargon_trait = RegexRubricTrait(
     name="No Unexplained Jargon",
     description="Checks that the response doesn't use complex medical terms without explanation.",
     pattern=r"\b(pathogenesis|etiology|contraindicated|pharmacokinetics|bioavailability)\b",
@@ -190,9 +190,9 @@ print(f"Added global: {jargon_trait.name}")
 Custom Python logic checks that responses are substantive but not overwhelming.
 
 ```python
-from karenina.schemas import CallableTrait
+from karenina.schemas import CallableRubricTrait
 
-length_trait = CallableTrait.from_callable(
+length_trait = CallableRubricTrait.from_callable(
     name="Appropriate Length",
     func=lambda text: 50 <= len(text.split()) <= 300,
     kind="boolean",

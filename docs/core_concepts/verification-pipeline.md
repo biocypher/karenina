@@ -46,7 +46,7 @@ with patch.dict("sys.modules", mock_modules):
     from karenina.schemas.entities.rubric import (
         Rubric,
         LLMRubricTrait,
-        RegexTrait,
+        RegexRubricTrait,
     )
 ```
 
@@ -234,8 +234,8 @@ The stage respects `use_full_trace_for_template`: when `False` (the default), on
 | Trait type | Evaluator | LLM required |
 |------------|-----------|:------------:|
 | `LLMRubricTrait` | Parsing model (batch or sequential) | Yes |
-| `RegexTrait` | Pattern matching | No |
-| `CallableTrait` | Local Python function | No |
+| `RegexRubricTrait` | Pattern matching | No |
+| `CallableRubricTrait` | Local Python function | No |
 | `MetricRubricTrait` | Parsing model + confusion matrix computation | Yes |
 
 The rubric evaluation input depends on `use_full_trace_for_rubric`: the full trace by default (`True`), or only the final AI message (`False`). Question-specific traits are merged with benchmark-level traits; duplicate names raise a `ValueError`.
@@ -305,7 +305,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             description="Has bracket citations",
             pattern=r"\[\d+\]",
@@ -412,7 +412,7 @@ Consider a benchmark question in `template_and_rubric` mode with `abstention_ena
 
 **Stage 9: EmbeddingCheck** checks `field_verification_result`. It is `True`. Stage skips itself (embedding fallback is unnecessary).
 
-**Stage 11: RubricEvaluation** evaluates the attached traits. A `RegexTrait` for `has_citations` checks for `\[\d+\]` in the response. No match: `has_citations=False`. An `LLMRubricTrait` for `conciseness` asks the parsing model to judge. Result: `True`.
+**Stage 11: RubricEvaluation** evaluates the attached traits. A `RegexRubricTrait` for `has_citations` checks for `\[\d+\]` in the response. No match: `has_citations=False`. An `LLMRubricTrait` for `conciseness` asks the parsing model to judge. Result: `True`.
 
 **Stage 13: FinalizeResult** assembles the `VerificationResult`:
 - `result.template.verify_result = True`

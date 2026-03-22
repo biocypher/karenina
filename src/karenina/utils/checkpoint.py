@@ -21,7 +21,7 @@ from ..schemas.checkpoint import (
     SchemaOrgQuestion,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
 from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from .checkpoint_trait_converters import (
     convert_dynamic_rubric_to_ratings,
@@ -150,7 +150,9 @@ def add_question_to_benchmark(
     raw_answer: str,
     answer_template: str,
     question_id: str | None = None,
-    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait]
+    question_rubric_traits: list[
+        LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
+    ]
     | None = None,
     finished: bool = False,
     author: dict[str, Any] | None = None,
@@ -266,7 +268,9 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait],
+    rubric_traits: list[
+        LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
+    ],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -352,12 +356,12 @@ def extract_questions_from_benchmark(
 
             # Categorize traits by type to match Rubric schema
             if traits:
-                from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+                from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
                 from ..schemas.entities.rubric import AgenticRubricTrait as AgenticRubricTraitLocal
 
                 llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
-                regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
-                callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
+                regex_traits = [t for t in traits if isinstance(t, RegexRubricTrait)]
+                callable_traits = [t for t in traits if isinstance(t, CallableRubricTrait)]
                 metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
                 agentic_traits = [t for t in traits if isinstance(t, AgenticRubricTraitLocal)]
 
@@ -394,7 +398,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] | None:
+) -> list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -409,7 +413,7 @@ def extract_global_rubric_from_benchmark(
     Returns:
         List of trait objects or None if no global rubric
     """
-    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] = []
+    traits: list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait] = []
 
     # Extract from rating array (standard format)
     if benchmark.rating:
@@ -434,7 +438,7 @@ def extract_global_rubric_from_benchmark(
                         # Normalize legacy "invert" field to "invert_result"
                         if "invert" in trait_data and "invert_result" not in trait_data:
                             trait_data["invert_result"] = trait_data.pop("invert")
-                        traits.append(RegexTrait(**trait_data))
+                        traits.append(RegexRubricTrait(**trait_data))
                 except (json.JSONDecodeError, TypeError):
                     pass  # Invalid JSON, skip
 
@@ -442,7 +446,7 @@ def extract_global_rubric_from_benchmark(
                 try:
                     callable_traits_data = json.loads(prop.value)
                     for trait_data in callable_traits_data:
-                        traits.append(CallableTrait(**trait_data))
+                        traits.append(CallableRubricTrait(**trait_data))
                 except (json.JSONDecodeError, TypeError):
                     pass  # Invalid JSON, skip
 

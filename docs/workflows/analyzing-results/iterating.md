@@ -215,7 +215,7 @@ benchmark.add_global_rubric_trait(
 For traits that only apply to certain questions:
 
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import RegexRubricTrait
 
 # Replace a question-specific rubric entirely
 from karenina.schemas import Rubric
@@ -223,7 +223,7 @@ from karenina.schemas import Rubric
 benchmark.set_question_rubric(
     question_id,
     Rubric(regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="citation_format",
             pattern=r"\[\d+\]",
             description="Response includes numbered citations",

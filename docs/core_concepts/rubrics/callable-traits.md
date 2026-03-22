@@ -25,11 +25,11 @@ warnings.filterwarnings("ignore", message="Deserializing callable")
 
 ## 1. What Callable Traits Are
 
-A `CallableTrait` wraps a Python function that runs locally during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.
+A `CallableRubricTrait` wraps a Python function that runs locally during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.
 
 Callable traits are meant for checks that need **custom programmatic logic**. Typical examples include minimum length requirements, repetition checks, sentence counts, heuristic term counts, or custom evaluators that combine multiple strategies under one Python entrypoint.
 
-Use `CallableTrait` when the built-in traits do not express the evaluation shape you need cleanly. If the check is an exact text pattern, prefer [Regex traits](../regex-traits/). If the check fits Karenina's built-in semantic judgment path, prefer [LLM traits](../llm-traits/). Reach for `CallableTrait` when you need custom orchestration, validation, or scoring logic beyond those built-in abstractions.
+Use `CallableRubricTrait` when the built-in traits do not express the evaluation shape you need cleanly. If the check is an exact text pattern, prefer [Regex traits](../regex-traits/). If the check fits Karenina's built-in semantic judgment path, prefer [LLM traits](../llm-traits/). Reach for `CallableRubricTrait` when you need custom orchestration, validation, or scoring logic beyond those built-in abstractions.
 
 ### 1.1 Philosophy
 
@@ -47,7 +47,7 @@ That means good callable traits define **explicit code-level rules**:
 - use [LLM traits](../llm-traits/) for Karenina-managed semantic judgment
 - use [Metric traits](../metric-traits/) for checklist-style precision/recall evaluation
 
-Reach for `CallableTrait` when your assessment does not fit those built-in shapes cleanly, or when you need custom orchestration across them.
+Reach for `CallableRubricTrait` when your assessment does not fit those built-in shapes cleanly, or when you need custom orchestration across them.
 
 | Better fit for Callable Traits | Usually better fit for built-in tools |
 |--------------------------------|---------------------------------------|
@@ -117,12 +117,12 @@ If your function is pure local code, evaluation is deterministic: the same strin
 
 ## 4. Why `from_callable()` Matters
 
-Always use `CallableTrait.from_callable()` rather than constructing a trait directly. It is the normal authoring interface because it validates the function signature and handles serialization for you.
+Always use `CallableRubricTrait.from_callable()` rather than constructing a trait directly. It is the normal authoring interface because it validates the function signature and handles serialization for you.
 
 ```python
-from karenina.schemas import CallableTrait
+from karenina.schemas import CallableRubricTrait
 
-minimum_length_trait = CallableTrait.from_callable(
+minimum_length_trait = CallableRubricTrait.from_callable(
     name="Minimum Word Count",
     description="Response must contain at least 50 words",
     func=lambda text: len(text.split()) >= 50,
@@ -151,7 +151,7 @@ They work well for explicit pass/fail rules such as:
 - local heuristics that reduce naturally to pass/fail
 
 ```python
-repetition_trait = CallableTrait.from_callable(
+repetition_trait = CallableRubricTrait.from_callable(
     name="No Excessive Repetition",
     description="Response should not repeat the same sentence excessively",
     func=lambda text: len(set(text.split(". "))) < len(text.split(". ")) * 0.5,
@@ -175,7 +175,7 @@ def count_sentences(text: str) -> int:
     sentences = re.split(r"[.!?]+", text.strip())
     return len([s for s in sentences if s.strip()])
 
-sentence_count_trait = CallableTrait.from_callable(
+sentence_count_trait = CallableRubricTrait.from_callable(
     name="Sentence Count",
     description="Count the number of sentences in the response",
     func=count_sentences,
@@ -208,7 +208,7 @@ The `higher_is_better` field controls how results are interpreted in aggregate a
 | `False` | Lower values = better performance | Error count, penalty score |
 
 ```python
-error_count_trait = CallableTrait.from_callable(
+error_count_trait = CallableRubricTrait.from_callable(
     name="Grammar Error Count",
     description="Count potential grammar errors (lower is better)",
     func=lambda text: text.count("  "),
@@ -237,7 +237,7 @@ Callable traits are portable because the function is serialized with cloudpickle
 You can retrieve the stored function using `deserialize_callable()`:
 
 ```python
-length_trait = CallableTrait.from_callable(
+length_trait = CallableRubricTrait.from_callable(
     name="Response Length",
     func=lambda text: len(text),
     kind="score",
@@ -253,7 +253,7 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 
 <div class="admonition warning">
 <p class="admonition-title">Security Warning</p>
-<p>Deserializing callable code can execute arbitrary Python code. Only load <code>CallableTrait</code> instances from <strong>trusted sources</strong>. This is also why <code>CallableTrait</code> cannot be created via the web API.</p>
+<p>Deserializing callable code can execute arbitrary Python code. Only load <code>CallableRubricTrait</code> instances from <strong>trusted sources</strong>. This is also why <code>CallableRubricTrait</code> cannot be created via the web API.</p>
 </div>
 
 ## 9. Using Callable Traits in a Rubric
@@ -261,7 +261,7 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 Callable traits combine with other trait types in a `Rubric`:
 
 ```python
-from karenina.schemas import CallableTrait, Rubric
+from karenina.schemas import CallableRubricTrait, Rubric
 
 rubric = Rubric(callable_traits=[
     minimum_length_trait,

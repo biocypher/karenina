@@ -24,11 +24,11 @@ Regex traits use **regular expression pattern matching** to perform deterministi
 
 ## 1. What Regex Traits Are
 
-A `RegexTrait` searches the model's raw response trace for a regex pattern during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
+A `RegexRubricTrait` searches the model's raw response trace for a regex pattern during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). If the pattern is found, the result is `True`; if not, `False`. You can invert this logic with `invert_result` and control case sensitivity with `case_sensitive`.
 
 Regex traits are meant for checks that can be reduced to an **exact textual rule**. Typical examples include whether a response contains bracket citations, follows a required answer tag format, includes a disclaimer string, or avoids a small set of prohibited phrases.
 
-Use `RegexTrait` when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer [LLM traits](../llm-traits/). If the check is deterministic but more complex than a regex match, prefer [Callable traits](../callable-traits/).
+Use `RegexRubricTrait` when the evaluation is genuinely about the presence or absence of a literal text pattern. If the check requires semantic interpretation, prefer [LLM traits](../llm-traits/). If the check is deterministic but more complex than a regex match, prefer [Callable traits](../callable-traits/).
 
 ### 1.1 Philosophy
 
@@ -137,9 +137,9 @@ Two common tools make patterns safer:
 ### 4.1 Basic Presence Check
 
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import RegexRubricTrait
 
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="Has Citations",
     description="Check that the response includes numbered citations",
     pattern=r"\[\d+\]",
@@ -155,7 +155,7 @@ print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))          # Fal
 A common use case is verifying that the model followed a required answering format:
 
 ```python
-format_trait = RegexTrait(
+format_trait = RegexRubricTrait(
     name="Answer Format",
     description="Check that the answer is enclosed in [ANSWER] tags",
     pattern=r"\[ANSWER\].*?\[/ANSWER\]",
@@ -171,7 +171,7 @@ print(format_trait.evaluate("The gene is BCL2."))                   # False
 By default, matching is case-sensitive. Set `case_sensitive=False` when the textual contract should ignore case.
 
 ```python
-keyword_trait = RegexTrait(
+keyword_trait = RegexRubricTrait(
     name="Mentions Machine Learning",
     description="Check that the response mentions machine learning",
     pattern=r"\bmachine learning\b",
@@ -191,7 +191,7 @@ Use case-insensitive matching deliberately. If capitalization itself matters to 
 Use `invert_result=True` when you want to check that a pattern is **absent**. The raw regex match is still the same; only the returned boolean is flipped.
 
 ```python
-no_hedging_trait = RegexTrait(
+no_hedging_trait = RegexRubricTrait(
     name="No Hedging",
     description="Ensure the response avoids hedging phrases",
     pattern=r"\b(maybe|perhaps|possibly|might be|could be)\b",
@@ -223,7 +223,7 @@ This required field tells analysis tools how to interpret the result:
 Most regex traits use `higher_is_better=True`. Use `False` when finding the pattern indicates a problem and you want the raw `True` result to mean "problem detected."
 
 ```python
-prohibited_trait = RegexTrait(
+prohibited_trait = RegexRubricTrait(
     name="Contains PII",
     description="Detect personally identifiable information (email addresses)",
     pattern=r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
@@ -254,16 +254,16 @@ print(prohibited_trait.evaluate("No personal info here."))          # False
 Regex traits can be combined with other trait types in a `Rubric`:
 
 ```python
-from karenina.schemas import RegexTrait, Rubric
+from karenina.schemas import RegexRubricTrait, Rubric
 
 quality_rubric = Rubric(
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="Has Citations",
             pattern=r"\[\d+\]",
             higher_is_better=True,
         ),
-        RegexTrait(
+        RegexRubricTrait(
             name="No Hedging",
             pattern=r"\b(maybe|perhaps|possibly|might be|could be)\b",
             case_sensitive=False,
@@ -284,7 +284,7 @@ The regex pattern is validated at construction time. Invalid patterns raise a `V
 
 ```python
 try:
-    bad_trait = RegexTrait(
+    bad_trait = RegexRubricTrait(
         name="Invalid",
         pattern=r"[unclosed",  # Invalid regex
         higher_is_better=True,

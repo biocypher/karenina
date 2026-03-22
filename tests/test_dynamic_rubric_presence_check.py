@@ -29,7 +29,7 @@ from karenina.schemas.entities.rubric import (
     DynamicRubric,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
     Rubric,
 )
 
@@ -57,9 +57,9 @@ def _llm_trait(name: str, summary: str | None = None) -> LLMRubricTrait:
     )
 
 
-def _regex_trait(name: str, summary: str | None = None) -> RegexTrait:
-    """Create a minimal RegexTrait for testing."""
-    return RegexTrait(
+def _regex_trait(name: str, summary: str | None = None) -> RegexRubricTrait:
+    """Create a minimal RegexRubricTrait for testing."""
+    return RegexRubricTrait(
         name=name,
         pattern=r"\btest\b",
         higher_is_better=True,
