@@ -131,8 +131,12 @@ class TemplateDataFrameBuilder:
         # Determine field match status
         field_match = None
         if field_name is not None:
-            # If one exists but not the other, they don't match
-            field_match = False if gt_exists != llm_exists else self._compare_values(gt_value, llm_value)
+            # Use stored primitive verification results if available (issue 152)
+            if result.template and result.template.field_results and field_name in result.template.field_results:
+                field_match = result.template.field_results[field_name]
+            else:
+                # Fallback to naive comparison for backward compatibility
+                field_match = False if gt_exists != llm_exists else self._compare_values(gt_value, llm_value)
 
         # Determine field type
         field_type = None
