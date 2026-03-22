@@ -84,6 +84,9 @@ class ArtifactKeys:
     VERIFY_RESULT = "verify_result"
     VERIFY_GRANULAR_RESULT = "verify_granular_result"
     FIELD_VERIFICATION_RESULT = "field_verification_result"
+    FIELD_VERIFICATION_ERROR = "field_verification_error"
+    FIELD_RESULTS = "field_results"
+    COMPOSITION_STRATEGY = "composition_strategy"
     FINAL_RESULT = "final_result"
 
     # Regex Verification
@@ -190,6 +193,7 @@ class ArtifactKeys:
     TIMESTAMP = "timestamp"
     EXECUTION_TIME = "execution_time"
     FAILED_STAGE = "failed_stage"
+    EVALUATION_MODE = "evaluation_mode"
 
     # ==========================================================================
     # Agentic Parsing

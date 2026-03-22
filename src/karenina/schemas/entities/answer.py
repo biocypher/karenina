@@ -309,7 +309,12 @@ class BaseAnswer(BaseModel):
     def _auto_verify_granular(self) -> float:
         """Auto-generated verify_granular() for VerifiedField templates.
 
-        Computes a flat weighted average over all VerifiedField results.
+        For AllOf (default, no VerificationStrategy): computes a flat weighted
+        average over all VerifiedField results.
+
+        For AnyOf: returns the max passing field weight divided by total weight.
+        For AtLeastN: returns the sum of the top-N passing field weights
+        divided by total weight.
 
         Returns:
             Score between 0.0 and 1.0.
@@ -325,6 +330,14 @@ class BaseAnswer(BaseModel):
 
         field_results = self._compute_field_results()
 
+        # Check for VerificationStrategy inner class (issue 133)
+        strategy_cls = getattr(self.__class__, "VerificationStrategy", None)
+        strategy = getattr(strategy_cls, "verify_strategy", None) if strategy_cls else None
+
+        if strategy is not None:
+            return self._composition_aware_granular(strategy, field_results, verified)
+
+        # Default AllOf behavior: flat weighted average
         total_weight = 0.0
         weighted_sum = 0.0
         for name, meta in verified.items():
@@ -335,6 +348,47 @@ class BaseAnswer(BaseModel):
         if total_weight == 0.0:
             return 0.0
         return weighted_sum / total_weight
+
+    @staticmethod
+    def _composition_aware_granular(
+        strategy: Any,
+        field_results: dict[str, bool],
+        verified: dict[str, Any],
+    ) -> float:
+        """Compute granular score honoring composition strategy.
+
+        Args:
+            strategy: Composition strategy node (AllOf, AnyOf, AtLeastN).
+            field_results: Per-field pass/fail booleans.
+            verified: Per-field VerificationMeta (for weights).
+
+        Returns:
+            Score between 0.0 and 1.0.
+        """
+        from karenina.schemas.entities.composition import AnyOf, AtLeastN
+
+        total_weight: float = sum(meta.weight for meta in verified.values())
+        if total_weight == 0.0:
+            return 0.0
+
+        passing_weights: list[float] = sorted(
+            [verified[name].weight for name, passed in field_results.items() if passed],
+            reverse=True,
+        )
+
+        if isinstance(strategy, AnyOf):
+            # AnyOf: best single passing field
+            if passing_weights:
+                return float(max(passing_weights)) / total_weight
+            return 0.0
+
+        if isinstance(strategy, AtLeastN):
+            # AtLeastN: sum of top-N passing weights
+            top_n = passing_weights[: strategy.n]
+            return float(sum(top_n)) / total_weight
+
+        # AllOf or unknown: flat weighted average
+        return float(sum(passing_weights)) / total_weight
 
     def verify_regex(self, raw_trace: str) -> dict[str, Any]:
         """Verify regex patterns against the raw LLM response trace.
