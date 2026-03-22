@@ -222,13 +222,13 @@ class TestIssue172DJConfigDefaults:
         assert isinstance(trait, LLMRubricTrait)
         assert trait.deep_judgment_excerpt_enabled is True
 
-    def test_save_default_is_true(self) -> None:
-        """BenchmarkBase.save() should default to preserving DJ config."""
+    def test_save_default_is_false(self) -> None:
+        """BenchmarkBase.save() should default to stripping DJ config."""
         from karenina.benchmark.core.base import BenchmarkBase
 
         sig = inspect.signature(BenchmarkBase.save)
         default = sig.parameters["save_deep_judgment_config"].default
-        assert default is True, f"Expected default True, got {default}"
+        assert default is False, f"Expected default False, got {default}"
 
 
 # =============================================================================
