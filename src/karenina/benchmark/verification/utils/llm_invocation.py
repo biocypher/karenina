@@ -6,7 +6,6 @@ These functions handle common tasks like response parsing and prompt constructio
 Functions provided:
 - Response parsing: _split_parsed_response
 - Prompt construction: _construct_few_shot_prompt
-- Agent metrics: _extract_agent_metrics, _extract_middleware_metrics (from trace_agent_metrics)
 
 Note: LLM invocation is now handled by the port/adapter layer:
 - LLMPort.invoke() for simple LLM calls
@@ -21,18 +20,8 @@ all template evaluation logic following the evaluator pattern.
 import logging
 from typing import Any
 
-from .trace_agent_metrics import (
-    extract_agent_metrics,
-    extract_middleware_metrics,
-)
-
 # Set up logger
 logger = logging.getLogger(__name__)
-
-# Re-export agent metrics functions with underscore prefix for backward compatibility
-# These are the internal names used throughout the codebase
-_extract_agent_metrics = extract_agent_metrics
-_extract_middleware_metrics = extract_middleware_metrics
 
 
 # ============================================================================

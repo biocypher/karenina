@@ -108,8 +108,8 @@ class UsageTracker:
         tracker.track_call("answer_generation", "gpt-4.1-mini", callback_metadata)
         tracker.track_call("parsing", "gpt-4.1-mini", callback_metadata)
 
-        # Track agent metrics (if agent used)
-        tracker.track_agent_metrics(agent_response)
+        # Set agent metrics (if agent used)
+        tracker.set_agent_metrics(extracted_metrics)
 
         # Get summaries
         answer_summary = tracker.get_stage_summary("answer_generation")
@@ -149,52 +149,6 @@ class UsageTracker:
             self._stage_calls[stage_name] = []
 
         self._stage_calls[stage_name].append(metadata)
-
-    def track_agent_metrics(self, response: Any) -> None:
-        """
-        Extract and store agent execution metrics from response.
-
-        Note: This method is used by stages that need to extract metrics from
-        raw response objects. For pre-extracted metrics, use set_agent_metrics().
-
-        Args:
-            response: Agent response dict with "messages" key containing message objects.
-        """
-        if not response or not isinstance(response, dict):
-            return
-
-        messages = response.get("messages", [])
-        if not messages:
-            return
-
-        # Count iterations (AI message cycles)
-        iterations = 0
-        tool_calls = 0
-        tools_used = set()
-
-        for msg in messages:
-            # Check message type
-            msg_type = getattr(msg, "__class__", None)
-            if msg_type:
-                type_name = msg_type.__name__
-
-                # Count AI messages as iterations
-                if type_name == "AIMessage":
-                    iterations += 1
-
-                # Count tool messages and extract tool names
-                elif type_name == "ToolMessage":
-                    tool_calls += 1
-                    # Extract tool name from ToolMessage
-                    tool_name = getattr(msg, "name", None)
-                    if tool_name:
-                        tools_used.add(tool_name)
-
-        self._agent_metrics = {
-            "iterations": iterations,
-            "tool_calls": tool_calls,
-            "tools_used": sorted(tools_used),  # Sort for deterministic output
-        }
 
     def get_stage_summary(self, stage_name: str) -> dict[str, Any] | None:
         """
