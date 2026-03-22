@@ -36,6 +36,11 @@ class VerificationResultMetadata(BaseModel):
     run_name: str | None = None
     replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
 
+    # Provenance metadata
+    few_shot_enabled: bool = False  # Whether few-shot prompting was active (issue 178)
+    few_shot_example_count: int = 0  # Number of few-shot examples used (issue 178)
+    evaluation_mode: str | None = None  # Evaluation mode used, e.g. "template_only" (issue 184)
+
     # Scenario linking metadata (all nullable; None for standalone questions)
     scenario_id: str | None = None
     scenario_node: str | None = None
@@ -110,6 +115,11 @@ class VerificationResultTemplate(BaseModel):
         default=None, json_schema_extra={"index": True}
     )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
+    field_verification_error: str | None = None  # Error from verify() exception (issue 146)
+    field_results: dict[str, bool] | None = None  # Per-field primitive verification results (issue 150)
+    composition_strategy: str | None = (
+        None  # Composition strategy used: "all_of", "any_of", "at_least_n(N)" (issue 151)
+    )
 
     # Embeddings
     embedding_check_performed: bool = False  # Whether embedding check was attempted
