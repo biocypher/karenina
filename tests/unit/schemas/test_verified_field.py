@@ -1,5 +1,7 @@
 """Tests for VerifiedField factory and VerificationMeta."""
 
+import logging
+
 import pytest
 from pydantic import BaseModel, Field
 
@@ -9,6 +11,7 @@ from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedF
 from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
+    NumericRange,
     NumericTolerance,
     TraceRegex,
 )
@@ -330,3 +333,143 @@ class TestBaseAnswerTraceFields:
         answer = MyAnswer(target="BCL2", has_citations=False)
         answer._raw_trace = "BCL2 is the target [1]"
         assert answer.verify() is True
+
+
+# --- Issue 053: VerifiedField(verify_with=None) must raise ValueError ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldNoneVerifyWith:
+    """VerifiedField(verify_with=None) raises ValueError, not AttributeError."""
+
+    def test_none_verify_with_raises_value_error(self):
+        """Passing verify_with=None raises a clear ValueError."""
+        with pytest.raises(ValueError, match="verify_with is required"):
+            VerifiedField(
+                description="target",
+                ground_truth="BCL2",
+                verify_with=None,
+            )
+
+    def test_error_message_suggests_primitives(self):
+        """The error message mentions example primitives to help the user."""
+        with pytest.raises(ValueError, match="ExactMatch|BooleanMatch"):
+            VerifiedField(
+                description="target",
+                ground_truth="BCL2",
+                verify_with=None,
+            )
+
+
+# --- Issue 056: VerifiedField rejects empty/whitespace description ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldEmptyDescription:
+    """VerifiedField rejects empty or whitespace-only description."""
+
+    def test_empty_string_description_raises(self):
+        """Empty string description raises ValueError."""
+        with pytest.raises(ValueError, match="description is required"):
+            VerifiedField(
+                description="",
+                ground_truth="BCL2",
+                verify_with=ExactMatch(),
+            )
+
+    def test_whitespace_only_description_raises(self):
+        """Whitespace-only description raises ValueError."""
+        with pytest.raises(ValueError, match="description is required"):
+            VerifiedField(
+                description="   \t\n  ",
+                ground_truth="BCL2",
+                verify_with=ExactMatch(),
+            )
+
+    def test_valid_description_passes(self):
+        """A non-empty description does not raise."""
+        field = VerifiedField(
+            description="The protein target",
+            ground_truth="BCL2",
+            verify_with=ExactMatch(),
+        )
+        # Should return a FieldInfo without error
+        assert field is not None
+
+
+# --- Issue 010: ground_truth type mismatch warning ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldGroundTruthMismatchWarning:
+    """VerifiedField warns when ground_truth type obviously mismatches the primitive."""
+
+    def test_numeric_primitive_with_non_numeric_string_warns(self, caplog):
+        """NumericTolerance with a non-numeric string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="dose",
+                ground_truth="not-a-number",
+                verify_with=NumericTolerance(tolerance=0.1),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_range_with_non_numeric_string_warns(self, caplog):
+        """NumericRange with a non-numeric string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="score",
+                ground_truth="abc",
+                verify_with=NumericRange(min=0, max=10),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_boolean_primitive_with_non_bool_string_warns(self, caplog):
+        """BooleanMatch with a non-bool string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="approved",
+                ground_truth="maybe",
+                verify_with=BooleanMatch(),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_primitive_with_valid_number_no_warning(self, caplog):
+        """NumericTolerance with a float ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="dose",
+                ground_truth=5.0,
+                verify_with=NumericTolerance(tolerance=0.1),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_primitive_with_numeric_string_no_warning(self, caplog):
+        """NumericTolerance with a string like '3.14' does not warn (coercible)."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="dose",
+                ground_truth="3.14",
+                verify_with=NumericTolerance(tolerance=0.1),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_boolean_primitive_with_bool_no_warning(self, caplog):
+        """BooleanMatch with a bool ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="approved",
+                ground_truth=True,
+                verify_with=BooleanMatch(),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_exact_match_no_spurious_warning(self, caplog):
+        """ExactMatch with a string ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="target",
+                ground_truth="BCL2",
+                verify_with=ExactMatch(),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
