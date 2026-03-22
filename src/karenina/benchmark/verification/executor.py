@@ -71,11 +71,13 @@ class ExecutorConfig:
         max_workers: Maximum number of parallel workers (default: 2)
         enable_cache: Whether to enable answer caching (default: True)
         retry_wait_seconds: Seconds to wait for IN_PROGRESS cache entries (default: 5.0)
+        timeout_seconds: Maximum wall-clock seconds for a parallel batch (default: 600.0)
     """
 
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
     enable_cache: bool = True
     retry_wait_seconds: float = 5.0
+    timeout_seconds: float = 600.0
 
 
 # ============================================================================
@@ -133,19 +135,29 @@ class VerificationExecutor:
     ) -> dict[str, VerificationResult]:
         """Execute tasks one at a time.
 
+        On failure, logs the error, records it, and continues processing the
+        remaining tasks. If any tasks failed, raises VerificationBatchError
+        with partial results after the loop completes.
+
         Args:
             tasks: List of task dictionaries
             progress_callback: Optional progress callback
 
         Returns:
             Dictionary mapping result keys to verification results
+
+        Raises:
+            VerificationBatchError: If one or more tasks failed during execution.
         """
+        from karenina.exceptions import VerificationBatchError
+
         from .batch_runner import execute_task
         from .utils.cache_helpers import log_cache_stats
         from .utils.task_helpers import create_preview_result
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
         results: dict[str, VerificationResult] = {}
+        errors: list[tuple[str, Exception]] = []
         total = len(tasks)
 
         for idx, task in enumerate(tasks, 1):
@@ -154,9 +166,14 @@ class VerificationExecutor:
                 preview_result = create_preview_result(task)
                 progress_callback(idx, total, preview_result)
 
-            # Execute the task with answer cache
-            result_key, result = execute_task(task, answer_cache)
-            results[result_key] = result
+            try:
+                # Execute the task with answer cache
+                result_key, result = execute_task(task, answer_cache)
+                results[result_key] = result
+            except Exception as e:
+                logger.error("Sequential task %s failed: %s", task["question_id"], e)
+                errors.append((task["question_id"], e))
+                continue
 
             # Call progress callback AFTER completion (with actual result)
             if progress_callback:
@@ -165,6 +182,13 @@ class VerificationExecutor:
         # Log cache statistics
         if answer_cache:
             log_cache_stats(answer_cache, mode="sequential")
+
+        if errors:
+            raise VerificationBatchError(
+                f"{len(errors)} of {total} verification tasks failed",
+                partial_results=results,
+                errors=errors,
+            )
 
         return results
 
@@ -187,7 +211,12 @@ class VerificationExecutor:
 
         Returns:
             Dictionary mapping result keys to verification results (in original task order)
+
+        Raises:
+            VerificationBatchError: If the batch times out or any tasks fail.
         """
+        from karenina.exceptions import VerificationBatchError
+
         from .batch_runner import execute_task
         from .utils.cache_helpers import generate_answer_cache_key, log_cache_stats
         from .utils.task_helpers import create_preview_result
@@ -211,6 +240,10 @@ class VerificationExecutor:
         results_lock = threading.Lock()
         results_by_index: dict[int, tuple[str, VerificationResult]] = {}
 
+        # Thread-safe error tracking
+        failed_count = [0]
+        failed_tasks: list[tuple[str, Exception]] = []
+
         # Thread-safe progress tracking
         progress_lock = threading.Lock()
         completed_count = [0]
@@ -232,9 +265,9 @@ class VerificationExecutor:
                         try:
                             item = work_queue.get(timeout=1.0)
                         except queue.Empty:
-                            # Check if all tasks are completed
+                            # Check if all tasks are completed (successes + failures)
                             with results_lock:
-                                if len(results_by_index) == total:
+                                if len(results_by_index) + failed_count[0] >= total:
                                     tasks_completed_event.set()
                             continue
 
@@ -291,7 +324,7 @@ class VerificationExecutor:
                             with results_lock:
                                 results_by_index[original_index] = (result_key, verification_result)
                                 # Check if all tasks are now complete
-                                if len(results_by_index) == total:
+                                if len(results_by_index) + failed_count[0] >= total:
                                     tasks_completed_event.set()
 
                             # Call completion progress callback
@@ -301,8 +334,12 @@ class VerificationExecutor:
                                     progress_callback(completed_count[0], total, verification_result)
 
                         except Exception as e:
-                            logger.error(f"Task execution failed: {e}")
-                            # Don't raise - log and continue
+                            logger.error("Parallel task %s failed: %s", task["question_id"], e)
+                            with results_lock:
+                                failed_count[0] += 1
+                                failed_tasks.append((task["question_id"], e))
+                                if len(results_by_index) + failed_count[0] >= total:
+                                    tasks_completed_event.set()
 
                         finally:
                             work_queue.task_done()
@@ -326,8 +363,8 @@ class VerificationExecutor:
                 t.start()
                 workers.append(t)
 
-            # Wait for all tasks to actually complete (not just queue empty)
-            tasks_completed_event.wait()
+            # Wait for all tasks to complete, with timeout
+            completed = tasks_completed_event.wait(timeout=self.config.timeout_seconds)
 
             # Send shutdown signal to workers
             for _ in range(max_workers):
@@ -346,6 +383,22 @@ class VerificationExecutor:
         # Log cache statistics
         if answer_cache:
             log_cache_stats(answer_cache, mode="parallel mode")
+
+        # Handle timeout
+        if not completed:
+            raise VerificationBatchError(
+                f"Parallel batch timed out after {self.config.timeout_seconds:.0f} seconds ({len(results)} of {total} tasks completed)",
+                partial_results=results,
+                errors=failed_tasks,
+            )
+
+        # Handle partial failures
+        if failed_tasks:
+            raise VerificationBatchError(
+                f"{len(failed_tasks)} of {total} verification tasks failed",
+                partial_results=results,
+                errors=failed_tasks,
+            )
 
         return results
 
