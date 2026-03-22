@@ -258,12 +258,13 @@ class StageOrchestrator:
                 continue
 
             # Execute stage
+            error_before = context.error
             try:
                 logger.debug(f"Executing stage: {stage.name}")
                 stage.execute(context)
 
-                # If error was set during execution, log it
-                if context.error:
+                # Log only if this stage introduced or changed the error
+                if context.error and context.error != error_before:
                     logger.warning(f"Stage {stage.name} set error: {context.error}")
                     # Don't break - FinalizeResultStage needs to run
 
