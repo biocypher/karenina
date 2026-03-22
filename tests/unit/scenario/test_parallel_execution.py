@@ -157,9 +157,9 @@ class TestScenarioRunParallel:
 
         parallel_called = {"called": False}
 
-        def fake_parallel(_self, **kwargs: Any) -> list:
+        def fake_parallel(_self, **kwargs: Any) -> tuple:
             parallel_called["called"] = True
-            return []
+            return ([], [], [])
 
         monkeypatch.setattr(
             Benchmark,
@@ -216,7 +216,7 @@ class TestScenarioRunParallel:
             (bm.get_scenario("beta"), _make_model("claude"), _make_model("haiku")),
         ]
 
-        results = bm._run_scenario_parallel(
+        turn_results, exec_results, errors = bm._run_scenario_parallel(
             manager=manager,
             combos=combos,
             config=config,
@@ -227,7 +227,9 @@ class TestScenarioRunParallel:
 
         assert arun_count["n"] == 2
         # Both exec_results have empty turn_results, so total is 0
-        assert len(results) == 0
+        assert len(turn_results) == 0
+        assert len(exec_results) == 2
+        assert len(errors) == 0
 
     def test_parallel_exception_in_one_combo_does_not_block_others(self, monkeypatch):
         """If one arun raises, the others still complete successfully."""
@@ -256,8 +258,8 @@ class TestScenarioRunParallel:
             (bm.get_scenario("beta"), _make_model("claude"), _make_model("haiku")),
         ]
 
-        # Should not raise; the exception is logged and skipped
-        results = bm._run_scenario_parallel(
+        # Should not raise; the exception is logged and collected
+        turn_results, exec_results, errors = bm._run_scenario_parallel(
             manager=manager,
             combos=combos,
             config=config,
@@ -266,4 +268,6 @@ class TestScenarioRunParallel:
             progress_callback=None,
         )
         # Only the second combo succeeded (with empty turn_results)
-        assert isinstance(results, list)
+        assert isinstance(turn_results, list)
+        assert len(errors) == 1
+        assert "alpha" in errors[0][0]
