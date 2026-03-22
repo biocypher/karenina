@@ -10,6 +10,7 @@ Tests cover:
 - Preset utility class methods (sanitize_model_config, sanitize_preset_name, validate_preset_metadata, create_preset_structure)
 - save_preset() and from_preset() with temp directories
 - DeepJudgmentTraitConfig validation
+- Validation constraints: extra="forbid", Field ge/le, bool rejection
 """
 
 import json
@@ -17,8 +18,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from karenina.schemas.config import FewShotConfig, ModelConfig
+from karenina.schemas.config.models import ModelRetryConfig, ToolRetryConfig
 from karenina.schemas.verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
     DEFAULT_PARSING_SYSTEM_PROMPT,
@@ -1160,3 +1163,363 @@ class TestAgenticRubricConfigFields:
                 parsing_only=True,
                 agentic_rubric_strategy="invalid",
             )
+
+
+# =============================================================================
+# Issue 013: VerificationConfig extra="forbid"
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestVerificationConfigExtraForbid:
+    """Tests for VerificationConfig rejecting unknown extra fields."""
+
+    def _make_parsing_model(self) -> ModelConfig:
+        """Create a minimal valid parsing model."""
+        return ModelConfig(
+            id="parsing",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+
+    def test_rejects_unknown_field(self) -> None:
+        """VerificationConfig rejects unknown extra fields."""
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                totally_unknown_field="should_fail",
+            )
+
+    def test_accepts_known_fields(self) -> None:
+        """VerificationConfig accepts all known fields without error."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            replicate_count=3,
+            abstention_enabled=True,
+        )
+        assert config.replicate_count == 3
+        assert config.abstention_enabled is True
+
+    def test_round_trip_dump_and_recreate(self) -> None:
+        """VerificationConfig can be dumped and recreated (round-trip).
+
+        This ensures computed fields like rubric_enabled do not break
+        reconstruction from a model_dump() output.
+        """
+        original = VerificationConfig(
+            answering_models=[
+                ModelConfig(
+                    id="answering",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.5,
+                )
+            ],
+            parsing_models=[self._make_parsing_model()],
+            evaluation_mode="template_and_rubric",
+        )
+        dumped = original.model_dump()
+        # rubric_enabled appears in the dump as a computed field
+        assert "rubric_enabled" in dumped
+
+        # Recreating from dump should work (rubric_enabled is popped in __init__)
+        recreated = VerificationConfig(**dumped)
+        assert recreated.evaluation_mode == "template_and_rubric"
+        assert recreated.rubric_enabled is True
+
+    def test_from_overrides_round_trip(self) -> None:
+        """from_overrides can rebuild from a base config without errors.
+
+        This tests that model_dump() output passed back to the constructor
+        does not include fields that would be rejected by extra='forbid'.
+        """
+        base = VerificationConfig(
+            answering_models=[
+                ModelConfig(
+                    id="answering",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.5,
+                )
+            ],
+            parsing_models=[self._make_parsing_model()],
+        )
+        # from_overrides dumps the base and re-creates; must not raise
+        rebuilt = VerificationConfig.from_overrides(base, replicate_count=5)
+        assert rebuilt.replicate_count == 5
+
+
+# =============================================================================
+# Issue 014: replicate_count rejects 0 and negative in all modes
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestReplicateCountValidation:
+    """Tests for replicate_count rejecting zero and negative values."""
+
+    def _make_parsing_model(self) -> ModelConfig:
+        return ModelConfig(
+            id="parsing",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+
+    def test_rejects_zero_in_template_only_mode(self) -> None:
+        """replicate_count=0 is rejected even in template_only mode."""
+        with pytest.raises(ValidationError, match="replicate_count"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                replicate_count=0,
+            )
+
+    def test_rejects_negative_in_template_only_mode(self) -> None:
+        """replicate_count=-1 is rejected even in template_only mode."""
+        with pytest.raises(ValidationError, match="replicate_count"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                replicate_count=-1,
+            )
+
+    def test_accepts_one(self) -> None:
+        """replicate_count=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            replicate_count=1,
+        )
+        assert config.replicate_count == 1
+
+    def test_accepts_positive(self) -> None:
+        """replicate_count=5 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            replicate_count=5,
+        )
+        assert config.replicate_count == 5
+
+
+# =============================================================================
+# Issue 134: Numeric fields missing range constraints
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestNumericFieldRangeConstraints:
+    """Tests for numeric field range constraints on VerificationConfig."""
+
+    def _make_parsing_model(self) -> ModelConfig:
+        return ModelConfig(
+            id="parsing",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+
+    # async_max_workers: ge=1
+    def test_async_max_workers_rejects_zero(self) -> None:
+        """async_max_workers=0 is rejected (must be >= 1)."""
+        with pytest.raises(ValidationError, match="async_max_workers"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                async_max_workers=0,
+            )
+
+    def test_async_max_workers_accepts_one(self) -> None:
+        """async_max_workers=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            async_max_workers=1,
+        )
+        assert config.async_max_workers == 1
+
+    # embedding_check_threshold: ge=0.0, le=1.0
+    def test_embedding_threshold_rejects_negative(self) -> None:
+        """embedding_check_threshold=-0.1 is rejected."""
+        with pytest.raises(ValidationError, match="embedding_check_threshold"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                embedding_check_threshold=-0.1,
+            )
+
+    def test_embedding_threshold_rejects_above_one(self) -> None:
+        """embedding_check_threshold=1.1 is rejected."""
+        with pytest.raises(ValidationError, match="embedding_check_threshold"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                embedding_check_threshold=1.1,
+            )
+
+    def test_embedding_threshold_accepts_boundaries(self) -> None:
+        """embedding_check_threshold=0.0 and 1.0 are both accepted."""
+        config_low = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            embedding_check_threshold=0.0,
+        )
+        assert config_low.embedding_check_threshold == 0.0
+
+        config_high = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            embedding_check_threshold=1.0,
+        )
+        assert config_high.embedding_check_threshold == 1.0
+
+    # agentic_parsing_max_turns: ge=1
+    def test_agentic_parsing_max_turns_rejects_zero(self) -> None:
+        """agentic_parsing_max_turns=0 is rejected."""
+        with pytest.raises(ValidationError, match="agentic_parsing_max_turns"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                agentic_parsing_max_turns=0,
+            )
+
+    def test_agentic_parsing_max_turns_accepts_one(self) -> None:
+        """agentic_parsing_max_turns=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            agentic_parsing_max_turns=1,
+        )
+        assert config.agentic_parsing_max_turns == 1
+
+    # agentic_parsing_timeout: ge=0.0
+    def test_agentic_parsing_timeout_rejects_negative(self) -> None:
+        """agentic_parsing_timeout=-1.0 is rejected."""
+        with pytest.raises(ValidationError, match="agentic_parsing_timeout"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                agentic_parsing_timeout=-1.0,
+            )
+
+    def test_agentic_parsing_timeout_accepts_zero(self) -> None:
+        """agentic_parsing_timeout=0.0 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            agentic_parsing_timeout=0.0,
+        )
+        assert config.agentic_parsing_timeout == 0.0
+
+    # scenario_turn_limit: ge=1
+    def test_scenario_turn_limit_rejects_zero(self) -> None:
+        """scenario_turn_limit=0 is rejected."""
+        with pytest.raises(ValidationError, match="scenario_turn_limit"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                scenario_turn_limit=0,
+            )
+
+    def test_scenario_turn_limit_accepts_one(self) -> None:
+        """scenario_turn_limit=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            scenario_turn_limit=1,
+        )
+        assert config.scenario_turn_limit == 1
+
+
+# =============================================================================
+# Issue 030: ModelConfig rejects manual_traces=True (bool)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestModelConfigManualTracesBoolRejection:
+    """Tests for ModelConfig rejecting bool values for manual_traces."""
+
+    def test_rejects_true_bool(self) -> None:
+        """ModelConfig rejects manual_traces=True with interface='manual'."""
+        with pytest.raises(ValueError, match="ManualTraces instance"):
+            ModelConfig(
+                interface="manual",
+                manual_traces=True,
+            )
+
+    def test_rejects_false_bool(self) -> None:
+        """ModelConfig rejects manual_traces=False with interface='manual'.
+
+        False is not None, so it passes the None check but should be caught
+        as a bool.
+        """
+        with pytest.raises(ValueError, match="ManualTraces instance"):
+            ModelConfig(
+                interface="manual",
+                manual_traces=False,
+            )
+
+    def test_accepts_none_for_non_manual(self) -> None:
+        """ModelConfig accepts manual_traces=None for non-manual interfaces."""
+        config = ModelConfig(
+            id="test",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+        )
+        assert config.manual_traces is None
+
+
+# =============================================================================
+# Issue 039: ModelRetryConfig and ToolRetryConfig reject negative max_retries
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRetryConfigMaxRetriesConstraint:
+    """Tests for max_retries rejecting negative values."""
+
+    def test_model_retry_rejects_negative(self) -> None:
+        """ModelRetryConfig rejects max_retries=-1."""
+        with pytest.raises(ValidationError, match="max_retries"):
+            ModelRetryConfig(max_retries=-1)
+
+    def test_model_retry_accepts_zero(self) -> None:
+        """ModelRetryConfig accepts max_retries=0 (no retries)."""
+        config = ModelRetryConfig(max_retries=0)
+        assert config.max_retries == 0
+
+    def test_model_retry_accepts_positive(self) -> None:
+        """ModelRetryConfig accepts max_retries=5."""
+        config = ModelRetryConfig(max_retries=5)
+        assert config.max_retries == 5
+
+    def test_tool_retry_rejects_negative(self) -> None:
+        """ToolRetryConfig rejects max_retries=-1."""
+        with pytest.raises(ValidationError, match="max_retries"):
+            ToolRetryConfig(max_retries=-1)
+
+    def test_tool_retry_accepts_zero(self) -> None:
+        """ToolRetryConfig accepts max_retries=0 (no retries)."""
+        config = ToolRetryConfig(max_retries=0)
+        assert config.max_retries == 0
+
+    def test_tool_retry_accepts_positive(self) -> None:
+        """ToolRetryConfig accepts max_retries=3."""
+        config = ToolRetryConfig(max_retries=3)
+        assert config.max_retries == 3
