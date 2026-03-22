@@ -135,7 +135,11 @@ class VerifyTemplateStage(BaseVerificationStage):
 
                 # Field verification: call verify() if defined, else True (no fields)
                 if hasattr(parsed_answer, "verify") and callable(parsed_answer.verify):
-                    field_verification_result = parsed_answer.verify()
+                    try:
+                        field_verification_result = parsed_answer.verify()
+                    except Exception as e:
+                        logger.warning("Field verification error (regex-only): %s", e)
+                        field_verification_result = False
                 else:
                     field_verification_result = True
 
