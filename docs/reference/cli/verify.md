@@ -122,8 +122,10 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | Code | Meaning |
 |------|---------|
 | `0` | Verification completed successfully |
-| `1` | Error — no templates found, invalid arguments, benchmark load failure, or unexpected error |
+| `1` | Error: no templates found, invalid arguments, benchmark load failure, partial batch failure (`VerificationBatchError`), or unexpected error |
 | `130` | Interrupted by user (Ctrl+C) |
+
+If some questions fail while others succeed, the executor raises `VerificationBatchError` with both `partial_results` and `errors`. The CLI catches this, writes any partial results to the output file, and exits with code `1`. In parallel mode, a timeout also triggers `VerificationBatchError`.
 
 When interrupted with Ctrl+C during a progressive save run, the command prints a resume hint:
 

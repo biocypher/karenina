@@ -195,9 +195,9 @@ print(f"Granular score:   {parsed.verify_granular():.2f}")
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `description` | Yes | Instructions for the judge LLM on what to extract from the response |
+| `description` | Yes | Instructions for the judge LLM on what to extract from the response. Must be non-empty and non-whitespace; raises `ValueError` otherwise. |
 | `ground_truth` | Yes | The expected correct value |
-| `verify_with` | Yes | A verification primitive instance (`ExactMatch`, `BooleanMatch`, etc.) |
+| `verify_with` | Yes | A verification primitive instance (`ExactMatch`, `BooleanMatch`, etc.). Cannot be `None`; raises `ValueError` if omitted or explicitly set to `None`. |
 | `extraction_hint` | No | Optional guidance to help the judge parse ambiguous responses |
 | `weight` | No | Float (default 1.0) controlling this field's contribution to `verify_granular()` scoring |
 
@@ -1213,7 +1213,9 @@ def verify(self) -> bool:
 
 ### 10.3. VerifiedField pitfalls
 
-**Forgetting `description`**: Unlike `Field()`, the `description` parameter is mandatory on `VerifiedField`. Omitting it raises a `TypeError`. Every field needs a description because it serves as the judge's extraction instruction.
+**Empty or missing `description`**: The `description` parameter is mandatory on `VerifiedField` and must be a non-empty, non-whitespace string. Omitting it raises a `TypeError`; passing an empty string or whitespace-only string raises a `ValueError`. Every field needs a description because it serves as the judge's extraction instruction.
+
+**Passing `verify_with=None`**: The `verify_with` parameter must be a verification primitive instance. Passing `None` (whether explicitly or by omission) raises a `ValueError` with a message prompting you to provide a primitive such as `ExactMatch()` or `BooleanMatch()`.
 
 **Mismatched primitive and field type**: Each primitive expects certain field types. Using `BooleanMatch()` on a `str` field, or `NumericTolerance()` on a `bool` field, will produce unexpected results or errors during verification.
 

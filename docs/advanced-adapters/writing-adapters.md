@@ -351,14 +351,28 @@ import karenina.adapters.my_provider.prompts.rubric  # noqa: E402, F401
 import karenina.adapters.my_provider.prompts.deep_judgment  # noqa: E402, F401
 ```
 
-### Enable Lazy Discovery
+### Enable Discovery
 
-Add your adapter to the registry's initialization list in `karenina/src/karenina/adapters/registry.py` so it gets discovered automatically:
+There are two ways to make the registry discover your adapter.
+
+**Option A: Built-in adapter** (for adapters inside the karenina package). Add an import to `_load_builtins()` in `karenina/src/karenina/adapters/registry.py`:
 
 ```python
-# In AdapterRegistry._ensure_initialized():
-import karenina.adapters.my_provider.registration  # noqa: F401
+# In AdapterRegistry._load_builtins():
+try:
+    from karenina.adapters.my_provider import registration as _mp  # noqa: F401
+except ImportError:
+    logger.debug("MyProvider registration module not available")
 ```
+
+**Option B: Entry point** (for external adapter packages). Add a `karenina.adapters` entry point to your package's `pyproject.toml`:
+
+```toml
+[project.entry-points."karenina.adapters"]
+my_provider = "my_package.registration"
+```
+
+The entry point module must call `AdapterRegistry.register()` when imported. The registry discovers entry points automatically after loading built-in adapters. If an entry point's name conflicts with a built-in interface, the entry point is skipped with a warning.
 
 ---
 

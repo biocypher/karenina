@@ -82,6 +82,14 @@ config = VerificationConfig(
 
 Reads deep judgment settings from the trait objects loaded from the checkpoint. This is useful when traits have been pre-configured with deep judgment settings and saved to a `.jsonld` file.
 
+**Important:** `benchmark.save()` strips deep judgment configuration from traits by default. To persist deep judgment settings for this mode, save with `save_deep_judgment_config=True`:
+
+```python
+benchmark.save(Path("benchmark.jsonld"), save_deep_judgment_config=True)
+```
+
+Without this flag, all `deep_judgment_*` fields on traits will be removed from the saved file, and `use_checkpoint` mode will see every trait as having deep judgment disabled.
+
 Each `LLMRubricTrait` has these fields:
 
 | Field | Type | Default | Description |

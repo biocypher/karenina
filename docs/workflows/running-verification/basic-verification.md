@@ -349,7 +349,24 @@ See [CLI Reference: verify](../../reference/cli/verify.md) for all options.
 
 ## Error Handling
 
-Errors are caught per-question — one failure does not abort the entire run:
+Individual question failures do not abort the entire run. Both sequential and parallel executors collect errors as they occur, continue processing the remaining questions, and return partial results. If any questions failed, the executor raises `VerificationBatchError` after all questions have been attempted. This exception carries two attributes: `partial_results` (a dict of question ID to `VerificationResult` for questions that succeeded) and `errors` (a list of `(question_id, exception)` pairs for questions that failed).
+
+Catch `VerificationBatchError` to access partial results instead of losing them:
+
+```python
+from karenina.exceptions import VerificationBatchError
+
+try:
+    results = benchmark.run_verification(config)
+except VerificationBatchError as e:
+    print(f"{len(e.errors)} questions failed, {len(e.partial_results)} succeeded")
+    for question_id, error in e.errors:
+        print(f"  {question_id}: {error}")
+    # Partial results are still usable
+    results = e.partial_results
+```
+
+When all questions succeed, `run_verification` returns normally. You can also inspect per-question errors on individual results:
 
 ```python
 for result in results:
@@ -357,9 +374,12 @@ for result in results:
         print(f"Error in {result.metadata.question_id}: {result.metadata.error}")
 ```
 
+In parallel mode, `VerificationBatchError` is also raised if the batch exceeds the configured timeout (`ExecutorConfig.timeout_seconds`, default 600 seconds). The `partial_results` attribute contains whichever questions completed before the timeout.
+
 | Exception | When |
 |-----------|------|
 | `KareninaError` | Base exception for all karenina errors |
+| `VerificationBatchError` | One or more questions failed, or parallel batch timed out. Carries `partial_results` and `errors`. |
 | `PortError` | LLM/agent/parser port failures |
 | `AdapterUnavailableError` | Requested adapter not installed |
 | `ParseError` | Judge model returned unparseable output |

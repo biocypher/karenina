@@ -423,7 +423,7 @@ Pass if the extracted value is within a specified tolerance of the ground truth.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `tolerance` | `float` | required | Allowed deviation from ground truth |
-| `mode` | `str` | `"relative"` | `"relative"`: fraction of ground truth; `"absolute"`: raw difference |
+| `mode` | `Literal["relative", "absolute"]` | `"relative"` | `"relative"`: fraction of ground truth; `"absolute"`: raw difference |
 
 **Applies to:** `int`, `float`
 
@@ -602,7 +602,7 @@ Pass if the extracted date is within the specified tolerance of the ground truth
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `tolerance` | `int` | required | Maximum allowed difference |
-| `unit` | `str` | `"days"` | Time unit: `"days"`, `"hours"`, or `"minutes"` |
+| `unit` | `Literal["days", "hours", "minutes"]` | `"days"` | Time unit: `"days"`, `"hours"`, or `"minutes"` |
 
 **Applies to:** `str`
 

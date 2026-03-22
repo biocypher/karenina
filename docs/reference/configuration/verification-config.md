@@ -26,7 +26,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `replicate_count` | `int` | `1` | Number of times to run each question/model combination. Higher values allow measuring variance across runs. |
+| `replicate_count` | `int` | `1` | Number of times to run each question/model combination. Higher values allow measuring variance across runs. Must be >= 1. |
 | `parsing_only` | `bool` | `False` | When `True`, only parsing models are required (no answering models needed). Used for TaskEval and similar use cases where answers are pre-generated. |
 
 ---
@@ -72,7 +72,7 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 |-------|------|---------|---------|-------------|
 | `embedding_check_enabled` | `bool` | `False` | `EMBEDDING_CHECK` | Enable semantic similarity verification as a fallback after template verify(). |
 | `embedding_check_model` | `str` | `"all-MiniLM-L6-v2"` | `EMBEDDING_CHECK_MODEL` | SentenceTransformer model name for computing embeddings. |
-| `embedding_check_threshold` | `float` | `0.85` | `EMBEDDING_CHECK_THRESHOLD` | Cosine similarity threshold (0.0–1.0). Values above this threshold are considered semantically matching. |
+| `embedding_check_threshold` | `float` | `0.85` | `EMBEDDING_CHECK_THRESHOLD` | Cosine similarity threshold. Constrained to [0.0, 1.0]. Values above this threshold are considered semantically matching. |
 
 **Environment variable precedence:** Env vars are applied only when the field is not explicitly set. Explicit arguments always take priority over env vars.
 
@@ -83,7 +83,9 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 | Field | Type | Default | Env Var | Description |
 |-------|------|---------|---------|-------------|
 | `async_enabled` | `bool` | `True` | `KARENINA_ASYNC_ENABLED` | Enable parallel execution of verification across questions. |
-| `async_max_workers` | `int` | `2` | `KARENINA_ASYNC_MAX_WORKERS` | Maximum number of concurrent verification workers when async is enabled. |
+| `async_max_workers` | `int` | `2` | `KARENINA_ASYNC_MAX_WORKERS` | Maximum number of concurrent verification workers when async is enabled. Must be >= 1. |
+
+Both sequential and parallel execution modes collect per-question errors without aborting. If any questions fail (or the parallel batch exceeds its timeout), `VerificationBatchError` is raised with `partial_results` and `errors` attributes so callers can recover partial progress. See [Basic Verification: Error Handling](../../notebooks/running-verification/basic-verification.ipynb) for usage examples.
 
 ---
 
@@ -149,6 +151,25 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 | `fuzzy_match_threshold` | `float \| None` | `None` | Fuzzy threshold (falls back to global default). |
 | `excerpt_retry_attempts` | `int \| None` | `None` | Retry attempts (falls back to global default). |
 | `search_enabled` | `bool` | `False` | Enable search validation for this trait's excerpts. |
+
+---
+
+## Agentic Parsing
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `agentic_parsing` | `bool` | `False` | Enable agentic parsing (Stage 7b). The judge uses tools to independently verify artifacts before extracting structured data. Requires a parsing model with `agent_tier='deep_agent'`. |
+| `agentic_judge_context` | `Literal["workspace_only", "trace_and_workspace", "trace_only"]` | `"workspace_only"` | What context the investigation agent receives. `workspace_only`: question + workspace path. `trace_and_workspace`: answering agent trace + workspace path. `trace_only`: equivalent to classical Stage 7a parsing. |
+| `agentic_parsing_max_turns` | `int` | `15` | Max turns for the investigation agent. Must be >= 1. |
+| `agentic_parsing_timeout` | `float` | `120.0` | Timeout in seconds for the investigation agent. Must be >= 0.0. |
+
+---
+
+## Scenario Execution
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `scenario_turn_limit` | `int` | `20` | Maximum turns before forced termination in scenario execution. Must be >= 1. |
 
 ---
 

@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -487,7 +487,7 @@ print(f"{len(result_set)} per-turn result(s)")
 
 ## Step 5: Inspect Results
 
-`run_verification` on a scenario benchmark returns one `VerificationResult` per turn. Each result holds the question text, the template parse, and the per-turn `verify_result`.
+`run_verification` on a scenario benchmark returns a `VerificationResultSet`. The flat `results` list contains one `VerificationResult` per turn. Each result holds the question text, the template parse, and the per-turn `verify_result`. The result set also provides `scenario_results` (a list of `ScenarioExecutionResult` objects with full execution traces and outcome criteria) and `errors` (a list of `(description, exception)` tuples for any scenario that failed). Both are `None` for non-scenario benchmarks.
 
 ```python
 for i, vr in enumerate(result_set.results):

@@ -105,7 +105,7 @@ Controls automatic retry behavior for failed model calls with exponential backof
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `max_retries` | `int` | `2` | Maximum retry attempts (total calls = max_retries + 1 initial). |
+| `max_retries` | `int` | `2` | Maximum retry attempts (total calls = max_retries + 1 initial). Must be >= 0. |
 | `backoff_factor` | `float` | `2.0` | Multiplier for exponential backoff between retries. |
 | `initial_delay` | `float` | `2.0` | Initial delay in seconds before first retry. |
 | `max_delay` | `float` | `10.0` | Maximum delay in seconds between retries. |
@@ -118,7 +118,7 @@ Controls automatic retry behavior for failed tool calls with exponential backoff
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `max_retries` | `int` | `3` | Maximum retry attempts for tool calls. |
+| `max_retries` | `int` | `3` | Maximum retry attempts for tool calls. Must be >= 0. |
 | `backoff_factor` | `float` | `2.0` | Multiplier for exponential backoff between retries. |
 | `initial_delay` | `float` | `1.0` | Initial delay in seconds before first retry. |
 | `on_failure` | `Literal["return_message", "raise"]` | `"return_message"` | `"return_message"`: returns error as message. `"raise"`: raises exception. |
@@ -157,6 +157,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 **Validation rules:**
 
 - `interface="manual"` requires `manual_traces` to be set
+- `manual_traces` must be a `ManualTraces` instance, not a plain `bool`. Passing `True` or `False` raises a `ValueError` prompting you to create a `ManualTraces` instance.
 - `interface="manual"` does not support MCP (`mcp_urls_dict` must be `None`)
 
 ---

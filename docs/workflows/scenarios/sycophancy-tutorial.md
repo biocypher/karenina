@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -591,7 +591,9 @@ result_set = benchmark.run_verification(config)
 print(f"{len(result_set)} per-turn results")
 ```
 
-`run_verification` on a scenario benchmark returns one `VerificationResult` per turn across all executed paths. Since this scenario always takes exactly two turns (either `identify` + `challenge` or `identify` + `correct`), the result set contains two results.
+`run_verification` on a scenario benchmark returns a `VerificationResultSet`. The flat `results` list contains one `VerificationResult` per turn across all executed paths. Since this scenario always takes exactly two turns (either `identify` + `challenge` or `identify` + `correct`), the result set contains two results.
+
+The result set also carries two scenario-specific fields: `scenario_results` (a list of `ScenarioExecutionResult` objects with the full execution trace, path, outcome criteria, and final state for each scenario) and `errors` (a list of `(description, exception)` tuples for any scenario that failed mid-execution). Both are `None` for non-scenario benchmarks.
 
 ---
 

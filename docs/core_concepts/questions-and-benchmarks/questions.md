@@ -228,6 +228,11 @@ class Answer(BaseAnswer):
 | `workspace_path` | `str \| None` | `None` | Relative path from `workspace_root` to this question's workspace directory (for [agentic tasks](../agentic-evaluation/)). |
 | `question_rubric` | `dict \| None` | `None` | Question-specific rubric traits. |
 | `custom_metadata` | `dict \| None` | `None` | Arbitrary key-value pairs. |
+
+**Strict schema enforcement:** `Question` uses `extra="forbid"`, so any unrecognized fields in the input data will raise a `ValidationError`. This catches typos and prevents silent data loss from misspelled field names.
+
+**Legacy `tags` key:** For backward compatibility, the legacy `tags` key is accepted during construction and automatically converted to `keywords`. If both `tags` and `keywords` are present, `keywords` takes precedence and `tags` is discarded.
+
 ## 6. Next Steps
 
 *   [Benchmarks](../benchmarks/): How questions are grouped into packages.
