@@ -70,12 +70,19 @@ class ManualTraceManager:
             agent_metrics: Optional agent metrics dictionary (tool calls, failures, etc.)
 
         Raises:
-            ManualTraceError: If question_hash format is invalid
+            ManualTraceError: If question_hash format is invalid or trace is empty
         """
         if not self._is_valid_md5_hash(question_hash):
             raise ManualTraceError(
                 f"Invalid question hash format: '{question_hash}'. "
                 "Question hashes must be 32-character hexadecimal MD5 hashes."
+            )
+
+        if not isinstance(trace, str) or not trace.strip():
+            raise ManualTraceError(
+                f"Invalid trace content for question hash '{question_hash}'. "
+                "Expected a non-empty string. Trace content should be the "
+                "precomputed answer text from your LLM."
             )
 
         with self._lock:

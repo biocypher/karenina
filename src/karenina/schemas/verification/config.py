@@ -68,9 +68,11 @@ class DeepJudgmentTraitConfig(BaseModel):
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
+    model_config = ConfigDict(extra="forbid")
+
     answering_models: list[ModelConfig] = Field(default_factory=list)
     parsing_models: list[ModelConfig]
-    replicate_count: int = 1  # Number of times to run each test combination
+    replicate_count: int = Field(default=1, ge=1)  # Number of times to run each test combination
 
     # Parsing-only mode (for TaskEval and similar use cases)
     parsing_only: bool = False  # When True, only parsing models are required
@@ -116,11 +118,13 @@ class VerificationConfig(BaseModel):
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
     embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
-    embedding_check_threshold: float = DEFAULT_EMBEDDING_THRESHOLD  # Similarity threshold (0.0-1.0)
+    embedding_check_threshold: float = Field(
+        default=DEFAULT_EMBEDDING_THRESHOLD, ge=0.0, le=1.0
+    )  # Similarity threshold (0.0-1.0)
 
     # Async execution settings
     async_enabled: bool = DEFAULT_ASYNC_ENABLED  # Enable parallel execution
-    async_max_workers: int = DEFAULT_ASYNC_MAX_WORKERS  # Number of parallel workers
+    async_max_workers: int = Field(default=DEFAULT_ASYNC_MAX_WORKERS, ge=1)  # Number of parallel workers
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
@@ -189,10 +193,12 @@ class VerificationConfig(BaseModel):
     )
     agentic_parsing_max_turns: int = Field(
         default=15,
+        ge=1,
         description="Max turns for the investigation agent.",
     )
     agentic_parsing_timeout: float = Field(
         default=120.0,
+        ge=0.0,
         description="Timeout in seconds for the investigation agent.",
     )
 
@@ -232,7 +238,7 @@ class VerificationConfig(BaseModel):
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
     # Scenario execution settings
-    scenario_turn_limit: int = 20  # Max turns before forced termination in scenario execution
+    scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
 
     def __init__(self, **data: Any) -> None:
         """
@@ -297,6 +303,10 @@ class VerificationConfig(BaseModel):
         # Strip rubric_enabled from input: now derived from evaluation_mode
         data.pop("rubric_enabled", None)
 
+        # Strip deep_judgment_rubric_search_enabled: not a declared field,
+        # but injected by from_overrides() and some CLI callers.
+        data.pop("deep_judgment_rubric_search_enabled", None)
+
         super().__init__(**data)
 
         # Validate configuration after initialization
@@ -341,14 +351,8 @@ class VerificationConfig(BaseModel):
                 raise ValueError(f"System prompt is required for model {model.id}")
 
         # Additional validation for rubric-enabled scenarios
-        if self.rubric_enabled:
-            # Ensure parsing models are configured since they're needed for rubric evaluation
-            if not self.parsing_models:
-                raise ValueError("Parsing models are required when rubric evaluation is enabled")
-
-            # Check that replicate count is valid
-            if self.replicate_count < 1:
-                raise ValueError("Replicate count must be at least 1")
+        if self.rubric_enabled and not self.parsing_models:
+            raise ValueError("Parsing models are required when rubric evaluation is enabled")
 
         # Additional validation for few-shot prompting scenarios
         if self.few_shot_config is not None and self.few_shot_config.enabled:

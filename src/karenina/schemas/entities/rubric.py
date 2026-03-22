@@ -771,11 +771,11 @@ class Rubric(BaseModel):
 
     @model_validator(mode="after")
     def validate_trait_names(self) -> "Rubric":
-        """Reject duplicate trait names within each type and dots in agentic names.
+        """Reject duplicate trait names (within and across types) and dots in agentic names.
 
         Each trait type list must have unique names. Cross-type name overlaps
-        are allowed because results are stored in type-segregated dicts
-        (``llm_trait_scores``, ``regex_trait_scores``, etc.).
+        are also rejected because downstream consumers (DataFrames, result
+        dicts) use trait names as keys without type prefixes.
 
         Dots in agentic trait names are rejected because template kind traits
         produce dot-expanded keys (``trait.field``). A trait named ``"foo.bar"``
@@ -798,6 +798,17 @@ class Rubric(BaseModel):
                         f"per type."
                     )
                 seen.add(trait.name)
+
+        # Cross-type uniqueness check
+        all_names = self.get_trait_names()
+        seen_all: set[str] = set()
+        for name in all_names:
+            if name in seen_all:
+                raise ValueError(
+                    f"Duplicate trait name '{name}' across different trait types. "
+                    f"Trait names must be unique across all types within a rubric."
+                )
+            seen_all.add(name)
 
         for trait in self.agentic_traits:
             if "." in trait.name:
@@ -1044,10 +1055,10 @@ class DynamicRubric(BaseModel):
 
     @model_validator(mode="after")
     def validate_trait_names(self) -> "DynamicRubric":
-        """Reject duplicate trait names within each type.
+        """Reject duplicate trait names within and across types.
 
-        Mirrors ``Rubric.validate_trait_names``. Cross-type overlaps are
-        allowed; same-type duplicates are not.
+        Mirrors ``Rubric.validate_trait_names``. Both same-type and
+        cross-type duplicates are rejected.
         """
         type_lists: list[tuple[str, list[Any]]] = [
             ("llm", self.llm_traits),
@@ -1066,6 +1077,17 @@ class DynamicRubric(BaseModel):
                         f"unique per type."
                     )
                 seen.add(trait.name)
+
+        # Cross-type uniqueness check
+        all_names = self.get_trait_names()
+        seen_all: set[str] = set()
+        for name in all_names:
+            if name in seen_all:
+                raise ValueError(
+                    f"Duplicate trait name '{name}' across different trait types. "
+                    f"Trait names must be unique across all types within a dynamic rubric."
+                )
+            seen_all.add(name)
         return self
 
     @model_validator(mode="after")

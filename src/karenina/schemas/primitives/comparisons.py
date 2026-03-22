@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from dateutil import parser as dateutil_parser  # type: ignore[import-untyped]
 from pydantic import BaseModel
@@ -157,7 +157,7 @@ class NumericTolerance(VerificationPrimitive):
     """
 
     tolerance: float
-    mode: str = "relative"
+    mode: Literal["relative", "absolute"] = "relative"
 
     def check(self, extracted: Any, expected: Any) -> bool:
         diff = abs(float(extracted) - float(expected))
@@ -300,7 +300,7 @@ class DateTolerance(VerificationPrimitive):
     """Check that extracted date is within tolerance of expected date."""
 
     tolerance: int
-    unit: str = "days"
+    unit: Literal["days", "hours", "minutes"] = "days"
 
     def check(self, extracted: Any, expected: Any) -> bool:
         try:

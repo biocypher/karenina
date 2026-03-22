@@ -23,6 +23,7 @@ class ModelRetryConfig(BaseModel):
 
     max_retries: int = Field(
         default=2,
+        ge=0,
         description="Maximum retry attempts (total calls = max_retries + 1 initial)",
     )
     backoff_factor: float = Field(
@@ -57,6 +58,7 @@ class ToolRetryConfig(BaseModel):
 
     max_retries: int = Field(
         default=3,
+        ge=0,
         description="Maximum retry attempts for tool calls",
     )
     backoff_factor: float = Field(
@@ -605,6 +607,12 @@ class ModelConfig(BaseModel):
     def validate_manual_interface(self) -> "ModelConfig":
         """Validate manual interface configuration and set defaults."""
         if self.interface == INTERFACE_MANUAL:
+            # Reject bool values: True/False are not ManualTraces instances
+            if isinstance(self.manual_traces, bool):
+                raise ValueError(
+                    "manual_traces must be a ManualTraces instance, not a bool. "
+                    "Create a ManualTraces instance and pass it to ModelConfig."
+                )
             # Manual interface requires manual_traces
             if self.manual_traces is None:
                 raise ValueError(

@@ -23,7 +23,7 @@ class Question(BaseModel):
     construction and automatically converted to ``keywords``.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     question: str = Field(description="Question text", min_length=1)
     raw_answer: str = Field(description="Raw answer text", min_length=1)
@@ -57,11 +57,19 @@ class Question(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _convert_legacy_tags(cls, data: Any) -> Any:
-        """Convert legacy ``tags`` key to ``keywords``."""
-        if isinstance(data, dict) and "tags" in data and "keywords" not in data:
-            tags = data.pop("tags")
-            # Filter out None values from legacy tags list
-            data["keywords"] = [t for t in (tags or []) if t is not None]
+        """Convert legacy ``tags`` key to ``keywords`` and strip computed fields.
+
+        The computed field ``id`` appears in serialized output but is not an
+        input field. Strip it so that round-tripping via model_dump/model_validate
+        works with extra="forbid".
+        """
+        if isinstance(data, dict):
+            data.pop("id", None)
+            if "tags" in data:
+                tags = data.pop("tags")
+                if "keywords" not in data:
+                    # Filter out None values from legacy tags list
+                    data["keywords"] = [t for t in (tags or []) if t is not None]
         return data
 
     @computed_field  # type: ignore[prop-decorator]

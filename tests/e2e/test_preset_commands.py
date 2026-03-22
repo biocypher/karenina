@@ -34,6 +34,8 @@ def _make_valid_preset(**kwargs) -> dict:
 
     Note: Model config uses 'model_provider' and 'model_name' as keys.
     """
+    # Separate preset-level fields from config fields
+    preset_name = kwargs.pop("name", "test-preset")
     default_config = {
         "parsing_models": [
             {
@@ -51,7 +53,7 @@ def _make_valid_preset(**kwargs) -> dict:
         "async_enabled": False,
     }
     default_config.update(kwargs)
-    return {"name": "test-preset", "config": default_config}
+    return {"name": preset_name, "config": default_config}
 
 
 # =============================================================================

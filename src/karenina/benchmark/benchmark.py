@@ -161,9 +161,16 @@ class Benchmark:
         instance._init_managers()
         return instance
 
-    def save(self, path: Path) -> None:
-        """Save the benchmark to a JSON-LD file."""
-        self._base.save(path)
+    def save(self, path: Path, save_deep_judgment_config: bool = False) -> None:
+        """Save the benchmark to a JSON-LD file.
+
+        Args:
+            path: Path where to save the benchmark.
+            save_deep_judgment_config: If True, include deep judgment
+                configuration in LLM rubric traits. If False (default),
+                deep judgment settings are stripped before saving.
+        """
+        self._base.save(path, save_deep_judgment_config=save_deep_judgment_config)
 
     def save_to_db(self, storage: str, checkpoint_path: Path | None = None) -> "Benchmark":
         """Save this benchmark to a database."""

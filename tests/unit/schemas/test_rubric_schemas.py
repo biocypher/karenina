@@ -623,12 +623,12 @@ def test_rubric_rejects_duplicate_regex_trait_names() -> None:
 
 
 @pytest.mark.unit
-def test_rubric_allows_cross_type_same_name() -> None:
-    """Same name across different types is allowed (type-segregated storage)."""
+def test_rubric_rejects_cross_type_same_name() -> None:
+    """Same name across different types is rejected (names must be globally unique)."""
     llm = LLMRubricTrait(name="quality", kind="boolean", higher_is_better=True)
     regex = RegexRubricTrait(name="quality", pattern=r"quality", higher_is_better=True)
-    rubric = Rubric(llm_traits=[llm], regex_traits=[regex])
-    assert len(rubric.get_trait_names()) == 2
+    with pytest.raises(ValidationError, match="Duplicate trait name 'quality' across different trait types"):
+        Rubric(llm_traits=[llm], regex_traits=[regex])
 
 
 @pytest.mark.unit
@@ -648,13 +648,12 @@ def test_dynamic_rubric_rejects_duplicate_llm_trait_names() -> None:
 
 
 @pytest.mark.unit
-def test_merge_rubrics_cross_type_same_name_allowed() -> None:
-    """Cross-type same-name traits merge without error."""
+def test_merge_rubrics_cross_type_same_name_rejected() -> None:
+    """Cross-type same-name traits are rejected during merge."""
     global_rubric = Rubric(regex_traits=[RegexRubricTrait(name="quality", pattern=r"quality", higher_is_better=True)])
     question_rubric = Rubric(llm_traits=[LLMRubricTrait(name="quality", kind="boolean", higher_is_better=True)])
-    merged = merge_rubrics(global_rubric, question_rubric)
-    assert len(merged.regex_traits) == 1
-    assert len(merged.llm_traits) == 1
+    with pytest.raises(ValidationError, match="Duplicate trait name 'quality' across different trait types"):
+        merge_rubrics(global_rubric, question_rubric)
 
 
 @pytest.mark.unit
@@ -875,13 +874,12 @@ class TestRubricAgenticTraitSupport:
         with pytest.raises(ValueError, match="Same-type trait name conflicts"):
             merge_rubrics(r1, r2)
 
-    def test_merge_rubrics_cross_type_allowed(self):
-        """Cross-type same-name traits are allowed (type-segregated storage)."""
+    def test_merge_rubrics_cross_type_rejected(self):
+        """Cross-type same-name traits are rejected (names must be unique across all types)."""
         r1 = Rubric(llm_traits=[LLMRubricTrait(name="shared", kind="boolean")])
         r2 = Rubric(agentic_traits=[self._make_agentic_trait("shared")])
-        merged = merge_rubrics(r1, r2)
-        assert len(merged.llm_traits) == 1
-        assert len(merged.agentic_traits) == 1
+        with pytest.raises((ValueError, ValidationError), match="Duplicate trait name"):
+            merge_rubrics(r1, r2)
 
     def test_validate_evaluation_includes_agentic(self):
         """validate_evaluation checks agentic trait scores."""
