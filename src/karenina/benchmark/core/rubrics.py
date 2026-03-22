@@ -256,8 +256,18 @@ class RubricManager:
 
         # Check question-specific rubrics
         for q_id, q_data in self.base._questions_cache.items():
-            if q_data.get("question_rubric"):
-                for trait in q_data["question_rubric"]:
+            question_rubric = q_data.get("question_rubric")
+            if question_rubric:
+                # Collect traits: dict format (keyed by trait type) or flat list
+                if isinstance(question_rubric, dict):
+                    traits_to_validate = []
+                    for trait_list in question_rubric.values():
+                        if isinstance(trait_list, list):
+                            traits_to_validate.extend(trait_list)
+                else:
+                    traits_to_validate = list(question_rubric)
+
+                for trait in traits_to_validate:
                     if not trait.name or not trait.description:
                         errors.append(f"Question {q_id} rubric trait missing name or description")
                     # Check score fields for LLM traits

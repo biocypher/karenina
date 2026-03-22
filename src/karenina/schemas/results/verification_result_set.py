@@ -474,9 +474,23 @@ class VerificationResultSet(BaseModel):
             "total_execution_time": total_execution_time,
         }
 
-    def _calculate_token_stats(
-        self, num_with_judgment: int
-    ) -> tuple[dict[str, Any], dict[tuple[str, str, tuple[str, ...] | None], dict[str, int]]]:
+    @staticmethod
+    def _combo_key_to_string(combo_key: tuple[str, str, tuple[str, ...] | None]) -> str:
+        """Convert a model combo tuple key to a pipe-delimited string for JSON serialization.
+
+        Args:
+            combo_key: Tuple of (answering_model, parsing_model, mcp_servers_tuple_or_none)
+
+        Returns:
+            String in the format "answering_model | parsing_model" or
+            "answering_model | parsing_model | mcp1, mcp2" if MCP servers are present.
+        """
+        answering, parsing, mcp_tuple = combo_key
+        if mcp_tuple:
+            return f"{answering} | {parsing} | {', '.join(mcp_tuple)}"
+        return f"{answering} | {parsing}"
+
+    def _calculate_token_stats(self, num_with_judgment: int) -> tuple[dict[str, Any], dict[str, dict[str, int]]]:
         """Calculate token usage statistics.
 
         Returns:
@@ -651,7 +665,7 @@ class VerificationResultSet(BaseModel):
                         combo_token_stats[combo_key]["output"] += int(dj_out)
 
         tokens_by_combo = {
-            combo_key: {
+            self._combo_key_to_string(combo_key): {
                 "input": stats["input"],
                 "output": stats["output"],
                 "total": stats["input"] + stats["output"],
@@ -691,7 +705,7 @@ class VerificationResultSet(BaseModel):
 
     def _calculate_completion_by_combo(
         self,
-    ) -> dict[tuple[str, str, tuple[str, ...] | None], dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """Calculate completion status by model combination."""
         from collections import defaultdict
 
@@ -713,7 +727,7 @@ class VerificationResultSet(BaseModel):
                 combo_stats[combo_key]["completed"] += 1
 
         return {
-            combo_key: {
+            self._combo_key_to_string(combo_key): {
                 "total": stats["total"],
                 "completed": stats["completed"],
                 "completion_pct": (stats["completed"] / stats["total"] * 100) if stats["total"] > 0 else 0,
@@ -750,8 +764,8 @@ class VerificationResultSet(BaseModel):
                         trait_questions[trait_name].add(q_id)
                         trait_types[trait_name] = "callable"
 
-                if result.rubric.metric_trait_confusion_lists:
-                    for trait_name in result.rubric.metric_trait_confusion_lists:
+                if result.rubric.metric_trait_scores:
+                    for trait_name in result.rubric.metric_trait_scores:
                         trait_questions[trait_name].add(q_id)
                         trait_types[trait_name] = "metric"
 
@@ -785,8 +799,8 @@ class VerificationResultSet(BaseModel):
                         else:
                             qs_callable += 1
 
-                if result.rubric.metric_trait_confusion_lists:
-                    for trait in result.rubric.metric_trait_confusion_lists:
+                if result.rubric.metric_trait_scores:
+                    for trait in result.rubric.metric_trait_scores:
                         if trait in global_traits:
                             global_metric += 1
                         else:
@@ -809,7 +823,7 @@ class VerificationResultSet(BaseModel):
 
     def _calculate_template_pass_rates(
         self, num_with_template: int
-    ) -> tuple[dict[tuple[str, str, tuple[str, ...] | None], dict[str, Any]] | None, dict[str, Any] | None]:
+    ) -> tuple[dict[str, dict[str, Any]] | None, dict[str, Any] | None]:
         """Calculate template pass rates by combo and overall.
 
         Returns:
@@ -835,7 +849,7 @@ class VerificationResultSet(BaseModel):
                     combo_pass_stats[combo_key]["passed"] += 1
 
         template_pass_by_combo = {
-            combo_key: {
+            self._combo_key_to_string(combo_key): {
                 "total": stats["total"],
                 "passed": stats["passed"],
                 "pass_pct": (stats["passed"] / stats["total"] * 100) if stats["total"] > 0 else 0,

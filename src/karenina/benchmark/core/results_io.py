@@ -162,55 +162,53 @@ class ResultsIOManager:
 
         return [
             index,  # row_index
-            ResultsIOManager._escape_csv_field(result.metadata.question_id),
-            ResultsIOManager._escape_csv_field(result.metadata.question_text),
-            ResultsIOManager._escape_csv_field(result.template.raw_llm_response if result.template else ""),
-            ResultsIOManager._escape_csv_field(
+            result.metadata.question_id,
+            result.metadata.question_text,
+            result.template.raw_llm_response if result.template else "",
+            (
                 json.dumps(result.template.parsed_gt_response)
                 if result.template and result.template.parsed_gt_response
                 else ""
             ),
-            ResultsIOManager._escape_csv_field(
+            (
                 json.dumps(result.template.parsed_llm_response)
                 if result.template and result.template.parsed_llm_response
                 else ""
             ),
-            ResultsIOManager._escape_csv_field(
+            (
                 json.dumps(result.template.verify_result)
                 if result.template and result.template.verify_result is not None
                 else "N/A"
             ),
-            ResultsIOManager._escape_csv_field(
+            (
                 json.dumps(result.template.verify_granular_result)
                 if result.template and result.template.verify_granular_result is not None
                 else "N/A"
             ),
-            *[ResultsIOManager._escape_csv_field(value) for value in global_rubric_values],
+            *global_rubric_values,
             *([question_specific_rubrics_value] if question_specific_traits else []),
-            ResultsIOManager._escape_csv_field(rubric_summary),
-            ResultsIOManager._escape_csv_field(result.metadata.answering_model),
-            ResultsIOManager._escape_csv_field(result.metadata.parsing_model),
-            ResultsIOManager._escape_csv_field(result.metadata.replicate or ""),
-            ResultsIOManager._escape_csv_field(result.metadata.answering_system_prompt or ""),
-            ResultsIOManager._escape_csv_field(result.metadata.parsing_system_prompt or ""),
-            ResultsIOManager._escape_csv_field(
+            rubric_summary,
+            result.metadata.answering_model,
+            result.metadata.parsing_model,
+            result.metadata.replicate or "",
+            result.metadata.answering_system_prompt or "",
+            result.metadata.parsing_system_prompt or "",
+            (
                 "abstained"
                 if result.template
                 and result.template.abstention_detected
                 and result.template.abstention_override_applied
                 else result.metadata.completed_without_errors
             ),
-            ResultsIOManager._escape_csv_field(result.metadata.error or ""),
-            ResultsIOManager._escape_csv_field(result.metadata.execution_time),
-            ResultsIOManager._escape_csv_field(result.metadata.timestamp),
-            ResultsIOManager._escape_csv_field(result.metadata.run_name or ""),
+            result.metadata.error or "",
+            result.metadata.execution_time,
+            result.metadata.timestamp,
+            result.metadata.run_name or "",
             # Embedding check fields
-            ResultsIOManager._escape_csv_field(result.template.embedding_check_performed if result.template else False),
-            ResultsIOManager._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
-            ResultsIOManager._escape_csv_field(
-                result.template.embedding_override_applied if result.template else False
-            ),
-            ResultsIOManager._escape_csv_field(result.template.embedding_model_used if result.template else ""),
+            result.template.embedding_check_performed if result.template else False,
+            result.template.embedding_similarity_score if result.template else "",
+            result.template.embedding_override_applied if result.template else False,
+            result.template.embedding_model_used if result.template else "",
         ]
 
     @staticmethod

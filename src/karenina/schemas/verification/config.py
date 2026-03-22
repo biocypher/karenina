@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from ..config.models import (
     FewShotConfig,
@@ -240,6 +240,24 @@ class VerificationConfig(BaseModel):
     # Scenario execution settings
     scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
 
+    @field_validator("db_config", mode="before")
+    @classmethod
+    def _validate_db_config(cls, v: Any) -> Any:
+        """Validate that db_config is a DBConfig instance or None.
+
+        Uses runtime import to avoid circular dependency with karenina.storage.
+
+        Raises:
+            TypeError: If value is not None and not a DBConfig instance.
+        """
+        if v is None:
+            return v
+        from karenina.storage.db_config import DBConfig
+
+        if not isinstance(v, DBConfig):
+            raise TypeError(f"db_config must be a DBConfig instance or None, got {type(v).__name__}")
+        return v
+
     def __init__(self, **data: Any) -> None:
         """
         Initialize with environment variable support and default system prompts.
@@ -285,20 +303,31 @@ class VerificationConfig(BaseModel):
                     data["async_max_workers"] = int(env_val)
             # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
 
-        # Apply default system prompts to models that don't have one
+        # Apply default system prompts to models that don't have one.
+        # Deep-copy ModelConfig instances to avoid mutating shared objects.
         if "answering_models" in data:
-            for model in data["answering_models"]:
-                if isinstance(model, ModelConfig) and not model.system_prompt:
-                    model.system_prompt = DEFAULT_ANSWERING_SYSTEM_PROMPT
-                elif isinstance(model, dict) and not model.get("system_prompt"):
-                    model["system_prompt"] = DEFAULT_ANSWERING_SYSTEM_PROMPT
+            data["answering_models"] = [
+                m.model_copy(update={"system_prompt": DEFAULT_ANSWERING_SYSTEM_PROMPT})
+                if isinstance(m, ModelConfig) and not m.system_prompt
+                else (
+                    {**m, "system_prompt": DEFAULT_ANSWERING_SYSTEM_PROMPT}
+                    if isinstance(m, dict) and not m.get("system_prompt")
+                    else m
+                )
+                for m in data["answering_models"]
+            ]
 
         if "parsing_models" in data:
-            for model in data["parsing_models"]:
-                if isinstance(model, ModelConfig) and not model.system_prompt:
-                    model.system_prompt = DEFAULT_PARSING_SYSTEM_PROMPT
-                elif isinstance(model, dict) and not model.get("system_prompt"):
-                    model["system_prompt"] = DEFAULT_PARSING_SYSTEM_PROMPT
+            data["parsing_models"] = [
+                m.model_copy(update={"system_prompt": DEFAULT_PARSING_SYSTEM_PROMPT})
+                if isinstance(m, ModelConfig) and not m.system_prompt
+                else (
+                    {**m, "system_prompt": DEFAULT_PARSING_SYSTEM_PROMPT}
+                    if isinstance(m, dict) and not m.get("system_prompt")
+                    else m
+                )
+                for m in data["parsing_models"]
+            ]
 
         # Strip rubric_enabled from input: now derived from evaluation_mode
         data.pop("rubric_enabled", None)

@@ -139,14 +139,22 @@ class StageOrchestrator:
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
 
+            # Sufficiency check is not applicable in rubric_only mode (no template parsing)
+            if sufficiency_enabled:
+                logger.info(
+                    "sufficiency_enabled=True ignored in rubric_only mode: "
+                    "sufficiency check requires template parsing which is skipped"
+                )
+
             # Rubric evaluation (required for rubric_only mode)
             _rubric_has_non_agentic = rubric and (
                 rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits
             )
             if _rubric_has_non_agentic or _dynamic_has_non_agentic:
                 stages.append(RubricEvaluationStage())
-                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
-                stages.append(DeepJudgmentRubricAutoFailStage())
+                # Deep judgment rubric auto-fail (only when deep judgment is enabled)
+                if deep_judgment_enabled:
+                    stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation
             if (rubric and rubric.agentic_traits) or _dynamic_has_agentic:
@@ -198,8 +206,9 @@ class StageOrchestrator:
             )
             if evaluation_mode == "template_and_rubric" and (_rubric_has_non_agentic or _dynamic_has_non_agentic):
                 stages.append(RubricEvaluationStage())
-                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
-                stages.append(DeepJudgmentRubricAutoFailStage())
+                # Deep judgment rubric auto-fail (only when deep judgment is enabled)
+                if deep_judgment_enabled:
+                    stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation (after Stage 11)
             if evaluation_mode == "template_and_rubric" and (

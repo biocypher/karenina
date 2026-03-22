@@ -117,7 +117,11 @@ class RegexMatch(VerificationPrimitive):
     def check(self, extracted: Any, _expected: Any) -> bool:
         flag_value = 0
         for f in self.flags:
-            flag_value |= getattr(re, f, 0)
+            resolved = getattr(re, f, None)
+            if resolved is None:
+                logger.warning("Unknown regex flag %r, ignoring", f)
+            else:
+                flag_value |= resolved
         return bool(re.search(self.pattern, str(extracted), flag_value))
 
 

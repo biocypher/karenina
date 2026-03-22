@@ -194,7 +194,15 @@ class TemplateEvaluator:
         result = FieldVerificationResult()
 
         try:
-            result.success = parsed_answer.verify()
+            verify_return = parsed_answer.verify()
+            if not isinstance(verify_return, bool):
+                logger.warning(
+                    "verify() returned non-bool value %r (type %s); "
+                    "expected bool. Truthy non-bool values may mask bugs.",
+                    verify_return,
+                    type(verify_return).__name__,
+                )
+            result.success = verify_return
         except Exception as e:
             result.error = f"Field verification failed: {e}"
             logger.error(result.error)

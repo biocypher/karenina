@@ -236,8 +236,21 @@ class BaseAnswer(BaseModel):
                 result[name] = meta
         return result
 
+    def _clear_verification_cache(self) -> None:
+        """Clear the cached _field_results, forcing recomputation on next call.
+
+        Call this after mutating field values if you need _compute_field_results()
+        to reflect the updated state.
+        """
+        self.__dict__.pop("_field_results", None)
+
     def _compute_field_results(self) -> dict[str, bool]:
         """Evaluate all VerifiedField checks and cache in _field_results.
+
+        Results are cached in self.__dict__["_field_results"] after the first
+        call. Subsequent calls return the cached value without recomputation.
+        Call _clear_verification_cache() to invalidate the cache after
+        mutating field values.
 
         For TracePrimitive fields, reads self._raw_trace and compares
         check_trace() result against bool(meta.ground_truth). For parsed

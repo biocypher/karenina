@@ -146,7 +146,11 @@ class TaskEval:
         """
         from karenina.ports.messages import Message
 
-        trace_messages = [Message.assistant(messages)] if isinstance(messages, str) else messages
+        if isinstance(messages, str):
+            messages = messages.removeprefix("--- AI Message ---\n")
+            trace_messages = [Message.assistant(messages)]
+        else:
+            trace_messages = messages
 
         log_event = LogEvent(
             level=level,
