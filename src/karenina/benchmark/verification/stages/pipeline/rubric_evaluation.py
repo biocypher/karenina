@@ -229,7 +229,6 @@ class RubricEvaluationStage(BaseVerificationStage):
                     dj_config = VerificationConfig(
                         answering_models=[context.answering_model],
                         parsing_models=[context.parsing_model],
-                        deep_judgment_rubric_enabled=True,
                         deep_judgment_rubric_max_excerpts_default=getattr(
                             context, "deep_judgment_max_excerpts_per_attribute", 3
                         ),
@@ -239,7 +238,6 @@ class RubricEvaluationStage(BaseVerificationStage):
                         deep_judgment_rubric_excerpt_retry_attempts_default=getattr(
                             context, "deep_judgment_excerpt_retry_attempts", 2
                         ),
-                        deep_judgment_rubric_search_enabled=getattr(context, "deep_judgment_search_enabled", False),
                         deep_judgment_rubric_search_tool=getattr(context, "deep_judgment_search_tool", "tavily"),
                     )
 
