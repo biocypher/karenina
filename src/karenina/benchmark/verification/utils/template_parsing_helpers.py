@@ -104,7 +104,7 @@ def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]
     without requiring it to follow the full schema format.
 
     Args:
-        json_schema: JSON schema string from PydanticOutputParser.get_format_instructions()
+        json_schema: JSON schema string from model_json_schema()
         attribute_names: List of attribute names to extract descriptions for
 
     Returns:

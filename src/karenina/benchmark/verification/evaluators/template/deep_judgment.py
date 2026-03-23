@@ -13,7 +13,7 @@ with a multi-stage approach:
    - Determines what value the attribute should have based on the evidence
 
 3. Stage 3: Parse final attribute values (standard parsing logic)
-   - Uses PydanticOutputParser with the same schema to extract structured values
+   - Uses ParserPort with the same schema to extract structured values
 
 The feature gracefully handles missing excerpts (refusals, no corroborating evidence)
 and provides detailed metadata about the parsing process.
@@ -130,10 +130,7 @@ def deep_judgment_parse(
     # PREPARE PROMPTS
     # ==========================================
     # Generate JSON schema with field descriptions from the template class
-    from langchain_core.output_parsers import PydanticOutputParser
-
-    temp_parser = PydanticOutputParser(pydantic_object=RawAnswer)
-    json_schema = temp_parser.get_format_instructions()
+    json_schema = json.dumps(RawAnswer.model_json_schema(), indent=2)
 
     # The combined_system_prompt is now format-agnostic (no format_instructions section).
     # Use it directly as the generic system prompt for stages 1&2.

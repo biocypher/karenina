@@ -389,8 +389,6 @@ class TemplateEvaluator:
         Returns:
             ParseResult with deep judgment metadata
         """
-        from langchain_core.output_parsers import PydanticOutputParser
-
         from karenina.schemas.verification import VerificationConfig
 
         from .deep_judgment import deep_judgment_parse
@@ -410,10 +408,6 @@ class TemplateEvaluator:
             deep_judgment_search_enabled=deep_judgment_config.get("search_enabled", False),
             deep_judgment_search_tool=deep_judgment_config.get("search_tool", "wikipedia"),
         )
-
-        # Build prompts for deep judgment
-        parser = PydanticOutputParser(pydantic_object=self.answer_class)
-        format_instructions = parser.get_format_instructions()
 
         # Extract ground truth if enabled
         ground_truth = None
@@ -446,7 +440,7 @@ class TemplateEvaluator:
             user_instructions=user_instructions,
             instruction_context={
                 "json_schema": build_parsing_schema(self.answer_class),
-                "format_instructions": format_instructions,
+                "format_instructions": "",
             },
         )
 
@@ -459,7 +453,7 @@ class TemplateEvaluator:
                 parser=self._parser,
                 question_text=question_text,
                 config=dj_config,
-                format_instructions=format_instructions,
+                format_instructions="",  # Unused (ARG001), kept for interface stability
                 combined_system_prompt=combined_system_prompt,
                 usage_tracker=usage_tracker,
                 parsing_model_str=self.model_str,
