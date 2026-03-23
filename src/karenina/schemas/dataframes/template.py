@@ -44,14 +44,18 @@ class TemplateDataFrameBuilder:
         Each field in the parsed responses gets its own row with field-level matching.
 
         Column ordering:
-            1. Status: completed_without_errors, error, recursion_limit_reached
+            1. Status: completed_without_errors, error, failed_stage,
+               recursion_limit_reached
             2. Identification: question_id, template_id, question_text, keywords,
                replicate, answering_mcp_servers
-            3. Model Config: answering_model, parsing_model, system_prompts
-            4. Template Response: raw_llm_response
-            5. Field Comparison: field_name, gt_value, llm_value, field_match, field_type
-            6. Verification Checks: embedding, abstention, regex
-            7. Execution Metadata: execution_time, timestamp, run_name
+            3. Scenario: scenario_id, scenario_node, scenario_turn, scenario_path
+            4. Model Config: answering_model, parsing_model, system_prompts
+            5. Template Response: raw_llm_response
+            6. Field Comparison: field_name, gt_value, llm_value, field_match,
+               field_type
+            7. Verification Checks: verify_result, verify_granular_result,
+               embedding, abstention, sufficiency, regex
+            8. Execution Metadata: execution_time, timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per field comparison
@@ -149,6 +153,7 @@ class TemplateDataFrameBuilder:
             # === Status (FIRST COLUMN) ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             "recursion_limit_reached": template.recursion_limit_reached if template else False,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
@@ -157,6 +162,11 @@ class TemplateDataFrameBuilder:
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
             "answering_mcp_servers": template.answering_mcp_servers if template else None,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -172,6 +182,7 @@ class TemplateDataFrameBuilder:
             "field_type": field_type,
             # === Verification Checks ===
             "verify_result": template.verify_result if template else None,
+            "verify_granular_result": template.verify_granular_result if template else None,
             "embedding_check_performed": template.embedding_check_performed if template else False,
             "embedding_similarity_score": template.embedding_similarity_score if template else None,
             "embedding_model_used": template.embedding_model_used if template else None,
@@ -180,6 +191,10 @@ class TemplateDataFrameBuilder:
             "abstention_detected": template.abstention_detected if template else None,
             "abstention_reasoning": template.abstention_reasoning if template else None,
             "abstention_override_applied": template.abstention_override_applied if template else False,
+            "sufficiency_check_performed": template.sufficiency_check_performed if template else False,
+            "sufficiency_detected": template.sufficiency_detected if template else None,
+            "sufficiency_reasoning": template.sufficiency_reasoning if template else None,
+            "sufficiency_override_applied": template.sufficiency_override_applied if template else False,
             "regex_validations_performed": template.regex_validations_performed if template else False,
             "regex_overall_success": template.regex_overall_success if template else None,
             # === Execution Metadata (AT END) ===
@@ -206,6 +221,7 @@ class TemplateDataFrameBuilder:
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             "recursion_limit_reached": False,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
@@ -214,6 +230,11 @@ class TemplateDataFrameBuilder:
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
             "answering_mcp_servers": None,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -229,6 +250,7 @@ class TemplateDataFrameBuilder:
             "field_type": None,
             # === Verification Checks ===
             "verify_result": None,
+            "verify_granular_result": None,
             "embedding_check_performed": False,
             "embedding_similarity_score": None,
             "embedding_model_used": None,
@@ -237,6 +259,10 @@ class TemplateDataFrameBuilder:
             "abstention_detected": None,
             "abstention_reasoning": None,
             "abstention_override_applied": False,
+            "sufficiency_check_performed": False,
+            "sufficiency_detected": None,
+            "sufficiency_reasoning": None,
+            "sufficiency_override_applied": False,
             "regex_validations_performed": False,
             "regex_overall_success": None,
             # === Execution Metadata ===
@@ -245,20 +271,26 @@ class TemplateDataFrameBuilder:
             "run_name": metadata.run_name,
         }
 
-    def _compare_values(self, value1: Any, value2: Any) -> bool:
+    def _compare_values(self, value1: Any, value2: Any) -> bool | None:
         """
         Compare two values for equality, handling various data types.
+
+        When both values are None, the comparison is not meaningful (the field
+        was absent or unpopulated on both sides), so None is returned to signal
+        "not comparable". This aligns with the judgment builder, which also
+        treats both-None as not comparable.
 
         Args:
             value1: First value to compare
             value2: Second value to compare
 
         Returns:
-            True if values are equal, False otherwise
+            True if values are equal, False if unequal, None if both values
+            are None (not comparable).
         """
         # Handle None cases
         if value1 is None and value2 is None:
-            return True
+            return None
         if value1 is None or value2 is None:
             return False
 
