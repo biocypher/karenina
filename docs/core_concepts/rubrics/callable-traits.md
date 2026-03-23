@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore", message="Deserializing callable")
 
 ## 1. What Callable Traits Are
 
-A `CallableRubricTrait` wraps a Python function that runs locally during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). The function receives the configured rubric evaluation input as a single string argument and returns either a boolean (pass/fail) or an integer score.
+A `CallableRubricTrait` wraps a Python function that runs locally during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). The function receives the configured rubric evaluation input as a single string argument and returns a boolean (pass/fail), a numeric score (int or float), or a string class label (for literal/categorical classification).
 
 Callable traits are meant for checks that need **custom programmatic logic**. Typical examples include minimum length requirements, repetition checks, sentence counts, heuristic term counts, or custom evaluators that combine multiple strategies under one Python entrypoint.
 
@@ -39,7 +39,7 @@ That means good callable traits define **explicit code-level rules**:
 
 - one string input
 - explicit, inspectable Python logic
-- a clearly bounded output type: boolean or integer
+- a clearly bounded output type: boolean, numeric (int or float), or string class label
 
 **The abstraction boundary.** Callable traits are best thought of as the escape hatch trait type. In principle, a callable can re-implement the behavior of other trait types or even call an external model. In practice, you should prefer the built-in traits when they already match the assessment you want:
 
@@ -67,16 +67,17 @@ The function is serialized using [cloudpickle](https://github.com/cloudpipe/clou
 |-------|------|---------|-------------|
 | `name` | `str` | *(required)* | Human-readable identifier |
 | `description` | `str \| None` | `None` | What this trait evaluates |
-| `kind` | `str` | *(required)* | `"boolean"` for pass/fail, `"score"` for numeric |
+| `kind` | `str` | *(required)* | `"boolean"` for pass/fail, `"score"` for numeric, `"literal"` for categorical |
 | `callable_code` | `bytes` | *(required)* | Serialized function (cloudpickle) |
-| `min_score` | `int \| None` | `None` | Minimum score (required if `kind="score"`) |
-| `max_score` | `int \| None` | `None` | Maximum score (required if `kind="score"`) |
+| `classes` | `dict[str, str] \| None` | `None` | Class name to description mapping (required if `kind="literal"`) |
+| `min_score` | `int \| None` | `None` | Minimum score (required if `kind="score"`, auto-derived for `kind="literal"`) |
+| `max_score` | `int \| None` | `None` | Maximum score (required if `kind="score"`, auto-derived for `kind="literal"`) |
 | `invert_result` | `bool` | `False` | Invert the boolean result (only for `kind="boolean"`) |
 | `higher_is_better` | `bool` | *(required)* | Whether higher return values indicate better performance |
 
 **Key characteristics:**
 
-- Returns **boolean** or **integer** depending on `kind`
+- Returns **boolean**, **int**, **float**, or **class index** depending on `kind`
 - Karenina itself makes no evaluator LLM call; it simply runs your function
 - Function must accept exactly **one `str` parameter**
 - Function is serialized via cloudpickle
@@ -100,7 +101,7 @@ Previous Stages
 │   Your Python function(text)                      │
 │           │                                       │
 │           ▼                                       │
-│   Returns bool or int                             │
+│   Returns bool, int, float, or str                │
 │           │                                       │
 │   Apply invert_result (if boolean and set)        │
 │           │                                       │
@@ -166,7 +167,7 @@ print(repetition_trait.evaluate("Repeat this. Repeat this. Repeat this."))      
 
 ## 6. Score Callable Traits
 
-Score callables return an integer within a defined range. You must specify `min_score` and `max_score`.
+Score callables return a numeric value (int or float) within a defined range. You must specify `min_score` and `max_score`. Float return values are preserved (not truncated to int).
 
 ```python
 def count_sentences(text: str) -> int:
@@ -221,7 +222,32 @@ error_count_trait = CallableRubricTrait.from_callable(
 print(f"Errors: {error_count_trait.evaluate('Clean  text with  two double  spaces.')}")  # Errors: 3
 ```
 
-## 8. Serialization and Security
+## 8. Literal Callable Traits
+
+Literal callables classify the response into one of several predefined categories. Your function returns a string matching one of the class names. Karenina converts it to an integer index (0-based, following class order).
+
+You must provide a `classes` dict mapping class names to descriptions (2 to 20 classes). `min_score` and `max_score` are auto-derived from the number of classes.
+
+```python
+tone_classifier = CallableRubricTrait.from_callable(
+    name="Response Tone",
+    description="Classify the tone of the response",
+    func=lambda text: "formal" if "therefore" in text.lower() else "casual",
+    kind="literal",
+    classes={
+        "formal": "Academic or professional tone with structured arguments",
+        "casual": "Conversational, relaxed tone",
+    },
+    higher_is_better=True,
+)
+
+print(tone_classifier.evaluate("Therefore, the evidence suggests..."))  # 0 (formal)
+print(tone_classifier.evaluate("Yeah, I think it's fine"))              # 1 (casual)
+```
+
+Use literal callables when you have a programmatic classifier that maps responses to discrete categories. If the classification needs LLM judgment, use an [LLM trait](../llm-traits/) with `kind="literal"` instead.
+
+## 9. Serialization and Security
 
 Callable traits are portable because the function is serialized with cloudpickle when you call `from_callable()`. This is powerful, but it introduces real constraints.
 
@@ -256,7 +282,7 @@ print(f"Trait evaluate:  {length_trait.evaluate('Hello world')}")  # Trait evalu
 <p>Deserializing callable code can execute arbitrary Python code. Only load <code>CallableRubricTrait</code> instances from <strong>trusted sources</strong>. This is also why <code>CallableRubricTrait</code> cannot be created via the web API.</p>
 </div>
 
-## 9. Using Callable Traits in a Rubric
+## 10. Using Callable Traits in a Rubric
 
 Callable traits combine with other trait types in a `Rubric`:
 
@@ -273,7 +299,7 @@ for trait in rubric.callable_traits:
     print(f"  - {trait.name} (kind={trait.kind})")
 ```
 
-## 10. Next Steps
+## 11. Next Steps
 
 - [LLM traits](../llm-traits/): boolean, score, and literal traits evaluated by an LLM judge
 - [Regex traits](../regex-traits/): deterministic pattern matching

@@ -452,6 +452,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableRubric
         max_score=max_score,
         invert_result=invert_result,
         higher_is_better=higher_is_better,
+        classes=None,
     )
 
 

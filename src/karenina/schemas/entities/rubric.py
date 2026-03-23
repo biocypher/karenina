@@ -254,27 +254,50 @@ class CallableRubricTrait(BaseModel):
     Only load CallableRubricTrait instances from trusted sources. CallableRubricTrait cannot be
     created via the web API for security reasons.
 
-    The trait can return either boolean (pass/fail) or numeric score results, matching
-    LLMRubricTrait behavior.
+    Supported kinds:
+    - boolean: callable returns bool (pass/fail)
+    - score: callable returns int or float (numeric rating within min/max range)
+    - literal: callable returns str (class label from predefined classes dict)
+
+    For kind="literal":
+    - The ``classes`` field is REQUIRED (dict mapping class name to description)
+    - ``min_score`` is automatically set to 0 (first class index)
+    - ``max_score`` is automatically set to len(classes)-1 (last class index)
+    - The callable must return a string that matches one of the class names
+    - evaluate() returns the int index of the matched class
 
     Examples:
         Boolean:
         - Word count validation: lambda text: len(text.split()) >= 50
         - Custom domain logic: checking medical terminology consistency
 
-        Score:
+        Score (int or float):
         - Readability score: lambda text: calculate_flesch_kincaid(text)
         - Custom metric: lambda text: compute_domain_score(text)
+
+        Literal:
+        - Tone classifier: lambda text: "formal" if "therefore" in text else "casual"
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
     summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
-    kind: TraitKind = Field(..., description="Type of evaluation: 'boolean' for pass/fail, 'score' for numeric")
+    kind: TraitKind = Field(..., description="Type of evaluation: 'boolean', 'score', or 'literal'")
     callable_code: bytes = Field(..., description="Serialized callable function (cloudpickle)")
-    min_score: int | None = Field(None, description="Minimum score value (required if kind='score')")
-    max_score: int | None = Field(None, description="Maximum score value (required if kind='score')")
+    min_score: int | None = Field(
+        None, description="Minimum score value (required if kind='score', auto-derived for 'literal')"
+    )
+    max_score: int | None = Field(
+        None, description="Maximum score value (required if kind='score', auto-derived for 'literal')"
+    )
     invert_result: bool = Field(False, description="Whether to invert the boolean result (only for kind='boolean')")
+
+    # Literal-specific field (required when kind="literal")
+    classes: dict[str, str] | None = Field(
+        None,
+        description="Class name to description mapping. Required when kind='literal'. "
+        "Order determines indices (0, 1, 2...). Must have 2-20 classes.",
+    )
 
     # Directionality field
     higher_is_better: bool = Field(
@@ -285,12 +308,37 @@ class CallableRubricTrait(BaseModel):
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
+    @field_validator("classes")
+    @classmethod
+    def validate_classes(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        """Validate class definitions when present."""
+        if v is None:
+            return None
+        if len(v) < 2:
+            raise ValueError("Literal trait must have at least 2 classes")
+        if len(v) > 20:
+            raise ValueError("Literal trait cannot have more than 20 classes")
+        return v
+
     @model_validator(mode="before")
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
-            values["higher_is_better"] = True
+        """Set defaults for higher_is_better and validate literal kind requires classes."""
+        if isinstance(values, dict):
+            if "higher_is_better" not in values or values.get("higher_is_better") is None:
+                values["higher_is_better"] = True
+
+            # Literal kind requires classes
+            if values.get("kind") == "literal":
+                if not values.get("classes"):
+                    raise ValueError("classes field is required when kind='literal'")
+                # Auto-derive min/max score from classes
+                num_classes = len(values["classes"])
+                if values.get("min_score") is None:
+                    values["min_score"] = 0
+                if values.get("max_score") is None:
+                    values["max_score"] = num_classes - 1
+
         return values
 
     @field_serializer("callable_code")
@@ -312,7 +360,7 @@ class CallableRubricTrait(BaseModel):
     def from_callable(
         cls,
         name: str,
-        func: Callable[[str], bool | int],
+        func: Callable[[str], bool | int | float | str],
         kind: TraitKind,
         description: str | None = None,
         summary: str | None = None,
@@ -320,47 +368,49 @@ class CallableRubricTrait(BaseModel):
         max_score: int | None = None,
         invert_result: bool = False,
         higher_is_better: bool = True,
+        classes: dict[str, str] | None = None,
     ) -> "CallableRubricTrait":
         """
         Create a CallableRubricTrait from a callable function.
 
         Args:
-            name: Trait name
-            func: Function that takes a string (the verification trace/answer text) and returns bool or int
-            kind: Type of evaluation - 'boolean' or 'score'
-            description: Optional trait description
-            summary: Short concept label for dynamic rubric presence check
-            min_score: Minimum score (required if kind='score')
-            max_score: Maximum score (required if kind='score')
-            invert_result: Whether to invert boolean result (only for kind='boolean')
-            higher_is_better: Whether higher return values indicate better performance
+            name: Trait name.
+            func: Function that takes a string and returns bool, int, float, or str
+                depending on kind.
+            kind: Type of evaluation: 'boolean', 'score', or 'literal'.
+            description: Optional trait description.
+            summary: Short concept label for dynamic rubric presence check.
+            min_score: Minimum score (required if kind='score', auto-derived for 'literal').
+            max_score: Maximum score (required if kind='score', auto-derived for 'literal').
+            invert_result: Whether to invert boolean result (only for kind='boolean').
+            higher_is_better: Whether higher return values indicate better performance.
+            classes: Class name to description mapping (required if kind='literal').
 
         Returns:
-            CallableRubricTrait instance with serialized function
+            CallableRubricTrait instance with serialized function.
 
         Raises:
-            ValueError: If function signature is invalid or score parameters are missing
+            ValueError: If function signature is invalid or required parameters are missing.
         """
-        # Validate function signature
         import inspect
 
         sig = inspect.signature(func)
         params = list(sig.parameters.keys())
-
         if len(params) != 1:
             raise ValueError(f"Callable must have exactly one parameter, got {len(params)}")
 
-        # Validate score parameters
         if kind == "score":
             if min_score is None or max_score is None:
                 raise ValueError("min_score and max_score are required when kind='score'")
             if min_score >= max_score:
                 raise ValueError(f"min_score ({min_score}) must be less than max_score ({max_score})")
-        else:  # kind == "boolean"
+        elif kind == "literal":
+            if not classes:
+                raise ValueError("classes field is required when kind='literal'")
+        elif kind == "boolean":
             if min_score is not None or max_score is not None:
                 raise ValueError("min_score and max_score should not be set when kind='boolean'")
 
-        # Serialize the function
         callable_code = cloudpickle.dumps(func)
 
         return cls(
@@ -373,9 +423,10 @@ class CallableRubricTrait(BaseModel):
             max_score=max_score,
             invert_result=invert_result,
             higher_is_better=higher_is_better,
+            classes=classes,
         )
 
-    def deserialize_callable(self) -> Callable[[str], bool | int]:
+    def deserialize_callable(self) -> Callable[[str], bool | int | float | str]:
         """
         Deserialize the callable function from stored bytes.
 
@@ -383,10 +434,10 @@ class CallableRubricTrait(BaseModel):
         arbitrary Python code. Only deserialize callables from trusted sources.
 
         Returns:
-            The deserialized callable function
+            The deserialized callable function.
 
         Raises:
-            RuntimeError: If deserialization fails
+            RuntimeError: If deserialization fails.
         """
         try:
             warnings.warn(
@@ -395,24 +446,26 @@ class CallableRubricTrait(BaseModel):
                 category=UserWarning,
                 stacklevel=2,
             )
-            callable_func: Callable[[str], bool | int] = cloudpickle.loads(self.callable_code)
+            callable_func: Callable[[str], bool | int | float | str] = cloudpickle.loads(self.callable_code)
             return callable_func
         except Exception as e:
             raise RuntimeError(f"Failed to deserialize callable for trait '{self.name}': {e}") from e
 
-    def evaluate(self, text: str) -> bool | int:
+    def evaluate(self, text: str) -> bool | int | float:
         """
         Evaluate the trait against the provided text.
 
         Args:
-            text: The text to evaluate (verification trace or answer text)
+            text: The text to evaluate (verification trace or answer text).
 
         Returns:
-            Boolean result for kind='boolean', numeric score for kind='score'
+            For kind='boolean': bool result (possibly inverted).
+            For kind='score': int or float score within [min_score, max_score].
+            For kind='literal': int class index (0-based, matching classes key order).
 
         Raises:
-            RuntimeError: If evaluation fails
-            ValueError: If return type doesn't match kind or score is out of range
+            RuntimeError: If evaluation fails.
+            ValueError: If return type does not match kind or value is out of range.
         """
         try:
             func = self.deserialize_callable()
@@ -422,14 +475,25 @@ class CallableRubricTrait(BaseModel):
                 if not isinstance(result, bool):
                     raise ValueError(f"Callable with kind='boolean' must return bool, got {type(result)}")
                 return not result if self.invert_result else result
+
+            elif self.kind == "literal":
+                if not isinstance(result, str):
+                    raise ValueError(f"Callable with kind='literal' must return str, got {type(result)}")
+                if self.classes is None:
+                    raise ValueError(f"Trait '{self.name}' has kind='literal' but no classes defined")
+                class_names = list(self.classes.keys())
+                if result not in class_names:
+                    raise ValueError(
+                        f"'{result}' is not a valid class for trait '{self.name}'. Valid classes: {class_names}"
+                    )
+                return class_names.index(result)
+
             else:  # kind == "score"
                 if not isinstance(result, int | float):
                     raise ValueError(f"Callable with kind='score' must return int or float, got {type(result)}")
 
-                # Convert to int if float
-                score = int(result) if isinstance(result, float) else result
+                score: int | float = result
 
-                # Validate score range
                 if self.min_score is not None and score < self.min_score:
                     raise ValueError(f"Score {score} is below minimum {self.min_score} for trait '{self.name}'")
                 if self.max_score is not None and score > self.max_score:

@@ -141,6 +141,7 @@ def _deserialize_callable_trait(trait_data: dict[str, Any]) -> Any:
         min_score=trait_data.get("min_score"),
         max_score=trait_data.get("max_score"),
         invert_result=trait_data.get("invert_result", False),
+        classes=trait_data.get("classes"),
     )
 
 
