@@ -606,11 +606,11 @@ class TestLoadResultsFromFile:
         assert len(loaded) == 0
 
     def test_load_empty_csv_returns_empty_dict(self, tmp_path) -> None:
-        """Test loading CSV with only header returns empty dict."""
+        """Test loading CSV with headers only returns empty dict."""
         benchmark = Benchmark.create(name="test")
         manager = ResultsManager(benchmark)
 
-        csv_content = "row_index,question_id,question_text"
+        csv_content = "row_index,question_id,question_text\n"
         csv_path = tmp_path / "results.csv"
         csv_path.write_text(csv_content)
 
