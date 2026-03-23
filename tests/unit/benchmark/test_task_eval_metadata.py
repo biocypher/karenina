@@ -2,7 +2,7 @@
 
 import pytest
 
-from karenina.benchmark.task_eval import StepEval
+from karenina.benchmark.task_eval import StepEval, TaskEval
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -129,3 +129,29 @@ class TestSuccessRateRubricOnly:
         step = StepEval(verification_results={"q1": [result]})
         stats = step.get_summary_stats()
         assert stats["success_rate"] == 100.0
+
+
+@pytest.mark.unit
+class TestAvailableStepIds:
+    """Issue 115: _get_available_step_ids() includes dynamic rubric steps."""
+
+    def test_dynamic_rubric_only_step_discovered(self):
+        """A step with only a dynamic rubric should appear in available step IDs."""
+        from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+        task = TaskEval()
+        task.add_dynamic_rubric(
+            DynamicRubric(
+                llm_traits=[
+                    LLMRubricTrait(
+                        name="dynamic_trait",
+                        summary="check",
+                        description="Dynamic check",
+                        kind="boolean",
+                    )
+                ]
+            ),
+            step_id="dynamic_step",
+        )
+        step_ids = task._get_available_step_ids()
+        assert "dynamic_step" in step_ids

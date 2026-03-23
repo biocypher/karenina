@@ -415,6 +415,7 @@ class TaskEval:
         step_ids.update(self.step_logs.keys())
         step_ids.update(self.step_questions.keys())
         step_ids.update(self.step_rubrics.keys())
+        step_ids.update(self.step_dynamic_rubrics.keys())
         return step_ids
 
     def _get_evaluation_context(self, step_id: str | None = None) -> "EvaluationContext":
