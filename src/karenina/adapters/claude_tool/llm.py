@@ -265,8 +265,10 @@ class ClaudeToolLLMAdapter:
             raise ParseError(f"Parsed output is {type(parsed_output).__name__}, expected {schema.__name__}")
 
         usage = extract_usage_from_response(response, model=self._config.model_name)
+        # Serialize to JSON so callers can json.loads(response.content)
+        content = parsed_output.model_dump_json()
         return LLMResponse(
-            content=str(parsed_output),
+            content=content,
             usage=usage,
             raw=parsed_output,
         )

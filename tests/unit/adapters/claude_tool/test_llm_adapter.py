@@ -257,6 +257,38 @@ class TestLLMAdapterStructuredOutput:
             assert result.raw == mock_parsed
 
     @pytest.mark.asyncio
+    async def test_structured_ainvoke_content_is_json(self, model_config: Any) -> None:
+        """Test structured output content is valid JSON, not str(model).
+
+        The content field must be JSON-serialized so that callers can
+        json.loads(response.content) to reconstruct the parsed object.
+        """
+        import json
+
+        class TestSchema(BaseModel):
+            value: str
+            count: int
+
+        adapter = ClaudeToolLLMAdapter(model_config)
+        structured = adapter.with_structured_output(TestSchema)
+
+        mock_parsed = TestSchema(value="hello", count=42)
+        mock_response = MagicMock()
+        mock_response.parsed_output = mock_parsed
+        mock_response.usage = MockUsage()
+
+        mock_client = AsyncMock()
+        mock_client.beta.messages.parse.return_value = mock_response
+
+        with patch.object(structured, "_get_async_client", return_value=mock_client):
+            result = await structured.ainvoke([Message.user("Parse this")])
+
+            # Content must be valid JSON
+            parsed = json.loads(result.content)
+            assert parsed["value"] == "hello"
+            assert parsed["count"] == 42
+
+    @pytest.mark.asyncio
     async def test_structured_ainvoke_passes_output_format(self, model_config: Any) -> None:
         """Test structured output passes schema as output_format."""
 
