@@ -162,13 +162,9 @@ class TestRubricResultsStandardExport:
         assert isinstance(excerpts, list)
         assert len(excerpts) == 2
 
-        # trait_hallucination_risk should be JSON dict (or dict)
+        # trait_hallucination_risk is the overall_risk string (issue 123)
         risk = row["trait_hallucination_risk"]
-        if isinstance(risk, str):
-            risk = json.loads(risk)
-        assert isinstance(risk, dict)
-        assert "overall_risk" in risk
-        assert risk["overall_risk"] == "low"
+        assert risk == "low"
 
 
 class TestRubricJudgmentResultsCreation:
