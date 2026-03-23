@@ -397,3 +397,41 @@ class TestExceptionNarrowing:
         step = result.global_eval
         assert step is not None
         assert len(step.failed_questions) > 0
+
+
+@pytest.mark.unit
+class TestFewShotConfigWarning:
+    """Issue 179: FewShotConfig warning in TaskEval mode."""
+
+    def test_few_shot_warning_emitted(self, monkeypatch, caplog):
+        """Debug log emitted when FewShotConfig is enabled."""
+        import logging
+
+        from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
+
+        def mock_run(*args, **kwargs):
+            return _make_mock_result()
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = TaskEval(task_id="test")
+        task.log_trace([Message.assistant("response")])
+        task.add_rubric(
+            Rubric(
+                llm_traits=[
+                    LLMRubricTrait(name="q", description="check", kind="boolean"),
+                ]
+            )
+        )
+
+        from karenina.schemas.config import FewShotConfig
+
+        config = _make_config(few_shot_config=FewShotConfig(enabled=True))
+
+        with caplog.at_level(logging.DEBUG, logger="karenina.benchmark.task_eval.task_eval"):
+            task.evaluate(config)
+
+        assert any("FewShotConfig has no effect in TaskEval mode" in m for m in caplog.messages)
