@@ -435,3 +435,62 @@ class TestFewShotConfigWarning:
             task.evaluate(config)
 
         assert any("FewShotConfig has no effect in TaskEval mode" in m for m in caplog.messages)
+
+
+@pytest.mark.unit
+class TestTemplateIdNormalization:
+    """Issue 167: generate_template_id() produces consistent hashes regardless of indentation."""
+
+    def test_same_hash_different_indentation(self):
+        """Same template at different indentation levels produces the same hash."""
+        from karenina.utils.checkpoint import generate_template_id
+
+        # Module-level (no extra indentation)
+        template_module = """from karenina.schemas.entities import BaseAnswer
+
+class Answer(BaseAnswer):
+    value: str = ""
+    def verify(self) -> bool:
+        return True
+"""
+
+        # Embedded in a string literal (extra indentation)
+        template_embedded = """
+            from karenina.schemas.entities import BaseAnswer
+
+            class Answer(BaseAnswer):
+                value: str = ""
+                def verify(self) -> bool:
+                    return True
+            """
+
+        assert generate_template_id(template_module) == generate_template_id(template_embedded)
+
+    def test_different_templates_different_hash(self):
+        """Semantically different templates still produce different hashes."""
+        from karenina.utils.checkpoint import generate_template_id
+
+        template_a = "class A:\n    def verify(self): return True"
+        template_b = "class B:\n    def verify(self): return False"
+        assert generate_template_id(template_a) != generate_template_id(template_b)
+
+    def test_none_returns_no_template(self):
+        """None input returns 'no_template' sentinel."""
+        from karenina.utils.checkpoint import generate_template_id
+
+        assert generate_template_id(None) == "no_template"
+
+    def test_empty_returns_no_template(self):
+        """Empty/whitespace-only returns 'no_template' sentinel."""
+        from karenina.utils.checkpoint import generate_template_id
+
+        assert generate_template_id("") == "no_template"
+        assert generate_template_id("   \n  \n  ") == "no_template"
+
+    def test_line_ending_normalization(self):
+        """Windows vs Unix line endings produce the same hash."""
+        from karenina.utils.checkpoint import generate_template_id
+
+        unix = "class A:\n    pass\n"
+        windows = "class A:\r\n    pass\r\n"
+        assert generate_template_id(unix) == generate_template_id(windows)

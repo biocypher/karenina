@@ -161,9 +161,9 @@ def test_generate_template_id_whitespace_only_returns_no_template() -> None:
 
 @pytest.mark.unit
 def test_generate_template_id_strips_whitespace() -> None:
-    """Test that leading/trailing whitespace is stripped before hashing."""
+    """Test that leading/trailing whitespace and uniform indentation are stripped before hashing."""
     template1 = "class Answer(BaseAnswer):\n    value: str"
-    template2 = "  class Answer(BaseAnswer):\n    value: str  "
+    template2 = "  class Answer(BaseAnswer):\n      value: str  "
 
     id1 = generate_template_id(template1)
     id2 = generate_template_id(template2)
