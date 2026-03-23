@@ -201,6 +201,31 @@ Replace key-sniffing (`type` or `command` presence) in `_convert_mcp_servers()` 
 - In both adapters' `with_structured_output()`: when `max_retries` is not None, emit `logger.warning("max_retries=%d ignored by %s adapter; retry behavior is managed internally", max_retries, adapter_name)`
 - Update `LLMPort.with_structured_output()` docstring to note adapter support varies
 
+### Group 6: Documentation & Skill Updates
+
+After all code changes are complete and tests pass, review and update the adapter authoring skills and documentation to reflect the new protocol requirements and patterns.
+
+#### Adapter Creation Skills
+
+Five skills in `.claude/skills/` guide new adapter authors through the lifecycle. These must reflect the protocol changes from 138/139 and the MCP session pattern from 091/092:
+
+| Skill | Path | Updates Needed |
+|-------|------|----------------|
+| `create-karenina-adapter` | `.claude/skills/create-karenina-adapter/SKILL.md` | Mention `aclose()` as required protocol method, `capabilities` on all three ports |
+| `adapter-design` | `.claude/skills/adapter-design/SKILL.md` | Add `aclose()` and `AgentPort.capabilities` to concept mapping tables |
+| `adapter-implement` | `.claude/skills/adapter-implement/SKILL.md` | Add `aclose()` to implementation checklist, document AsyncExitStack pattern for MCP session management |
+| `adapter-test` | `.claude/skills/adapter-test/SKILL.md` | Add cold test for `aclose()` protocol conformance, verify `capabilities` on agent adapters |
+| `adapter-review` | `.claude/skills/adapter-review/SKILL.md` | Add `aclose()` and `capabilities` to review checklist |
+
+#### Documentation
+
+| Doc | Path | Updates Needed |
+|-----|------|----------------|
+| `writing-adapters.md` | `docs/advanced-adapters/writing-adapters.md` | Add `aclose()` as required method, document `AgentPort.capabilities`, note `max_retries` adapter-dependent behavior |
+| `ports.md` | `docs/advanced-adapters/ports.md` | Update protocol signatures to include `aclose()`, add `capabilities` to `AgentPort` section |
+| `available-adapters.md` | `docs/advanced-adapters/available-adapters.md` | Update Deep Agents capability matrix (MCP/tools now wired up) |
+| `mcp-integration.md` | `docs/advanced-adapters/mcp-integration.md` | Document AsyncExitStack session pattern, reference Deep Agents as second MCP-capable adapter |
+
 ## Verification
 
 - Run full test suite: `cd karenina && uv run pytest tests/ -x -q`
@@ -230,3 +255,12 @@ Replace key-sniffing (`type` or `command` presence) in `_convert_mcp_servers()` 
 | `ports/llm.py` | 138, 142 |
 | `ports/agent.py` | 138, 139 |
 | `ports/parser.py` | 138 |
+| `.claude/skills/create-karenina-adapter/SKILL.md` | docs |
+| `.claude/skills/adapter-design/SKILL.md` | docs |
+| `.claude/skills/adapter-implement/SKILL.md` | docs |
+| `.claude/skills/adapter-test/SKILL.md` | docs |
+| `.claude/skills/adapter-review/SKILL.md` | docs |
+| `docs/advanced-adapters/writing-adapters.md` | docs |
+| `docs/advanced-adapters/ports.md` | docs |
+| `docs/advanced-adapters/available-adapters.md` | docs |
+| `docs/advanced-adapters/mcp-integration.md` | docs |
