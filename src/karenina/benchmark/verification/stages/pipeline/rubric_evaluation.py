@@ -457,7 +457,9 @@ class RubricEvaluationStage(BaseVerificationStage):
             )
 
         # Annotate promoted traits with "dynamic" provenance
-        if promoted_names and context.trait_provenance is not None:
+        if promoted_names:
+            if context.trait_provenance is None:
+                context.trait_provenance = {}
             for name in promoted_names:
                 context.trait_provenance[name] = "dynamic"
 

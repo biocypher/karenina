@@ -588,6 +588,10 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            # === Rubric Evaluation Metadata ===
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
+            "trait_provenance": None,
         }
 
     def _add_deep_judgment_columns(
