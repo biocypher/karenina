@@ -104,7 +104,10 @@ class TemplateDataFrameBuilder:
                     row["result_index"] = result_idx
                     rows.append(row)
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        if "replicate" in df.columns:
+            df["replicate"] = df["replicate"].astype(pd.Int64Dtype())
+        return df
 
     def _create_field_row(
         self,
@@ -463,11 +466,12 @@ class TemplateDataFrameBuilder:
                 output_audio = output_details.get("audio")
                 reasoning_tokens = output_details.get("reasoning")
 
-                # Agent metrics (only relevant for answer_generation stage typically)
-                iterations = agent_metrics.get("iterations")
-                tool_calls = agent_metrics.get("tool_calls")
-                tools_used = agent_metrics.get("tools_used")
-                suspected_failures = agent_metrics.get("suspect_failed_tool_calls")
+                # Agent metrics (only meaningful for answer_generation stage)
+                is_answer_stage = stage == "answer_generation"
+                iterations = agent_metrics.get("iterations") if is_answer_stage else None
+                tool_calls = agent_metrics.get("tool_calls") if is_answer_stage else None
+                tools_used = agent_metrics.get("tools_used") if is_answer_stage else None
+                suspected_failures = agent_metrics.get("suspect_failed_tool_calls") if is_answer_stage else None
 
                 rows.append(
                     {

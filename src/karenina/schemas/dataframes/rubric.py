@@ -173,6 +173,8 @@ class RubricDataFrameBuilder:
                     row_result_ids.append(result.metadata.result_id)
 
         df = pd.DataFrame(rows)
+        if "replicate" in df.columns:
+            df["replicate"] = df["replicate"].astype(pd.Int64Dtype())
 
         # Add dynamic rubric _skipped columns if any result has dynamic rubric data
         df = self._add_dynamic_rubric_skipped_columns(df, row_result_ids)
@@ -665,9 +667,10 @@ class RubricDataFrameBuilder:
             else []
         )
 
-        # Add trait_hallucination_risk
-        row["trait_hallucination_risk"] = (
+        # Add trait_hallucination_risk (extract overall_risk string from dict)
+        risk_data = (
             rubric_dj.rubric_hallucination_risk_assessment.get(trait_name)
             if rubric_dj and rubric_dj.rubric_hallucination_risk_assessment
             else None
         )
+        row["trait_hallucination_risk"] = risk_data.get("overall_risk") if isinstance(risk_data, dict) else risk_data

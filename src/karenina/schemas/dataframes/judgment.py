@@ -151,7 +151,10 @@ class JudgmentDataFrameBuilder:
                     row["result_index"] = result_idx
                     rows.append(row)
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        if "replicate" in df.columns:
+            df["replicate"] = df["replicate"].astype(pd.Int64Dtype())
+        return df
 
     def _create_judgment_row(
         self,
