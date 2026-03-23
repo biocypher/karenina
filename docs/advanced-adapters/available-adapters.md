@@ -190,6 +190,8 @@ The agent adapter uses `create_deep_agent()` from the `deepagents` package, whic
 - Dual trace output: both a raw trace string and structured `trace_messages` list
 - Usage metadata extraction from `AIMessage.response_metadata`
 - Recursion limit detection from LangGraph state (`is_last_step`)
+- MCP server support via `langchain-mcp-adapters` (converts `MCPServerConfig` to MCP tools using `AsyncExitStack` for session lifetime management)
+- Static tool support (karenina `Tool` objects converted to LangChain tools and passed to `create_deep_agent`)
 
 Extra configuration can be passed through `AgentConfig.extra`, which forwards arbitrary keyword arguments to `create_deep_agent()`.
 

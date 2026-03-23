@@ -34,6 +34,8 @@ class LLMPort(Protocol):
     def with_structured_output(
         self, schema: type[BaseModel], *, max_retries: int | None = None
     ) -> "LLMPort": ...
+
+    async def aclose(self) -> None: ...
 ```
 
 ### Methods
@@ -42,8 +44,9 @@ class LLMPort(Protocol):
 |--------|-------------|
 | `ainvoke(messages)` | Async invocation — primary API. Takes a list of `Message` objects, returns `LLMResponse`. |
 | `invoke(messages)` | Sync wrapper around `ainvoke()`. Uses `asyncio.run()` internally. |
-| `with_structured_output(schema, *, max_retries=None)` | Returns a new `LLMPort` configured for structured output using the provided Pydantic schema. |
+| `with_structured_output(schema, *, max_retries=None)` | Returns a new `LLMPort` configured for structured output using the provided Pydantic schema. Not all adapters support `max_retries`; those that do not will log a warning. |
 | `capabilities` | Property returning `PortCapabilities` declaring adapter feature support. |
+| `aclose()` | Release adapter resources. Required; must be safe to call multiple times. |
 
 ### LLMResponse
 
@@ -97,6 +100,8 @@ class ParserPort(Protocol):
     def parse_to_pydantic(
         self, messages: list[Message], schema: type[T]
     ) -> ParsePortResult[T]: ...
+
+    async def aclose(self) -> None: ...
 ```
 
 ### Methods
@@ -106,6 +111,7 @@ class ParserPort(Protocol):
 | `aparse_to_pydantic(messages, schema)` | Async parsing — primary API. Receives pre-assembled prompt messages and a Pydantic schema, returns `ParsePortResult[T]`. |
 | `parse_to_pydantic(messages, schema)` | Sync wrapper around `aparse_to_pydantic()`. Uses `asyncio.run()` internally. |
 | `capabilities` | Property returning `PortCapabilities` declaring adapter feature support. |
+| `aclose()` | Release adapter resources. Required; must be safe to call multiple times. |
 
 ### ParsePortResult
 
@@ -173,6 +179,9 @@ The most complex port. Executes multi-turn agent loops with tool use and MCP ser
 from karenina.ports.agent import AgentPort, AgentConfig, AgentResult, Tool, MCPServerConfig
 
 class AgentPort(Protocol):
+    @property
+    def capabilities(self) -> PortCapabilities: ...
+
     async def arun(
         self,
         messages: list[Message],
@@ -188,17 +197,18 @@ class AgentPort(Protocol):
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult: ...
+
+    async def aclose(self) -> None: ...
 ```
 
 ### Methods
 
 | Method | Description |
 |--------|-------------|
+| `capabilities` | Property returning `PortCapabilities` declaring adapter feature support. |
 | `arun(messages, tools=None, mcp_servers=None, config=None)` | Async agent execution — primary API. Runs an agent loop with optional tools and MCP servers. |
 | `run(messages, tools=None, mcp_servers=None, config=None)` | Sync wrapper around `arun()`. Creates a new event loop — do not call from within an existing async context. |
-
-!!! note "No capabilities property"
-    Unlike LLMPort and ParserPort, AgentPort does not expose a `capabilities` property. Agent capabilities are determined by the adapter implementation and MCP server configuration.
+| `aclose()` | Release adapter resources (MCP sessions, SDK clients). Required; must be safe to call multiple times. |
 
 ### AgentConfig
 

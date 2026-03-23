@@ -26,6 +26,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 from .messages import LangChainMessageConverter
 from .usage import count_agent_turns, extract_langchain_usage, extract_usage_cumulative
@@ -132,6 +133,15 @@ class LangChainAgentAdapter:
         """
         self._config = model_config
         self._converter = LangChainMessageConverter()
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(supports_system_prompt=True)
 
     def _convert_mcp_servers_to_urls(
         self,
@@ -334,7 +344,11 @@ class LangChainAgentAdapter:
 
         # Use session-based thread_id for checkpointing
         thread_id = str(uuid.uuid4())
-        agent_config = {"configurable": {"thread_id": thread_id}}
+        agent_config: dict[str, Any] = {
+            "configurable": {"thread_id": thread_id},
+            # Each tool call + response = 2 LangGraph steps, so double max_turns
+            "recursion_limit": config.max_turns * 2,
+        }
 
         # LangGraph agent expects dict with "messages" key
         # Use usage metadata callback to reliably capture cumulative token usage

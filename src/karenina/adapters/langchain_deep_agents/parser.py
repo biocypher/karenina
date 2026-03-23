@@ -232,3 +232,6 @@ class DeepAgentsParserAdapter:
 
         except RuntimeError:
             return asyncio.run(self.aparse_to_pydantic(messages, schema))
+
+    async def aclose(self) -> None:
+        """Close underlying resources (no-op for this adapter)."""

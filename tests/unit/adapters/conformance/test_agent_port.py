@@ -65,6 +65,13 @@ class TestAgentPortConformance:
         assert result.turns >= 0
         assert isinstance(result.limit_reached, bool)
 
+    def test_agent_port_has_capabilities(self, deep_agents_agent_adapter):
+        """AgentPort should expose a capabilities property."""
+        from karenina.ports.capabilities import PortCapabilities
+
+        caps = deep_agents_agent_adapter.capabilities
+        assert isinstance(caps, PortCapabilities)
+
     @pytest.mark.asyncio
     async def test_agent_result_usage_valid(
         self,

@@ -126,6 +126,21 @@ def wrap_sdk_error(e: Exception) -> PortError:
             message=f"Invalid JSON response from Claude Code CLI{line_info}",
         )
 
+    # Turn/recursion limit errors (by exception type name)
+    if exc_type_name in ("MaxTurnsExceededException", "MaxTurnsExceeded"):
+        return AgentExecutionError(
+            message=f"Agent hit turn limit: {e}",
+            limit_reached=True,
+        )
+
+    # Turn/recursion limit errors (by message content, last resort)
+    error_lower = str(e).lower()
+    if "recursion" in error_lower or "limit" in error_lower or "max_turns" in error_lower:
+        return AgentExecutionError(
+            message=f"Agent hit turn limit: {e}",
+            limit_reached=True,
+        )
+
     # Generic fallback for unknown SDK errors or non-SDK exceptions
     # Preserve the original exception type name for debugging
     return AgentExecutionError(

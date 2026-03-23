@@ -117,6 +117,11 @@ class ManualAgentAdapter:
         """
         self._model_config = model_config
 
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Default capabilities for the manual agent adapter (no-op)."""
+        return PortCapabilities()
+
     async def arun(
         self,
         messages: list[Message],
@@ -198,6 +203,9 @@ class ManualAgentAdapter:
             actual_model="manual",
         )
 
+    async def aclose(self) -> None:
+        """Close underlying resources (no-op for manual adapter)."""
+
 
 class ManualLLMAdapter:
     """No-op LLMPort implementation for manual interface.
@@ -239,6 +247,9 @@ class ManualLLMAdapter:
         """Raises ManualInterfaceError - manual interface cannot invoke LLM."""
         raise ManualInterfaceError("llm.with_structured_output()")
 
+    async def aclose(self) -> None:
+        """Close underlying resources (no-op for manual adapter)."""
+
 
 class ManualParserAdapter:
     """No-op ParserPort implementation for manual interface.
@@ -270,6 +281,9 @@ class ManualParserAdapter:
     def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot parse via LLM."""
         raise ManualInterfaceError("parser.parse_to_pydantic()")
+
+    async def aclose(self) -> None:
+        """Close underlying resources (no-op for manual adapter)."""
 
 
 # =============================================================================

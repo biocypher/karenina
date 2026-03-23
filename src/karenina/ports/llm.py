@@ -115,7 +115,10 @@ class LLMPort(Protocol):
         Args:
             schema: A Pydantic model class defining the output structure.
             max_retries: Maximum retry attempts on validation failure.
-                Implementation depends on adapter (some may ignore this).
+                Not all adapters support this parameter. LangChain and Claude
+                Tool adapters respect it; Claude SDK and Deep Agents adapters
+                ignore it (with a warning). Check adapter documentation for
+                details.
 
         Returns:
             A new LLMPort instance configured for structured output.
@@ -125,5 +128,14 @@ class LLMPort(Protocol):
             ...     value: str
             ...     confidence: float
             >>> structured_llm = llm.with_structured_output(Answer)
+        """
+        ...
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        Implementations should release any held resources (HTTP connections,
+        file handles, MCP sessions). Safe to call multiple times. The default
+        is a no-op for adapters with no resources to clean up.
         """
         ...

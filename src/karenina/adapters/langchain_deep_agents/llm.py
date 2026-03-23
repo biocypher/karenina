@@ -172,18 +172,33 @@ class DeepAgentsLLMAdapter:
         self,
         schema: type[BaseModel],
         *,
-        max_retries: int | None = None,  # noqa: ARG002
+        max_retries: int | None = None,
     ) -> DeepAgentsLLMAdapter:
         """Return a new adapter configured for structured output.
 
         Args:
             schema: A Pydantic model class defining the output structure.
-            max_retries: Ignored (LangChain handles retries internally).
+            max_retries: Not supported by this adapter. A warning is emitted
+                if a non-None value is provided.
 
         Returns:
             A new DeepAgentsLLMAdapter configured with the schema.
         """
+        if max_retries is not None:
+            logger.warning(
+                "max_retries=%d ignored by langchain_deep_agents adapter; "
+                "retry behavior is managed internally by LangChain",
+                max_retries,
+            )
         return DeepAgentsLLMAdapter(
             self._config,
             _structured_schema=schema,
         )
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        No resources to clean up: the LangChain model is created fresh
+        per ainvoke() call. Provided for interface consistency with other
+        adapters.
+        """
