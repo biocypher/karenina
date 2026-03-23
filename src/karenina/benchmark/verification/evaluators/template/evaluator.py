@@ -402,6 +402,7 @@ class TemplateEvaluator:
             parsing_models=[self.model_config],
             parsing_only=True,
             deep_judgment_enabled=True,
+            deep_judgment_reasoning_only=deep_judgment_config.get("reasoning_only", False),
             deep_judgment_max_excerpts_per_attribute=deep_judgment_config.get("max_excerpts_per_attribute", 3),
             deep_judgment_fuzzy_match_threshold=deep_judgment_config.get("fuzzy_match_threshold", 0.8),
             deep_judgment_excerpt_retry_attempts=deep_judgment_config.get("excerpt_retry_attempts", 2),

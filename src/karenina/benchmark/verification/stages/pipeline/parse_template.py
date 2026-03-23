@@ -209,6 +209,7 @@ class ParseTemplateStage(BaseVerificationStage):
                 "excerpt_retry_attempts": context.deep_judgment_excerpt_retry_attempts,
                 "search_enabled": context.deep_judgment_search_enabled,
                 "search_tool": context.deep_judgment_search_tool,
+                "reasoning_only": context.deep_judgment_reasoning_only,
             }
 
         # Step 2: Parse response using evaluator
@@ -245,6 +246,10 @@ class ParseTemplateStage(BaseVerificationStage):
         )
         context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, parse_result.attributes_without_excerpts)
         context.set_artifact(ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT, parse_result.hallucination_risk_assessment)
+
+        # Store reasoning-only flag so downstream stages (e.g., DeepJudgmentAutoFail) can check it
+        if context.deep_judgment_reasoning_only:
+            context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_REASONING_ONLY, True)
 
         # Update usage tracker with any usage from parsing
         for usage_meta in parse_result.usage_metadata_list:
