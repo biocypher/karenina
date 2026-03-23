@@ -1,10 +1,13 @@
 """Tests for TaskEval metadata coherence fixes (issues 024, 114, 115, 117, 160, 165, 166, 168, 179)."""
 
+from typing import Any
+
 import pytest
 
 from karenina.benchmark.task_eval import StepEval, TaskEval
+from karenina.ports.messages import Message
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.verification import VerificationResult
+from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
     VerificationResultMetadata,
@@ -155,3 +158,169 @@ class TestAvailableStepIds:
         )
         step_ids = task._get_available_step_ids()
         assert "dynamic_step" in step_ids
+
+
+# ---------------------------------------------------------------------------
+# Helpers for TestParameterThreading
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_result():
+    """Create a minimal mock VerificationResult."""
+    return VerificationResult(metadata=_make_metadata())
+
+
+def _make_config(**overrides) -> VerificationConfig:
+    """Create a test VerificationConfig."""
+    defaults = {
+        "parsing_models": [
+            ModelConfig(
+                id="test_parser",
+                model_provider="mock",
+                model_name="mock",
+                interface="langchain",
+            )
+        ],
+        "parsing_only": True,
+    }
+    defaults.update(overrides)
+    return VerificationConfig(**defaults)
+
+
+@pytest.mark.unit
+class TestParameterThreading:
+    """Issues 114, 160, 165, 166, 168: parameters reach run_single_model_verification."""
+
+    def _capture_calls(self, monkeypatch) -> list[dict[str, Any]]:
+        """Monkeypatch runner and return captured kwargs list."""
+        captured: list[dict[str, Any]] = []
+
+        def mock_run(*args, **kwargs):
+            captured.append(kwargs)
+            return _make_mock_result()
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+        return captured
+
+    def _setup_rubric_task(self):
+        """Create a TaskEval with a rubric and trace."""
+        from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
+
+        task = TaskEval(task_id="test")
+        task.log_trace([Message.assistant("response")])
+        task.add_rubric(
+            Rubric(
+                llm_traits=[
+                    LLMRubricTrait(name="q", description="check", kind="boolean"),
+                ]
+            )
+        )
+        return task
+
+    def test_sentinel_model_used_by_default(self, monkeypatch):
+        """Issue 166: sentinel answering_model with interface='taskeval' when none provided."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        task.evaluate(_make_config())
+
+        assert len(captured) > 0
+        model = captured[0]["answering_model"]
+        assert model.interface == "taskeval"
+        assert model.model_name == "user-provided"
+        assert model.model_provider == "user-provided"
+
+    def test_custom_answering_model_passed_through(self, monkeypatch):
+        """Issue 166: user-provided answering_model reaches the runner."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        custom_model = ModelConfig(
+            id="gpt4",
+            model_provider="openai",
+            model_name="gpt-4",
+            interface="langchain",
+        )
+        task.evaluate(_make_config(), answering_model=custom_model)
+
+        assert captured[0]["answering_model"].model_name == "gpt-4"
+
+    def test_run_name_auto_generated(self, monkeypatch):
+        """Issue 168: auto-generated run_name reaches the runner."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        task.evaluate(_make_config())
+
+        assert captured[0]["run_name"] is not None
+        assert captured[0]["run_name"].startswith("taskeval_")
+
+    def test_run_name_explicit(self, monkeypatch):
+        """Issue 168: explicit run_name reaches the runner."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        task.evaluate(_make_config(), run_name="my_run")
+
+        assert captured[0]["run_name"] == "my_run"
+
+    def test_replicate_index_threaded(self, monkeypatch):
+        """Issue 114: replicate index reaches the runner when replicate_count > 1."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        config = _make_config(replicate_count=3)
+        task.evaluate(config)
+
+        assert len(captured) == 3
+        assert captured[0]["replicate"] == 1
+        assert captured[1]["replicate"] == 2
+        assert captured[2]["replicate"] == 3
+
+    def test_replicate_none_when_single(self, monkeypatch):
+        """Issue 114: replicate is None when replicate_count is 1."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        task.evaluate(_make_config())
+
+        assert captured[0]["replicate"] is None
+
+    def test_guard_flags_from_config(self, monkeypatch):
+        """Issue 160: abstention_enabled and sufficiency_enabled from config."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        config = _make_config(abstention_enabled=True, sufficiency_enabled=True)
+        task.evaluate(config)
+
+        assert captured[0]["abstention_enabled"] is True
+        assert captured[0]["sufficiency_enabled"] is True
+
+    def test_guard_flags_default_false(self, monkeypatch):
+        """Issue 160: guard flags default to False."""
+        captured = self._capture_calls(monkeypatch)
+        task = self._setup_rubric_task()
+        task.evaluate(_make_config())
+
+        assert captured[0]["abstention_enabled"] is False
+        assert captured[0]["sufficiency_enabled"] is False
+
+    def test_question_id_not_force_hashed(self, monkeypatch):
+        """Issue 165: non-MD5 question IDs pass through without hashing."""
+        captured = self._capture_calls(monkeypatch)
+        task = TaskEval(task_id="test")
+        task.log("Some output")
+        # Question with human-readable ID and an answer template
+        task.add_question(
+            {
+                "id": "my_readable_id",
+                "question": "What?",
+                "answer_template": """
+from karenina.schemas.entities import BaseAnswer
+class Answer(BaseAnswer):
+    value: str = ""
+    def verify(self) -> bool:
+        return True
+""",
+            }
+        )
+        task.evaluate(_make_config())
+
+        assert captured[0]["question_id"] == "my_readable_id"
