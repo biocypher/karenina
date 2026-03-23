@@ -295,6 +295,7 @@ class RubricManager:
                 + len(global_rubric.regex_traits)
                 + len(global_rubric.callable_traits)
                 + len(global_rubric.metric_traits)
+                + len(global_rubric.agentic_traits)
             )
             if global_rubric
             else 0
@@ -398,6 +399,7 @@ class RubricManager:
                 trait_names.extend([trait.name for trait in global_rubric.regex_traits])
                 trait_names.extend([trait.name for trait in global_rubric.callable_traits])
                 trait_names.extend([trait.name for trait in global_rubric.metric_traits])
+                trait_names.extend([trait.name for trait in global_rubric.agentic_traits])
                 return trait_names
             return []
         else:
@@ -408,6 +410,7 @@ class RubricManager:
                 trait_names.extend([trait.name for trait in merged_rubric.regex_traits])
                 trait_names.extend([trait.name for trait in merged_rubric.callable_traits])
                 trait_names.extend([trait.name for trait in merged_rubric.metric_traits])
+                trait_names.extend([trait.name for trait in merged_rubric.agentic_traits])
                 return trait_names
             return []
 

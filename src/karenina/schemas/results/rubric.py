@@ -661,6 +661,7 @@ class RubricResults(BaseModel):
             - regex_traits: List of regex trait names
             - callable_traits: List of callable trait names
             - metric_traits: List of metric trait names
+            - agentic_traits: List of agentic trait names
             - num_questions: Number of unique questions
         """
         results_with_rubric = self.get_results_with_rubric()
@@ -669,6 +670,7 @@ class RubricResults(BaseModel):
         regex_traits: set[str] = set()
         callable_traits: set[str] = set()
         metric_traits: set[str] = set()
+        agentic_traits: set[str] = set()
         questions: set[str] = set()
 
         for result in results_with_rubric:
@@ -683,6 +685,8 @@ class RubricResults(BaseModel):
                     callable_traits.update(result.rubric.callable_trait_scores.keys())
                 if result.rubric.metric_trait_scores:
                     metric_traits.update(result.rubric.metric_trait_scores.keys())
+                if result.rubric.agentic_trait_scores:
+                    agentic_traits.update(result.rubric.agentic_trait_scores.keys())
 
         return {
             "num_results": len(results_with_rubric),
@@ -690,6 +694,7 @@ class RubricResults(BaseModel):
             "regex_traits": sorted(regex_traits),
             "callable_traits": sorted(callable_traits),
             "metric_traits": sorted(metric_traits),
+            "agentic_traits": sorted(agentic_traits),
             "num_questions": len(questions),
         }
 
