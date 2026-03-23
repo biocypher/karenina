@@ -19,14 +19,12 @@ from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationR
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
-    DEFAULT_EMBEDDING_MODEL,
-    DEFAULT_EMBEDDING_THRESHOLD,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
 )
 from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 
 from .utils import cli_error, filter_templates_by_indices, parse_question_indices, validate_output_path
-from .verify_config import build_config_non_interactive
+from .verify_config import build_config_non_interactive, validate_cli_config_requirements
 from .verify_output import (
     display_summary,
     export_results,
@@ -228,11 +226,20 @@ def verify(
     ] = None,
     # General settings
     replicate_count: Annotated[int | None, typer.Option(help="Number of replicates per verification")] = None,
-    # Feature flags
-    abstention: Annotated[bool, typer.Option("--abstention", help="Enable abstention detection")] = False,
-    sufficiency: Annotated[bool, typer.Option("--sufficiency", help="Enable trace sufficiency detection")] = False,
-    embedding_check: Annotated[bool, typer.Option("--embedding-check", help="Enable embedding check")] = False,
-    deep_judgment: Annotated[bool, typer.Option("--deep-judgment", help="Enable deep judgment for templates")] = False,
+    # Feature flags (tri-state: None = use preset/default, True = enable, False = disable)
+    abstention: Annotated[
+        bool | None, typer.Option("--abstention/--no-abstention", help="Enable/disable abstention detection")
+    ] = None,
+    sufficiency: Annotated[
+        bool | None, typer.Option("--sufficiency/--no-sufficiency", help="Enable/disable trace sufficiency detection")
+    ] = None,
+    embedding_check: Annotated[
+        bool | None, typer.Option("--embedding-check/--no-embedding-check", help="Enable/disable embedding check")
+    ] = None,
+    deep_judgment: Annotated[
+        bool | None,
+        typer.Option("--deep-judgment/--no-deep-judgment", help="Enable/disable deep judgment for templates"),
+    ] = None,
     # Deep judgment rubric settings
     deep_judgment_rubric_mode: Annotated[
         str, typer.Option(help="Deep judgment mode for rubrics (disabled/enable_all/use_checkpoint/custom)")
@@ -278,10 +285,8 @@ def verify(
     evaluation_mode: Annotated[
         str, typer.Option(help="Evaluation mode (template_only/template_and_rubric/rubric_only)")
     ] = "template_only",
-    embedding_threshold: Annotated[
-        float, typer.Option(help="Embedding similarity threshold (0.0-1.0)")
-    ] = DEFAULT_EMBEDDING_THRESHOLD,
-    embedding_model: Annotated[str, typer.Option(help="Embedding model name")] = DEFAULT_EMBEDDING_MODEL,
+    embedding_threshold: Annotated[float | None, typer.Option(help="Embedding similarity threshold (0.0-1.0)")] = None,
+    embedding_model: Annotated[str | None, typer.Option(help="Embedding model name")] = None,
     no_async: Annotated[bool, typer.Option("--no-async", help="Disable async execution")] = False,
     async_workers: Annotated[
         int | None, typer.Option(help="Number of async workers (default: 2 or KARENINA_ASYNC_MAX_WORKERS)")
@@ -356,7 +361,19 @@ def verify(
         selected_question_indices: list[int] | None = None
         show_progress_bar_interactive: bool | None = None
 
-        # Step 2: Handle resume mode or build fresh config
+        # Step 2: Early config validation (before benchmark load, so config errors are not masked)
+        if not resume and not interactive and not preset:
+            validation_errors = validate_cli_config_requirements(
+                interface, answering_model, parsing_model, answering_provider, parsing_provider, manual_traces
+            )
+            if validation_errors:
+                console.print("[red]Configuration errors:[/red]")
+                for error in validation_errors:
+                    console.print(f"  [red]• {error}[/red]")
+                console.print("\n[dim]Run with --interactive for guided configuration[/dim]")
+                raise typer.Exit(code=1)
+
+        # Step 3: Handle resume mode or build fresh config
         if resume:
             progressive_manager, config, benchmark_path, output, output_format, pending_task_ids = _handle_resume_mode(
                 resume
