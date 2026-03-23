@@ -287,15 +287,15 @@ def generate_questions_file(
         question_objects.append(var_name)
         answer_notes_line = ""
         if question.answer_notes:
-            answer_notes_line = f',\n    answer_notes="""{question.answer_notes}"""'
-        content += f'''{var_name} = Question(
-    id="{question.id}",
-    question="""{question.question}""",
-    raw_answer="""{question.raw_answer}""",
-    keywords={question.keywords}{answer_notes_line}
+            answer_notes_line = f",\n    answer_notes={repr(question.answer_notes)}"
+        content += f"""{var_name} = Question(
+    id={repr(question.id)},
+    question={repr(question.question)},
+    raw_answer={repr(question.raw_answer)},
+    keywords={question.keywords!r}{answer_notes_line}
 )
 
-'''
+"""
 
     # Add a list containing all questions
     content += "# List of all questions\n"
