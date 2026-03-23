@@ -180,6 +180,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "deep_judgment_excerpt_retry_attempts": getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
         "deep_judgment_search_enabled": getattr(config, "deep_judgment_search_enabled", False),
         "deep_judgment_search_tool": getattr(config, "deep_judgment_search_tool", "tavily"),
+        "deep_judgment_reasoning_only": getattr(config, "deep_judgment_reasoning_only", False),
         # Deep-judgment rubric configuration (NEW)
         "deep_judgment_rubric_mode": getattr(config, "deep_judgment_rubric_mode", "disabled"),
         "deep_judgment_rubric_global_excerpts": getattr(config, "deep_judgment_rubric_global_excerpts", True),

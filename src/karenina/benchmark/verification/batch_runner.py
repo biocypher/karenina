@@ -208,6 +208,7 @@ def execute_task(
             abstention_enabled=task.get("abstention_enabled", False),
             sufficiency_enabled=task.get("sufficiency_enabled", False),
             deep_judgment_enabled=task.get("deep_judgment_enabled", False),
+            deep_judgment_reasoning_only=task.get("deep_judgment_reasoning_only", False),
             evaluation_mode=task.get("evaluation_mode", "template_only"),
             rubric_evaluation_strategy=task.get("rubric_evaluation_strategy", "batch"),
             deep_judgment_max_excerpts_per_attribute=task.get("deep_judgment_max_excerpts_per_attribute", 3),

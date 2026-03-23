@@ -41,6 +41,7 @@ def run_single_model_verification(
     abstention_enabled: bool = False,
     sufficiency_enabled: bool = False,
     deep_judgment_enabled: bool = False,
+    deep_judgment_reasoning_only: bool = False,
     rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -149,6 +150,7 @@ def run_single_model_verification(
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
         deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_reasoning_only=deep_judgment_reasoning_only,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
         # Deep-Judgment Configuration
