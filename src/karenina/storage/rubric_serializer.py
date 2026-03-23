@@ -39,7 +39,7 @@ def serialize_rubric_to_dict(
         return None
 
     return {
-        "traits": [t.model_dump() for t in llm_traits],
+        "llm_traits": [t.model_dump() for t in llm_traits],
         "regex_traits": [t.model_dump() for t in regex_traits],
         "callable_traits": [t.model_dump() for t in callable_traits],
         "metric_traits": [t.model_dump() for t in metric_traits],
@@ -226,7 +226,7 @@ def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | No
         )
 
     # Deserialize each trait type
-    llm_traits = [_deserialize_llm_trait(t) for t in rubric_data.get("traits", [])]
+    llm_traits = [_deserialize_llm_trait(t) for t in (rubric_data.get("llm_traits") or rubric_data.get("traits", []))]
     regex_traits = [_deserialize_regex_trait(t) for t in rubric_data.get("regex_traits", [])]
     callable_traits = [_deserialize_callable_trait(t) for t in rubric_data.get("callable_traits", [])]
     metric_traits = [_deserialize_metric_trait(t) for t in rubric_data.get("metric_traits", [])]
