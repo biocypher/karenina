@@ -53,6 +53,23 @@ class TestDeepAgentsLLMAdapter:
         assert structured._structured_schema == Answer
         assert adapter._structured_schema is None  # Original unchanged
 
+    def test_with_structured_output_warns_on_max_retries(self, deep_agents_model_config, caplog):
+        """with_structured_output should warn when max_retries is provided."""
+        import logging
+
+        from pydantic import BaseModel, Field
+
+        class Answer(BaseModel):
+            value: str = Field(description="The answer")
+
+        adapter = DeepAgentsLLMAdapter(deep_agents_model_config)
+
+        with caplog.at_level(logging.WARNING):
+            adapter.with_structured_output(Answer, max_retries=5)
+
+        assert "max_retries" in caplog.text
+        assert "ignored" in caplog.text.lower()
+
     @pytest.mark.asyncio
     async def test_aclose_exists_and_is_noop(self, deep_agents_model_config):
         """aclose() should exist and complete without error."""
