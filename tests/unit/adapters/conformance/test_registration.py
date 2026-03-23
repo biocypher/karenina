@@ -21,9 +21,15 @@ class TestAdapterRegistrationConformance:
             spec = AdapterRegistry.get_spec(interface)
             assert spec is not None, f"No spec for interface: {interface}"
 
+    # Sentinel interfaces that exist only for ModelConfig validation,
+    # not for LLM invocation. They intentionally have no factories.
+    _SENTINEL_INTERFACES = {"taskeval"}
+
     def test_all_specs_have_at_least_one_factory(self, all_registered_interfaces):
-        """Each spec must provide at least one factory (agent, llm, or parser)."""
+        """Each non-sentinel spec must provide at least one factory (agent, llm, or parser)."""
         for interface in all_registered_interfaces:
+            if interface in self._SENTINEL_INTERFACES:
+                continue
             spec = AdapterRegistry.get_spec(interface)
             has_factory = (
                 spec.agent_factory is not None or spec.llm_factory is not None or spec.parser_factory is not None
