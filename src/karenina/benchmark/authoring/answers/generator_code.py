@@ -179,15 +179,24 @@ def generate_pydantic_class(
         field_lines.append(f"        verify_with={primitive_code},")
         field_lines.append("    )")
 
-    # Build import line: BaseAnswer and VerifiedField are always needed,
+    # Build import lines: check if typing imports are needed
+    typing_imports: list[str] = []
+    for attr in attributes:
+        if attr["type"].startswith("Literal") and "Literal" not in typing_imports:
+            typing_imports.append("Literal")
+
+    # BaseAnswer and VerifiedField are always needed,
     # plus all used primitives in sorted order for determinism
     sorted_primitives = sorted(used_primitives)
     imports_parts = ["BaseAnswer", "VerifiedField"] + sorted_primitives
-    import_line = f"from karenina.schemas.entities import {', '.join(imports_parts)}"
+    entities_import_line = f"from karenina.schemas.entities import {', '.join(imports_parts)}"
 
     # Assemble final class code
     lines: list[str] = []
-    lines.append(import_line)
+    if typing_imports:
+        lines.append(f"from typing import {', '.join(sorted(typing_imports))}")
+        lines.append("")
+    lines.append(entities_import_line)
     lines.append("")
     lines.append("")
     lines.append(f"class {class_name}(BaseAnswer):")
