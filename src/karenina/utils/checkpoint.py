@@ -130,8 +130,16 @@ def generate_template_id(template: str | None) -> str:
     if not template or template.strip() == "":
         return "no_template"
 
-    # Create MD5 hash of the template
-    hash_obj = hashlib.md5(template.strip().encode("utf-8"))
+    # Normalize source before hashing to ensure consistent IDs regardless
+    # of indentation context (module-level vs. string literal in TaskEval)
+    import textwrap
+
+    normalized = textwrap.dedent(template)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = "\n".join(line.rstrip() for line in normalized.split("\n"))
+    normalized = normalized.strip()
+
+    hash_obj = hashlib.md5(normalized.encode("utf-8"))
     return hash_obj.hexdigest()[:32]
 
 
