@@ -34,6 +34,10 @@ class StepEval(BaseModel):
         default_factory=dict,
         description="Full verification results per question: {question_id: [VerificationResult, ...]}",
     )
+    failed_questions: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Questions that failed evaluation, keyed by question_id with error messages",
+    )
 
     def format_rubric_scores(self, indent: str = "  ") -> str:
         """Format verification results including rubric scores."""
