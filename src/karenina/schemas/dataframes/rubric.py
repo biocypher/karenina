@@ -292,6 +292,8 @@ class RubricDataFrameBuilder:
             "execution_time",
             "timestamp",
             "run_name",
+            "rubric_evaluation_performed",
+            "rubric_evaluation_strategy",
             # Deep Judgment (if included)
             "trait_reasoning",
             "trait_excerpts",
@@ -356,6 +358,8 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
         }
 
         # Add deep judgment columns if requested
@@ -397,6 +401,8 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
         }
 
     def _create_callable_trait_row(
@@ -432,6 +438,8 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
         }
 
     def _create_metric_trait_row(
@@ -475,6 +483,8 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
         }
 
     def _create_agentic_trait_row(
@@ -521,6 +531,8 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
         }
 
     def _create_empty_rubric_row(self, result: VerificationResult) -> dict[str, Any]:
