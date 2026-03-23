@@ -170,7 +170,8 @@ def validate_cli_config_requirements(
             "--interface is required when not using a preset (langchain/openrouter/openai_endpoint)"
         )
 
-    if not answering_model:
+    # Manual interface doesn't need an answering model (traces replace generation)
+    if not answering_model and interface != "manual":
         validation_errors.append("--answering-model is required when not using a preset")
 
     if not parsing_model:
