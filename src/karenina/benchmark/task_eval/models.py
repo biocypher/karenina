@@ -148,7 +148,23 @@ class StepEval(BaseModel):
 
         for _trace_id, results in self.verification_results.items():
             total_results += len(results)
-            if any(result.template and result.template.verify_result for result in results):
+
+            template_passed = any(result.template and result.template.verify_result for result in results)
+            template_performed = any(
+                result.template and result.template.template_verification_performed for result in results
+            )
+            rubric_passed = any(
+                result.rubric
+                and result.rubric.rubric_evaluation_performed
+                and result.rubric.get_all_trait_scores()
+                and all(
+                    score is True or (isinstance(score, int) and score > 0)
+                    for score in result.rubric.get_all_trait_scores().values()
+                )
+                for result in results
+            )
+
+            if template_passed or (not template_performed and rubric_passed):
                 passed_traces += 1
 
             # Count template verification and rubric traits separately
