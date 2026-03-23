@@ -61,8 +61,14 @@ class UsageMetadata:
 
         # Detect flat format: top-level "input_tokens" key whose value is an int
         if "input_tokens" in callback_metadata and isinstance(callback_metadata.get("input_tokens"), int):
+            # Prefer fallback_model_name (caller-provided ModelIdentity.display_string)
+            # over bare model name from adapter, which lacks the interface prefix.
+            if fallback_model_name != "unknown":
+                model_name = fallback_model_name
+            else:
+                model_name = callback_metadata.get("model") or fallback_model_name
             return cls(
-                model_name=callback_metadata.get("model") or fallback_model_name,
+                model_name=model_name,
                 input_tokens=callback_metadata.get("input_tokens", 0),
                 output_tokens=callback_metadata.get("output_tokens", 0),
                 total_tokens=callback_metadata.get("total_tokens", 0),
