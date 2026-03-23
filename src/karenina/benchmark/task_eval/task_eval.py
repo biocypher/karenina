@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from karenina.schemas.entities import Question, Rubric
     from karenina.schemas.entities.rubric import DynamicRubric
 
+from karenina.exceptions import KareninaError
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 
@@ -765,8 +766,11 @@ class TaskEval:
                 step_eval.verification_results[question_id] = []
             step_eval.verification_results[question_id].append(verification_result)
 
-        except Exception as e:
+        except (KareninaError, ValueError, RuntimeError) as e:
             logger.warning("Evaluation failed for %s: %s", error_context, e)
+            if question_id not in step_eval.failed_questions:
+                step_eval.failed_questions[question_id] = []
+            step_eval.failed_questions[question_id].append(str(e))
 
     # =============================================================================
     # EVALUATION METHODS

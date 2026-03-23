@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from karenina.benchmark.task_eval import StepEval, TaskEval
+from karenina.exceptions import KareninaError
 from karenina.ports.messages import Message
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig, VerificationResult
@@ -324,3 +325,75 @@ class Answer(BaseAnswer):
         task.evaluate(_make_config())
 
         assert captured[0]["question_id"] == "my_readable_id"
+
+
+@pytest.mark.unit
+class TestExceptionNarrowing:
+    """Issue 117: _evaluate_and_store() narrows exception scope."""
+
+    def _capture_calls(self, monkeypatch):
+        """Monkeypatch runner to raise a specific exception."""
+
+        def _set_exception(exc):
+            def mock_run(*args, **kwargs):
+                raise exc
+
+            monkeypatch.setattr(
+                "karenina.benchmark.verification.runner.run_single_model_verification",
+                mock_run,
+            )
+
+        return _set_exception
+
+    def _setup_rubric_task(self):
+        """Create a TaskEval with a rubric and trace."""
+        from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
+
+        task = TaskEval(task_id="test")
+        task.log_trace([Message.assistant("response")])
+        task.add_rubric(
+            Rubric(
+                llm_traits=[
+                    LLMRubricTrait(name="q", description="check", kind="boolean"),
+                ]
+            )
+        )
+        return task
+
+    def test_programming_error_propagates(self, monkeypatch):
+        """TypeError should NOT be caught."""
+        set_exc = self._capture_calls(monkeypatch)
+        set_exc(TypeError("This is a programming bug"))
+        task = self._setup_rubric_task()
+        with pytest.raises(TypeError, match="programming bug"):
+            task.evaluate(_make_config())
+
+    def test_attribute_error_propagates(self, monkeypatch):
+        """AttributeError should NOT be caught."""
+        set_exc = self._capture_calls(monkeypatch)
+        set_exc(AttributeError("missing attribute"))
+        task = self._setup_rubric_task()
+        with pytest.raises(AttributeError, match="missing attribute"):
+            task.evaluate(_make_config())
+
+    def test_domain_error_caught_and_recorded(self, monkeypatch):
+        """KareninaError should be caught and recorded in failed_questions."""
+        set_exc = self._capture_calls(monkeypatch)
+        set_exc(KareninaError("Evaluation pipeline failed"))
+        task = self._setup_rubric_task()
+        result = task.evaluate(_make_config())
+        step = result.global_eval
+        assert step is not None
+        assert len(step.failed_questions) > 0
+        failed = list(step.failed_questions.values())[0]
+        assert "Evaluation pipeline failed" in failed[0]
+
+    def test_value_error_caught_and_recorded(self, monkeypatch):
+        """ValueError should be caught and recorded in failed_questions."""
+        set_exc = self._capture_calls(monkeypatch)
+        set_exc(ValueError("Invalid template"))
+        task = self._setup_rubric_task()
+        result = task.evaluate(_make_config())
+        step = result.global_eval
+        assert step is not None
+        assert len(step.failed_questions) > 0
