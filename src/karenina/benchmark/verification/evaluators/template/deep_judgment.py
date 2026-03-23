@@ -61,13 +61,13 @@ logger = logging.getLogger(__name__)
 def deep_judgment_parse(
     raw_llm_response: str,
     RawAnswer: type[BaseAnswer],
-    parsing_model: ModelConfig,  # noqa: ARG001 - Kept for interface consistency with standard parsing
+    parsing_model: ModelConfig,
     parsing_llm: LLMPort,
     parser: ParserPort,
     question_text: str,
     config: VerificationConfig,
     format_instructions: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
-    combined_system_prompt: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
+    combined_system_prompt: str,
     usage_tracker: Any | None = None,
     parsing_model_str: str | None = None,
     prompt_config: PromptConfig | None = None,
@@ -86,8 +86,8 @@ def deep_judgment_parse(
         parser: ParserPort adapter for Stage 3 (parameter extraction with retry)
         question_text: Original question text for context
         config: Verification configuration with deep-judgment settings
-        format_instructions: Kept for interface consistency (ParserPort builds its own)
-        combined_system_prompt: Kept for interface consistency (ParserPort builds its own)
+        format_instructions: Unused; kept for interface consistency (ParserPort builds its own)
+        combined_system_prompt: Base system prompt used for excerpt extraction and search stages
         usage_tracker: Optional usage tracker to record token usage for each stage
         parsing_model_str: Model string identifier for usage tracking
 
