@@ -213,8 +213,8 @@ class ClaudeSDKLLMAdapter:
         # Assert schema exists (this method only called when _structured_schema is set)
         assert self._structured_schema is not None
 
-        content = str(result.structured_output)
         parsed_model = self._structured_schema.model_validate(result.structured_output)
+        content = parsed_model.model_dump_json()
         usage = extract_sdk_usage(result, model=self._config.model_name)
 
         return LLMResponse(content=content, usage=usage, raw=parsed_model)
