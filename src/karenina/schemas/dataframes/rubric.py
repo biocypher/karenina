@@ -512,6 +512,11 @@ class RubricDataFrameBuilder:
             "trait_type": "agentic",
             "evaluation_method": "agentic",
             "trait_score": trait_score,
+            "investigation_trace": (
+                result.rubric.agentic_trait_investigation_traces.get(trait_name)
+                if result.rubric and result.rubric.agentic_trait_investigation_traces
+                else None
+            ),
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,

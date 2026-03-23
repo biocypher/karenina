@@ -534,6 +534,27 @@ class TestGetRubricStatistics:
         # So even with 1 trait, it counts the dict keys
         assert stats["total_question_traits"] == 5
 
+    def test_statistics_includes_agentic_traits(self) -> None:
+        """Test that global_traits_count includes agentic traits."""
+        benchmark = Benchmark.create(name="test")
+        manager = RubricManager(benchmark)
+
+        manager.add_global_rubric_trait(
+            LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
+        )
+        manager.add_global_rubric_trait(
+            AgenticRubricTrait(
+                name="agentic",
+                description="Agentic",
+                kind="boolean",
+                higher_is_better=True,
+            )
+        )
+
+        stats = manager.get_rubric_statistics()
+        assert stats["has_global_rubric"] is True
+        assert stats["global_traits_count"] == 2
+
 
 @pytest.mark.unit
 class TestGetQuestionsWithRubric:
@@ -718,6 +739,45 @@ class TestGetRubricTraitNames:
 
         names = manager.get_rubric_trait_names(q_id)
         assert set(names) == {"global", "question"}
+
+    def test_get_global_trait_names_includes_agentic(self) -> None:
+        """Test that agentic trait names are included in global names."""
+        benchmark = Benchmark.create(name="test")
+        manager = RubricManager(benchmark)
+
+        manager.add_global_rubric_trait(
+            LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
+        )
+        manager.add_global_rubric_trait(
+            AgenticRubricTrait(
+                name="agentic",
+                description="Agentic",
+                kind="boolean",
+                higher_is_better=True,
+            )
+        )
+
+        names = manager.get_rubric_trait_names()
+        assert "agentic" in names
+        assert set(names) == {"llm", "agentic"}
+
+    def test_get_question_trait_names_includes_agentic(self) -> None:
+        """Test that agentic trait names are included in question-level names."""
+        benchmark = Benchmark.create(name="test")
+        manager = RubricManager(benchmark)
+
+        manager.add_global_rubric_trait(
+            AgenticRubricTrait(
+                name="global_agentic",
+                description="Global agentic",
+                kind="boolean",
+                higher_is_better=True,
+            )
+        )
+        q_id = benchmark.add_question("Question?", "Answer")
+
+        names = manager.get_rubric_trait_names(q_id)
+        assert "global_agentic" in names
 
 
 @pytest.mark.unit

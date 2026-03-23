@@ -364,7 +364,7 @@ class ExportManager:
             temp_path = Path(f.name)
 
         try:
-            self.base.save(temp_path)
+            self.base.save(temp_path, save_deep_judgment_config=True)
             from .base import BenchmarkBase
 
             cloned = BenchmarkBase.load(temp_path)

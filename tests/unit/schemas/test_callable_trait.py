@@ -703,8 +703,8 @@ def test_evaluate_score_returns_int() -> None:
 
 
 @pytest.mark.unit
-def test_evaluate_score_returns_float_converts_to_int() -> None:
-    """Test evaluate() converts float return to int."""
+def test_evaluate_score_returns_float_preserves_float() -> None:
+    """Test evaluate() preserves float return values for score kind."""
     trait = CallableRubricTrait.from_callable(
         name="ratio",
         func=lambda text: len(text) / 2,
@@ -714,8 +714,8 @@ def test_evaluate_score_returns_float_converts_to_int() -> None:
     )
 
     result = trait.evaluate("hello")  # len=5, 5/2=2.5
-    assert isinstance(result, int)
-    assert result == 2
+    assert isinstance(result, float)
+    assert result == 2.5
 
 
 @pytest.mark.unit

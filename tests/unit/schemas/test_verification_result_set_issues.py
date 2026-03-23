@@ -2,6 +2,7 @@
 
 Covers:
 - Issue 016: get_summary() tuple keys break JSON serialization
+- Issue 118: _calculate_rubric_traits and get_trait_summary omit agentic traits
 - Issue 119: _calculate_rubric_traits uses confusion_lists for metric detection
 """
 
@@ -9,6 +10,7 @@ import json
 
 import pytest
 
+from karenina.schemas.results.rubric import RubricResults
 from karenina.schemas.results.verification_result_set import VerificationResultSet
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result import VerificationResult
@@ -256,3 +258,90 @@ class TestIssue119MetricTraitDetectionUsesConfusionLists:
         assert total_metric == 0, (
             "Metric trait was detected from confusion_lists but should only be detected from metric_trait_scores."
         )
+
+
+@pytest.mark.unit
+class TestIssue118AgenticTraitsInRubricSummary:
+    """Issue 118: _calculate_rubric_traits() and get_trait_summary() omit agentic traits."""
+
+    def test_calculate_rubric_traits_includes_agentic(self) -> None:
+        """Agentic traits appear in rubric_traits summary under 'agentic' key."""
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={"investigates_sources": True},
+        )
+        result = _make_result(rubric=rubric)
+        result_set = VerificationResultSet(results=[result])
+
+        summary = result_set.get_summary()
+
+        rubric_traits = summary["rubric_traits"]
+        assert rubric_traits is not None
+        assert "agentic" in rubric_traits["global_traits"]
+        assert rubric_traits["global_traits"]["agentic"]["count"] == 1
+
+    def test_calculate_rubric_traits_agentic_question_specific(self) -> None:
+        """Agentic traits on some questions appear as question-specific."""
+        rubric_q1 = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={"depth": 4},
+        )
+        rubric_q2 = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            llm_trait_scores={"clarity": 3},
+        )
+        r1 = _make_result(question_id="q1", rubric=rubric_q1)
+        r2 = _make_result(question_id="q2", rubric=rubric_q2)
+        result_set = VerificationResultSet(results=[r1, r2])
+
+        summary = result_set.get_summary()
+        rubric_traits = summary["rubric_traits"]
+        assert rubric_traits["question_specific_traits"]["agentic"]["count"] == 1
+
+    def test_calculate_rubric_traits_mixed_types(self) -> None:
+        """Agentic traits coexist correctly with LLM traits."""
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            llm_trait_scores={"clarity": 3},
+            agentic_trait_scores={"depth": 4},
+        )
+        result = _make_result(rubric=rubric)
+        result_set = VerificationResultSet(results=[result])
+
+        summary = result_set.get_summary()
+        rubric_traits = summary["rubric_traits"]
+        assert rubric_traits["global_traits"]["llm"]["count"] == 1
+        assert rubric_traits["global_traits"]["agentic"]["count"] == 1
+
+
+@pytest.mark.unit
+class TestIssue118RubricResultsGetTraitSummary:
+    """Issue 118 (part 2): RubricResults.get_trait_summary() omits agentic traits."""
+
+    def test_get_trait_summary_includes_agentic_traits(self) -> None:
+        """get_trait_summary() returns agentic_traits key with trait names."""
+        result = _make_result(
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                agentic_trait_scores={"investigates_sources": True, "depth": 4},
+            )
+        )
+        rubric_results = RubricResults(results=[result])
+
+        summary = rubric_results.get_trait_summary()
+        assert "agentic_traits" in summary
+        assert sorted(summary["agentic_traits"]) == ["depth", "investigates_sources"]
+
+    def test_get_trait_summary_agentic_empty_when_none(self) -> None:
+        """agentic_traits is empty list when no agentic scores present."""
+        result = _make_result(
+            rubric=VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores={"clarity": 3},
+            )
+        )
+        rubric_results = RubricResults(results=[result])
+
+        summary = rubric_results.get_trait_summary()
+        assert "agentic_traits" in summary
+        assert summary["agentic_traits"] == []

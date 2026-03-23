@@ -94,8 +94,13 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
 
         Args:
             context: Verification context with rubric and artifacts.
+
+        Raises:
+            ValueError: If no agentic trait can be evaluated because
+                the resolved model interface lacks ``agent_tier='deep_agent'``.
         """
         traits = context.rubric.agentic_traits  # type: ignore[union-attr]
+        self._validate_agent_support(traits, context)
         raw_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         workspace_path = context.workspace_path
 
@@ -412,6 +417,46 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _validate_agent_support(
+        traits: list[AgenticRubricTrait],
+        context: VerificationContext,
+    ) -> None:
+        """Validate that every agentic trait can be evaluated.
+
+        Checks each trait's resolved model (model_override or parsing_model)
+        for ``agent_tier='deep_agent'``. Raises if any trait cannot be
+        evaluated, since silent skipping hides configuration errors.
+
+        Raises:
+            ValueError: If any trait resolves to an interface that lacks
+                ``agent_tier='deep_agent'``.
+        """
+        default_model = context.parsing_model
+        default_spec = AdapterRegistry.get_spec(default_model.interface)
+        default_ok = default_spec is not None and default_spec.agent_tier == "deep_agent"
+
+        unsupported: list[str] = []
+        for trait in traits:
+            if trait.model_override is not None:
+                spec = AdapterRegistry.get_spec(trait.model_override.interface)
+                if spec is None or spec.agent_tier != "deep_agent":
+                    unsupported.append(trait.name)
+            elif not default_ok:
+                unsupported.append(trait.name)
+
+        if unsupported:
+            trait_names = ", ".join(f"'{n}'" for n in unsupported)
+            raise ValueError(
+                f"Agentic rubric traits ({trait_names}) require an interface with "
+                f"agent_tier='deep_agent' (e.g., 'claude_agent_sdk' or "
+                f"'langchain_deep_agents'), but the resolved model uses "
+                f"interface='{default_model.interface}' "
+                f"(agent_tier='{default_spec.agent_tier if default_spec else 'unknown'}'). "
+                f"Either change the parsing model interface or set model_override "
+                f"on each agentic trait."
+            )
+
+    @staticmethod
     def _resolve_model(
         trait: AgenticRubricTrait,
         context: VerificationContext,
@@ -426,7 +471,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         model = trait.model_override or context.parsing_model
         spec = AdapterRegistry.get_spec(model.interface)
         if spec is None or spec.agent_tier != "deep_agent":
-            logger.debug(
+            logger.warning(
                 "Interface '%s' has agent_tier='%s' (not 'deep_agent'); trait '%s' will be skipped",
                 model.interface,
                 spec.agent_tier if spec else "unknown",

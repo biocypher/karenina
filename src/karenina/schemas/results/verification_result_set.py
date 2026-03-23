@@ -769,12 +769,17 @@ class VerificationResultSet(BaseModel):
                         trait_questions[trait_name].add(q_id)
                         trait_types[trait_name] = "metric"
 
+                if result.rubric.agentic_trait_scores:
+                    for trait_name in result.rubric.agentic_trait_scores:
+                        trait_questions[trait_name].add(q_id)
+                        trait_types[trait_name] = "agentic"
+
         num_questions = len(questions)
         global_traits = {trait for trait, qs in trait_questions.items() if len(qs) == num_questions}
 
         # Count evaluations by type
-        global_llm = global_regex = global_callable = global_metric = 0
-        qs_llm = qs_regex = qs_callable = qs_metric = 0
+        global_llm = global_regex = global_callable = global_metric = global_agentic = 0
+        qs_llm = qs_regex = qs_callable = qs_metric = qs_agentic = 0
 
         for result in self.results:
             if result.rubric and result.rubric.rubric_evaluation_performed:
@@ -806,18 +811,27 @@ class VerificationResultSet(BaseModel):
                         else:
                             qs_metric += 1
 
+                if result.rubric.agentic_trait_scores:
+                    for trait in result.rubric.agentic_trait_scores:
+                        if trait in global_traits:
+                            global_agentic += 1
+                        else:
+                            qs_agentic += 1
+
         return {
             "global_traits": {
                 "llm": {"count": global_llm},
                 "regex": {"count": global_regex},
                 "callable": {"count": global_callable},
                 "metric": {"count": global_metric},
+                "agentic": {"count": global_agentic},
             },
             "question_specific_traits": {
                 "llm": {"count": qs_llm},
                 "regex": {"count": qs_regex},
                 "callable": {"count": qs_callable},
                 "metric": {"count": qs_metric},
+                "agentic": {"count": qs_agentic},
             },
         }
 

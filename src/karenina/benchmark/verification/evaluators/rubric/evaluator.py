@@ -103,7 +103,7 @@ class RubricEvaluator:
 
     def evaluate_rubric(
         self, question: str, answer: str, rubric: Rubric
-    ) -> tuple[dict[str, int | bool], dict[str, str] | None, list[dict[str, Any]]]:
+    ) -> tuple[dict[str, int | bool | float], dict[str, str] | None, list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (LLM, regex, and callable).
 
@@ -121,7 +121,7 @@ class RubricEvaluator:
         Raises:
             Exception: If evaluation fails completely
         """
-        results: dict[str, int | bool] = {}
+        results: dict[str, int | bool | float] = {}
         llm_trait_labels: dict[str, str] | None = None
         usage_metadata_list: list[dict[str, Any]] = []
 
@@ -198,7 +198,7 @@ class RubricEvaluator:
         answer: str,
         traits: list[RegexRubricTrait] | list[CallableRubricTrait],
         trait_type_name: str,
-    ) -> dict[str, bool | int]:
+    ) -> dict[str, bool | int | float]:
         """
         Evaluate deterministic traits (regex or callable) using their evaluate() method.
 
@@ -214,7 +214,7 @@ class RubricEvaluator:
             Dictionary mapping trait names to their evaluated results.
             Failed traits are marked as None for consistency with LLM evaluation.
         """
-        results: dict[str, bool | int] = {}
+        results: dict[str, bool | int | float] = {}
 
         for trait in traits:
             try:
@@ -243,7 +243,7 @@ class RubricEvaluator:
 
     def _evaluate_callable_traits(
         self, answer: str, callable_traits: list[CallableRubricTrait]
-    ) -> dict[str, bool | int]:
+    ) -> dict[str, bool | int | float]:
         """
         Evaluate callable traits using custom functions.
 
