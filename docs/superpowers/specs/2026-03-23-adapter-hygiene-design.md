@@ -32,8 +32,22 @@ Fix fragile heuristics, missing protocol methods, operator precedence bugs, impo
 
 **Decision**: Route through `wrap_sdk_error()`.
 
-- Add a `MaxTurnsExceeded` case to `wrap_sdk_error()` (checking for SDK-specific exception type or structural signal)
-- Replace the string-matching block in `arun()` with a call to `wrap_sdk_error()`
+- Add a turn/recursion limit case to `wrap_sdk_error()` that returns `AgentExecutionError` with `limit_reached=True` metadata
+- In `arun()`, replace the `except Exception` block with:
+
+```python
+except TimeoutError as e:
+    raise AgentTimeoutError(...) from e
+except Exception as e:
+    translated = wrap_sdk_error(e)
+    if isinstance(translated, AgentExecutionError) and getattr(translated, "limit_reached", False):
+        limit_reached = True
+        logger.warning("Agent hit turn limit: %s", e)
+    else:
+        raise translated from e
+```
+
+- `wrap_sdk_error()` checks SDK exception type first, then falls back to string matching as last resort
 - Centralizes all SDK error translation in one place
 
 ### D4: MCP Config Format (069)
@@ -46,9 +60,12 @@ Fix fragile heuristics, missing protocol methods, operator precedence bugs, impo
 
 **Decision**: Use `model_json_schema()` directly, after verifying equivalence.
 
-- Write an auxiliary script to compare `PydanticOutputParser.get_format_instructions()` output with `json.dumps(model_json_schema(), indent=2)`
-- If outputs are functionally equivalent, proceed with the replacement
+- Write an auxiliary script (`scripts/compare_schema_formats.py`) to compare both outputs side by side
+- If outputs are functionally equivalent (same fields, types, descriptions), use `json.dumps(RawAnswer.model_json_schema(), indent=2)`
+- If outputs differ meaningfully, use `RawAnswer.model_fields` to build a format string that preserves the original structure
+- Fallback: if neither approach preserves equivalence, keep `PydanticOutputParser` and document why
 - Drop `langchain_core` import from both `deep_judgment.py` and `evaluator.py`
+- Clean up the auxiliary script after verification
 
 ### D6: MCP Session Pattern (092)
 
@@ -68,8 +85,12 @@ Fix fragile heuristics, missing protocol methods, operator precedence bugs, impo
 
 ## Execution Order
 
+Dependencies require: **095 → 091/092 → 138 → 139** (strict order).
+
+All remaining issues (068, 093, 067, 086, 090, 094, 069, 142) are independent of each other and of 139. They can be done in any order after 138 completes. The linear sequence below is for reviewer convenience:
+
 ```
-095 → 091/092 → 138 → 139 → 068 → 093 → 067 → 086 → 090 → 094 → 069 → 142
+095 → 091/092 → 138 → 139 → {068, 093, 067, 086, 090, 094, 069, 142}
 ```
 
 ## Issue Specifications
@@ -104,7 +125,7 @@ Add `async def aclose(self) -> None` with docstring noting no resources to clean
 
 **Files**: `ports/llm.py`, `ports/agent.py`, `ports/parser.py`
 
-Add `async def aclose(self) -> None: ...` to `LLMPort`, `AgentPort`, and `ParserPort`. The `...` body means implementations must define it. All adapters already have it (including Deep Agents after 095). The registry's `hasattr` check remains as a safety net.
+Add `async def aclose(self) -> None: ...` to `LLMPort`, `AgentPort`, and `ParserPort`. This formalizes the existing convention: all adapters already implement `aclose()` (including Deep Agents after 095). The protocol addition makes the contract explicit for static type checkers and new adapter authors. The registry's `hasattr` check remains as a backward-compatibility safety net for any third-party adapters that may not yet implement the method.
 
 #### 139: Add `capabilities` to `AgentPort`
 
