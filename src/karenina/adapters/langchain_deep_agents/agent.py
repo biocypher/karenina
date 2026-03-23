@@ -30,6 +30,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 from .errors import wrap_deep_agents_error
 from .initialization import create_chat_model
@@ -86,6 +87,15 @@ class DeepAgentsAgentAdapter:
         """
         self._config = model_config
         self._converter = DeepAgentsMessageConverter()
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(supports_system_prompt=True)
 
     def _extract_final_response(self, lc_messages: list[Any]) -> str:
         """Extract final text response from the last AIMessage.

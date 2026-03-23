@@ -259,6 +259,18 @@ class TestDeepAgentsAgentAdapter:
 
 
 @pytest.mark.unit
+class TestDeepAgentsAgentCapabilities:
+    def test_capabilities_returns_port_capabilities(self, deep_agents_model_config):
+        """DeepAgentsAgentAdapter should expose a capabilities property."""
+        from karenina.ports.capabilities import PortCapabilities
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        caps = adapter.capabilities
+        assert isinstance(caps, PortCapabilities)
+        assert caps.supports_system_prompt is True
+
+
+@pytest.mark.unit
 class TestDeepAgentsMCPToolsWiring:
     """Test that arun() passes tools and MCP-derived tools to the agent."""
 

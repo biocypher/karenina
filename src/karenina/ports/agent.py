@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
 
+from karenina.ports.capabilities import PortCapabilities
+
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
     from karenina.ports.usage import UsageMetadata
@@ -245,6 +247,17 @@ class AgentPort(Protocol):
         - Both `raw_trace` and `trace_messages` in AgentResult provide the same
           conversation data in different formats for backward compatibility
     """
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this agent adapter supports.
+
+        Returns:
+            PortCapabilities with adapter-specific feature flags.
+            Defaults to PortCapabilities() (system prompts supported,
+            structured output not supported).
+        """
+        return PortCapabilities()
 
     async def arun(
         self,

@@ -117,6 +117,11 @@ class ManualAgentAdapter:
         """
         self._model_config = model_config
 
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Default capabilities for the manual agent adapter (no-op)."""
+        return PortCapabilities()
+
     async def arun(
         self,
         messages: list[Message],

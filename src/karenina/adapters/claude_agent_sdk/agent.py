@@ -35,6 +35,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
@@ -92,6 +93,15 @@ class ClaudeSDKAgentAdapter:
         """
         self._config = model_config
         self._converter = ClaudeSDKMessageConverter()
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(supports_system_prompt=True)
 
     def _build_options(
         self,

@@ -35,6 +35,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
 
 from .mcp import connect_all_mcp_servers, get_all_mcp_tools
@@ -99,6 +100,15 @@ class ClaudeToolAgentAdapter:
 
         # Initialize client lazily
         self._async_client: Any = None
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(supports_system_prompt=True)
 
     def _get_async_client(self) -> Any:
         """Get or create the async Anthropic client."""
