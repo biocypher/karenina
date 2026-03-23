@@ -221,6 +221,9 @@ class VerificationResultRubric(BaseModel):
     dynamic_rubric_skipped_traits: dict[str, str] | None = None  # Traits skipped with reasons
     dynamic_rubric_promoted_traits: list[str] | None = None  # Traits promoted after presence check
 
+    # Trait provenance metadata (maps trait name to source: "global", "question_specific", or "dynamic")
+    trait_provenance: dict[str, str] | None = None
+
     def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
         """Get all trait scores across all trait types in a flat dictionary.
 

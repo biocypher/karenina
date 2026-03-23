@@ -330,6 +330,7 @@ class FinalizeResultStage(BaseVerificationStage):
                 agentic_trait_investigation_traces=agentic_trait_traces,
                 dynamic_rubric_skipped_traits=dynamic_skipped,
                 dynamic_rubric_promoted_traits=dynamic_promoted,
+                trait_provenance=context.trait_provenance,
             )
 
         # Create deep-judgment subclass (if enabled)

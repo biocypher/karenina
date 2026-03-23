@@ -75,6 +75,8 @@ def run_single_model_verification(
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
     agentic_rubric_parallel: bool = False,
+    # Trait provenance
+    trait_provenance: dict[str, str] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -185,6 +187,8 @@ def run_single_model_verification(
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,
+        # Trait Provenance
+        trait_provenance=trait_provenance,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)

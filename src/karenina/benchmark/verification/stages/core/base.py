@@ -286,6 +286,7 @@ class VerificationContext:
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
+    trait_provenance: dict[str, str] | None = None  # Trait provenance: "global", "question_specific", "dynamic"
 
     # Deep-Judgment Configuration
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS

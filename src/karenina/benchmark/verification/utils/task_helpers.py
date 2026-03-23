@@ -23,7 +23,7 @@ def merge_rubrics_for_task(
     global_rubric: Rubric | None,
     template: FinishedTemplate,
     config: VerificationConfig,
-) -> Rubric | None:
+) -> tuple[Rubric | None, dict[str, str] | None]:
     """Merge global and question-specific rubrics for a task.
 
     This is an adapter function that bridges the verification workflow layer
@@ -36,10 +36,12 @@ def merge_rubrics_for_task(
         config: Verification configuration with rubric settings
 
     Returns:
-        Merged rubric or None if rubrics are disabled
+        Tuple of (merged_rubric, provenance) where provenance maps each
+        trait name to its source ("global" or "question_specific"). Both
+        elements are None when rubrics are disabled or both inputs are None.
     """
     if not config.rubric_enabled:
-        return None
+        return None, None
 
     question_rubric = None
     if template.question_rubric:
@@ -50,8 +52,7 @@ def merge_rubrics_for_task(
 
     from karenina.schemas import merge_rubrics
 
-    rubric, _provenance = merge_rubrics(global_rubric, question_rubric)
-    return rubric
+    return merge_rubrics(global_rubric, question_rubric)
 
 
 def merge_dynamic_rubrics_for_task(
