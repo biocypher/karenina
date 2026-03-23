@@ -29,10 +29,10 @@ def build_config_from_cli_args(
     temperature: float | None,
     interface: str | None,
     replicate_count: int | None,
-    abstention: bool,
-    sufficiency: bool,
-    embedding_check: bool,
-    deep_judgment: bool,
+    abstention: bool | None,
+    sufficiency: bool | None,
+    embedding_check: bool | None,
+    deep_judgment: bool | None,
     deep_judgment_rubric_mode: str,
     deep_judgment_rubric_excerpts: bool,
     deep_judgment_rubric_max_excerpts: int,
@@ -44,8 +44,8 @@ def build_config_from_cli_args(
     use_full_trace_for_template: bool,
     use_full_trace_for_rubric: bool,
     evaluation_mode: str,
-    embedding_threshold: float,
-    embedding_model: str,
+    embedding_threshold: float | None,
+    embedding_model: str | None,
     async_execution: bool,
     async_workers: int | None,
     preset_config: VerificationConfig | None = None,
@@ -170,7 +170,8 @@ def validate_cli_config_requirements(
             "--interface is required when not using a preset (langchain/openrouter/openai_endpoint)"
         )
 
-    if not answering_model:
+    # Manual interface doesn't need an answering model (traces replace generation)
+    if not answering_model and interface != "manual":
         validation_errors.append("--answering-model is required when not using a preset")
 
     if not parsing_model:
@@ -280,10 +281,10 @@ def build_config_non_interactive(
     parsing_id: str,
     temperature: float | None,
     replicate_count: int | None,
-    abstention: bool,
-    sufficiency: bool,
-    embedding_check: bool,
-    deep_judgment: bool,
+    abstention: bool | None,
+    sufficiency: bool | None,
+    embedding_check: bool | None,
+    deep_judgment: bool | None,
     deep_judgment_rubric_mode: str,
     deep_judgment_rubric_excerpts: bool,
     deep_judgment_rubric_max_excerpts: int,
@@ -295,8 +296,8 @@ def build_config_non_interactive(
     use_full_trace_for_template: bool,
     use_full_trace_for_rubric: bool,
     evaluation_mode: str,
-    embedding_threshold: float,
-    embedding_model: str,
+    embedding_threshold: float | None,
+    embedding_model: str | None,
     async_execution: bool,
     async_workers: int | None,
     manual_traces: Path | None,
