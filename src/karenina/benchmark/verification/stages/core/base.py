@@ -242,6 +242,7 @@ class VerificationContext:
         abstention_enabled: Whether abstention detection is enabled.
         sufficiency_enabled: Whether trace sufficiency detection is enabled.
         deep_judgment_enabled: Whether deep-judgment parsing is enabled.
+        deep_judgment_reasoning_only: Skip excerpt extraction, generate reasoning directly.
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
             ("batch" or "sequential").
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
@@ -282,6 +283,7 @@ class VerificationContext:
     abstention_enabled: bool = False
     sufficiency_enabled: bool = False
     deep_judgment_enabled: bool = False
+    deep_judgment_reasoning_only: bool = False  # Skip excerpt extraction, generate reasoning directly
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"

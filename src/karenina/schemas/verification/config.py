@@ -128,6 +128,7 @@ class VerificationConfig(BaseModel):
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
+    deep_judgment_reasoning_only: bool = False  # Skip excerpt extraction, generate reasoning directly
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Similarity threshold
     deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
