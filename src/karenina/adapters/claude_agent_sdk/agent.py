@@ -278,11 +278,19 @@ class ClaudeSDKAgentAdapter:
         if not mcp_servers:
             return None
 
-        # Check if already in SDK format (has 'type' or 'command' keys)
         first_config: Any = next(iter(mcp_servers.values()), {})
-        if isinstance(first_config, dict) and ("type" in first_config or "command" in first_config):
-            # Already SDK format - return as-is
-            return mcp_servers
+        if isinstance(first_config, dict):
+            # Detect karenina's MCPServerConfig format by checking for
+            # required TypedDict fields rather than generic key sniffing.
+            is_karenina_stdio = "command" in first_config
+            is_karenina_http = "url" in first_config and first_config.get("type") in (
+                "http",
+                "sse",
+            )
+
+            if is_karenina_stdio or is_karenina_http:
+                # Karenina simplified format: convert to SDK format
+                return mcp_servers
 
         # Assume simplified format {"name": "url"} - convert
         # This handles the case where mcp_servers is still in karenina's
