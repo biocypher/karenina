@@ -46,7 +46,7 @@ Adapter classes use **duck typing** — they implement the port method signature
 
 ### Implementing LLMPort
 
-The simplest port. Implement `ainvoke`, `invoke`, `with_structured_output`, and a `capabilities` property:
+The simplest port. Implement `ainvoke`, `invoke`, `with_structured_output`, `aclose`, and a `capabilities` property:
 
 ```python
 from __future__ import annotations
@@ -118,7 +118,19 @@ class MyProviderLLMAdapter:
         If your provider doesn't support native structured output,
         return self unchanged — the pipeline will handle JSON parsing.
         """
+        if max_retries is not None:
+            logger.warning(
+                "%s does not support max_retries (got %d), ignoring",
+                type(self).__name__, max_retries,
+            )
         return self
+
+    async def aclose(self) -> None:
+        """Release adapter resources.
+
+        Required protocol method. Implement even if the adapter holds
+        no resources (as a no-op). Must be safe to call multiple times.
+        """
 
     def _convert_messages(self, messages: list[Message]) -> list[dict]:
         """Convert karenina Messages to provider format."""
@@ -195,6 +207,12 @@ class MyProviderParserAdapter:
         """Sync wrapper."""
         import asyncio
         return asyncio.run(self.aparse_to_pydantic(messages, schema))
+
+    async def aclose(self) -> None:
+        """Release adapter resources.
+
+        Required protocol method. Must be safe to call multiple times.
+        """
 ```
 
 ### Implementing AgentPort
@@ -203,6 +221,7 @@ The most complex port — handles multi-turn execution with optional tools and M
 
 ```python
 from karenina.ports.agent import AgentConfig, AgentResult
+from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.messages import Message
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.config import ModelConfig
@@ -216,6 +235,17 @@ class MyProviderAgentAdapter:
 
     def __init__(self, model_config: ModelConfig) -> None:
         self._config = model_config
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Required on all three ports (AgentPort, LLMPort, ParserPort).
+        """
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_structured_output=False,
+        )
 
     async def arun(
         self,
@@ -249,6 +279,12 @@ class MyProviderAgentAdapter:
         """Sync wrapper."""
         import asyncio
         return asyncio.run(self.arun(messages, tools, mcp_servers, config))
+
+    async def aclose(self) -> None:
+        """Release adapter resources (MCP sessions, SDK clients, etc.).
+
+        Required protocol method. Must be safe to call multiple times.
+        """
 ```
 
 ---
@@ -556,7 +592,9 @@ config = VerificationConfig(
 
 **Usage tracking** — Always populate `UsageMetadata` with at least `input_tokens` and `output_tokens`. The pipeline uses these for cost tracking and reporting.
 
-**Adapter cleanup** — If your adapter holds resources (connections, sessions), implement an `aclose()` method. The registry calls `cleanup_all_adapters()` at shutdown to close tracked instances.
+**Adapter cleanup** — `aclose()` is a required protocol method on all three ports. Every adapter must implement it. If the adapter holds no resources, implement it as an empty async method. For adapters that manage MCP sessions, use `AsyncExitStack` to keep sessions alive across the agent loop and clean them up in `aclose()`. The registry calls `cleanup_all_adapters()` at shutdown.
+
+**max_retries varies by adapter** — The `with_structured_output(schema, max_retries=N)` parameter is not universally supported. If your adapter does not support it, emit `logger.warning()` when it is passed so callers know the value is being ignored.
 
 ---
 
