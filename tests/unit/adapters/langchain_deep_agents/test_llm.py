@@ -52,3 +52,9 @@ class TestDeepAgentsLLMAdapter:
         assert isinstance(structured, DeepAgentsLLMAdapter)
         assert structured._structured_schema == Answer
         assert adapter._structured_schema is None  # Original unchanged
+
+    @pytest.mark.asyncio
+    async def test_aclose_exists_and_is_noop(self, deep_agents_model_config):
+        """aclose() should exist and complete without error."""
+        adapter = DeepAgentsLLMAdapter(deep_agents_model_config)
+        await adapter.aclose()  # Should not raise

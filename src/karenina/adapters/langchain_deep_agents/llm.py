@@ -187,3 +187,11 @@ class DeepAgentsLLMAdapter:
             self._config,
             _structured_schema=schema,
         )
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        No resources to clean up: the LangChain model is created fresh
+        per ainvoke() call. Provided for interface consistency with other
+        adapters.
+        """
