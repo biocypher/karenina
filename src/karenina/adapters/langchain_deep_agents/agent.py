@@ -16,10 +16,12 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
 
 from karenina.ports import (
     AgentConfig,
+    AgentExecutionError,
     AgentResponseError,
     AgentResult,
     AgentTimeoutError,
@@ -128,8 +130,8 @@ class DeepAgentsAgentAdapter:
     async def arun(
         self,
         messages: list[Message],
-        tools: list[Tool] | None = None,  # noqa: ARG002 - required by AgentPort protocol
-        mcp_servers: dict[str, MCPServerConfig] | None = None,  # noqa: ARG002 - required by AgentPort protocol
+        tools: list[Tool] | None = None,
+        mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
     ) -> AgentResult:
         """Execute an agent loop with optional tools and MCP servers.
@@ -196,48 +198,86 @@ class DeepAgentsAgentAdapter:
                 if key not in ("model", "system_prompt", "backend"):
                     agent_kwargs[key] = value
 
-        # Create the agent
-        agent = _create_deep_agent(**agent_kwargs)
+        # Convert MCP servers to LangChain tools and combine with explicit tools
+        all_tools: list[Any] = []
+        if tools:
+            all_tools.extend(tools)
 
-        # Build invocation input
-        invoke_input: dict[str, Any] = {
-            "messages": [{"role": "user", "content": prompt_string}],
-        }
-
-        # LangGraph config for recursion limit
-        # Each tool call + response = 2 steps, so double max_turns
-        langgraph_config: dict[str, Any] = {
-            "recursion_limit": config.max_turns * 2,
-        }
-
-        # Execute agent
+        # Use AsyncExitStack for persistent MCP sessions. Sessions stay alive
+        # for all tool calls during agent execution. Exceptions are captured
+        # inside the block and re-raised after clean exit, because MCP session
+        # cleanup can wrap errors in ExceptionGroup if an exception propagates
+        # through the exit stack.
         result: dict[str, Any] = {}
         limit_reached = False
+        deferred_error: Exception | None = None
 
-        async def execute_agent() -> None:
-            nonlocal result, limit_reached
+        async with AsyncExitStack() as exit_stack:
+            # Convert MCP servers to LangChain tools
+            if mcp_servers:
+                from .mcp import convert_mcp_to_tools
 
-            result = await agent.ainvoke(invoke_input, config=langgraph_config)
+                try:
+                    mcp_tools = await convert_mcp_to_tools(mcp_servers, exit_stack)
+                    all_tools.extend(mcp_tools)
+                    logger.info(
+                        "Loaded %d MCP tools from %d servers",
+                        len(mcp_tools),
+                        len(mcp_servers),
+                    )
+                except Exception as e:
+                    logger.warning("Failed to load MCP tools: %s", e)
+                    deferred_error = AgentExecutionError(f"Failed to initialize MCP tools: {e}")
+                    deferred_error.__cause__ = e
 
-            # Check if limit was reached via state
-            if result.get("is_last_step", False):
-                limit_reached = True
+            if deferred_error is None:
+                # Pass tools to agent if any were collected
+                if all_tools:
+                    agent_kwargs["tools"] = all_tools
 
-        try:
-            if config.timeout:
-                await asyncio.wait_for(execute_agent(), timeout=config.timeout)
-            else:
-                await execute_agent()
+                # Create the agent
+                agent = _create_deep_agent(**agent_kwargs)
 
-        except TimeoutError as e:
-            raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
-        except Exception as e:
-            mapped_error, was_limit = wrap_deep_agents_error(e)
-            if was_limit:
-                limit_reached = True
-                logger.warning("Agent hit turn limit: %s", e)
-            else:
-                raise mapped_error from e
+                # Build invocation input
+                invoke_input: dict[str, Any] = {
+                    "messages": [{"role": "user", "content": prompt_string}],
+                }
+
+                # LangGraph config for recursion limit
+                # Each tool call + response = 2 steps, so double max_turns
+                langgraph_config: dict[str, Any] = {
+                    "recursion_limit": config.max_turns * 2,
+                }
+
+                # Execute agent
+                async def execute_agent() -> None:
+                    nonlocal result, limit_reached
+                    result = await agent.ainvoke(invoke_input, config=langgraph_config)
+                    if result.get("is_last_step", False):
+                        limit_reached = True
+
+                try:
+                    if config.timeout:
+                        await asyncio.wait_for(execute_agent(), timeout=config.timeout)
+                    else:
+                        await execute_agent()
+
+                except TimeoutError as e:
+                    deferred_error = AgentTimeoutError(f"Agent execution timed out after {config.timeout}s")
+                    deferred_error.__cause__ = e
+                except Exception as e:
+                    mapped_error, was_limit = wrap_deep_agents_error(e)
+                    if was_limit:
+                        limit_reached = True
+                        logger.warning("Agent hit turn limit: %s", e)
+                    else:
+                        deferred_error = mapped_error
+                        deferred_error.__cause__ = e
+
+        # exit_stack closed: MCP sessions cleaned up
+
+        if deferred_error is not None:
+            raise deferred_error
 
         # Extract messages from result
         lc_messages: list[Any] = result.get("messages", [])
