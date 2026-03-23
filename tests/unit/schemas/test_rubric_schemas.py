@@ -500,7 +500,7 @@ def test_rubric_evaluation_extra_fields_forbidden() -> None:
 @pytest.mark.unit
 def test_merge_rubrics_both_none() -> None:
     """Test merge_rubrics with both rubrics as None."""
-    result = merge_rubrics(None, None)
+    result, _provenance = merge_rubrics(None, None)
 
     assert result is None
 
@@ -511,7 +511,7 @@ def test_merge_rubrics_global_only() -> None:
     global_trait = LLMRubricTrait(name="clarity", kind="boolean", higher_is_better=True)
     global_rubric = Rubric(llm_traits=[global_trait])
 
-    result = merge_rubrics(global_rubric, None)
+    result, _provenance = merge_rubrics(global_rubric, None)
 
     assert result is global_rubric
 
@@ -522,7 +522,7 @@ def test_merge_rubrics_question_only() -> None:
     question_trait = LLMRubricTrait(name="specificity", kind="boolean", higher_is_better=True)
     question_rubric = Rubric(llm_traits=[question_trait])
 
-    result = merge_rubrics(None, question_rubric)
+    result, _provenance = merge_rubrics(None, question_rubric)
 
     assert result is question_rubric
 
@@ -536,7 +536,7 @@ def test_merge_rubrics_no_conflicts() -> None:
     global_rubric = Rubric(llm_traits=[global_trait])
     question_rubric = Rubric(llm_traits=[question_trait])
 
-    result = merge_rubrics(global_rubric, question_rubric)
+    result, _provenance = merge_rubrics(global_rubric, question_rubric)
 
     assert len(result.llm_traits) == 2
     assert result.get_llm_trait_names() == ["clarity", "specificity"]
@@ -585,7 +585,7 @@ def test_merge_rubrics_all_trait_types() -> None:
         metric_traits=[question_metric],
     )
 
-    result = merge_rubrics(global_rubric, question_rubric)
+    result, _provenance = merge_rubrics(global_rubric, question_rubric)
 
     assert len(result.llm_traits) == 2
     assert len(result.regex_traits) == 2
@@ -865,7 +865,7 @@ class TestRubricAgenticTraitSupport:
     def test_merge_rubrics_includes_agentic(self):
         r1 = Rubric(agentic_traits=[self._make_agentic_trait("t1")])
         r2 = Rubric(agentic_traits=[self._make_agentic_trait("t2")])
-        merged = merge_rubrics(r1, r2)
+        merged, _provenance = merge_rubrics(r1, r2)
         assert len(merged.agentic_traits) == 2
 
     def test_merge_rubrics_detects_agentic_name_conflict(self):

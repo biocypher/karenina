@@ -50,7 +50,8 @@ def merge_rubrics_for_task(
 
     from karenina.schemas import merge_rubrics
 
-    return merge_rubrics(global_rubric, question_rubric)
+    rubric, _provenance = merge_rubrics(global_rubric, question_rubric)
+    return rubric
 
 
 def merge_dynamic_rubrics_for_task(

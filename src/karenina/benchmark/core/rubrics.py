@@ -159,7 +159,8 @@ class RubricManager:
                             agentic_traits=agentic,
                         )
 
-        return merge_rubrics(global_rubric, question_rubric)
+        rubric, _provenance = merge_rubrics(global_rubric, question_rubric)
+        return rubric
 
     def clear_global_rubric(self) -> bool:
         """
