@@ -344,7 +344,11 @@ class LangChainAgentAdapter:
 
         # Use session-based thread_id for checkpointing
         thread_id = str(uuid.uuid4())
-        agent_config = {"configurable": {"thread_id": thread_id}}
+        agent_config: dict[str, Any] = {
+            "configurable": {"thread_id": thread_id},
+            # Each tool call + response = 2 LangGraph steps, so double max_turns
+            "recursion_limit": config.max_turns * 2,
+        }
 
         # LangGraph agent expects dict with "messages" key
         # Use usage metadata callback to reliably capture cumulative token usage
