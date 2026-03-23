@@ -196,6 +196,9 @@ class VerificationResultRubric(BaseModel):
     # For literal kind traits, scores are stored as int indices (0 to len(classes)-1) in llm_trait_scores,
     # and the human-readable class names are stored here. For non-literal traits, this field is not used.
     # Error state: score=-1 in llm_trait_scores indicates invalid classification, label contains the invalid value.
+    llm_trait_explanations: dict[str, str] | None = None  # LLM judge explanations per trait
+    # Explanations or reasoning from the LLM judge for each trait score. Keyed by trait name.
+    # Populated when the structured output model includes an explanation field.
     regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
     callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
