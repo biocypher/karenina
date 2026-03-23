@@ -148,6 +148,7 @@ class ArtifactKeys:
     DEEP_JUDGMENT_EXCERPT_RETRY_COUNT = "deep_judgment_excerpt_retry_count"
     ATTRIBUTES_WITHOUT_EXCERPTS = "attributes_without_excerpts"
     DEEP_JUDGMENT_SEARCH_ENABLED = "deep_judgment_search_enabled"
+    DEEP_JUDGMENT_REASONING_ONLY = "deep_judgment_reasoning_only"
     HALLUCINATION_RISK_ASSESSMENT = "hallucination_risk_assessment"
 
     # ==========================================================================

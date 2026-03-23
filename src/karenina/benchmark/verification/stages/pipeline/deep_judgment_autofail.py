@@ -63,13 +63,21 @@ class DeepJudgmentAutoFailStage(BaseAutoFailStage):
 
     def should_run(self, context: VerificationContext) -> bool:
         """
-        Run only if deep-judgment was performed.
+        Run only if deep-judgment was performed and reasoning-only mode was not used.
 
         Also requires that we have attributes_without_excerpts data,
         which is set by deep-judgment parsing.
         Inherits error-checking from BaseVerificationStage.
+
+        Reasoning-only mode skips excerpt extraction entirely, so there are
+        no excerpts to validate. The auto-fail check is not applicable.
         """
         if not super().should_run(context):
+            return False
+
+        # Skip when reasoning-only mode was used (no excerpts to check)
+        if context.get_artifact(ArtifactKeys.DEEP_JUDGMENT_REASONING_ONLY, False):
+            logger.debug("Skipping DeepJudgmentAutoFail: reasoning-only mode was used (no excerpts to validate)")
             return False
 
         deep_judgment_performed = context.get_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
