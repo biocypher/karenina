@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any
 
 from karenina.ports import (
     AgentConfig,
-    AgentExecutionError,
     AgentPort,
     AgentResponseError,
     AgentResult,
@@ -373,14 +372,14 @@ class ClaudeSDKAgentAdapter:
         except TimeoutError as e:
             raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
         except Exception as e:
-            error_str = str(e).lower()
+            from .errors import wrap_sdk_error
 
-            # Check for limit-related errors
-            if "recursion" in error_str or "limit" in error_str or "max_turns" in error_str:
+            translated = wrap_sdk_error(e)
+            if getattr(translated, "limit_reached", False):
                 limit_reached = True
-                logger.warning(f"Agent hit turn limit: {e}")
+                logger.warning("Agent hit turn limit: %s", e)
             else:
-                raise AgentExecutionError(f"Agent execution failed: {e}") from e
+                raise translated from e
 
         if result_message is None and not collected_messages:
             raise AgentResponseError("No messages received from SDK agent")
