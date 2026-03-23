@@ -497,6 +497,34 @@ class TestAgentAdapterExecuteLoop:
             assert result.limit_reached is False
             assert result.final_response == "Single turn"
 
+    @pytest.mark.asyncio
+    async def test_execute_loop_without_tools_applies_timeout(self, model_config: Any) -> None:
+        """Test _execute_agent_loop applies timeout to single-turn path.
+
+        When no tools are provided, the adapter falls back to
+        messages.create(). The timeout must still apply to this path.
+        """
+        import asyncio
+
+        adapter = ClaudeToolAgentAdapter(model_config)
+
+        async def slow_create(**kwargs: Any) -> MockResponse:
+            await asyncio.sleep(10)
+            return MockResponse()
+
+        mock_client = MagicMock()
+        mock_client.messages.create = slow_create
+
+        with (
+            patch.object(adapter, "_get_async_client", return_value=mock_client),
+            pytest.raises(TimeoutError),
+        ):
+            await adapter._execute_agent_loop(
+                messages=[Message.user("Hello")],
+                tools=[],
+                config=AgentConfig(timeout=0.01),
+            )
+
 
 class TestAgentAdapterSync:
     """Tests for synchronous agent execution."""

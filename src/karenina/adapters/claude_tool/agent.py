@@ -329,6 +329,11 @@ class ClaudeToolAgentAdapter:
         # tool_runner requires the "tools" kwarg, so when no tools are
         # provided we fall back to a plain messages.create() call.
         if not tools:
+            if config.timeout:
+                return await asyncio.wait_for(
+                    self._single_turn_create(client, kwargs),
+                    timeout=config.timeout,
+                )
             return await self._single_turn_create(client, kwargs)
 
         # Collect messages and usage during the loop
