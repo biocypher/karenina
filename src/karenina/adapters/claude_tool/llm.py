@@ -17,7 +17,6 @@ import concurrent.futures
 import logging
 from typing import Any
 
-from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
@@ -27,9 +26,6 @@ from karenina.utils.messages import append_error_feedback
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
 from .usage import extract_usage_from_response
-
-# Load environment variables from .env file (for ANTHROPIC_API_KEY)
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

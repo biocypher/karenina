@@ -20,7 +20,6 @@ from contextlib import AsyncExitStack
 from typing import Any
 
 from anthropic import Omit
-from dotenv import load_dotenv
 
 from karenina.ports import (
     AgentConfig,
@@ -48,9 +47,6 @@ from .messages import (
 from .tools import ToolResultCollector, apply_cache_control_to_tool, wrap_mcp_tool, wrap_static_tool
 from .trace import claude_tool_messages_to_raw_trace
 from .usage import aggregate_usage, extract_usage_from_response
-
-# Load environment variables from .env file (for ANTHROPIC_API_KEY)
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
