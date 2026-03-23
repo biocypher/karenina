@@ -230,22 +230,22 @@ class TestMixedDynamicAndStaticResults:
                 f"Expected NaN for conciseness_skipped, got {row['conciseness_skipped']}"
             )
 
-    def test_nan_for_no_rubric_results(
+    def test_no_rubric_results_produce_zero_rows(
         self,
         rubric_with_dynamic_skipped: VerificationResult,
         result_no_rubric: VerificationResult,
     ):
-        """Results without any rubric get NaN in _skipped columns."""
+        """Results without any rubric produce zero rows (no ghost rows).
+
+        Issue 186: previously these created a ghost row with trait_name=None
+        and NaN _skipped columns. Now they are skipped entirely.
+        """
         results = RubricResults(results=[rubric_with_dynamic_skipped, result_no_rubric])
         df = results.to_dataframe(trait_type="all")
 
-        # The no-rubric result should produce a single empty row with NaN _skipped
+        # The no-rubric result should produce zero rows
         no_rubric_rows = df[df["question_id"] == "q_no_rubric"]
-        assert len(no_rubric_rows) == 1
-
-        for _, row in no_rubric_rows.iterrows():
-            assert _is_nan(row["safety_skipped"])
-            assert _is_nan(row["conciseness_skipped"])
+        assert len(no_rubric_rows) == 0
 
     def test_trait_type_filter_preserves_skipped_columns(
         self,
