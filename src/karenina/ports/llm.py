@@ -127,3 +127,12 @@ class LLMPort(Protocol):
             >>> structured_llm = llm.with_structured_output(Answer)
         """
         ...
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        Implementations should release any held resources (HTTP connections,
+        file handles, MCP sessions). Safe to call multiple times. The default
+        is a no-op for adapters with no resources to clean up.
+        """
+        ...
