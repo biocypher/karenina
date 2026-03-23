@@ -221,32 +221,21 @@ def langchain_messages_to_trace_messages(
     return result
 
 
-def _detect_tool_error(content: str) -> bool:
-    """Heuristic for detecting tool errors.
+def _detect_tool_error(_content: str) -> bool:
+    """Check whether tool output represents an error.
 
-    LangChain ToolMessage lacks an is_error field, so we use pattern matching
-    to detect error responses. This is imperfect but matches the design spec.
+    LangChain ToolMessage has no structural error indicator, so this
+    always returns False. The previous heuristic (substring matching on
+    keywords like 'error', 'failed') produced too many false positives
+    on legitimate tool output.
 
     Args:
-        content: The tool result content string
+        content: The tool result content string.
 
     Returns:
-        True if the content appears to contain an error
+        Always False. Retained for backward compatibility with callers.
     """
-    if not content:
-        return False
-
-    error_patterns = [
-        "error",
-        "failed",
-        "exception",
-        "traceback",
-        "permission denied",
-        "not found",
-        "timeout",
-    ]
-    content_lower = content.lower()
-    return any(pattern in content_lower for pattern in error_patterns)
+    return False
 
 
 def _format_langchain_message(msg: Any) -> str:
