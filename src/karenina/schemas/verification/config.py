@@ -395,6 +395,14 @@ class VerificationConfig(BaseModel):
                         f"Question {question_id} few-shot k value must be at least 1 when using k-shot mode"
                     )
 
+        # Validate incompatible deep-judgment combinations
+        if self.deep_judgment_mode == "reasoning_only" and self.deep_judgment_search_enabled:
+            raise ValueError(
+                "deep_judgment_search_enabled=True is incompatible with "
+                "deep_judgment_mode='reasoning_only'. Search requires excerpt "
+                "extraction. Use deep_judgment_mode='full' for search."
+            )
+
         # Additional validation for search-enhanced deep-judgment
         if self.deep_judgment_search_enabled:
             # Validate search tool

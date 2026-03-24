@@ -44,6 +44,16 @@ class TestDeepJudgmentModeConfig:
         )
         assert config.deep_judgment_mode == "full"
 
+    def test_reasoning_only_with_search_raises(self):
+        """reasoning_only + search_enabled is an invalid combination."""
+        with pytest.raises(ValueError, match="incompatible.*reasoning_only"):
+            VerificationConfig(
+                parsing_models=[_parsing_model()],
+                parsing_only=True,
+                deep_judgment_mode="reasoning_only",
+                deep_judgment_search_enabled=True,
+            )
+
 
 @pytest.mark.unit
 class TestVerificationContextDeepJudgmentMode:
