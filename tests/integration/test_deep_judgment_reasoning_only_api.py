@@ -84,8 +84,7 @@ def reasoning_only_config(parsing_model: ModelConfig) -> VerificationConfig:
     return VerificationConfig(
         answering_models=[parsing_model],
         parsing_models=[parsing_model],
-        deep_judgment_enabled=True,
-        deep_judgment_reasoning_only=True,
+        deep_judgment_mode="reasoning_only",
     )
 
 

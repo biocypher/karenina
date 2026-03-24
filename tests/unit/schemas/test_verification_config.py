@@ -84,7 +84,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     assert config.embedding_check_threshold == 0.85
     assert config.async_enabled is True
     assert config.async_max_workers == 2
-    assert config.deep_judgment_enabled is False
+    assert config.deep_judgment_mode == "disabled"
     assert config.deep_judgment_max_excerpts_per_attribute == 3
     assert config.deep_judgment_fuzzy_match_threshold == 0.80
     assert config.deep_judgment_excerpt_retry_attempts == 2
@@ -464,13 +464,13 @@ def test_repr_shows_features() -> None:
         ],
         evaluation_mode="template_and_rubric",
         abstention_enabled=True,
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
     )
 
     repr_str = repr(config)
     assert "Rubric: enabled" in repr_str
     assert "Abstention: enabled" in repr_str
-    assert "Deep Judgment (Template):" in repr_str
+    assert "Deep Judgment (Template): mode=full" in repr_str
 
 
 # =============================================================================

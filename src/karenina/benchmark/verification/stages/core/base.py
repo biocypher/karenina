@@ -139,7 +139,7 @@ class ArtifactKeys:
     # Deep Judgment (Template)
     # ==========================================================================
 
-    DEEP_JUDGMENT_ENABLED = "deep_judgment_enabled"
+    DEEP_JUDGMENT_MODE = "deep_judgment_mode"
     DEEP_JUDGMENT_PERFORMED = "deep_judgment_performed"
     EXTRACTED_EXCERPTS = "extracted_excerpts"
     ATTRIBUTE_REASONING = "attribute_reasoning"
@@ -148,7 +148,7 @@ class ArtifactKeys:
     DEEP_JUDGMENT_EXCERPT_RETRY_COUNT = "deep_judgment_excerpt_retry_count"
     ATTRIBUTES_WITHOUT_EXCERPTS = "attributes_without_excerpts"
     DEEP_JUDGMENT_SEARCH_ENABLED = "deep_judgment_search_enabled"
-    DEEP_JUDGMENT_REASONING_ONLY = "deep_judgment_reasoning_only"
+    DEEP_JUDGMENT_REASONING_ONLY = "deep_judgment_reasoning_only"  # Inter-stage flag for reasoning-only mode
     HALLUCINATION_RISK_ASSESSMENT = "hallucination_risk_assessment"
 
     # ==========================================================================
@@ -242,8 +242,7 @@ class VerificationContext:
         few_shot_enabled: Whether few-shot prompting is enabled.
         abstention_enabled: Whether abstention detection is enabled.
         sufficiency_enabled: Whether trace sufficiency detection is enabled.
-        deep_judgment_enabled: Whether deep-judgment parsing is enabled.
-        deep_judgment_reasoning_only: Skip excerpt extraction, generate reasoning directly.
+        deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full").
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
             ("batch" or "sequential").
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
@@ -283,8 +282,7 @@ class VerificationContext:
     few_shot_enabled: bool = False
     abstention_enabled: bool = False
     sufficiency_enabled: bool = False
-    deep_judgment_enabled: bool = False
-    deep_judgment_reasoning_only: bool = False  # Skip excerpt extraction, generate reasoning directly
+    deep_judgment_mode: str = "disabled"  # Template deep-judgment mode: "disabled", "reasoning_only", "full"
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"

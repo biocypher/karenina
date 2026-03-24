@@ -80,7 +80,7 @@ class JudgmentResults(BaseModel):
             2. Identification: question_id, template_id, question_text, keywords, replicate, answering_mcp_servers
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Response Data: raw_llm_response, parsed_gt_response, parsed_llm_response
-            5. Deep Judgment Config: deep_judgment_enabled, deep_judgment_performed, deep_judgment_search_enabled
+            5. Deep Judgment Config: deep_judgment_mode, deep_judgment_performed, deep_judgment_search_enabled
             6. Attribute Data: attribute_name, gt_attribute_value, llm_attribute_value, attribute_match
             7. Excerpt Data: excerpt_index, excerpt_text, excerpt_confidence, excerpt_similarity_score
             8. Search Enhancement: excerpt_search_results, excerpt_hallucination_risk, excerpt_hallucination_justification

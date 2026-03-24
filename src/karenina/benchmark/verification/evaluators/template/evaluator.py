@@ -124,7 +124,7 @@ class TemplateEvaluator:
         self,
         raw_response: str,
         question_text: str,
-        deep_judgment_enabled: bool = False,
+        deep_judgment_enabled: bool = False,  # Whether deep judgment is active
         deep_judgment_config: dict[str, Any] | None = None,
         use_full_trace: bool = False,
         usage_tracker: Any | None = None,
@@ -401,8 +401,7 @@ class TemplateEvaluator:
             answering_models=[],
             parsing_models=[self.model_config],
             parsing_only=True,
-            deep_judgment_enabled=True,
-            deep_judgment_reasoning_only=deep_judgment_config.get("reasoning_only", False),
+            deep_judgment_mode="reasoning_only" if deep_judgment_config.get("reasoning_only", False) else "full",
             deep_judgment_max_excerpts_per_attribute=deep_judgment_config.get("max_excerpts_per_attribute", 3),
             deep_judgment_fuzzy_match_threshold=deep_judgment_config.get("fuzzy_match_threshold", 0.8),
             deep_judgment_excerpt_retry_attempts=deep_judgment_config.get("excerpt_retry_attempts", 2),

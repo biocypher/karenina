@@ -165,7 +165,7 @@ def test_preset_show_displays_summary_fields(runner: CliRunner, tmp_path: Path) 
         evaluation_mode="template_and_rubric",
         abstention_enabled=True,
         embedding_check_enabled=True,
-        deep_judgment_enabled=False,
+        deep_judgment_mode="disabled",
         async_enabled=True,
     )
     with preset_file.open("w") as f:

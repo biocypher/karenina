@@ -294,7 +294,7 @@ class VerificationResultRubric(BaseModel):
 class VerificationResultDeepJudgment(BaseModel):
     """Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)."""
 
-    deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
+    deep_judgment_mode: str | None = None  # Which deep-judgment mode was used (None, "reasoning_only", "full")
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
     # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,

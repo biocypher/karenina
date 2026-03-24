@@ -175,7 +175,7 @@ class TestParseTemplateReasoningOnlyWiring:
     def test_deep_judgment_config_includes_reasoning_only_when_enabled(
         self, minimal_context: VerificationContext, sample_answer_class
     ):
-        """When context has deep_judgment_reasoning_only=True, the config dict
+        """When context has deep_judgment_mode='reasoning_only', the config dict
         passed to evaluator.parse_response must include reasoning_only=True.
         """
         from unittest.mock import MagicMock, patch
@@ -185,8 +185,7 @@ class TestParseTemplateReasoningOnlyWiring:
             ParseTemplateStage,
         )
 
-        minimal_context.deep_judgment_enabled = True
-        minimal_context.deep_judgment_reasoning_only = True
+        minimal_context.deep_judgment_mode = "reasoning_only"
         minimal_context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "BCL-2 is the target.")
         minimal_context.set_artifact(ArtifactKeys.ANSWER, sample_answer_class)
         minimal_context.set_artifact(ArtifactKeys.RAW_ANSWER, sample_answer_class)
@@ -218,7 +217,7 @@ class TestParseTemplateReasoningOnlyWiring:
     def test_deep_judgment_config_has_reasoning_only_false_when_disabled(
         self, minimal_context: VerificationContext, sample_answer_class
     ):
-        """When context has deep_judgment_reasoning_only=False, config must include
+        """When context has deep_judgment_mode='full', config must include
         reasoning_only=False.
         """
         from unittest.mock import MagicMock, patch
@@ -228,8 +227,7 @@ class TestParseTemplateReasoningOnlyWiring:
             ParseTemplateStage,
         )
 
-        minimal_context.deep_judgment_enabled = True
-        minimal_context.deep_judgment_reasoning_only = False
+        minimal_context.deep_judgment_mode = "full"
         minimal_context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "BCL-2 is the target.")
         minimal_context.set_artifact(ArtifactKeys.ANSWER, sample_answer_class)
         minimal_context.set_artifact(ArtifactKeys.RAW_ANSWER, sample_answer_class)
@@ -268,8 +266,7 @@ class TestParseTemplateReasoningOnlyWiring:
             ParseTemplateStage,
         )
 
-        minimal_context.deep_judgment_enabled = True
-        minimal_context.deep_judgment_reasoning_only = True
+        minimal_context.deep_judgment_mode = "reasoning_only"
         minimal_context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "BCL-2 is the target.")
         minimal_context.set_artifact(ArtifactKeys.ANSWER, sample_answer_class)
         minimal_context.set_artifact(ArtifactKeys.RAW_ANSWER, sample_answer_class)
@@ -312,8 +309,7 @@ class TestParseTemplateReasoningOnlyWiring:
             ParseTemplateStage,
         )
 
-        minimal_context.deep_judgment_enabled = True
-        minimal_context.deep_judgment_reasoning_only = False
+        minimal_context.deep_judgment_mode = "full"
         minimal_context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "BCL-2 is the target.")
         minimal_context.set_artifact(ArtifactKeys.ANSWER, sample_answer_class)
         minimal_context.set_artifact(ArtifactKeys.RAW_ANSWER, sample_answer_class)
@@ -353,7 +349,7 @@ class TestTemplateEvaluatorReasoningOnlyConfig:
 
     def test_reasoning_only_passed_to_dj_config(self):
         """When deep_judgment_config includes reasoning_only=True, the
-        VerificationConfig created for DJ must have deep_judgment_reasoning_only=True.
+        VerificationConfig created for DJ must have deep_judgment_mode='reasoning_only'.
         """
         from unittest.mock import MagicMock, patch
 
@@ -406,11 +402,11 @@ class TestTemplateEvaluatorReasoningOnlyConfig:
                 call_kwargs = mock_dj.call_args.kwargs
                 config = call_kwargs.get("config")
                 assert config is not None
-                assert config.deep_judgment_reasoning_only is True
+                assert config.deep_judgment_mode == "reasoning_only"
 
     def test_reasoning_only_false_when_not_in_config(self):
         """When deep_judgment_config does not include reasoning_only, the config
-        must default to deep_judgment_reasoning_only=False.
+        must default to deep_judgment_mode='full'.
         """
         from unittest.mock import MagicMock, patch
 
@@ -459,4 +455,4 @@ class TestTemplateEvaluatorReasoningOnlyConfig:
 
                 config = mock_dj.call_args.kwargs.get("config")
                 assert config is not None
-                assert config.deep_judgment_reasoning_only is False
+                assert config.deep_judgment_mode == "full"

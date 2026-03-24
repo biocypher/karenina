@@ -18,7 +18,7 @@ with a multi-stage approach:
 The feature gracefully handles missing excerpts (refusals, no corroborating evidence)
 and provides detailed metadata about the parsing process.
 
-A reasoning-only mode is also available (``deep_judgment_reasoning_only=True``), which
+A reasoning-only mode is also available (``deep_judgment_mode="reasoning_only"``), which
 skips excerpt extraction entirely. It generates per-attribute reasoning directly from
 the response (1 LLM call) then feeds that reasoning to ParserPort for parameter
 extraction (1 more call), totalling 2 model calls instead of the standard 3+.
@@ -300,7 +300,7 @@ def deep_judgment_parse(
     # ==========================================
     # REASONING-ONLY BRANCH (skip excerpts entirely)
     # ==========================================
-    if config.deep_judgment_reasoning_only:
+    if config.deep_judgment_mode == "reasoning_only":
         return _reasoning_only_parse(
             raw_llm_response=raw_llm_response,
             RawAnswer=RawAnswer,

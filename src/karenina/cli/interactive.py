@@ -158,7 +158,11 @@ def build_config_interactively(
             "Embedding similarity threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_EMBEDDING_THRESHOLD)
         )
 
-    deep_judgment_enabled = Confirm.ask("Enable deep judgment?", default=False)
+    deep_judgment_mode_str = Prompt.ask(
+        "Deep judgment mode",
+        choices=["disabled", "reasoning_only", "full"],
+        default="disabled",
+    )
 
     console.print("[green]✓ Features configured[/green]\n")
 
@@ -181,7 +185,7 @@ def build_config_interactively(
             traits_str = Prompt.ask("Rubric trait names (comma-separated)")
             rubric_trait_names = [t.strip() for t in traits_str.split(",")]
 
-        if deep_judgment_enabled:
+        if deep_judgment_mode_str != "disabled":
             dj = _configure_deep_judgment()
             deep_judgment_max_excerpts = dj["max_excerpts"]
             deep_judgment_fuzzy_threshold = dj["fuzzy_threshold"]
@@ -240,7 +244,7 @@ def build_config_interactively(
         embedding_check_enabled=embedding_check_enabled,
         embedding_check_model=embedding_check_model,
         embedding_check_threshold=embedding_check_threshold,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_mode=deep_judgment_mode_str,
         deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts,
         deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_threshold,
         deep_judgment_excerpt_retry_attempts=deep_judgment_retry_attempts,
@@ -268,7 +272,7 @@ def build_config_interactively(
     console.print(f"  Abstention: {'enabled' if abstention_enabled else 'disabled'}")
     console.print(f"  Sufficiency: {'enabled' if sufficiency_enabled else 'disabled'}")
     console.print(f"  Embedding check: {'enabled' if embedding_check_enabled else 'disabled'}")
-    console.print(f"  Deep judgment: {'enabled' if deep_judgment_enabled else 'disabled'}")
+    console.print(f"  Deep judgment: {deep_judgment_mode_str}")
 
     # Step 6: Optionally save as preset
     if Confirm.ask("\nSave this configuration as a preset?", default=False):

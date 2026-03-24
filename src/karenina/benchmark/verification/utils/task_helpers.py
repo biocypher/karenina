@@ -172,7 +172,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "few_shot_enabled": config.is_few_shot_enabled(),
         "abstention_enabled": getattr(config, "abstention_enabled", False),
         "sufficiency_enabled": getattr(config, "sufficiency_enabled", False),
-        "deep_judgment_enabled": getattr(config, "deep_judgment_enabled", False),
+        "deep_judgment_mode": getattr(config, "deep_judgment_mode", "disabled"),
         "evaluation_mode": getattr(config, "evaluation_mode", "template_only"),
         "rubric_evaluation_strategy": getattr(config, "rubric_evaluation_strategy", "batch"),
         "deep_judgment_max_excerpts_per_attribute": getattr(config, "deep_judgment_max_excerpts_per_attribute", 3),
@@ -180,7 +180,6 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "deep_judgment_excerpt_retry_attempts": getattr(config, "deep_judgment_excerpt_retry_attempts", 2),
         "deep_judgment_search_enabled": getattr(config, "deep_judgment_search_enabled", False),
         "deep_judgment_search_tool": getattr(config, "deep_judgment_search_tool", "tavily"),
-        "deep_judgment_reasoning_only": getattr(config, "deep_judgment_reasoning_only", False),
         # Deep-judgment rubric configuration (NEW)
         "deep_judgment_rubric_mode": getattr(config, "deep_judgment_rubric_mode", "disabled"),
         "deep_judgment_rubric_global_excerpts": getattr(config, "deep_judgment_rubric_global_excerpts", True),

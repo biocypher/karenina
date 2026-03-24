@@ -127,8 +127,7 @@ class VerificationConfig(BaseModel):
     async_max_workers: int = Field(default=DEFAULT_ASYNC_MAX_WORKERS, ge=1)  # Number of parallel workers
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
-    deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
-    deep_judgment_reasoning_only: bool = False  # Skip excerpt extraction, generate reasoning directly
+    deep_judgment_mode: Literal["disabled", "reasoning_only", "full"] = "disabled"  # Template deep-judgment mode
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Similarity threshold
     deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
@@ -502,10 +501,10 @@ class VerificationConfig(BaseModel):
             lines.append("  Rubric: disabled")
 
         # Deep Judgment - Template
-        if self.deep_judgment_enabled:
+        if self.deep_judgment_mode != "disabled":
             features_shown = True
             lines.append(
-                f"  Deep Judgment (Template): "
+                f"  Deep Judgment (Template): mode={self.deep_judgment_mode}, "
                 f"max_excerpts={self.deep_judgment_max_excerpts_per_attribute}, "
                 f"fuzzy_threshold={self.deep_judgment_fuzzy_match_threshold}"
             )
@@ -653,7 +652,7 @@ class VerificationConfig(BaseModel):
         abstention: bool | None = None,
         sufficiency: bool | None = None,
         embedding_check: bool | None = None,
-        deep_judgment: bool | None = None,
+        deep_judgment_mode: str | None = None,
         # Evaluation settings
         evaluation_mode: str | None = None,
         embedding_threshold: float | None = None,
@@ -698,7 +697,7 @@ class VerificationConfig(BaseModel):
             abstention: Override for abstention detection flag.
             sufficiency: Override for sufficiency checking flag.
             embedding_check: Override for embedding check flag.
-            deep_judgment: Override for deep judgment flag.
+            deep_judgment_mode: Override for template deep judgment mode.
             evaluation_mode: Override for evaluation mode.
             embedding_threshold: Override for embedding similarity threshold.
             embedding_model: Override for embedding model name.
@@ -736,8 +735,8 @@ class VerificationConfig(BaseModel):
             config_dict["sufficiency_enabled"] = sufficiency
         if embedding_check is not None:
             config_dict["embedding_check_enabled"] = embedding_check
-        if deep_judgment is not None:
-            config_dict["deep_judgment_enabled"] = deep_judgment
+        if deep_judgment_mode is not None:
+            config_dict["deep_judgment_mode"] = deep_judgment_mode
 
         # Evaluation settings
         if evaluation_mode is not None:

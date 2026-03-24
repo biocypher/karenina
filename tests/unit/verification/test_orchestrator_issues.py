@@ -83,7 +83,7 @@ class TestRubricOnlySufficiencyLog:
 
 @pytest.mark.unit
 class TestRubricOnlyDeepJudgmentGating:
-    """Issue 158: DeepJudgmentRubricAutoFailStage should be gated on deep_judgment_enabled."""
+    """Issue 158: DeepJudgmentRubricAutoFailStage should be gated on deep judgment being active."""
 
     def test_rubric_only_includes_deep_judgment_rubric_without_flag(self):
         """Before fix: DeepJudgmentRubricAutoFailStage is always included in rubric_only."""

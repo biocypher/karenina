@@ -57,8 +57,7 @@ Reasoning-only mode generates per-attribute reasoning traces without excerpt ext
 
 ```python
 config = VerificationConfig(
-    deep_judgment_enabled=True,
-    deep_judgment_reasoning_only=True,
+    deep_judgment_mode="reasoning_only",
     answering_models=[...],
     parsing_models=[...],
 )
@@ -68,8 +67,7 @@ Or via `from_overrides`:
 
 ```python
 config = VerificationConfig.from_overrides(
-    deep_judgment=True,
-    deep_judgment_reasoning_only=True,
+    deep_judgment_mode="reasoning_only",
     answering_model="claude-haiku-4-5",
     answering_id="answering",
     parsing_model="claude-haiku-4-5",
@@ -96,7 +94,7 @@ In reasoning-only mode:
 
 ### Auto-Fail Behavior
 
-The DeepJudgmentAutoFail stage (Stage 10) is skipped entirely when reasoning-only mode is active. Since no excerpts are extracted, there are no missing excerpts to trigger a failure. The `deep_judgment_reasoning_only` flag is stored as a pipeline artifact, and Stage 10 checks for it before running.
+The DeepJudgmentAutoFail stage (Stage 10) is skipped entirely when reasoning-only mode is active. Since no excerpts are extracted, there are no missing excerpts to trigger a failure. The reasoning-only flag is stored as a pipeline artifact, and Stage 10 checks for it before running.
 
 ## The Three-Stage Process (Full Mode)
 
@@ -180,8 +178,7 @@ All deep judgment template settings are on `VerificationConfig`:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `deep_judgment_enabled` | `bool` | `False` | Master switch for deep judgment |
-| `deep_judgment_reasoning_only` | `bool` | `False` | Skip excerpt extraction; generate reasoning directly (2 LLM calls instead of 3+) |
+| `deep_judgment_mode` | `Literal["disabled", "reasoning_only", "full"]` | `"disabled"` | Template deep-judgment mode. `"disabled"`: off. `"reasoning_only"`: reasoning only (2 LLM calls). `"full"`: excerpts + reasoning (3+ LLM calls). |
 | `deep_judgment_max_excerpts_per_attribute` | `int` | `3` | Maximum excerpts per attribute (ignored in reasoning-only mode) |
 | `deep_judgment_fuzzy_match_threshold` | `float` | `0.80` | Fuzzy match similarity threshold (0.0–1.0) |
 | `deep_judgment_excerpt_retry_attempts` | `int` | `2` | Retries on fuzzy match failure |
@@ -194,7 +191,7 @@ All deep judgment template settings are on `VerificationConfig`:
 from karenina.schemas import VerificationConfig
 
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     answering_models=[...],
     parsing_models=[...],
 )
@@ -235,7 +232,7 @@ karenina verify benchmark.jsonld --preset my_preset.json --deep-judgment
 
 ```python
 config = VerificationConfig.from_overrides(
-    deep_judgment=True,
+    deep_judgment_mode="full",
     answering_model="claude-haiku-4-5",
     answering_id="answering",
     parsing_model="claude-haiku-4-5",

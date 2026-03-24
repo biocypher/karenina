@@ -71,7 +71,7 @@ def sample_rubric_result() -> VerificationResultRubric:
 def sample_deep_judgment_result() -> VerificationResultDeepJudgment:
     """Create a sample deep judgment result."""
     return VerificationResultDeepJudgment(
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
         deep_judgment_performed=True,
         extracted_excerpts={"capital": [{"text": "Paris is the capital", "confidence": "high"}]},
         attribute_reasoning={"capital": "Clearly stated in response"},

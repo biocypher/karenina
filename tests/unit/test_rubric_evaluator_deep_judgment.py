@@ -169,7 +169,7 @@ class TestDeepJudgmentRetryMechanism:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_excerpt_retry_attempts=2,
             deep_judgment_fuzzy_match_threshold=0.8,
         )
@@ -225,7 +225,7 @@ class TestDeepJudgmentRetryMechanism:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_excerpt_retry_attempts=2,
             deep_judgment_fuzzy_match_threshold=0.8,
         )
@@ -266,7 +266,7 @@ class TestDeepJudgmentRetryMechanism:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_excerpt_retry_attempts=2,
             deep_judgment_fuzzy_match_threshold=0.8,
         )
@@ -314,7 +314,7 @@ class TestDeepJudgmentRetryMechanism:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_excerpt_retry_attempts=2,  # Global default
             deep_judgment_fuzzy_match_threshold=0.8,
         )
@@ -360,7 +360,7 @@ class TestDeepJudgmentRetryMechanism:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_excerpt_retry_attempts=1,
             deep_judgment_fuzzy_match_threshold=0.85,
         )
@@ -635,7 +635,7 @@ class TestDeepJudgmentEdgeCases:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 
@@ -678,7 +678,7 @@ class TestDeepJudgmentEdgeCases:
         config = VerificationConfig(
             answering_models=[mock_model_config],
             parsing_models=[mock_model_config],
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
             deep_judgment_fuzzy_match_threshold=0.8,
         )
 

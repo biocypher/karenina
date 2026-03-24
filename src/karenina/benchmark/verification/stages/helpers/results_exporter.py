@@ -363,7 +363,7 @@ def export_verification_results_csv(
             # MCP server fields
             "answering_mcp_servers",
             # Deep-judgment fields
-            "deep_judgment_enabled",
+            "deep_judgment_mode",
             "deep_judgment_performed",
             "extracted_excerpts",
             "attribute_reasoning",
@@ -469,7 +469,7 @@ def export_verification_results_csv(
                 rubric.metric_trait_scores if rubric else None, metadata.question_id, "metric_trait_metrics"
             ),
             # Deep-judgment fields
-            "deep_judgment_enabled": deep_judgment.deep_judgment_enabled if deep_judgment else False,
+            "deep_judgment_mode": deep_judgment.deep_judgment_mode if deep_judgment else None,
             "deep_judgment_performed": deep_judgment.deep_judgment_performed if deep_judgment else False,
             "extracted_excerpts": _safe_json_serialize(
                 deep_judgment.extracted_excerpts if deep_judgment else None, metadata.question_id, "extracted_excerpts"

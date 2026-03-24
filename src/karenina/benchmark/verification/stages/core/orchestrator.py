@@ -85,7 +85,7 @@ class StageOrchestrator:
         rubric: Rubric | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
-        deep_judgment_enabled: bool = False,
+        deep_judgment_enabled: bool = False,  # Whether any template deep-judgment mode is active
         evaluation_mode: str = "template_only",
         agentic_parsing: bool = False,
         dynamic_rubric: DynamicRubric | None = None,

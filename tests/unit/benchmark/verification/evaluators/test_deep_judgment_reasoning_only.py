@@ -88,8 +88,7 @@ def _make_config(reasoning_only: bool = True) -> VerificationConfig:
     return VerificationConfig(
         answering_models=[parsing_model],
         parsing_models=[parsing_model],
-        deep_judgment_enabled=True,
-        deep_judgment_reasoning_only=reasoning_only,
+        deep_judgment_mode="reasoning_only" if reasoning_only else "full",
     )
 
 
@@ -451,7 +450,7 @@ class TestDeepJudgmentParseReasoningOnlyBranch:
     """Tests that deep_judgment_parse() dispatches to reasoning-only when config says so."""
 
     def test_reasoning_only_flag_triggers_reasoning_only_path(self):
-        """When deep_judgment_reasoning_only=True, excerpts are empty and metadata shows reasoning_only."""
+        """When deep_judgment_mode='reasoning_only', excerpts are empty and metadata shows reasoning_only."""
         reasoning_json = json.dumps(
             {
                 "drug_target": "Target reasoning from response.",
@@ -483,7 +482,7 @@ class TestDeepJudgmentParseReasoningOnlyBranch:
         assert metadata["model_calls"] == 2
 
     def test_standard_path_when_reasoning_only_false(self):
-        """When deep_judgment_reasoning_only=False, the standard excerpt path runs."""
+        """When deep_judgment_mode='full', the standard excerpt path runs."""
         # Standard path needs: excerpt JSON, reasoning JSON, then parser
         excerpt_json = json.dumps(
             {

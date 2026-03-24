@@ -202,21 +202,21 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Build deep judgment config
         deep_judgment_config: dict[str, Any] = {}
-        if context.deep_judgment_enabled:
+        if context.deep_judgment_mode != "disabled":
             deep_judgment_config = {
                 "max_excerpts_per_attribute": context.deep_judgment_max_excerpts_per_attribute,
                 "fuzzy_match_threshold": context.deep_judgment_fuzzy_match_threshold,
                 "excerpt_retry_attempts": context.deep_judgment_excerpt_retry_attempts,
                 "search_enabled": context.deep_judgment_search_enabled,
                 "search_tool": context.deep_judgment_search_tool,
-                "reasoning_only": context.deep_judgment_reasoning_only,
+                "reasoning_only": context.deep_judgment_mode == "reasoning_only",
             }
 
         # Step 2: Parse response using evaluator
         parse_result = evaluator.parse_response(
             raw_response=raw_llm_response,
             question_text=context.question_text,
-            deep_judgment_enabled=context.deep_judgment_enabled,
+            deep_judgment_enabled=context.deep_judgment_mode != "disabled",
             deep_judgment_config=deep_judgment_config,
             use_full_trace=use_full_trace,
             usage_tracker=usage_tracker,
@@ -248,7 +248,7 @@ class ParseTemplateStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT, parse_result.hallucination_risk_assessment)
 
         # Store reasoning-only flag so downstream stages (e.g., DeepJudgmentAutoFail) can check it
-        if context.deep_judgment_reasoning_only:
+        if context.deep_judgment_mode == "reasoning_only":
             context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_REASONING_ONLY, True)
 
         # Update usage tracker with any usage from parsing
@@ -258,7 +258,7 @@ class ParseTemplateStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
         # Store in result builder
-        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, context.deep_judgment_enabled)
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_MODE, context.deep_judgment_mode)
         context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, parse_result.deep_judgment_performed)
         context.set_result_field(ArtifactKeys.EXTRACTED_EXCERPTS, parse_result.extracted_excerpts)
         context.set_result_field(ArtifactKeys.ATTRIBUTE_REASONING, parse_result.attribute_reasoning)
