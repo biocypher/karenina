@@ -140,3 +140,38 @@ class TestValidateRubricsErrorShape:
         assert "source" in errors[0]
         assert "error" in errors[0]
         assert errors[0]["source"] == f"question:{q_id}"
+
+
+@pytest.mark.unit
+class TestFacadeGetQuestionRubric:
+    """Test get_question_rubric facade method."""
+
+    def test_returns_none_when_no_rubric(self):
+        """Facade should return None when no rubric is set."""
+        b, q_id = _create_benchmark_with_question()
+        assert b.get_question_rubric(q_id) is None
+
+    def test_returns_rubric_when_set(self):
+        """Facade should return a Rubric after one is set."""
+        b, q_id = _create_benchmark_with_question()
+        rubric = Rubric(llm_traits=[LLMRubricTrait(name="t", description="d", kind="boolean")])
+        b.set_question_rubric(q_id, rubric)
+        result = b.get_question_rubric(q_id)
+        assert isinstance(result, Rubric)
+        assert len(result.llm_traits) == 1
+
+    def test_handles_dict_format_from_cache(self):
+        """Facade should handle dict format stored in the questions cache."""
+        b, q_id = _create_benchmark_with_question()
+        # Simulate dict format that can appear from JSON-loaded data
+        b._questions_cache[q_id]["question_rubric"] = {
+            "llm_traits": [LLMRubricTrait(name="t1", description="d1", kind="boolean")],
+            "regex_traits": [RegexRubricTrait(name="t2", description="d2", pattern=r"\d+")],
+            "callable_traits": [],
+            "metric_traits": [],
+            "agentic_traits": [],
+        }
+        result = b.get_question_rubric(q_id)
+        assert isinstance(result, Rubric)
+        assert len(result.llm_traits) == 1
+        assert len(result.regex_traits) == 1

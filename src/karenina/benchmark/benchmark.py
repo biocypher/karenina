@@ -672,8 +672,18 @@ class Benchmark:
         Returns:
             Rubric containing the question-specific traits, or None.
         """
-        traits = self._rubric_manager.get_question_rubric(question_id)
-        return Rubric.from_traits(traits)
+        raw = self._rubric_manager.get_question_rubric(question_id)
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return Rubric(
+                llm_traits=raw.get("llm_traits", []),
+                regex_traits=raw.get("regex_traits", []),
+                callable_traits=raw.get("callable_traits", []),
+                metric_traits=raw.get("metric_traits", []),
+                agentic_traits=raw.get("agentic_traits", []),
+            )
+        return Rubric.from_traits(raw)
 
     def clear_global_rubric(self) -> bool:
         """Remove the global rubric."""
