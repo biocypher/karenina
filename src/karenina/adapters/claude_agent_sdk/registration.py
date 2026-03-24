@@ -83,6 +83,8 @@ _claude_sdk_spec = AdapterSpec(
 AdapterRegistry.register(_claude_sdk_spec)
 
 # Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.claude_agent_sdk.prompts.abstention  # noqa: E402, F401
 import karenina.adapters.claude_agent_sdk.prompts.deep_judgment  # noqa: E402, F401
 import karenina.adapters.claude_agent_sdk.prompts.parsing  # noqa: E402, F401
 import karenina.adapters.claude_agent_sdk.prompts.rubric  # noqa: E402, F401
+import karenina.adapters.claude_agent_sdk.prompts.sufficiency  # noqa: E402, F401

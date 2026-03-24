@@ -121,6 +121,8 @@ AdapterRegistry.register(_claude_tool_spec)
 logger.debug("Registered claude_tool adapter with AdapterRegistry")
 
 # Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.claude_tool.prompts.abstention  # noqa: E402, F401
 import karenina.adapters.claude_tool.prompts.deep_judgment  # noqa: E402, F401
 import karenina.adapters.claude_tool.prompts.parsing  # noqa: E402, F401
 import karenina.adapters.claude_tool.prompts.rubric  # noqa: E402, F401
+import karenina.adapters.claude_tool.prompts.sufficiency  # noqa: E402, F401
