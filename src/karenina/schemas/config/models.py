@@ -224,9 +224,9 @@ class QuestionFewShotConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: Literal["all", "k-shot", "custom", "inherit"] = "inherit"
-    k: int | None = None
-    selected_examples: list[str | int] | None = None
-    excluded_examples: list[str | int] | None = None
+    k: int | None = None  # Override pool_k for this question
+    selected_examples: list[str | int] | None = None  # Hash (MD5) or index selection
+    excluded_examples: list[str | int] | None = None  # Examples to exclude
 
 
 class FewShotConfig(BaseModel):
@@ -234,10 +234,19 @@ class FewShotConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Master source selector: what types of examples are active
     source: Literal["disabled", "question_pool", "global", "both"] = "both"
+
+    # Pool selection: how question-specific examples are chosen
+    # Only relevant when source includes question_pool ("question_pool" or "both")
     pool_mode: Literal["all", "k-shot", "custom"] = "all"
-    pool_k: int = 3
+    pool_k: int = 3  # Default number of examples for k-shot mode
+
+    # Per-question pool overrides
     question_configs: dict[str, QuestionFewShotConfig] = Field(default_factory=dict)
+
+    # Global examples appended to ALL questions
+    # Only used when source includes global ("global" or "both")
     global_examples: list[dict[str, str]] = Field(default_factory=list)
 
     @classmethod
@@ -438,7 +447,7 @@ class FewShotConfig(BaseModel):
                 if len(available_examples) <= k:
                     resolved_examples = available_examples.copy()
                 else:
-                    random.seed(hash(question_id) & 0x7FFFFFFF)
+                    random.seed(int(hashlib.md5(question_id.encode()).hexdigest(), 16) & 0x7FFFFFFF)
                     resolved_examples = random.sample(available_examples, k)
             elif effective_config.mode == "custom" and effective_config.selected_examples:
                 for selection in effective_config.selected_examples:

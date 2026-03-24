@@ -27,12 +27,13 @@ class TestKShotReproducibility:
         sel_b = config.resolve_examples_for_question("question-b", examples)
         assert sel_a != sel_b
 
-    def test_seed_uses_builtin_hash(self) -> None:
-        """The seed must use hash(question_id) for reproducible seeding.
+    def test_seed_is_md5_based(self) -> None:
+        """The seed must use hashlib.md5 for cross-process reproducibility.
 
-        We verify by checking the source code uses hash(question_id).
+        hash() is randomized per-process via PYTHONHASHSEED, so the seed
+        must use hashlib.md5 instead.
         """
         import inspect
 
         source = inspect.getsource(FewShotConfig.resolve_examples_for_question)
-        assert "hash(question_id)" in source
+        assert "hashlib.md5" in source
