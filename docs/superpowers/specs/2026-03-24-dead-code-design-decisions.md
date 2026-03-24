@@ -17,9 +17,13 @@ This spec addresses dead code paths, silent overrides, and unclear semantics acr
 
 ### Change
 
-In `GenerateAnswerStage.execute()`, read `context.prompt_config.get_for_task("generation")` and append it to the system message after `ModelConfig.system_prompt`.
+In `GenerateAnswerStage.execute()`, replace the existing system prompt block (around line 271, before conversation_history injection) with logic that merges `ModelConfig.system_prompt` and `PromptConfig.generation`:
 
 ```python
+# Replace the existing block:
+#   if answering_model.system_prompt:
+#       adapter_messages.append(Message.system(answering_model.system_prompt))
+# With:
 system_parts = []
 if answering_model.system_prompt:
     system_parts.append(answering_model.system_prompt)
@@ -31,13 +35,16 @@ if system_parts:
     adapter_messages.append(Message.system("\n\n".join(system_parts)))
 ```
 
+The cached answer path (early return at line 202) is unaffected; generation instructions are only relevant for live LLM calls.
+
 This keeps `ModelConfig.system_prompt` as the base and layers `PromptConfig.generation` on top, consistent with how other stages layer PromptConfig user instructions.
 
 ### Test Plan
 
 - Test that `PromptConfig(generation="Focus on accuracy")` results in the instruction appearing in the system message sent to the adapter.
-- Test that when `PromptConfig.generation` is None, behavior is unchanged.
-- Test that both `ModelConfig.system_prompt` and `PromptConfig.generation` are joined when both are set.
+- Test that when `PromptConfig.generation` is None, behavior is unchanged (only ModelConfig.system_prompt in system message).
+- Test that both `ModelConfig.system_prompt` and `PromptConfig.generation` are joined with double newline when both are set.
+- Test that when neither is set, no system message is added.
 
 ## 2. Remove Dead Parsing System Prompt + Add Instruction Shortcuts
 
@@ -53,38 +60,72 @@ User customization of parsing already works via `PromptConfig(parsing="...")`, w
 
 **Part A: Remove dead code**
 
-1. Remove `DEFAULT_PARSING_SYSTEM_PROMPT` constant from `config.py`.
-2. Remove the auto-assignment block for parsing models (the list comprehension at lines 320-330 that copies models with the default system prompt).
-3. Relax validation to allow `system_prompt=None` on parsing models. The validation check `_validate_model_configs()` should not require `system_prompt` on parsing models.
+1. Remove the auto-assignment block for parsing models (the list comprehension at config.py lines 320-330 that copies models with the default system prompt). Keep `DEFAULT_PARSING_SYSTEM_PROMPT` as a constant (it is used by the CLI interactive mode as a UI default).
+2. In `_validate_config()` (config.py line 369-380), split the validation loop so the `system_prompt` check only applies to answering models, not parsing models. Parsing models do not need `system_prompt` because `TemplateEvaluator` builds its own prompt.
+
+```python
+# Validation for answering models: require system_prompt
+for model in self.answering_models:
+    if not model.model_name:
+        raise ValueError(...)
+    # ... provider check ...
+    if not model.system_prompt:
+        raise ValueError(f"System prompt is required for answering model {model.id}")
+
+# Validation for parsing models: system_prompt is optional
+for model in self.parsing_models:
+    if not model.model_name:
+        raise ValueError(...)
+    # ... provider check ...
+    # No system_prompt check: TemplateEvaluator builds its own prompt
+```
+
+**Files requiring updates for Part A:**
+
+| File | Change |
+|------|--------|
+| `config.py` lines 320-330 | Remove parsing model auto-assignment |
+| `config.py` lines 369-380 | Split validation loop |
+| `__init__.py` re-exports | Keep (constant still used by CLI) |
 
 **Part B: Add instruction shortcuts on VerificationConfig**
 
-Add convenience parameters on `VerificationConfig` that wire into `PromptConfig`, one for each `PromptConfig` field:
+Add convenience parameters on `VerificationConfig` that wire into `PromptConfig`. Names match PromptConfig field names exactly with `_instructions` suffix:
 
-- `generation_instructions: str | None`
-- `parsing_instructions: str | None`
-- `abstention_instructions: str | None`
-- `sufficiency_instructions: str | None`
-- `rubric_instructions: str | None`
-- `agentic_parsing_instructions: str | None`
-- `deep_judgment_instructions: str | None`
+| Shortcut | Maps to PromptConfig field |
+|----------|---------------------------|
+| `generation_instructions` | `generation` |
+| `parsing_instructions` | `parsing` |
+| `abstention_detection_instructions` | `abstention_detection` |
+| `sufficiency_detection_instructions` | `sufficiency_detection` |
+| `rubric_evaluation_instructions` | `rubric_evaluation` |
+| `agentic_parsing_instructions` | `agentic_parsing` |
+| `deep_judgment_instructions` | `deep_judgment` |
 
-In `__init__`, if any `*_instructions` shortcut is set and the corresponding `PromptConfig` field is not already populated, create or update the `PromptConfig` to include the shortcut value.
+In `__init__`, if any `*_instructions` shortcut is set and the corresponding `PromptConfig` field is `None`, create or update the `PromptConfig` to include the shortcut value.
+
+**Merge behavior:** When `prompt_config` is provided, each shortcut only fills in PromptConfig fields that are `None`. A `PromptConfig(parsing="X")` combined with `generation_instructions="Y"` produces `PromptConfig(parsing="X", generation="Y")`. If both the shortcut and the PromptConfig field are set for the same field, `PromptConfig` takes precedence.
 
 ```python
 # Example: VerificationConfig(parsing_instructions="Be strict")
 # Equivalent to: VerificationConfig(prompt_config=PromptConfig(parsing="Be strict"))
-```
 
-If both the shortcut and the `PromptConfig` field are set, `PromptConfig` takes precedence (the shortcut is a convenience, not an override).
+# Merge example: VerificationConfig(
+#     prompt_config=PromptConfig(parsing="X"),
+#     generation_instructions="Y"
+# )
+# Result: PromptConfig(parsing="X", generation="Y")
+```
 
 ### Test Plan
 
-- Test that removing DEFAULT_PARSING_SYSTEM_PROMPT does not break parsing (TemplateEvaluator builds its own prompt).
+- Test that removing the parsing model auto-assignment does not break parsing (TemplateEvaluator builds its own prompt).
 - Test that parsing models can have `system_prompt=None` without validation failure.
+- Test that answering models still require `system_prompt` (validation unchanged for answering).
 - Test each `*_instructions` shortcut wires into the corresponding PromptConfig field.
 - Test that explicit PromptConfig fields take precedence over shortcuts.
-- Test that setting a shortcut when PromptConfig already has the field does not overwrite.
+- Test merge: PromptConfig(parsing="X") + generation_instructions="Y" results in both fields set.
+- Test that shortcuts are ignored when PromptConfig already has the corresponding field set.
 
 ## 3. FewShotConfig Restructure
 
@@ -140,6 +181,10 @@ class QuestionFewShotConfig(BaseModel):
 
 No backwards compatibility shims. Clean break.
 
+### Inheritance Resolution
+
+When `QuestionFewShotConfig.mode = "inherit"`, the question inherits `pool_mode` and `pool_k` from the top-level `FewShotConfig`. Pool examples are only resolved when `source` includes `"question_pool"` (i.e., `source="question_pool"` or `source="both"`). If `source="global"` or `source="disabled"`, the inherited pool_mode is irrelevant since pool selection is skipped.
+
 ### Behavior in resolve_examples_for_question
 
 | source | Pool examples | Global examples |
@@ -153,11 +198,19 @@ No backwards compatibility shims. Clean break.
 
 All callers of the old FewShotConfig API must be updated:
 
-- `VerificationConfig` (if it references FewShotConfig fields)
-- Any factory methods on FewShotConfig (`from_index_selections`, `from_hash_selections`, `k_shot_for_questions`)
-- Test fixtures
-- Documentation (docs/core_concepts/few-shot.md, notebooks, etc.)
-- Server API schemas (if karenina-server exposes FewShotConfig)
+| File | What to change |
+|------|----------------|
+| `config.py:387-396` | `_validate_config()`: replace `few_shot_config.enabled` with `source != "disabled"`, replace `global_mode` with `pool_mode`, replace `global_k` with `pool_k` |
+| `config.py:558` | `__repr__`: replace `few_shot_config.enabled` with `source != "disabled"` |
+| `config.py:586-594` | `is_few_shot_enabled()`: replace `config.enabled` with `config.source != "disabled"` |
+| `task_helpers.py:111` | `resolve_few_shot_for_task`: replace `few_shot_config.enabled` with `source != "disabled"` |
+| `models.py` | Factory methods (`from_index_selections`, `from_hash_selections`, `k_shot_for_questions`): update `global_mode` to `pool_mode`, `global_k` to `pool_k` |
+| `models.py` | Mutation methods (`add_selections_by_index`, `add_selections_by_hash`, `add_k_shot_configs`): update field references |
+| `models.py` | `get_effective_config()`: update inheritance to use `pool_mode`/`pool_k` |
+| `models.py` | `validate_selections()`: remove external_examples references |
+| Tests | All test fixtures referencing old field names |
+| Docs | `docs/core_concepts/few-shot.md`, notebooks, `docs/workflows/` |
+| Server | karenina-server schemas (if they expose FewShotConfig) |
 
 ### Test Plan
 
@@ -168,6 +221,9 @@ All callers of the old FewShotConfig API must be updated:
 - Test `pool_mode="all"`, `pool_mode="k-shot"`, `pool_mode="custom"` each work correctly.
 - Test that old field names (`enabled`, `global_mode`, etc.) raise validation errors (extra="forbid").
 - Test factory methods updated to new field names.
+- Test `get_effective_config()` with `mode="inherit"` under each `source` value.
+- Test `validate_selections()` with new structure.
+- Test mutation methods (`add_selections_by_index`, etc.) work with new field names.
 
 ## 4. Remove Runner Auto-Upgrade
 
@@ -175,11 +231,11 @@ All callers of the old FewShotConfig API must be updated:
 
 ### Problem
 
-When `evaluation_mode="template_only"` but rubric traits are present, the runner silently overrides to `"template_and_rubric"` (lines 211-220). No logging occurs. The auto-upgrade is unreachable through `Benchmark.run_verification()` but reachable via direct `run_single_model_verification()` calls.
+When `evaluation_mode="template_only"` but rubric traits are present, the runner silently overrides to `"template_and_rubric"` (lines 211-220). No logging occurs. This is a deliberate behavioral change: the auto-upgrade IS reachable through the normal pipeline (via batch_runner calling run_single_model_verification), but the silent override causes confusion. Users who explicitly set `template_only` should get `template_only` behavior with a clear warning about unused rubric traits.
 
 ### Change
 
-Remove the silent auto-upgrade. Replace with a warning log:
+Remove the silent auto-upgrade (delete the `evaluation_mode = "template_and_rubric"` assignment). Replace with a warning log that preserves the user's explicit `evaluation_mode` choice:
 
 ```python
 _has_rubric_traits = rubric and (
