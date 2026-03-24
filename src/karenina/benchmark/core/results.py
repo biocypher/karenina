@@ -392,8 +392,15 @@ class ResultsManager:
         else:
             raise ValueError(f"Unsupported file format: {file_path.suffix}. Supported formats: .json, .csv")
 
-        # Store in memory if run_name provided
-        if run_name:
-            self._in_memory_results[run_name] = results
+        # Group results by their metadata.run_name, falling back to caller-provided run_name
+        grouped: dict[str, dict[str, VerificationResult]] = {}
+        for key, result in results.items():
+            effective_run = result.metadata.run_name if result.metadata.run_name is not None else run_name
+            if effective_run:
+                grouped.setdefault(effective_run, {})[key] = result
+
+        # Store each group under its own run_name
+        for group_name, group_results in grouped.items():
+            self._in_memory_results[group_name] = group_results
 
         return results

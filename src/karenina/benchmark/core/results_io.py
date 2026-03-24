@@ -260,7 +260,14 @@ class ResultsIOManager:
                     # Remove row_index if present and create key
                     item_copy = dict(item)
                     row_index = item_copy.pop("row_index", None)
-                    question_id = item_copy.get("question_id", "unknown")
+                    # Check top-level first, then nested metadata for question_id
+                    question_id = item_copy.get("question_id")
+                    if question_id is None:
+                        metadata = item_copy.get("metadata")
+                        if isinstance(metadata, dict):
+                            question_id = metadata.get("question_id", "unknown")
+                        else:
+                            question_id = "unknown"
                     result_key = f"{question_id}_{row_index}" if row_index else question_id
                     try:
                         results[result_key] = VerificationResult(**item_copy)
