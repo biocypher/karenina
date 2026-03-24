@@ -23,7 +23,7 @@ def merge_rubrics_for_task(
     global_rubric: Rubric | None,
     template: FinishedTemplate,
     config: VerificationConfig,
-) -> Rubric | None:
+) -> tuple[Rubric | None, dict[str, str] | None]:
     """Merge global and question-specific rubrics for a task.
 
     This is an adapter function that bridges the verification workflow layer
@@ -36,10 +36,12 @@ def merge_rubrics_for_task(
         config: Verification configuration with rubric settings
 
     Returns:
-        Merged rubric or None if rubrics are disabled
+        Tuple of (merged_rubric, provenance) where provenance maps each
+        trait name to its source ("global" or "question_specific"). Both
+        elements are None when rubrics are disabled or both inputs are None.
     """
     if not config.rubric_enabled:
-        return None
+        return None, None
 
     question_rubric = None
     if template.question_rubric:
@@ -170,7 +172,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "few_shot_enabled": config.is_few_shot_enabled(),
         "abstention_enabled": getattr(config, "abstention_enabled", False),
         "sufficiency_enabled": getattr(config, "sufficiency_enabled", False),
-        "deep_judgment_enabled": getattr(config, "deep_judgment_enabled", False),
+        "deep_judgment_mode": getattr(config, "deep_judgment_mode", "disabled"),
         "evaluation_mode": getattr(config, "evaluation_mode", "template_only"),
         "rubric_evaluation_strategy": getattr(config, "rubric_evaluation_strategy", "batch"),
         "deep_judgment_max_excerpts_per_attribute": getattr(config, "deep_judgment_max_excerpts_per_attribute", 3),

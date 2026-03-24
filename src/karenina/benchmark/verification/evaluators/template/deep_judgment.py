@@ -17,6 +17,11 @@ with a multi-stage approach:
 
 The feature gracefully handles missing excerpts (refusals, no corroborating evidence)
 and provides detailed metadata about the parsing process.
+
+A reasoning-only mode is also available (``deep_judgment_mode="reasoning_only"``), which
+skips excerpt extraction entirely. It generates per-attribute reasoning directly from
+the response (1 LLM call) then feeds that reasoning to ParserPort for parameter
+extraction (1 more call), totalling 2 model calls instead of the standard 3+.
 """
 
 from __future__ import annotations
@@ -45,6 +50,10 @@ from karenina.benchmark.verification.prompts.deep_judgment.template import (
     build_reasoning_system_prompt,
     build_reasoning_user_prompt,
 )
+from karenina.benchmark.verification.prompts.deep_judgment.template.reasoning_only import (
+    build_reasoning_only_system_prompt,
+    build_reasoning_only_user_prompt,
+)
 from karenina.benchmark.verification.utils.search_provider import create_search_tool
 from karenina.benchmark.verification.utils.template_parsing_helpers import (
     _extract_attribute_descriptions,
@@ -56,6 +65,153 @@ from karenina.benchmark.verification.utils.template_parsing_helpers import (
 from karenina.benchmark.verification.utils.trace_fuzzy_match import fuzzy_match_excerpt
 
 logger = logging.getLogger(__name__)
+
+
+def _reasoning_only_parse(
+    raw_llm_response: str,
+    RawAnswer: type[BaseAnswer],
+    parsing_llm: LLMPort,
+    parser: ParserPort,
+    question_text: str,
+    config: VerificationConfig,  # noqa: ARG001 - Kept for interface consistency with deep_judgment_parse
+    generic_system_prompt: str,
+    attr_guidance: str,
+    attribute_names: list[str],
+    usage_tracker: Any | None,
+    parsing_model_str: str | None,
+    prompt_config: PromptConfig | None,
+    parsing_model: ModelConfig,
+    combined_system_prompt: str,
+) -> tuple[BaseAnswer, dict[str, list[dict[str, Any]]], dict[str, str], dict[str, Any]]:
+    """Execute reasoning-only deep-judgment parsing: reasoning -> parameters.
+
+    Skips excerpt extraction entirely. Generates per-attribute reasoning directly
+    from the response (1 LLM call), then feeds the reasoning to ParserPort for
+    parameter extraction (1 more call).
+
+    Args:
+        raw_llm_response: Raw trace from answering model.
+        RawAnswer: Answer template class (BaseAnswer subclass).
+        parsing_llm: LLMPort adapter for reasoning generation.
+        parser: ParserPort adapter for parameter extraction.
+        question_text: Original question text for context.
+        config: Verification configuration (unused, kept for interface consistency).
+        attr_guidance: Formatted attribute descriptions, one per line.
+        attribute_names: List of attribute names to reason about.
+        usage_tracker: Optional usage tracker.
+        parsing_model_str: Model string identifier for usage tracking.
+        prompt_config: Optional prompt configuration for user instructions.
+        parsing_model: Parsing model configuration.
+        combined_system_prompt: Base system prompt for the parser stage.
+
+    Returns:
+        Tuple of (parsed_answer, excerpts, reasoning, metadata) where
+        excerpts is always an empty dict.
+    """
+    model_calls = 0
+    stages_completed: list[str] = []
+
+    logger.info(
+        "Reasoning-only mode: skipping excerpt extraction for %d attributes",
+        len(attribute_names),
+    )
+
+    # ==========================================
+    # STAGE 1: REASONING GENERATION (direct from response)
+    # ==========================================
+    reasoning_system = build_reasoning_only_system_prompt(
+        generic_system_prompt=generic_system_prompt,
+        attr_guidance=attr_guidance,
+    )
+    reasoning_user = build_reasoning_only_user_prompt(
+        question_text=question_text,
+        raw_llm_response=raw_llm_response,
+    )
+
+    reasoning_assembler = PromptAssembler(
+        task=PromptTask.DJ_TEMPLATE_REASONING_ONLY,
+        interface=parsing_model.interface,
+        capabilities=PortCapabilities(),
+    )
+    reasoning_messages = reasoning_assembler.assemble(
+        system_text=reasoning_system,
+        user_text=reasoning_user,
+        user_instructions=(
+            prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_REASONING_ONLY.value) if prompt_config else None
+        ),
+    )
+
+    llm_response = parsing_llm.invoke(reasoning_messages)
+    raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
+    model_calls += 1
+
+    if usage_tracker and usage_metadata and parsing_model_str:
+        usage_tracker.track_call("deep_judgment_reasoning", parsing_model_str, usage_metadata)
+
+    cleaned_response = _strip_markdown_fences(raw_response)
+
+    try:
+        reasoning_raw = {} if cleaned_response is None else json.loads(cleaned_response)
+    except json.JSONDecodeError as e:
+        logger.warning("Failed to parse reasoning-only JSON: %s", e)
+        reasoning_raw = {}
+
+    # Extract reasoning text per attribute
+    reasoning: dict[str, str] = {}
+    for attr, value in reasoning_raw.items():
+        reasoning[attr] = str(value) if not isinstance(value, dict) else value.get("reasoning", "")
+
+    stages_completed.append("reasoning")
+    logger.info(
+        "Reasoning-only stage completed: generated reasoning for %d attributes",
+        len(reasoning),
+    )
+
+    # ==========================================
+    # STAGE 2: PARAMETER EXTRACTION (via ParserPort)
+    # ==========================================
+    reasoning_text = f"""Original Question: {question_text}
+
+Reasoning Traces (explaining how the response informs each attribute value):
+
+{format_reasoning_for_parsing(reasoning)}"""
+
+    stage2_assembler = PromptAssembler(
+        task=PromptTask.PARSING,
+        interface=parsing_model.interface,
+        capabilities=parser.capabilities,
+    )
+    stage2_messages = stage2_assembler.assemble(
+        system_text=combined_system_prompt,
+        user_text=reasoning_text,
+        user_instructions=(prompt_config.get_for_task(PromptTask.PARSING.value) if prompt_config else None),
+        instruction_context={"json_schema": RawAnswer.model_json_schema()},
+    )
+
+    parse_port_result = parser.parse_to_pydantic(stage2_messages, RawAnswer)
+    parsed_answer = parse_port_result.parsed
+    model_calls += 1
+
+    if usage_tracker is not None and parse_port_result.usage:
+        usage_dict = parse_port_result.usage.to_dict()
+        if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
+            usage_tracker.track_call("parsing", parsing_model_str, usage_dict)
+
+    stages_completed.append("parameters")
+    logger.info(
+        "Reasoning-only parsing completed (total %d model calls)",
+        model_calls,
+    )
+
+    metadata: dict[str, Any] = {
+        "stages_completed": stages_completed,
+        "model_calls": model_calls,
+        "excerpt_retry_count": 0,
+        "attributes_without_excerpts": [],
+        "reasoning_only": True,
+    }
+
+    return parsed_answer, {}, reasoning, metadata
 
 
 def deep_judgment_parse(
@@ -140,6 +296,27 @@ def deep_judgment_parse(
     # Extract attribute descriptions for guidance (without the full schema format)
     attribute_descriptions = _extract_attribute_descriptions(json_schema, attribute_names)
     attr_guidance = "\n".join([f"- {attr}: {desc}" for attr, desc in attribute_descriptions.items()])
+
+    # ==========================================
+    # REASONING-ONLY BRANCH (skip excerpts entirely)
+    # ==========================================
+    if config.deep_judgment_mode == "reasoning_only":
+        return _reasoning_only_parse(
+            raw_llm_response=raw_llm_response,
+            RawAnswer=RawAnswer,
+            parsing_llm=parsing_llm,
+            parser=parser,
+            question_text=question_text,
+            config=config,
+            generic_system_prompt=generic_system_prompt,
+            attr_guidance=attr_guidance,
+            attribute_names=attribute_names,
+            usage_tracker=usage_tracker,
+            parsing_model_str=parsing_model_str,
+            prompt_config=prompt_config,
+            parsing_model=parsing_model,
+            combined_system_prompt=combined_system_prompt,
+        )
 
     excerpt_system_prompt = build_excerpt_system_prompt(
         generic_system_prompt=generic_system_prompt,

@@ -40,7 +40,7 @@ def run_single_model_verification(
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
     sufficiency_enabled: bool = False,
-    deep_judgment_enabled: bool = False,
+    deep_judgment_mode: str = "disabled",
     rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -75,6 +75,8 @@ def run_single_model_verification(
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
     agentic_rubric_parallel: bool = False,
+    # Trait provenance
+    trait_provenance: dict[str, str] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -98,7 +100,7 @@ def run_single_model_verification(
         few_shot_enabled: Whether to use few-shot prompting (disabled by default)
         abstention_enabled: Whether to enable abstention detection
         sufficiency_enabled: Whether to enable trace sufficiency detection
-        deep_judgment_enabled: Whether to enable deep-judgment parsing
+        deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full")
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
             - "batch": All traits evaluated in single LLM call (default, efficient)
             - "sequential": Traits evaluated one-by-one (reliable, more expensive)
@@ -146,7 +148,7 @@ def run_single_model_verification(
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_mode=deep_judgment_mode,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
         # Deep-Judgment Configuration
@@ -185,6 +187,8 @@ def run_single_model_verification(
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,
+        # Trait Provenance
+        trait_provenance=trait_provenance,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
@@ -221,7 +225,7 @@ def run_single_model_verification(
         dynamic_rubric=dynamic_rubric,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_enabled=deep_judgment_mode != "disabled",
         evaluation_mode=evaluation_mode,
         agentic_parsing=agentic_parsing,
     )

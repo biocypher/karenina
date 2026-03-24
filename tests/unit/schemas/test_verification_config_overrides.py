@@ -141,12 +141,12 @@ class TestFromOverridesNoBase:
             abstention=True,
             sufficiency=True,
             embedding_check=True,
-            deep_judgment=True,
+            deep_judgment_mode="full",
         )
         assert config.abstention_enabled is True
         assert config.sufficiency_enabled is True
         assert config.embedding_check_enabled is True
-        assert config.deep_judgment_enabled is True
+        assert config.deep_judgment_mode == "full"
 
 
 @pytest.mark.unit

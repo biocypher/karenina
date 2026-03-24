@@ -61,7 +61,7 @@ Every verification run executes a subset of 13 stages in a fixed order. The `Sta
 | 7 | ParseTemplate | Judge LLM parses response into template schema | Always runs (template modes) |
 | 8 | VerifyTemplate | Runs `verify()` and `verify_granular()` | Always runs (template modes) |
 | 9 | EmbeddingCheck | Compares embeddings if field verification failed | `embedding_check_enabled` + own logic |
-| 10 | DeepJudgmentAutoFail | Excerpt extraction + fuzzy matching for templates | `deep_judgment_enabled` |
+| 10 | DeepJudgmentAutoFail | Excerpt extraction + fuzzy matching for templates | `deep_judgment_mode` != `"disabled"` |
 | 11 | RubricEvaluation | Evaluates LLM/regex/callable/metric traits | `template_and_rubric` or `rubric_only` mode |
 | 12 | DeepJudgmentRubric | Deep judgment for rubric trait scores | Rubric traits with deep judgment config |
 | 13 | FinalizeResult | Assembles `VerificationResult` from context | Always runs |

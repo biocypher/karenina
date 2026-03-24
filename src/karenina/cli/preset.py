@@ -84,7 +84,7 @@ def show_preset(name_or_path: Annotated[str, typer.Argument(help="Preset name or
         console.print(f"  Abstention enabled: {config.abstention_enabled}")
         console.print(f"  Sufficiency enabled: {config.sufficiency_enabled}")
         console.print(f"  Embedding check enabled: {config.embedding_check_enabled}")
-        console.print(f"  Deep judgment enabled: {config.deep_judgment_enabled}")
+        console.print(f"  Deep judgment mode: {config.deep_judgment_mode}")
 
     except FileNotFoundError as e:
         cli_error(str(e), e)

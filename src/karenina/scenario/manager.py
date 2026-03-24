@@ -326,7 +326,7 @@ class ScenarioManager:
             rubric=rubric,
             abstention_enabled=config.abstention_enabled,
             sufficiency_enabled=config.sufficiency_enabled,
-            deep_judgment_enabled=False,
+            deep_judgment_enabled=False,  # Scenarios do not use template deep judgment
             evaluation_mode=evaluation_mode,
         )
 

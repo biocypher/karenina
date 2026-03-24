@@ -330,13 +330,15 @@ class FinalizeResultStage(BaseVerificationStage):
                 agentic_trait_investigation_traces=agentic_trait_traces,
                 dynamic_rubric_skipped_traits=dynamic_skipped,
                 dynamic_rubric_promoted_traits=dynamic_promoted,
+                trait_provenance=context.trait_provenance,
             )
 
         # Create deep-judgment subclass (if enabled)
         deep_judgment = None
-        if context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False):
+        dj_mode = context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_MODE)
+        if dj_mode and dj_mode != "disabled":
             deep_judgment = VerificationResultDeepJudgment(
-                deep_judgment_enabled=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False),
+                deep_judgment_mode=dj_mode,
                 deep_judgment_performed=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False),
                 extracted_excerpts=context.get_result_field(ArtifactKeys.EXTRACTED_EXCERPTS),
                 attribute_reasoning=context.get_result_field(ArtifactKeys.ATTRIBUTE_REASONING),

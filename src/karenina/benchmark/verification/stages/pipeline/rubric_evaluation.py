@@ -456,6 +456,13 @@ class RubricEvaluationStage(BaseVerificationStage):
                 }
             )
 
+        # Annotate promoted traits with "dynamic" provenance
+        if promoted_names:
+            if context.trait_provenance is None:
+                context.trait_provenance = {}
+            for name in promoted_names:
+                context.trait_provenance[name] = "dynamic"
+
         # Record artifacts for downstream consumers and result serialization
         context.set_artifact(ArtifactKeys.DYNAMIC_RUBRIC_PROMOTED_TRAITS, promoted_names or None)
         context.set_artifact(ArtifactKeys.DYNAMIC_RUBRIC_SKIPPED_TRAITS, skipped or None)

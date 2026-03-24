@@ -339,7 +339,7 @@ Each trait's metadata in `trait_metadata` contains:
 | Pipeline stage | Stage 7 (ParseTemplate) | Stage 11 (RubricEvaluation) |
 | Auto-fail stage | Stage 10 (DeepJudgmentAutoFail) | Stage 12 (DeepJudgmentRubricAutoFail) |
 | Scope | Per-attribute (template fields) | Per-trait (rubric LLM traits) |
-| Configuration | Single toggle (`deep_judgment_enabled`) | Four modes with per-trait control |
+| Configuration | Single mode field (`deep_judgment_mode`) | Four modes with per-trait control |
 | Default max excerpts | 3 | 7 |
 | Result location | `result.deep_judgment` | `result.deep_judgment_rubric` |
 | Mixed evaluation | N/A (all-or-nothing for template) | Yes — some traits deep judgment, others standard |

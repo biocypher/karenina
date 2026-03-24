@@ -93,7 +93,7 @@ Both sequential and parallel execution modes collect per-question errors without
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `deep_judgment_enabled` | `bool` | `False` | Enable multi-stage deep judgment analysis for template verification. Adds excerpt extraction, fuzzy matching, and reasoning to parsed results. |
+| `deep_judgment_mode` | `Literal["disabled", "reasoning_only", "full"]` | `"disabled"` | Template deep-judgment mode. `"disabled"`: off. `"reasoning_only"`: reasoning traces without excerpts (2 LLM calls). `"full"`: excerpts + reasoning (3+ LLM calls). |
 | `deep_judgment_max_excerpts_per_attribute` | `int` | `3` | Maximum number of excerpts to extract per template attribute during deep judgment. |
 | `deep_judgment_fuzzy_match_threshold` | `float` | `0.80` | Fuzzy match similarity threshold for validating excerpts against the original trace. |
 | `deep_judgment_excerpt_retry_attempts` | `int` | `2` | Number of retry attempts for excerpt extraction when fuzzy matching fails. |
@@ -243,7 +243,7 @@ config = VerificationConfig.from_overrides(
 | `abstention` | `abstention_enabled` | Enable abstention detection |
 | `sufficiency` | `sufficiency_enabled` | Enable sufficiency detection |
 | `embedding_check` | `embedding_check_enabled` | Enable embedding check |
-| `deep_judgment` | `deep_judgment_enabled` | Enable template deep judgment |
+| `deep_judgment_mode` | `deep_judgment_mode` | Template deep-judgment mode (`"disabled"`, `"reasoning_only"`, `"full"`) |
 | `evaluation_mode` | `evaluation_mode` | Sets the evaluation mode |
 | `embedding_threshold` | `embedding_check_threshold` | Embedding similarity threshold |
 | `embedding_model` | `embedding_check_model` | Embedding model name |

@@ -358,7 +358,7 @@ The `deep_judgment` section is present when deep judgment was enabled for templa
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `deep_judgment_enabled` | `bool` | Whether deep judgment was configured |
+| `deep_judgment_mode` | `str \| None` | Which deep-judgment mode was used (`None`, `"reasoning_only"`, `"full"`) |
 | `deep_judgment_performed` | `bool` | Whether deep judgment was successfully executed |
 | `deep_judgment_stages_completed` | `list[str] \| None` | Stages completed: `["excerpts", "reasoning", "parameters"]` |
 | `deep_judgment_model_calls` | `int` | Number of LLM invocations for deep judgment |

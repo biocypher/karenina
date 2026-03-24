@@ -145,7 +145,7 @@ A preset with two answering models, template + rubric evaluation, and deep judgm
     "embedding_check_threshold": 0.85,
     "async_enabled": true,
     "async_max_workers": 4,
-    "deep_judgment_enabled": true,
+    "deep_judgment_mode": "full",
     "deep_judgment_max_excerpts_per_attribute": 3,
     "deep_judgment_fuzzy_match_threshold": 0.80,
     "deep_judgment_excerpt_retry_attempts": 2,

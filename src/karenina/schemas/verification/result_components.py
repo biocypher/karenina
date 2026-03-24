@@ -221,6 +221,9 @@ class VerificationResultRubric(BaseModel):
     dynamic_rubric_skipped_traits: dict[str, str] | None = None  # Traits skipped with reasons
     dynamic_rubric_promoted_traits: list[str] | None = None  # Traits promoted after presence check
 
+    # Trait provenance metadata (maps trait name to source: "global", "question_specific", or "dynamic")
+    trait_provenance: dict[str, str] | None = None
+
     def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
         """Get all trait scores across all trait types in a flat dictionary.
 
@@ -291,7 +294,7 @@ class VerificationResultRubric(BaseModel):
 class VerificationResultDeepJudgment(BaseModel):
     """Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)."""
 
-    deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
+    deep_judgment_mode: str | None = None  # Which deep-judgment mode was used (None, "reasoning_only", "full")
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
     # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,

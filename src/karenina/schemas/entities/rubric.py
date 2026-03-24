@@ -1040,33 +1040,61 @@ class RubricEvaluation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | None") -> "Rubric | None":
+def _iter_traits(
+    rubric: "Rubric",
+) -> "list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait]":
+    """Return all traits from a rubric in a flat list.
+
+    Args:
+        rubric: The rubric to iterate over.
+
+    Returns:
+        All traits across llm, regex, callable, metric, and agentic types.
+    """
+    return (
+        list(rubric.llm_traits)
+        + list(rubric.regex_traits)
+        + list(rubric.callable_traits)
+        + list(rubric.metric_traits)
+        + list(rubric.agentic_traits)
+    )
+
+
+def merge_rubrics(
+    global_rubric: "Rubric | None",
+    question_rubric: "Rubric | None",
+) -> "tuple[Rubric | None, dict[str, str] | None]":
     """Merge global and question-specific rubrics.
 
     Same-type trait name collisions (e.g., both rubrics have an LLM trait
     named "safety") raise ``ValueError``. Cross-type collisions (e.g., global
-    regex trait "quality" + question LLM trait "quality") are allowed because
-    results are stored in type-segregated dicts.
+    regex trait "quality" + question LLM trait "quality") are rejected by the
+    ``Rubric`` constructor's cross-type uniqueness validation.
 
     Args:
         global_rubric: The global rubric (applied to all questions).
         question_rubric: Question-specific rubric (adds to global).
 
     Returns:
-        Merged rubric, or None if both are None.
+        A tuple of (merged_rubric, provenance) where provenance maps each
+        trait name to its source: "global" or "question_specific". Both
+        elements are None when both inputs are None.
 
     Raises:
         ValueError: If a trait name appears in both rubrics within the same
             trait type.
     """
     if not global_rubric and not question_rubric:
-        return None
+        return None, None
 
     if not global_rubric:
-        return question_rubric
+        assert question_rubric is not None
+        q_provenance: dict[str, str] = {t.name: "question_specific" for t in _iter_traits(question_rubric)}
+        return question_rubric, q_provenance
 
     if not question_rubric:
-        return global_rubric
+        g_provenance: dict[str, str] = {t.name: "global" for t in _iter_traits(global_rubric)}
+        return global_rubric, g_provenance
 
     # Check per-type name collisions
     type_pairs: list[tuple[str, list[Any], list[Any]]] = [
@@ -1087,13 +1115,19 @@ def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | Non
     if all_conflicts:
         raise ValueError(f"Same-type trait name conflicts between global and question rubrics: {all_conflicts}")
 
-    return Rubric(
+    merged = Rubric(
         llm_traits=list(global_rubric.llm_traits) + list(question_rubric.llm_traits),
         regex_traits=list(global_rubric.regex_traits) + list(question_rubric.regex_traits),
         callable_traits=list(global_rubric.callable_traits) + list(question_rubric.callable_traits),
         metric_traits=list(global_rubric.metric_traits) + list(question_rubric.metric_traits),
         agentic_traits=list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits),
     )
+    provenance: dict[str, str] = {}
+    for t in _iter_traits(global_rubric):
+        provenance[t.name] = "global"
+    for t in _iter_traits(question_rubric):
+        provenance[t.name] = "question_specific"
+    return merged, provenance
 
 
 # Type alias for the union of all trait types stored in DynamicRubric

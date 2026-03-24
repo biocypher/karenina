@@ -69,6 +69,9 @@ class PromptTask(str, Enum):
     DJ_TEMPLATE_REASONING = "dj_template_reasoning"
     """Stage 2: Generates reasoning mapping excerpts to template attributes."""
 
+    DJ_TEMPLATE_REASONING_ONLY = "dj_template_reasoning_only"
+    """Reasoning-only: generates per-attribute reasoning directly from the response (no excerpts)."""
+
     # --- Deep judgment: rubric trait evaluation flow ---
 
     DJ_RUBRIC_EXCERPT_EXTRACTION = "dj_rubric_excerpt_extraction"
