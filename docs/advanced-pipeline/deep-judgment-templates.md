@@ -201,7 +201,7 @@ config = VerificationConfig(
 
 ```python
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_search_enabled=True,
     deep_judgment_search_tool="tavily",  # Requires TAVILY_API_KEY env var
     answering_models=[...],
@@ -213,7 +213,7 @@ config = VerificationConfig(
 
 ```python
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_max_excerpts_per_attribute=5,    # More evidence per attribute
     deep_judgment_fuzzy_match_threshold=0.90,       # Stricter matching
     deep_judgment_excerpt_retry_attempts=3,         # More retries
@@ -261,7 +261,7 @@ def my_search(query: str | list[str]) -> str | list[str]:
     ...
 
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_search_enabled=True,
     deep_judgment_search_tool=my_search,
     answering_models=[...],

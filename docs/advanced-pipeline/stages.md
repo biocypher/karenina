@@ -17,7 +17,7 @@ For an overview of how stages fit together, see [Advanced Pipeline Overview](ind
 | 7 | [ParseTemplate](#7-parsetemplate) | LLM Call | Template modes | Recursion, trace fail, abstention, or insufficient |
 | 8 | [VerifyTemplate](#8-verifytemplate) | Verification | Template modes | Recursion or abstention |
 | 9 | [EmbeddingCheck](#9-embeddingcheck) | Enhancement | Template modes | Field verification passed |
-| 10 | [DeepJudgmentAutoFail](#10-deepjudgmentautofail) | Enhancement | `deep_judgment_enabled` | Deep judgment not performed or no missing excerpts |
+| 10 | [DeepJudgmentAutoFail](#10-deepjudgmentautofail) | Enhancement | `deep_judgment_mode` != `"disabled"` | Deep judgment not performed or no missing excerpts |
 | 11 | [RubricEvaluation](#11-rubricevaluation) | Evaluation | Rubric configured + mode | Trace validation failed (filtered mode) |
 | 12 | [DeepJudgmentRubricAutoFail](#12-deepjudgmentrubricautofail) | Enhancement | Rubric configured + mode | Deep judgment rubric not performed or no missing excerpts |
 | 13 | [FinalizeResult](#13-finalizeresult) | Finalization | Always | Never skips |
@@ -299,7 +299,7 @@ Uses the parsing (judge) LLM to extract structured data from the raw response in
 
 ### Deep Judgment Parsing
 
-When `deep_judgment_enabled=True`, parsing includes excerpt extraction:
+When `deep_judgment_mode` is `"full"` or `"reasoning_only"`, parsing includes deep judgment processing:
 
 - For each template attribute, the judge extracts text spans from the response that support its answer
 - Excerpts are validated using fuzzy matching against the original response
@@ -330,7 +330,7 @@ Deep judgment fields (when enabled):
 
 | Field | Purpose |
 |-------|---------|
-| `deep_judgment_enabled` | Enable excerpt extraction during parsing |
+| `deep_judgment_mode` | Template deep-judgment mode (`"disabled"`, `"reasoning_only"`, `"full"`) |
 | `deep_judgment_max_excerpts_per_attribute` | Max excerpts per field |
 | `deep_judgment_fuzzy_match_threshold` | Similarity threshold (0.0-1.0) |
 | `deep_judgment_excerpt_retry_attempts` | Retry count for failed excerpts |
@@ -443,7 +443,7 @@ Auto-fails verification if deep-judgment parsing found attributes without corrob
 
 ### When It Runs
 
-- **Included**: When `deep_judgment_enabled=True` (template modes only)
+- **Included**: When `deep_judgment_mode` is `"full"` or `"reasoning_only"` (template modes only)
 - **Runtime skip**: If deep judgment was not performed, no attributes are missing excerpts, or abstention was detected
 
 ### What It Does
@@ -458,7 +458,7 @@ Modifies `verify_result` and `field_verification_result` — no new fields added
 
 ### Configuration
 
-No direct configuration — auto-included when `deep_judgment_enabled=True`.
+No direct configuration; auto-included when `deep_judgment_mode` is not `"disabled"`.
 
 ---
 

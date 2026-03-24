@@ -127,7 +127,7 @@ For a hands-on tutorial that walks through each of these needs with a complete e
           └─ NO: What kind of judgment?
               │
               ├─ Yes/no → LLMRubricTrait (kind="boolean")
-              │           Need traceable evidence? Add deep_judgment_enabled=True
+              │           Need traceable evidence? Enable via deep_judgment_rubric_mode
               │
               ├─ Named tiers with observable boundaries
               │   → LLMRubricTrait (kind="literal")

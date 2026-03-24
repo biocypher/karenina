@@ -153,7 +153,7 @@ context = VerificationContext(
     parsing_model=ModelConfig(...),
     # Optional features
     abstention_enabled=True,
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     # ...
 )
 ```

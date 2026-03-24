@@ -59,7 +59,7 @@ from pathlib import Path
 benchmark.save(Path("drug_target_v1.jsonld"))
 ```
 
-**Deep judgment configuration stripping.** By default, `save()` strips deep judgment configuration fields (e.g., `deep_judgment_enabled`, `deep_judgment_excerpt_enabled`) from LLM rubric traits before writing the file. This keeps checkpoint files focused on the benchmark definition and avoids coupling saved checkpoints to a particular deep judgment configuration. To preserve deep judgment settings in the checkpoint (required for `use_checkpoint` mode), pass `save_deep_judgment_config=True`:
+**Deep judgment configuration stripping.** By default, `save()` strips deep judgment configuration fields (e.g., `deep_judgment_enabled`, `deep_judgment_excerpt_enabled`) from LLM rubric traits before writing the file. These are per-trait rubric fields that control rubric deep judgment behavior. This keeps checkpoint files focused on the benchmark definition and avoids coupling saved checkpoints to a particular deep judgment configuration. To preserve deep judgment settings in the checkpoint (required for `use_checkpoint` mode), pass `save_deep_judgment_config=True`:
 
 ```python
 # Preserve deep judgment trait settings in the checkpoint
