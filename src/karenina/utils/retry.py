@@ -21,21 +21,21 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-def log_retry(retry_state: Any, *, context: str = "LLM call") -> None:
+def log_retry(retry_state: Any, *, context: str = "LLM call", max_attempts: int = 3) -> None:
     """Log retry attempt with error details.
 
     Args:
         retry_state: Tenacity retry state object containing attempt info.
         context: Description of what operation is being retried.
+        max_attempts: Maximum number of retry attempts for log display.
 
     Example:
         >>> from functools import partial
-        >>> before_sleep = partial(log_retry, context="abstention check")
+        >>> before_sleep = partial(log_retry, context="abstention check", max_attempts=3)
     """
     exc = retry_state.outcome.exception() if retry_state.outcome else None
     attempt = retry_state.attempt_number
-    max_attempts = 3  # Default max attempts
-    logger.warning(f"Retrying {context} (attempt {attempt}/{max_attempts}) after error: {exc}")
+    logger.warning("Retrying %s (attempt %d/%d) after error: %s", context, attempt, max_attempts, exc)
 
 
 def create_transient_retry(
@@ -68,7 +68,13 @@ def create_transient_retry(
 
     def _log_retry(retry_state: Any) -> None:
         exc = retry_state.outcome.exception() if retry_state.outcome else None
-        logger.warning(f"Retrying {context} (attempt {retry_state.attempt_number}/{max_attempts}) after error: {exc}")
+        logger.warning(
+            "Retrying %s (attempt %d/%d) after error: %s",
+            context,
+            retry_state.attempt_number,
+            max_attempts,
+            exc,
+        )
 
     return retry(
         retry=retry_if_exception(is_retryable_error),
