@@ -127,7 +127,7 @@ def build_config_from_cli_args(
         abstention=abstention,
         sufficiency=sufficiency,
         embedding_check=embedding_check,
-        deep_judgment_mode="full" if deep_judgment else "disabled",
+        deep_judgment_mode="full" if deep_judgment is True else ("disabled" if deep_judgment is False else None),
         # Evaluation settings
         evaluation_mode=evaluation_mode,
         embedding_threshold=embedding_threshold,

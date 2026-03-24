@@ -162,21 +162,19 @@ class TestRubricEvaluationPerformedColumn:
         assert "rubric_evaluation_performed" in df.columns
         assert all(df["rubric_evaluation_performed"] == True)  # noqa: E712
 
-    def test_column_false_when_not_performed(self):
-        """rubric_evaluation_performed is False when evaluation was not performed."""
+    def test_zero_rows_when_not_performed(self):
+        """Results with rubric_evaluation_performed=False produce zero rows (issue 186)."""
         result = _make_result(
             "q1",
             rubric_evaluation_performed=False,
             rubric_evaluation_strategy=None,
         )
-        # When rubric_evaluation_performed is False, the builder creates an empty row
+        # Ghost row fix (issue 186): results where rubric evaluation was not
+        # performed are skipped entirely to prevent ghost rows with trait_name=None.
         builder = RubricDataFrameBuilder(results=[result])
         df = builder.build_dataframe(trait_type="all")
 
-        # The empty row path does not include rubric_evaluation_performed currently,
-        # but when a result has rubric data with performed=True, it should be present.
-        # This test confirms the column appears in the output.
-        assert len(df) == 1  # One empty row
+        assert len(df) == 0
 
 
 # =============================================================================
@@ -328,8 +326,8 @@ class TestMetadataColumnOrdering:
     """rubric_evaluation_performed and rubric_evaluation_strategy must appear
     after run_name and before deep judgment columns."""
 
-    def test_columns_appear_after_run_name(self):
-        """Both new columns appear after run_name in column order."""
+    def test_columns_appear_before_trait_name(self):
+        """Both columns appear before trait_name in column order."""
         result = _make_result(
             "q1",
             rubric_evaluation_performed=True,
@@ -340,12 +338,12 @@ class TestMetadataColumnOrdering:
         df = builder.build_dataframe(trait_type="llm")
 
         cols = list(df.columns)
-        run_name_idx = cols.index("run_name")
+        trait_name_idx = cols.index("trait_name")
         performed_idx = cols.index("rubric_evaluation_performed")
         strategy_idx = cols.index("rubric_evaluation_strategy")
 
-        assert performed_idx > run_name_idx, "rubric_evaluation_performed must come after run_name"
-        assert strategy_idx > run_name_idx, "rubric_evaluation_strategy must come after run_name"
+        assert performed_idx < trait_name_idx, "rubric_evaluation_performed must come before trait_name"
+        assert strategy_idx < trait_name_idx, "rubric_evaluation_strategy must come before trait_name"
 
     def test_performed_before_strategy(self):
         """rubric_evaluation_performed appears before rubric_evaluation_strategy."""
