@@ -138,7 +138,7 @@ class TestMetricComputation:
         from karenina.schemas.config import ModelConfig
 
         model_config = ModelConfig(
-            id="test-metric",
+            id="claude-haiku-4-5",
             model_provider="anthropic",
             model_name="claude-haiku-4-5",
             temperature=0.0,
@@ -505,7 +505,7 @@ class TestMetricFormulas:
         from karenina.schemas.config import ModelConfig
 
         model_config = ModelConfig(
-            id="test-metric",
+            id="claude-haiku-4-5",
             model_provider="anthropic",
             model_name="claude-haiku-4-5",
             temperature=0.0,

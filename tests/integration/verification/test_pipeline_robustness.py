@@ -46,7 +46,7 @@ from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait, Rubric
 def minimal_model_config() -> ModelConfig:
     """Return a minimal ModelConfig for testing."""
     return ModelConfig(
-        id="test-model",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,

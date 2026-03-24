@@ -69,7 +69,7 @@ class DrugAnswer(BaseAnswer):
 def parsing_model() -> ModelConfig:
     """Create a ModelConfig pointing at a cheap Anthropic model."""
     return ModelConfig(
-        id="test-reasoning-only-api",
+        id=MODEL_NAME,
         model_provider=MODEL_PROVIDER,
         model_name=MODEL_NAME,
         temperature=0.0,

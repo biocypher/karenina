@@ -213,7 +213,7 @@ class MockConditionalStage(BaseVerificationStage):
 def minimal_model_config() -> ModelConfig:
     """Return a minimal ModelConfig for testing."""
     return ModelConfig(
-        id="test-model",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,
@@ -895,7 +895,7 @@ class TestFailedStageAttribute:
         """TraceValidationAutoFailStage sets failed_stage when trace is invalid."""
         # Simulate MCP-enabled model with invalid trace
         minimal_context.answering_model = ModelConfig(
-            id="mcp-agent",
+            id="test-model",
             model_name="test-model",
             model_provider="anthropic",
             mcp_urls_dict={"tools": "http://localhost:8080/mcp"},

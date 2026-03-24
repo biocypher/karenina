@@ -317,7 +317,7 @@ class TestEvaluationLoop:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -385,7 +385,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -438,7 +438,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -467,7 +467,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -527,7 +527,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -811,7 +811,7 @@ class TestDynamicRubricPlumbing:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",

@@ -28,7 +28,7 @@ def mock_model_config_for_interface():
 
     def _factory(interface: str) -> ModelConfig:
         return ModelConfig(
-            id=f"test-{interface}",
+            id="claude-sonnet-4-20250514",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
             interface=interface,
@@ -56,7 +56,7 @@ def deep_agents_agent_adapter():
     from karenina.adapters.langchain_deep_agents.agent import DeepAgentsAgentAdapter
 
     config = ModelConfig(
-        id="test-da",
+        id="claude-sonnet-4-20250514",
         model_name="claude-sonnet-4-20250514",
         model_provider="anthropic",
         interface="langchain_deep_agents",
@@ -72,7 +72,7 @@ def deep_agents_llm_adapter():
     from karenina.adapters.langchain_deep_agents.llm import DeepAgentsLLMAdapter
 
     config = ModelConfig(
-        id="test-da",
+        id="claude-sonnet-4-20250514",
         model_name="claude-sonnet-4-20250514",
         model_provider="anthropic",
         interface="langchain_deep_agents",
@@ -88,7 +88,7 @@ def deep_agents_parser_adapter():
     from karenina.adapters.langchain_deep_agents.parser import DeepAgentsParserAdapter
 
     config = ModelConfig(
-        id="test-da",
+        id="claude-sonnet-4-20250514",
         model_name="claude-sonnet-4-20250514",
         model_provider="anthropic",
         interface="langchain_deep_agents",

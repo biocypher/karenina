@@ -71,7 +71,7 @@ class TestFromModelConfig:
 
     def test_langchain_interface(self) -> None:
         config = ModelConfig(
-            id="test-langchain",
+            id="claude-sonnet-4-20250514",
             interface="langchain",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
@@ -83,7 +83,7 @@ class TestFromModelConfig:
 
     def test_claude_tool_interface(self) -> None:
         config = ModelConfig(
-            id="test-claude-tool",
+            id="claude-sonnet-4-20250514",
             interface="claude_tool",
             model_name="claude-sonnet-4-20250514",
         )
@@ -94,7 +94,7 @@ class TestFromModelConfig:
 
     def test_openrouter_interface(self) -> None:
         config = ModelConfig(
-            id="test-openrouter",
+            id="anthropic/claude-sonnet-4-20250514",
             interface="openrouter",
             model_name="anthropic/claude-sonnet-4-20250514",
         )
@@ -105,7 +105,7 @@ class TestFromModelConfig:
     def test_with_mcp_urls_dict_answering_role(self) -> None:
         """Answering models with mcp_urls_dict should have sorted tools."""
         config = ModelConfig(
-            id="test-mcp",
+            id="claude-sonnet-4-20250514",
             interface="langchain",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
@@ -117,7 +117,7 @@ class TestFromModelConfig:
     def test_with_mcp_urls_dict_parsing_role_always_empty_tools(self) -> None:
         """Parsing models always produce tools=[] regardless of mcp_urls_dict."""
         config = ModelConfig(
-            id="test-mcp-parsing",
+            id="claude-sonnet-4-20250514",
             interface="langchain",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
@@ -147,7 +147,7 @@ class TestFromModelConfig:
     def test_tools_are_sorted(self) -> None:
         """Tools are sorted alphabetically regardless of input order."""
         config = ModelConfig(
-            id="test-sorted-tools",
+            id="gpt-4",
             interface="langchain",
             model_name="gpt-4",
             model_provider="openai",

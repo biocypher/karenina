@@ -164,7 +164,7 @@ def parsing_model_config() -> ModelConfig:
     with captured fixtures.
     """
     return ModelConfig(
-        id="test-parser",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,

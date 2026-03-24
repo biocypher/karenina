@@ -57,10 +57,10 @@ class TestAddNode:
         from karenina.schemas.config import ModelConfig
 
         s = Scenario("test")
-        override = ModelOverride(answering_model=ModelConfig(id="gpt4", model_provider="openai", model_name="gpt-4"))
+        override = ModelOverride(answering_model=ModelConfig(id="gpt-4", model_provider="openai", model_name="gpt-4"))
         s.add_node("q1", question=_make_question(), model_override=override)
         assert s._nodes["q1"].model_override is not None
-        assert s._nodes["q1"].model_override.answering_model.id == "gpt4"
+        assert s._nodes["q1"].model_override.answering_model.id == "gpt-4"
 
     def test_add_node_with_state_update_lambda(self) -> None:
         s = Scenario("test")

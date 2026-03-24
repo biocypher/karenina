@@ -18,6 +18,7 @@ from karenina.adapters.registry import AdapterRegistry, AdapterSpec
 def _make_context(interface, model_provider=None, model_name="test"):
     """Build a minimal VerificationContext stand-in via SimpleNamespace."""
     model = SimpleNamespace(
+        id=model_name,
         interface=interface,
         mcp_urls_dict=None,
         system_prompt=None,

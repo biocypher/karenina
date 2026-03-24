@@ -89,7 +89,7 @@ class TestDeepJudgmentRetryMechanism:
     def mock_model_config(self) -> ModelConfig:
         """Create a mock model configuration."""
         return ModelConfig(
-            id="test-dj-model",
+            id="gpt-4.1-mini",
             model_provider="openai",
             model_name="gpt-4.1-mini",
             temperature=0.1,
@@ -381,7 +381,7 @@ class TestDeepJudgmentFlows:
     def mock_model_config(self) -> ModelConfig:
         """Create a mock model configuration."""
         return ModelConfig(
-            id="test-flow-model",
+            id="gpt-4.1-mini",
             model_provider="openai",
             model_name="gpt-4.1-mini",
             temperature=0.0,
@@ -491,7 +491,7 @@ class TestDeepJudgmentConfiguration:
     def mock_model_config(self) -> ModelConfig:
         """Create a mock model configuration."""
         return ModelConfig(
-            id="test-config-model",
+            id="gpt-4.1-mini",
             model_provider="openai",
             model_name="gpt-4.1-mini",
             temperature=0.0,
@@ -593,7 +593,7 @@ class TestDeepJudgmentEdgeCases:
     def mock_model_config(self) -> ModelConfig:
         """Create a mock model configuration."""
         return ModelConfig(
-            id="test-edge-model",
+            id="gpt-4.1-mini",
             model_provider="openai",
             model_name="gpt-4.1-mini",
             temperature=0.0,
