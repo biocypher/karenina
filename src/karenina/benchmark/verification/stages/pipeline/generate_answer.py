@@ -268,8 +268,15 @@ class GenerateAnswerStage(BaseVerificationStage):
         try:
             # Construct messages in unified Message format
             adapter_messages: list[Message] = []
+            system_parts: list[str] = []
             if answering_model.system_prompt:
-                adapter_messages.append(Message.system(answering_model.system_prompt))
+                system_parts.append(answering_model.system_prompt)
+            if context.prompt_config:
+                gen_instructions = context.prompt_config.get_for_task("generation")
+                if gen_instructions:
+                    system_parts.append(gen_instructions)
+            if system_parts:
+                adapter_messages.append(Message.system("\n\n".join(system_parts)))
 
             # Inject conversation history from prior scenario turns (if present)
             conversation_history = context.get_artifact("conversation_history")

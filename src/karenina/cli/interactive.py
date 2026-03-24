@@ -412,11 +412,11 @@ def _configure_few_shot() -> Any:
 
     from karenina.schemas.config import FewShotConfig
 
-    few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom", "none"], default="all")
-    few_shot_mode = cast(Literal["all", "k-shot", "custom", "none"], few_shot_mode_str)
+    few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom"], default="all")
+    few_shot_mode = cast(Literal["all", "k-shot", "custom"], few_shot_mode_str)
     few_shot_k = _prompt_int_min("Few-shot k (number of examples)", min_val=1, default="3")
 
-    return FewShotConfig(enabled=True, global_mode=few_shot_mode, global_k=few_shot_k)
+    return FewShotConfig(source="both", pool_mode=few_shot_mode, pool_k=few_shot_k)
 
 
 def _configure_async() -> tuple[bool, int]:

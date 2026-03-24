@@ -24,7 +24,6 @@ from karenina.schemas.config import FewShotConfig, ModelConfig
 from karenina.schemas.config.models import ModelRetryConfig, ToolRetryConfig
 from karenina.schemas.verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
-    DEFAULT_PARSING_SYSTEM_PROMPT,
     DeepJudgmentTraitConfig,
     VerificationConfig,
 )
@@ -263,7 +262,7 @@ def test_default_system_prompts() -> None:
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
-                system_prompt="",  # Empty, should be replaced
+                system_prompt="",  # Empty, no auto-assignment for parsing models
                 temperature=0.1,
             )
         ],
@@ -273,14 +272,14 @@ def test_default_system_prompts() -> None:
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
-                system_prompt=None,  # None, should be replaced
+                system_prompt=None,  # None, should be replaced with default
                 temperature=0.1,
             )
         ],
     )
 
-    # Default prompts should be applied
-    assert config.parsing_models[0].system_prompt == DEFAULT_PARSING_SYSTEM_PROMPT
+    # Answering models get auto-assigned default; parsing models do not
+    assert config.parsing_models[0].system_prompt == ""
     assert config.answering_models[0].system_prompt == DEFAULT_ANSWERING_SYSTEM_PROMPT
 
 
@@ -495,13 +494,13 @@ def test_get_few_shot_config_returns_new_config() -> None:
         ],
         answering_models=[],
         parsing_only=True,
-        few_shot_config=FewShotConfig(enabled=True, global_mode="all", global_k=3),
+        few_shot_config=FewShotConfig(source="both", pool_mode="all", pool_k=3),
     )
 
     result = config.get_few_shot_config()
     assert result is not None
-    assert result.enabled is True
-    assert result.global_mode == "all"
+    assert result.source == "both"
+    assert result.pool_mode == "all"
 
 
 @pytest.mark.unit
@@ -544,7 +543,7 @@ def test_is_few_shot_enabled_true() -> None:
         ],
         answering_models=[],
         parsing_only=True,
-        few_shot_config=FewShotConfig(enabled=True, global_mode="all", global_k=3),
+        few_shot_config=FewShotConfig(source="both", pool_mode="all", pool_k=3),
     )
 
     assert config.is_few_shot_enabled() is True

@@ -214,9 +214,7 @@ def run_single_model_verification(
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
     context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
-    # Determine evaluation mode automatically if not explicitly set.
-    # If rubric or dynamic_rubric is provided and mode is template_only,
-    # upgrade to template_and_rubric.
+    # Warn if rubric traits are provided but evaluation_mode won't use them.
     _has_rubric_traits = rubric and (
         rubric.llm_traits
         or rubric.regex_traits
@@ -226,7 +224,11 @@ def run_single_model_verification(
     )
     _has_dynamic_rubric_traits = dynamic_rubric is not None and not dynamic_rubric.is_empty()
     if (_has_rubric_traits or _has_dynamic_rubric_traits) and evaluation_mode == "template_only":
-        evaluation_mode = "template_and_rubric"
+        logger.warning(
+            "Rubric traits were provided but evaluation_mode='template_only'. "
+            "Rubric evaluation will be skipped. Set evaluation_mode='template_and_rubric' "
+            "to evaluate rubric traits."
+        )
 
     if evaluation_mode == "rubric_only" and not _has_rubric_traits and not _has_dynamic_rubric_traits:
         logger.warning(

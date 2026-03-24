@@ -327,24 +327,32 @@ class VerificationConfig(BaseModel):
                 for m in data["answering_models"]
             ]
 
-        if "parsing_models" in data:
-            data["parsing_models"] = [
-                m.model_copy(update={"system_prompt": DEFAULT_PARSING_SYSTEM_PROMPT})
-                if isinstance(m, ModelConfig) and not m.system_prompt
-                else (
-                    {**m, "system_prompt": DEFAULT_PARSING_SYSTEM_PROMPT}
-                    if isinstance(m, dict) and not m.get("system_prompt")
-                    else m
-                )
-                for m in data["parsing_models"]
-            ]
-
         # Strip rubric_enabled from input: now derived from evaluation_mode
         data.pop("rubric_enabled", None)
 
         # Strip deep_judgment_rubric_search_enabled: not a declared field,
         # but injected by from_overrides() and some CLI callers.
         data.pop("deep_judgment_rubric_search_enabled", None)
+
+        # Wire instruction shortcuts into prompt_config (pop before super().__init__)
+        shortcut_mapping = {
+            "generation": data.pop("generation_instructions", None),
+            "parsing": data.pop("parsing_instructions", None),
+            "abstention_detection": data.pop("abstention_detection_instructions", None),
+            "sufficiency_detection": data.pop("sufficiency_detection_instructions", None),
+            "rubric_evaluation": data.pop("rubric_evaluation_instructions", None),
+            "agentic_parsing": data.pop("agentic_parsing_instructions", None),
+            "deep_judgment": data.pop("deep_judgment_instructions", None),
+        }
+        active_shortcuts = {k: v for k, v in shortcut_mapping.items() if v is not None}
+        if active_shortcuts:
+            pc = data.get("prompt_config") or PromptConfig()
+            if isinstance(pc, dict):
+                pc = PromptConfig(**pc)
+            updates = {k: v for k, v in active_shortcuts.items() if getattr(pc, k) is None}
+            if updates:
+                pc = pc.model_copy(update=updates)
+            data["prompt_config"] = pc
 
         super().__init__(**data)
 
@@ -376,27 +384,31 @@ class VerificationConfig(BaseModel):
         # Validate model configurations
         # Note: Basic model validation (model_name, model_provider) is also done by
         # the adapter factory at runtime, but we validate here too for early failure.
+        from karenina.adapters.registry import AdapterRegistry
+
         for model in self.answering_models + self.parsing_models:
             if not model.model_name:
                 raise ValueError(f"Model name is required in model configuration (model: {model.id})")
             # Model provider requirement is defined per-adapter via AdapterSpec.requires_provider
-            from karenina.adapters.registry import AdapterRegistry
-
             spec = AdapterRegistry.get_spec(model.interface)
             if spec is not None and spec.requires_provider and not model.model_provider:
                 raise ValueError(f"Model provider is required for interface '{model.interface}'. (model: {model.id})")
-            # System prompt is required for verification (not validated by factory)
+
+        # System prompt is required for answering models (not validated by factory).
+        # Parsing models do not require a system_prompt; their prompt is assembled
+        # by the pipeline at runtime.
+        for model in self.answering_models:
             if not model.system_prompt:
-                raise ValueError(f"System prompt is required for model {model.id}")
+                raise ValueError(f"System prompt is required for answering model {model.id}")
 
         # Additional validation for rubric-enabled scenarios
         if self.rubric_enabled and not self.parsing_models:
             raise ValueError("Parsing models are required when rubric evaluation is enabled")
 
         # Additional validation for few-shot prompting scenarios
-        if self.few_shot_config is not None and self.few_shot_config.enabled:
-            if self.few_shot_config.global_mode == "k-shot" and self.few_shot_config.global_k < 1:
-                raise ValueError("Global few-shot k value must be at least 1 when using k-shot mode")
+        if self.few_shot_config is not None and self.few_shot_config.source != "disabled":
+            if self.few_shot_config.pool_mode == "k-shot" and self.few_shot_config.pool_k < 1:
+                raise ValueError("Pool few-shot k value must be at least 1 when using k-shot mode")
 
             # Validate question-specific k values
             for question_id, question_config in self.few_shot_config.question_configs.items():
@@ -565,11 +577,11 @@ class VerificationConfig(BaseModel):
 
         # Few-Shot
         few_shot_config = self.get_few_shot_config()
-        if few_shot_config and few_shot_config.enabled:
+        if few_shot_config and few_shot_config.source != "disabled":
             features_shown = True
-            lines.append(f"  Few-Shot: mode={few_shot_config.global_mode}")
-            if few_shot_config.global_mode == "k-shot":
-                lines.append(f"    └─ k={few_shot_config.global_k}")
+            lines.append(f"  Few-Shot: source={few_shot_config.source}, pool_mode={few_shot_config.pool_mode}")
+            if few_shot_config.pool_mode == "k-shot":
+                lines.append(f"    └─ pool_k={few_shot_config.pool_k}")
             if few_shot_config.question_configs:
                 lines.append(f"    └─ {len(few_shot_config.question_configs)} question configs")
 
@@ -601,7 +613,7 @@ class VerificationConfig(BaseModel):
             True if few-shot is enabled
         """
         config = self.get_few_shot_config()
-        return config is not None and config.enabled
+        return config is not None and config.source != "disabled"
 
     # ===== Preset Utility Class Methods =====
     # These methods delegate to config_presets module for backward compatibility.
