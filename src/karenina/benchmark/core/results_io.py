@@ -317,7 +317,11 @@ class ResultsIOManager:
     def _parse_model_identity(display_string: str | None) -> ModelIdentity:
         """Parse a ModelIdentity display string back into a ModelIdentity object.
 
-        Handles the format "interface:model_name" or "interface:model_name +[tool1, tool2]".
+        Handles these formats:
+        - "interface:model_name"
+        - "interface:model_name (config_id)"
+        - "interface:model_name +[tool1, tool2]"
+        - "interface:model_name (config_id) +[tool1, tool2]"
 
         Args:
             display_string: The display string from CSV export, or None/empty.
@@ -336,12 +340,25 @@ class ResultsIOManager:
             base, tools_part = display_string.split(" +[", 1)
             tools = [t.strip() for t in tools_part.rstrip("]").split(",") if t.strip()]
 
+        # Extract config_id from " (config_id)" suffix
+        config_id: str | None = None
+        if " (" in base and base.endswith(")"):
+            candidate_base, config_part = base.rsplit(" (", 1)
+            if ":" in candidate_base:
+                config_id = config_part.rstrip(")")
+                base = candidate_base
+
         # Split base on ":" to get interface and model_name
         parts = base.split(":", 1)
         interface = parts[0] if parts else "unknown"
         model_name = parts[1] if len(parts) > 1 else "unknown"
 
-        return ModelIdentity(interface=interface, model_name=model_name, tools=tools)
+        return ModelIdentity(
+            interface=interface,
+            model_name=model_name,
+            tools=tools,
+            config_id=config_id,
+        )
 
     @staticmethod
     def _parse_rubric_traits(row: dict[str, str]) -> dict[str, int | bool]:
