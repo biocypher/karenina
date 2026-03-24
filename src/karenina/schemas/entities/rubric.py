@@ -844,6 +844,49 @@ class Rubric(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @classmethod
+    def from_traits(
+        cls,
+        traits: list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait]
+        | None,
+    ) -> "Rubric | None":
+        """Create a Rubric from a flat list of traits, categorizing by type.
+
+        Args:
+            traits: Flat list of trait objects. If None, returns None.
+
+        Returns:
+            Rubric with traits sorted into typed lists, or None if input is None.
+        """
+        if traits is None:
+            return None
+
+        llm_traits: list[LLMRubricTrait] = []
+        regex_traits: list[RegexRubricTrait] = []
+        callable_traits: list[CallableRubricTrait] = []
+        metric_traits: list[MetricRubricTrait] = []
+        agentic_traits: list[AgenticRubricTrait] = []
+
+        for trait in traits:
+            if isinstance(trait, LLMRubricTrait):
+                llm_traits.append(trait)
+            elif isinstance(trait, RegexRubricTrait):
+                regex_traits.append(trait)
+            elif isinstance(trait, CallableRubricTrait):
+                callable_traits.append(trait)
+            elif isinstance(trait, MetricRubricTrait):
+                metric_traits.append(trait)
+            elif isinstance(trait, AgenticRubricTrait):
+                agentic_traits.append(trait)
+
+        return cls(
+            llm_traits=llm_traits,
+            regex_traits=regex_traits,
+            callable_traits=callable_traits,
+            metric_traits=metric_traits,
+            agentic_traits=agentic_traits,
+        )
+
     @model_validator(mode="after")
     def validate_trait_names(self) -> "Rubric":
         """Reject duplicate trait names (within and across types) and dots in agentic names.

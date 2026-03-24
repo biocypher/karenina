@@ -164,3 +164,37 @@ class TestHigherIsBetterUnification:
             higher_is_better=None,
         )
         assert trait.higher_is_better is None
+
+
+@pytest.mark.unit
+class TestRubricFromTraits:
+    """Test Rubric.from_traits() factory method."""
+
+    def test_from_mixed_traits(self):
+        """from_traits should categorize a flat list into typed trait lists."""
+        llm = LLMRubricTrait(name="clarity", description="clear", kind="boolean")
+        regex = RegexRubricTrait(name="has_number", description="num", pattern=r"\d+")
+        metric = MetricRubricTrait(
+            name="precision", description="prec", metrics=["precision"], tp_instructions=["check this"]
+        )
+
+        rubric = Rubric.from_traits([llm, regex, metric])
+
+        assert len(rubric.llm_traits) == 1
+        assert rubric.llm_traits[0].name == "clarity"
+        assert len(rubric.regex_traits) == 1
+        assert rubric.regex_traits[0].name == "has_number"
+        assert len(rubric.metric_traits) == 1
+        assert rubric.metric_traits[0].name == "precision"
+        assert len(rubric.callable_traits) == 0
+        assert len(rubric.agentic_traits) == 0
+
+    def test_from_empty_traits(self):
+        """from_traits with empty list should produce empty Rubric."""
+        rubric = Rubric.from_traits([])
+        assert len(rubric.llm_traits) == 0
+        assert len(rubric.regex_traits) == 0
+
+    def test_from_none_returns_none(self):
+        """from_traits with None should return None."""
+        assert Rubric.from_traits(None) is None
