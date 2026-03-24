@@ -68,8 +68,8 @@ class RubricDataFrameBuilder:
                scenario_id, scenario_node, scenario_turn, scenario_path
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Rubric Evaluation Metadata: rubric_evaluation_performed, rubric_evaluation_strategy
-            5. Rubric Data: trait_name, trait_score, trait_label, trait_explanation,
-               trait_type, evaluation_method, metric_name
+            5. Rubric Data: trait_name, trait_score, trait_label, trait_type,
+               evaluation_method, metric_name
             6. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
             7. Execution Metadata: execution_time, timestamp, run_name
             8. Deep Judgment (if include_deep_judgment=True):
@@ -293,7 +293,6 @@ class RubricDataFrameBuilder:
             "trait_name",
             "trait_score",
             "trait_label",  # For literal kind LLM traits: class name (score is index)
-            "trait_explanation",  # LLM judge explanation for the trait score (LLM traits only)
             "trait_type",
             "evaluation_method",
             "metric_name",
@@ -376,11 +375,6 @@ class RubricDataFrameBuilder:
             "evaluation_method": "llm",
             "trait_score": trait_score,
             "trait_label": trait_label,  # Class name for literal kind traits, None otherwise
-            "trait_explanation": (
-                result.rubric.llm_trait_explanations.get(trait_name)
-                if result.rubric and result.rubric.llm_trait_explanations
-                else None
-            ),
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
