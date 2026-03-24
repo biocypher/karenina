@@ -458,7 +458,7 @@ class FewShotConfig(BaseModel):
             else:
                 # Randomly sample k examples for consistency
                 # Use question_id as seed for reproducible results
-                random.seed(hash(question_id) & 0x7FFFFFFF)
+                random.seed(int(hashlib.md5(question_id.encode()).hexdigest(), 16) & 0x7FFFFFFF)
                 resolved_examples = random.sample(available_examples, k)
 
         elif effective_config.mode == "custom" and effective_config.selected_examples:
