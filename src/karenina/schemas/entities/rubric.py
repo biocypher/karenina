@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
+from karenina.schemas.entities._rubric_kind_validation import _validate_template_fields
 from karenina.schemas.entities._schema_reconstruction import _reconstruct_model_from_schema
-from karenina.schemas.entities._template_validation import _validate_template_fields
 
 if TYPE_CHECKING:
     from karenina.schemas.config.models import ModelConfig

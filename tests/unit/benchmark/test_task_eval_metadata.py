@@ -24,7 +24,7 @@ class TestTaskEvalInterface:
     def test_taskeval_interface_registered(self):
         """ModelConfig with interface='taskeval' should not raise."""
         config = ModelConfig(
-            id="taskeval_user_provided",
+            id="user-provided",
             model_name="user-provided",
             model_provider="user-provided",
             interface="taskeval",
@@ -34,7 +34,7 @@ class TestTaskEvalInterface:
     def test_taskeval_sentinel_fields(self):
         """Sentinel model has expected field values."""
         config = ModelConfig(
-            id="taskeval_user_provided",
+            id="user-provided",
             model_name="user-provided",
             model_provider="user-provided",
             interface="taskeval",
@@ -176,7 +176,7 @@ def _make_config(**overrides) -> VerificationConfig:
     defaults = {
         "parsing_models": [
             ModelConfig(
-                id="test_parser",
+                id="mock",
                 model_provider="mock",
                 model_name="mock",
                 interface="langchain",
@@ -238,7 +238,7 @@ class TestParameterThreading:
         captured = self._capture_calls(monkeypatch)
         task = self._setup_rubric_task()
         custom_model = ModelConfig(
-            id="gpt4",
+            id="gpt-4",
             model_provider="openai",
             model_name="gpt-4",
             interface="langchain",

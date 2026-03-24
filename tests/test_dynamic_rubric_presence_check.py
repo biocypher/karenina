@@ -41,7 +41,7 @@ from karenina.schemas.entities.rubric import (
 def _model() -> ModelConfig:
     """Return a minimal ModelConfig."""
     return ModelConfig(
-        id="test",
+        id="test-model",
         model_name="test-model",
         model_provider="anthropic",
     )

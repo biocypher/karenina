@@ -260,7 +260,14 @@ class ResultsIOManager:
                     # Remove row_index if present and create key
                     item_copy = dict(item)
                     row_index = item_copy.pop("row_index", None)
-                    question_id = item_copy.get("question_id", "unknown")
+                    # Check top-level first, then nested metadata for question_id
+                    question_id = item_copy.get("question_id")
+                    if question_id is None:
+                        metadata = item_copy.get("metadata")
+                        if isinstance(metadata, dict):
+                            question_id = metadata.get("question_id", "unknown")
+                        else:
+                            question_id = "unknown"
                     result_key = f"{question_id}_{row_index}" if row_index else question_id
                     try:
                         results[result_key] = VerificationResult(**item_copy)
@@ -317,7 +324,11 @@ class ResultsIOManager:
     def _parse_model_identity(display_string: str | None) -> ModelIdentity:
         """Parse a ModelIdentity display string back into a ModelIdentity object.
 
-        Handles the format "interface:model_name" or "interface:model_name +[tool1, tool2]".
+        Handles these formats:
+        - "interface:model_name"
+        - "interface:model_name (config_id)"
+        - "interface:model_name +[tool1, tool2]"
+        - "interface:model_name (config_id) +[tool1, tool2]"
 
         Args:
             display_string: The display string from CSV export, or None/empty.
@@ -336,12 +347,25 @@ class ResultsIOManager:
             base, tools_part = display_string.split(" +[", 1)
             tools = [t.strip() for t in tools_part.rstrip("]").split(",") if t.strip()]
 
+        # Extract config_id from " (config_id)" suffix
+        config_id: str | None = None
+        if " (" in base and base.endswith(")"):
+            candidate_base, config_part = base.rsplit(" (", 1)
+            if ":" in candidate_base:
+                config_id = config_part.rstrip(")")
+                base = candidate_base
+
         # Split base on ":" to get interface and model_name
         parts = base.split(":", 1)
         interface = parts[0] if parts else "unknown"
         model_name = parts[1] if len(parts) > 1 else "unknown"
 
-        return ModelIdentity(interface=interface, model_name=model_name, tools=tools)
+        return ModelIdentity(
+            interface=interface,
+            model_name=model_name,
+            tools=tools,
+            config_id=config_id,
+        )
 
     @staticmethod
     def _parse_rubric_traits(row: dict[str, str]) -> dict[str, int | bool]:

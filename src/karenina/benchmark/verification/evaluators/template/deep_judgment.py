@@ -542,91 +542,99 @@ def deep_judgment_parse(
     )
 
     if search_performed:
-        logger.info("Stage 1.5: Assessing hallucination risk for each excerpt")
+        try:
+            logger.info("Stage 1.5: Assessing hallucination risk for each excerpt")
 
-        # Assign unique IDs to excerpts for matching
-        excerpt_id_counter = 0
-        excerpts_with_search = []
+            # Assign unique IDs to excerpts for matching
+            excerpt_id_counter = 0
+            excerpts_with_search = []
 
-        for attr_name, excerpt_list in excerpts.items():
-            for excerpt_obj in excerpt_list:
-                if "search_results" in excerpt_obj:
-                    excerpt_obj["_id"] = str(excerpt_id_counter)
-                    excerpt_obj["_attribute"] = attr_name
-                    excerpts_with_search.append((attr_name, excerpt_obj))
-                    excerpt_id_counter += 1
+            for attr_name, excerpt_list in excerpts.items():
+                for excerpt_obj in excerpt_list:
+                    if "search_results" in excerpt_obj:
+                        excerpt_obj["_id"] = str(excerpt_id_counter)
+                        excerpt_obj["_attribute"] = attr_name
+                        excerpts_with_search.append((attr_name, excerpt_obj))
+                        excerpt_id_counter += 1
 
-        if excerpts_with_search:
-            # Build batch assessment prompt
-            assessment_system_prompt = build_assessment_system_prompt(
-                generic_system_prompt=generic_system_prompt,
-            )
-
-            assessment_prompt = build_assessment_user_prompt(
-                excerpts_with_search=excerpts_with_search,
-                format_search_results_fn=_format_search_results_for_llm,
-            )
-
-            # Invoke LLM for batch assessment
-            assessment_assembler = PromptAssembler(
-                task=PromptTask.DJ_TEMPLATE_HALLUCINATION,
-                interface=parsing_model.interface,
-                capabilities=PortCapabilities(),
-            )
-            assessment_messages = assessment_assembler.assemble(
-                system_text=assessment_system_prompt,
-                user_text=assessment_prompt,
-                user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_HALLUCINATION.value)
-                if prompt_config
-                else None,
-                instruction_context={
-                    "json_schema": None,  # Template DJ uses inline format in system prompt
-                    "parsing_notes": (
-                        '- The "hallucination_risk" field must be one of: "none", "low", "medium", "high"'
-                    ),
-                },
-            )
-
-            try:
-                llm_response = parsing_llm.invoke(assessment_messages)
-                raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
-                model_calls += 1
-                # Track usage for hallucination assessment
-                if usage_tracker and usage_metadata and parsing_model_str:
-                    usage_tracker.track_call(
-                        "deep_judgment_hallucination_assessment", parsing_model_str, usage_metadata
-                    )
-                cleaned_response = _strip_markdown_fences(raw_response)
-                assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
-
-                # Match assessments back to excerpts
-                for assessment in assessment_data.get("excerpt_assessments", []):
-                    excerpt_id = assessment["excerpt_id"]
-                    hallucination_risk = assessment.get("hallucination_risk", "high")
-                    justification = assessment.get("justification", "")
-
-                    # Find and update the excerpt
-                    for excerpt_list in excerpts.values():
-                        for excerpt_obj in excerpt_list:
-                            if excerpt_obj.get("_id") == excerpt_id:
-                                excerpt_obj["hallucination_risk"] = hallucination_risk
-                                excerpt_obj["hallucination_justification"] = justification
-                                break
-
-                logger.info(
-                    f"Stage 1.5 complete: Assessed {len(assessment_data.get('excerpt_assessments', []))} excerpts"
+            if excerpts_with_search:
+                # Build batch assessment prompt
+                assessment_system_prompt = build_assessment_system_prompt(
+                    generic_system_prompt=generic_system_prompt,
                 )
-                stages_completed.append("excerpt_hallucination_assessment")
 
-            except (json.JSONDecodeError, Exception) as e:
-                # Fail the entire deep-judgment process if hallucination assessment fails
-                logger.error(f"Stage 1.5 hallucination assessment failed: {e}")
-                raise ValueError(
-                    f"Failed to assess per-excerpt hallucination risk: {e}. "
-                    "Deep-judgment cannot continue without risk assessment."
-                ) from e
+                assessment_prompt = build_assessment_user_prompt(
+                    excerpts_with_search=excerpts_with_search,
+                    format_search_results_fn=_format_search_results_for_llm,
+                )
 
-            # Clean up temporary IDs
+                # Invoke LLM for batch assessment
+                assessment_assembler = PromptAssembler(
+                    task=PromptTask.DJ_TEMPLATE_HALLUCINATION,
+                    interface=parsing_model.interface,
+                    capabilities=PortCapabilities(),
+                )
+                assessment_messages = assessment_assembler.assemble(
+                    system_text=assessment_system_prompt,
+                    user_text=assessment_prompt,
+                    user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_HALLUCINATION.value)
+                    if prompt_config
+                    else None,
+                    instruction_context={
+                        "json_schema": None,  # Template DJ uses inline format in system prompt
+                        "parsing_notes": (
+                            '- The "hallucination_risk" field must be one of: "none", "low", "medium", "high"'
+                        ),
+                    },
+                )
+
+                try:
+                    llm_response = parsing_llm.invoke(assessment_messages)
+                    raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
+                    model_calls += 1
+                    # Track usage for hallucination assessment
+                    if usage_tracker and usage_metadata and parsing_model_str:
+                        usage_tracker.track_call(
+                            "deep_judgment_hallucination_assessment", parsing_model_str, usage_metadata
+                        )
+                    cleaned_response = _strip_markdown_fences(raw_response)
+                    assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
+
+                    # Match assessments back to excerpts
+                    for assessment in assessment_data.get("excerpt_assessments", []):
+                        excerpt_id = assessment["excerpt_id"]
+                        hallucination_risk = assessment.get("hallucination_risk", "high")
+                        justification = assessment.get("justification", "")
+
+                        # Find and update the excerpt
+                        for excerpt_list in excerpts.values():
+                            for excerpt_obj in excerpt_list:
+                                if excerpt_obj.get("_id") == excerpt_id:
+                                    excerpt_obj["hallucination_risk"] = hallucination_risk
+                                    excerpt_obj["hallucination_justification"] = justification
+                                    break
+
+                    logger.info(
+                        "Stage 1.5 complete: Assessed %d excerpts",
+                        len(assessment_data.get("excerpt_assessments", [])),
+                    )
+                    stages_completed.append("excerpt_hallucination_assessment")
+
+                except Exception:
+                    logger.warning(
+                        "Stage 1.5 hallucination assessment failed. "
+                        "Continuing without per-excerpt risk scores (Stage 2 defaults to 'high').",
+                        exc_info=True,
+                    )
+
+        except Exception:
+            logger.warning(
+                "Stage 1.5 hallucination assessment setup failed. Continuing without per-excerpt risk scores.",
+                exc_info=True,
+            )
+
+        finally:
+            # Clean up temporary IDs regardless of success or failure
             for excerpt_list in excerpts.values():
                 for excerpt_obj in excerpt_list:
                     excerpt_obj.pop("_id", None)

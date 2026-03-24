@@ -37,7 +37,7 @@ def _make_config(**kwargs) -> VerificationConfig:
     defaults = {
         "answering_models": [
             ModelConfig(
-                id="ans-1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -45,7 +45,7 @@ def _make_config(**kwargs) -> VerificationConfig:
         ],
         "parsing_models": [
             ModelConfig(
-                id="par-1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",

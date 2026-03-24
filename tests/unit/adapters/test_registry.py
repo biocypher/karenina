@@ -82,7 +82,7 @@ class TestAdapterRegistry:
 
         identity = ModelIdentity.from_model_config(config, role="answering")
 
-        assert identity.display_string == "langchain:claude-sonnet-4-20250514"
+        assert identity.display_string == "langchain:claude-sonnet-4-20250514 (test)"
 
     def test_model_identity_display_string_openrouter(self) -> None:
         """Test ModelIdentity.display_string for openrouter interface."""
@@ -98,7 +98,7 @@ class TestAdapterRegistry:
 
         identity = ModelIdentity.from_model_config(config, role="answering")
 
-        assert identity.display_string == "openrouter:anthropic/claude-3-sonnet"
+        assert identity.display_string == "openrouter:anthropic/claude-3-sonnet (test)"
 
     def test_model_identity_display_string_openai_endpoint(self) -> None:
         """Test ModelIdentity.display_string for openai_endpoint interface."""
@@ -114,7 +114,7 @@ class TestAdapterRegistry:
 
         identity = ModelIdentity.from_model_config(config, role="answering")
 
-        assert identity.display_string == "openai_endpoint:gpt-4"
+        assert identity.display_string == "openai_endpoint:gpt-4 (test)"
 
     def test_resolve_interface_no_routing(self) -> None:
         """Test resolve_interface for interface without routing."""

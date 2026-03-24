@@ -49,7 +49,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -59,7 +59,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -124,7 +124,7 @@ def test_validation_requires_answering_model_when_not_parsing_only() -> None:
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -143,7 +143,7 @@ def test_validation_allows_no_answering_model_when_parsing_only() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -163,7 +163,7 @@ def test_validation_requires_model_provider_for_non_excluded_interfaces() -> Non
     from karenina.schemas.config import ModelConfig
 
     model = ModelConfig(
-        id="test",
+        id="gpt-4",
         model_name="gpt-4",
         model_provider=None,  # Missing provider
         interface="langchain",  # Requires provider
@@ -185,7 +185,7 @@ def test_validation_allows_empty_provider_for_openrouter() -> None:
     from karenina.schemas.config import ModelConfig
 
     model = ModelConfig(
-        id="test",
+        id="gpt-4",
         model_name="gpt-4",
         model_provider=None,  # Empty provider
         interface="openrouter",  # Interface that doesn't require provider
@@ -209,7 +209,7 @@ def test_validation_invalid_search_tool_name() -> None:
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -231,7 +231,7 @@ def test_validation_search_tool_must_be_string_or_callable() -> None:
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -259,7 +259,7 @@ def test_default_system_prompts() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -269,7 +269,7 @@ def test_default_system_prompts() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -313,7 +313,7 @@ def test_env_var_sets_config_value(env_var: str, env_value: str, config_attr: st
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -334,7 +334,7 @@ def test_env_var_invalid_embedding_threshold_ignored() -> None:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -356,7 +356,7 @@ def test_explicit_value_overrides_env_var() -> None:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -385,7 +385,7 @@ def test_repr_shows_models() -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -395,7 +395,7 @@ def test_repr_shows_models() -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="claude-haiku-4-5",
                 model_name="claude-haiku-4-5",
                 model_provider="anthropic",
                 interface="langchain",
@@ -418,7 +418,7 @@ def test_repr_shows_execution_settings() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -444,7 +444,7 @@ def test_repr_shows_features() -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -454,7 +454,7 @@ def test_repr_shows_features() -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -485,7 +485,7 @@ def test_get_few_shot_config_returns_new_config() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -511,7 +511,7 @@ def test_get_few_shot_config_returns_none_when_disabled() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -534,7 +534,7 @@ def test_is_few_shot_enabled_true() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -556,7 +556,7 @@ def test_is_few_shot_enabled_false() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -744,7 +744,7 @@ def test_save_preset_creates_file(tmp_path: Path) -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -754,7 +754,7 @@ def test_save_preset_creates_file(tmp_path: Path) -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="claude-haiku-4-5",
                 model_name="claude-haiku-4-5",
                 model_provider="anthropic",
                 interface="langchain",
@@ -798,7 +798,7 @@ def test_save_preset_generates_safe_filename(tmp_path: Path) -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -831,7 +831,7 @@ def test_save_perset_existing_file_raises(tmp_path: Path) -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -856,7 +856,7 @@ def test_from_preset_loads_config(tmp_path: Path) -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -866,7 +866,7 @@ def test_from_preset_loads_config(tmp_path: Path) -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="claude-haiku-4-5",
                 model_name="claude-haiku-4-5",
                 model_provider="anthropic",
                 interface="langchain",
@@ -925,7 +925,7 @@ def test_deep_judgment_rubric_mode_default() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -946,7 +946,7 @@ def test_deep_judgment_rubric_enable_all_mode() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -981,7 +981,7 @@ def test_deep_judgment_rubric_custom_mode() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1010,7 +1010,7 @@ def test_sufficiency_enabled_default_false() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1031,7 +1031,7 @@ def test_sufficiency_enabled_can_be_set_true() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1053,7 +1053,7 @@ def test_sufficiency_and_abstention_can_both_be_enabled() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1077,7 +1077,7 @@ def test_repr_shows_sufficiency_when_enabled() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1108,8 +1108,8 @@ class TestAgenticRubricConfigFields:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test",
-                    model_name="test",
+                    id="test-model",
+                    model_name="test-model",
                     model_provider="test",
                     interface="langchain",
                 )
@@ -1123,8 +1123,8 @@ class TestAgenticRubricConfigFields:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test",
-                    model_name="test",
+                    id="test-model",
+                    model_name="test-model",
                     model_provider="test",
                     interface="langchain",
                 )
@@ -1138,8 +1138,8 @@ class TestAgenticRubricConfigFields:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test",
-                    model_name="test",
+                    id="test-model",
+                    model_name="test-model",
                     model_provider="test",
                     interface="langchain",
                 )
@@ -1154,8 +1154,8 @@ class TestAgenticRubricConfigFields:
             VerificationConfig(
                 parsing_models=[
                     ModelConfig(
-                        id="test",
-                        model_name="test",
+                        id="test-model",
+                        model_name="test-model",
                         model_provider="test",
                         interface="langchain",
                     )
@@ -1177,7 +1177,7 @@ class TestVerificationConfigExtraForbid:
     def _make_parsing_model(self) -> ModelConfig:
         """Create a minimal valid parsing model."""
         return ModelConfig(
-            id="parsing",
+            id="gpt-4",
             model_name="gpt-4",
             model_provider="openai",
             interface="langchain",
@@ -1214,7 +1214,7 @@ class TestVerificationConfigExtraForbid:
         original = VerificationConfig(
             answering_models=[
                 ModelConfig(
-                    id="answering",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -1243,7 +1243,7 @@ class TestVerificationConfigExtraForbid:
         base = VerificationConfig(
             answering_models=[
                 ModelConfig(
-                    id="answering",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -1269,7 +1269,7 @@ class TestReplicateCountValidation:
 
     def _make_parsing_model(self) -> ModelConfig:
         return ModelConfig(
-            id="parsing",
+            id="gpt-4",
             model_name="gpt-4",
             model_provider="openai",
             interface="langchain",
@@ -1325,7 +1325,7 @@ class TestNumericFieldRangeConstraints:
 
     def _make_parsing_model(self) -> ModelConfig:
         return ModelConfig(
-            id="parsing",
+            id="gpt-4",
             model_name="gpt-4",
             model_provider="openai",
             interface="langchain",
@@ -1477,7 +1477,7 @@ class TestModelConfigManualTracesBoolRejection:
     def test_accepts_none_for_non_manual(self) -> None:
         """ModelConfig accepts manual_traces=None for non-manual interfaces."""
         config = ModelConfig(
-            id="test",
+            id="gpt-4",
             model_name="gpt-4",
             model_provider="openai",
             interface="langchain",

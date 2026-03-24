@@ -26,7 +26,7 @@ def csv_file_path(fixtures_dir: Path) -> Path:
 def openai_endpoint_config():
     """Configuration for the OpenAI-compatible endpoint."""
     return ModelConfig(
-        id="glm-4.6-generator",
+        id="glm-4.6",
         model_name="glm-4.6",
         model_provider="openai",  # Not used for openai_endpoint interface
         interface="openai_endpoint",

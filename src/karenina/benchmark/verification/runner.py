@@ -75,6 +75,10 @@ def run_single_model_verification(
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
     agentic_rubric_parallel: bool = False,
+    # Embedding check configuration
+    embedding_check_enabled: bool = False,
+    embedding_check_model: str | None = None,
+    embedding_check_threshold: float | None = None,
     # Trait provenance
     trait_provenance: dict[str, str] | None = None,
 ) -> VerificationResult:
@@ -187,6 +191,10 @@ def run_single_model_verification(
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,
+        # Embedding Check
+        embedding_check_enabled=embedding_check_enabled,
+        embedding_check_model=embedding_check_model,
+        embedding_check_threshold=embedding_check_threshold,
         # Trait Provenance
         trait_provenance=trait_provenance,
     )
@@ -218,6 +226,11 @@ def run_single_model_verification(
     _has_dynamic_rubric_traits = dynamic_rubric is not None and not dynamic_rubric.is_empty()
     if (_has_rubric_traits or _has_dynamic_rubric_traits) and evaluation_mode == "template_only":
         evaluation_mode = "template_and_rubric"
+
+    if evaluation_mode == "rubric_only" and not _has_rubric_traits and not _has_dynamic_rubric_traits:
+        logger.warning(
+            "evaluation_mode='rubric_only' but no rubric traits provided. Rubric evaluation will produce no scores."
+        )
 
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(

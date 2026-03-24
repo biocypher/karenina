@@ -56,9 +56,13 @@ class BooleanMatch(VerificationPrimitive):
     """Compare extracted bool to ground truth bool.
 
     Both values are coerced to bool before comparison.
+    None is treated as distinct from both True and False:
+    None only matches None via identity comparison.
     """
 
     def check(self, extracted: Any, expected: Any) -> bool:
+        if extracted is None or expected is None:
+            return extracted is expected
         return bool(extracted) == bool(expected)
 
 

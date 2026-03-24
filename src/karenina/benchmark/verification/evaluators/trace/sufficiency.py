@@ -78,7 +78,7 @@ def detect_sufficiency(
         stop=stop_after_attempt(3),  # Try 3 times
         wait=wait_exponential(multiplier=1, min=2, max=10),  # Exponential backoff: 2s, 4s, 8s
         reraise=True,
-        before_sleep=partial(log_retry, context="sufficiency detection"),
+        before_sleep=partial(log_retry, context="sufficiency detection", max_attempts=3),
     )
     def _detect_with_retry() -> tuple[bool, bool, str | None, dict[str, Any]]:
         """Inner function with retry logic."""

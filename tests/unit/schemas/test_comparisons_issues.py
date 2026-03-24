@@ -2,13 +2,14 @@
 
 Covers:
 - Issue 045: RegexMatch silently ignores unknown flag names
+- BooleanMatch treats None as distinct from True and False
 """
 
 import logging
 
 import pytest
 
-from karenina.schemas.primitives.comparisons import RegexMatch
+from karenina.schemas.primitives.comparisons import BooleanMatch, RegexMatch
 
 
 @pytest.mark.unit
@@ -50,3 +51,42 @@ class TestRegexMatchUnknownFlags:
         assert result is True
         # But a warning should be emitted for BADFLAG
         assert "BADFLAG" in caplog.text
+
+
+@pytest.mark.unit
+class TestBooleanMatchNoneHandling:
+    """BooleanMatch should treat None as non-match against True and False."""
+
+    def test_none_vs_false_is_non_match(self) -> None:
+        """None should NOT match False (previous bug: bool(None)==bool(False))."""
+        bm = BooleanMatch()
+        assert bm.check(None, False) is False
+
+    def test_none_vs_true_is_non_match(self) -> None:
+        bm = BooleanMatch()
+        assert bm.check(None, True) is False
+
+    def test_false_vs_none_is_non_match(self) -> None:
+        bm = BooleanMatch()
+        assert bm.check(False, None) is False
+
+    def test_true_vs_none_is_non_match(self) -> None:
+        bm = BooleanMatch()
+        assert bm.check(True, None) is False
+
+    def test_none_vs_none_is_match(self) -> None:
+        """None should match None via identity."""
+        bm = BooleanMatch()
+        assert bm.check(None, None) is True
+
+    def test_true_vs_true_still_works(self) -> None:
+        bm = BooleanMatch()
+        assert bm.check(True, True) is True
+
+    def test_false_vs_false_still_works(self) -> None:
+        bm = BooleanMatch()
+        assert bm.check(False, False) is True
+
+    def test_true_vs_false_still_non_match(self) -> None:
+        bm = BooleanMatch()
+        assert bm.check(True, False) is False

@@ -332,6 +332,11 @@ class VerificationContext:
     agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
     agentic_rubric_parallel: bool = False
 
+    # Embedding Check Configuration
+    embedding_check_enabled: bool = False
+    embedding_check_model: str | None = None
+    embedding_check_threshold: float | None = None
+
     # Scenario
     scenario_turn: int | None = None
     scenario_id: str | None = None

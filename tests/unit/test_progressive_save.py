@@ -147,8 +147,8 @@ class TestTaskIdentifierFromTaskDict:
         task_id = TaskIdentifier.from_task_dict(task)
 
         assert task_id.question_id == "q1"
-        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:"
-        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:"
+        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:answering-1:"
+        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:parsing-1:"
         assert task_id.replicate == 1
 
     def test_task_dict_with_mcp_tools(self):
@@ -176,9 +176,9 @@ class TestTaskIdentifierFromTaskDict:
         task_id = TaskIdentifier.from_task_dict(task)
 
         # Tools are sorted in canonical_key
-        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:brave|fs"
+        assert task_id.answering_canonical_key == "langchain:claude-haiku-4-5:answering-1:brave|fs"
         # Parsing model never has tools (role="parsing")
-        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:"
+        assert task_id.parsing_canonical_key == "langchain:claude-haiku-4-5:parsing-1:"
 
     def test_from_task_dict_matches_from_result(self):
         """Test that from_task_dict and from_result produce the same key for matching inputs."""
