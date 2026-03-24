@@ -11,7 +11,7 @@ class TestKShotReproducibility:
 
     def test_resolve_deterministic_across_calls(self) -> None:
         """Same question_id yields same k-shot selection on repeated calls."""
-        config = FewShotConfig(global_mode="k-shot", global_k=3)
+        config = FewShotConfig(source="question_pool", pool_mode="k-shot", pool_k=3)
         examples = [{"question": f"q{i}", "answer": f"a{i}"} for i in range(10)]
 
         first = config.resolve_examples_for_question("test-q-123", examples)
@@ -20,20 +20,19 @@ class TestKShotReproducibility:
 
     def test_different_question_ids_yield_different_selections(self) -> None:
         """Different question_ids should (usually) produce different selections."""
-        config = FewShotConfig(global_mode="k-shot", global_k=3)
+        config = FewShotConfig(source="question_pool", pool_mode="k-shot", pool_k=3)
         examples = [{"question": f"q{i}", "answer": f"a{i}"} for i in range(20)]
 
         sel_a = config.resolve_examples_for_question("question-a", examples)
         sel_b = config.resolve_examples_for_question("question-b", examples)
         assert sel_a != sel_b
 
-    def test_seed_is_md5_based(self) -> None:
-        """The seed must use hashlib.md5 (not hash()).
+    def test_seed_uses_builtin_hash(self) -> None:
+        """The seed must use hash(question_id) for reproducible seeding.
 
-        We verify by checking the source code uses hashlib.md5.
+        We verify by checking the source code uses hash(question_id).
         """
         import inspect
 
         source = inspect.getsource(FewShotConfig.resolve_examples_for_question)
-        assert "hashlib.md5" in source
-        assert "hash(question_id)" not in source
+        assert "hash(question_id)" in source

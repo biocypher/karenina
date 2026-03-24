@@ -429,7 +429,7 @@ class TestFewShotConfigWarning:
 
         from karenina.schemas.config import FewShotConfig
 
-        config = _make_config(few_shot_config=FewShotConfig(enabled=True))
+        config = _make_config(few_shot_config=FewShotConfig(source="both"))
 
         with caplog.at_level(logging.DEBUG, logger="karenina.benchmark.task_eval.task_eval"):
             task.evaluate(config)

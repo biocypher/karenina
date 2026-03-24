@@ -108,7 +108,7 @@ def resolve_few_shot_for_task(
         List of few-shot examples or None if disabled/unavailable
     """
     few_shot_config = config.get_few_shot_config()
-    if not few_shot_config or not few_shot_config.enabled:
+    if not few_shot_config or few_shot_config.source == "disabled":
         return None
 
     return few_shot_config.resolve_examples_for_question(

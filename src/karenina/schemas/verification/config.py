@@ -406,9 +406,9 @@ class VerificationConfig(BaseModel):
             raise ValueError("Parsing models are required when rubric evaluation is enabled")
 
         # Additional validation for few-shot prompting scenarios
-        if self.few_shot_config is not None and self.few_shot_config.enabled:
-            if self.few_shot_config.global_mode == "k-shot" and self.few_shot_config.global_k < 1:
-                raise ValueError("Global few-shot k value must be at least 1 when using k-shot mode")
+        if self.few_shot_config is not None and self.few_shot_config.source != "disabled":
+            if self.few_shot_config.pool_mode == "k-shot" and self.few_shot_config.pool_k < 1:
+                raise ValueError("Pool few-shot k value must be at least 1 when using k-shot mode")
 
             # Validate question-specific k values
             for question_id, question_config in self.few_shot_config.question_configs.items():
@@ -577,11 +577,11 @@ class VerificationConfig(BaseModel):
 
         # Few-Shot
         few_shot_config = self.get_few_shot_config()
-        if few_shot_config and few_shot_config.enabled:
+        if few_shot_config and few_shot_config.source != "disabled":
             features_shown = True
-            lines.append(f"  Few-Shot: mode={few_shot_config.global_mode}")
-            if few_shot_config.global_mode == "k-shot":
-                lines.append(f"    └─ k={few_shot_config.global_k}")
+            lines.append(f"  Few-Shot: source={few_shot_config.source}, pool_mode={few_shot_config.pool_mode}")
+            if few_shot_config.pool_mode == "k-shot":
+                lines.append(f"    └─ pool_k={few_shot_config.pool_k}")
             if few_shot_config.question_configs:
                 lines.append(f"    └─ {len(few_shot_config.question_configs)} question configs")
 
@@ -613,7 +613,7 @@ class VerificationConfig(BaseModel):
             True if few-shot is enabled
         """
         config = self.get_few_shot_config()
-        return config is not None and config.enabled
+        return config is not None and config.source != "disabled"
 
     # ===== Preset Utility Class Methods =====
     # These methods delegate to config_presets module for backward compatibility.
