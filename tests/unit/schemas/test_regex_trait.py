@@ -653,12 +653,25 @@ def test_regex_trait_pattern_types(name: str, pattern: str, match_text: str, no_
 
 
 @pytest.mark.unit
-def test_regex_trait_higher_is_better_none_defaults_to_true() -> None:
-    """Test that higher_is_better=None defaults to True (old checkpoint data)."""
+def test_regex_trait_higher_is_better_none_preserved() -> None:
+    """Test that explicit higher_is_better=None is preserved (directionality not applicable)."""
     trait = RegexRubricTrait(
         name="test",
         pattern=r"\w+",
         higher_is_better=None,
+    )
+
+    assert trait.higher_is_better is None
+
+
+@pytest.mark.unit
+def test_regex_trait_higher_is_better_missing_defaults_to_true() -> None:
+    """Test that missing higher_is_better defaults to True (old checkpoint data)."""
+    trait = RegexRubricTrait.model_validate(
+        {
+            "name": "test",
+            "pattern": r"\w+",
+        }
     )
 
     assert trait.higher_is_better is True
