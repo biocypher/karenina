@@ -10,6 +10,7 @@ conversion is in benchmark_helpers.py.
 """
 
 import logging
+import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -918,6 +919,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> None:
         """Store verification results in the benchmark metadata."""
+        warnings.warn(
+            "store_verification_results is deprecated. Use ResultsStore.add() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         _helpers.store_verification_results(self, results, run_name)
 
     def get_verification_results(
@@ -926,10 +932,20 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Get verification results for specific questions and/or runs."""
+        warnings.warn(
+            "get_verification_results is deprecated. Use ResultsStore.get_by_run() or ResultsStore.get_latest() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_results(question_ids, run_name)
 
     def get_verification_history(self, question_id: str | None = None) -> dict[str, dict[str, VerificationResult]]:
         """Get verification history organized by run name."""
+        warnings.warn(
+            "get_verification_history is deprecated. Use ResultsStore.get_by_question() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_history(question_id)
 
     def clear_verification_results(
@@ -938,6 +954,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> int:
         """Clear verification results."""
+        warnings.warn(
+            "clear_verification_results is deprecated. Use ResultsStore.clear() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.clear_verification_results(question_ids, run_name)
 
     def export_verification_results(
@@ -948,6 +969,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> str:
         """Export verification results in specified format."""
+        warnings.warn(
+            "export_verification_results is deprecated. Use ResultsStore.export() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.export_verification_results(question_ids, run_name, format, global_rubric)
 
     def export_verification_results_to_file(
@@ -959,6 +985,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> None:
         """Export verification results directly to a file."""
+        warnings.warn(
+            "export_verification_results_to_file is deprecated. Use ResultsStore.export_to_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._results_manager.export_results_to_file(file_path, question_ids, run_name, format, global_rubric)
 
     def load_verification_results_from_file(
@@ -967,18 +998,38 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Load verification results from a previously exported file."""
+        warnings.warn(
+            "load_verification_results_from_file is deprecated. Use ResultsStore.from_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.load_results_from_file(file_path, run_name)
 
     def get_verification_summary(self, run_name: str | None = None) -> dict[str, Any]:
         """Get summary statistics for verification results."""
+        warnings.warn(
+            "get_verification_summary is deprecated. Use ResultsStore.get_summary() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_summary(run_name)
 
     def get_all_run_names(self) -> list[str]:
         """Get all verification run names."""
+        warnings.warn(
+            "get_all_run_names is deprecated. Use ResultsStore.get_all_runs() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_all_run_names()
 
     def get_results_statistics_by_run(self) -> dict[str, dict[str, Any]]:
         """Get verification statistics for each run."""
+        warnings.warn(
+            "get_results_statistics_by_run is deprecated. Use ResultsStore.get_statistics_by_run() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_results_statistics_by_run()
 
     # ── GEPA optimization (delegated to benchmark_helpers) ───────────────
