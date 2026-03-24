@@ -334,6 +334,26 @@ class VerificationConfig(BaseModel):
         # but injected by from_overrides() and some CLI callers.
         data.pop("deep_judgment_rubric_search_enabled", None)
 
+        # Wire instruction shortcuts into prompt_config (pop before super().__init__)
+        shortcut_mapping = {
+            "generation": data.pop("generation_instructions", None),
+            "parsing": data.pop("parsing_instructions", None),
+            "abstention_detection": data.pop("abstention_detection_instructions", None),
+            "sufficiency_detection": data.pop("sufficiency_detection_instructions", None),
+            "rubric_evaluation": data.pop("rubric_evaluation_instructions", None),
+            "agentic_parsing": data.pop("agentic_parsing_instructions", None),
+            "deep_judgment": data.pop("deep_judgment_instructions", None),
+        }
+        active_shortcuts = {k: v for k, v in shortcut_mapping.items() if v is not None}
+        if active_shortcuts:
+            pc = data.get("prompt_config") or PromptConfig()
+            if isinstance(pc, dict):
+                pc = PromptConfig(**pc)
+            updates = {k: v for k, v in active_shortcuts.items() if getattr(pc, k) is None}
+            if updates:
+                pc = pc.model_copy(update=updates)
+            data["prompt_config"] = pc
+
         super().__init__(**data)
 
         # Validate configuration after initialization
