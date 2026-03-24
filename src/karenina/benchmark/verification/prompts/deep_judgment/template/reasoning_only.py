@@ -61,9 +61,20 @@ When the response contains no relevant information for an attribute: Explain why
 
 **Response-Based**: Base reasoning on the actual response text provided.
 
+# Output Format
+
+Return a JSON object mapping each attribute name to its reasoning string:
+
+```json
+{{"attribute_name": "Your reasoning about this attribute (2-3 sentences)."}}
+```
+
+Return ONLY the JSON object, no other text.
+
 # What NOT to Do
 
-- Do NOT skip any attributes"""
+- Do NOT skip any attributes
+- Do NOT return anything other than the JSON object"""
 
 
 def build_reasoning_only_user_prompt(
