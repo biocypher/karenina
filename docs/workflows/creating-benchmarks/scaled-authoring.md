@@ -279,22 +279,22 @@ print(f"Added question with {2} few-shot examples")
 
 ### FewShotConfig for Verification
 
-`FewShotConfig` controls *which* examples are used during verification. Global external examples are appended to every question. The `global_k` parameter limits how many per-question examples are included.
+`FewShotConfig` controls *which* examples are used during verification. Global examples are appended to every question. The `pool_k` parameter limits how many per-question examples are included.
 
 ```python
 from karenina.schemas import FewShotConfig, QuestionFewShotConfig
 
 few_shot_config = FewShotConfig(
-    global_mode="k-shot",
-    global_k=2,
-    global_external_examples=[
+    pool_mode="k-shot",
+    pool_k=2,
+    global_examples=[
         {"question": "What class of drug is aspirin?", "answer": "NSAID"},
     ],
 )
 
-print(f"Mode: {few_shot_config.global_mode}")
-print(f"K: {few_shot_config.global_k}")
-print(f"Global external examples: {len(few_shot_config.global_external_examples)}")
+print(f"Mode: {few_shot_config.pool_mode}")
+print(f"K: {few_shot_config.pool_k}")
+print(f"Global examples: {len(few_shot_config.global_examples)}")
 ```
 
 See [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb) for the full configuration reference.
