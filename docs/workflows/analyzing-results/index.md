@@ -164,7 +164,7 @@ The `VerificationResultSet` provides specialized accessors for different analysi
 | `filter(...)` | `VerificationResultSet` | Subset by question, model, or completion status |
 | `group_by_question()` | `dict[str, VerificationResultSet]` | Per-question analysis |
 | `group_by_model()` | `dict[str, VerificationResultSet]` | Cross-model comparison |
-| `group_by_replicate()` | `dict[int, VerificationResultSet]` | Replicate consistency |
+| `group_by_replicate()` | `dict[int \| None, VerificationResultSet]` | Replicate consistency |
 | `get_summary()` | `dict` | Aggregate statistics (counts, pass rates, timing) |
 
 ---

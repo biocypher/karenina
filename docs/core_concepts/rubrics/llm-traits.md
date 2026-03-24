@@ -295,7 +295,7 @@ A literal trait is created by setting `kind="literal"` on `LLMRubricTrait` and p
 |-------|------|-------------|
 | `kind` | `"literal"` | Must be `"literal"` for categorical classification |
 | `classes` | `dict[str, str]` | Class name to description mapping (2-20 classes, order matters) |
-| `higher_is_better` | `bool` | Whether higher class indices indicate better performance |
+| `higher_is_better` | `bool \| None` | Whether higher class indices indicate better performance. `None` means directionality does not apply. Defaults to `True`. |
 
 Key characteristics:
 
@@ -470,15 +470,15 @@ Literal traits are evaluated through the standard classification path. The [deep
 
 ## 7. The `higher_is_better` Field
 
-This required field tells analysis tools how to interpret results:
+This field (type `bool | None`, default `True`) tells analysis tools how to interpret results:
 
-| Kind | `higher_is_better=True` | `higher_is_better=False` |
-|------|------------------------|--------------------------|
-| boolean | `True` = positive outcome | `True` = negative outcome |
-| score | Higher scores = better | Higher scores = worse |
-| literal | Higher class indices are interpreted as better | Higher class indices are interpreted as worse |
+| Kind | `higher_is_better=True` | `higher_is_better=False` | `higher_is_better=None` |
+|------|------------------------|--------------------------|------------------------|
+| boolean | `True` = positive outcome | `True` = negative outcome | Directionality does not apply |
+| score | Higher scores = better | Higher scores = worse | Directionality does not apply |
+| literal | Higher class indices are interpreted as better | Higher class indices are interpreted as worse | Directionality does not apply |
 
-Most traits use `higher_is_better=True`. Use `False` for traits where a positive detection is bad (for example, scope drift detected or prohibited content present).
+Most traits use `higher_is_better=True` (the default). Use `False` for traits where a positive detection is bad (for example, scope drift detected or prohibited content present). Use `None` when the trait has no meaningful directionality.
 
 For literal traits, `higher_is_better` does **not** affect classification itself. It only affects how downstream tooling interprets the numeric indices. If your classes are distinct categories rather than a quality ladder, choose a stable convention and rely on the class labels for human interpretation.
 

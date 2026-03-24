@@ -66,7 +66,7 @@ Unlike [LLM traits](../llm-traits/), which send the response to the parsing mode
 | `pattern` | `str` | *(required)* | Regex pattern to search for |
 | `case_sensitive` | `bool` | `True` | Whether matching is case-sensitive |
 | `invert_result` | `bool` | `False` | Invert the boolean result |
-| `higher_is_better` | `bool` | *(required)* | Whether a match indicates a positive outcome |
+| `higher_is_better` | `bool \| None` | `True` | Whether a match indicates a positive outcome. `None` means directionality does not apply. |
 
 **Key characteristics:**
 

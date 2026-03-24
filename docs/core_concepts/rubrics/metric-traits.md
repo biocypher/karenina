@@ -82,7 +82,7 @@ In both modes, Karenina stores the derived metrics in `VerificationResult.rubric
 | `tn_instructions` | `list[str]` | `[]` | Items that should not be present; required in `full_matrix` mode |
 | `repeated_extraction` | `bool` | `True` | Deduplicate repeated excerpts using case-insensitive exact matching |
 
-Metric traits do not use `higher_is_better`; the returned metrics are inherently interpreted as "higher is better."
+MetricRubricTrait includes `higher_is_better: bool | None`, defaulting to `None`. A value of `None` means directionality does not apply (the returned metrics carry their own interpretation). Set it to `True` or `False` only when downstream analysis tools need an explicit direction signal.
 
 ## 3. Why the Instruction Lists Matter
 

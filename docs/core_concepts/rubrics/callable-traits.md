@@ -73,7 +73,7 @@ The function is serialized using [cloudpickle](https://github.com/cloudpipe/clou
 | `min_score` | `int \| None` | `None` | Minimum score (required if `kind="score"`, auto-derived for `kind="literal"`) |
 | `max_score` | `int \| None` | `None` | Maximum score (required if `kind="score"`, auto-derived for `kind="literal"`) |
 | `invert_result` | `bool` | `False` | Invert the boolean result (only for `kind="boolean"`) |
-| `higher_is_better` | `bool` | *(required)* | Whether higher return values indicate better performance |
+| `higher_is_better` | `bool \| None` | `True` | Whether higher return values indicate better performance. `None` means directionality does not apply. |
 
 **Key characteristics:**
 

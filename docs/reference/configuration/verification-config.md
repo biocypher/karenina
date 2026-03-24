@@ -108,7 +108,7 @@ Both sequential and parallel execution modes collect per-question errors without
 |-------|------|---------|-------------|
 | `deep_judgment_rubric_mode` | `Literal["disabled", "enable_all", "use_checkpoint", "custom"]` | `"disabled"` | Controls how deep judgment is applied to rubric traits. `disabled`: off. `enable_all`: apply to all LLM traits. `use_checkpoint`: use settings saved in checkpoint. `custom`: use per-trait configuration from `deep_judgment_rubric_config`. |
 | `deep_judgment_rubric_global_excerpts` | `bool` | `True` | For `enable_all` mode: globally enable or disable excerpt extraction for all traits. |
-| `deep_judgment_rubric_config` | `dict[str, Any] \| None` | `None` | Per-trait configuration for `custom` mode. See structure below. |
+| `deep_judgment_rubric_config` | `DeepJudgmentRubricCustomConfig \| None` | `None` | Per-trait configuration for `custom` mode. See structure below. |
 | `deep_judgment_rubric_max_excerpts_default` | `int` | `7` | Default maximum excerpts per rubric trait (used as fallback when per-trait config omits this setting). |
 | `deep_judgment_rubric_fuzzy_match_threshold_default` | `float` | `0.80` | Default fuzzy match threshold for rubric excerpt validation. |
 | `deep_judgment_rubric_excerpt_retry_attempts_default` | `int` | `2` | Default retry attempts for rubric excerpt extraction. |

@@ -217,7 +217,7 @@ All deep judgment rubric settings are on `VerificationConfig`:
 | `deep_judgment_rubric_fuzzy_match_threshold_default` | `float` | `0.80` | Default fuzzy match threshold (0.0–1.0) |
 | `deep_judgment_rubric_excerpt_retry_attempts_default` | `int` | `2` | Default retry attempts for excerpt extraction |
 | `deep_judgment_rubric_search_tool` | `str \| Callable` | `"tavily"` | Search tool: `"tavily"` or custom callable |
-| `deep_judgment_rubric_config` | `dict \| None` | `None` | Custom mode per-trait config dict |
+| `deep_judgment_rubric_config` | `DeepJudgmentRubricCustomConfig \| None` | `None` | Custom mode per-trait config dict |
 
 ### Via from_overrides
 
