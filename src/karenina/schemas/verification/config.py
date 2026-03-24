@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from ..config.models import (
     FewShotConfig,
@@ -63,6 +63,15 @@ class DeepJudgmentTraitConfig(BaseModel):
     fuzzy_match_threshold: float | None = None
     excerpt_retry_attempts: int | None = None
     search_enabled: bool = False
+
+
+class DeepJudgmentRubricCustomConfig(BaseModel):
+    """Per-trait deep judgment configuration for custom mode."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    global_traits: dict[str, DeepJudgmentTraitConfig] = Field(default_factory=dict, alias="global")
+    question_specific: dict[str, dict[str, DeepJudgmentTraitConfig]] = Field(default_factory=dict)
 
 
 class VerificationConfig(BaseModel):
@@ -155,18 +164,7 @@ class VerificationConfig(BaseModel):
     # - "custom": Use per-trait configuration from deep_judgment_rubric_config
 
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts globally
-    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
-    # Expected structure for custom mode:
-    # {
-    #   "global": {
-    #     "TraitName": {"enabled": True, "excerpt_enabled": True, ...}
-    #   },
-    #   "question_specific": {
-    #     "question-id": {
-    #       "TraitName": {"enabled": True, ...}
-    #     }
-    #   }
-    # }
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None  # For custom mode: per-trait config
 
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
@@ -239,6 +237,18 @@ class VerificationConfig(BaseModel):
 
     # Scenario execution settings
     scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
+
+    @model_validator(mode="after")
+    def _validate_custom_mode_has_config(self) -> "VerificationConfig":
+        """Validate that custom mode has the required config.
+
+        Raises:
+            ValueError: If deep_judgment_rubric_mode is 'custom' but
+                deep_judgment_rubric_config is None.
+        """
+        if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config is None:
+            raise ValueError("deep_judgment_rubric_config is required when deep_judgment_rubric_mode is 'custom'")
+        return self
 
     @field_validator("db_config", mode="before")
     @classmethod
@@ -532,8 +542,8 @@ class VerificationConfig(BaseModel):
             # Warning about sequential evaluation
             lines.append("    ⚠️  Deep judgment traits are ALWAYS evaluated sequentially (one-by-one)")
             if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config:
-                global_traits = self.deep_judgment_rubric_config.get("global", {})
-                question_configs = self.deep_judgment_rubric_config.get("question_specific", {})
+                global_traits = self.deep_judgment_rubric_config.global_traits
+                question_configs = self.deep_judgment_rubric_config.question_specific
                 lines.append(f"    └─ {len(global_traits)} global traits, {len(question_configs)} question configs")
 
         # Abstention
@@ -678,7 +688,7 @@ class VerificationConfig(BaseModel):
         deep_judgment_rubric_retry_attempts: int | None = None,
         deep_judgment_rubric_search: bool | None = None,
         deep_judgment_rubric_search_tool: str | None = None,
-        deep_judgment_rubric_config: dict[str, Any] | None = None,
+        deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | dict[str, Any] | None = None,
     ) -> "VerificationConfig":
         """
         Create a VerificationConfig by applying overrides to an optional base config.

@@ -9,6 +9,7 @@ from typing import Any
 
 from karenina.schemas.entities import LLMRubricTrait
 from karenina.schemas.verification import DeepJudgmentTraitConfig
+from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -84,25 +85,23 @@ def resolve_deep_judgment_config_for_trait(
         )
 
     elif mode == "custom":
-        # Navigate nested config structure
-        config_dict = getattr(config, "deep_judgment_rubric_config", None) or {}
+        # Navigate typed config structure
+        custom_config: DeepJudgmentRubricCustomConfig | None = getattr(config, "deep_judgment_rubric_config", None)
+
+        if custom_config is None:
+            return DeepJudgmentTraitConfig(enabled=False)
 
         # Try question-specific first
         if (
             question_id
-            and "question_specific" in config_dict
-            and question_id in config_dict["question_specific"]
-            and trait.name in config_dict["question_specific"][question_id]
+            and question_id in custom_config.question_specific
+            and trait.name in custom_config.question_specific[question_id]
         ):
-            trait_config = config_dict["question_specific"][question_id][trait.name]
-            # Validate dict against model
-            return DeepJudgmentTraitConfig(**trait_config)
+            return custom_config.question_specific[question_id][trait.name]
 
         # Fall back to global
-        if "global" in config_dict and trait.name in config_dict["global"]:
-            trait_config = config_dict["global"][trait.name]
-            # Validate dict against model
-            return DeepJudgmentTraitConfig(**trait_config)
+        if trait.name in custom_config.global_traits:
+            return custom_config.global_traits[trait.name]
 
         # No config found, disabled
         return DeepJudgmentTraitConfig(enabled=False)

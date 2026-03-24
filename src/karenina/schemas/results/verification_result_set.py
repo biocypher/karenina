@@ -401,12 +401,15 @@ class VerificationResultSet(BaseModel):
 
         return {key: VerificationResultSet(results=results) for key, results in grouped.items()}
 
-    def group_by_replicate(self) -> dict[int, VerificationResultSet]:
-        """
-        Group results by replicate number.
+    def group_by_replicate(self) -> dict[int | None, VerificationResultSet]:
+        """Group results by replicate number.
+
+        Results with ``replicate=None`` are grouped under the ``None`` key
+        rather than being coerced to ``0``.
 
         Returns:
-            Dictionary mapping replicate numbers to VerificationResultSet instances
+            Dictionary mapping replicate numbers (or None) to
+            VerificationResultSet instances.
 
         Example:
             ```python
@@ -415,9 +418,9 @@ class VerificationResultSet(BaseModel):
                 print(f"Replicate {rep_num}: {len(rep_results)} results")
             ```
         """
-        grouped: dict[int, list[VerificationResult]] = {}
+        grouped: dict[int | None, list[VerificationResult]] = {}
         for result in self.results:
-            rep = result.metadata.replicate or 0
+            rep = result.metadata.replicate
             if rep not in grouped:
                 grouped[rep] = []
             grouped[rep].append(result)
@@ -1197,187 +1200,14 @@ class VerificationResultSet(BaseModel):
         return self.results[index]
 
     def __repr__(self) -> str:
-        """
-        Enhanced string representation with detailed statistics.
+        """Lightweight string representation showing result count.
 
-        Fetches comprehensive data from get_summary() and formats it for display.
-        Shows overview, completion status, evaluation types, template pass rates,
-        and replicate statistics.
+        For detailed statistics, use ``get_summary()`` directly.
         """
-        if not self.results:
+        n = len(self.results)
+        if n == 0:
             return "VerificationResultSet(empty)"
-
-        # Helper function to format time
-        def format_time(seconds: float) -> str:
-            """Format seconds as H:M:S, omitting hours/minutes if zero."""
-            hours = int(seconds // 3600)
-            minutes = int((seconds % 3600) // 60)
-            secs = seconds % 60
-
-            if hours > 0:
-                return f"{hours}h {minutes}m {secs:.1f}s"
-            elif minutes > 0:
-                return f"{minutes}m {secs:.1f}s"
-            else:
-                return f"{secs:.1f}s"
-
-        # Helper function to format token counts with dot separators
-        def format_tokens(count: int) -> str:
-            """Format token count with dot separators (thousands)."""
-            return f"{count:,}".replace(",", ".")
-
-        # Get comprehensive summary
-        summary = self.get_summary()
-
-        lines = ["VerificationResultSet("]
-
-        # === OVERVIEW ===
-        lines.append("  === OVERVIEW ===")
-        lines.append(f"  Total Results: {summary['num_results']}")
-        lines.append(f"  Questions: {summary['num_questions']}")
-        lines.append(f"  Models: {summary['num_models']} answering x {summary['num_parsing_models']} parsing")
-
-        if summary["num_replicates"] > 0:
-            lines.append(f"  Replicates: {summary['num_replicates']}")
-
-        if summary["total_execution_time"] > 0:
-            lines.append(f"  Total Execution Time: {format_time(summary['total_execution_time'])}")
-
-        # Token usage breakdown
-        tokens = summary["tokens"]
-        if tokens["total_input"] > 0 or tokens["total_output"] > 0:
-            lines.append(
-                f"  Total Tokens: {format_tokens(tokens['total_input'])} input, "
-                f"{format_tokens(tokens['total_output'])} output"
-            )
-
-            if tokens["template_input"] > 0 or tokens["template_output"] > 0:
-                lines.append(
-                    f"    └─ Templates: {format_tokens(tokens['template_input'])} input, "
-                    f"{format_tokens(tokens['template_output'])} output"
-                )
-
-            if tokens["rubric_input"] > 0 or tokens["rubric_output"] > 0:
-                lines.append(
-                    f"    └─ Rubrics: {format_tokens(tokens['rubric_input'])} input, "
-                    f"{format_tokens(tokens['rubric_output'])} output"
-                )
-
-        # === COMPLETION STATUS ===
-        lines.append("")
-        lines.append("  === COMPLETION STATUS ===")
-        lines.append("  By Model Combination:")
-
-        for combo_key, stats in sorted(summary["completion_by_combo"].items()):
-            answering, parsing, mcp_key = combo_key
-            # Format MCP suffix
-            mcp_suffix = f" + {', '.join(mcp_key)}" if mcp_key else ""
-
-            combo_str = f"{answering} / {parsing}{mcp_suffix}"
-            lines.append(
-                f"    {combo_str:40} {stats['completed']}/{stats['total']} completed ({stats['completion_pct']:.1f}%)"
-            )
-
-        lines.append(
-            f"  Overall: {summary['num_completed']}/{summary['num_results']} "
-            f"completed ({(summary['num_completed'] / summary['num_results'] * 100) if summary['num_results'] > 0 else 0:.1f}%)"
-        )
-
-        # === EVALUATION TYPES ===
-        lines.append("")
-        lines.append("  === EVALUATION TYPES ===")
-
-        if summary["num_with_template"] > 0:
-            lines.append(f"  Template Verification: {summary['num_with_template']} results")
-
-        if summary["num_with_rubric"] > 0 and summary["rubric_traits"]:
-            traits = summary["rubric_traits"]
-            lines.append(f"  Rubric Evaluation: {summary['num_with_rubric']} results")
-
-            # Global traits breakdown
-            global_traits = traits.get("global_traits", {})
-            global_llm = global_traits.get("llm", {}).get("count", 0)
-            global_regex = global_traits.get("regex", {}).get("count", 0)
-            global_callable = global_traits.get("callable", {}).get("count", 0)
-            global_metric = global_traits.get("metric", {}).get("count", 0)
-            global_total = global_llm + global_regex + global_callable + global_metric
-
-            if global_total > 0:
-                lines.append(f"    Global: {global_total}")
-                breakdown = []
-                if global_llm > 0:
-                    breakdown.append(f"LLM: {global_llm}")
-                if global_regex > 0:
-                    breakdown.append(f"Regex: {global_regex}")
-                if global_callable > 0:
-                    breakdown.append(f"Callable: {global_callable}")
-                if global_metric > 0:
-                    breakdown.append(f"Metric: {global_metric}")
-                if breakdown:
-                    lines.append(f"      └─ {', '.join(breakdown)}")
-
-            # Question-specific traits breakdown
-            qs_traits = traits.get("question_specific_traits", {})
-            qs_llm = qs_traits.get("llm", {}).get("count", 0)
-            qs_regex = qs_traits.get("regex", {}).get("count", 0)
-            qs_callable = qs_traits.get("callable", {}).get("count", 0)
-            qs_metric = qs_traits.get("metric", {}).get("count", 0)
-            qs_total = qs_llm + qs_regex + qs_callable + qs_metric
-
-            if qs_total > 0:
-                lines.append(f"    Question-Specific: {qs_total}")
-                breakdown = []
-                if qs_llm > 0:
-                    breakdown.append(f"LLM: {qs_llm}")
-                if qs_regex > 0:
-                    breakdown.append(f"Regex: {qs_regex}")
-                if qs_callable > 0:
-                    breakdown.append(f"Callable: {qs_callable}")
-                if qs_metric > 0:
-                    breakdown.append(f"Metric: {qs_metric}")
-                if breakdown:
-                    lines.append(f"      └─ {', '.join(breakdown)}")
-
-        if summary["num_with_judgment"] > 0:
-            lines.append(f"  Deep Judgment: {summary['num_with_judgment']} results")
-
-        # === TEMPLATE PASS RATES ===
-        if summary["template_pass_by_combo"]:
-            lines.append("")
-            lines.append("  === TEMPLATE PASS RATES ===")
-            lines.append("  By Model Combination (+ MCP if used):")
-
-            for combo_key, stats in sorted(summary["template_pass_by_combo"].items()):
-                answering, parsing, mcp_key = combo_key
-                mcp_suffix = f" + {', '.join(mcp_key)}" if mcp_key else ""
-
-                combo_str = f"{answering} / {parsing}{mcp_suffix}"
-                lines.append(f"    {combo_str:40} {stats['passed']}/{stats['total']} passed ({stats['pass_pct']:.1f}%)")
-
-            if summary["template_pass_overall"]:
-                overall = summary["template_pass_overall"]
-                lines.append(f"  Overall: {overall['passed']}/{overall['total']} passed ({overall['pass_pct']:.1f}%)")
-
-        # === REPLICATE STATISTICS ===
-        replicate_stats = summary.get("replicate_stats")
-        if replicate_stats and replicate_stats.get("replicate_pass_rates"):
-            lines.append("")
-            lines.append("  === REPLICATE STATISTICS ===")
-            lines.append("  Template Pass Rate by Replicate:")
-
-            for rep_num in sorted(replicate_stats["replicate_pass_rates"].keys()):
-                stats = replicate_stats["replicate_pass_rates"][rep_num]
-                lines.append(
-                    f"    Replicate {rep_num}: {stats['passed']}/{stats['total']} passed ({stats['pass_pct']:.1f}%)"
-                )
-
-            if replicate_stats.get("replicate_summary"):
-                rep_sum = replicate_stats["replicate_summary"]
-                lines.append(f"  Summary: mean={rep_sum['mean']:.3f}, std={rep_sum['std']:.3f}")
-
-        lines.append(")")
-
-        return "\n".join(lines)
+        return f"VerificationResultSet({n} result{'s' if n != 1 else ''})"
 
     def __str__(self) -> str:
         """String representation (same as repr for developer-friendly output)."""
