@@ -653,35 +653,27 @@ class Benchmark:
 
     def set_global_rubric(self, rubric: Rubric) -> None:
         """Set the complete global rubric (replaces existing)."""
-        self.clear_global_rubric()
-        for trait in rubric.llm_traits:
-            self.add_global_rubric_trait(trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_global_rubric_trait(regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_global_rubric_trait(callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_global_rubric_trait(metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_global_rubric_trait(agentic_trait)
+        self._rubric_manager.set_global_rubric(rubric)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
-        self.remove_question_rubric(question_id)
-        for trait in rubric.llm_traits:
-            self.add_question_rubric_trait(question_id, trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_question_rubric_trait(question_id, regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_question_rubric_trait(question_id, callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_question_rubric_trait(question_id, metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_question_rubric_trait(question_id, agentic_trait)
+        self._rubric_manager.set_question_rubric(question_id, rubric)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""
         return self._rubric_manager.get_global_rubric()
+
+    def get_question_rubric(self, question_id: str) -> Rubric | None:
+        """Get the question-specific rubric for a question.
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Rubric containing the question-specific traits, or None.
+        """
+        traits = self._rubric_manager.get_question_rubric(question_id)
+        return Rubric.from_traits(traits)
 
     def clear_global_rubric(self) -> bool:
         """Remove the global rubric."""
@@ -695,7 +687,7 @@ class Benchmark:
         """Remove all rubrics (global and question-specific)."""
         return self._rubric_manager.clear_all_rubrics()
 
-    def validate_rubrics(self) -> tuple[bool, list[str]]:
+    def validate_rubrics(self) -> tuple[bool, list[dict[str, str]]]:
         """Validate all rubrics are properly configured."""
         return self._rubric_manager.validate_rubrics()
 
