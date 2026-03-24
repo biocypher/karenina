@@ -71,14 +71,18 @@ class TemplateResults(BaseModel):
         Each field in the parsed responses gets its own row with field-level matching.
 
         Column ordering:
-            1. Status: completed_without_errors, error, recursion_limit_reached
+            1. Status: completed_without_errors, error, failed_stage,
+               recursion_limit_reached
             2. Identification: question_id, template_id, question_text, keywords,
                replicate, answering_mcp_servers
-            3. Model Config: answering_model, parsing_model, system_prompts
-            4. Template Response: raw_llm_response
-            5. Field Comparison: field_name, gt_value, llm_value, field_match, field_type
-            6. Verification Checks: embedding, abstention, regex
-            7. Execution Metadata: execution_time, timestamp, run_name
+            3. Scenario: scenario_id, scenario_node, scenario_turn, scenario_path
+            4. Model Config: answering_model, parsing_model, system_prompts
+            5. Template Response: raw_llm_response
+            6. Field Comparison: field_name, gt_value, llm_value, field_match,
+               field_type
+            7. Verification Checks: verify_result, verify_granular_result,
+               embedding, abstention, sufficiency, regex
+            8. Execution Metadata: execution_time, timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per field comparison

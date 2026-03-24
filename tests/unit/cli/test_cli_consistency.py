@@ -200,7 +200,7 @@ class TestBooleanFlagPairs:
             abstention_enabled=True,
             sufficiency_enabled=True,
             embedding_check_enabled=True,
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
         )
         preset_config = VerificationConfig.from_preset(preset_path)
 
@@ -239,7 +239,7 @@ class TestBooleanFlagPairs:
         assert config.abstention_enabled is True
         assert config.sufficiency_enabled is True
         assert config.embedding_check_enabled is True
-        assert config.deep_judgment_enabled is True
+        assert config.deep_judgment_mode == "full"
 
     def test_cli_accepts_no_abstention_flag(self) -> None:
         """The CLI should accept --no-abstention as a valid flag."""
