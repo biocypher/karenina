@@ -67,21 +67,22 @@ def compute_objective_scores(
 
             if isinstance(trait_result, bool):
                 raw_score = 1.0 if trait_result else 0.0
-                # Invert for lower-is-better traits
-                score = raw_score if higher_is_better else 1.0 - raw_score
+                # Invert only when explicitly lower-is-better (None treated as True)
+                score = raw_score if higher_is_better is not False else 1.0 - raw_score
                 objectives[f"{model_name}:{trait_name}"] = score
 
             elif isinstance(trait_result, int | float):
                 # Normalize using trait's max_score, defaulting to 5 for backwards compatibility
                 max_score = trait_max_scores.get(trait_name, 5)
                 raw_score = float(trait_result) / float(max_score)
-                # Invert for lower-is-better traits
-                score = raw_score if higher_is_better else 1.0 - raw_score
+                # Invert only when explicitly lower-is-better (None treated as True)
+                score = raw_score if higher_is_better is not False else 1.0 - raw_score
                 objectives[f"{model_name}:{trait_name}"] = score
 
             elif isinstance(trait_result, dict):
-                # Metric trait - expand based on metric_config
-                # Note: Metric traits (precision/recall/F1) are inherently higher-is-better
+                # Metric trait: expand based on metric_config.
+                # MetricRubricTrait.higher_is_better defaults to None (directionality
+                # not applicable), so no score inversion is performed here.
                 enabled_metrics = config.metric_config.get_enabled_metrics()
                 for metric_name in enabled_metrics:
                     if metric_name in trait_result:

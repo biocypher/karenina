@@ -93,13 +93,16 @@ def build_config_from_cli_args(
         VerificationConfig with CLI overrides applied
     """
     # CLI-specific: load custom rubric config JSON if a file path was provided
-    rubric_config_dict = None
+    rubric_config_obj = None
     if deep_judgment_rubric_config is not None:
         import json
 
+        from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
+
         try:
             with open(deep_judgment_rubric_config) as f:
-                rubric_config_dict = json.load(f)
+                raw_dict = json.load(f)
+            rubric_config_obj = DeepJudgmentRubricCustomConfig.model_validate(raw_dict)
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
 
@@ -145,7 +148,7 @@ def build_config_from_cli_args(
         deep_judgment_rubric_retry_attempts=deep_judgment_rubric_retry_attempts,
         deep_judgment_rubric_search=deep_judgment_rubric_search,
         deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
-        deep_judgment_rubric_config=rubric_config_dict,
+        deep_judgment_rubric_config=rubric_config_obj,
     )
 
 

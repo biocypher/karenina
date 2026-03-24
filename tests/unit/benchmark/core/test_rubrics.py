@@ -557,15 +557,15 @@ class TestGetRubricStatistics:
 
 
 @pytest.mark.unit
-class TestGetQuestionsWithRubric:
-    """Tests for get_questions_with_rubric method."""
+class TestGetQuestionIdsWithRubric:
+    """Tests for get_question_ids_with_rubric method."""
 
     def test_get_questions_empty(self) -> None:
         """Test getting questions with rubrics from empty benchmark."""
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
-        assert manager.get_questions_with_rubric() == []
+        assert manager.get_question_ids_with_rubric() == []
 
     def test_get_questions_with_rubrics(self) -> None:
         """Test getting list of question IDs with rubrics."""
@@ -583,7 +583,7 @@ class TestGetQuestionsWithRubric:
             q_id3, LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
         )
 
-        questions = manager.get_questions_with_rubric()
+        questions = manager.get_question_ids_with_rubric()
         assert len(questions) == 2
         assert q_id1 in questions
         assert q_id3 in questions

@@ -10,6 +10,7 @@ conversion is in benchmark_helpers.py.
 """
 
 import logging
+import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -653,35 +654,37 @@ class Benchmark:
 
     def set_global_rubric(self, rubric: Rubric) -> None:
         """Set the complete global rubric (replaces existing)."""
-        self.clear_global_rubric()
-        for trait in rubric.llm_traits:
-            self.add_global_rubric_trait(trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_global_rubric_trait(regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_global_rubric_trait(callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_global_rubric_trait(metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_global_rubric_trait(agentic_trait)
+        self._rubric_manager.set_global_rubric(rubric)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
-        self.remove_question_rubric(question_id)
-        for trait in rubric.llm_traits:
-            self.add_question_rubric_trait(question_id, trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_question_rubric_trait(question_id, regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_question_rubric_trait(question_id, callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_question_rubric_trait(question_id, metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_question_rubric_trait(question_id, agentic_trait)
+        self._rubric_manager.set_question_rubric(question_id, rubric)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""
         return self._rubric_manager.get_global_rubric()
+
+    def get_question_rubric(self, question_id: str) -> Rubric | None:
+        """Get the question-specific rubric for a question.
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Rubric containing the question-specific traits, or None.
+        """
+        raw = self._rubric_manager.get_question_rubric(question_id)
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return Rubric(
+                llm_traits=raw.get("llm_traits", []),
+                regex_traits=raw.get("regex_traits", []),
+                callable_traits=raw.get("callable_traits", []),
+                metric_traits=raw.get("metric_traits", []),
+                agentic_traits=raw.get("agentic_traits", []),
+            )
+        return Rubric.from_traits(raw)
 
     def clear_global_rubric(self) -> bool:
         """Remove the global rubric."""
@@ -695,7 +698,7 @@ class Benchmark:
         """Remove all rubrics (global and question-specific)."""
         return self._rubric_manager.clear_all_rubrics()
 
-    def validate_rubrics(self) -> tuple[bool, list[str]]:
+    def validate_rubrics(self) -> tuple[bool, list[dict[str, str]]]:
         """Validate all rubrics are properly configured."""
         return self._rubric_manager.validate_rubrics()
 
@@ -916,6 +919,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> None:
         """Store verification results in the benchmark metadata."""
+        warnings.warn(
+            "store_verification_results is deprecated. Use ResultsStore.add() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         _helpers.store_verification_results(self, results, run_name)
 
     def get_verification_results(
@@ -924,10 +932,20 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Get verification results for specific questions and/or runs."""
+        warnings.warn(
+            "get_verification_results is deprecated. Use ResultsStore.get_by_run() or ResultsStore.get_latest() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_results(question_ids, run_name)
 
     def get_verification_history(self, question_id: str | None = None) -> dict[str, dict[str, VerificationResult]]:
         """Get verification history organized by run name."""
+        warnings.warn(
+            "get_verification_history is deprecated. Use ResultsStore.get_by_question() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_history(question_id)
 
     def clear_verification_results(
@@ -936,6 +954,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> int:
         """Clear verification results."""
+        warnings.warn(
+            "clear_verification_results is deprecated. Use ResultsStore.clear() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.clear_verification_results(question_ids, run_name)
 
     def export_verification_results(
@@ -946,6 +969,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> str:
         """Export verification results in specified format."""
+        warnings.warn(
+            "export_verification_results is deprecated. Use ResultsStore.export() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.export_verification_results(question_ids, run_name, format, global_rubric)
 
     def export_verification_results_to_file(
@@ -957,6 +985,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> None:
         """Export verification results directly to a file."""
+        warnings.warn(
+            "export_verification_results_to_file is deprecated. Use ResultsStore.export_to_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._results_manager.export_results_to_file(file_path, question_ids, run_name, format, global_rubric)
 
     def load_verification_results_from_file(
@@ -965,18 +998,38 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Load verification results from a previously exported file."""
+        warnings.warn(
+            "load_verification_results_from_file is deprecated. Use ResultsStore.from_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.load_results_from_file(file_path, run_name)
 
     def get_verification_summary(self, run_name: str | None = None) -> dict[str, Any]:
         """Get summary statistics for verification results."""
+        warnings.warn(
+            "get_verification_summary is deprecated. Use ResultsStore.get_summary() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_summary(run_name)
 
     def get_all_run_names(self) -> list[str]:
         """Get all verification run names."""
+        warnings.warn(
+            "get_all_run_names is deprecated. Use ResultsStore.get_all_runs() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_all_run_names()
 
     def get_results_statistics_by_run(self) -> dict[str, dict[str, Any]]:
         """Get verification statistics for each run."""
+        warnings.warn(
+            "get_results_statistics_by_run is deprecated. Use ResultsStore.get_statistics_by_run() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_results_statistics_by_run()
 
     # ── GEPA optimization (delegated to benchmark_helpers) ───────────────

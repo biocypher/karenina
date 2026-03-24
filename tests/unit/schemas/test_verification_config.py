@@ -966,7 +966,9 @@ def test_deep_judgment_rubric_enable_all_mode() -> None:
 
 @pytest.mark.unit
 def test_deep_judgment_rubric_custom_mode() -> None:
-    """Test deep_judgment_rubric_mode='custom' with config."""
+    """Test deep_judgment_rubric_mode='custom' with config dict (auto-coerced)."""
+    from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
+
     custom_config = {
         "global": {
             "Clarity": {"enabled": True, "excerpt_enabled": False},
@@ -996,7 +998,11 @@ def test_deep_judgment_rubric_custom_mode() -> None:
     )
 
     assert config.deep_judgment_rubric_mode == "custom"
-    assert config.deep_judgment_rubric_config == custom_config
+    assert isinstance(config.deep_judgment_rubric_config, DeepJudgmentRubricCustomConfig)
+    assert "Clarity" in config.deep_judgment_rubric_config.global_traits
+    assert config.deep_judgment_rubric_config.global_traits["Clarity"].enabled is True
+    assert config.deep_judgment_rubric_config.global_traits["Clarity"].excerpt_enabled is False
+    assert "q-123" in config.deep_judgment_rubric_config.question_specific
 
 
 # =============================================================================

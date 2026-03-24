@@ -528,7 +528,10 @@ class TaskEvalResult(BaseModel):
         return "\n".join(lines)
 
     def summary(self) -> str:
-        """Return a concise summary of the evaluation results."""
+        """Return a concise summary of the evaluation results.
+
+        Aggregates across global evaluation and all per-step evaluations.
+        """
         total_traces = 0
         passed_traces = 0
         total_template_verifications = 0
@@ -569,7 +572,10 @@ class TaskEvalResult(BaseModel):
         return " | ".join(parts) if parts else "No evaluations performed"
 
     def summary_compact(self) -> str:
-        """Return a very compact one-line summary."""
+        """Return a very compact one-line summary.
+
+        Reports global evaluation statistics only (excludes per-step evaluations).
+        """
         if self.global_eval:
             stats = self.global_eval.get_summary_stats()
             parts = []

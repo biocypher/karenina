@@ -16,6 +16,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
 )
 from karenina.utils.checkpoint import generate_template_id
 
@@ -50,7 +51,7 @@ def run_single_model_verification(
     # Deep-judgment rubric configuration (NEW)
     deep_judgment_rubric_mode: str = "disabled",
     deep_judgment_rubric_global_excerpts: bool = True,
-    deep_judgment_rubric_config: dict[str, Any] | None = None,
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None,
     deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS,
     deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,

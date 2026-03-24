@@ -1046,13 +1046,27 @@ def test_callable_trait_invert_result_preserved() -> None:
 
 
 @pytest.mark.unit
-def test_callable_trait_higher_is_better_none_defaults_to_true() -> None:
-    """Test that higher_is_better=None defaults to True (old checkpoint data)."""
+def test_callable_trait_higher_is_better_none_preserved() -> None:
+    """Test that explicit higher_is_better=None is preserved (directionality not applicable)."""
     trait = CallableRubricTrait(
         name="test",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda _t: True),
         higher_is_better=None,
+    )
+
+    assert trait.higher_is_better is None
+
+
+@pytest.mark.unit
+def test_callable_trait_higher_is_better_missing_defaults_to_true() -> None:
+    """Test that missing higher_is_better defaults to True (old checkpoint data)."""
+    trait = CallableRubricTrait.model_validate(
+        {
+            "name": "test",
+            "kind": "boolean",
+            "callable_code": cloudpickle.dumps(lambda _t: True),
+        }
     )
 
     assert trait.higher_is_better is True

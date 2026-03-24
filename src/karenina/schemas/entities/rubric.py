@@ -88,12 +88,13 @@ class LLMRubricTrait(BaseModel):
     )
 
     # Directionality field
-    higher_is_better: bool = Field(
-        ...,
+    higher_is_better: bool | None = Field(
+        default=True,
         description="Whether higher values indicate better performance. "
         "For boolean: True means True is good. "
         "For score: True means higher scores are better. "
-        "For literal: True means higher indices (later classes) are better.",
+        "For literal: True means higher indices (later classes) are better. "
+        "None means directionality does not apply.",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -125,7 +126,7 @@ class LLMRubricTrait(BaseModel):
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+        if isinstance(values, dict) and "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
 
@@ -195,9 +196,11 @@ class RegexRubricTrait(BaseModel):
     invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
 
     # Directionality field
-    higher_is_better: bool = Field(
-        ...,
-        description="Whether a regex match indicates a positive outcome. True: match = good. False: match = bad.",
+    higher_is_better: bool | None = Field(
+        default=True,
+        description="Whether a regex match indicates a positive outcome. "
+        "True: match = good. False: match = bad. "
+        "None means directionality does not apply.",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -206,7 +209,7 @@ class RegexRubricTrait(BaseModel):
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+        if isinstance(values, dict) and "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
 
@@ -300,10 +303,11 @@ class CallableRubricTrait(BaseModel):
     )
 
     # Directionality field
-    higher_is_better: bool = Field(
-        ...,
+    higher_is_better: bool | None = Field(
+        default=True,
         description="Whether higher return values indicate better performance. "
-        "True: high value = good. False: high value = bad.",
+        "True: high value = good. False: high value = bad. "
+        "None means directionality does not apply.",
     )
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -325,7 +329,7 @@ class CallableRubricTrait(BaseModel):
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Set defaults for higher_is_better and validate literal kind requires classes."""
         if isinstance(values, dict):
-            if "higher_is_better" not in values or values.get("higher_is_better") is None:
+            if "higher_is_better" not in values:
                 values["higher_is_better"] = True
 
             # Literal kind requires classes
@@ -574,6 +578,13 @@ class MetricRubricTrait(BaseModel):
         True, description="Whether to deduplicate repeated excerpts/instructions (case-insensitive exact match)"
     )
 
+    # Directionality field
+    higher_is_better: bool | None = Field(
+        default=None,
+        description="Whether higher metric values indicate better performance. "
+        "None means directionality does not apply (default for metrics).",
+    )
+
     model_config = ConfigDict(extra="forbid")
 
     @field_validator("metrics")
@@ -738,7 +749,7 @@ class AgenticRubricTrait(BaseModel):
         # Template kind: do not inject legacy default
         if not isinstance(kind, str):
             return values
-        if "higher_is_better" not in values or values.get("higher_is_better") is None:
+        if "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
 
@@ -832,6 +843,49 @@ class Rubric(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @classmethod
+    def from_traits(
+        cls,
+        traits: list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait]
+        | None,
+    ) -> "Rubric | None":
+        """Create a Rubric from a flat list of traits, categorizing by type.
+
+        Args:
+            traits: Flat list of trait objects. If None, returns None.
+
+        Returns:
+            Rubric with traits sorted into typed lists, or None if input is None.
+        """
+        if traits is None:
+            return None
+
+        llm_traits: list[LLMRubricTrait] = []
+        regex_traits: list[RegexRubricTrait] = []
+        callable_traits: list[CallableRubricTrait] = []
+        metric_traits: list[MetricRubricTrait] = []
+        agentic_traits: list[AgenticRubricTrait] = []
+
+        for trait in traits:
+            if isinstance(trait, LLMRubricTrait):
+                llm_traits.append(trait)
+            elif isinstance(trait, RegexRubricTrait):
+                regex_traits.append(trait)
+            elif isinstance(trait, CallableRubricTrait):
+                callable_traits.append(trait)
+            elif isinstance(trait, MetricRubricTrait):
+                metric_traits.append(trait)
+            elif isinstance(trait, AgenticRubricTrait):
+                agentic_traits.append(trait)
+
+        return cls(
+            llm_traits=llm_traits,
+            regex_traits=regex_traits,
+            callable_traits=callable_traits,
+            metric_traits=metric_traits,
+            agentic_traits=agentic_traits,
+        )
 
     @model_validator(mode="after")
     def validate_trait_names(self) -> "Rubric":
@@ -937,15 +991,12 @@ class Rubric(BaseModel):
         return max_scores
 
     def get_trait_directionalities(self) -> dict[str, bool | None]:
-        """Get higher_is_better for LLM, regex, callable, and agentic traits.
-
-        Note: MetricRubricTraits are excluded as metrics (precision/recall/F1)
-        are inherently 'higher is better'.
+        """Get higher_is_better for all trait types.
 
         Returns:
-            Dict mapping trait name to higher_is_better value. Template kind
-            agentic traits map to None because directionality is not meaningful
-            for structured results.
+            Dict mapping trait name to higher_is_better value. None means
+            directionality does not apply (e.g., template kind agentic traits
+            or metric traits where it was not explicitly set).
         """
         directionalities: dict[str, bool | None] = {}
 
@@ -961,10 +1012,13 @@ class Rubric(BaseModel):
         for callable_trait in self.callable_traits:
             directionalities[callable_trait.name] = callable_trait.higher_is_better
 
+        metric_trait: MetricRubricTrait
+        for metric_trait in self.metric_traits:
+            directionalities[metric_trait.name] = metric_trait.higher_is_better
+
         for agentic_trait in self.agentic_traits:
             directionalities[agentic_trait.name] = agentic_trait.higher_is_better
 
-        # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
 
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:

@@ -30,6 +30,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
 )
 
 if TYPE_CHECKING:
@@ -299,7 +300,7 @@ class VerificationContext:
     # Deep-Judgment Rubric Configuration (NEW - runtime control of deep judgment for rubrics)
     deep_judgment_rubric_mode: str = "disabled"  # Mode: disabled, enable_all, use_checkpoint, custom
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts
-    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None  # For custom mode: per-trait config
     deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS
     deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
     deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS

@@ -266,16 +266,25 @@ def test_llm_rubric_trait_deep_judgment_fields() -> None:
 
 @pytest.mark.unit
 def test_llm_rubric_trait_default_higher_is_better() -> None:
-    """Test that higher_is_better defaults to True when None or missing."""
-    trait = LLMRubricTrait.model_validate(
+    """Test that higher_is_better defaults to True when missing, preserves None."""
+    # Missing higher_is_better defaults to True (legacy compat)
+    trait_missing = LLMRubricTrait.model_validate(
+        {
+            "name": "test",
+            "kind": "boolean",
+        }
+    )
+    assert trait_missing.higher_is_better is True
+
+    # Explicit None is preserved (directionality does not apply)
+    trait_none = LLMRubricTrait.model_validate(
         {
             "name": "test",
             "kind": "boolean",
             "higher_is_better": None,
         }
     )
-
-    assert trait.higher_is_better is True
+    assert trait_none.higher_is_better is None
 
 
 @pytest.mark.unit

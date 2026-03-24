@@ -387,10 +387,13 @@ def _configure_deep_judgment_rubric(rubric_enabled: bool) -> dict[str, Any]:
         import json
         from pathlib import Path
 
+        from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
+
         try:
             config_path = Path(config_path_str)
             with open(config_path) as f:
-                result["config"] = json.load(f)
+                raw_dict = json.load(f)
+            result["config"] = DeepJudgmentRubricCustomConfig.model_validate(raw_dict)
             console.print(f"[green]✓ Loaded custom config from {config_path}[/green]")
         except Exception as e:
             cli_error(f"loading config: {e}", e)

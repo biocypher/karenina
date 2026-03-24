@@ -65,6 +65,7 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
         SchemaOrgPropertyValue(name="metrics", value=trait.metrics),
         SchemaOrgPropertyValue(name="repeated_extraction", value=trait.repeated_extraction),
         SchemaOrgPropertyValue(name="evaluation_mode", value=trait.evaluation_mode),
+        SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
     ]
 
     # Add instruction lists (only if non-empty)
@@ -342,6 +343,7 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
     evaluation_mode: Literal["tp_only", "full_matrix"] = "tp_only"  # Default for backward compatibility
     tp_instructions = []
     tn_instructions = []
+    higher_is_better: bool | None = None  # Default for MetricRubricTrait
     summary: str | None = None
 
     if rating.additionalProperty:
@@ -366,6 +368,8 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
                     tn_instructions = json.loads(prop.value)
                 except (json.JSONDecodeError, TypeError):
                     tn_instructions = prop.value if isinstance(prop.value, list) else []
+            elif prop.name == "higher_is_better":
+                higher_is_better = prop.value
             elif prop.name == "summary":
                 summary = prop.value
 
@@ -378,6 +382,7 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
         tp_instructions=tp_instructions,
         tn_instructions=tn_instructions,
         repeated_extraction=repeated_extraction,
+        higher_is_better=higher_is_better,
     )
 
 
