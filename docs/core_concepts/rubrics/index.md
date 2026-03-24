@@ -142,7 +142,7 @@ For a hands-on tutorial that walks through each of these needs with a complete e
 
 ## 5. The `higher_is_better` Field
 
-All trait types (except MetricRubricTrait, where metrics are inherently "higher is better") include a `higher_is_better` field that controls directionality:
+All trait types include a `higher_is_better` field (`bool | None`) that controls directionality. A value of `None` means directionality does not apply.
 
 - **Boolean traits**: `True` means `True` is a positive outcome
 - **Score traits**: `True` means higher scores indicate better performance
