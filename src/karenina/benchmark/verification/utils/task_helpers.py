@@ -193,6 +193,10 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         ),
         "deep_judgment_rubric_search_enabled": getattr(config, "deep_judgment_rubric_search_enabled", False),
         "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
+        # Embedding check configuration
+        "embedding_check_enabled": getattr(config, "embedding_check_enabled", False),
+        "embedding_check_model": getattr(config, "embedding_check_model", None),
+        "embedding_check_threshold": getattr(config, "embedding_check_threshold", None),
         # Prompt configuration
         "prompt_config": getattr(config, "prompt_config", None),
         # Agentic parsing configuration

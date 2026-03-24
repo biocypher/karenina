@@ -75,6 +75,10 @@ def run_single_model_verification(
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
     agentic_rubric_parallel: bool = False,
+    # Embedding check configuration
+    embedding_check_enabled: bool = False,
+    embedding_check_model: str | None = None,
+    embedding_check_threshold: float | None = None,
     # Trait provenance
     trait_provenance: dict[str, str] | None = None,
 ) -> VerificationResult:
@@ -187,6 +191,10 @@ def run_single_model_verification(
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,
+        # Embedding Check
+        embedding_check_enabled=embedding_check_enabled,
+        embedding_check_model=embedding_check_model,
+        embedding_check_threshold=embedding_check_threshold,
         # Trait Provenance
         trait_provenance=trait_provenance,
     )

@@ -105,9 +105,15 @@ class EmbeddingCheckStage(BaseVerificationStage):
         # Extract ground truth and LLM response for embedding check
         parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
 
-        # Perform embedding check
+        # Perform embedding check, passing config from context
         (should_override, similarity_score, model_name, check_performed) = perform_embedding_check(
-            parsed_gt_response, parsed_llm_response, context.parsing_model, context.question_text
+            parsed_gt_response,
+            parsed_llm_response,
+            context.parsing_model,
+            context.question_text,
+            enabled=context.embedding_check_enabled,
+            model=context.embedding_check_model,
+            threshold=context.embedding_check_threshold,
         )
 
         embedding_check_performed = check_performed
