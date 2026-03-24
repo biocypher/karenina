@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification.config import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
-    DEFAULT_PARSING_SYSTEM_PROMPT,
     VerificationConfig,
 )
 from karenina.storage.db_config import DBConfig
@@ -37,8 +36,8 @@ class TestSharedModelConfigMutation:
         )
         # After construction, the answering copy should have the answering prompt
         assert config.answering_models[0].system_prompt == DEFAULT_ANSWERING_SYSTEM_PROMPT
-        # And the parsing copy should have the parsing prompt
-        assert config.parsing_models[0].system_prompt == DEFAULT_PARSING_SYSTEM_PROMPT
+        # Parsing models no longer receive auto-assigned system_prompt
+        assert config.parsing_models[0].system_prompt is None
 
     def test_original_model_not_mutated(self) -> None:
         """The original ModelConfig instance must not be mutated by VerificationConfig.__init__."""

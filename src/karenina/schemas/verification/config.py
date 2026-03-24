@@ -327,18 +327,6 @@ class VerificationConfig(BaseModel):
                 for m in data["answering_models"]
             ]
 
-        if "parsing_models" in data:
-            data["parsing_models"] = [
-                m.model_copy(update={"system_prompt": DEFAULT_PARSING_SYSTEM_PROMPT})
-                if isinstance(m, ModelConfig) and not m.system_prompt
-                else (
-                    {**m, "system_prompt": DEFAULT_PARSING_SYSTEM_PROMPT}
-                    if isinstance(m, dict) and not m.get("system_prompt")
-                    else m
-                )
-                for m in data["parsing_models"]
-            ]
-
         # Strip rubric_enabled from input: now derived from evaluation_mode
         data.pop("rubric_enabled", None)
 
@@ -376,18 +364,22 @@ class VerificationConfig(BaseModel):
         # Validate model configurations
         # Note: Basic model validation (model_name, model_provider) is also done by
         # the adapter factory at runtime, but we validate here too for early failure.
+        from karenina.adapters.registry import AdapterRegistry
+
         for model in self.answering_models + self.parsing_models:
             if not model.model_name:
                 raise ValueError(f"Model name is required in model configuration (model: {model.id})")
             # Model provider requirement is defined per-adapter via AdapterSpec.requires_provider
-            from karenina.adapters.registry import AdapterRegistry
-
             spec = AdapterRegistry.get_spec(model.interface)
             if spec is not None and spec.requires_provider and not model.model_provider:
                 raise ValueError(f"Model provider is required for interface '{model.interface}'. (model: {model.id})")
-            # System prompt is required for verification (not validated by factory)
+
+        # System prompt is required for answering models (not validated by factory).
+        # Parsing models do not require a system_prompt; their prompt is assembled
+        # by the pipeline at runtime.
+        for model in self.answering_models:
             if not model.system_prompt:
-                raise ValueError(f"System prompt is required for model {model.id}")
+                raise ValueError(f"System prompt is required for answering model {model.id}")
 
         # Additional validation for rubric-enabled scenarios
         if self.rubric_enabled and not self.parsing_models:
