@@ -165,6 +165,7 @@ def _deserialize_metric_trait(trait_data: dict[str, Any]) -> Any:
         tp_instructions=trait_data.get("tp_instructions", []),
         tn_instructions=trait_data.get("tn_instructions", []),
         repeated_extraction=trait_data.get("repeated_extraction", True),
+        higher_is_better=trait_data.get("higher_is_better"),
     )
 
 
