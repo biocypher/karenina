@@ -306,8 +306,6 @@ class RubricDataFrameBuilder:
             "execution_time",
             "timestamp",
             "run_name",
-            "rubric_evaluation_performed",
-            "rubric_evaluation_strategy",
             "trait_provenance",
             # Deep Judgment (if included)
             "trait_reasoning",
@@ -387,8 +385,6 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
-            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             "trait_provenance": (
                 result.rubric.trait_provenance.get(trait_name)
                 if result.rubric and result.rubric.trait_provenance
@@ -444,8 +440,6 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
-            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             "trait_provenance": (
                 result.rubric.trait_provenance.get(trait_name)
                 if result.rubric and result.rubric.trait_provenance
@@ -495,8 +489,6 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
-            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             "trait_provenance": (
                 result.rubric.trait_provenance.get(trait_name)
                 if result.rubric and result.rubric.trait_provenance
@@ -571,8 +563,6 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
-            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             "trait_provenance": (
                 result.rubric.trait_provenance.get(trait_name)
                 if result.rubric and result.rubric.trait_provenance
@@ -633,8 +623,6 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else None,
-            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             "trait_provenance": (
                 result.rubric.trait_provenance.get(trait_name)
                 if result.rubric and result.rubric.trait_provenance
