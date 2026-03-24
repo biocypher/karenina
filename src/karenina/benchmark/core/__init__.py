@@ -11,6 +11,7 @@ from .question_query import QuestionQueryBuilder
 from .questions import QuestionManager
 from .results import ResultsManager
 from .results_io import ResultsIOManager
+from .results_store import ResultsStore
 from .rubrics import RubricManager
 from .templates import TemplateManager
 from .verification_manager import VerificationManager
@@ -23,6 +24,7 @@ __all__ = [
     "QuestionQueryBuilder",
     "ResultsIOManager",
     "ResultsManager",
+    "ResultsStore",
     "RubricManager",
     "TemplateManager",
     "VerificationManager",
