@@ -495,13 +495,14 @@ The first argument is the interface name, the second is the `PromptTask` value s
 | `rubric_literal_trait_batch` | Stage 11 | For literal trait evaluation |
 | `rubric_literal_trait_single` | Stage 11 | Same, for single-trait evaluation |
 | `rubric_metric_trait` | Stage 11 | For metric trait evaluation |
-| `dj_template_excerpt` | Deep judgment | For excerpt extraction |
+| `dj_template_excerpt_extraction` | Deep judgment | For excerpt extraction |
+| `dj_template_hallucination` | Deep judgment | For hallucination risk assessment via search |
 | `dj_template_reasoning` | Deep judgment | For reasoning generation |
-| `dj_template_extraction` | Deep judgment | For parameter extraction |
-| `dj_rubric_excerpt` | Deep judgment | For rubric excerpt extraction |
+| `dj_template_reasoning_only` | Deep judgment | For reasoning-only mode (no excerpts) |
+| `dj_rubric_excerpt_extraction` | Deep judgment | For rubric excerpt extraction |
+| `dj_rubric_hallucination` | Deep judgment | For rubric hallucination risk assessment |
 | `dj_rubric_reasoning` | Deep judgment | For rubric reasoning |
-| `dj_rubric_scoring` | Deep judgment | For rubric scoring |
-| `dj_rubric_aggregation` | Deep judgment | For rubric aggregation |
+| `dj_rubric_score_extraction` | Deep judgment | For rubric score extraction |
 
 For most adapters, registering `parsing` instructions is sufficient. Rubric and deep judgment instructions are optional refinements.
 
@@ -565,18 +566,20 @@ config = VerificationConfig(
 
 ## AdapterSpec Fields Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `interface` | `str` | Interface name used in `ModelConfig.interface` |
-| `description` | `str` | Human-readable description |
-| `agent_factory` | `Callable | None` | Factory for `AgentPort` — `None` if unsupported |
-| `llm_factory` | `Callable | None` | Factory for `LLMPort` — `None` if unsupported |
-| `parser_factory` | `Callable | None` | Factory for `ParserPort` — `None` if unsupported |
-| `availability_checker` | `Callable | None` | Returns `AdapterAvailability` — `None` means always available |
-| `fallback_interface` | `str | None` | Interface to fall back to when unavailable |
-| `routes_to` | `str | None` | Interface this one delegates to (for routing interfaces) |
-| `supports_mcp` | `bool` | Whether the adapter can connect to MCP servers |
-| `supports_tools` | `bool` | Whether the adapter supports tool use |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `interface` | `str` | *(required)* | Interface name used in `ModelConfig.interface` |
+| `description` | `str` | *(required)* | Human-readable description |
+| `agent_factory` | `Callable \| None` | `None` | Factory for `AgentPort`. `None` if unsupported. |
+| `llm_factory` | `Callable \| None` | `None` | Factory for `LLMPort`. `None` if unsupported. |
+| `parser_factory` | `Callable \| None` | `None` | Factory for `ParserPort`. `None` if unsupported. |
+| `availability_checker` | `Callable \| None` | `None` | Returns `AdapterAvailability`. `None` means always available. |
+| `fallback_interface` | `str \| None` | `None` | Interface to fall back to when unavailable |
+| `routes_to` | `str \| None` | `None` | Interface this one delegates to (for routing interfaces) |
+| `supports_mcp` | `bool` | `False` | Whether the adapter can connect to MCP servers |
+| `supports_tools` | `bool` | `False` | Whether the adapter supports tool use |
+| `agent_tier` | `str` | `"tool_loop"` | Agent capability tier. `"tool_loop"`: basic tool-calling loop (e.g., LangChain ReAct), the adapter orchestrates each tool call turn. `"deep_agent"`: full agent runtime with built-in tools (e.g., Claude Code, LangChain Deep Agents), the runtime handles tool loops internally and `GenerateAnswer` prefers the `AgentPort` path to capture the full trace. |
+| `requires_provider` | `bool` | `True` | If `False`, `model_provider` is not required for this interface. Used by `validate_model_config()` to determine whether to require the provider field. |
 
 ---
 

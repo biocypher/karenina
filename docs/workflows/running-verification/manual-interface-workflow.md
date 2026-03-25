@@ -241,7 +241,7 @@ config = VerificationConfig(
         ModelConfig(
             id="manual",
             model_name="manual",
-            model_provider="manual",
+            # model_provider is not needed: the manual adapter has requires_provider=False
             interface="manual",
             manual_traces=manual_traces,
         )
@@ -311,8 +311,7 @@ for parser in parsing_models:
     parser_config = VerificationConfig(
         answering_models=[
             ModelConfig(id="manual", model_name="manual",
-                        model_provider="manual", interface="manual",
-                        manual_traces=manual_traces)
+                        interface="manual", manual_traces=manual_traces)
         ],
         parsing_models=[parser],
         evaluation_mode="template_only",

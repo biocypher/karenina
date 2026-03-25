@@ -288,9 +288,9 @@ for name in global_rubric.get_trait_names():
 print()
 for qid in benchmark.get_question_ids():
     q = benchmark.get_question(qid)
-    if q.get("has_rubric", False):
+    if q.get("question_rubric"):
         q_text = q["question"][:45]
-        print(f"'{q_text}...' has per-question traits")
+        print(f"'{q_text}...' has question-level rubric")
 ```
 
 ---

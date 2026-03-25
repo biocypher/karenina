@@ -53,38 +53,50 @@ END: str = "__end__"
 
 
 # ---------------------------------------------------------------------------
-# Verification primitives
+# Verification primitives (mirrors karenina.schemas.primitives)
 # ---------------------------------------------------------------------------
 
-class BooleanMatch:
-    type: str = "boolean_match"
-    def check(self, value: Any, expected: Any) -> bool:
-        return bool(value) == bool(expected)
+class BooleanMatch(BaseModel):
+    type: Literal["boolean_match"] = "boolean_match"
 
 
 # ---------------------------------------------------------------------------
-# Scope and check nodes (for outcome criteria)
+# Scope selectors (mirrors karenina.schemas.primitives.scope)
 # ---------------------------------------------------------------------------
 
-class TurnAt:
-    def __init__(self, index: int) -> None:
-        self.index = index
+class TurnAt(BaseModel):
+    type: Literal["turn_at"] = "turn_at"
+    index: int
+
+
+# ---------------------------------------------------------------------------
+# Check nodes (mirrors karenina.schemas.scenario.checks)
+# ---------------------------------------------------------------------------
+
+class TurnCheck(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    type: Literal["turn_check"] = "turn_check"
+    scope: Any
+    field: str
+    expected: Any = None
+    verify_with: Any
+
+
+# ---------------------------------------------------------------------------
+# Composition (mirrors karenina.schemas.primitives.composition)
+# ---------------------------------------------------------------------------
+
+class AllOf(BaseModel):
+    type: Literal["all_of"] = "all_of"
+    conditions: list = []
+
+
+# ---------------------------------------------------------------------------
+# Sugar functions (mirrors karenina.scenario.sugar)
+# ---------------------------------------------------------------------------
 
 def turn_at(index: int) -> TurnAt:
     return TurnAt(index=index)
-
-
-class TurnCheck:
-    def __init__(self, scope: Any, field: str, verify_with: Any, expected: Any = None) -> None:
-        self.scope = scope
-        self.field = field
-        self.expected = expected
-        self.verify_with = verify_with
-
-
-class AllOf:
-    def __init__(self, conditions: list) -> None:
-        self.conditions = conditions
 
 
 def all_of(*checks: Any) -> AllOf:
@@ -326,6 +338,24 @@ class Benchmark:
 
 print("Mock setup complete.")
 ```
+
+---
+
+## Real Imports
+
+Outside a notebook, use these imports for the scenario API:
+
+```text
+from karenina.scenario import Scenario, END, turn_at, all_of
+from karenina.schemas.scenario.checks import TurnCheck
+from karenina.schemas.primitives import BooleanMatch, TurnAt, AllOf
+from karenina.schemas.entities import Question
+from karenina.schemas.verification import VerificationConfig
+from karenina.schemas.config import ModelConfig
+from karenina import Benchmark
+```
+
+The sugar functions `turn_at()` and `all_of()` return `TurnAt` and `AllOf` Pydantic model instances. You can also construct them directly: `TurnAt(index=0)`, `AllOf(conditions=[...])`.
 
 ---
 

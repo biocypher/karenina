@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
+    "sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext",
     "sqlalchemy.ext.declarative", "sqlalchemy.engine",
     "sqlalchemy.sql", "sqlalchemy.event",
     "karenina.storage", "karenina.storage.base",
@@ -56,7 +56,7 @@ with patch.dict("sys.modules", mock_modules):
         TraceLength,
         TraceRegex,
     )
-    from karenina.schemas.entities.normalizers import SynonymMap
+    from karenina.schemas.primitives import SynonymMap
 ```
 
 ```python
@@ -83,7 +83,7 @@ from karenina.schemas.primitives import (
     TraceLength,
     TraceRegex,
 )
-from karenina.schemas.entities.normalizers import SynonymMap
+from karenina.schemas.primitives import SynonymMap
 ```
 
 ## 1. What Verification Primitives Are

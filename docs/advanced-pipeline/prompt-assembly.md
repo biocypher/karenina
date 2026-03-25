@@ -2,9 +2,9 @@
 
 Every LLM call in the verification pipeline uses a **tri-section prompt pattern**. Three independent instruction sources are combined into the final prompt messages:
 
-1. **Task instructions** --- the base system and user text for a specific pipeline call (e.g., parsing, abstention detection, rubric evaluation)
-2. **Adapter instructions** --- text appended based on the LLM backend (e.g., LangChain appends JSON schema formatting; Claude Tool appends extraction directives)
-3. **User instructions** --- optional per-task text from `PromptConfig`
+1. **Task instructions**: the base system and user text for a specific pipeline call (e.g., parsing, abstention detection, rubric evaluation)
+2. **Adapter instructions**: text appended based on the LLM backend (e.g., LangChain appends JSON schema formatting; Claude Tool appends extraction directives)
+3. **User instructions**: optional per-task text from `PromptConfig`
 
 This separation keeps each concern isolated: task prompt builders don't know about adapters, adapters don't know about user overrides, and user instructions don't depend on either.
 
@@ -35,11 +35,11 @@ All instruction sources are **append-only**: adapter text is appended first, the
 
 ### Methods
 
-**`assemble(system_text, user_text, user_instructions, instruction_context)`** --- Returns `list[Message]`
+**`assemble(system_text, user_text, user_instructions, instruction_context)`**: Returns `list[Message]`
 
 The primary method. Applies adapter and user instructions, then builds `Message` objects. If the adapter does not support system prompts (`capabilities.supports_system_prompt == False`), the system text is prepended to the user text as a single user message.
 
-**`assemble_text(system_text, user_text, user_instructions, instruction_context)`** --- Returns `tuple[str, str]`
+**`assemble_text(system_text, user_text, user_instructions, instruction_context)`**: Returns `tuple[str, str]`
 
 Same tri-section logic but returns raw `(system_text, user_text)` strings instead of `Message` objects. Used by multi-stage flows (e.g., deep judgment) that need intermediate text processing before final message construction.
 
@@ -48,9 +48,9 @@ Same tri-section logic but returns raw `(system_text, user_text)` strings instea
 Both methods follow the same internal sequence:
 
 1. **Look up adapter instructions** from the `AdapterInstructionRegistry` for the `(interface, task)` pair
-2. **Append adapter additions** --- each registered factory produces an `AdapterInstruction` with `system_addition` and `user_addition` properties; non-empty additions are appended to their respective texts
-3. **Append user instructions** --- if `user_instructions` is provided (from `PromptConfig`), it is appended to the system text
-4. **Build messages** (for `assemble()` only) --- wrap the final texts in `Message.system()` and `Message.user()`, or combine into a single `Message.user()` if system prompts are not supported
+2. **Append adapter additions**: each registered factory produces an `AdapterInstruction` with `system_addition` and `user_addition` properties; non-empty additions are appended to their respective texts
+3. **Append user instructions**: if `user_instructions` is provided (from `PromptConfig`), it is appended to the system text
+4. **Build messages** (for `assemble()` only): wrap the final texts in `Message.system()` and `Message.user()`, or combine into a single `Message.user()` if system prompts are not supported
 
 ### Usage Example
 
@@ -159,7 +159,7 @@ The following table shows all registered `(interface, task)` pairs across the co
 | `claude_agent_sdk` | parsing, rubric, deep judgment | Minimal best-interpretation directive (native structured output) |
 | `manual` | *(none)* | No registered instructions |
 
-The key difference: LangChain-based adapters need explicit JSON schema and format instructions because they lack native structured output. Claude-based adapters (Claude Tool and Claude Agent SDK) use native structured output, so their instructions are minimal --- just extraction or interpretation directives.
+The key difference: LangChain-based adapters need explicit JSON schema and format instructions because they lack native structured output. Claude-based adapters (Claude Tool and Claude Agent SDK) use native structured output, so their instructions are minimal, just extraction or interpretation directives.
 
 ## PromptTask Values
 
@@ -183,6 +183,7 @@ Each `PromptTask` enum value identifies a distinct LLM call in the pipeline. The
 | `dj_template_excerpt_extraction` | DeepJudgmentAutoFail | Extract verbatim excerpts per attribute |
 | `dj_template_hallucination` | DeepJudgmentAutoFail | Assess hallucination risk via search |
 | `dj_template_reasoning` | DeepJudgmentAutoFail | Generate reasoning for excerpt-to-attribute mapping |
+| `dj_template_reasoning_only` | DeepJudgmentAutoFail | Generate per-attribute reasoning directly from response (no excerpts) |
 | `dj_rubric_excerpt_extraction` | DeepJudgmentRubricAutoFail | Extract excerpts for rubric traits |
 | `dj_rubric_hallucination` | DeepJudgmentRubricAutoFail | Assess per-excerpt hallucination risk |
 | `dj_rubric_reasoning` | DeepJudgmentRubricAutoFail | Generate trait evaluation reasoning |
@@ -250,8 +251,8 @@ Factories should use `kwargs.get()` with defaults so they work even when keys ar
 
 ## Next Steps
 
-- [Prompt Config](../notebooks/running-verification/full-evaluation.ipynb) --- configure user instructions per task
-- [13 Stages in Detail](stages.md) --- which stages make LLM calls and use the assembler
-- [Available Adapters](../advanced-adapters/available-adapters.md) --- adapter-specific prompt behavior
-- [Verification Config Reference](../reference/configuration/verification-config.md) --- `prompt_config` field in `VerificationConfig`
-- [Pipeline Overview](index.md) --- how stages execute and interact
+- [Prompt Config](../notebooks/running-verification/full-evaluation.ipynb): configure user instructions per task
+- [13 Stages in Detail](stages.md): which stages make LLM calls and use the assembler
+- [Available Adapters](../advanced-adapters/available-adapters.md): adapter-specific prompt behavior
+- [Verification Config Reference](../reference/configuration/verification-config.md): `prompt_config` field in `VerificationConfig`
+- [Pipeline Overview](index.md): how stages execute and interact

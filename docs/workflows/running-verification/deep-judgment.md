@@ -239,7 +239,7 @@ print(f"Results with DJ: {len(results)}")
 | `deep_judgment_mode` | `Literal` | `"disabled"` | Template deep-judgment mode: `"disabled"`, `"reasoning_only"`, `"full"` |
 | `deep_judgment_search_enabled` | `bool` | `False` | Enable external search validation |
 | `deep_judgment_excerpt_retry_attempts` | `int` | `2` | Max retries for excerpt extraction |
-| `deep_judgment_fuzzy_match_threshold` | `float` | `0.7` | Min similarity score for excerpt matching |
+| `deep_judgment_fuzzy_match_threshold` | `float` | `0.80` | Min similarity score for excerpt matching |
 
 ---
 

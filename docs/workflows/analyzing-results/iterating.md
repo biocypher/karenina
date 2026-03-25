@@ -189,10 +189,18 @@ for name, score in trait_scores.sort_values().items():
 Remove a poorly-performing trait and replace it with an improved version:
 
 ```python
-from karenina.schemas import LLMRubricTrait
+from karenina.schemas import LLMRubricTrait, Rubric
 
-# Remove the old trait
-benchmark.remove_global_rubric_trait("clarity")
+# Get the current global rubric and rebuild it without the old trait
+current_rubric = benchmark.get_global_rubric()
+updated_rubric = Rubric(
+    llm_traits=[t for t in current_rubric.llm_traits if t.name != "clarity"],
+    regex_traits=current_rubric.regex_traits,
+    callable_traits=current_rubric.callable_traits,
+    metric_traits=current_rubric.metric_traits,
+    agentic_traits=current_rubric.agentic_traits,
+)
+benchmark.set_global_rubric(updated_rubric)
 
 # Add an improved version with a better description
 benchmark.add_global_rubric_trait(

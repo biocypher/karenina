@@ -15,7 +15,7 @@ jupyter:
 
 # Verification Pipeline
 
-The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 14 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
+The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 13 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
 
 The most important idea is that the pipeline is a **result-producing machine**: it always returns a `VerificationResult`, even when the model fails, abstains, or a stage throws an exception. Individual stages may skip, fail, or override earlier outcomes, but the pipeline itself never crashes without producing an output.
 
@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
+    "sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext",
     "sqlalchemy.ext.declarative", "sqlalchemy.engine",
     "sqlalchemy.sql", "sqlalchemy.event",
     "karenina.storage", "karenina.storage.base",
@@ -61,7 +61,7 @@ Structuring evaluation as an ordered sequence of stages provides four guarantees
 | **Configurability** | Optional stages are included or skipped based on feature flags without affecting the rest of the sequence |
 | **Error containment** | Guard stages catch problems early; `FinalizeResult` always runs to assemble whatever data is available into a valid result |
 
-## 2. Anatomy: The 14 Stages
+## 2. Anatomy: The 13 Stages
 
 The pipeline groups its stages into functional categories. Within each category, stages execute in the order shown.
 
@@ -114,7 +114,7 @@ orch = StageOrchestrator.from_config(
     evaluation_mode="template_only",
     abstention_enabled=True,
     sufficiency_enabled=True,
-    deep_judgment_mode="full",
+    deep_judgment_enabled=True,
 )
 print(f"template_only (all options): {len(orch.stages)} stages")
 for s in orch.stages:

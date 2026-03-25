@@ -61,6 +61,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 |-------|------|---------|-------------|
 | `abstention_enabled` | `bool` | `False` | Enable abstention/refusal detection. When the model refuses to answer, parsing is skipped and the result is auto-failed. |
 | `sufficiency_enabled` | `bool` | `False` | Enable response sufficiency detection. When the response lacks enough information to fill the template, parsing is skipped and the result is auto-failed. |
+| `include_extraction_hints` | `bool` | `True` | Controls whether extraction hints are included in parsing prompts. Extraction hints provide the judge LLM with guidance on how to extract specific template fields from the response. Enabled by default. |
 
 See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage examples.
 

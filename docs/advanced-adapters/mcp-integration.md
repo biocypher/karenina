@@ -285,7 +285,7 @@ Content block types:
 | `TextContent` | `text` | Plain text responses |
 | `ToolUseContent` | `id`, `name`, `input` | Tool invocation requests |
 | `ToolResultContent` | `tool_use_id`, `content`, `is_error` | Tool execution results |
-| `ThinkingContent` | `thinking` | Extended thinking blocks (Anthropic) |
+| `ThinkingContent` | `thinking`, `signature: str \| None = None` | Extended thinking blocks (Anthropic) |
 
 ### Adapter Message Conversion
 

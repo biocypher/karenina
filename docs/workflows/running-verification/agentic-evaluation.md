@@ -262,8 +262,8 @@ Each field uses a `VerifiedField` with a verification primitive that checks the 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
 from karenina.schemas.primitives import BooleanMatch, NumericTolerance
 
-TEMPLATE_CODE = '''
-class LogisticRegressionAnswer(BaseAnswer):
+
+class Answer(BaseAnswer):
     """Template for logistic regression analysis task."""
 
     age_significant: bool = VerifiedField(
@@ -298,10 +298,9 @@ class LogisticRegressionAnswer(BaseAnswer):
         ground_truth=104.14,
         verify_with=NumericTolerance(tolerance=1.0, mode="absolute"),
     )
-'''
 ```
 
-The template class name (`LogisticRegressionAnswer`) is arbitrary; the pipeline discovers the class by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
+The template class name (`Answer` by convention) is discovered by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
 
 ---
 
@@ -335,7 +334,8 @@ question = Question(
     workspace_path="workspace",
 )
 
-question_id = benchmark.add_question(question, answer_template=TEMPLATE_CODE)
+question_id = benchmark.add_question(question)
+benchmark.update_template(question_id, Answer)
 ```
 
 The `workspace_path` on the `Question` is relative to the benchmark's `workspace_root`. The pipeline resolves the full path as `workspace_root / workspace_path`, giving the agent access to `my_benchmark/workspace/data.xlsx`.
@@ -513,7 +513,7 @@ In production, use `run_single_model_verification` with `cached_answer_data` to 
 # trace_only_result = run_single_model_verification(
 #     question_id=question_id,
 #     question_text=question.question,
-#     template_code=TEMPLATE_CODE,
+#     template_code=benchmark.get_template(question_id),
 #     answering_model=config.answering_models[0],
 #     parsing_model=config.parsing_models[0],
 #     agentic_parsing=False,

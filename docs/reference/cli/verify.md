@@ -50,7 +50,7 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | `--parsing-provider` | `TEXT` | — | Parsing model provider for LangChain (required without `--preset`) |
 | `--parsing-id` | `TEXT` | `parsing-1` | Parsing model ID |
 | `--temperature` | `FLOAT` | — | Model temperature (`0.0`–`2.0`) |
-| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `manual` |
+| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual` |
 
 ### General Settings
 

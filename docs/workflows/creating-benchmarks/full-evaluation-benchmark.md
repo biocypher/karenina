@@ -292,9 +292,9 @@ print()
 for qid in benchmark.get_question_ids():
     q = benchmark.get_question(qid)
     q_text = q["question"][:40]
-    has_rubric = q.get("has_rubric", False)
+    has_rubric = q.get("question_rubric")
     if has_rubric:
-        print(f"'{q_text}...' has per-question rubric traits")
+        print(f"'{q_text}...' has question-level rubric")
 ```
 
 ## Replace Global Rubric

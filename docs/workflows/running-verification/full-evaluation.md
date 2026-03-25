@@ -329,11 +329,13 @@ dynamic = DynamicRubric(
     ],
 )
 
-# Attach per-question
+# Attach as global dynamic rubric
+benchmark.set_global_dynamic_rubric(dynamic)
+
+# Add the question separately
 benchmark.add_question(
     question="What is the recommended treatment for condition X?",
     raw_answer="Drug A, 500mg twice daily",
-    dynamic_rubric=dynamic,
 )
 
 # Run with rubric mode enabled

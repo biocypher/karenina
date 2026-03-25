@@ -475,9 +475,9 @@ For verification against source code, here are the field counts per section:
 | Section | Fields | Convenience Methods |
 |---------|--------|---------------------|
 | Root level | 3 (evaluation_input, used_full_trace, trace_extraction_error) | — |
-| `metadata` | 16 fields + 2 properties | `answering_model`, `parsing_model` |
-| `template` | 28 fields | — |
-| `rubric` | 8 fields | `get_all_trait_scores()`, `get_trait_by_name()`, `get_llm_trait_labels()` |
+| `metadata` | 24 fields + 2 properties | `answering_model`, `parsing_model` |
+| `template` | 33 fields | — |
+| `rubric` | 13 fields | `get_all_trait_scores()`, `get_trait_by_name()`, `get_llm_trait_labels()` |
 | `deep_judgment` | 10 fields | — |
 | `deep_judgment_rubric` | 11 fields | — |
 

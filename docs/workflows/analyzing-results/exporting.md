@@ -143,9 +143,9 @@ template_df.to_csv("template_results.csv", index=False)
 rubric_df = results.get_rubrics_results().to_dataframe()
 rubric_df.to_csv("rubric_results.csv", index=False)
 
-# Deep judgment results (if available)
+# Deep judgment results (if any results have judgment data)
 judgment_results = results.get_judgment_results()
-if judgment_results is not None:
+if judgment_results.get_results_with_judgment():
     judgment_df = judgment_results.to_dataframe()
     judgment_df.to_csv("judgment_results.csv", index=False)
 ```

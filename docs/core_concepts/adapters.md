@@ -276,7 +276,7 @@ VerificationConfig
 ├── answering_models[0]  →  get_agent()  →  Stage 2: generate answer
 ├── parsing_models[0]    →  get_parser() →  Stage 7: parse template
 │                        →  get_llm()    →  Stages 5-6: quality checks
-└── rubric_models[0]     →  get_llm()    →  Stage 11: rubric evaluation
+└── parsing_models[0]    →  get_llm()    →  Stage 11: rubric evaluation
 ```
 
 For example, you might generate answers with `claude_agent_sdk` (for tool use and MCP) while parsing templates with `langchain` (to use a different judge model from a different provider). The pipeline does not care; it calls the same port methods in both cases.

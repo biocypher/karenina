@@ -37,7 +37,7 @@ class SchemaOrgPropertyValue(BaseModel):
 
     type: Literal["PropertyValue"] = Field(alias="@type", default="PropertyValue")
     name: str
-    value: Any
+    value: Any = None
 
 
 # Schema.org Rating for rubric traits

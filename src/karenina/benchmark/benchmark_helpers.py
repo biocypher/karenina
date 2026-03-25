@@ -643,9 +643,15 @@ def convert_to_schema_org_question(question_data: dict[str, Any], finished: bool
 
     ratings = None
     if question_data.get("question_rubric"):
-        ratings = [
-            convert_rubric_trait_to_rating(trait, "question-specific") for trait in question_data["question_rubric"]
-        ]
+        rubric_data = question_data["question_rubric"]
+        if isinstance(rubric_data, dict):
+            all_traits = []
+            for trait_list in rubric_data.values():
+                if isinstance(trait_list, list):
+                    all_traits.extend(trait_list)
+            ratings = [convert_rubric_trait_to_rating(trait, "question-specific") for trait in all_traits]
+        else:
+            ratings = [convert_rubric_trait_to_rating(trait, "question-specific") for trait in rubric_data]
 
     additional_properties = []
     additional_properties.append(SchemaOrgPropertyValue(name="finished", value=finished))

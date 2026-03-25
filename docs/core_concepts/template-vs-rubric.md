@@ -267,7 +267,7 @@ The `evaluation_mode` field on [VerificationConfig](../../../reference/configura
 |---|---|---|---|---|
 | `template_only` (default) | Yes | No | Stages 1-10, 13 | Pure correctness verification |
 | `template_and_rubric` | Yes | Yes | All 13 stages | Correctness + quality assessment |
-| `rubric_only` | No | Yes | Stages 1-2, 11-13 (template stages skipped) | Quality-only evaluation; no correct answer needed |
+| `rubric_only` | No | Yes | Stages 2-5, 11-13 (template stages skipped) | Quality-only evaluation; no correct answer needed |
 
 For details on configuring evaluation modes, see [Evaluation Modes](../evaluation-modes/).
 

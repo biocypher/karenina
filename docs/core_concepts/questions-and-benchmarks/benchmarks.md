@@ -25,7 +25,7 @@ While a [Question object](../questions/) is the minimal unit of evaluation, the 
 from unittest.mock import MagicMock, patch
 
 mock_modules = {}
-for mod in ["sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext", "sqlalchemy.ext.declarative"]:
+for mod in ["sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext", "sqlalchemy.ext.declarative"]:
     mock_modules[mod] = MagicMock()
 
 with patch.dict("sys.modules", mock_modules):
