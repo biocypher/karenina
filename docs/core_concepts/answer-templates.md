@@ -287,8 +287,17 @@ print(f"Granular score:   {parsed.verify_granular():.2f}")
 
 
 class Answer(BaseAnswer):
-    mutation_type: Literal["missense", "nonsense", "frameshift", "silent"] = VerifiedField(
-        description="The type of point mutation described in the response.",
+    mutation_type: Literal["missense", "nonsense", "frameshift", "silent", "splice site", "other"] = VerifiedField(
+        description=(
+            "Select the type of point mutation the response identifies for SNP "
+            "rs28897696 in the BRCA1 gene. Choose 'missense' if the response describes "
+            "an amino acid substitution (also called nonsynonymous mutation or missense "
+            "variant). Choose 'nonsense' for a premature stop codon, 'silent' for no "
+            "amino acid change, 'frameshift' for an insertion or deletion causing a "
+            "reading frame shift, 'splice site' for splice junction disruption, or "
+            "'other' if the mutation type is not covered above. If the response does "
+            "not specify a mutation type, select 'other'."
+        ),
         ground_truth="missense",
         verify_with=LiteralMatch(),
     )
@@ -318,31 +327,34 @@ In form terms, this is a checkbox: "Check this box if the letter mentions X." Th
 
 
 class Answer(BaseAnswer):
-    identifies_tp53: bool = VerifiedField(
+    identifies_tp53_as_most_commonly_mutated: bool = VerifiedField(
         description=(
-            "True if the response identifies TP53 (including p53, TP53, or "
-            "'tumor protein p53') as the single most commonly mutated gene "
-            "in human cancers. False if TP53 is mentioned as one of several "
-            "commonly mutated genes without being singled out as the most "
-            "frequent (e.g., 'TP53, KRAS, and PIK3CA are commonly mutated')."
+            "True if the response identifies TP53 as the single most commonly "
+            "mutated gene in human cancers. Recognize all common aliases: 'p53', "
+            "'tumor protein p53', 'TP53'. False if the response names a different "
+            "gene as the most commonly mutated, if no gene is clearly identified, "
+            "or if TP53 is mentioned among multiple genes without being singled "
+            "out as the most frequent. If the response hedges by listing several "
+            "genes as equally common without designating TP53 as the top one, "
+            "return False."
         ),
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
 
 
-# The Judge LLM would extract identifies_tp53=True from that response.
-# Here we populate the field directly to demonstrate verify().
-parsed = Answer(identifies_tp53=True)
+# The Judge LLM would extract identifies_tp53_as_most_commonly_mutated=True
+# from that response. Here we populate the field directly to demonstrate verify().
+parsed = Answer(identifies_tp53_as_most_commonly_mutated=True)
 print(f"Correct answer verified: {parsed.verify()}")
 
-parsed_wrong = Answer(identifies_tp53=False)
+parsed_wrong = Answer(identifies_tp53_as_most_commonly_mutated=False)
 print(f"Wrong answer verified:   {parsed_wrong.verify()}")
 ```
 
 A boolean check avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description.
 
-The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The `identifies_tp53` description explicitly states that merely listing TP53 alongside other cancer genes should return False; the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
+The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The description explicitly states that merely listing TP53 alongside other cancer genes should return False; the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. The field name itself (`identifies_tp53_as_most_commonly_mutated` rather than `tp53`) reinforces this intent. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
 
 Boolean templates use the same structure as other patterns. The difference is in the verification primitive: `BooleanMatch()` compares the extracted boolean against ground truth directly. This makes boolean the simplest template pattern, but it comes with an anchoring tradeoff: the judge sees the expected answer in the field description.
 
@@ -399,6 +411,11 @@ for value in ["O+", "o+", " O+ "]:
 ```
 
 The `extraction_hint` parameter provides additional guidance to the judge for ambiguous responses without being as prominent as the main `description`. In this case, it helps the judge handle the normalization from "O positive" to "O+". Note that `ExactMatch` with `normalize=["lowercase", "strip"]` handles case insensitivity and whitespace automatically.
+
+<div class="admonition note">
+<p class="admonition-title">Auto-generated templates and extraction_hint</p>
+<p>The auto-generation pipeline places all guidance (what to extract, format, scope, disambiguation) directly in the <code>description</code> and does not produce <code>extraction_hint</code> values. The <code>extraction_hint</code> parameter remains available for manually authored templates. When used, it appears as supplementary guidance in the judge's system prompt, separate from the JSON schema.</p>
+</div>
 
 <div class="admonition tip">
 <p class="admonition-title">When to use string extraction</p>
@@ -846,7 +863,7 @@ This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faste
 
 ### 7.3. Anatomy of a Good Description
 
-The judge receives a JSON schema generated from your template's fields. Each field's `description` is the judge's sole instruction for what to extract and how to format it. The field name and type provide structural hints, but the description carries the semantic weight. A vague description produces unpredictable extractions: the judge fills in whatever seems relevant, and verification fails for reasons that have nothing to do with the answering model's correctness.
+The judge receives a JSON schema generated from your template's fields. Each field's `description` is the judge's sole instruction for what to extract and how to format it. The field name and type provide structural hints, but the description carries the semantic weight. The auto-generation pipeline enforces this by placing all four elements (what to extract, format, scope, disambiguation) directly in the description. A vague description produces unpredictable extractions: the judge fills in whatever seems relevant, and verification fails for reasons that have nothing to do with the answering model's correctness.
 
 The three examples below show how ambiguous descriptions cause extraction failures for the most common field types, and how rewriting them eliminates the ambiguity.
 

@@ -110,10 +110,13 @@ class FieldDescriptionItem(BaseModel):
     """A single field description entry."""
 
     name: str = Field(..., description="The attribute name (must match an attribute from the ground-truth spec).")
-    description: str = Field(..., description="Instructional text explaining what to extract from the response.")
-    extraction_hint: str | None = Field(
-        None,
-        description="Optional hint for the extraction model about normalization or formatting concerns.",
+    description: str = Field(
+        ...,
+        description=(
+            "Instructional text for the judge LLM. Must be self-contained: "
+            "include what to extract, format guidance, scope boundaries, and "
+            "disambiguation rules all within this single field."
+        ),
     )
 
 
@@ -309,18 +312,18 @@ def _generate_structured_outputs(
     gt_json = gt_result.model_dump() if isinstance(gt_result, BaseModel) else gt_result
 
     # Phase 2: Generate field descriptions
-    # Remove ground_truth values from spec for field description generation
-    spec_for_descriptions = {
-        "attributes": [{k: v for k, v in attr.items() if k != "ground_truth"} for attr in gt_json["attributes"]]
-    }
-
+    # Pass full attributes (including ground truth) so the description LLM
+    # can write precise format and scope guidance informed by the expected values.
+    # The plan is also forwarded so Phase 2 can use Phase 0's reasoning about
+    # scope, disambiguation, and format considerations.
     fd_result = _generate_structured_output(
         "field_descriptions",
         {
             "question": question,
             "answer": answer,
             "answer_notes_section": answer_notes_section,
-            "spec_json": json.dumps(spec_for_descriptions, ensure_ascii=False),
+            "plan_section": plan_section,
+            "spec_json": json.dumps(gt_json, ensure_ascii=False),
         },
         config,
         AttributeDescriptions,
@@ -337,14 +340,10 @@ def _generate_structured_outputs(
     # Convert list of FieldDescriptionItem to dict[str, str]
     # (list format is needed for Anthropic's beta.messages.parse compatibility)
     field_descriptions_dict = {item.name: item.description for item in fd_typed.field_descriptions}
-    extraction_hints_dict = {
-        item.name: item.extraction_hint for item in fd_typed.field_descriptions if item.extraction_hint is not None
-    }
 
     return {
         "attributes": gt_json["attributes"],
         "field_descriptions": field_descriptions_dict,
-        "extraction_hints": extraction_hints_dict,
     }
 
 

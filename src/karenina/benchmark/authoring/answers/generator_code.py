@@ -141,8 +141,9 @@ def generate_pydantic_class(
     BaseAnswer auto-generates them from the VerifiedField metadata.
 
     Args:
-        spec_dict: Dictionary with "attributes" and "field_descriptions" keys.
-            Each attribute entry must have "name", "type", and "ground_truth" keys.
+        spec_dict: Dictionary with "attributes", "field_descriptions", and
+            optionally "extraction_hints" keys. Each attribute entry must have
+            "name", "type", and "ground_truth" keys.
         class_name: Name for the generated class (default: "Answer")
         float_tolerance: Tolerance for NumericTolerance primitives (default: 0.001)
 
@@ -152,6 +153,7 @@ def generate_pydantic_class(
     """
     attributes = spec_dict["attributes"]
     field_descriptions = spec_dict["field_descriptions"]
+    extraction_hints: dict[str, str] = spec_dict.get("extraction_hints", {})
 
     # Track which primitive class names are used so we can generate a minimal import
     used_primitives: list[str] = []
@@ -163,6 +165,7 @@ def generate_pydantic_class(
         attr_type = attr["type"]
         description = field_descriptions[attr_name]
         ground_truth_repr = format_ground_truth_value(attr["ground_truth"])
+        hint = extraction_hints.get(attr_name)
 
         # Convert type to proper annotation
         type_annotation = python_type_to_annotation(attr_type)
@@ -173,10 +176,15 @@ def generate_pydantic_class(
             used_primitives.append(primitive_cls_name)
 
         # Generate VerifiedField call
+        # Use repr() for description and hint to safely escape quotes and special chars
+        desc_repr = repr(description)
         field_lines.append(f"    {attr_name}: {type_annotation} = VerifiedField(")
-        field_lines.append(f'        description="{description}",')
+        field_lines.append(f"        description={desc_repr},")
         field_lines.append(f"        ground_truth={ground_truth_repr},")
         field_lines.append(f"        verify_with={primitive_code},")
+        if hint:
+            hint_repr = repr(hint)
+            field_lines.append(f"        extraction_hint={hint_repr},")
         field_lines.append("    )")
 
     # Build import lines: check if typing imports are needed
