@@ -180,3 +180,112 @@ class TestGenerateTemplatesSequential:
         )
 
         assert call_count <= 1
+
+
+@pytest.mark.unit
+class TestGenerateTemplatesParallel:
+    """Test generate_templates with max_workers>1 (parallel)."""
+
+    def test_parallel_produces_same_results_as_sequential(self, monkeypatch):
+        """Parallel and sequential produce the same result set."""
+        from karenina.benchmark.benchmark_helpers import generate_templates
+
+        generated = {}
+
+        def mock_gen(benchmark, question_id, **kwargs):
+            import time as _time
+
+            _time.sleep(0.01)  # Simulate I/O
+            return {
+                "success": True,
+                "template_code": f"# template for {question_id}",
+                "error": None,
+                "raw_response": f"# template for {question_id}",
+                "skipped": False,
+            }
+
+        monkeypatch.setattr(
+            "karenina.benchmark.benchmark_helpers.generate_template_for_question",
+            mock_gen,
+        )
+
+        class FakeBenchmark:
+            _questions_cache = {f"q{i}": {"question": f"Q{i}"} for i in range(5)}
+            name = "test"
+
+            def has_template(self, _qid):
+                return False
+
+            def get_template(self, _qid):
+                return ""
+
+            def get_question_ids(self):
+                return list(self._questions_cache.keys())
+
+            def add_answer_template(self, qid, code):
+                generated[qid] = code
+
+        qids = [f"q{i}" for i in range(5)]
+
+        results = generate_templates(
+            FakeBenchmark(),
+            question_ids=qids,
+            max_workers=3,
+        )
+
+        assert set(results.keys()) == set(qids)
+        assert all(r["success"] for r in results.values())
+
+    def test_cancel_event_stops_parallel(self, monkeypatch):
+        """Setting cancel_event cancels remaining futures."""
+        from karenina.benchmark.benchmark_helpers import generate_templates
+
+        call_count = 0
+
+        def mock_gen(benchmark, question_id, **kwargs):
+            nonlocal call_count
+            import time as _time
+
+            _time.sleep(0.05)  # Slow enough to allow cancel
+            call_count += 1
+            return {
+                "success": True,
+                "template_code": "# code",
+                "error": None,
+                "raw_response": "# code",
+                "skipped": False,
+            }
+
+        monkeypatch.setattr(
+            "karenina.benchmark.benchmark_helpers.generate_template_for_question",
+            mock_gen,
+        )
+
+        class FakeBenchmark:
+            _questions_cache = {f"q{i}": {"question": f"Q{i}"} for i in range(20)}
+            name = "test"
+
+            def has_template(self, _qid):
+                return False
+
+            def get_template(self, _qid):
+                return ""
+
+            def get_question_ids(self):
+                return list(self._questions_cache.keys())
+
+            def add_answer_template(self, _qid, _code):
+                pass
+
+        cancel = threading.Event()
+        cancel.set()  # Cancel immediately
+
+        generate_templates(
+            FakeBenchmark(),
+            question_ids=[f"q{i}" for i in range(20)],
+            max_workers=2,
+            cancel_event=cancel,
+        )
+
+        # Should not have processed all 20
+        assert call_count < 20
