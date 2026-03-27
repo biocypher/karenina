@@ -1,8 +1,7 @@
-"""Tests for authoring subsystem fixes (issues 048, 049, 050, 051).
+"""Tests for authoring subsystem fixes (issues 048, 049, 051).
 
 Issue 048: generate_pydantic_class missing Literal import in generated code.
 Issue 049: read_answer_templates fragile exec with minimal namespace.
-Issue 050: generate_questions_file triple-quote injection.
 Issue 051: read_questions_from_file pollutes sys.modules.
 """
 
@@ -14,9 +13,7 @@ import pytest
 
 from karenina.benchmark.authoring.answers.generator_code import generate_pydantic_class
 from karenina.benchmark.authoring.answers.reader import read_answer_templates
-from karenina.benchmark.authoring.questions.extractor import generate_questions_file
 from karenina.benchmark.authoring.questions.reader import read_questions_from_file
-from karenina.schemas.entities import Question
 
 
 def _make_spec(attributes: list[dict[str, Any]], descriptions: dict[str, str] | None = None) -> dict[str, Any]:
@@ -172,98 +169,6 @@ class Answer(BaseAnswer):
         Answer = result["q1_hash"]
         answer = Answer(score=0.955)
         assert answer.verify() is True
-
-
-# =============================================================================
-# Issue 050: Triple-quote injection in generate_questions_file
-# =============================================================================
-
-
-@pytest.mark.unit
-class TestTripleQuoteInjection:
-    """Issue 050: Strings containing triple quotes should not break generated code."""
-
-    def test_triple_quotes_in_answer_produce_valid_code(self, tmp_path: pytest.TempPathFactory) -> None:
-        """Question with triple quotes in raw_answer should produce valid Python."""
-        questions = [
-            Question(
-                question="What is the output?",
-                raw_answer='The answer includes """triple quotes""" in it.',
-                keywords=[],
-            ),
-        ]
-        output_path = tmp_path / "questions.py"
-        generate_questions_file(questions, str(output_path))
-
-        # The generated file must be valid Python
-        content = output_path.read_text()
-        exec_ns: dict[str, Any] = {"__builtins__": __builtins__}
-        exec(compile(content, str(output_path), "exec"), exec_ns)  # noqa: S102
-
-        # And the data must round-trip correctly
-        loaded = exec_ns["all_questions"]
-        assert len(loaded) == 1
-        assert '"""triple quotes"""' in loaded[0].raw_answer
-
-    def test_triple_quotes_in_question_produce_valid_code(self, tmp_path: pytest.TempPathFactory) -> None:
-        """Question text with triple quotes should produce valid Python."""
-        questions = [
-            Question(
-                question='Explain the output of print("""hello""")',
-                raw_answer="It prints hello",
-                keywords=[],
-            ),
-        ]
-        output_path = tmp_path / "questions.py"
-        generate_questions_file(questions, str(output_path))
-
-        content = output_path.read_text()
-        exec_ns: dict[str, Any] = {"__builtins__": __builtins__}
-        exec(compile(content, str(output_path), "exec"), exec_ns)  # noqa: S102
-
-        loaded = exec_ns["all_questions"]
-        assert len(loaded) == 1
-        assert '"""hello"""' in loaded[0].question
-
-    def test_triple_quotes_in_answer_notes_produce_valid_code(self, tmp_path: pytest.TempPathFactory) -> None:
-        """Answer notes with triple quotes should produce valid Python."""
-        questions = [
-            Question(
-                question="Some question",
-                raw_answer="Some answer",
-                keywords=[],
-                answer_notes='See """documentation""" for details',
-            ),
-        ]
-        output_path = tmp_path / "questions.py"
-        generate_questions_file(questions, str(output_path))
-
-        content = output_path.read_text()
-        exec_ns: dict[str, Any] = {"__builtins__": __builtins__}
-        exec(compile(content, str(output_path), "exec"), exec_ns)  # noqa: S102
-
-        loaded = exec_ns["all_questions"]
-        assert len(loaded) == 1
-        assert '"""documentation"""' in loaded[0].answer_notes
-
-    def test_backslashes_in_strings_produce_valid_code(self, tmp_path: pytest.TempPathFactory) -> None:
-        """Strings with backslashes should also be handled correctly."""
-        questions = [
-            Question(
-                question="What is \\n?",
-                raw_answer="It is a newline character: \\n",
-                keywords=[],
-            ),
-        ]
-        output_path = tmp_path / "questions.py"
-        generate_questions_file(questions, str(output_path))
-
-        content = output_path.read_text()
-        exec_ns: dict[str, Any] = {"__builtins__": __builtins__}
-        exec(compile(content, str(output_path), "exec"), exec_ns)  # noqa: S102
-
-        loaded = exec_ns["all_questions"]
-        assert len(loaded) == 1
 
 
 # =============================================================================

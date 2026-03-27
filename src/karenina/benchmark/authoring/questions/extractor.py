@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""
-Question extractor for MCP benchmark files (Excel, CSV, TSV).
+"""Question extractor for benchmark files (Excel, CSV, TSV).
 
-This module provides functionality to extract questions from various file formats and generate
-Python files containing Question instances.
-
-The main function extract_and_generate_questions() reads questions from files,
-generates unique MD5 hash IDs, creates Question objects, and outputs a Python file
-with all questions as individual variables and a list containing all questions.
+Reads tabular data and returns Question objects with all metadata populated.
 
 Usage:
-    from karenina.benchmark.authoring.questions import extract_and_generate_questions
+    from karenina.benchmark.authoring.questions import extract_questions_from_file
 
-    extract_and_generate_questions(
-        file_path="data/questions.xlsx",
-        output_path="karenina/questions.py",
+    questions = extract_questions_from_file(
+        file_path="data/questions.csv",
         question_column="Question",
-        answer_column="Answer"
+        answer_column="Answer",
+        keywords_columns=[{"column": "Area", "separator": ","}],
+        custom_metadata_columns=["Complexity"],
     )
 """
 
@@ -255,149 +250,3 @@ def extract_questions_from_file(
         )
 
     return questions
-
-
-def extract_questions_from_excel(excel_path: str) -> list[Question]:
-    """Extract questions from the Easy sheet of the Excel file.
-
-    This function is kept for backward compatibility.
-    """
-    return extract_questions_from_file(
-        file_path=excel_path, question_column="Question", answer_column="Answer", sheet_name="Easy"
-    )
-
-
-def generate_questions_file(questions: list[Question], output_path: str) -> None:
-    """Generate the questions.py file with all extracted questions."""
-
-    # Create the file content
-    content = """from karenina.schemas.entities import Question
-
-# Auto-generated questions from file
-
-"""
-
-    # Add each question as a variable
-    question_objects = []
-    for i, question in enumerate(questions):
-        var_name = f"question_{i + 1}"
-        question_objects.append(var_name)
-        answer_notes_line = ""
-        if question.answer_notes:
-            answer_notes_line = f",\n    answer_notes={repr(question.answer_notes)}"
-        content += f"""{var_name} = Question(
-    id={repr(question.id)},
-    question={repr(question.question)},
-    raw_answer={repr(question.raw_answer)},
-    keywords={question.keywords!r}{answer_notes_line}
-)
-
-"""
-
-    # Add a list containing all questions
-    content += "# List of all questions\n"
-    content += "all_questions = [\n"
-    for var_name in question_objects:
-        content += f"    {var_name},\n"
-    content += "]\n"
-
-    # Write to file
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-
-def questions_to_json(questions: list[Question]) -> dict[str, Any]:
-    """Convert questions to JSON format compatible with the webapp.
-
-    Args:
-        questions: List of Question objects.
-
-    Returns:
-        Dictionary in the format expected by the webapp.
-    """
-    result = {}
-    for question in questions:
-        question_data: dict[str, Any] = {
-            "question": question.question,
-            "raw_answer": question.raw_answer,
-        }
-
-        if question.answer_notes:
-            question_data["answer_notes"] = question.answer_notes
-
-        if question.keywords:
-            question_data["keywords"] = question.keywords
-
-        result[question.id] = question_data
-    return result
-
-
-def extract_and_generate_questions(
-    file_path: str,
-    output_path: str,
-    question_column: str = "Question",
-    answer_column: str = "Answer",
-    sheet_name: str | None = None,
-    return_json: bool = False,
-    # Optional metadata columns
-    author_name_column: str | None = None,
-    author_email_column: str | None = None,
-    author_affiliation_column: str | None = None,
-    url_column: str | None = None,
-    keywords_columns: list[dict[str, str]] | None = None,
-    answer_notes_column: str | None = None,
-) -> dict[str, Any] | None:
-    """
-    Extract questions from file and generate a Python file with Question instances.
-
-    Args:
-        file_path: Path to the file containing questions (Excel, CSV, or TSV)
-        output_path: Path where the generated Python file should be saved
-        question_column: Name of the column containing questions
-        answer_column: Name of the column containing answers
-        sheet_name: Sheet name for Excel files (optional)
-        return_json: If True, return JSON format instead of generating Python file
-        author_name_column: Optional column name for author names
-        author_email_column: Optional column name for author emails
-        author_affiliation_column: Optional column name for author affiliations
-        url_column: Optional column name for URLs
-        keywords_columns: Optional list of keyword column configurations with individual separators
-            e.g., [{"column": "keywords1", "separator": ","}, {"column": "keywords2", "separator": ";"}]
-        answer_notes_column: Optional column name for answer interpretation notes
-
-    Returns:
-        If return_json is True, returns dictionary in webapp format
-
-    Raises:
-        FileNotFoundError: If the file doesn't exist
-        ValueError: If required columns are missing from the file
-        Exception: For other errors during processing
-    """
-
-    # Validate input file exists
-    if not Path(file_path).exists():
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    # Extract questions with optional metadata
-    questions = extract_questions_from_file(
-        file_path=file_path,
-        question_column=question_column,
-        answer_column=answer_column,
-        sheet_name=sheet_name,
-        author_name_column=author_name_column,
-        author_email_column=author_email_column,
-        author_affiliation_column=author_affiliation_column,
-        url_column=url_column,
-        keywords_columns=keywords_columns,
-        answer_notes_column=answer_notes_column,
-    )
-
-    if not questions:
-        raise ValueError("No valid questions found in the file")
-
-    if return_json:
-        return questions_to_json(questions)
-    else:
-        # Generate questions.py file
-        generate_questions_file(questions, output_path)
-        return None
