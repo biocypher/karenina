@@ -1,5 +1,7 @@
 """Tests for template generation progress events and concurrency resolution."""
 
+import threading
+
 import pytest
 
 
@@ -70,3 +72,111 @@ class TestResolveMaxWorkers:
 
         monkeypatch.setenv("KARENINA_ASYNC_MAX_WORKERS", "abc")
         assert _resolve_max_workers(None) == 1
+
+
+@pytest.mark.unit
+class TestGenerateTemplatesSequential:
+    """Test generate_templates with max_workers=1 (sequential)."""
+
+    def test_emits_progress_events_in_order(self, monkeypatch):
+        """Progress callback receives job_started, task events, job_completed."""
+        from karenina.benchmark.benchmark_helpers import (
+            TemplateProgressEvent,
+            generate_templates,
+        )
+
+        def mock_gen(benchmark, question_id, **kwargs):
+            return {
+                "success": True,
+                "template_code": f"# template for {question_id}",
+                "error": None,
+                "raw_response": f"# template for {question_id}",
+                "skipped": False,
+            }
+
+        monkeypatch.setattr(
+            "karenina.benchmark.benchmark_helpers.generate_template_for_question",
+            mock_gen,
+        )
+
+        class FakeBenchmark:
+            _questions_cache = {"q1": {"question": "What?"}, "q2": {"question": "Why?"}}
+            name = "test"
+
+            def has_template(self, _qid):
+                return False
+
+            def get_template(self, _qid):
+                return ""
+
+            def get_question_ids(self):
+                return list(self._questions_cache.keys())
+
+            def add_answer_template(self, _qid, _code):
+                pass
+
+        events: list[TemplateProgressEvent] = []
+        results = generate_templates(
+            FakeBenchmark(),
+            question_ids=["q1", "q2"],
+            progress_callback=events.append,
+            max_workers=1,
+        )
+
+        event_types = [e.event for e in events]
+        assert event_types[0] == "job_started"
+        assert "task_started" in event_types
+        assert "task_completed" in event_types
+        assert event_types[-1] == "job_completed"
+        assert results["q1"]["success"] is True
+        assert results["q2"]["success"] is True
+
+    def test_cancel_event_stops_sequential(self, monkeypatch):
+        """Setting cancel_event stops the loop."""
+        from karenina.benchmark.benchmark_helpers import generate_templates
+
+        call_count = 0
+
+        def mock_gen(benchmark, question_id, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "success": True,
+                "template_code": "# code",
+                "error": None,
+                "raw_response": "# code",
+                "skipped": False,
+            }
+
+        monkeypatch.setattr(
+            "karenina.benchmark.benchmark_helpers.generate_template_for_question",
+            mock_gen,
+        )
+
+        class FakeBenchmark:
+            _questions_cache = {f"q{i}": {"question": f"Q{i}"} for i in range(10)}
+            name = "test"
+
+            def has_template(self, _qid):
+                return False
+
+            def get_template(self, _qid):
+                return ""
+
+            def get_question_ids(self):
+                return list(self._questions_cache.keys())
+
+            def add_answer_template(self, _qid, _code):
+                pass
+
+        cancel = threading.Event()
+        cancel.set()  # Cancel immediately
+
+        generate_templates(
+            FakeBenchmark(),
+            question_ids=[f"q{i}" for i in range(10)],
+            max_workers=1,
+            cancel_event=cancel,
+        )
+
+        assert call_count <= 1

@@ -599,7 +599,7 @@ class Benchmark:
             temperature,
             interface,
             force_regenerate,
-            progress_callback,
+            progress_callback,  # type: ignore[arg-type]  # Task 3 updates this signature
             endpoint_base_url,
             endpoint_api_key,
         )
@@ -615,8 +615,27 @@ class Benchmark:
         only_missing: bool = True,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        progressive_backup: bool = True,
+        backup_path: Path | None = None,
     ) -> dict[str, dict[str, Any]]:
-        """Generate templates for all questions in the benchmark using LLM."""
+        """Generate templates for all questions in the benchmark using LLM.
+
+        Args:
+            model: Model name.
+            model_provider: Model provider.
+            temperature: Generation temperature.
+            interface: Adapter interface.
+            force_regenerate: If True, regenerate existing templates.
+            progress_callback: Optional progress callback.
+            only_missing: If True, only generate for questions without templates.
+            endpoint_base_url: Optional custom endpoint URL.
+            endpoint_api_key: Optional API key for custom endpoint.
+            progressive_backup: If True (default), save generated templates to a
+                backup file after each successful generation so interrupted runs
+                can be resumed.
+            backup_path: Path for the backup file. Defaults to
+                ``{benchmark_name}_templates_backup.json`` in the current directory.
+        """
         return _helpers.generate_all_templates(
             self,
             model,
@@ -628,6 +647,8 @@ class Benchmark:
             only_missing,
             endpoint_base_url,
             endpoint_api_key,
+            progressive_backup,
+            backup_path,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:

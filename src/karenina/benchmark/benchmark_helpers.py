@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -161,42 +163,285 @@ def generate_templates(
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
-    progress_callback: Callable[[float, str], None] | None = None,
+    progress_callback: Callable[[TemplateProgressEvent], None] | None = None,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | None = None,
+    backup_path: Path | None = None,
+    max_workers: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Generate templates for multiple questions using LLM."""
+    """Generate templates for multiple questions using LLM.
+
+    Supports sequential (max_workers=1) and parallel (max_workers>1) execution
+    with progress tracking, cancellation, and thread-safe progressive backup.
+
+    Args:
+        benchmark: The benchmark to generate templates for.
+        question_ids: List of question IDs to generate templates for.
+        model: Model name.
+        model_provider: Model provider.
+        temperature: Generation temperature.
+        interface: Adapter interface.
+        force_regenerate: If True, regenerate existing templates.
+        progress_callback: Receives TemplateProgressEvent for each lifecycle event.
+        endpoint_base_url: Optional custom endpoint URL.
+        endpoint_api_key: Optional API key for custom endpoint.
+        backup_path: If provided, atomically save all generated templates
+            to this JSON file after each successful generation.
+        max_workers: Number of parallel workers. None reads from
+            KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+        cancel_event: If set, stops generation after the current task(s) complete.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from karenina.utils.file_ops import atomic_write
+
     invalid_ids = [qid for qid in question_ids if qid not in benchmark._questions_cache]
     if invalid_ids:
         raise ValueError(f"Questions not found: {invalid_ids}")
 
-    results = {}
-    total_questions = len(question_ids)
+    workers = _resolve_max_workers(max_workers)
+    total = len(question_ids)
+    results: dict[str, dict[str, Any]] = {}
+    successful_count = 0
+    failed_count = 0
+    processed_count = 0
+    lock = threading.Lock() if workers > 1 else None
+    in_progress: list[str] = []
 
-    for i, question_id in enumerate(question_ids):
-        if progress_callback:
-            percentage = (i / total_questions) * 100
-            question_text = benchmark._questions_cache[question_id].get("question", "")
-            message = f"Processing: {question_text[:50]}..."
-            progress_callback(percentage, message)
+    gen_kwargs: dict[str, Any] = {
+        "model": model,
+        "model_provider": model_provider,
+        "temperature": temperature,
+        "interface": interface,
+        "force_regenerate": force_regenerate,
+        "endpoint_base_url": endpoint_base_url,
+        "endpoint_api_key": endpoint_api_key,
+    }
 
+    def _emit(event: str, question_id: str | None = None, **kwargs: Any) -> None:
+        if not progress_callback:
+            return
+        progress_callback(
+            TemplateProgressEvent(
+                event=event,  # type: ignore[arg-type]
+                question_id=question_id,
+                processed_count=processed_count,
+                total_count=total,
+                successful_count=successful_count,
+                failed_count=failed_count,
+                percentage=(processed_count / total) * 100 if total > 0 else 0.0,
+                error=kwargs.get("error"),
+                template_code=kwargs.get("template_code"),
+                task_duration=kwargs.get("task_duration"),
+                in_progress_questions=list(in_progress),
+            )
+        )
+
+    def _process_result(question_id: str, result: dict[str, Any], duration: float) -> None:
+        nonlocal processed_count, successful_count, failed_count
+
+        results[question_id] = result
+        success = result.get("success", False)
+        skipped = result.get("skipped", False)
+
+        if not skipped:
+            processed_count += 1
+            if success:
+                successful_count += 1
+            else:
+                failed_count += 1
+        else:
+            processed_count += 1
+            successful_count += 1
+
+        if question_id in in_progress:
+            in_progress.remove(question_id)
+
+        event_type = "task_completed" if success or skipped else "task_failed"
+        _emit(
+            event_type,
+            question_id=question_id,
+            template_code=result.get("template_code") if success else None,
+            error=result.get("error") if not success else None,
+            task_duration=duration,
+        )
+
+        if backup_path and success and not skipped:
+            _save_template_backup(benchmark, backup_path, atomic_write)
+
+    _emit("job_started")
+
+    if workers <= 1:
+        # Sequential execution
+        for question_id in question_ids:
+            if cancel_event and cancel_event.is_set():
+                _emit("job_cancelled")
+                break
+
+            in_progress.append(question_id)
+            _emit("task_started", question_id=question_id)
+
+            start = time.monotonic()
+            result = generate_template_for_question(
+                benchmark,
+                question_id=question_id,
+                **gen_kwargs,
+            )
+            duration = time.monotonic() - start
+
+            _process_result(question_id, result, duration)
+    else:
+        # Parallel execution
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_qid: dict[Any, str] = {}
+            for question_id in question_ids:
+                in_progress.append(question_id)
+                _emit("task_started", question_id=question_id)
+                future = executor.submit(
+                    _timed_generate,
+                    benchmark,
+                    question_id,
+                    gen_kwargs,
+                    lock,
+                )
+                future_to_qid[future] = question_id
+
+            for future in as_completed(future_to_qid):
+                if cancel_event and cancel_event.is_set():
+                    for f in future_to_qid:
+                        f.cancel()
+                    _emit("job_cancelled")
+                    break
+
+                question_id = future_to_qid[future]
+                try:
+                    result, duration = future.result()
+                except Exception as e:
+                    result = {
+                        "success": False,
+                        "template_code": "",
+                        "error": str(e),
+                        "raw_response": None,
+                        "skipped": False,
+                    }
+                    duration = 0.0
+
+                assert lock is not None  # guaranteed when workers > 1
+                with lock:
+                    _process_result(question_id, result, duration)
+
+    if not (cancel_event and cancel_event.is_set()):
+        _emit("job_completed")
+
+    return results
+
+
+def _timed_generate(
+    benchmark: Benchmark,
+    question_id: str,
+    gen_kwargs: dict[str, Any],
+    lock: threading.Lock | None,
+) -> tuple[dict[str, Any], float]:
+    """Run generate_template_for_question with timing and optional locking.
+
+    In parallel mode, the benchmark mutation inside generate_template_for_question
+    (add_answer_template) needs protection. We wrap the benchmark's method
+    to acquire the lock before mutating.
+
+    Args:
+        benchmark: The benchmark object.
+        question_id: Question ID to generate for.
+        gen_kwargs: Keyword arguments for generate_template_for_question.
+        lock: Lock for thread-safe benchmark mutation. None in sequential mode.
+
+    Returns:
+        Tuple of (result_dict, duration_seconds).
+    """
+    start = time.monotonic()
+
+    if lock is not None:
+        original_add = benchmark.add_answer_template
+
+        def locked_add(question_id: str, template_code: str) -> None:
+            with lock:
+                original_add(question_id, template_code)
+
+        benchmark.add_answer_template = locked_add  # type: ignore[method-assign]
+
+    try:
         result = generate_template_for_question(
             benchmark,
             question_id=question_id,
-            model=model,
-            model_provider=model_provider,
-            temperature=temperature,
-            interface=interface,
-            force_regenerate=force_regenerate,
-            endpoint_base_url=endpoint_base_url,
-            endpoint_api_key=endpoint_api_key,
+            **gen_kwargs,
         )
-        results[question_id] = result
+    finally:
+        if lock is not None:
+            benchmark.add_answer_template = original_add  # type: ignore[method-assign]
 
-    if progress_callback:
-        progress_callback(100.0, "Template generation completed")
+    duration = time.monotonic() - start
+    return result, duration
 
-    return results
+
+def _save_template_backup(
+    benchmark: Benchmark,
+    backup_path: Path,
+    atomic_write_fn: Callable[[Path, str], None],
+) -> None:
+    """Save all current templates to a backup JSON file.
+
+    Args:
+        benchmark: The benchmark containing generated templates.
+        backup_path: Path to write the backup file.
+        atomic_write_fn: Atomic write function for crash safety.
+    """
+    templates_dict = {}
+    for qid in benchmark.get_question_ids():
+        if benchmark.has_template(qid):
+            templates_dict[qid] = benchmark.get_template(qid)
+
+    try:
+        atomic_write_fn(backup_path, json.dumps(templates_dict, indent=2))
+    except OSError:
+        logger.warning("Failed to write template backup to %s", backup_path, exc_info=True)
+
+
+def _load_template_backup(benchmark: Benchmark, backup_path: Path) -> int:
+    """Load templates from a backup file into the benchmark.
+
+    Only imports templates for questions that exist in the benchmark and
+    do not already have a template.
+
+    Args:
+        benchmark: The benchmark to import templates into.
+        backup_path: Path to the backup JSON file.
+
+    Returns:
+        Number of templates restored from backup.
+    """
+    try:
+        with open(backup_path) as f:
+            code_blocks = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Failed to read template backup from %s", backup_path, exc_info=True)
+        return 0
+
+    restored = 0
+    for question_id, template_code in code_blocks.items():
+        if question_id not in benchmark._questions_cache:
+            continue
+        if benchmark.has_template(question_id):
+            continue
+        try:
+            benchmark.add_answer_template(question_id, template_code)
+            restored += 1
+        except Exception:
+            logger.warning("Failed to restore template for %s from backup", question_id, exc_info=True)
+
+    if restored:
+        logger.info("Restored %d template(s) from backup: %s", restored, backup_path)
+
+    return restored
 
 
 def generate_all_templates(
@@ -210,8 +455,43 @@ def generate_all_templates(
     only_missing: bool = True,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | None = None,
+    progressive_backup: bool = True,
+    backup_path: Path | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Generate templates for all questions in the benchmark using LLM."""
+    """Generate templates for all questions in the benchmark using LLM.
+
+    Args:
+        benchmark: The benchmark to generate templates for.
+        model: Model name.
+        model_provider: Model provider.
+        temperature: Generation temperature.
+        interface: Adapter interface.
+        force_regenerate: If True, regenerate existing templates.
+        progress_callback: Optional progress callback.
+        only_missing: If True, only generate for questions without templates.
+        endpoint_base_url: Optional custom endpoint URL.
+        endpoint_api_key: Optional API key for custom endpoint.
+        progressive_backup: If True (default), save generated templates to a
+            backup JSON file after each successful generation. If the process
+            is interrupted, previously generated templates are preserved and
+            automatically restored on the next run.
+        backup_path: Path for the backup file. If None and progressive_backup
+            is True, defaults to ``{benchmark_name}_templates_backup.json``
+            in the current directory.
+    """
+    # Resolve backup path
+    effective_backup_path: Path | None = None
+    if progressive_backup:
+        if backup_path is not None:
+            effective_backup_path = backup_path
+        else:
+            safe_name = benchmark.name.replace(" ", "_").replace("/", "_")
+            effective_backup_path = Path(f"{safe_name}_templates_backup.json")
+
+        # Restore any previously generated templates from backup
+        if effective_backup_path.exists() and not force_regenerate:
+            _load_template_backup(benchmark, effective_backup_path)
+
     if only_missing and not force_regenerate:
         from typing import cast
 
@@ -230,9 +510,10 @@ def generate_all_templates(
         temperature=temperature,
         interface=interface,
         force_regenerate=force_regenerate,
-        progress_callback=progress_callback,
+        progress_callback=progress_callback,  # type: ignore[arg-type]  # Task 3 updates this signature
         endpoint_base_url=endpoint_base_url,
         endpoint_api_key=endpoint_api_key,
+        backup_path=effective_backup_path,
     )
 
 
