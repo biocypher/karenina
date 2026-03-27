@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 def generate_template_for_question(
     benchmark: Benchmark,
     question_id: str,
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
+    model: str = "claude-haiku-4-5",
+    model_provider: str = "anthropic",
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
@@ -101,8 +101,8 @@ def generate_template_for_question(
 def generate_templates(
     benchmark: Benchmark,
     question_ids: list[str],
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
+    model: str = "claude-haiku-4-5",
+    model_provider: str = "anthropic",
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
@@ -146,8 +146,8 @@ def generate_templates(
 
 def generate_all_templates(
     benchmark: Benchmark,
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
+    model: str = "claude-haiku-4-5",
+    model_provider: str = "anthropic",
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,

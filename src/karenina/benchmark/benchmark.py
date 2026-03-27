@@ -555,8 +555,8 @@ class Benchmark:
     def generate_template_for_question(
         self,
         question_id: str,
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
@@ -579,8 +579,8 @@ class Benchmark:
     def generate_templates(
         self,
         question_ids: list[str],
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
@@ -604,8 +604,8 @@ class Benchmark:
 
     def generate_all_templates(
         self,
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
