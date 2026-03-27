@@ -67,7 +67,7 @@ def test_csv_extraction(csv_file_path: Path):
     assert len(questions_with_metadata) > 0, "No questions extracted from CSV"
 
     # Check the structure of the first question
-    first_question, _ = questions_with_metadata[0]
+    first_question = questions_with_metadata[0]
 
     assert first_question.question, "Question text is empty"
     assert first_question.raw_answer, "Answer text is empty"
@@ -113,7 +113,7 @@ def test_template_generation_with_openai_endpoint(csv_file_path: Path, openai_en
     assert len(questions_with_metadata) > 0, "No questions extracted"
 
     # Take the first question for testing
-    first_question, _ = questions_with_metadata[0]
+    first_question = questions_with_metadata[0]
 
     # Mock the structured output generation (bypasses LLM calls)
     with patch("karenina.benchmark.authoring.answers.generator._generate_structured_outputs") as mock_gen:
@@ -153,7 +153,7 @@ def test_batch_template_generation(csv_file_path: Path, openai_endpoint_config, 
         mock_gen.return_value = mock_structured_output
 
         for i in range(num_questions):
-            question, _ = questions_with_metadata[i]
+            question = questions_with_metadata[i]
 
             template_code = generate_answer_template(
                 question_obj=question,

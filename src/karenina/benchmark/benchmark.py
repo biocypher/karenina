@@ -231,14 +231,16 @@ class Benchmark:
             answer_notes=answer_notes,
         )
 
-    def add_questions(self, questions_data: list[dict[str, Any]]) -> list[str]:
+    def add_questions(
+        self,
+        questions_data: "list[dict[str, Any] | Question]",
+    ) -> list[str]:
         """Add multiple questions at once.
 
-        Each dict is passed to ``add_question()``, so all dict keys supported
-        there are accepted here.
+        Accepts a list of dicts, Question objects, or a mix of both.
 
         Args:
-            questions_data: List of dicts with question data.
+            questions_data: List of dicts or Question objects.
 
         Returns:
             List of question IDs that were created.
@@ -325,7 +327,7 @@ class Benchmark:
         """Remove all questions from the benchmark."""
         return self._question_manager.clear_questions()
 
-    def add_questions_batch(self, questions_data: list[dict[str, Any]]) -> list[str]:
+    def add_questions_batch(self, questions_data: "list[dict[str, Any] | Question]") -> list[str]:
         """Add multiple questions at once."""
         return self._question_manager.add_questions_batch(questions_data)
 
