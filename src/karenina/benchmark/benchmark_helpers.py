@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig
@@ -21,6 +23,59 @@ if TYPE_CHECKING:
     from .benchmark import Benchmark
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TemplateProgressEvent:
+    """Progress event emitted during template generation.
+
+    Consumers receive these via the progress_callback parameter.
+    Job-level events (job_started, job_completed, job_cancelled) have
+    question_id=None. Task-level events have the question_id set.
+    """
+
+    event: Literal[
+        "job_started",
+        "task_started",
+        "task_completed",
+        "task_failed",
+        "job_completed",
+        "job_cancelled",
+    ]
+    question_id: str | None
+    processed_count: int
+    total_count: int
+    successful_count: int
+    failed_count: int
+    percentage: float
+    error: str | None
+    template_code: str | None
+    task_duration: float | None
+    in_progress_questions: list[str] = field(default_factory=list)
+
+
+def _resolve_max_workers(max_workers: int | None) -> int:
+    """Resolve max_workers from explicit value or environment.
+
+    Args:
+        max_workers: Explicit value, or None to auto-detect.
+
+    Returns:
+        Number of workers. 1 means sequential execution.
+    """
+    if max_workers is not None:
+        return max_workers
+    env_val = os.environ.get("KARENINA_ASYNC_MAX_WORKERS")
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            logger.warning(
+                "Invalid KARENINA_ASYNC_MAX_WORKERS value '%s', defaulting to 1",
+                env_val,
+            )
+            return 1
+    return 1
 
 
 # ---------------------------------------------------------------------------
