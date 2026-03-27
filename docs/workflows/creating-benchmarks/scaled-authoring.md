@@ -83,7 +83,7 @@ print(f"Created: {benchmark.name}")
 
 ## Bulk Question Ingestion
 
-For large benchmarks, questions typically come from spreadsheets or CSV files rather than manual entry. The `extract_questions_from_file()` function reads tabular data and returns `(Question, metadata)` pairs ready to add to a benchmark.
+For large benchmarks, questions typically come from spreadsheets or CSV files rather than manual entry. The `extract_questions_from_file()` function reads tabular data and returns a list of `Question` objects with all metadata (keywords, author, custom fields) populated directly.
 
 ```python
 from karenina.benchmark.authoring.questions import extract_questions_from_file
@@ -108,13 +108,13 @@ The function supports Excel, CSV, and TSV formats:
 #     keywords_columns=[
 #         {"column": "Tags", "separator": ","},
 #     ],
+#     custom_metadata_columns=["Complexity"],
 # )
 #
-# for question, metadata in questions:
-#     benchmark.add_question(question, **metadata)
+# benchmark.add_questions(questions)
 ```
 
-For this tutorial, we add questions manually — simulating what `extract_questions_from_file()` would produce:
+For this tutorial, we add questions manually:
 
 ```python
 questions = [
