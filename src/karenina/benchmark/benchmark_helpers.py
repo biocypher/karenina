@@ -451,12 +451,14 @@ def generate_all_templates(
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
-    progress_callback: Callable[[float, str], None] | None = None,
+    progress_callback: Callable[[TemplateProgressEvent], None] | None = None,
     only_missing: bool = True,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | None = None,
     progressive_backup: bool = True,
     backup_path: Path | None = None,
+    max_workers: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Generate templates for all questions in the benchmark using LLM.
 
@@ -478,6 +480,9 @@ def generate_all_templates(
         backup_path: Path for the backup file. If None and progressive_backup
             is True, defaults to ``{benchmark_name}_templates_backup.json``
             in the current directory.
+        max_workers: Number of parallel workers. None reads from
+            KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+        cancel_event: If set, stops generation after the current task(s) complete.
     """
     # Resolve backup path
     effective_backup_path: Path | None = None
@@ -510,10 +515,12 @@ def generate_all_templates(
         temperature=temperature,
         interface=interface,
         force_regenerate=force_regenerate,
-        progress_callback=progress_callback,  # type: ignore[arg-type]  # Task 3 updates this signature
+        progress_callback=progress_callback,
         endpoint_base_url=endpoint_base_url,
         endpoint_api_key=endpoint_api_key,
         backup_path=effective_backup_path,
+        max_workers=max_workers,
+        cancel_event=cancel_event,
     )
 
 

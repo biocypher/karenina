@@ -10,6 +10,7 @@ conversion is in benchmark_helpers.py.
 """
 
 import logging
+import threading
 import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -586,9 +587,11 @@ class Benchmark:
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
-        progress_callback: Callable[[float, str], None] | None = None,
+        progress_callback: "Callable[[_helpers.TemplateProgressEvent], None] | None" = None,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        max_workers: int | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> dict[str, dict[str, Any]]:
         """Generate templates for multiple questions using LLM."""
         return _helpers.generate_templates(
@@ -599,9 +602,11 @@ class Benchmark:
             temperature,
             interface,
             force_regenerate,
-            progress_callback,  # type: ignore[arg-type]  # Task 3 updates this signature
+            progress_callback,
             endpoint_base_url,
             endpoint_api_key,
+            max_workers=max_workers,
+            cancel_event=cancel_event,
         )
 
     def generate_all_templates(
@@ -611,12 +616,14 @@ class Benchmark:
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
-        progress_callback: Callable[[float, str], None] | None = None,
+        progress_callback: "Callable[[_helpers.TemplateProgressEvent], None] | None" = None,
         only_missing: bool = True,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
         progressive_backup: bool = True,
         backup_path: Path | None = None,
+        max_workers: int | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> dict[str, dict[str, Any]]:
         """Generate templates for all questions in the benchmark using LLM.
 
@@ -635,6 +642,9 @@ class Benchmark:
                 can be resumed.
             backup_path: Path for the backup file. Defaults to
                 ``{benchmark_name}_templates_backup.json`` in the current directory.
+            max_workers: Number of parallel workers. None reads from
+                KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+            cancel_event: If set, stops generation after the current task(s) complete.
         """
         return _helpers.generate_all_templates(
             self,
@@ -649,6 +659,8 @@ class Benchmark:
             endpoint_api_key,
             progressive_backup,
             backup_path,
+            max_workers=max_workers,
+            cancel_event=cancel_event,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:
