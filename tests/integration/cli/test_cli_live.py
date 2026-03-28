@@ -265,10 +265,10 @@ class TestCLIVerifyLive:
 class TestCLIConfigValidationLive:
     """Tests that don't need LLM calls (validation-only)."""
 
-    def test_config_error_before_benchmark(self, work_dir: Path) -> None:
+    def test_config_error_before_benchmark(self, tmp_path: Path) -> None:
         """Issue 035: Config errors shown before benchmark load attempt."""
-        nonexistent = work_dir / "does_not_exist.jsonld"
-        output = work_dir / "results.json"
+        nonexistent = tmp_path / "does_not_exist.jsonld"
+        output = tmp_path / "results.json"
 
         result = runner.invoke(
             app,
