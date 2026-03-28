@@ -282,9 +282,12 @@ class TestCLIConfigValidationLive:
         )
 
     def test_no_flag_help_shows_flag_pairs(self) -> None:
-        """Issue 036: Help shows --flag/--no-flag pairs."""
-        result = runner.invoke(app, ["verify", "--help"])
-        assert result.exit_code == 0
-        assert "--no-abstention" in result.stdout
-        assert "--no-sufficiency" in result.stdout
-        assert "--no-deep-judgment" in result.stdout
+        """Issue 036: Verify command has --flag/--no-flag pairs registered."""
+        import typer
+
+        click_app = typer.main.get_group(app)
+        verify_cmd = click_app.commands["verify"]
+        params_by_name = {p.name: p for p in verify_cmd.params}
+        assert "--no-abstention" in params_by_name["abstention"].secondary_opts
+        assert "--no-sufficiency" in params_by_name["sufficiency"].secondary_opts
+        assert "--no-deep-judgment" in params_by_name["deep_judgment"].secondary_opts

@@ -20,6 +20,19 @@ from karenina.schemas.verification.config import DEFAULT_EMBEDDING_MODEL, DEFAUL
 runner = CliRunner()
 
 
+def _get_verify_param(name: str):
+    """Get a Click parameter from the verify command by name."""
+    import typer
+
+    click_app = typer.main.get_group(app)
+    verify_cmd = click_app.commands["verify"]
+    for p in verify_cmd.params:
+        if p.name == name:
+            return p
+    msg = f"Parameter {name!r} not found in verify command"
+    raise ValueError(msg)
+
+
 def _create_checkpoint(path: Path) -> Path:
     """Create a minimal valid checkpoint file."""
     checkpoint_path = path / "test.jsonld"
@@ -243,28 +256,23 @@ class TestBooleanFlagPairs:
 
     def test_cli_accepts_no_abstention_flag(self) -> None:
         """The CLI should accept --no-abstention as a valid flag."""
-        result = runner.invoke(app, ["verify", "--help"])
-        assert result.exit_code == 0
-        assert "--no-abstention" in result.stdout
+        param = _get_verify_param("abstention")
+        assert "--no-abstention" in param.secondary_opts
 
     def test_cli_accepts_no_sufficiency_flag(self) -> None:
         """The CLI should accept --no-sufficiency as a valid flag."""
-        result = runner.invoke(app, ["verify", "--help"])
-        assert result.exit_code == 0
-        assert "--no-sufficiency" in result.stdout
+        param = _get_verify_param("sufficiency")
+        assert "--no-sufficiency" in param.secondary_opts
 
     def test_cli_accepts_no_embedding_check_flag(self) -> None:
         """The CLI should accept --no-embedding-check as a valid flag."""
-        result = runner.invoke(app, ["verify", "--help"])
-        assert result.exit_code == 0
-        # Rich console may truncate long flag names; check for the prefix
-        assert "--no-embedding-che" in result.stdout
+        param = _get_verify_param("embedding_check")
+        assert "--no-embedding-check" in param.secondary_opts
 
     def test_cli_accepts_no_deep_judgment_flag(self) -> None:
         """The CLI should accept --no-deep-judgment as a valid flag."""
-        result = runner.invoke(app, ["verify", "--help"])
-        assert result.exit_code == 0
-        assert "--no-deep-judgment" in result.stdout
+        param = _get_verify_param("deep_judgment")
+        assert "--no-deep-judgment" in param.secondary_opts
 
 
 # =============================================================================
