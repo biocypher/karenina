@@ -201,6 +201,16 @@ def generate_templates(
         raise ValueError(f"Questions not found: {invalid_ids}")
 
     workers = _resolve_max_workers(max_workers)
+
+    # Force adapter registry initialization in the main thread before
+    # spawning workers. The registry's _ensure_initialized() has a
+    # race condition where concurrent threads can see _initializing=True
+    # and return with an empty registry.
+    if workers > 1:
+        from karenina.adapters.registry import AdapterRegistry
+
+        AdapterRegistry._ensure_initialized()
+
     total = len(question_ids)
     results: dict[str, dict[str, Any]] = {}
     successful_count = 0
@@ -303,7 +313,6 @@ def generate_templates(
                     benchmark,
                     question_id,
                     gen_kwargs,
-                    lock,
                 )
                 future_to_qid[future] = question_id
 
@@ -341,44 +350,23 @@ def _timed_generate(
     benchmark: Benchmark,
     question_id: str,
     gen_kwargs: dict[str, Any],
-    lock: threading.Lock | None,
 ) -> tuple[dict[str, Any], float]:
-    """Run generate_template_for_question with timing and optional locking.
-
-    In parallel mode, the benchmark mutation inside generate_template_for_question
-    (add_answer_template) needs protection. We wrap the benchmark's method
-    to acquire the lock before mutating.
+    """Run generate_template_for_question with timing.
 
     Args:
         benchmark: The benchmark object.
         question_id: Question ID to generate for.
         gen_kwargs: Keyword arguments for generate_template_for_question.
-        lock: Lock for thread-safe benchmark mutation. None in sequential mode.
 
     Returns:
         Tuple of (result_dict, duration_seconds).
     """
     start = time.monotonic()
-
-    if lock is not None:
-        original_add = benchmark.add_answer_template
-
-        def locked_add(question_id: str, template_code: str) -> None:
-            with lock:
-                original_add(question_id, template_code)
-
-        benchmark.add_answer_template = locked_add  # type: ignore[method-assign]
-
-    try:
-        result = generate_template_for_question(
-            benchmark,
-            question_id=question_id,
-            **gen_kwargs,
-        )
-    finally:
-        if lock is not None:
-            benchmark.add_answer_template = original_add  # type: ignore[method-assign]
-
+    result = generate_template_for_question(
+        benchmark,
+        question_id=question_id,
+        **gen_kwargs,
+    )
     duration = time.monotonic() - start
     return result, duration
 
