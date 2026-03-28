@@ -441,7 +441,7 @@ def test_deep_judgment_construction() -> None:
     """Test VerificationResultDeepJudgment construction."""
     deep_judgment = VerificationResultDeepJudgment(
         deep_judgment_performed=True,
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
         extracted_excerpts={"value": [{"text": "excerpt1", "source": "doc1"}]},
         attribute_reasoning={"value": "The answer mentions Paris correctly"},
         deep_judgment_stages_completed=["extract_excerpts", "validate_excerpts"],
@@ -451,7 +451,7 @@ def test_deep_judgment_construction() -> None:
     )
 
     assert deep_judgment.deep_judgment_performed is True
-    assert deep_judgment.deep_judgment_enabled is True
+    assert deep_judgment.deep_judgment_mode == "full"
     assert "value" in deep_judgment.extracted_excerpts
     assert deep_judgment.attribute_reasoning["value"] == "The answer mentions Paris correctly"
     assert deep_judgment.deep_judgment_stages_completed == ["extract_excerpts", "validate_excerpts"]
@@ -464,7 +464,7 @@ def test_deep_judgment_default_values() -> None:
     deep_judgment = VerificationResultDeepJudgment()
 
     assert deep_judgment.deep_judgment_performed is False
-    assert deep_judgment.deep_judgment_enabled is False
+    assert deep_judgment.deep_judgment_mode is None
     assert deep_judgment.extracted_excerpts is None
     assert deep_judgment.attribute_reasoning is None
     assert deep_judgment.deep_judgment_stages_completed is None
@@ -478,7 +478,7 @@ def test_deep_judgment_with_attributes_without_excerpts() -> None:
     """Test deep_judgment with attributes_without_excerpts list."""
     deep_judgment = VerificationResultDeepJudgment(
         deep_judgment_performed=True,
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
         attributes_without_excerpts=["reasoning", "confidence"],
     )
 
@@ -490,7 +490,7 @@ def test_deep_judgment_with_hallucination_risk() -> None:
     """Test deep_judgment with hallucination risk assessment."""
     deep_judgment = VerificationResultDeepJudgment(
         deep_judgment_performed=True,
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
         deep_judgment_search_enabled=True,
         hallucination_risk_assessment={
             "value": "low",
@@ -601,7 +601,7 @@ def test_verification_result_with_all_components() -> None:
         ),
         deep_judgment=VerificationResultDeepJudgment(
             deep_judgment_performed=True,
-            deep_judgment_enabled=True,
+            deep_judgment_mode="full",
         ),
         deep_judgment_rubric=VerificationResultDeepJudgmentRubric(
             deep_judgment_rubric_performed=True,

@@ -20,10 +20,10 @@ from karenina.ports import LLMResponse
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.entities import Rubric
 from karenina.schemas.entities.rubric import (
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 from karenina.schemas.outputs.rubric import ConceptPresenceResult
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -229,7 +229,6 @@ class RubricEvaluationStage(BaseVerificationStage):
                     dj_config = VerificationConfig(
                         answering_models=[context.answering_model],
                         parsing_models=[context.parsing_model],
-                        deep_judgment_rubric_enabled=True,
                         deep_judgment_rubric_max_excerpts_default=getattr(
                             context, "deep_judgment_max_excerpts_per_attribute", 3
                         ),
@@ -239,7 +238,6 @@ class RubricEvaluationStage(BaseVerificationStage):
                         deep_judgment_rubric_excerpt_retry_attempts_default=getattr(
                             context, "deep_judgment_excerpt_retry_attempts", 2
                         ),
-                        deep_judgment_rubric_search_enabled=getattr(context, "deep_judgment_search_enabled", False),
                         deep_judgment_rubric_search_tool=getattr(context, "deep_judgment_search_tool", "tavily"),
                     )
 
@@ -396,14 +394,21 @@ class RubricEvaluationStage(BaseVerificationStage):
         if not non_agentic_traits:
             return
 
-        # Check for name conflicts with existing static rubric
-        static_names = set()
+        # Check for same-type name conflicts with existing static rubric.
+        # Cross-type overlaps are allowed (results use type-segregated dicts).
         if context.rubric is not None:
-            static_names = set(context.rubric.get_trait_names())
-        dynamic_names = {t.name for t in non_agentic_traits}
-        conflicts = static_names & dynamic_names
-        if conflicts:
-            raise ValueError(f"Dynamic rubric trait names conflict with static rubric: {conflicts}")
+            static_by_type: dict[type, set[str]] = {
+                LLMRubricTrait: {t.name for t in context.rubric.llm_traits},
+                RegexRubricTrait: {t.name for t in context.rubric.regex_traits},
+                CallableRubricTrait: {t.name for t in context.rubric.callable_traits},
+                MetricRubricTrait: {t.name for t in context.rubric.metric_traits},
+            }
+            for trait in non_agentic_traits:
+                names = static_by_type.get(type(trait), set())
+                if trait.name in names:
+                    raise ValueError(
+                        f"Dynamic {type(trait).__name__} trait '{trait.name}' conflicts with static rubric"
+                    )
 
         # Call LLM for presence check
         presence_map = self._call_presence_check(context, non_agentic_traits)
@@ -431,9 +436,9 @@ class RubricEvaluationStage(BaseVerificationStage):
             promoted_names.append(trait.name)
             if isinstance(trait, LLMRubricTrait):
                 promote_llm.append(trait)
-            elif isinstance(trait, RegexTrait):
+            elif isinstance(trait, RegexRubricTrait):
                 promote_regex.append(trait)
-            elif isinstance(trait, CallableTrait):
+            elif isinstance(trait, CallableRubricTrait):
                 promote_callable.append(trait)
             elif isinstance(trait, MetricRubricTrait):
                 promote_metric.append(trait)
@@ -450,6 +455,13 @@ class RubricEvaluationStage(BaseVerificationStage):
                     "metric_traits": list(context.rubric.metric_traits) + promote_metric,
                 }
             )
+
+        # Annotate promoted traits with "dynamic" provenance
+        if promoted_names:
+            if context.trait_provenance is None:
+                context.trait_provenance = {}
+            for name in promoted_names:
+                context.trait_provenance[name] = "dynamic"
 
         # Record artifacts for downstream consumers and result serialization
         context.set_artifact(ArtifactKeys.DYNAMIC_RUBRIC_PROMOTED_TRAITS, promoted_names or None)

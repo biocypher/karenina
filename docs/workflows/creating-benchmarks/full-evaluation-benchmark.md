@@ -168,9 +168,9 @@ print(f"Added global trait: {safety_trait.name}")
 Regex traits require no LLM call — they evaluate instantly using pattern matching on the raw response text.
 
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import RegexRubricTrait
 
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="No Hedging Language",
     description=(
         "Checks that the response states facts directly without hedging phrases "
@@ -191,9 +191,9 @@ print(f"Added global trait: {citation_trait.name}")
 Callable traits run a custom Python function on the response text. Karenina itself does not invoke an evaluator LLM for them, but your function may still call external services or another LLM if you choose.
 
 ```python
-from karenina.schemas import CallableTrait
+from karenina.schemas import CallableRubricTrait
 
-word_count_trait = CallableTrait.from_callable(
+word_count_trait = CallableRubricTrait.from_callable(
     name="Minimum Length",
     func=lambda text: len(text.split()) >= 15,
     kind="boolean",
@@ -292,9 +292,9 @@ print()
 for qid in benchmark.get_question_ids():
     q = benchmark.get_question(qid)
     q_text = q["question"][:40]
-    has_rubric = q.get("has_rubric", False)
+    has_rubric = q.get("question_rubric")
     if has_rubric:
-        print(f"'{q_text}...' has per-question rubric traits")
+        print(f"'{q_text}...' has question-level rubric")
 ```
 
 ## Replace Global Rubric
@@ -344,8 +344,8 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 | `LLMRubricTrait` (boolean) | `from karenina.schemas import LLMRubricTrait` | Yes | `bool` | Subjective yes/no judgments |
 | `LLMRubricTrait` (score) | same | Yes | `int` | Gradable qualities on a scale |
 | `LLMRubricTrait` (literal) | same | Yes | class index | Ordered categorical classification |
-| `RegexTrait` | `from karenina.schemas import RegexTrait` | No | `bool` | Pattern matching, format checks |
-| `CallableTrait` | `from karenina.schemas import CallableTrait` | No | `bool` or `int` | Custom Python logic |
+| `RegexRubricTrait` | `from karenina.schemas import RegexRubricTrait` | No | `bool` | Pattern matching, format checks |
+| `CallableRubricTrait` | `from karenina.schemas import CallableRubricTrait` | No | `bool` or `int` | Custom Python logic |
 | `MetricRubricTrait` | `from karenina.schemas import MetricRubricTrait` | Yes | metrics dict | Instruction adherence (P/R/F1) |
 
 ## Next Steps

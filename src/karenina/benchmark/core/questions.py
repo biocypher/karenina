@@ -160,6 +160,15 @@ class QuestionManager:
             # Use answer notes from Question object if not overridden
             if answer_notes is None:
                 answer_notes = question.answer_notes
+            # Use author from Question object if not overridden
+            if author is None:
+                author = question.author
+            # Use sources from Question object if not overridden
+            if sources is None:
+                sources = question.sources
+            # Use custom_metadata from Question object if not overridden
+            if custom_metadata is None:
+                custom_metadata = question.custom_metadata
             # Extract workspace path for coding benchmarks
             workspace_path = question.workspace_path
         elif isinstance(question, str):
@@ -646,17 +655,17 @@ class QuestionManager:
         self.base._checkpoint.dateModified = datetime.now().isoformat()
         return count
 
-    def add_questions_batch(self, questions_data: list[dict[str, Any]]) -> list[str]:
-        """
-        Add multiple questions at once.
+    def add_questions_batch(
+        self,
+        questions_data: "list[dict[str, Any] | Question]",
+    ) -> list[str]:
+        """Add multiple questions at once.
 
-        Each dict is passed to ``add_question()``, so all dict keys supported
-        there are accepted here (``question``, ``raw_answer``, ``answer_template``,
-        ``question_id``, ``finished``, ``author``, ``sources``, ``custom_metadata``,
-        ``few_shot_examples``, ``answer_notes``).
+        Accepts a list of dicts (passed to ``add_question()``), Question objects,
+        or a mix of both.
 
         Args:
-            questions_data: List of dictionaries with question data.
+            questions_data: List of dicts or Question objects.
 
         Returns:
             List of question IDs that were created.

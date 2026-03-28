@@ -24,6 +24,7 @@ from .config import (
     DEFAULT_EMBEDDING_THRESHOLD,
     DEFAULT_PARSING_SYSTEM_PROMPT,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
     DeepJudgmentTraitConfig,
     VerificationConfig,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "DEFAULT_RUBRIC_MAX_EXCERPTS",
     # Configuration
     "VerificationConfig",
+    "DeepJudgmentRubricCustomConfig",
     "DeepJudgmentTraitConfig",
     "PromptConfig",
     # Preset utilities

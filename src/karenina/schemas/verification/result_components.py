@@ -18,6 +18,7 @@ class VerificationResultMetadata(BaseModel):
     )  # MD5 of template or "no_template" (composite key component)
     completed_without_errors: bool = Field(default=..., json_schema_extra={"index": True})
     error: str | None = None
+    failed_stage: str | None = None  # Stage name of the first guard that caused an auto-fail
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question
@@ -34,6 +35,11 @@ class VerificationResultMetadata(BaseModel):
     )
     run_name: str | None = None
     replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
+
+    # Provenance metadata
+    few_shot_enabled: bool = False  # Whether few-shot prompting was active (issue 178)
+    few_shot_example_count: int = 0  # Number of few-shot examples used (issue 178)
+    evaluation_mode: str | None = None  # Evaluation mode used, e.g. "template_only" (issue 184)
 
     # Scenario linking metadata (all nullable; None for standalone questions)
     scenario_id: str | None = None
@@ -109,6 +115,11 @@ class VerificationResultTemplate(BaseModel):
         default=None, json_schema_extra={"index": True}
     )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
+    field_verification_error: str | None = None  # Error from verify() exception (issue 146)
+    field_results: dict[str, bool] | None = None  # Per-field primitive verification results (issue 150)
+    composition_strategy: str | None = (
+        None  # Composition strategy used: "all_of", "any_of", "at_least_n(N)" (issue 151)
+    )
 
     # Embeddings
     embedding_check_performed: bool = False  # Whether embedding check was attempted
@@ -210,9 +221,15 @@ class VerificationResultRubric(BaseModel):
     dynamic_rubric_skipped_traits: dict[str, str] | None = None  # Traits skipped with reasons
     dynamic_rubric_promoted_traits: list[str] | None = None  # Traits promoted after presence check
 
+    # Trait provenance metadata (maps trait name to source: "global", "question_specific", or "dynamic")
+    trait_provenance: dict[str, str] | None = None
+
     def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
-        """
-        Get all trait scores across all trait types in a flat dictionary.
+        """Get all trait scores across all trait types in a flat dictionary.
+
+        If cross-type same-name traits exist (e.g., an LLM trait and a regex
+        trait both named "quality"), later types overwrite earlier ones. Access
+        the individual ``*_trait_scores`` dicts directly in that case.
 
         Returns:
             dict: All trait scores, e.g.:
@@ -277,7 +294,7 @@ class VerificationResultRubric(BaseModel):
 class VerificationResultDeepJudgment(BaseModel):
     """Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)."""
 
-    deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
+    deep_judgment_mode: str | None = None  # Which deep-judgment mode was used (None, "reasoning_only", "full")
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
     # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,

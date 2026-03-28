@@ -345,7 +345,7 @@ Each ADeLe trait is an `LLMRubricTrait` with:
 | `min_score` | `0` |
 | `max_score` | `5` |
 | `higher_is_better` | `True` (higher index = higher cognitive demand) |
-| `deep_judgment_enabled` | `False` |
+| `deep_judgment_enabled` | `False` (per-trait field for rubric deep judgment) |
 
 ```python
 # Inspect the class structure of a trait

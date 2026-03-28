@@ -13,6 +13,8 @@ from typing import Any
 
 from karenina.adapters.registry import AdapterRegistry
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.ports import PortCapabilities
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 
@@ -92,8 +94,13 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
 
         Args:
             context: Verification context with rubric and artifacts.
+
+        Raises:
+            ValueError: If no agentic trait can be evaluated because
+                the resolved model interface lacks ``agent_tier='deep_agent'``.
         """
         traits = context.rubric.agentic_traits  # type: ignore[union-attr]
+        self._validate_agent_support(traits, context)
         raw_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         workspace_path = context.workspace_path
 
@@ -200,7 +207,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 traces[trait.name] = None
                 continue
 
-            evaluator = AgenticTraitEvaluator(model_config=model)
+            evaluator = AgenticTraitEvaluator(
+                model_config=model,
+                prompt_config=context.prompt_config,
+            )
             score, trace = evaluator.evaluate_trait(
                 trait=trait,
                 question_text=context.question_text,
@@ -256,7 +266,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
 
         # Build a combined investigation prompt
-        evaluator = AgenticTraitEvaluator(model_config=first_model)
+        evaluator = AgenticTraitEvaluator(
+            model_config=first_model,
+            prompt_config=context.prompt_config,
+        )
         valid_traits = [trait for trait, _ in valid]
 
         combined_desc_parts = [f"- {trait.name}: {trait.description}" for trait in valid_traits]
@@ -271,10 +284,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         # Run a single shared investigation
         try:
             from karenina.adapters import get_agent
-            from karenina.ports import AgentConfig, Message
+            from karenina.ports import AgentConfig
 
             agent = get_agent(first_model)
-            system_prompt = (
+            system_text = (
                 "You are an evaluation agent investigating the quality of an LLM "
                 "response. You have access to tools and can examine files, run "
                 "code, and navigate the workspace.\n\n"
@@ -292,10 +305,24 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             if workspace_path and include_workspace:
                 user_parts.append(f"\nWorkspace directory: {workspace_path}")
 
-            messages = [
-                Message.system(system_prompt),
-                Message.user("\n".join(user_parts)),
-            ]
+            user_text = "\n".join(user_parts)
+
+            # Assemble with adapter + user instructions
+            assembler = PromptAssembler(
+                task=PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION,
+                interface=first_model.interface,
+                capabilities=PortCapabilities(),
+            )
+            user_instructions = (
+                context.prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION.value)
+                if context.prompt_config
+                else None
+            )
+            messages = assembler.assemble(
+                system_text=system_text,
+                user_text=user_text,
+                user_instructions=user_instructions,
+            )
 
             agent_config = AgentConfig(
                 max_turns=shared_max_turns,
@@ -390,6 +417,46 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _validate_agent_support(
+        traits: list[AgenticRubricTrait],
+        context: VerificationContext,
+    ) -> None:
+        """Validate that every agentic trait can be evaluated.
+
+        Checks each trait's resolved model (model_override or parsing_model)
+        for ``agent_tier='deep_agent'``. Raises if any trait cannot be
+        evaluated, since silent skipping hides configuration errors.
+
+        Raises:
+            ValueError: If any trait resolves to an interface that lacks
+                ``agent_tier='deep_agent'``.
+        """
+        default_model = context.parsing_model
+        default_spec = AdapterRegistry.get_spec(default_model.interface)
+        default_ok = default_spec is not None and default_spec.agent_tier == "deep_agent"
+
+        unsupported: list[str] = []
+        for trait in traits:
+            if trait.model_override is not None:
+                spec = AdapterRegistry.get_spec(trait.model_override.interface)
+                if spec is None or spec.agent_tier != "deep_agent":
+                    unsupported.append(trait.name)
+            elif not default_ok:
+                unsupported.append(trait.name)
+
+        if unsupported:
+            trait_names = ", ".join(f"'{n}'" for n in unsupported)
+            raise ValueError(
+                f"Agentic rubric traits ({trait_names}) require an interface with "
+                f"agent_tier='deep_agent' (e.g., 'claude_agent_sdk' or "
+                f"'langchain_deep_agents'), but the resolved model uses "
+                f"interface='{default_model.interface}' "
+                f"(agent_tier='{default_spec.agent_tier if default_spec else 'unknown'}'). "
+                f"Either change the parsing model interface or set model_override "
+                f"on each agentic trait."
+            )
+
+    @staticmethod
     def _resolve_model(
         trait: AgenticRubricTrait,
         context: VerificationContext,
@@ -397,16 +464,17 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Resolve the model to use for a given trait.
 
         Returns trait.model_override if set; otherwise context.parsing_model.
-        Validates that the resolved model's interface has an agent_factory
-        registered. Returns None if no agent support is available (the trait
-        will be skipped).
+        Validates that the resolved model's interface has
+        agent_tier='deep_agent'. Returns None if the interface lacks deep
+        agent support (the trait will be skipped).
         """
         model = trait.model_override or context.parsing_model
         spec = AdapterRegistry.get_spec(model.interface)
-        if spec is None or spec.agent_factory is None:
-            logger.debug(
-                "Interface '%s' has no agent_factory; trait '%s' will be skipped",
+        if spec is None or spec.agent_tier != "deep_agent":
+            logger.warning(
+                "Interface '%s' has agent_tier='%s' (not 'deep_agent'); trait '%s' will be skipped",
                 model.interface,
+                spec.agent_tier if spec else "unknown",
                 trait.name,
             )
             return None

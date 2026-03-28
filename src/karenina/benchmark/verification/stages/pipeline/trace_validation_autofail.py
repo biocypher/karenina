@@ -143,6 +143,10 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
             context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, False)
             context.set_result_field(ArtifactKeys.VERIFY_RESULT, False)
 
+            # Record which stage caused the auto-fail (first guard wins)
+            if not context.get_result_field(ArtifactKeys.FAILED_STAGE):
+                context.set_result_field(ArtifactKeys.FAILED_STAGE, self.name)
+
             # Store error in result for diagnostics (root-level field)
             context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, error)
         else:

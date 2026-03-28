@@ -1,6 +1,8 @@
 # Deep Judgment for Templates
 
-Deep judgment adds a verification layer to template parsing by requiring the parsing LLM to extract verbatim excerpts from the response text. If the LLM claims an attribute value but cannot locate supporting text in the response, the result is auto-failed. This catches hallucinated parsing — where the judge LLM invents attribute values not present in the original response.
+Deep judgment adds a verification layer to template parsing by requiring the parsing LLM to extract verbatim excerpts from the response text. If the LLM claims an attribute value but cannot locate supporting text in the response, the result is auto-failed. This catches hallucinated parsing, where the judge LLM invents attribute values not present in the original response.
+
+Deep judgment supports two modes: **full mode** (excerpt extraction + reasoning + parsing) and **reasoning-only mode** (reasoning + parsing, no excerpts). Use reasoning-only mode when you want per-attribute reasoning traces for transparency but do not need excerpt extraction or its associated auto-fail checks.
 
 ## When to Use Deep Judgment
 
@@ -12,6 +14,16 @@ Deep judgment adds a verification layer to template parsing by requiring the par
 | Simple yes/no or single-value templates | Usually unnecessary |
 | Cost-sensitive bulk evaluations | Disable (adds LLM calls) |
 | Debugging unexpected verification failures | Enable temporarily |
+| Want reasoning traces without excerpt overhead | Enable reasoning-only |
+
+### Mode Comparison
+
+| Mode | Excerpts | Reasoning | Search | LLM Calls |
+|------|----------|-----------|--------|-----------|
+| Disabled | No | No | No | 0 |
+| Reasoning-only | No | Yes | No | 2 |
+| Full | Yes | Yes | No | 3 |
+| Full + Search | Yes | Yes | Yes | 4+ |
 
 ## How It Works
 
@@ -21,13 +33,70 @@ Deep judgment adds a multi-stage process between answer generation and parameter
 Standard parsing:
   Response → Parse to schema → Verify
 
-Deep judgment parsing:
+Reasoning-only deep judgment:
+  Response → Generate reasoning → Parse to schema → Verify
+
+Full deep judgment:
   Response → Extract excerpts → [Search validation] → Generate reasoning → Parse to schema → Verify → Auto-fail check
 ```
 
-The three stages (plus an optional search stage) run during the ParseTemplate pipeline stage (Stage 7). The auto-fail check runs as a separate pipeline stage (Stage 10: DeepJudgmentAutoFail).
+The stages run during the ParseTemplate pipeline stage (Stage 7). In full mode, the auto-fail check runs as a separate pipeline stage (Stage 10: DeepJudgmentAutoFail). In reasoning-only mode, Stage 10 is skipped because there are no excerpts to validate.
 
-## The Three-Stage Process
+## Reasoning-Only Mode
+
+Reasoning-only mode generates per-attribute reasoning traces without excerpt extraction. The LLM reads the full response and produces a reasoning explanation for each template attribute, then the reasoning is fed to `ParserPort` for structured parameter extraction. This yields the same `BaseAnswer` output as standard parsing, with `attribute_reasoning` populated for transparency.
+
+### When to Use Reasoning-Only
+
+- You want interpretability (why the parser chose each value) without the cost of excerpt extraction and fuzzy match validation
+- Your templates are moderately complex and you want a reasoning audit trail
+- Cost is a concern: reasoning-only uses 2 LLM calls per question, compared to 3+ for full deep judgment
+- You do not need the auto-fail safety net (since there are no excerpts, the DeepJudgmentAutoFail stage is skipped)
+
+### Configuration
+
+```python
+config = VerificationConfig(
+    deep_judgment_mode="reasoning_only",
+    answering_models=[...],
+    parsing_models=[...],
+)
+```
+
+Or via `from_overrides`:
+
+```python
+config = VerificationConfig.from_overrides(
+    deep_judgment_mode="reasoning_only",
+    answering_model="claude-haiku-4-5",
+    answering_id="answering",
+    parsing_model="claude-haiku-4-5",
+    parsing_id="parsing",
+)
+```
+
+### Two-Stage Process
+
+1. **Reasoning generation**: The parsing LLM receives the response and template schema, then produces `{"attribute_name": "reasoning text"}` for each attribute (1 LLM call)
+2. **Parameter extraction**: The reasoning text is passed to `ParserPort.parse_to_pydantic()` for structured parsing (1 LLM call)
+
+### Result Structure
+
+In reasoning-only mode:
+
+- `deep_judgment_performed` = `True`
+- `attribute_reasoning` = populated with per-attribute reasoning
+- `extracted_excerpts` = empty dict (`{}`)
+- `attributes_without_excerpts` = empty list (`[]`)
+- `deep_judgment_stages_completed` = `["reasoning", "parameters"]`
+- `deep_judgment_model_calls` = `2`
+- `hallucination_risk_assessment` = `None` (search is not applicable)
+
+### Auto-Fail Behavior
+
+The DeepJudgmentAutoFail stage (Stage 10) is skipped entirely when reasoning-only mode is active. Since no excerpts are extracted, there are no missing excerpts to trigger a failure. The reasoning-only flag is stored as a pipeline artifact, and Stage 10 checks for it before running.
+
+## The Three-Stage Process (Full Mode)
 
 ### Stage 1: Excerpt Extraction
 
@@ -59,7 +128,7 @@ If fuzzy matching fails for an excerpt:
 1. The excerpt is retried up to `excerpt_retry_attempts` times
 2. Each retry includes error feedback telling the LLM why the previous excerpt failed
 3. After max retries, that excerpt is skipped (the attribute is marked as missing excerpts)
-4. A single failed excerpt does not halt the entire pipeline — other attributes continue
+4. A single failed excerpt does not halt the entire pipeline; other attributes continue
 
 Attributes with no valid excerpts after all retries are added to `attributes_without_excerpts`, which triggers the auto-fail in Stage 10.
 
@@ -86,7 +155,7 @@ Reasoning is stored in the result for transparency and debugging.
 
 ### Stage 3: Parameter Extraction
 
-The reasoning text and excerpts are passed to `ParserPort.parse_to_pydantic()` for standard structured parsing. This produces the final `BaseAnswer` instance with all attributes populated — the same output as standard (non-deep-judgment) parsing.
+The reasoning text and excerpts are passed to `ParserPort.parse_to_pydantic()` for standard structured parsing. This produces the final `BaseAnswer` instance with all attributes populated, the same output as standard (non-deep-judgment) parsing.
 
 ## Auto-Fail (Stage 10)
 
@@ -99,6 +168,7 @@ After parsing completes, the DeepJudgmentAutoFail stage checks the results:
 The auto-fail is skipped if:
 
 - Deep judgment was not performed
+- Reasoning-only mode was used (no excerpts to validate)
 - No attributes are missing excerpts
 - Abstention was detected (abstention takes priority)
 
@@ -108,8 +178,8 @@ All deep judgment template settings are on `VerificationConfig`:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `deep_judgment_enabled` | `bool` | `False` | Master switch for deep judgment |
-| `deep_judgment_max_excerpts_per_attribute` | `int` | `3` | Maximum excerpts per attribute |
+| `deep_judgment_mode` | `Literal["disabled", "reasoning_only", "full"]` | `"disabled"` | Template deep-judgment mode. `"disabled"`: off. `"reasoning_only"`: reasoning only (2 LLM calls). `"full"`: excerpts + reasoning (3+ LLM calls). |
+| `deep_judgment_max_excerpts_per_attribute` | `int` | `3` | Maximum excerpts per attribute (ignored in reasoning-only mode) |
 | `deep_judgment_fuzzy_match_threshold` | `float` | `0.80` | Fuzzy match similarity threshold (0.0–1.0) |
 | `deep_judgment_excerpt_retry_attempts` | `int` | `2` | Retries on fuzzy match failure |
 | `deep_judgment_search_enabled` | `bool` | `False` | Enable web search validation |
@@ -121,7 +191,7 @@ All deep judgment template settings are on `VerificationConfig`:
 from karenina.schemas import VerificationConfig
 
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     answering_models=[...],
     parsing_models=[...],
 )
@@ -131,7 +201,7 @@ config = VerificationConfig(
 
 ```python
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_search_enabled=True,
     deep_judgment_search_tool="tavily",  # Requires TAVILY_API_KEY env var
     answering_models=[...],
@@ -143,7 +213,7 @@ config = VerificationConfig(
 
 ```python
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_max_excerpts_per_attribute=5,    # More evidence per attribute
     deep_judgment_fuzzy_match_threshold=0.90,       # Stricter matching
     deep_judgment_excerpt_retry_attempts=3,         # More retries
@@ -162,7 +232,7 @@ karenina verify benchmark.jsonld --preset my_preset.json --deep-judgment
 
 ```python
 config = VerificationConfig.from_overrides(
-    deep_judgment=True,
+    deep_judgment_mode="full",
     answering_model="claude-haiku-4-5",
     answering_id="answering",
     parsing_model="claude-haiku-4-5",
@@ -191,7 +261,7 @@ def my_search(query: str | list[str]) -> str | list[str]:
     ...
 
 config = VerificationConfig(
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_search_enabled=True,
     deep_judgment_search_tool=my_search,
     answering_models=[...],
@@ -242,9 +312,10 @@ Deep judgment adds LLM calls to the parsing phase:
 
 | Configuration | Additional Parsing LLM Calls |
 |---------------|------------------------------|
-| Deep judgment only | 2–3 per question (excerpts + reasoning + parse) |
-| Deep judgment + search | 3–4 per question (adds hallucination assessment) |
-| With retries | +1 per failed excerpt per retry |
+| Reasoning-only | 2 per question (reasoning + parse) |
+| Full deep judgment | 3 per question (excerpts + reasoning + parse) |
+| Full + search | 4 per question (adds hallucination assessment) |
+| With retries (full only) | +1 per failed excerpt per retry |
 
 The total cost depends on the number of attributes and the retry rate. For a template with 5 attributes and 2 retry attempts, the worst case is 2 base calls + 10 retries = 12 calls per question. In practice, retries are rare with well-behaved parsing models.
 
@@ -261,8 +332,8 @@ The only hard failure is in Stage 3 (parameter extraction via ParserPort), which
 
 ## Related
 
-- [Advanced Pipeline Overview](index.md) — Stage ordering and evaluation mode matrix
-- [13 Stages in Detail](stages.md) — Stage 10 (DeepJudgmentAutoFail) specifics
-- [Deep Judgment: Rubrics](deep-judgment-rubrics.md) — Per-trait deep judgment for rubric evaluation
-- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields
-- [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — Complete result hierarchy
+- [Advanced Pipeline Overview](index.md): Stage ordering and evaluation mode matrix
+- [13 Stages in Detail](stages.md): Stage 10 (DeepJudgmentAutoFail) specifics
+- [Deep Judgment: Rubrics](deep-judgment-rubrics.md): Per-trait deep judgment for rubric evaluation
+- [VerificationConfig Reference](../reference/configuration/verification-config.md): All configuration fields
+- [VerificationResult Structure](../workflows/analyzing-results/verification-result.md): Complete result hierarchy

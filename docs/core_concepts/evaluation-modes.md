@@ -191,7 +191,11 @@ At the low-level `run_single_model_verification(...)` API, passing a non-empty r
 
 In `rubric_only`, `TaskEval` can evaluate logs even when no explicit template is attached; internally it creates a minimal synthetic template so the shared pipeline can still run.
 
-## 6. Next Steps
+## 6. Mode Tracking in Results
+
+The `evaluation_mode` used for each verification is stored in `result.metadata.evaluation_mode`. This lets you distinguish results produced under different modes when analyzing a benchmark that mixes evaluation strategies across runs.
+
+## 7. Next Steps
 
 - [Templates vs Rubrics](../template-vs-rubric/): the conceptual distinction between correctness and quality
 - [Answer Templates](../answer-templates/): how parsing and `verify()` work

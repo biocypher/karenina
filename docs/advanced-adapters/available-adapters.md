@@ -1,6 +1,6 @@
 # Available Adapters
 
-Karenina ships with four adapter implementations and two routing interfaces, totaling six `interface` values. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
+Karenina ships with five adapter implementations and two routing interfaces, totaling seven `interface` values. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
 
 For the conceptual introduction to adapters, see [Adapters Overview](../core_concepts/adapters.md). For port protocol signatures, see [Port Types](ports.md).
 
@@ -8,16 +8,17 @@ For the conceptual introduction to adapters, see [Adapters Overview](../core_con
 
 ## Feature Comparison
 
-| Feature | `langchain` | `claude_agent_sdk` | `claude_tool` | `manual` |
-|---------|:-----------:|:------------------:|:-------------:|:--------:|
-| **Multi-provider support** | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | N/A |
-| **MCP server support** | Yes | Yes | Yes | No |
-| **Tool use** | Yes | Yes | Yes | No |
-| **Parser: structured output** | No (JSON fallback) | Yes (native) | Yes (native) | No |
-| **Parser: system prompt** | Yes | Yes | Yes | No |
-| **Prompt caching** | Via middleware config | Via SDK | Native API support | No |
-| **Auto-fallback** | None (base adapter) | `langchain` | `langchain` | None |
-| **Availability check** | `langchain_core` importable | `claude` CLI in PATH | `anthropic` importable | Always available |
+| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `manual` |
+|---------|:-----------:|:-----------------------:|:------------------:|:-------------:|:--------:|
+| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | N/A |
+| **MCP server support** | Yes | Yes | Yes | Yes | No |
+| **Tool use** | Yes | Yes | Yes | Yes | No |
+| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` |
+| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | No |
+| **Parser: system prompt** | Yes | Yes | Yes | Yes | No |
+| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | No |
+| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None |
+| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | Always available |
 
 ---
 
@@ -143,6 +144,75 @@ Both `endpoint_base_url` and `endpoint_api_key` are validated at factory creatio
 - Local LLM servers: Ollama, LM Studio, vLLM, text-generation-inference
 - Cloud providers with OpenAI-compatible APIs
 - Self-hosted model deployments
+
+---
+
+## `langchain_deep_agents` — LangChain Deep Agents
+
+A natively agentic adapter using LangChain Deep Agents (`create_deep_agent`). Unlike the standard `langchain` adapter, which orchestrates each tool call turn explicitly (`tool_loop`), this adapter wraps a full agent runtime with built-in planning, context management, and subagent orchestration (`deep_agent` tier). It supports all LangChain-compatible providers.
+
+### Implementation Classes
+
+| Port | Class | Module |
+|------|-------|--------|
+| AgentPort | `DeepAgentsAgentAdapter` | `adapters.langchain_deep_agents.agent` |
+| ParserPort | `DeepAgentsParserAdapter` | `adapters.langchain_deep_agents.parser` |
+| LLMPort | `DeepAgentsLLMAdapter` | `adapters.langchain_deep_agents.llm` |
+
+### Configuration
+
+```python
+from karenina.schemas.config import ModelConfig
+
+config = ModelConfig(
+    id="deep-agent",
+    model_name="claude-sonnet-4-20250514",
+    model_provider="anthropic",  # Required for langchain_deep_agents
+    interface="langchain_deep_agents",
+)
+```
+
+**Required fields**: `id`, `model_name`, `model_provider`
+
+**Environment variables**: Provider-specific API key (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
+
+**Install**: `pip install deepagents langchain-mcp-adapters`
+
+**Availability check**: Checks that the `deepagents` package is importable. No fallback interface is provided because Deep Agents' natively agentic behavior cannot be meaningfully approximated by the scaffolded LangChain adapter.
+
+### Agent Behavior
+
+The agent adapter uses `create_deep_agent()` from the `deepagents` package, which returns a compiled LangGraph graph. The adapter handles:
+
+- System prompt extraction and forwarding to `create_deep_agent(system_prompt=...)`
+- Backend selection: uses `FilesystemBackend` with an optional `workspace_path` from `AgentConfig`, falling back to the current working directory
+- Recursion limit control via LangGraph config (derived from `AgentConfig.max_turns`)
+- Dual trace output: both a raw trace string and structured `trace_messages` list
+- Usage metadata extraction from `AIMessage.response_metadata`
+- Recursion limit detection from LangGraph state (`is_last_step`)
+- MCP server support via `langchain-mcp-adapters` (converts `MCPServerConfig` to MCP tools using `AsyncExitStack` for session lifetime management)
+- Static tool support (karenina `Tool` objects converted to LangChain tools and passed to `create_deep_agent`)
+
+Extra configuration can be passed through `AgentConfig.extra`, which forwards arbitrary keyword arguments to `create_deep_agent()`.
+
+### LLM Behavior
+
+For single-turn calls, the LLM adapter uses LangChain's `init_chat_model` directly (not `create_deep_agent`), since no agent loop or tool calling is needed. This keeps simple invocations lightweight.
+
+### Parser Behavior
+
+The Deep Agents parser uses **native structured output** (`supports_structured_output = True`) via LangChain's `with_structured_output()`. It uses `include_raw=True` to preserve the `AIMessage` alongside the parsed output, ensuring usage metadata is not lost. If structured output fails, the parser falls back to JSON text extraction.
+
+### Adapter Instructions
+
+Registers prompt instructions for `langchain_deep_agents` interface covering parsing, rubric, and deep judgment tasks.
+
+### When to Use
+
+- You need a full agent runtime with built-in planning and subagent orchestration
+- You want provider-agnostic agentic evaluation (not limited to Anthropic)
+- You need the `deep_agent` tier for capturing complete tool call traces through `AgentPort`
+- Your evaluation tasks benefit from filesystem access, context management, or multi-step planning
 
 ---
 
@@ -326,10 +396,11 @@ See [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb) for tr
 | Multi-provider evaluation | `langchain` | Supports OpenAI, Anthropic, Google, and more |
 | Single API key for many models | `openrouter` | 200+ models, one API key |
 | Local LLM server | `openai_endpoint` | Ollama, vLLM, LM Studio, etc. |
+| Natively agentic evaluation (multi-provider) | `langchain_deep_agents` | Deep agent runtime with planning and subagents |
 | Claude-only with full features | `claude_agent_sdk` | Native structured output, session management |
 | Claude-only, lightweight | `claude_tool` | Native structured output, prompt caching, simpler setup |
 | Offline / CI / reproducibility | `manual` | No API calls, pre-recorded traces |
-| Need native structured output | `claude_agent_sdk` or `claude_tool` | Both have `supports_structured_output = True` |
+| Need native structured output | `claude_agent_sdk`, `claude_tool`, or `langchain_deep_agents` | All have `supports_structured_output = True` |
 
 ---
 
@@ -338,6 +409,7 @@ See [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb) for tr
 | Interface | `model_provider` Required | API Key Environment Variable |
 |-----------|:-------------------------:|------------------------------|
 | `langchain` | Yes | Provider-specific: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` |
+| `langchain_deep_agents` | Yes | Provider-specific: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` |
 | `openrouter` | No | `OPENROUTER_API_KEY` |
 | `openai_endpoint` | No | Set via `endpoint_api_key` on ModelConfig |
 | `claude_agent_sdk` | No | `ANTHROPIC_API_KEY` (used by Claude CLI) |

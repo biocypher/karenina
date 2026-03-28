@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from ..config.models import (
     FewShotConfig,
@@ -65,12 +65,23 @@ class DeepJudgmentTraitConfig(BaseModel):
     search_enabled: bool = False
 
 
+class DeepJudgmentRubricCustomConfig(BaseModel):
+    """Per-trait deep judgment configuration for custom mode."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    global_traits: dict[str, DeepJudgmentTraitConfig] = Field(default_factory=dict, alias="global")
+    question_specific: dict[str, dict[str, DeepJudgmentTraitConfig]] = Field(default_factory=dict)
+
+
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
+    model_config = ConfigDict(extra="forbid")
+
     answering_models: list[ModelConfig] = Field(default_factory=list)
     parsing_models: list[ModelConfig]
-    replicate_count: int = 1  # Number of times to run each test combination
+    replicate_count: int = Field(default=1, ge=1)  # Number of times to run each test combination
 
     # Parsing-only mode (for TaskEval and similar use cases)
     parsing_only: bool = False  # When True, only parsing models are required
@@ -116,14 +127,16 @@ class VerificationConfig(BaseModel):
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
     embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
-    embedding_check_threshold: float = DEFAULT_EMBEDDING_THRESHOLD  # Similarity threshold (0.0-1.0)
+    embedding_check_threshold: float = Field(
+        default=DEFAULT_EMBEDDING_THRESHOLD, ge=0.0, le=1.0
+    )  # Similarity threshold (0.0-1.0)
 
     # Async execution settings
     async_enabled: bool = DEFAULT_ASYNC_ENABLED  # Enable parallel execution
-    async_max_workers: int = DEFAULT_ASYNC_MAX_WORKERS  # Number of parallel workers
+    async_max_workers: int = Field(default=DEFAULT_ASYNC_MAX_WORKERS, ge=1)  # Number of parallel workers
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
-    deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
+    deep_judgment_mode: Literal["disabled", "reasoning_only", "full"] = "disabled"  # Template deep-judgment mode
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Similarity threshold
     deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
@@ -151,18 +164,7 @@ class VerificationConfig(BaseModel):
     # - "custom": Use per-trait configuration from deep_judgment_rubric_config
 
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts globally
-    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
-    # Expected structure for custom mode:
-    # {
-    #   "global": {
-    #     "TraitName": {"enabled": True, "excerpt_enabled": True, ...}
-    #   },
-    #   "question_specific": {
-    #     "question-id": {
-    #       "TraitName": {"enabled": True, ...}
-    #     }
-    #   }
-    # }
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None  # For custom mode: per-trait config
 
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
@@ -189,10 +191,12 @@ class VerificationConfig(BaseModel):
     )
     agentic_parsing_max_turns: int = Field(
         default=15,
+        ge=1,
         description="Max turns for the investigation agent.",
     )
     agentic_parsing_timeout: float = Field(
         default=120.0,
+        ge=0.0,
         description="Timeout in seconds for the investigation agent.",
     )
 
@@ -232,7 +236,37 @@ class VerificationConfig(BaseModel):
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
     # Scenario execution settings
-    scenario_turn_limit: int = 20  # Max turns before forced termination in scenario execution
+    scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
+
+    @model_validator(mode="after")
+    def _validate_custom_mode_has_config(self) -> "VerificationConfig":
+        """Validate that custom mode has the required config.
+
+        Raises:
+            ValueError: If deep_judgment_rubric_mode is 'custom' but
+                deep_judgment_rubric_config is None.
+        """
+        if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config is None:
+            raise ValueError("deep_judgment_rubric_config is required when deep_judgment_rubric_mode is 'custom'")
+        return self
+
+    @field_validator("db_config", mode="before")
+    @classmethod
+    def _validate_db_config(cls, v: Any) -> Any:
+        """Validate that db_config is a DBConfig instance or None.
+
+        Uses runtime import to avoid circular dependency with karenina.storage.
+
+        Raises:
+            TypeError: If value is not None and not a DBConfig instance.
+        """
+        if v is None:
+            return v
+        from karenina.storage.db_config import DBConfig
+
+        if not isinstance(v, DBConfig):
+            raise TypeError(f"db_config must be a DBConfig instance or None, got {type(v).__name__}")
+        return v
 
     def __init__(self, **data: Any) -> None:
         """
@@ -279,23 +313,46 @@ class VerificationConfig(BaseModel):
                     data["async_max_workers"] = int(env_val)
             # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
 
-        # Apply default system prompts to models that don't have one
+        # Apply default system prompts to models that don't have one.
+        # Deep-copy ModelConfig instances to avoid mutating shared objects.
         if "answering_models" in data:
-            for model in data["answering_models"]:
-                if isinstance(model, ModelConfig) and not model.system_prompt:
-                    model.system_prompt = DEFAULT_ANSWERING_SYSTEM_PROMPT
-                elif isinstance(model, dict) and not model.get("system_prompt"):
-                    model["system_prompt"] = DEFAULT_ANSWERING_SYSTEM_PROMPT
-
-        if "parsing_models" in data:
-            for model in data["parsing_models"]:
-                if isinstance(model, ModelConfig) and not model.system_prompt:
-                    model.system_prompt = DEFAULT_PARSING_SYSTEM_PROMPT
-                elif isinstance(model, dict) and not model.get("system_prompt"):
-                    model["system_prompt"] = DEFAULT_PARSING_SYSTEM_PROMPT
+            data["answering_models"] = [
+                m.model_copy(update={"system_prompt": DEFAULT_ANSWERING_SYSTEM_PROMPT})
+                if isinstance(m, ModelConfig) and not m.system_prompt
+                else (
+                    {**m, "system_prompt": DEFAULT_ANSWERING_SYSTEM_PROMPT}
+                    if isinstance(m, dict) and not m.get("system_prompt")
+                    else m
+                )
+                for m in data["answering_models"]
+            ]
 
         # Strip rubric_enabled from input: now derived from evaluation_mode
         data.pop("rubric_enabled", None)
+
+        # Strip deep_judgment_rubric_search_enabled: not a declared field,
+        # but injected by from_overrides() and some CLI callers.
+        data.pop("deep_judgment_rubric_search_enabled", None)
+
+        # Wire instruction shortcuts into prompt_config (pop before super().__init__)
+        shortcut_mapping = {
+            "generation": data.pop("generation_instructions", None),
+            "parsing": data.pop("parsing_instructions", None),
+            "abstention_detection": data.pop("abstention_detection_instructions", None),
+            "sufficiency_detection": data.pop("sufficiency_detection_instructions", None),
+            "rubric_evaluation": data.pop("rubric_evaluation_instructions", None),
+            "agentic_parsing": data.pop("agentic_parsing_instructions", None),
+            "deep_judgment": data.pop("deep_judgment_instructions", None),
+        }
+        active_shortcuts = {k: v for k, v in shortcut_mapping.items() if v is not None}
+        if active_shortcuts:
+            pc = data.get("prompt_config") or PromptConfig()
+            if isinstance(pc, dict):
+                pc = PromptConfig(**pc)
+            updates = {k: v for k, v in active_shortcuts.items() if getattr(pc, k) is None}
+            if updates:
+                pc = pc.model_copy(update=updates)
+            data["prompt_config"] = pc
 
         super().__init__(**data)
 
@@ -327,33 +384,31 @@ class VerificationConfig(BaseModel):
         # Validate model configurations
         # Note: Basic model validation (model_name, model_provider) is also done by
         # the adapter factory at runtime, but we validate here too for early failure.
+        from karenina.adapters.registry import AdapterRegistry
+
         for model in self.answering_models + self.parsing_models:
             if not model.model_name:
                 raise ValueError(f"Model name is required in model configuration (model: {model.id})")
             # Model provider requirement is defined per-adapter via AdapterSpec.requires_provider
-            from karenina.adapters.registry import AdapterRegistry
-
             spec = AdapterRegistry.get_spec(model.interface)
             if spec is not None and spec.requires_provider and not model.model_provider:
                 raise ValueError(f"Model provider is required for interface '{model.interface}'. (model: {model.id})")
-            # System prompt is required for verification (not validated by factory)
+
+        # System prompt is required for answering models (not validated by factory).
+        # Parsing models do not require a system_prompt; their prompt is assembled
+        # by the pipeline at runtime.
+        for model in self.answering_models:
             if not model.system_prompt:
-                raise ValueError(f"System prompt is required for model {model.id}")
+                raise ValueError(f"System prompt is required for answering model {model.id}")
 
         # Additional validation for rubric-enabled scenarios
-        if self.rubric_enabled:
-            # Ensure parsing models are configured since they're needed for rubric evaluation
-            if not self.parsing_models:
-                raise ValueError("Parsing models are required when rubric evaluation is enabled")
-
-            # Check that replicate count is valid
-            if self.replicate_count < 1:
-                raise ValueError("Replicate count must be at least 1")
+        if self.rubric_enabled and not self.parsing_models:
+            raise ValueError("Parsing models are required when rubric evaluation is enabled")
 
         # Additional validation for few-shot prompting scenarios
-        if self.few_shot_config is not None and self.few_shot_config.enabled:
-            if self.few_shot_config.global_mode == "k-shot" and self.few_shot_config.global_k < 1:
-                raise ValueError("Global few-shot k value must be at least 1 when using k-shot mode")
+        if self.few_shot_config is not None and self.few_shot_config.source != "disabled":
+            if self.few_shot_config.pool_mode == "k-shot" and self.few_shot_config.pool_k < 1:
+                raise ValueError("Pool few-shot k value must be at least 1 when using k-shot mode")
 
             # Validate question-specific k values
             for question_id, question_config in self.few_shot_config.question_configs.items():
@@ -361,6 +416,14 @@ class VerificationConfig(BaseModel):
                     raise ValueError(
                         f"Question {question_id} few-shot k value must be at least 1 when using k-shot mode"
                     )
+
+        # Validate incompatible deep-judgment combinations
+        if self.deep_judgment_mode == "reasoning_only" and self.deep_judgment_search_enabled:
+            raise ValueError(
+                "deep_judgment_search_enabled=True is incompatible with "
+                "deep_judgment_mode='reasoning_only'. Search requires excerpt "
+                "extraction. Use deep_judgment_mode='full' for search."
+            )
 
         # Additional validation for search-enhanced deep-judgment
         if self.deep_judgment_search_enabled:
@@ -385,10 +448,13 @@ class VerificationConfig(BaseModel):
 
             for pm in self.parsing_models:
                 spec = AdapterRegistry.get_spec(pm.interface)
-                if spec is None or spec.agent_factory is None:
+                if spec is None or spec.agent_tier != "deep_agent":
+                    tier = spec.agent_tier if spec else "unknown"
                     raise ValueError(
-                        "agentic_parsing=True requires an interface with "
-                        f"AgentPort support, but '{pm.interface}' does not provide one."
+                        f"agentic_parsing=True requires an interface with "
+                        f"agent_tier='deep_agent', but '{pm.interface}' has "
+                        f"agent_tier='{tier}'. Use 'claude_agent_sdk' or "
+                        f"'langchain_deep_agents' instead."
                     )
 
             # Agentic parsing is not supported in rubric_only mode
@@ -465,10 +531,10 @@ class VerificationConfig(BaseModel):
             lines.append("  Rubric: disabled")
 
         # Deep Judgment - Template
-        if self.deep_judgment_enabled:
+        if self.deep_judgment_mode != "disabled":
             features_shown = True
             lines.append(
-                f"  Deep Judgment (Template): "
+                f"  Deep Judgment (Template): mode={self.deep_judgment_mode}, "
                 f"max_excerpts={self.deep_judgment_max_excerpts_per_attribute}, "
                 f"fuzzy_threshold={self.deep_judgment_fuzzy_match_threshold}"
             )
@@ -488,8 +554,8 @@ class VerificationConfig(BaseModel):
             # Warning about sequential evaluation
             lines.append("    ⚠️  Deep judgment traits are ALWAYS evaluated sequentially (one-by-one)")
             if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config:
-                global_traits = self.deep_judgment_rubric_config.get("global", {})
-                question_configs = self.deep_judgment_rubric_config.get("question_specific", {})
+                global_traits = self.deep_judgment_rubric_config.global_traits
+                question_configs = self.deep_judgment_rubric_config.question_specific
                 lines.append(f"    └─ {len(global_traits)} global traits, {len(question_configs)} question configs")
 
         # Abstention
@@ -511,11 +577,11 @@ class VerificationConfig(BaseModel):
 
         # Few-Shot
         few_shot_config = self.get_few_shot_config()
-        if few_shot_config and few_shot_config.enabled:
+        if few_shot_config and few_shot_config.source != "disabled":
             features_shown = True
-            lines.append(f"  Few-Shot: mode={few_shot_config.global_mode}")
-            if few_shot_config.global_mode == "k-shot":
-                lines.append(f"    └─ k={few_shot_config.global_k}")
+            lines.append(f"  Few-Shot: source={few_shot_config.source}, pool_mode={few_shot_config.pool_mode}")
+            if few_shot_config.pool_mode == "k-shot":
+                lines.append(f"    └─ pool_k={few_shot_config.pool_k}")
             if few_shot_config.question_configs:
                 lines.append(f"    └─ {len(few_shot_config.question_configs)} question configs")
 
@@ -547,7 +613,7 @@ class VerificationConfig(BaseModel):
             True if few-shot is enabled
         """
         config = self.get_few_shot_config()
-        return config is not None and config.enabled
+        return config is not None and config.source != "disabled"
 
     # ===== Preset Utility Class Methods =====
     # These methods delegate to config_presets module for backward compatibility.
@@ -616,7 +682,7 @@ class VerificationConfig(BaseModel):
         abstention: bool | None = None,
         sufficiency: bool | None = None,
         embedding_check: bool | None = None,
-        deep_judgment: bool | None = None,
+        deep_judgment_mode: str | None = None,
         # Evaluation settings
         evaluation_mode: str | None = None,
         embedding_threshold: float | None = None,
@@ -634,7 +700,7 @@ class VerificationConfig(BaseModel):
         deep_judgment_rubric_retry_attempts: int | None = None,
         deep_judgment_rubric_search: bool | None = None,
         deep_judgment_rubric_search_tool: str | None = None,
-        deep_judgment_rubric_config: dict[str, Any] | None = None,
+        deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | dict[str, Any] | None = None,
     ) -> "VerificationConfig":
         """
         Create a VerificationConfig by applying overrides to an optional base config.
@@ -661,7 +727,7 @@ class VerificationConfig(BaseModel):
             abstention: Override for abstention detection flag.
             sufficiency: Override for sufficiency checking flag.
             embedding_check: Override for embedding check flag.
-            deep_judgment: Override for deep judgment flag.
+            deep_judgment_mode: Override for template deep judgment mode.
             evaluation_mode: Override for evaluation mode.
             embedding_threshold: Override for embedding similarity threshold.
             embedding_model: Override for embedding model name.
@@ -699,8 +765,8 @@ class VerificationConfig(BaseModel):
             config_dict["sufficiency_enabled"] = sufficiency
         if embedding_check is not None:
             config_dict["embedding_check_enabled"] = embedding_check
-        if deep_judgment is not None:
-            config_dict["deep_judgment_enabled"] = deep_judgment
+        if deep_judgment_mode is not None:
+            config_dict["deep_judgment_mode"] = deep_judgment_mode
 
         # Evaluation settings
         if evaluation_mode is not None:

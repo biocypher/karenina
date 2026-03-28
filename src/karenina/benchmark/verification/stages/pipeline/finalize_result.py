@@ -91,12 +91,30 @@ class FinalizeResultStage(BaseVerificationStage):
         # Extract parsed responses if available
         parsed_gt_response = None
         parsed_llm_response = None
+        field_results_dict = None
+        composition_strategy_str = None
         parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
         if parsed_answer is not None:
             try:
                 parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
             except Exception as e:
-                logger.warning(f"Failed to split parsed response: {e}")
+                logger.warning("Failed to split parsed response: %s", e)
+
+            # Compute per-field primitive verification results (issue 150)
+            if hasattr(parsed_answer, "_compute_field_results"):
+                try:
+                    computed = parsed_answer._compute_field_results()
+                    if computed:
+                        field_results_dict = computed
+                except Exception as e:
+                    logger.warning("Failed to compute field results: %s", e)
+
+            # Extract composition strategy from template class (issue 151)
+            strategy_cls = getattr(parsed_answer.__class__, "VerificationStrategy", None)
+            if strategy_cls is not None:
+                strategy = getattr(strategy_cls, "verify_strategy", None)
+                if strategy is not None:
+                    composition_strategy_str = self._format_strategy(strategy)
 
         # Determine which verification types were performed
         # Template verification was performed if VerifyTemplateStage ran and set field_verification_result
@@ -153,6 +171,7 @@ class FinalizeResultStage(BaseVerificationStage):
             template_id=context.template_id,
             completed_without_errors=context.completed_without_errors,
             error=context.error,
+            failed_stage=context.get_result_field(ArtifactKeys.FAILED_STAGE),
             keywords=context.keywords,
             question_text=context.question_text,
             raw_answer=context.raw_answer,
@@ -165,6 +184,13 @@ class FinalizeResultStage(BaseVerificationStage):
             result_id=result_id,
             run_name=context.run_name,
             replicate=context.replicate,
+            few_shot_enabled=context.few_shot_enabled,
+            few_shot_example_count=len(context.few_shot_examples) if context.few_shot_examples else 0,
+            evaluation_mode=context.get_result_field(ArtifactKeys.EVALUATION_MODE),
+            scenario_id=context.scenario_id,
+            scenario_node=context.scenario_node,
+            scenario_turn=context.scenario_turn,
+            scenario_path=context.scenario_path,
         )
 
         # Build structured trace_messages for storage
@@ -196,6 +222,9 @@ class FinalizeResultStage(BaseVerificationStage):
             template_verification_performed=template_verification_performed,
             verify_result=context.get_result_field(ArtifactKeys.VERIFY_RESULT),
             verify_granular_result=context.get_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT),
+            field_verification_error=context.get_result_field(ArtifactKeys.FIELD_VERIFICATION_ERROR),
+            field_results=field_results_dict,
+            composition_strategy=composition_strategy_str,
             embedding_check_performed=context.get_result_field(ArtifactKeys.EMBEDDING_CHECK_PERFORMED, False),
             embedding_similarity_score=context.get_result_field(ArtifactKeys.EMBEDDING_SIMILARITY_SCORE),
             embedding_override_applied=context.get_result_field(ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED, False),
@@ -301,13 +330,15 @@ class FinalizeResultStage(BaseVerificationStage):
                 agentic_trait_investigation_traces=agentic_trait_traces,
                 dynamic_rubric_skipped_traits=dynamic_skipped,
                 dynamic_rubric_promoted_traits=dynamic_promoted,
+                trait_provenance=context.trait_provenance,
             )
 
         # Create deep-judgment subclass (if enabled)
         deep_judgment = None
-        if context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False):
+        dj_mode = context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_MODE)
+        if dj_mode and dj_mode != "disabled":
             deep_judgment = VerificationResultDeepJudgment(
-                deep_judgment_enabled=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False),
+                deep_judgment_mode=dj_mode,
                 deep_judgment_performed=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False),
                 extracted_excerpts=context.get_result_field(ArtifactKeys.EXTRACTED_EXCERPTS),
                 attribute_reasoning=context.get_result_field(ArtifactKeys.ATTRIBUTE_REASONING),
@@ -374,3 +405,23 @@ class FinalizeResultStage(BaseVerificationStage):
                     context.workspace_path,
                     exc_info=True,
                 )
+
+    @staticmethod
+    def _format_strategy(strategy: Any) -> str:
+        """Format a composition strategy node as a human-readable string.
+
+        Args:
+            strategy: A composition strategy node (AllOf, AnyOf, AtLeastN).
+
+        Returns:
+            String like "all_of", "any_of", or "at_least_n(2)".
+        """
+        from karenina.schemas.entities.composition import AllOf, AnyOf, AtLeastN
+
+        if isinstance(strategy, AnyOf):
+            return "any_of"
+        elif isinstance(strategy, AtLeastN):
+            return f"at_least_n({strategy.n})"
+        elif isinstance(strategy, AllOf):
+            return "all_of"
+        return str(strategy.__class__.__name__).lower()

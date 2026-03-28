@@ -287,7 +287,7 @@ print(f"Global logs after trace: {len(task.global_logs)}")
 Pass `step_id` to `add_rubric()` to attach criteria to a specific step. Each step can have different traits, tuned to what that phase should accomplish.
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
 
 # Retrieval: did it find relevant sources?
 task.add_rubric(Rubric(
@@ -350,7 +350,7 @@ task.add_rubric(Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             pattern=r"\[.+?\d{4}\]|\(.+?\d{4}\)",
             description="Response includes author-year citations.",

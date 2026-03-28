@@ -16,6 +16,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
 )
 from karenina.utils.checkpoint import generate_template_id
 
@@ -40,7 +41,7 @@ def run_single_model_verification(
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
     sufficiency_enabled: bool = False,
-    deep_judgment_enabled: bool = False,
+    deep_judgment_mode: str = "disabled",
     rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -50,7 +51,7 @@ def run_single_model_verification(
     # Deep-judgment rubric configuration (NEW)
     deep_judgment_rubric_mode: str = "disabled",
     deep_judgment_rubric_global_excerpts: bool = True,
-    deep_judgment_rubric_config: dict[str, Any] | None = None,
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None,
     deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS,
     deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
@@ -75,6 +76,12 @@ def run_single_model_verification(
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
     agentic_rubric_parallel: bool = False,
+    # Embedding check configuration
+    embedding_check_enabled: bool = False,
+    embedding_check_model: str | None = None,
+    embedding_check_threshold: float | None = None,
+    # Trait provenance
+    trait_provenance: dict[str, str] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -98,7 +105,7 @@ def run_single_model_verification(
         few_shot_enabled: Whether to use few-shot prompting (disabled by default)
         abstention_enabled: Whether to enable abstention detection
         sufficiency_enabled: Whether to enable trace sufficiency detection
-        deep_judgment_enabled: Whether to enable deep-judgment parsing
+        deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full")
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
             - "batch": All traits evaluated in single LLM call (default, efficient)
             - "sequential": Traits evaluated one-by-one (reliable, more expensive)
@@ -146,7 +153,7 @@ def run_single_model_verification(
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_mode=deep_judgment_mode,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
         # Deep-Judgment Configuration
@@ -185,6 +192,12 @@ def run_single_model_verification(
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,
+        # Embedding Check
+        embedding_check_enabled=embedding_check_enabled,
+        embedding_check_model=embedding_check_model,
+        embedding_check_threshold=embedding_check_threshold,
+        # Trait Provenance
+        trait_provenance=trait_provenance,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
@@ -201,9 +214,7 @@ def run_single_model_verification(
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
     context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
-    # Determine evaluation mode automatically if not explicitly set.
-    # If rubric or dynamic_rubric is provided and mode is template_only,
-    # upgrade to template_and_rubric.
+    # Warn if rubric traits are provided but evaluation_mode won't use them.
     _has_rubric_traits = rubric and (
         rubric.llm_traits
         or rubric.regex_traits
@@ -213,7 +224,16 @@ def run_single_model_verification(
     )
     _has_dynamic_rubric_traits = dynamic_rubric is not None and not dynamic_rubric.is_empty()
     if (_has_rubric_traits or _has_dynamic_rubric_traits) and evaluation_mode == "template_only":
-        evaluation_mode = "template_and_rubric"
+        logger.warning(
+            "Rubric traits were provided but evaluation_mode='template_only'. "
+            "Rubric evaluation will be skipped. Set evaluation_mode='template_and_rubric' "
+            "to evaluate rubric traits."
+        )
+
+    if evaluation_mode == "rubric_only" and not _has_rubric_traits and not _has_dynamic_rubric_traits:
+        logger.warning(
+            "evaluation_mode='rubric_only' but no rubric traits provided. Rubric evaluation will produce no scores."
+        )
 
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
@@ -221,7 +241,7 @@ def run_single_model_verification(
         dynamic_rubric=dynamic_rubric,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_enabled=deep_judgment_mode != "disabled",
         evaluation_mode=evaluation_mode,
         agentic_parsing=agentic_parsing,
     )

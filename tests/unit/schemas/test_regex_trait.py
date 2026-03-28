@@ -1,7 +1,7 @@
-"""Unit tests for RegexTrait evaluation rules.
+"""Unit tests for RegexRubricTrait evaluation rules.
 
 Tests cover:
-- RegexTrait creation and validation
+- RegexRubricTrait creation and validation
 - Pattern validation (valid and invalid regex)
 - Case sensitive and insensitive matching
 - Invert result functionality
@@ -12,17 +12,17 @@ Tests cover:
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.entities import RegexTrait
+from karenina.schemas.entities import RegexRubricTrait
 
 # =============================================================================
-# RegexTrait Creation and Defaults Tests
+# RegexRubricTrait Creation and Defaults Tests
 # =============================================================================
 
 
 @pytest.mark.unit
 def test_regex_trait_minimal() -> None:
-    """Test RegexTrait with minimal required fields."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with minimal required fields."""
+    trait = RegexRubricTrait(
         name="has_email",
         pattern=r"\S+@\S+",
         higher_is_better=True,
@@ -37,8 +37,8 @@ def test_regex_trait_minimal() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_with_all_fields() -> None:
-    """Test RegexTrait with all fields specified."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with all fields specified."""
+    trait = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         case_sensitive=False,
@@ -55,8 +55,8 @@ def test_regex_trait_with_all_fields() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_defaults() -> None:
-    """Test RegexTrait field defaults."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait field defaults."""
+    trait = RegexRubricTrait(
         name="test",
         pattern=r"\w+",
         higher_is_better=True,
@@ -71,7 +71,7 @@ def test_regex_trait_defaults() -> None:
 def test_regex_trait_extra_fields_forbidden() -> None:
     """Test that extra fields are rejected."""
     with pytest.raises(ValidationError):
-        RegexTrait(
+        RegexRubricTrait(
             name="test",
             pattern=r"\w+",
             higher_is_better=True,
@@ -83,7 +83,7 @@ def test_regex_trait_extra_fields_forbidden() -> None:
 def test_regex_trait_name_min_length() -> None:
     """Test that name must be at least 1 character."""
     with pytest.raises(ValidationError) as exc_info:
-        RegexTrait(
+        RegexRubricTrait(
             name="",
             pattern=r"\w+",
             higher_is_better=True,
@@ -100,8 +100,8 @@ def test_regex_trait_name_min_length() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_valid_pattern_simple() -> None:
-    """Test RegexTrait accepts valid simple pattern."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait accepts valid simple pattern."""
+    trait = RegexRubricTrait(
         name="word_match",
         pattern=r"hello",
         higher_is_better=True,
@@ -112,8 +112,8 @@ def test_regex_trait_valid_pattern_simple() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_valid_pattern_complex() -> None:
-    """Test RegexTrait accepts valid complex pattern."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait accepts valid complex pattern."""
+    trait = RegexRubricTrait(
         name="complex_pattern",
         pattern=r"(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$",
         higher_is_better=True,
@@ -126,7 +126,7 @@ def test_regex_trait_valid_pattern_complex() -> None:
 def test_regex_trait_invalid_pattern_raises_error() -> None:
     """Test that invalid regex pattern raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        RegexTrait(
+        RegexRubricTrait(
             name="bad_pattern",
             pattern=r"[invalid(",  # Unclosed bracket
             higher_is_better=True,
@@ -139,7 +139,7 @@ def test_regex_trait_invalid_pattern_raises_error() -> None:
 def test_regex_trait_unmatched_bracket() -> None:
     """Test unmatched bracket pattern raises error."""
     with pytest.raises(ValidationError):
-        RegexTrait(
+        RegexRubricTrait(
             name="unmatched",
             pattern=r"[abc",
             higher_is_better=True,
@@ -150,7 +150,7 @@ def test_regex_trait_unmatched_bracket() -> None:
 def test_regex_trait_invalid_escape() -> None:
     """Test invalid escape sequence raises error."""
     with pytest.raises(ValidationError):
-        RegexTrait(
+        RegexRubricTrait(
             name="bad_escape",
             pattern=r"\p",  # \p is not a valid escape in Python regex
             higher_is_better=True,
@@ -165,7 +165,7 @@ def test_regex_trait_invalid_escape() -> None:
 @pytest.mark.unit
 def test_regex_trait_case_sensitive_match() -> None:
     """Test case-sensitive matching."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="uppercase_word",
         pattern=r"[A-Z]{2,}",
         case_sensitive=True,
@@ -179,7 +179,7 @@ def test_regex_trait_case_sensitive_match() -> None:
 @pytest.mark.unit
 def test_regex_trait_case_insensitive_match() -> None:
     """Test case-insensitive matching with literal word."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="case_insensitive_word",
         pattern=r"error",
         case_sensitive=False,
@@ -194,7 +194,7 @@ def test_regex_trait_case_insensitive_match() -> None:
 @pytest.mark.unit
 def test_regex_trait_default_case_sensitive() -> None:
     """Test that case_sensitive defaults to True."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="default_sensitive",
         pattern=r"ERROR",
         higher_is_better=True,
@@ -214,7 +214,7 @@ def test_regex_trait_default_case_sensitive() -> None:
 @pytest.mark.unit
 def test_regex_trait_invert_result_true_to_false() -> None:
     """Test invert_result converts match to False."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
         invert_result=True,
@@ -229,7 +229,7 @@ def test_regex_trait_invert_result_true_to_false() -> None:
 @pytest.mark.unit
 def test_regex_trait_invert_result_false_to_true() -> None:
     """Test invert_result with case insensitive matching."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bBADWORD\b",
         case_sensitive=False,
@@ -245,7 +245,7 @@ def test_regex_trait_invert_result_false_to_true() -> None:
 @pytest.mark.unit
 def test_regex_trait_invert_result_with_no_match() -> None:
     """Test invert_result when pattern doesn't match."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
         invert_result=True,
@@ -259,7 +259,7 @@ def test_regex_trait_invert_result_with_no_match() -> None:
 @pytest.mark.unit
 def test_regex_trait_default_not_inverted() -> None:
     """Test that invert_result defaults to False."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_url",
         pattern=r"https?://\S+",
         higher_is_better=True,
@@ -279,7 +279,7 @@ def test_regex_trait_default_not_inverted() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_simple_match() -> None:
     """Test evaluate() with simple matching pattern."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="contains_python",
         pattern=r"python",
         case_sensitive=True,
@@ -293,7 +293,7 @@ def test_regex_evaluate_simple_match() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_word_boundary() -> None:
     """Test evaluate() with word boundary."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_test",
         pattern=r"\btest\b",
         higher_is_better=True,
@@ -306,7 +306,7 @@ def test_regex_evaluate_word_boundary() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_email_pattern() -> None:
     """Test evaluate() with email pattern."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_email",
         pattern=r"\S+@\S+\.\S+",
         higher_is_better=True,
@@ -319,7 +319,7 @@ def test_regex_evaluate_email_pattern() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_multiple_matches() -> None:
     """Test evaluate() returns True when multiple matches exist."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_digit",
         pattern=r"\d+",
         higher_is_better=True,
@@ -331,7 +331,7 @@ def test_regex_evaluate_multiple_matches() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_empty_string() -> None:
     """Test evaluate() with empty string."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_content",
         pattern=r"\w+",
         higher_is_better=True,
@@ -343,7 +343,7 @@ def test_regex_evaluate_empty_string() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_special_characters() -> None:
     """Test evaluate() with special character pattern."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_dollar_sign",
         pattern=r"\$",
         higher_is_better=True,
@@ -356,7 +356,7 @@ def test_regex_evaluate_special_characters() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_multiline_text() -> None:
     """Test evaluate() with multiline input."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_error",
         pattern=r"ERROR",
         case_sensitive=True,
@@ -375,7 +375,7 @@ def test_regex_evaluate_multiline_text() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_unicode() -> None:
     """Test evaluate() with unicode characters."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="has_emoji",
         pattern=r"😀",
         higher_is_better=True,
@@ -388,7 +388,7 @@ def test_regex_evaluate_unicode() -> None:
 @pytest.mark.unit
 def test_regex_evaluate_newline_carriage_return() -> None:
     """Test evaluate() with newline and carriage return in pattern."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="multiline",
         pattern=r"line1.*line2",
         higher_is_better=True,
@@ -405,8 +405,8 @@ def test_regex_evaluate_newline_carriage_return() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_higher_is_better_true() -> None:
-    """Test RegexTrait with higher_is_better=True."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with higher_is_better=True."""
+    trait = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         higher_is_better=True,
@@ -417,8 +417,8 @@ def test_regex_trait_higher_is_better_true() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_higher_is_better_false() -> None:
-    """Test RegexTrait with higher_is_better=False."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with higher_is_better=False."""
+    trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
         higher_is_better=False,
@@ -436,7 +436,7 @@ def test_regex_trait_higher_is_better_false() -> None:
 def test_regex_evaluate_runtime_error_on_pattern_failure() -> None:
     """Test evaluate() raises RuntimeError on unexpected errors."""
     # This test verifies error handling, though valid patterns shouldn't fail
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="test",
         pattern=r"test",  # Valid pattern
         higher_is_better=True,
@@ -448,8 +448,8 @@ def test_regex_evaluate_runtime_error_on_pattern_failure() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_description_field() -> None:
-    """Test RegexTrait description field."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait description field."""
+    trait = RegexRubricTrait(
         name="citation_check",
         pattern=r"\[\d+\]",
         description="Checks for academic citation format",
@@ -461,8 +461,8 @@ def test_regex_trait_description_field() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_with_escaped_backslash() -> None:
-    """Test RegexTrait with escaped backslash in pattern."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with escaped backslash in pattern."""
+    trait = RegexRubricTrait(
         name="has_backslash",
         pattern=r"\\",
         higher_is_better=True,
@@ -474,8 +474,8 @@ def test_regex_trait_with_escaped_backslash() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_with_digit_class() -> None:
-    """Test RegexTrait with digit character class."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with digit character class."""
+    trait = RegexRubricTrait(
         name="has_number",
         pattern=r"\d+",
         higher_is_better=True,
@@ -487,8 +487,8 @@ def test_regex_trait_with_digit_class() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_with_negated_class() -> None:
-    """Test RegexTrait with negated character class."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with negated character class."""
+    trait = RegexRubricTrait(
         name="no_spaces",
         pattern=r"^\S+$",
         higher_is_better=True,
@@ -500,8 +500,8 @@ def test_regex_trait_with_negated_class() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_with_anchors() -> None:
-    """Test RegexTrait with start/end anchors."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with start/end anchors."""
+    trait = RegexRubricTrait(
         name="starts_with_hello",
         pattern=r"^Hello",
         higher_is_better=True,
@@ -514,7 +514,7 @@ def test_regex_trait_with_anchors() -> None:
 @pytest.mark.unit
 def test_regex_trait_case_insensitive_with_uppercase_pattern() -> None:
     """Test case insensitive with uppercase pattern."""
-    trait = RegexTrait(
+    trait = RegexRubricTrait(
         name="case_insensitive",
         pattern=r"ERROR",
         case_sensitive=False,
@@ -543,8 +543,8 @@ def test_regex_trait_case_insensitive_with_uppercase_pattern() -> None:
     ids=["lookahead", "lookbehind", "non_capturing", "capturing"],
 )
 def test_regex_trait_advanced_patterns(name: str, pattern: str, match_text: str, no_match_text: str) -> None:
-    """Test RegexTrait with advanced regex patterns."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with advanced regex patterns."""
+    trait = RegexRubricTrait(
         name=name,
         pattern=pattern,
         higher_is_better=True,
@@ -556,8 +556,8 @@ def test_regex_trait_advanced_patterns(name: str, pattern: str, match_text: str,
 
 @pytest.mark.unit
 def test_regex_trait_zero_quantifier() -> None:
-    """Test RegexTrait with zero quantifier."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with zero quantifier."""
+    trait = RegexRubricTrait(
         name="has_optional",
         pattern=r"\d?\.\d+",
         higher_is_better=True,
@@ -586,8 +586,8 @@ def test_regex_trait_zero_quantifier() -> None:
     ids=["star", "plus", "exact", "lazy", "dot"],
 )
 def test_regex_trait_quantifiers(name: str, pattern: str, match_text: str, no_match_text: str) -> None:
-    """Test RegexTrait with various quantifiers."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with various quantifiers."""
+    trait = RegexRubricTrait(
         name=name,
         pattern=pattern,
         higher_is_better=True,
@@ -610,8 +610,8 @@ def test_regex_trait_quantifiers(name: str, pattern: str, match_text: str, no_ma
     ids=["two_digits", "three_digits", "four_digits", "one_digit", "five_digits"],
 )
 def test_regex_trait_range_quantifier(text: str, expected: bool) -> None:
-    """Test RegexTrait with range quantifier {2,4}."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with range quantifier {2,4}."""
+    trait = RegexRubricTrait(
         name="two_to_four_digits",
         pattern=r"^\d{2,4}$",
         higher_is_better=True,
@@ -636,8 +636,8 @@ def test_regex_trait_range_quantifier(text: str, expected: bool) -> None:
     ids=["or", "set", "negated_set"],
 )
 def test_regex_trait_pattern_types(name: str, pattern: str, match_text: str, no_match_text: str) -> None:
-    """Test RegexTrait with various pattern types."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with various pattern types."""
+    trait = RegexRubricTrait(
         name=name,
         pattern=pattern,
         higher_is_better=True,
@@ -653,12 +653,25 @@ def test_regex_trait_pattern_types(name: str, pattern: str, match_text: str, no_
 
 
 @pytest.mark.unit
-def test_regex_trait_higher_is_better_none_defaults_to_true() -> None:
-    """Test that higher_is_better=None defaults to True (old checkpoint data)."""
-    trait = RegexTrait(
+def test_regex_trait_higher_is_better_none_preserved() -> None:
+    """Test that explicit higher_is_better=None is preserved (directionality not applicable)."""
+    trait = RegexRubricTrait(
         name="test",
         pattern=r"\w+",
         higher_is_better=None,
+    )
+
+    assert trait.higher_is_better is None
+
+
+@pytest.mark.unit
+def test_regex_trait_higher_is_better_missing_defaults_to_true() -> None:
+    """Test that missing higher_is_better defaults to True (old checkpoint data)."""
+    trait = RegexRubricTrait.model_validate(
+        {
+            "name": "test",
+            "pattern": r"\w+",
+        }
     )
 
     assert trait.higher_is_better is True

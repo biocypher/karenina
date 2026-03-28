@@ -12,7 +12,7 @@ from karenina.schemas.entities.rubric import (
     AgenticRubricTrait,
     DynamicRubric,
     LLMRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 
 
@@ -33,7 +33,7 @@ def _make_regex_dynamic_rubric() -> DynamicRubric:
     """Create a DynamicRubric with a single regex trait."""
     return DynamicRubric(
         regex_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="has_citations",
                 summary="Response includes bracket citations",
                 pattern=r"\[\d+\]",

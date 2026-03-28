@@ -356,8 +356,21 @@ class LangChainLLMAdapter:
                     usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
                     if usage.total_tokens == 0:
                         usage = extract_usage_from_response(response, model_name=self._config.model_name)
+                    # Serialize to JSON so callers can json.loads(response.content)
+                    content = response.model_dump_json()
                     return LLMResponse(
-                        content=str(response),
+                        content=content,
+                        usage=usage,
+                        raw=response,
+                    )
+                if isinstance(response, dict):
+                    # Some LangChain models return a dict instead of a Pydantic model
+                    usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
+                    if usage.total_tokens == 0:
+                        usage = extract_usage_from_response(response, model_name=self._config.model_name)
+                    content = json.dumps(response)
+                    return LLMResponse(
+                        content=content,
                         usage=usage,
                         raw=response,
                     )

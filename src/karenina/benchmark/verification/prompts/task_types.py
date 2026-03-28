@@ -25,6 +25,14 @@ class PromptTask(str, Enum):
     PARSING = "parsing"
     """Judge LLM parses the raw response into a structured answer template."""
 
+    # --- Agentic template parsing ---
+
+    AGENTIC_PARSING_INVESTIGATION = "agentic_parsing_investigation"
+    """Investigation agent examines workspace/trace to evaluate answer template."""
+
+    AGENTIC_PARSING_EXTRACTION = "agentic_parsing_extraction"
+    """Extracts structured answer from agentic investigation trace."""
+
     # --- Trace-level quality checks ---
 
     ABSTENTION_DETECTION = "abstention_detection"
@@ -60,6 +68,9 @@ class PromptTask(str, Enum):
 
     DJ_TEMPLATE_REASONING = "dj_template_reasoning"
     """Stage 2: Generates reasoning mapping excerpts to template attributes."""
+
+    DJ_TEMPLATE_REASONING_ONLY = "dj_template_reasoning_only"
+    """Reasoning-only: generates per-attribute reasoning directly from the response (no excerpts)."""
 
     # --- Deep judgment: rubric trait evaluation flow ---
 

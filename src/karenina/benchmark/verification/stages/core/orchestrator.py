@@ -85,7 +85,7 @@ class StageOrchestrator:
         rubric: Rubric | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
-        deep_judgment_enabled: bool = False,
+        deep_judgment_enabled: bool = False,  # Whether any template deep-judgment mode is active
         evaluation_mode: str = "template_only",
         agentic_parsing: bool = False,
         dynamic_rubric: DynamicRubric | None = None,
@@ -139,14 +139,22 @@ class StageOrchestrator:
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
 
+            # Sufficiency check is not applicable in rubric_only mode (no template parsing)
+            if sufficiency_enabled:
+                logger.info(
+                    "sufficiency_enabled=True ignored in rubric_only mode: "
+                    "sufficiency check requires template parsing which is skipped"
+                )
+
             # Rubric evaluation (required for rubric_only mode)
             _rubric_has_non_agentic = rubric and (
                 rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits
             )
             if _rubric_has_non_agentic or _dynamic_has_non_agentic:
                 stages.append(RubricEvaluationStage())
-                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
-                stages.append(DeepJudgmentRubricAutoFailStage())
+                # Deep judgment rubric auto-fail (only when deep judgment is enabled)
+                if deep_judgment_enabled:
+                    stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation
             if (rubric and rubric.agentic_traits) or _dynamic_has_agentic:
@@ -198,8 +206,9 @@ class StageOrchestrator:
             )
             if evaluation_mode == "template_and_rubric" and (_rubric_has_non_agentic or _dynamic_has_non_agentic):
                 stages.append(RubricEvaluationStage())
-                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
-                stages.append(DeepJudgmentRubricAutoFailStage())
+                # Deep judgment rubric auto-fail (only when deep judgment is enabled)
+                if deep_judgment_enabled:
+                    stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation (after Stage 11)
             if evaluation_mode == "template_and_rubric" and (
@@ -258,12 +267,13 @@ class StageOrchestrator:
                 continue
 
             # Execute stage
+            error_before = context.error
             try:
                 logger.debug(f"Executing stage: {stage.name}")
                 stage.execute(context)
 
-                # If error was set during execution, log it
-                if context.error:
+                # Log only if this stage introduced or changed the error
+                if context.error and context.error != error_before:
                     logger.warning(f"Stage {stage.name} set error: {context.error}")
                     # Don't break - FinalizeResultStage needs to run
 

@@ -150,6 +150,7 @@ def scenario_to_schema_org(defn: ScenarioDefinition) -> SchemaOrgScenario:
             modelOverride=(node.model_override.model_dump() if node.model_override else None),
             toolFilter=(node.tool_filter.model_dump() if node.tool_filter else None),
             stateUpdateSource=node.state_update_source,
+            questionData=node.question.model_dump(),
             metadata=node.metadata or {},
         )
 
@@ -289,11 +290,15 @@ def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
 
     nodes: dict[str, ScenarioNode] = {}
     for node_id, snode in schema.nodes.items():
-        q = Question(
-            question=snode.question.text,
-            raw_answer=snode.question.acceptedAnswer.text,
-            answer_template=snode.question.hasPart.text,
-        )
+        if snode.questionData is not None:
+            q = Question(**snode.questionData)
+        else:
+            # Backward compat: old checkpoints without questionData
+            q = Question(
+                question=snode.question.text,
+                raw_answer=snode.question.acceptedAnswer.text,
+                answer_template=snode.question.hasPart.text,
+            )
 
         state_update_fn = None
         if snode.stateUpdateSource:

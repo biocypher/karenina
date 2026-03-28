@@ -3,7 +3,7 @@
 import pytest
 from pydantic import BaseModel
 
-from karenina.schemas.entities._template_validation import _validate_template_fields
+from karenina.schemas.entities._rubric_kind_validation import _validate_template_fields
 
 
 @pytest.mark.unit

@@ -129,7 +129,7 @@ def _make(qid, q_text, raw_ans, dj):
             parsed_llm_response={"answer": raw_ans},
         ),
         deep_judgment=VerificationResultDeepJudgment(
-            deep_judgment_enabled=True, deep_judgment_performed=True,
+            deep_judgment_mode="full", deep_judgment_performed=True,
             extracted_excerpts=dj["excerpts"], attribute_reasoning=dj["reasoning"],
             deep_judgment_stages_completed=["excerpts", "reasoning", "parameters"],
             deep_judgment_model_calls=3,
@@ -227,7 +227,7 @@ config = VerificationConfig(
                     temperature=0.0)
     ],
     evaluation_mode="template_only",
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
 )
 
 results = benchmark.run_verification(config)
@@ -236,10 +236,10 @@ print(f"Results with DJ: {len(results)}")
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `deep_judgment_enabled` | `bool` | `False` | Enable deep judgment for template verification |
+| `deep_judgment_mode` | `Literal` | `"disabled"` | Template deep-judgment mode: `"disabled"`, `"reasoning_only"`, `"full"` |
 | `deep_judgment_search_enabled` | `bool` | `False` | Enable external search validation |
 | `deep_judgment_excerpt_retry_attempts` | `int` | `2` | Max retries for excerpt extraction |
-| `deep_judgment_fuzzy_match_threshold` | `float` | `0.7` | Min similarity score for excerpt matching |
+| `deep_judgment_fuzzy_match_threshold` | `float` | `0.80` | Min similarity score for excerpt matching |
 
 ---
 
@@ -289,11 +289,11 @@ config_with_search = VerificationConfig(
                     temperature=0.0)
     ],
     evaluation_mode="template_only",
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
     deep_judgment_search_enabled=True,
 )
 
-print(f"DJ enabled: {config_with_search.deep_judgment_enabled}")
+print(f"DJ mode: {config_with_search.deep_judgment_mode}")
 print(f"Search enabled: {config_with_search.deep_judgment_search_enabled}")
 ```
 

@@ -262,8 +262,8 @@ Each field uses a `VerifiedField` with a verification primitive that checks the 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
 from karenina.schemas.primitives import BooleanMatch, NumericTolerance
 
-TEMPLATE_CODE = '''
-class LogisticRegressionAnswer(BaseAnswer):
+
+class Answer(BaseAnswer):
     """Template for logistic regression analysis task."""
 
     age_significant: bool = VerifiedField(
@@ -298,10 +298,9 @@ class LogisticRegressionAnswer(BaseAnswer):
         ground_truth=104.14,
         verify_with=NumericTolerance(tolerance=1.0, mode="absolute"),
     )
-'''
 ```
 
-The template class name (`LogisticRegressionAnswer`) is arbitrary; the pipeline discovers the class by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
+The template class name (`Answer` by convention) is discovered by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
 
 ---
 
@@ -335,7 +334,8 @@ question = Question(
     workspace_path="workspace",
 )
 
-question_id = benchmark.add_question(question, answer_template=TEMPLATE_CODE)
+question_id = benchmark.add_question(question)
+benchmark.update_template(question_id, Answer)
 ```
 
 The `workspace_path` on the `Question` is relative to the benchmark's `workspace_root`. The pipeline resolves the full path as `workspace_root / workspace_path`, giving the agent access to `my_benchmark/workspace/data.xlsx`.
@@ -344,7 +344,7 @@ The `workspace_path` on the `Question` is relative to the benchmark's `workspace
 
 ## Step 4: Configure Verification
 
-Two key configuration groups control agentic evaluation: the **answering model** (which must use a natively agentic interface) and the **agentic parsing** settings (which enable the investigation judge).
+Two key configuration groups control agentic evaluation: the **answering model** (which must use a deep agent interface) and the **agentic parsing** settings (which enable the investigation judge).
 
 ```python
 from karenina.schemas.verification.config import VerificationConfig
@@ -389,7 +389,7 @@ config = VerificationConfig(
 
 | Field | Value | Why |
 |-------|-------|-----|
-| `interface` | `"claude_agent_sdk"` | Natively agentic: the SDK manages tool use internally, producing a multi-turn trace. The pipeline detects this via the adapter's `natively_agentic=True` flag and routes through `AgentPort` instead of `LLMPort`. |
+| `interface` | `"claude_agent_sdk"` | Deep agent tier: the SDK manages tool use internally, producing a multi-turn trace. The pipeline detects this via the adapter's `agent_tier="deep_agent"` setting and routes through `AgentPort` instead of `LLMPort`. |
 | `agent_timeout` | `300` | Data analysis tasks can take several minutes. The default is 180s. |
 | `system_prompt` | *(custom)* | Tells the agent to work in the workspace, use Python, and save scripts and results to files. The judge inspects these workspace artifacts; if the agent only prints to stdout without saving files, the judge has nothing to evaluate in `workspace_only` mode. |
 | `agent_middleware` | `AgentMiddlewareConfig(limits=AgentLimitConfig(model_call_limit=50))` | Data analysis tasks typically need more than the default 25 turns: reading data, writing scripts, installing packages, running analysis, and saving results. |
@@ -446,7 +446,7 @@ Agentic: True
 
 Four stages do the substantive work in this configuration:
 
-1. **GenerateAnswer** (Stage 2): Detects that `claude_agent_sdk` is `natively_agentic` and uses `AgentPort`. Copies `workspace/` to `workspace_run_{timestamp}/`. The agent reads `data.xlsx`, writes Python scripts, executes them, and produces analysis output.
+1. **GenerateAnswer** (Stage 2): Detects that `claude_agent_sdk` has `agent_tier="deep_agent"` and uses `AgentPort`. Copies `workspace/` to `workspace_run_{timestamp}/`. The agent reads `data.xlsx`, writes Python scripts, executes them, and produces analysis output.
 
 2. **AgenticParseTemplate** (Stage 7b): The investigation agent independently examines the workspace. In `workspace_only` mode, it receives only the question text and workspace path (not the answering agent's trace). It reads the scripts and output files the answering agent left behind, optionally re-runs them to confirm their output, and reports structured findings. The judge does not re-implement the task from scratch. A separate extraction parser then converts these findings into the `LogisticRegressionAnswer` schema.
 
@@ -513,7 +513,7 @@ In production, use `run_single_model_verification` with `cached_answer_data` to 
 # trace_only_result = run_single_model_verification(
 #     question_id=question_id,
 #     question_text=question.question,
-#     template_code=TEMPLATE_CODE,
+#     template_code=benchmark.get_template(question_id),
 #     answering_model=config.answering_models[0],
 #     parsing_model=config.parsing_models[0],
 #     agentic_parsing=False,

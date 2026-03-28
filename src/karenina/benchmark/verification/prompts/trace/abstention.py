@@ -38,15 +38,7 @@ The following are NOT considered refusals (these are genuine answer attempts):
 - Consider the response in context of the original question
 - Be strict: If there's any genuine attempt to answer, it's NOT an abstention
 </required_behavior>
-</critical_instructions>
-
-<output_format>
-Respond with ONLY a JSON object with this exact structure (reasoning MUST come first):
-{
-    "reasoning": "Brief explanation of why this was classified as abstention or genuine attempt",
-    "abstention_detected": true or false
-}
-</output_format>"""
+</critical_instructions>"""
 
 ABSTENTION_DETECTION_USER = """
 <original_question>

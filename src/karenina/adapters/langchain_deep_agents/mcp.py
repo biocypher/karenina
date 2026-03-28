@@ -7,6 +7,7 @@ compatible with langchain-mcp-adapters' MultiServerMCPClient.
 from __future__ import annotations
 
 import logging
+from contextlib import AsyncExitStack
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -72,14 +73,18 @@ def build_mcp_server_params(
 
 async def convert_mcp_to_tools(
     mcp_servers: dict[str, Any] | None,
+    exit_stack: AsyncExitStack,
 ) -> list[Any]:
     """Convert MCP server configs to LangChain tools via langchain-mcp-adapters.
 
-    Creates a MultiServerMCPClient, connects to all servers, and returns
-    their tools as LangChain BaseTool instances.
+    Creates a MultiServerMCPClient registered with the provided exit_stack
+    so that MCP sessions remain open for the lifetime of the caller's
+    exit_stack context.
 
     Args:
         mcp_servers: Dict mapping server names to MCPServerConfig.
+        exit_stack: AsyncExitStack managing session lifecycles. Sessions
+            remain open until the exit stack closes.
 
     Returns:
         List of LangChain BaseTool instances from all MCP servers.
@@ -90,5 +95,6 @@ async def convert_mcp_to_tools(
 
     from langchain_mcp_adapters.client import MultiServerMCPClient
 
-    async with MultiServerMCPClient(server_params) as client:  # type: ignore[arg-type,misc]
-        return await client.get_tools()
+    client = MultiServerMCPClient(server_params)  # type: ignore[arg-type]
+    await exit_stack.enter_async_context(client)  # type: ignore[arg-type]
+    return await client.get_tools()

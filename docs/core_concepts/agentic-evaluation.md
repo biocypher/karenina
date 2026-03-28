@@ -177,34 +177,34 @@ After the run completes, `workspace_cleanup=True` (the default) deletes the work
 benchmark = Benchmark.load("checkpoint.jsonld", workspace_root=Path("/new/machine/tasks"))
 ```
 
-## 3. Natively Agentic vs. Scaffolded Adapters
+## 3. Deep Agent vs. Tool Loop Adapters
 
-Not all [adapters](adapters.md) are equal when it comes to agent capabilities. Karenina distinguishes two categories:
+Not all [adapters](adapters.md) are equal when it comes to agent capabilities. Karenina distinguishes two tiers via the `agent_tier` field on `AdapterSpec`:
 
-### 3.1. Scaffolded Adapters
+### 3.1. Tool Loop Adapters (`agent_tier="tool_loop"`)
 
-Scaffolded adapters (LangChain, Claude Tool) build agent behavior by orchestrating individual LLM calls. The adapter explicitly manages the tool call loop: it sends a message, checks for tool calls in the response, executes the tools, sends the results back, and repeats. Every intermediate step is visible to the adapter and captured in the trace.
+Tool loop adapters (LangChain, Claude Tool) build agent behavior by orchestrating individual LLM calls. The adapter explicitly manages the tool call loop: it sends a message, checks for tool calls in the response, executes the tools, sends the results back, and repeats. Every intermediate step is visible to the adapter and captured in the trace.
 
-### 3.2. Natively Agentic Adapters
+### 3.2. Deep Agent Adapters (`agent_tier="deep_agent"`)
 
-Natively agentic adapters wrap a runtime that is itself an agent with built-in tools (e.g., Claude Code via `claude_agent_sdk`). The runtime manages its own tool call loop internally. The adapter hands off a prompt and receives a completed trace.
+Deep agent adapters wrap a runtime that is itself an agent with built-in tools (e.g., Claude Code via `claude_agent_sdk`). The runtime manages its own tool call loop internally. The adapter hands off a prompt and receives a completed trace.
 
-This distinction matters for the pipeline. For natively agentic adapters, the pipeline always uses `AgentPort` (not `LLMPort`) to generate answers, because the `LLMPort` path cannot capture the intermediate tool calls that the runtime executes internally. Using `LLMPort` on a natively agentic adapter would produce a response but lose the full tool call trace.
+This distinction matters for the pipeline. For deep agent adapters, the pipeline always uses `AgentPort` (not `LLMPort`) to generate answers, because the `LLMPort` path cannot capture the intermediate tool calls that the runtime executes internally. Using `LLMPort` on a deep agent adapter would produce a response but lose the full tool call trace.
 
-### 3.3. The `natively_agentic` Flag
+### 3.3. The `agent_tier` Field
 
-The flag is declared on `AdapterSpec` in the [adapter registry](../../src/karenina/adapters/registry.py):
+The field is declared on `AdapterSpec` in the [adapter registry](../../src/karenina/adapters/registry.py):
 
 ```python
 @dataclass
 class AdapterSpec:
     """Adapter specification in the registry."""
-    natively_agentic: bool = False
+    agent_tier: str = "tool_loop"
 ```
 
-When `natively_agentic=True`, `GenerateAnswerStage` (Stage 2) automatically selects the `AgentPort` path even when no MCP servers are configured. This is the same path used for MCP-enabled answering models; the flag simply makes it the default for adapters that need it.
+When `agent_tier="deep_agent"`, `GenerateAnswerStage` (Stage 2) automatically selects the `AgentPort` path even when no MCP servers are configured. This is the same path used for MCP-enabled answering models; the tier simply makes it the default for adapters that need it.
 
-Currently, `claude_agent_sdk` is the only adapter that sets `natively_agentic=True`.
+Currently, `claude_agent_sdk` is the only adapter that sets `agent_tier="deep_agent"`.
 
 ## 4. Two-Step Agentic Judging (Stage 7b)
 
@@ -338,7 +338,7 @@ results = benchmark.run_verification(config)
 
 In this example:
 
-1. The answering model (`coder`) runs as a natively agentic adapter (`claude_agent_sdk`) with access to the workspace. It reads files, writes code, and runs tests.
+1. The answering model (`coder`) runs as a deep agent adapter (`claude_agent_sdk`) with access to the workspace. It reads files, writes code, and runs tests.
 2. The pipeline copies each question's workspace before the answering agent runs.
 3. After the answering agent finishes, `AgenticParseTemplateStage` launches a separate investigation agent with tool access to the (now modified) workspace copy.
 4. The investigation agent independently verifies the artifacts. It receives only the question and the workspace path (not the answering agent's trace, because `agentic_judge_context="workspace_only"`).

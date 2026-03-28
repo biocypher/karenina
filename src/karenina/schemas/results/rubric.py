@@ -630,21 +630,44 @@ class RubricResults(BaseModel):
 
         return {qid: RubricResults(results=results) for qid, results in grouped.items()}
 
-    def group_by_model(self) -> dict[str, RubricResults]:
-        """
-        Group results by answering model.
+    def group_by_model(self, by: Literal["answering", "parsing", "both"] = "answering") -> dict[str, RubricResults]:
+        """Group results by model(s).
+
+        Args:
+            by: How to group results:
+                - "answering": Group by answering model (includes MCP servers if attached)
+                - "parsing": Group by parsing model
+                - "both": Group by both answering and parsing models
 
         Returns:
-            Dictionary mapping model names to RubricResults instances
+            Dictionary mapping model identifier(s) to RubricResults instances.
         """
         grouped: dict[str, list[VerificationResult]] = {}
         for result in self.results:
-            model = result.metadata.answering_model
-            if model not in grouped:
-                grouped[model] = []
-            grouped[model].append(result)
+            answering_model = result.metadata.answering_model
+            parsing_model = result.metadata.parsing_model
 
-        return {model: RubricResults(results=results) for model, results in grouped.items()}
+            if by in ("answering", "both"):
+                mcp_servers = result.template.answering_mcp_servers if result.template else None
+                if mcp_servers and len(mcp_servers) > 0:
+                    answering_key = f"{answering_model} + MCP[{','.join(sorted(mcp_servers))}]"
+                else:
+                    answering_key = answering_model
+
+            if by == "answering":
+                key = answering_key
+            elif by == "parsing":
+                key = parsing_model
+            elif by == "both":
+                key = f"{answering_key} / {parsing_model}"
+            else:
+                raise ValueError(f"Invalid grouping mode: {by}. Must be 'answering', 'parsing', or 'both'")
+
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(result)
+
+        return {key: RubricResults(results=results) for key, results in grouped.items()}
 
     # ========================================================================
     # Summary Statistics
@@ -661,6 +684,7 @@ class RubricResults(BaseModel):
             - regex_traits: List of regex trait names
             - callable_traits: List of callable trait names
             - metric_traits: List of metric trait names
+            - agentic_traits: List of agentic trait names
             - num_questions: Number of unique questions
         """
         results_with_rubric = self.get_results_with_rubric()
@@ -669,6 +693,7 @@ class RubricResults(BaseModel):
         regex_traits: set[str] = set()
         callable_traits: set[str] = set()
         metric_traits: set[str] = set()
+        agentic_traits: set[str] = set()
         questions: set[str] = set()
 
         for result in results_with_rubric:
@@ -683,6 +708,8 @@ class RubricResults(BaseModel):
                     callable_traits.update(result.rubric.callable_trait_scores.keys())
                 if result.rubric.metric_trait_scores:
                     metric_traits.update(result.rubric.metric_trait_scores.keys())
+                if result.rubric.agentic_trait_scores:
+                    agentic_traits.update(result.rubric.agentic_trait_scores.keys())
 
         return {
             "num_results": len(results_with_rubric),
@@ -690,6 +717,7 @@ class RubricResults(BaseModel):
             "regex_traits": sorted(regex_traits),
             "callable_traits": sorted(callable_traits),
             "metric_traits": sorted(metric_traits),
+            "agentic_traits": sorted(agentic_traits),
             "num_questions": len(questions),
         }
 

@@ -71,7 +71,7 @@ def generate_task_queue(
 
     for template in templates:
         # Prepare rubric for this question
-        rubric = merge_rubrics_for_task(global_rubric, template, config)
+        rubric, trait_provenance = merge_rubrics_for_task(global_rubric, template, config)
 
         # Prepare dynamic rubric for this question
         dynamic_rubric = merge_dynamic_rubrics_for_task(global_dynamic_rubric, template, config)
@@ -102,6 +102,7 @@ def generate_task_queue(
                         # Context
                         "rubric": rubric,
                         "dynamic_rubric": dynamic_rubric,
+                        "trait_provenance": trait_provenance,
                         "keywords": template.keywords,
                         "question_workspace_path": template.workspace_path,
                         "few_shot_examples": few_shot,
@@ -206,7 +207,7 @@ def execute_task(
             few_shot_enabled=task.get("few_shot_enabled", False),
             abstention_enabled=task.get("abstention_enabled", False),
             sufficiency_enabled=task.get("sufficiency_enabled", False),
-            deep_judgment_enabled=task.get("deep_judgment_enabled", False),
+            deep_judgment_mode=task.get("deep_judgment_mode", "disabled"),
             evaluation_mode=task.get("evaluation_mode", "template_only"),
             rubric_evaluation_strategy=task.get("rubric_evaluation_strategy", "batch"),
             deep_judgment_max_excerpts_per_attribute=task.get("deep_judgment_max_excerpts_per_attribute", 3),
@@ -241,6 +242,8 @@ def execute_task(
             # Agentic rubric evaluation
             agentic_rubric_strategy=task.get("agentic_rubric_strategy", "individual"),
             agentic_rubric_parallel=task.get("agentic_rubric_parallel", False),
+            # Trait provenance
+            trait_provenance=task.get("trait_provenance"),
             cached_answer_data=cached_answer_data,
         )
 

@@ -35,15 +35,7 @@ A response IS SUFFICIENT when:
 - Be lenient: if information CAN be extracted (even imperfectly), it's sufficient
 - Be strict: if a field genuinely has NO information available, mark insufficient
 </required_behavior>
-</critical_instructions>
-
-<output_format>
-Respond with ONLY a JSON object with this exact structure (reasoning MUST come first):
-{
-    "reasoning": "For each field, explain whether information exists. End with overall determination.",
-    "sufficient": true or false
-}
-</output_format>"""
+</critical_instructions>"""
 
 SUFFICIENCY_DETECTION_USER = """
 <original_question>

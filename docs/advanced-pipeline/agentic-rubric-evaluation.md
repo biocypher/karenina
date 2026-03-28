@@ -12,11 +12,15 @@ The `StageOrchestrator.from_config()` method includes Stage 11b when the rubric 
 
 ```python
 # orchestrator.py
-if evaluation_mode == "template_and_rubric" and rubric and rubric.agentic_traits:
+_dynamic_has_agentic = dynamic_rubric is not None and bool(dynamic_rubric.agentic_traits)
+
+if evaluation_mode == "template_and_rubric" and (
+    (rubric and rubric.agentic_traits) or _dynamic_has_agentic
+):
     stages.append(AgenticRubricEvaluationStage())
 ```
 
-In `rubric_only` mode, the same inclusion logic applies without the `evaluation_mode` guard.
+In `rubric_only` mode, the same inclusion logic applies without the `evaluation_mode` guard. The `_dynamic_has_agentic` check ensures that agentic traits contributed by a dynamic rubric also trigger Stage 11b.
 
 ## 2. AgenticTraitEvaluator
 

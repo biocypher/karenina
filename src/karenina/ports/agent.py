@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
 
+from karenina.ports.capabilities import PortCapabilities
+
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
     from karenina.ports.usage import UsageMetadata
@@ -246,6 +248,17 @@ class AgentPort(Protocol):
           conversation data in different formats for backward compatibility
     """
 
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare what prompt features this agent adapter supports.
+
+        Returns:
+            PortCapabilities with adapter-specific feature flags.
+            Defaults to PortCapabilities() (system prompts supported,
+            structured output not supported).
+        """
+        return PortCapabilities()
+
     async def arun(
         self,
         messages: list[Message],
@@ -309,5 +322,14 @@ class AgentPort(Protocol):
         Note:
             This method creates a new event loop. Do not call from within
             an existing async context - use `arun()` directly instead.
+        """
+        ...
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        Implementations should release any held resources (HTTP connections,
+        file handles, MCP sessions). Safe to call multiple times. The default
+        is a no-op for adapters with no resources to clean up.
         """
         ...

@@ -135,6 +135,10 @@ class BaseAutoFailStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, field_verification_result)
         context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
 
+        # Record which stage caused the auto-fail (first guard wins)
+        if not context.get_result_field(ArtifactKeys.FAILED_STAGE):
+            context.set_result_field(ArtifactKeys.FAILED_STAGE, self.name)
+
         # Set any additional fields (subclass-specific)
         self._set_additional_failure_fields(context)
 

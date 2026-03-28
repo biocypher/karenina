@@ -14,6 +14,11 @@ from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
+# Field names that collide with BaseAnswer internal attributes.
+# Subclasses that declare any of these as model fields will get a TypeError
+# at class definition time, preventing cryptic ValidationErrors at runtime.
+_RESERVED_FIELD_NAMES = {"correct"}
+
 
 class BaseAnswer(BaseModel):
     """Base class for all answer templates in Karenina.
@@ -66,6 +71,14 @@ class BaseAnswer(BaseModel):
         get the auto-generated methods; classic templates are left alone.
         """
         super().__pydantic_init_subclass__(**kwargs)
+
+        # Reject reserved field names that would collide with internal attributes
+        reserved_conflicts = _RESERVED_FIELD_NAMES & set(cls.model_fields.keys())
+        if reserved_conflicts:
+            raise TypeError(
+                f"Field name(s) {reserved_conflicts} reserved by BaseAnswer for internal use. "
+                f"Please rename your field(s) to avoid collision."
+            )
 
         verified = cls._get_verified_fields()
         if not verified:
@@ -223,8 +236,21 @@ class BaseAnswer(BaseModel):
                 result[name] = meta
         return result
 
+    def _clear_verification_cache(self) -> None:
+        """Clear the cached _field_results, forcing recomputation on next call.
+
+        Call this after mutating field values if you need _compute_field_results()
+        to reflect the updated state.
+        """
+        self.__dict__.pop("_field_results", None)
+
     def _compute_field_results(self) -> dict[str, bool]:
         """Evaluate all VerifiedField checks and cache in _field_results.
+
+        Results are cached in self.__dict__["_field_results"] after the first
+        call. Subsequent calls return the cached value without recomputation.
+        Call _clear_verification_cache() to invalidate the cache after
+        mutating field values.
 
         For TracePrimitive fields, reads self._raw_trace and compares
         check_trace() result against bool(meta.ground_truth). For parsed
@@ -296,7 +322,12 @@ class BaseAnswer(BaseModel):
     def _auto_verify_granular(self) -> float:
         """Auto-generated verify_granular() for VerifiedField templates.
 
-        Computes a flat weighted average over all VerifiedField results.
+        For AllOf (default, no VerificationStrategy): computes a flat weighted
+        average over all VerifiedField results.
+
+        For AnyOf: returns the max passing field weight divided by total weight.
+        For AtLeastN: returns the sum of the top-N passing field weights
+        divided by total weight.
 
         Returns:
             Score between 0.0 and 1.0.
@@ -312,6 +343,14 @@ class BaseAnswer(BaseModel):
 
         field_results = self._compute_field_results()
 
+        # Check for VerificationStrategy inner class (issue 133)
+        strategy_cls = getattr(self.__class__, "VerificationStrategy", None)
+        strategy = getattr(strategy_cls, "verify_strategy", None) if strategy_cls else None
+
+        if strategy is not None:
+            return self._composition_aware_granular(strategy, field_results, verified)
+
+        # Default AllOf behavior: flat weighted average
         total_weight = 0.0
         weighted_sum = 0.0
         for name, meta in verified.items():
@@ -322,6 +361,47 @@ class BaseAnswer(BaseModel):
         if total_weight == 0.0:
             return 0.0
         return weighted_sum / total_weight
+
+    @staticmethod
+    def _composition_aware_granular(
+        strategy: Any,
+        field_results: dict[str, bool],
+        verified: dict[str, Any],
+    ) -> float:
+        """Compute granular score honoring composition strategy.
+
+        Args:
+            strategy: Composition strategy node (AllOf, AnyOf, AtLeastN).
+            field_results: Per-field pass/fail booleans.
+            verified: Per-field VerificationMeta (for weights).
+
+        Returns:
+            Score between 0.0 and 1.0.
+        """
+        from karenina.schemas.entities.composition import AnyOf, AtLeastN
+
+        total_weight: float = sum(meta.weight for meta in verified.values())
+        if total_weight == 0.0:
+            return 0.0
+
+        passing_weights: list[float] = sorted(
+            [verified[name].weight for name, passed in field_results.items() if passed],
+            reverse=True,
+        )
+
+        if isinstance(strategy, AnyOf):
+            # AnyOf: best single passing field
+            if passing_weights:
+                return float(max(passing_weights)) / total_weight
+            return 0.0
+
+        if isinstance(strategy, AtLeastN):
+            # AtLeastN: sum of top-N passing weights
+            top_n = passing_weights[: strategy.n]
+            return float(sum(top_n)) / total_weight
+
+        # AllOf or unknown: flat weighted average
+        return float(sum(passing_weights)) / total_weight
 
     def verify_regex(self, raw_trace: str) -> dict[str, Any]:
         """Verify regex patterns against the raw LLM response trace.

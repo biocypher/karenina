@@ -98,7 +98,7 @@ Each builder also supports filtering and aggregation with standard pandas operat
 
 ```python
 # Pass rate by model
-df.groupby("answering_model_name")["field_match"].mean()
+df.groupby("answering_model")["field_match"].mean()
 
 # Trait scores by question
 df_rubric.groupby("question_id")["trait_score"].mean()
@@ -130,8 +130,9 @@ Save results for sharing, external analysis, or archival:
 json_str = benchmark.export_verification_results(format="json")
 
 # Export to file (format inferred from extension)
-benchmark.export_verification_results_to_file("results.json")
-benchmark.export_verification_results_to_file("results.csv")
+from pathlib import Path
+benchmark.export_verification_results_to_file(Path("results.json"))
+benchmark.export_verification_results_to_file(Path("results.csv"))
 
 # Export DataFrames directly
 df.to_csv("template_analysis.csv", index=False)
@@ -164,7 +165,7 @@ The `VerificationResultSet` provides specialized accessors for different analysi
 | `filter(...)` | `VerificationResultSet` | Subset by question, model, or completion status |
 | `group_by_question()` | `dict[str, VerificationResultSet]` | Per-question analysis |
 | `group_by_model()` | `dict[str, VerificationResultSet]` | Cross-model comparison |
-| `group_by_replicate()` | `dict[int, VerificationResultSet]` | Replicate consistency |
+| `group_by_replicate()` | `dict[int \| None, VerificationResultSet]` | Replicate consistency |
 | `get_summary()` | `dict` | Aggregate statistics (counts, pass rates, timing) |
 
 ---

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import logging
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
@@ -26,6 +27,8 @@ from karenina.ports.capabilities import PortCapabilities
 
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -210,8 +213,8 @@ class ClaudeSDKLLMAdapter:
         # Assert schema exists (this method only called when _structured_schema is set)
         assert self._structured_schema is not None
 
-        content = str(result.structured_output)
         parsed_model = self._structured_schema.model_validate(result.structured_output)
+        content = parsed_model.model_dump_json()
         usage = extract_sdk_usage(result, model=self._config.model_name)
 
         return LLMResponse(content=content, usage=usage, raw=parsed_model)
@@ -262,22 +265,23 @@ class ClaudeSDKLLMAdapter:
         schema: type[BaseModel],
         *,
         max_turns: int | None = None,
-        max_retries: int | None = None,  # noqa: ARG002 - Ignored for API compat
+        max_retries: int | None = None,
     ) -> ClaudeSDKLLMAdapter:
         """Return a new adapter configured for structured output.
 
         The returned adapter uses SDK's output_format option to constrain
         the LLM's output to match the provided JSON schema.
 
-        The SDK handles retries autonomously via max_turns - no manual retry
+        The SDK handles retries autonomously via max_turns, so no manual retry
         logic is needed.
 
         Args:
             schema: A Pydantic model class defining the output structure.
             max_turns: Maximum turns for SDK (handles retries autonomously).
                 Default is 2 (minimum needed for structured output).
-            max_retries: Ignored for API compatibility with LangChain adapter.
-                The SDK handles retries autonomously via max_turns.
+            max_retries: Not supported by this adapter. A warning is emitted
+                if a non-None value is provided. The SDK handles retries
+                autonomously via max_turns.
 
         Returns:
             A new ClaudeSDKLLMAdapter instance configured for structured output.
@@ -292,6 +296,12 @@ class ClaudeSDKLLMAdapter:
             >>> response = await structured.ainvoke(messages)
             >>> assert isinstance(response.raw, Answer)
         """
+        if max_retries is not None:
+            logger.warning(
+                "max_retries=%d ignored by claude_agent_sdk adapter; "
+                "retry behavior is managed internally by the SDK via max_turns",
+                max_retries,
+            )
         return ClaudeSDKLLMAdapter(
             model_config=self._config,
             _structured_schema=schema,

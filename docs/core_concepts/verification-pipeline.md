@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -15,7 +15,7 @@ jupyter:
 
 # Verification Pipeline
 
-The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 14 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
+The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 13 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
 
 The most important idea is that the pipeline is a **result-producing machine**: it always returns a `VerificationResult`, even when the model fails, abstains, or a stage throws an exception. Individual stages may skip, fail, or override earlier outcomes, but the pipeline itself never crashes without producing an output.
 
@@ -28,7 +28,7 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
+    "sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext",
     "sqlalchemy.ext.declarative", "sqlalchemy.engine",
     "sqlalchemy.sql", "sqlalchemy.event",
     "karenina.storage", "karenina.storage.base",
@@ -46,7 +46,7 @@ with patch.dict("sys.modules", mock_modules):
     from karenina.schemas.entities.rubric import (
         Rubric,
         LLMRubricTrait,
-        RegexTrait,
+        RegexRubricTrait,
     )
 ```
 
@@ -61,7 +61,7 @@ Structuring evaluation as an ordered sequence of stages provides four guarantees
 | **Configurability** | Optional stages are included or skipped based on feature flags without affecting the rest of the sequence |
 | **Error containment** | Guard stages catch problems early; `FinalizeResult` always runs to assemble whatever data is available into a valid result |
 
-## 2. Anatomy: The 14 Stages
+## 2. Anatomy: The 13 Stages
 
 The pipeline groups its stages into functional categories. Within each category, stages execute in the order shown.
 
@@ -77,7 +77,7 @@ The pipeline groups its stages into functional categories. Within each category,
   Template path      7. ParseTemplate                  Template modes only
                      8. VerifyTemplate                  Template modes only
   Enhancements       9. EmbeddingCheck                 Template modes only
-                    10. DeepJudgmentAutoFail            If deep_judgment_enabled
+                    10. DeepJudgmentAutoFail            If deep_judgment_mode != "disabled"
   Rubric path       11. RubricEvaluation               If rubric has traits + mode includes rubric
                    11b. AgenticRubricEvaluation        If rubric has agentic traits
                     12. DeepJudgmentRubricAutoFail      If rubric stages present
@@ -94,7 +94,7 @@ Before any stage runs, `StageOrchestrator.from_config()` builds the ordered stag
 
 - `evaluation_mode`: which categories of stages to include
 - `rubric`: whether a non-empty rubric is attached
-- `abstention_enabled`, `sufficiency_enabled`, `deep_judgment_enabled`: feature flags
+- `abstention_enabled`, `sufficiency_enabled`, `deep_judgment_mode`: feature flags
 
 The resulting list is the pipeline's "program." Only stages in this list can execute. You can inspect the resulting stage list directly:
 
@@ -212,7 +212,7 @@ Both stages record four metadata fields: `*_check_performed`, `*_detected`, `*_o
 **ParseTemplate** (stage 7) sends the response to the Judge LLM along with the template's JSON schema. The Judge extracts structured fields, producing a filled `Answer` instance. Two fast paths exist:
 
 - **Regex-only templates** (templates with no LLM-parsed fields) skip the LLM call entirely and create an empty `Answer()` for regex verification.
-- **Deep judgment mode**: when `deep_judgment_enabled` is `True`, the stage also extracts verbatim excerpts from the response for each parsed field, enabling evidence-based verification.
+- **Deep judgment mode**: when `deep_judgment_mode` is `"full"` or `"reasoning_only"`, the stage also performs deep judgment processing on the response for each parsed field, enabling evidence-based verification.
 
 The stage respects `use_full_trace_for_template`: when `False` (the default), only the final AI message is passed to the Judge; when `True`, the full agent trace is passed.
 
@@ -234,13 +234,13 @@ The stage respects `use_full_trace_for_template`: when `False` (the default), on
 | Trait type | Evaluator | LLM required |
 |------------|-----------|:------------:|
 | `LLMRubricTrait` | Parsing model (batch or sequential) | Yes |
-| `RegexTrait` | Pattern matching | No |
-| `CallableTrait` | Local Python function | No |
+| `RegexRubricTrait` | Pattern matching | No |
+| `CallableRubricTrait` | Local Python function | No |
 | `MetricRubricTrait` | Parsing model + confusion matrix computation | Yes |
 
 The rubric evaluation input depends on `use_full_trace_for_rubric`: the full trace by default (`True`), or only the final AI message (`False`). Question-specific traits are merged with benchmark-level traits; duplicate names raise a `ValueError`.
 
-When any LLM trait has `deep_judgment_enabled=True`, the stage switches to a deep-judgment path that extracts verbatim excerpts supporting each trait assessment.
+When any LLM trait has deep judgment enabled (via the rubric deep judgment mode), the stage switches to a deep-judgment path that extracts verbatim excerpts supporting each trait assessment.
 
 **AgenticRubricEvaluation** (stage 11b) runs when the rubric includes agentic traits. It deploys an agent per trait to investigate workspace artifacts, then extracts a structured score from the investigation findings. See [agentic rubric traits](rubrics/agentic-traits.md) and [Stage 11b internals](../../advanced-pipeline/agentic-rubric-evaluation.md).
 
@@ -305,7 +305,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             description="Has bracket citations",
             pattern=r"\[\d+\]",
@@ -350,7 +350,7 @@ The full matrix:
 |--------------|-------------|-------------|------|
 | `abstention_enabled` | AbstentionCheck (stage 5) | Evaluating models that may refuse questions (safety, out-of-scope) | One additional LLM call per question to the parsing model |
 | `sufficiency_enabled` | SufficiencyCheck (stage 6) | Template has many fields and partial responses are expected | One additional LLM call per question to the parsing model |
-| `deep_judgment_enabled` | Deep-judgment parsing in ParseTemplate + DeepJudgmentAutoFail (stage 10) | You need evidence-based verification with traceable excerpts, or want hallucination detection | Multiple additional LLM calls (excerpt extraction + validation per attribute) |
+| `deep_judgment_mode` | Deep-judgment parsing in ParseTemplate + DeepJudgmentAutoFail (stage 10) | You need evidence-based verification with traceable excerpts, or want hallucination detection | Multiple additional LLM calls (excerpt extraction + validation per attribute) |
 | `deep_judgment_rubric_mode` | Deep-judgment evaluation in RubricEvaluation + DeepJudgmentRubricAutoFail (stage 12) | Same as above, for rubric traits | Additional LLM calls per trait with deep judgment enabled |
 
 **Heuristics**:
@@ -358,7 +358,7 @@ The full matrix:
 - If your benchmark contains only factual questions with clear correct answers, `template_only` with no optional stages is the fastest and cheapest path.
 - Enable `abstention_enabled` when you expect models to sometimes refuse. Without it, a refusal is parsed as a normal response, producing a misleading `verify_result=False`.
 - Enable `sufficiency_enabled` when your template has many fields and you want to avoid burning parsing tokens on responses that clearly lack the information needed.
-- Enable `deep_judgment_enabled` when you need an audit trail linking each parsed field back to verbatim text in the response.
+- Set `deep_judgment_mode="full"` when you need an audit trail linking each parsed field back to verbatim text in the response.
 
 ## 8. Error Containment
 
@@ -412,7 +412,7 @@ Consider a benchmark question in `template_and_rubric` mode with `abstention_ena
 
 **Stage 9: EmbeddingCheck** checks `field_verification_result`. It is `True`. Stage skips itself (embedding fallback is unnecessary).
 
-**Stage 11: RubricEvaluation** evaluates the attached traits. A `RegexTrait` for `has_citations` checks for `\[\d+\]` in the response. No match: `has_citations=False`. An `LLMRubricTrait` for `conciseness` asks the parsing model to judge. Result: `True`.
+**Stage 11: RubricEvaluation** evaluates the attached traits. A `RegexRubricTrait` for `has_citations` checks for `\[\d+\]` in the response. No match: `has_citations=False`. An `LLMRubricTrait` for `conciseness` asks the parsing model to judge. Result: `True`.
 
 **Stage 13: FinalizeResult** assembles the `VerificationResult`:
 - `result.template.verify_result = True`

@@ -308,9 +308,9 @@ class Message:
                 )
             )
 
-        # Add text content if present
+        # Add text content if present (skip for tool messages to avoid duplication)
         text = data.get("content", "")
-        if text:
+        if text and "tool_result" not in data:
             content_blocks.append(TextContent(text=text))
 
         # Add tool calls if present

@@ -34,6 +34,10 @@ class StepEval(BaseModel):
         default_factory=dict,
         description="Full verification results per question: {question_id: [VerificationResult, ...]}",
     )
+    failed_questions: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Questions that failed evaluation, keyed by question_id with error messages",
+    )
 
     def format_rubric_scores(self, indent: str = "  ") -> str:
         """Format verification results including rubric scores."""
@@ -144,7 +148,23 @@ class StepEval(BaseModel):
 
         for _trace_id, results in self.verification_results.items():
             total_results += len(results)
-            if any(result.template and result.template.verify_result for result in results):
+
+            template_passed = any(result.template and result.template.verify_result for result in results)
+            template_performed = any(
+                result.template and result.template.template_verification_performed for result in results
+            )
+            rubric_passed = any(
+                result.rubric
+                and result.rubric.rubric_evaluation_performed
+                and result.rubric.get_all_trait_scores()
+                and all(
+                    score is True or (isinstance(score, int) and score > 0)
+                    for score in result.rubric.get_all_trait_scores().values()
+                )
+                for result in results
+            )
+
+            if template_passed or (not template_performed and rubric_passed):
                 passed_traces += 1
 
             # Count template verification and rubric traits separately
@@ -508,7 +528,10 @@ class TaskEvalResult(BaseModel):
         return "\n".join(lines)
 
     def summary(self) -> str:
-        """Return a concise summary of the evaluation results."""
+        """Return a concise summary of the evaluation results.
+
+        Aggregates across global evaluation and all per-step evaluations.
+        """
         total_traces = 0
         passed_traces = 0
         total_template_verifications = 0
@@ -549,7 +572,10 @@ class TaskEvalResult(BaseModel):
         return " | ".join(parts) if parts else "No evaluations performed"
 
     def summary_compact(self) -> str:
-        """Return a very compact one-line summary."""
+        """Return a very compact one-line summary.
+
+        Reports global evaluation statistics only (excludes per-step evaluations).
+        """
         if self.global_eval:
             stats = self.global_eval.get_summary_stats()
             parts = []

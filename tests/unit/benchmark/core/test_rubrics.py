@@ -18,10 +18,10 @@ from karenina import Benchmark
 from karenina.benchmark.core.rubrics import RubricManager
 from karenina.schemas.entities import (
     AgenticRubricTrait,
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
     Rubric,
 )
 
@@ -60,7 +60,7 @@ class TestAddGlobalRubricTrait:
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
-        trait = RegexTrait(
+        trait = RegexRubricTrait(
             name="has_citation",
             description="Has citation pattern",
             pattern=r"\[\d+\]",
@@ -81,7 +81,7 @@ class TestAddGlobalRubricTrait:
         def simple_check(_: str) -> bool:
             return True
 
-        trait = CallableTrait.from_callable(
+        trait = CallableRubricTrait.from_callable(
             name="simple_check", func=simple_check, kind="boolean", description="Simple callable check"
         )
         manager.add_global_rubric_trait(trait)
@@ -115,7 +115,7 @@ class TestAddGlobalRubricTrait:
             LLMRubricTrait(name="llm", description="LLM trait", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex trait",
                 pattern="test",
@@ -125,7 +125,7 @@ class TestAddGlobalRubricTrait:
             )
         )
         manager.add_global_rubric_trait(
-            CallableTrait.from_callable(
+            CallableRubricTrait.from_callable(
                 name="callable", func=lambda _: True, kind="boolean", description="Callable trait"
             )
         )
@@ -187,7 +187,7 @@ class TestGetGlobalRubric:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex",
                 pattern="test",
@@ -282,13 +282,13 @@ class TestGetMergedRubricForQuestion:
         assert merged is not None
         assert len(merged.llm_traits) == 2
 
-    def test_merged_rubric_question_overrides_global(self) -> None:
-        """Test question trait overrides global trait with same name."""
+    def test_merged_rubric_rejects_same_type_collision(self) -> None:
+        """Test same-type trait name collision raises ValueError."""
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="pattern",
                 description="Global pattern",
                 pattern=r"\d+",
@@ -300,7 +300,7 @@ class TestGetMergedRubricForQuestion:
         q_id = benchmark.add_question("Question?", "Answer")
         manager.add_question_rubric_trait(
             q_id,
-            RegexTrait(
+            RegexRubricTrait(
                 name="pattern",
                 description="Question pattern",
                 pattern=r"[A-Z]+",
@@ -310,12 +310,8 @@ class TestGetMergedRubricForQuestion:
             ),
         )
 
-        merged = manager.get_merged_rubric_for_question(q_id)
-        assert merged is not None
-        assert len(merged.regex_traits) == 1
-        # Question's pattern should override
-        assert merged.regex_traits[0].pattern == r"[A-Z]+"
-        assert merged.regex_traits[0].description == "Question pattern"
+        with pytest.raises(ValueError, match="Same-type trait name conflicts"):
+            manager.get_merged_rubric_for_question(q_id)
 
 
 @pytest.mark.unit
@@ -449,7 +445,7 @@ class TestValidateRubrics:
         manager = RubricManager(benchmark)
 
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="pattern",
                 description="Has pattern",
                 pattern=r"\w+",
@@ -508,7 +504,7 @@ class TestGetRubricStatistics:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex",
                 pattern="test",
@@ -538,17 +534,38 @@ class TestGetRubricStatistics:
         # So even with 1 trait, it counts the dict keys
         assert stats["total_question_traits"] == 5
 
+    def test_statistics_includes_agentic_traits(self) -> None:
+        """Test that global_traits_count includes agentic traits."""
+        benchmark = Benchmark.create(name="test")
+        manager = RubricManager(benchmark)
+
+        manager.add_global_rubric_trait(
+            LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
+        )
+        manager.add_global_rubric_trait(
+            AgenticRubricTrait(
+                name="agentic",
+                description="Agentic",
+                kind="boolean",
+                higher_is_better=True,
+            )
+        )
+
+        stats = manager.get_rubric_statistics()
+        assert stats["has_global_rubric"] is True
+        assert stats["global_traits_count"] == 2
+
 
 @pytest.mark.unit
-class TestGetQuestionsWithRubric:
-    """Tests for get_questions_with_rubric method."""
+class TestGetQuestionIdsWithRubric:
+    """Tests for get_question_ids_with_rubric method."""
 
     def test_get_questions_empty(self) -> None:
         """Test getting questions with rubrics from empty benchmark."""
         benchmark = Benchmark.create(name="test")
         manager = RubricManager(benchmark)
 
-        assert manager.get_questions_with_rubric() == []
+        assert manager.get_question_ids_with_rubric() == []
 
     def test_get_questions_with_rubrics(self) -> None:
         """Test getting list of question IDs with rubrics."""
@@ -566,7 +583,7 @@ class TestGetQuestionsWithRubric:
             q_id3, LLMRubricTrait(name="trait", description="Trait", kind="boolean", higher_is_better=True)
         )
 
-        questions = manager.get_questions_with_rubric()
+        questions = manager.get_question_ids_with_rubric()
         assert len(questions) == 2
         assert q_id1 in questions
         assert q_id3 in questions
@@ -689,7 +706,7 @@ class TestGetRubricTraitNames:
             LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
         )
         manager.add_global_rubric_trait(
-            RegexTrait(
+            RegexRubricTrait(
                 name="regex",
                 description="Regex",
                 pattern="test",
@@ -699,7 +716,9 @@ class TestGetRubricTraitNames:
             )
         )
         manager.add_global_rubric_trait(
-            CallableTrait.from_callable(name="callable", func=lambda _: True, kind="boolean", description="Callable")
+            CallableRubricTrait.from_callable(
+                name="callable", func=lambda _: True, kind="boolean", description="Callable"
+            )
         )
 
         names = manager.get_rubric_trait_names()
@@ -720,6 +739,45 @@ class TestGetRubricTraitNames:
 
         names = manager.get_rubric_trait_names(q_id)
         assert set(names) == {"global", "question"}
+
+    def test_get_global_trait_names_includes_agentic(self) -> None:
+        """Test that agentic trait names are included in global names."""
+        benchmark = Benchmark.create(name="test")
+        manager = RubricManager(benchmark)
+
+        manager.add_global_rubric_trait(
+            LLMRubricTrait(name="llm", description="LLM", kind="boolean", higher_is_better=True)
+        )
+        manager.add_global_rubric_trait(
+            AgenticRubricTrait(
+                name="agentic",
+                description="Agentic",
+                kind="boolean",
+                higher_is_better=True,
+            )
+        )
+
+        names = manager.get_rubric_trait_names()
+        assert "agentic" in names
+        assert set(names) == {"llm", "agentic"}
+
+    def test_get_question_trait_names_includes_agentic(self) -> None:
+        """Test that agentic trait names are included in question-level names."""
+        benchmark = Benchmark.create(name="test")
+        manager = RubricManager(benchmark)
+
+        manager.add_global_rubric_trait(
+            AgenticRubricTrait(
+                name="global_agentic",
+                description="Global agentic",
+                kind="boolean",
+                higher_is_better=True,
+            )
+        )
+        q_id = benchmark.add_question("Question?", "Answer")
+
+        names = manager.get_rubric_trait_names(q_id)
+        assert "global_agentic" in names
 
 
 @pytest.mark.unit

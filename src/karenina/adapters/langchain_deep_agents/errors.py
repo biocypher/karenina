@@ -37,7 +37,7 @@ def wrap_deep_agents_error(error: Exception) -> tuple[Exception, bool]:
         return AgentTimeoutError(f"Agent execution timed out: {error}"), False
 
     # Output parsing errors
-    if "parse" in error_str or "output" in error_str and "format" in error_str:
+    if ("parse" in error_str and "output" in error_str) or ("output" in error_str and "format" in error_str):
         return AgentResponseError(f"Failed to parse agent response: {error}"), False
 
     # GraphRecursionError from LangGraph

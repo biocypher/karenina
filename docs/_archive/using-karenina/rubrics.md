@@ -470,7 +470,7 @@ Balance these trade-offs based on your use case:
 - **Quick testing**: Disable deep judgment for faster iteration
 - **Production benchmarks**: Enable selectively for key quality traits
 
-### 2. Regex-Based Traits (`RegexTrait`)
+### 2. Regex-Based Traits (`RegexRubricTrait`)
 
 **What they are:** Deterministic pattern-matching traits that check if answers match (or don't match) specific regex patterns. These provide **100% reproducible** validation without any LLM judgment.
 
@@ -484,9 +484,9 @@ Balance these trade-offs based on your use case:
 
 **Structure:**
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import RegexRubricTrait
 
-RegexTrait(
+RegexRubricTrait(
     name="Trait Name",
     description="What this pattern checks for",
     pattern=r"regex_pattern",        # Python regex pattern
@@ -513,7 +513,7 @@ Check that an answer mentions specific required terms:
 
 ```python
 # Answer must mention "BH3 proteins"
-RegexTrait(
+RegexRubricTrait(
     name="Mentions BH3 Proteins",
     description="Answer must mention BH3 proteins (the mechanism of BCL2 inhibition)",
     pattern=r"\bBH3\b",
@@ -522,7 +522,7 @@ RegexTrait(
 )
 
 # Answer must mention either "chromosome" or "chromosomes"
-RegexTrait(
+RegexRubricTrait(
     name="Mentions Chromosomes",
     description="Answer must use the term 'chromosome' or 'chromosomes'",
     pattern=r"\bchromosomes?\b",  # ? makes 's' optional
@@ -537,7 +537,7 @@ Ensure answers follow required formats:
 
 ```python
 # Answer must include a gene symbol (all caps, 3-6 letters)
-RegexTrait(
+RegexRubricTrait(
     name="Contains Gene Symbol Format",
     description="Answer must include a gene symbol in standard format (e.g., BCL2, TP53)",
     pattern=r"\b[A-Z]{3,6}\d?\b",  # 3-6 uppercase letters, optional digit
@@ -546,7 +546,7 @@ RegexTrait(
 )
 
 # Answer must include a numeric value
-RegexTrait(
+RegexRubricTrait(
     name="Includes Numeric Answer",
     description="Answer must contain a number",
     pattern=r"\b\d+\b",
@@ -561,7 +561,7 @@ Check that answers DON'T contain unwanted patterns:
 
 ```python
 # Answer must NOT contain URLs
-RegexTrait(
+RegexRubricTrait(
     name="No URLs",
     description="Answer should not contain web URLs",
     pattern=r"https?://[^\s]+",
@@ -570,7 +570,7 @@ RegexTrait(
 )
 
 # Answer must NOT use informal language
-RegexTrait(
+RegexRubricTrait(
     name="No Informal Language",
     description="Answer must avoid informal terms like 'basically', 'kinda', 'sorta'",
     pattern=r"\b(basically|kinda|sorta|like\s+um)\b",
@@ -585,7 +585,7 @@ Verify that answers include proper citations:
 
 ```python
 # Answer must include a citation in square brackets
-RegexTrait(
+RegexRubricTrait(
     name="Contains Citation",
     description="Answer must include at least one citation [reference]",
     pattern=r"\[[^\]]+\]",  # Matches [anything inside]
@@ -609,7 +609,7 @@ The `invert_result` parameter changes the pass/fail logic:
 
 ```python
 # Normal: Pass if "BCL2" is found
-RegexTrait(
+RegexRubricTrait(
     name="Mentions BCL2",
     description="Answer must mention BCL2",
     pattern=r"\bBCL2\b",
@@ -619,7 +619,7 @@ RegexTrait(
 # "The drug targets TP53" → ❌ Fail (pattern not found)
 
 # Inverted: Pass if "BCL2" is NOT found
-RegexTrait(
+RegexRubricTrait(
     name="No Mention of BCL2",
     description="Answer must not mention BCL2",
     pattern=r"\bBCL2\b",
@@ -716,7 +716,7 @@ pattern=r"\b(BCL2|BCL-2|BCL 2)\b"  # All three formats valid
 
 ---
 
-### 3. Callable Traits (`CallableTrait`)
+### 3. Callable Traits (`CallableRubricTrait`)
 
 **What they are:** Custom Python function-based traits for complex validation logic that can't be expressed with regex patterns. These provide **programmatic evaluation** using your own Python code.
 
@@ -728,7 +728,7 @@ pattern=r"\b(BCL2|BCL-2|BCL 2)\b"  # All three formats valid
 - Validation that requires **external data** or computation
 - When regex patterns are too limited but you want deterministic evaluation
 
-**⚠️ SECURITY WARNING**: CallableTrait uses cloudpickle serialization to store Python code. Only load callable traits from **trusted sources**. Malicious code can execute arbitrary commands during deserialization.
+**⚠️ SECURITY WARNING**: CallableRubricTrait uses cloudpickle serialization to store Python code. Only load callable traits from **trusted sources**. Malicious code can execute arbitrary commands during deserialization.
 
 **Creating Callable Traits:**
 
@@ -736,10 +736,10 @@ Callable traits **must be created programmatically** using the `from_callable()`
 
 **Structure:**
 ```python
-from karenina.schemas import CallableTrait
+from karenina.schemas import CallableRubricTrait
 
 # Create from a function
-trait = CallableTrait.from_callable(
+trait = CallableRubricTrait.from_callable(
     name="Trait Name",
     description="What this evaluates",
     func=your_function,              # Python function
@@ -767,7 +767,7 @@ trait = CallableTrait.from_callable(
 **1. Boolean Callable Trait (Pass/Fail):**
 
 ```python
-from karenina.schemas import CallableTrait
+from karenina.schemas import CallableRubricTrait
 
 # Define evaluation function
 def check_word_count(text: str) -> bool:
@@ -775,7 +775,7 @@ def check_word_count(text: str) -> bool:
     return len(text.split()) >= 50
 
 # Create callable trait
-word_count_trait = CallableTrait.from_callable(
+word_count_trait = CallableRubricTrait.from_callable(
     name="Minimum Word Count",
     description="Answer must have at least 50 words",
     func=check_word_count,
@@ -807,7 +807,7 @@ def score_response_quality(text: str) -> int:
         return 5  # Excellent
 
 # Create score-based callable trait
-quality_trait = CallableTrait.from_callable(
+quality_trait = CallableRubricTrait.from_callable(
     name="Response Quality Score",
     description="Comprehensive quality assessment based on length and structure",
     func=score_response_quality,
@@ -827,7 +827,7 @@ score = quality_trait.evaluate("This is a medium length answer...")  # Returns 3
 import re
 
 # Boolean lambda for citation check
-citation_check = CallableTrait.from_callable(
+citation_check = CallableRubricTrait.from_callable(
     name="Contains Citations",
     description="Check for citation patterns [1], (Author, Year)",
     func=lambda text: bool(re.search(r'\[\d+\]|\([A-Z][a-z]+,\s*\d{4}\)', text)),
@@ -835,7 +835,7 @@ citation_check = CallableTrait.from_callable(
 )
 
 # Boolean lambda for sentence count
-sentence_check = CallableTrait.from_callable(
+sentence_check = CallableRubricTrait.from_callable(
     name="Multiple Sentences",
     description="Answer must have at least 3 sentences",
     func=lambda text: text.count('.') + text.count('!') + text.count('?') >= 3,
@@ -859,7 +859,7 @@ def check_code_quality(text: str) -> bool:
 
     return has_code_fence and has_function and has_comments
 
-code_quality_trait = CallableTrait.from_callable(
+code_quality_trait = CallableRubricTrait.from_callable(
     name="Code Quality Check",
     description="Answer must include well-documented code examples",
     func=check_code_quality,
@@ -877,10 +877,10 @@ code_quality_trait = CallableTrait.from_callable(
 **Using Callable Traits in Rubrics:**
 
 ```python
-from karenina.schemas import Rubric, CallableTrait
+from karenina.schemas import Rubric, CallableRubricTrait
 
 # Create callable traits
-word_count = CallableTrait.from_callable(
+word_count = CallableRubricTrait.from_callable(
     name="Min_50_Words",
     func=lambda text: len(text.split()) >= 50,
     kind="boolean"
@@ -916,7 +916,7 @@ def check_length(text: str) -> bool:
 
 **Test independently**:
 ```python
-# Test your function before creating CallableTrait
+# Test your function before creating CallableRubricTrait
 test_text = "This is a test answer with some words"
 assert check_length(test_text) == False  # Too short
 ```
@@ -926,8 +926,8 @@ assert check_length(test_text) == False  # Too short
 - ❌ Don't: Import uncommon packages (serialization issues)
 
 **Use regex traits for simple patterns**:
-- ✅ Do: Use CallableTrait for complex logic
-- ❌ Don't: Use CallableTrait when a simple regex pattern would work
+- ✅ Do: Use CallableRubricTrait for complex logic
+- ❌ Don't: Use CallableRubricTrait when a simple regex pattern would work
 
 **Document scoring logic**:
 ```python
@@ -962,14 +962,14 @@ def score_detail_level(text: str) -> int:
 | Need | Use This Trait Type |
 |------|---------------------|
 | Subjective quality assessment | LLM-Based (`LLMRubricTrait`) |
-| Exact keyword or format validation | Regex-Based (`RegexTrait`) |
-| Complex validation logic | Callable-Based (`CallableTrait`) |
+| Exact keyword or format validation | Regex-Based (`RegexRubricTrait`) |
+| Complex validation logic | Callable-Based (`CallableRubricTrait`) |
 | Classification accuracy metrics | Metric-Based (`MetricRubricTrait`) |
 | Nuanced scoring (1-5) | LLM-Based (`LLMRubricTrait`, kind="score") |
 | Yes/no judgment | LLM-Based (`LLMRubricTrait`, kind="binary") |
-| Deterministic pattern matching | Regex-Based (`RegexTrait`) |
-| Custom scoring algorithms | Callable-Based (`CallableTrait`, kind="score") |
-| Word counts, sentence structure | Callable-Based (`CallableTrait`) |
+| Deterministic pattern matching | Regex-Based (`RegexRubricTrait`) |
+| Custom scoring algorithms | Callable-Based (`CallableRubricTrait`, kind="score") |
+| Word counts, sentence structure | Callable-Based (`CallableRubricTrait`) |
 | Precision/recall/F1 computation | Metric-Based (`MetricRubricTrait`) |
 
 ---
@@ -1326,13 +1326,13 @@ Question-specific rubrics apply to **a single question only**. They're perfect f
 Check that a specific answer mentions required terminology:
 
 ```python
-from karenina.schemas import Rubric, RegexTrait
+from karenina.schemas import Rubric, RegexRubricTrait
 
 # This rubric is ONLY for the Venetoclax question
 venetoclax_rubric = Rubric(
     name="Drug Mechanism Validation",
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="Mentions BH3 Proteins",
             description="Answer must mention BH3 proteins (the mechanism of BCL2 inhibition)",
             pattern=r"\bBH3\b",
@@ -1410,7 +1410,7 @@ You can use both global and question-specific rubrics in the same benchmark:
 
 ```python
 from karenina import Benchmark
-from karenina.schemas import Rubric, LLMRubricTrait, RegexTrait
+from karenina.schemas import Rubric, LLMRubricTrait, RegexRubricTrait
 
 # Create benchmark
 benchmark = Benchmark.create(name="Genomics Knowledge Benchmark")
@@ -1444,7 +1444,7 @@ benchmark.add_question(
 venetoclax_rubric = Rubric(
     name="Drug Mechanism Validation",
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="Mentions BH3 Proteins",
             description="Answer must mention BH3 proteins",
             pattern=r"\bBH3\b",
@@ -1589,7 +1589,7 @@ Here's a complete workflow showing both global and question-specific rubrics wit
 ```python
 from karenina import Benchmark
 from karenina.schemas import (
-    Rubric, LLMRubricTrait, RegexTrait, MetricRubricTrait,
+    Rubric, LLMRubricTrait, RegexRubricTrait, MetricRubricTrait,
     ModelConfig, VerificationConfig
 )
 
@@ -1629,7 +1629,7 @@ benchmark.add_question(
 venetoclax_rubric = Rubric(
     name="Drug Mechanism Validation",
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="Mentions BH3 Proteins",
             description="Answer must mention BH3 proteins",
             pattern=r"\bBH3\b",

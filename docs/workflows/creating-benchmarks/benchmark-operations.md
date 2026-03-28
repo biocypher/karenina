@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -23,18 +23,13 @@ For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Conc
 # Setup cell: hidden in rendered documentation.
 import hashlib
 from datetime import datetime
-from unittest.mock import MagicMock, patch
 
-mock_modules = {}
-for mod in ["sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext", "sqlalchemy.ext.declarative"]:
-    mock_modules[mod] = MagicMock()
+from pydantic import Field
 
-with patch.dict("sys.modules", mock_modules):
-    from karenina.benchmark import Benchmark
-    from karenina.schemas.entities import BaseAnswer, Rubric
-    from karenina.schemas.entities.question import Question
-    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait
-    from pydantic import Field
+from karenina.benchmark import Benchmark
+from karenina.schemas.entities import BaseAnswer, Rubric
+from karenina.schemas.entities.question import Question
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait
 ```
 
 ---
@@ -137,7 +132,7 @@ Templates define how to verify correctness. There are three ways to attach a tem
 
 ### Inline (at question creation time)
 
-Pass the template class directly when adding the question:
+Define the template as a class and pass it when adding the question. `add_question` accepts both class objects and source strings:
 
 ```python
 class Answer(BaseAnswer):
@@ -160,8 +155,8 @@ class Answer(BaseAnswer):
 q3_id = benchmark.add_question(
     question="Describe the pharmacological mechanism of venetoclax.",
     raw_answer="BH3 mimetic that selectively inhibits BCL2",
-    answer_template=Answer,
 )
+benchmark.update_template(q3_id, Answer)
 print(f"Has template: {benchmark.has_template(q3_id)}")
 ```
 
@@ -172,7 +167,7 @@ print(f"Has template: {benchmark.has_template(q3_id)}")
 
 ### After the fact
 
-Add a template to an existing question using its ID:
+Add or replace a template on an existing question using `update_template`:
 
 ```python
 class Answer(BaseAnswer):
@@ -193,7 +188,7 @@ class Answer(BaseAnswer):
         extracted = self.target.strip().upper().replace("-", "").replace(" ", "")
         return extracted == self.correct["target"]
 
-benchmark.add_answer_template(q1_id, Answer)
+benchmark.update_template(q1_id, Answer)
 print(f"Q1 has template: {benchmark.has_template(q1_id)}")
 ```
 
@@ -260,14 +255,14 @@ Question-specific traits apply to a single question. When both global and questi
 ```python
 benchmark.add_question_rubric_trait(
     q1_id,
-    RegexTrait(
+    RegexRubricTrait(
         name="mentions_bcl2_family",
         pattern=r"(?i)bcl[-\s]?2\s+family",
         description="Response mentions the BCL2 protein family.",
         higher_is_better=True,
     ),
 )
-print(f"Questions with rubric: {benchmark.get_questions_with_rubric()}")
+print(f"Questions with rubric: {[q['id'] for q in benchmark.get_questions_with_rubric()]}")
 ```
 
 For the full set of trait types (LLM, regex, callable, metric, literal), see [Rubrics](../../core_concepts/rubrics/index.md).

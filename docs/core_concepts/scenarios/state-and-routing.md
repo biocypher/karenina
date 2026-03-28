@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -389,7 +389,9 @@ print(f"High confidence path: {resolve_next_node(scenario_b.edges_from('ask'), s
 
 ### c. Custom accumulated state via state_update
 
-`ScenarioNode` accepts an optional `state_update` callable. After each turn on that node, the engine calls `state_update(accumulated, parsed_fields)` and replaces `accumulated` with the returned dict. This allows tracking values across revisits, such as a running count:
+`ScenarioNode` accepts an optional `state_update` callable. After each turn on that node, the engine calls `state_update(accumulated, parsed_fields)` and replaces `accumulated` with the returned dict. This allows tracking values across revisits, such as a running count.
+
+Before calling the callback, the engine takes a `deepcopy` snapshot of `accumulated`. If the callback raises an exception, the snapshot is restored and the error is logged at `warning` level. This guarantees that a buggy `state_update` cannot corrupt accumulated state for subsequent turns.
 
 ```python
 # In real usage, state_update is attached to a ScenarioNode.
@@ -503,6 +505,10 @@ Missing keys return `None`, except `node_visits.<node_id>`, which returns `0`.
 ### Turn limit
 
 `VerificationConfig.scenario_turn_limit` (default: `20`) sets the maximum number of turns before the runner terminates the scenario with `status="limit_reached"`. Set this field in your `VerificationConfig` to override the default.
+
+### Evaluation mode
+
+Scenarios auto-detect evaluation mode per turn based on whether a rubric is present (per-question rubric or global rubric). Setting `evaluation_mode='rubric_only'` on `VerificationConfig` has no effect in scenarios: the ScenarioManager ignores it and emits a `UserWarning` explaining why. If you need rubric-only evaluation, attach rubrics to your questions without answer templates and the auto-detection will select `template_and_rubric` or `template_only` as appropriate.
 
 ## 7. Next Steps
 

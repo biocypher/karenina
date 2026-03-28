@@ -475,7 +475,7 @@ def test_create_export_job_basic() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -485,7 +485,7 @@ def test_create_export_job_basic() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -528,7 +528,7 @@ def test_create_export_job_with_failures() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -538,7 +538,7 @@ def test_create_export_job_with_failures() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -574,7 +574,7 @@ def test_create_export_job_default_run_name() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -584,7 +584,7 @@ def test_create_export_job_default_run_name() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -619,7 +619,7 @@ def test_create_export_job_generates_uuid() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -629,7 +629,7 @@ def test_create_export_job_generates_uuid() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",

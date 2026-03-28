@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from karenina.schemas.entities import Question, Rubric
     from karenina.schemas.entities.rubric import DynamicRubric
 
+from karenina.exceptions import KareninaError
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 
@@ -146,7 +147,11 @@ class TaskEval:
         """
         from karenina.ports.messages import Message
 
-        trace_messages = [Message.assistant(messages)] if isinstance(messages, str) else messages
+        if isinstance(messages, str):
+            messages = messages.removeprefix("--- AI Message ---\n")
+            trace_messages = [Message.assistant(messages)]
+        else:
+            trace_messages = messages
 
         log_event = LogEvent(
             level=level,
@@ -304,6 +309,8 @@ class TaskEval:
         config: VerificationConfig,
         step_id: str | None = None,
         merge_strategy: Literal["concatenate", "traces_only"] | None = None,
+        answering_model: ModelConfig | None = None,
+        run_name: str | None = None,
     ) -> TaskEvalResult:
         """Evaluate logged outputs against questions and rubrics.
 
@@ -312,6 +319,10 @@ class TaskEval:
             step_id: Optional step ID to evaluate specific step (otherwise global)
             merge_strategy: Optional override for the instance merge_strategy.
                 If None, uses the instance default.
+            answering_model: Optional model identity to record for the answering
+                stage. When None, a sentinel with interface="taskeval" is used.
+            run_name: Optional run name for result tracking. When None, an
+                auto-generated name with prefix "taskeval_" is used.
 
         Returns:
             TaskEvalResult with evaluation outcomes and failure characterization
@@ -323,15 +334,44 @@ class TaskEval:
             )
             result = task.evaluate(config)
         """
+        from uuid import uuid4
+
+        if answering_model is None:
+            answering_model = ModelConfig(
+                id="taskeval_user_provided",
+                model_name="user-provided",
+                model_provider="user-provided",
+                interface="taskeval",
+            )
+        if run_name is None:
+            run_name = f"taskeval_{uuid4().hex[:8]}"
+        if config.is_few_shot_enabled():
+            logger.debug("FewShotConfig has no effect in TaskEval mode")
+
         effective_strategy = merge_strategy or self.merge_strategy
 
         if step_id:
-            return self._evaluate_step(config, step_id, effective_strategy)
+            return self._evaluate_step(
+                config,
+                step_id,
+                effective_strategy,
+                answering_model=answering_model,
+                run_name=run_name,
+            )
         else:
-            return self._evaluate_global(config, effective_strategy)
+            return self._evaluate_global(
+                config,
+                effective_strategy,
+                answering_model=answering_model,
+                run_name=run_name,
+            )
 
     def _evaluate_global(
-        self, config: VerificationConfig, merge_strategy: Literal["concatenate", "traces_only"]
+        self,
+        config: VerificationConfig,
+        merge_strategy: Literal["concatenate", "traces_only"],
+        answering_model: ModelConfig,
+        run_name: str,
     ) -> TaskEvalResult:
         """Evaluate all global logs against global questions and rubrics.
 
@@ -341,11 +381,19 @@ class TaskEval:
         Args:
             config: Verification configuration with parsing models
             merge_strategy: Strategy for merging logs
+            answering_model: Model identity for the answering stage
+            run_name: Run name for result tracking
 
         Returns:
             TaskEvalResult with both global evaluation results and all step evaluations
         """
-        step_eval = self._run_evaluation_loop(config, step_id=None, merge_strategy=merge_strategy)
+        step_eval = self._run_evaluation_loop(
+            config,
+            step_id=None,
+            merge_strategy=merge_strategy,
+            answering_model=answering_model,
+            run_name=run_name,
+        )
 
         task_result = TaskEvalResult(
             task_id=self.task_id,
@@ -355,7 +403,13 @@ class TaskEval:
 
         # After global evaluation, automatically evaluate all available steps
         for sid in self._get_available_step_ids():
-            step_result = self._evaluate_step_internal(config, sid, merge_strategy)
+            step_result = self._evaluate_step_internal(
+                config,
+                sid,
+                merge_strategy,
+                answering_model=answering_model,
+                run_name=run_name,
+            )
             task_result.per_step[sid] = step_result
 
         return task_result
@@ -365,6 +419,8 @@ class TaskEval:
         config: VerificationConfig,
         step_id: str,
         merge_strategy: Literal["concatenate", "traces_only"],
+        answering_model: ModelConfig,
+        run_name: str,
     ) -> TaskEvalResult:
         """Evaluate step-specific logs against step-specific questions and rubrics.
 
@@ -372,11 +428,19 @@ class TaskEval:
             config: Verification configuration with parsing models
             step_id: ID of the step to evaluate
             merge_strategy: Strategy for merging logs
+            answering_model: Model identity for the answering stage
+            run_name: Run name for result tracking
 
         Returns:
             TaskEvalResult with step-specific evaluation results
         """
-        step_eval = self._evaluate_step_internal(config, step_id, merge_strategy)
+        step_eval = self._evaluate_step_internal(
+            config,
+            step_id,
+            merge_strategy,
+            answering_model=answering_model,
+            run_name=run_name,
+        )
         return self._build_result(step_eval, step_id=step_id)
 
     def _evaluate_step_internal(
@@ -384,6 +448,8 @@ class TaskEval:
         config: VerificationConfig,
         step_id: str,
         merge_strategy: Literal["concatenate", "traces_only"],
+        answering_model: ModelConfig,
+        run_name: str,
     ) -> StepEval:
         """Internal method to evaluate a single step and return StepEval.
 
@@ -391,11 +457,19 @@ class TaskEval:
             config: Verification configuration with parsing models
             step_id: ID of the step to evaluate
             merge_strategy: Strategy for merging logs
+            answering_model: Model identity for the answering stage
+            run_name: Run name for result tracking
 
         Returns:
             StepEval with step-specific evaluation results
         """
-        return self._run_evaluation_loop(config, step_id=step_id, merge_strategy=merge_strategy)
+        return self._run_evaluation_loop(
+            config,
+            step_id=step_id,
+            merge_strategy=merge_strategy,
+            answering_model=answering_model,
+            run_name=run_name,
+        )
 
     # =============================================================================
     # DATA PREPARATION METHODS
@@ -411,6 +485,7 @@ class TaskEval:
         step_ids.update(self.step_logs.keys())
         step_ids.update(self.step_questions.keys())
         step_ids.update(self.step_rubrics.keys())
+        step_ids.update(self.step_dynamic_rubrics.keys())
         return step_ids
 
     def _get_evaluation_context(self, step_id: str | None = None) -> "EvaluationContext":
@@ -521,6 +596,8 @@ class TaskEval:
         config: VerificationConfig,
         step_id: str | None,
         merge_strategy: Literal["concatenate", "traces_only"],
+        answering_model: ModelConfig,
+        run_name: str,
     ) -> StepEval:
         """Run the evaluation loop for either global or step-specific context.
 
@@ -528,6 +605,8 @@ class TaskEval:
             config: Verification configuration with parsing models
             step_id: Optional step ID (None for global evaluation)
             merge_strategy: Strategy for merging logs
+            answering_model: Model identity for the answering stage
+            run_name: Run name for result tracking
 
         Returns:
             StepEval with evaluation results
@@ -553,11 +632,17 @@ class TaskEval:
         if replicate_count < 1:
             replicate_count = 1
 
+        # Extract guard flags from config
+        abstention_enabled = config.abstention_enabled
+        sufficiency_enabled = config.sufficiency_enabled
+
         # Build step prefix for synthetic question IDs and error messages
         step_prefix = f"step_{step_id}_" if step_id else ""
         step_suffix = f" in step {step_id}" if step_id else ""
 
-        for _ in range(replicate_count):
+        for rep_idx in range(replicate_count):
+            replicate = None if replicate_count == 1 else rep_idx + 1
+
             # In rubric_only mode with no explicit questions, create a synthetic question
             if evaluation_mode == "rubric_only" and not context.questions and concatenated_logs:
                 synthetic_question = {
@@ -578,6 +663,11 @@ class TaskEval:
                     error_context=f"rubric-only logs{step_suffix}",
                     trace_messages=trace_messages,
                     agent_metrics=agent_metrics,
+                    answering_model=answering_model,
+                    run_name=run_name,
+                    replicate=replicate,
+                    abstention_enabled=abstention_enabled,
+                    sufficiency_enabled=sufficiency_enabled,
                 )
 
             for question in context.questions:
@@ -606,6 +696,11 @@ class TaskEval:
                     error_context=f"question {question_id}{step_suffix}",
                     trace_messages=trace_messages,
                     agent_metrics=agent_metrics,
+                    answering_model=answering_model,
+                    run_name=run_name,
+                    replicate=replicate,
+                    abstention_enabled=abstention_enabled,
+                    sufficiency_enabled=sufficiency_enabled,
                 )
 
         return step_eval
@@ -622,6 +717,11 @@ class TaskEval:
         error_context: str,
         trace_messages: "list[Message] | None" = None,
         agent_metrics: dict[str, Any] | None = None,
+        answering_model: ModelConfig | None = None,
+        run_name: str | None = None,
+        replicate: int | None = None,
+        abstention_enabled: bool = False,
+        sufficiency_enabled: bool = False,
     ) -> None:
         """Evaluate a single question and store the result.
 
@@ -636,6 +736,11 @@ class TaskEval:
             error_context: Context string for error messages
             trace_messages: Optional list of Message objects for the trace
             agent_metrics: Optional agent execution metrics
+            answering_model: Model identity for the answering stage
+            run_name: Run name for result tracking
+            replicate: Replicate index (1-based), or None for single-replicate runs
+            abstention_enabled: Whether abstention detection is enabled
+            sufficiency_enabled: Whether sufficiency detection is enabled
         """
         question_id = question_dict.get("id", "unknown")
         assert isinstance(question_id, str), "Question ID must be a string"
@@ -650,14 +755,22 @@ class TaskEval:
                 evaluation_mode=evaluation_mode,
                 trace_messages=trace_messages,
                 agent_metrics=agent_metrics,
+                answering_model=answering_model,
+                run_name=run_name,
+                replicate=replicate,
+                abstention_enabled=abstention_enabled,
+                sufficiency_enabled=sufficiency_enabled,
             )
 
             if question_id not in step_eval.verification_results:
                 step_eval.verification_results[question_id] = []
             step_eval.verification_results[question_id].append(verification_result)
 
-        except Exception as e:
+        except (KareninaError, ValueError, RuntimeError) as e:
             logger.warning("Evaluation failed for %s: %s", error_context, e)
+            if question_id not in step_eval.failed_questions:
+                step_eval.failed_questions[question_id] = []
+            step_eval.failed_questions[question_id].append(str(e))
 
     # =============================================================================
     # EVALUATION METHODS
@@ -673,6 +786,11 @@ class TaskEval:
         evaluation_mode: str = "template_only",
         trace_messages: "list[Message] | None" = None,
         agent_metrics: dict[str, Any] | None = None,
+        answering_model: ModelConfig | None = None,
+        run_name: str | None = None,
+        replicate: int | None = None,
+        abstention_enabled: bool = False,
+        sufficiency_enabled: bool = False,
     ) -> Any:
         """Evaluate response using main verification pipeline with cached answer data.
 
@@ -685,6 +803,11 @@ class TaskEval:
             evaluation_mode: One of "template_only", "rubric_only", "template_and_rubric"
             trace_messages: Optional list of Message objects for the trace
             agent_metrics: Optional agent execution metrics
+            answering_model: Model identity for the answering stage
+            run_name: Run name for result tracking
+            replicate: Replicate index (1-based), or None for single-replicate runs
+            abstention_enabled: Whether abstention detection is enabled
+            sufficiency_enabled: Whether sufficiency detection is enabled
 
         Returns:
             VerificationResult from the main verification pipeline
@@ -711,22 +834,8 @@ class Answer(BaseAnswer):
         return True
 '''
 
-        # Ensure valid MD5 hash for question ID
-        import hashlib
-
-        if not self._is_valid_md5_hash(question_id):
-            question_id = hashlib.md5(question_id.encode()).hexdigest()
-
         assert isinstance(answer_template, str), "answer_template must be a string"
-
-        # Create mock answering model (won't be invoked due to cached_answer_data)
-        mock_answering_model = ModelConfig(
-            id="taskeval_mock",
-            model_provider="mock",
-            model_name="mock",
-            interface="langchain",
-            system_prompt="Mock model for TaskEval",
-        )
+        assert answering_model is not None, "answering_model must be provided"
 
         # Prepare cached answer data to inject logged output
         cached_answer_data: dict[str, Any] = {
@@ -745,12 +854,15 @@ class Answer(BaseAnswer):
             question_id=question_id,
             question_text=question_text,
             template_code=answer_template,
-            answering_model=mock_answering_model,
+            answering_model=answering_model,
             parsing_model=parsing_model,
             rubric=rubric,
             dynamic_rubric=dynamic_rubric,
             cached_answer_data=cached_answer_data,
-            abstention_enabled=True,
+            run_name=run_name,
+            replicate=replicate,
+            abstention_enabled=abstention_enabled,
+            sufficiency_enabled=sufficiency_enabled,
             rubric_evaluation_strategy="batch",
             evaluation_mode=evaluation_mode,
         )
@@ -761,19 +873,18 @@ class Answer(BaseAnswer):
     # HELPER METHODS
     # =============================================================================
 
-    def _is_valid_md5_hash(self, hash_string: str) -> bool:
-        """Check if a string is a valid MD5 hash format."""
-        import re
-
-        md5_pattern = re.compile(r"^[a-fA-F0-9]{32}$")
-        return bool(md5_pattern.match(hash_string))
-
     def _merge_rubrics(self, rubrics: list["Rubric"]) -> "Rubric | None":
         """Merge multiple rubrics into a single rubric, raising error on trait name conflicts."""
         if not rubrics:
             return None
 
-        from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from karenina.schemas.entities import (
+            CallableRubricTrait,
+            LLMRubricTrait,
+            MetricRubricTrait,
+            RegexRubricTrait,
+            Rubric,
+        )
         from karenina.schemas.entities.rubric import AgenticRubricTrait
 
         # Check for trait name conflicts first (across all trait types)
@@ -806,8 +917,8 @@ class Answer(BaseAnswer):
 
         # Combine all traits (now guaranteed to be unique)
         unique_llm_traits: dict[str, LLMRubricTrait] = {}
-        unique_regex_traits: dict[str, RegexTrait] = {}
-        unique_callable_traits: dict[str, CallableTrait] = {}
+        unique_regex_traits: dict[str, RegexRubricTrait] = {}
+        unique_callable_traits: dict[str, CallableRubricTrait] = {}
         unique_metric_traits: dict[str, MetricRubricTrait] = {}
         unique_agentic_traits: dict[str, AgenticRubricTrait] = {}
         for rubric in rubrics:

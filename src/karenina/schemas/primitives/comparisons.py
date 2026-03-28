@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from dateutil import parser as dateutil_parser  # type: ignore[import-untyped]
 from pydantic import BaseModel
@@ -56,9 +56,13 @@ class BooleanMatch(VerificationPrimitive):
     """Compare extracted bool to ground truth bool.
 
     Both values are coerced to bool before comparison.
+    None is treated as distinct from both True and False:
+    None only matches None via identity comparison.
     """
 
     def check(self, extracted: Any, expected: Any) -> bool:
+        if extracted is None or expected is None:
+            return extracted is expected
         return bool(extracted) == bool(expected)
 
 
@@ -117,7 +121,11 @@ class RegexMatch(VerificationPrimitive):
     def check(self, extracted: Any, _expected: Any) -> bool:
         flag_value = 0
         for f in self.flags:
-            flag_value |= getattr(re, f, 0)
+            resolved = getattr(re, f, None)
+            if resolved is None:
+                logger.warning("Unknown regex flag %r, ignoring", f)
+            else:
+                flag_value |= resolved
         return bool(re.search(self.pattern, str(extracted), flag_value))
 
 
@@ -157,7 +165,7 @@ class NumericTolerance(VerificationPrimitive):
     """
 
     tolerance: float
-    mode: str = "relative"
+    mode: Literal["relative", "absolute"] = "relative"
 
     def check(self, extracted: Any, expected: Any) -> bool:
         diff = abs(float(extracted) - float(expected))
@@ -300,7 +308,7 @@ class DateTolerance(VerificationPrimitive):
     """Check that extracted date is within tolerance of expected date."""
 
     tolerance: int
-    unit: str = "days"
+    unit: Literal["days", "hours", "minutes"] = "days"
 
     def check(self, extracted: Any, expected: Any) -> bool:
         try:

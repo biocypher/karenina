@@ -37,7 +37,7 @@ class SchemaOrgPropertyValue(BaseModel):
 
     type: Literal["PropertyValue"] = Field(alias="@type", default="PropertyValue")
     name: str
-    value: Any
+    value: Any = None
 
 
 # Schema.org Rating for rubric traits
@@ -174,6 +174,7 @@ class SchemaOrgScenarioNode(BaseModel):
     modelOverride: dict[str, Any] | None = None
     toolFilter: dict[str, Any] | None = None
     stateUpdateSource: str | None = None
+    questionData: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -17,7 +17,7 @@ For an overview of how stages fit together, see [Advanced Pipeline Overview](ind
 | 7 | [ParseTemplate](#7-parsetemplate) | LLM Call | Template modes | Recursion, trace fail, abstention, or insufficient |
 | 8 | [VerifyTemplate](#8-verifytemplate) | Verification | Template modes | Recursion or abstention |
 | 9 | [EmbeddingCheck](#9-embeddingcheck) | Enhancement | Template modes | Field verification passed |
-| 10 | [DeepJudgmentAutoFail](#10-deepjudgmentautofail) | Enhancement | `deep_judgment_enabled` | Deep judgment not performed or no missing excerpts |
+| 10 | [DeepJudgmentAutoFail](#10-deepjudgmentautofail) | Enhancement | `deep_judgment_mode` != `"disabled"` | Deep judgment not performed or no missing excerpts |
 | 11 | [RubricEvaluation](#11-rubricevaluation) | Evaluation | Rubric configured + mode | Trace validation failed (filtered mode) |
 | 12 | [DeepJudgmentRubricAutoFail](#12-deepjudgmentrubricautofail) | Enhancement | Rubric configured + mode | Deep judgment rubric not performed or no missing excerpts |
 | 13 | [FinalizeResult](#13-finalizeresult) | Finalization | Always | Never skips |
@@ -299,7 +299,7 @@ Uses the parsing (judge) LLM to extract structured data from the raw response in
 
 ### Deep Judgment Parsing
 
-When `deep_judgment_enabled=True`, parsing includes excerpt extraction:
+When `deep_judgment_mode` is `"full"` or `"reasoning_only"`, parsing includes deep judgment processing:
 
 - For each template attribute, the judge extracts text spans from the response that support its answer
 - Excerpts are validated using fuzzy matching against the original response
@@ -330,7 +330,7 @@ Deep judgment fields (when enabled):
 
 | Field | Purpose |
 |-------|---------|
-| `deep_judgment_enabled` | Enable excerpt extraction during parsing |
+| `deep_judgment_mode` | Template deep-judgment mode (`"disabled"`, `"reasoning_only"`, `"full"`) |
 | `deep_judgment_max_excerpts_per_attribute` | Max excerpts per field |
 | `deep_judgment_fuzzy_match_threshold` | Similarity threshold (0.0-1.0) |
 | `deep_judgment_excerpt_retry_attempts` | Retry count for failed excerpts |
@@ -363,7 +363,8 @@ Runs the template's programmatic verification: compares parsed data against grou
 1. **Field verification**: Calls `evaluator.verify_fields(parsed_answer)` which runs the template's `verify()` method comparing parsed values to ground truth
 2. **Regex verification**: Calls `evaluator.verify_regex(parsed_answer, raw_llm_response)` which runs any regex traits defined on the template
 3. **Combination**: `verify_result = field_success AND regex_success`
-4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0)
+4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0). Skipped when `verify()` raised an exception (sets `verify_granular_result=None` to avoid contradictory signals). Granular scoring is composition-aware: AnyOf uses max passing field weight, AtLeastN uses top-N weights.
+5. **Error capture**: If `verify()` raises, the error string is stored in `field_verification_error` (non-fatal; `completed_without_errors` remains `True`)
 
 ### Result Fields
 
@@ -371,7 +372,10 @@ Runs the template's programmatic verification: compares parsed data against grou
 |-------|----------|-------------|
 | `template_verification_performed` | `template` | Whether verification ran |
 | `verify_result` | `template` | Combined pass/fail (field AND regex) |
-| `verify_granular_result` | `template` | Partial credit score (0.0-1.0, if available) |
+| `verify_granular_result` | `template` | Partial credit score (0.0-1.0, if available). `None` when `verify()` raised |
+| `field_verification_error` | `template` | Error string if `verify()` raised an exception |
+| `field_results` | `template` | Per-field primitive pass/fail dict (from `_compute_field_results()`) |
+| `composition_strategy` | `template` | Composition strategy: `"all_of"`, `"any_of"`, `"at_least_n(N)"`, or `None` |
 | `field_verification_result` | internal | Field-only pass/fail |
 | `regex_validations_performed` | `template` | Whether regex checks ran |
 | `regex_validation_results` | `template` | Per-pattern pass/fail |
@@ -439,7 +443,7 @@ Auto-fails verification if deep-judgment parsing found attributes without corrob
 
 ### When It Runs
 
-- **Included**: When `deep_judgment_enabled=True` (template modes only)
+- **Included**: When `deep_judgment_mode` is `"full"` or `"reasoning_only"` (template modes only)
 - **Runtime skip**: If deep judgment was not performed, no attributes are missing excerpts, or abstention was detected
 
 ### What It Does
@@ -454,7 +458,7 @@ Modifies `verify_result` and `field_verification_result` — no new fields added
 
 ### Configuration
 
-No direct configuration — auto-included when `deep_judgment_enabled=True`.
+No direct configuration; auto-included when `deep_judgment_mode` is not `"disabled"`.
 
 ---
 

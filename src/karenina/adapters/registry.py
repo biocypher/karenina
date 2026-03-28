@@ -170,13 +170,13 @@ class AdapterSpec:
     supports_mcp: bool = False
     supports_tools: bool = False
 
-    # True when the underlying runtime is itself an agent with built-in tools
-    # (e.g. Claude Code). For these adapters, the LLMPort path loses tool
-    # call traces because the runtime executes tools internally. The pipeline
-    # should prefer the AgentPort path to capture the full conversation.
-    # False for scaffolded adapters (LangChain, Claude Tool) where the adapter
-    # explicitly orchestrates each tool call turn.
-    natively_agentic: bool = False
+    # Agent capability tier:
+    # - "tool_loop": Basic tool-calling loop (e.g. LangChain ReAct). The adapter
+    #   orchestrates each tool call turn explicitly.
+    # - "deep_agent": Full agent runtime with built-in tools (e.g. Claude Code,
+    #   LangChain Deep Agents). The runtime handles tool loops internally;
+    #   GenerateAnswer should prefer the AgentPort path to capture the full trace.
+    agent_tier: str = "tool_loop"
 
     # If False, model_provider is not required for this interface.
     # Used by validate_model_config() to replace the hardcoded
@@ -369,6 +369,11 @@ class AdapterRegistry:
             from karenina.adapters.langchain_deep_agents import registration as _da  # noqa: F401
         except ImportError:
             logger.debug("LangChain Deep Agents registration module not available")
+
+        try:
+            from karenina.adapters.taskeval import registration as _te  # noqa: F401
+        except ImportError:
+            logger.debug("TaskEval registration module not available")
 
     @classmethod
     def _discover_entry_points(cls) -> None:

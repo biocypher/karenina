@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -83,7 +83,7 @@ print(f"Created: {benchmark.name}")
 
 ## Bulk Question Ingestion
 
-For large benchmarks, questions typically come from spreadsheets or CSV files rather than manual entry. The `extract_questions_from_file()` function reads tabular data and returns `(Question, metadata)` pairs ready to add to a benchmark.
+For large benchmarks, questions typically come from spreadsheets or CSV files rather than manual entry. The `extract_questions_from_file()` function reads tabular data and returns a list of `Question` objects with all metadata (keywords, author, custom fields) populated directly.
 
 ```python
 from karenina.benchmark.authoring.questions import extract_questions_from_file
@@ -108,13 +108,13 @@ The function supports Excel, CSV, and TSV formats:
 #     keywords_columns=[
 #         {"column": "Tags", "separator": ","},
 #     ],
+#     custom_metadata_columns=["Complexity"],
 # )
 #
-# for question, metadata in questions:
-#     benchmark.add_question(question, **metadata)
+# benchmark.add_questions(questions)
 ```
 
-For this tutorial, we add questions manually — simulating what `extract_questions_from_file()` would produce:
+For this tutorial, we add questions manually:
 
 ```python
 questions = [
@@ -279,22 +279,22 @@ print(f"Added question with {2} few-shot examples")
 
 ### FewShotConfig for Verification
 
-`FewShotConfig` controls *which* examples are used during verification. Global external examples are appended to every question. The `global_k` parameter limits how many per-question examples are included.
+`FewShotConfig` controls *which* examples are used during verification. Global examples are appended to every question. The `pool_k` parameter limits how many per-question examples are included.
 
 ```python
 from karenina.schemas import FewShotConfig, QuestionFewShotConfig
 
 few_shot_config = FewShotConfig(
-    global_mode="k-shot",
-    global_k=2,
-    global_external_examples=[
+    pool_mode="k-shot",
+    pool_k=2,
+    global_examples=[
         {"question": "What class of drug is aspirin?", "answer": "NSAID"},
     ],
 )
 
-print(f"Mode: {few_shot_config.global_mode}")
-print(f"K: {few_shot_config.global_k}")
-print(f"Global external examples: {len(few_shot_config.global_external_examples)}")
+print(f"Mode: {few_shot_config.pool_mode}")
+print(f"K: {few_shot_config.pool_k}")
+print(f"Global examples: {len(few_shot_config.global_examples)}")
 ```
 
 See [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb) for the full configuration reference.

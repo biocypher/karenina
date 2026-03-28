@@ -58,12 +58,14 @@ _deep_agents_spec = AdapterSpec(
     routes_to=None,
     supports_mcp=True,
     supports_tools=True,
-    natively_agentic=True,
+    agent_tier="deep_agent",
 )
 
 AdapterRegistry.register(_deep_agents_spec)
 
 # Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.langchain_deep_agents.prompts.abstention  # noqa: E402, F401
 import karenina.adapters.langchain_deep_agents.prompts.deep_judgment  # noqa: E402, F401
 import karenina.adapters.langchain_deep_agents.prompts.parsing  # noqa: E402, F401
 import karenina.adapters.langchain_deep_agents.prompts.rubric  # noqa: E402, F401
+import karenina.adapters.langchain_deep_agents.prompts.sufficiency  # noqa: E402, F401

@@ -14,8 +14,8 @@ def _make_context(conversation_history=None, **overrides):
         "template_id": "test_t",
         "question_text": "What is X?",
         "template_code": "class Answer: pass",
-        "answering_model": ModelConfig(id="test", model_name="test-model", model_provider="anthropic"),
-        "parsing_model": ModelConfig(id="test", model_name="test-model", model_provider="anthropic"),
+        "answering_model": ModelConfig(id="test-model", model_name="test-model", model_provider="anthropic"),
+        "parsing_model": ModelConfig(id="test-model", model_name="test-model", model_provider="anthropic"),
     }
     defaults.update(overrides)
     ctx = VerificationContext(**defaults)

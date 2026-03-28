@@ -71,7 +71,7 @@ class TestFromModelConfig:
 
     def test_langchain_interface(self) -> None:
         config = ModelConfig(
-            id="test-langchain",
+            id="claude-sonnet-4-20250514",
             interface="langchain",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
@@ -83,7 +83,7 @@ class TestFromModelConfig:
 
     def test_claude_tool_interface(self) -> None:
         config = ModelConfig(
-            id="test-claude-tool",
+            id="claude-sonnet-4-20250514",
             interface="claude_tool",
             model_name="claude-sonnet-4-20250514",
         )
@@ -94,7 +94,7 @@ class TestFromModelConfig:
 
     def test_openrouter_interface(self) -> None:
         config = ModelConfig(
-            id="test-openrouter",
+            id="anthropic/claude-sonnet-4-20250514",
             interface="openrouter",
             model_name="anthropic/claude-sonnet-4-20250514",
         )
@@ -105,7 +105,7 @@ class TestFromModelConfig:
     def test_with_mcp_urls_dict_answering_role(self) -> None:
         """Answering models with mcp_urls_dict should have sorted tools."""
         config = ModelConfig(
-            id="test-mcp",
+            id="claude-sonnet-4-20250514",
             interface="langchain",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
@@ -117,7 +117,7 @@ class TestFromModelConfig:
     def test_with_mcp_urls_dict_parsing_role_always_empty_tools(self) -> None:
         """Parsing models always produce tools=[] regardless of mcp_urls_dict."""
         config = ModelConfig(
-            id="test-mcp-parsing",
+            id="claude-sonnet-4-20250514",
             interface="langchain",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
@@ -138,6 +138,7 @@ class TestFromModelConfig:
         config = MagicMock(spec=ModelConfig)
         config.interface = "langchain"
         config.model_name = None
+        config.id = None
         config.mcp_urls_dict = None
 
         identity = ModelIdentity.from_model_config(config)
@@ -146,7 +147,7 @@ class TestFromModelConfig:
     def test_tools_are_sorted(self) -> None:
         """Tools are sorted alphabetically regardless of input order."""
         config = ModelConfig(
-            id="test-sorted-tools",
+            id="gpt-4",
             interface="langchain",
             model_name="gpt-4",
             model_provider="openai",
@@ -321,3 +322,135 @@ class TestBackwardCompatProperties:
         meta = self._make_metadata()
         assert meta.answering_model == "langchain:gpt-4"
         assert meta.parsing_model == "langchain:claude-haiku-4-5"
+
+
+# =============================================================================
+# config_id Field
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestModelIdentityConfigId:
+    """Tests for ModelIdentity.config_id field and its effects on display/key."""
+
+    def test_config_id_set_when_differs_from_model_name(self) -> None:
+        """from_model_config sets config_id when config.id != model_name."""
+        config = ModelConfig(
+            id="high-temp",
+            interface="langchain",
+            model_name="gpt-4",
+            model_provider="openai",
+        )
+        identity = ModelIdentity.from_model_config(config)
+        assert identity.config_id == "high-temp"
+
+    def test_config_id_none_when_matches_model_name(self) -> None:
+        """from_model_config leaves config_id None when config.id == model_name."""
+        config = ModelConfig(
+            id="gpt-4",
+            interface="langchain",
+            model_name="gpt-4",
+            model_provider="openai",
+        )
+        identity = ModelIdentity.from_model_config(config)
+        assert identity.config_id is None
+
+    def test_display_string_includes_config_id(self) -> None:
+        """display_string includes config_id in parentheses."""
+        identity = ModelIdentity(
+            interface="langchain",
+            model_name="gpt-4",
+            config_id="high-temp",
+        )
+        assert identity.display_string == "langchain:gpt-4 (high-temp)"
+
+    def test_display_string_without_config_id_unchanged(self) -> None:
+        """display_string is unchanged when config_id is None."""
+        identity = ModelIdentity(interface="langchain", model_name="gpt-4")
+        assert identity.display_string == "langchain:gpt-4"
+
+    def test_display_string_with_config_id_and_tools(self) -> None:
+        """display_string places config_id before tools."""
+        identity = ModelIdentity(
+            interface="claude_agent_sdk",
+            model_name="claude-sonnet-4-20250514",
+            config_id="my-config",
+            tools=["brave"],
+        )
+        assert identity.display_string == "claude_agent_sdk:claude-sonnet-4-20250514 (my-config) +[brave]"
+
+    def test_canonical_key_includes_config_id(self) -> None:
+        """canonical_key has 4 segments when config_id is present."""
+        identity = ModelIdentity(
+            interface="langchain",
+            model_name="gpt-4",
+            config_id="high-temp",
+        )
+        assert identity.canonical_key == "langchain:gpt-4:high-temp:"
+
+    def test_canonical_key_without_config_id_backward_compatible(self) -> None:
+        """canonical_key has 3 segments when config_id is None (backward compatible)."""
+        identity = ModelIdentity(interface="langchain", model_name="gpt-4")
+        assert identity.canonical_key == "langchain:gpt-4:"
+
+    def test_different_config_ids_produce_different_identities(self) -> None:
+        """Two identities with same model but different config_ids are not equal."""
+        a = ModelIdentity(interface="langchain", model_name="gpt-4", config_id="high-temp")
+        b = ModelIdentity(interface="langchain", model_name="gpt-4", config_id="low-temp")
+        assert a != b
+        assert a.canonical_key != b.canonical_key
+
+
+# =============================================================================
+# CSV Round-Trip with config_id
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestModelIdentityCSVRoundTrip:
+    """Tests for ModelIdentity CSV round-trip via display_string and _parse_model_identity."""
+
+    def test_round_trip_with_config_id(self) -> None:
+        """display_string -> _parse_model_identity preserves config_id."""
+        from karenina.benchmark.core.results_io import ResultsIOManager
+
+        original = ModelIdentity(
+            interface="langchain",
+            model_name="gpt-4",
+            config_id="high-temp",
+        )
+        reconstructed = ResultsIOManager._parse_model_identity(original.display_string)
+        assert reconstructed.interface == original.interface
+        assert reconstructed.model_name == original.model_name
+        assert reconstructed.config_id == original.config_id
+        assert reconstructed.tools == original.tools
+
+    def test_round_trip_without_config_id(self) -> None:
+        """display_string -> _parse_model_identity works without config_id."""
+        from karenina.benchmark.core.results_io import ResultsIOManager
+
+        original = ModelIdentity(
+            interface="langchain",
+            model_name="gpt-4",
+        )
+        reconstructed = ResultsIOManager._parse_model_identity(original.display_string)
+        assert reconstructed.interface == original.interface
+        assert reconstructed.model_name == original.model_name
+        assert reconstructed.config_id is None
+        assert reconstructed.tools == original.tools
+
+    def test_round_trip_with_config_id_and_tools(self) -> None:
+        """display_string -> _parse_model_identity preserves config_id and tools."""
+        from karenina.benchmark.core.results_io import ResultsIOManager
+
+        original = ModelIdentity(
+            interface="claude_agent_sdk",
+            model_name="claude-sonnet-4-20250514",
+            config_id="my-config",
+            tools=["brave"],
+        )
+        reconstructed = ResultsIOManager._parse_model_identity(original.display_string)
+        assert reconstructed.interface == original.interface
+        assert reconstructed.model_name == original.model_name
+        assert reconstructed.config_id == original.config_id
+        assert reconstructed.tools == original.tools

@@ -7,6 +7,7 @@ a ScenarioDefinition: reachability, edge validity, and fallback coverage.
 from __future__ import annotations
 
 import logging
+import warnings
 from collections import defaultdict
 
 from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
@@ -79,4 +80,17 @@ def validate_scenario_graph(
             raise ValueError(
                 f"Node '{source}' has conditional edges but no unconditional fallback. "
                 "Add an unconditional edge (when=None) as a default path."
+            )
+
+    # 4. Multiple unconditional edges check
+    for source, source_edges in edges_by_source.items():
+        unconditional = [e for e in source_edges if e.condition is None and e.condition_callable is None]
+        if len(unconditional) > 1:
+            targets = [e.target for e in unconditional]
+            warnings.warn(
+                f"Node '{source}' has {len(unconditional)} unconditional edges "
+                f"(targets: {targets}). Only the first will be used; "
+                f"the rest are silently ignored. This is likely a graph error.",
+                UserWarning,
+                stacklevel=2,
             )

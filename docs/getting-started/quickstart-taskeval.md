@@ -241,7 +241,7 @@ print("Attached answer template with 2 verification fields")
 While templates verify **correctness**, rubrics assess **quality**. Each trait evaluates one dimension of the response independently. Here we add an LLM-judged score trait and a regex pattern trait.
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
 
 rubric = Rubric(
     llm_traits=[
@@ -255,7 +255,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="Has Citations",
             description="The response includes numbered citations in bracket notation (e.g., [1]).",
             pattern=r"\[\d+\]",

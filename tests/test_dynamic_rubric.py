@@ -19,7 +19,7 @@ from karenina.schemas.entities import (
     AgenticRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 from karenina.schemas.entities.rubric import DynamicRubric, merge_dynamic_rubrics
 
@@ -39,9 +39,9 @@ def _make_llm_trait(name: str, summary: str | None = None, description: str | No
     )
 
 
-def _make_regex_trait(name: str, summary: str | None = None, description: str | None = None) -> RegexTrait:
-    """Create a minimal RegexTrait for testing."""
-    return RegexTrait(
+def _make_regex_trait(name: str, summary: str | None = None, description: str | None = None) -> RegexRubricTrait:
+    """Create a minimal RegexRubricTrait for testing."""
+    return RegexRubricTrait(
         name=name,
         pattern=r"\btest\b",
         higher_is_better=True,
@@ -335,11 +335,11 @@ class TestMergeDynamicRubrics:
         with pytest.raises(ValueError, match="safety"):
             merge_dynamic_rubrics(global_dr, question_dr)
 
-    def test_cross_type_name_collision_raises(self) -> None:
-        """Name collision between different trait types raises ValueError."""
+    def test_cross_type_name_rejected(self) -> None:
+        """Cross-type same-name traits are rejected (names must be unique across all types)."""
         global_dr = DynamicRubric(llm_traits=[_make_llm_trait("check", summary="LLM check")])
         question_dr = DynamicRubric(regex_traits=[_make_regex_trait("check", summary="Regex check")])
-        with pytest.raises(ValueError, match="check"):
+        with pytest.raises((ValueError, ValidationError), match="Duplicate trait name"):
             merge_dynamic_rubrics(global_dr, question_dr)
 
     def test_merged_result_is_new_instance(self) -> None:

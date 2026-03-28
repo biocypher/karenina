@@ -35,7 +35,7 @@ from karenina.benchmark.verification.stages import (
     VerifyTemplateStage,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait, Rubric
 
 # =============================================================================
 # Test Fixtures
@@ -46,7 +46,7 @@ from karenina.schemas.entities import LLMRubricTrait, RegexTrait, Rubric
 def minimal_model_config() -> ModelConfig:
     """Return a minimal ModelConfig for testing."""
     return ModelConfig(
-        id="test-model",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,
@@ -105,7 +105,7 @@ def rubric_with_regex() -> Rubric:
     """Return a rubric with regex traits."""
     return Rubric(
         regex_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="has_citation",
                 pattern=r"\[\d+\]",
                 description="Response contains citations",

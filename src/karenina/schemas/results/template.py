@@ -7,7 +7,7 @@ including embedding checks, regex validation, abstention detection, and MCP metr
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -71,14 +71,18 @@ class TemplateResults(BaseModel):
         Each field in the parsed responses gets its own row with field-level matching.
 
         Column ordering:
-            1. Status: completed_without_errors, error, recursion_limit_reached
+            1. Status: completed_without_errors, error, failed_stage,
+               recursion_limit_reached
             2. Identification: question_id, template_id, question_text, keywords,
                replicate, answering_mcp_servers
-            3. Model Config: answering_model, parsing_model, system_prompts
-            4. Template Response: raw_llm_response
-            5. Field Comparison: field_name, gt_value, llm_value, field_match, field_type
-            6. Verification Checks: embedding, abstention, regex
-            7. Execution Metadata: execution_time, timestamp, run_name
+            3. Scenario: scenario_id, scenario_node, scenario_turn, scenario_path
+            4. Model Config: answering_model, parsing_model, system_prompts
+            5. Template Response: raw_llm_response
+            6. Field Comparison: field_name, gt_value, llm_value, field_match,
+               field_type
+            7. Verification Checks: verify_result, verify_granular_result,
+               embedding, abstention, sufficiency, regex
+            8. Execution Metadata: execution_time, timestamp, run_name
 
         Returns:
             pandas.DataFrame: Exploded DataFrame with one row per field comparison
@@ -641,21 +645,44 @@ class TemplateResults(BaseModel):
 
         return {qid: TemplateResults(results=results) for qid, results in grouped.items()}
 
-    def group_by_model(self) -> dict[str, TemplateResults]:
-        """
-        Group results by answering model.
+    def group_by_model(self, by: Literal["answering", "parsing", "both"] = "answering") -> dict[str, TemplateResults]:
+        """Group results by model(s).
+
+        Args:
+            by: How to group results:
+                - "answering": Group by answering model (includes MCP servers if attached)
+                - "parsing": Group by parsing model
+                - "both": Group by both answering and parsing models
 
         Returns:
-            Dictionary mapping model names to TemplateResults instances
+            Dictionary mapping model identifier(s) to TemplateResults instances.
         """
         grouped: dict[str, list[VerificationResult]] = {}
         for result in self.results:
-            model = result.metadata.answering_model
-            if model not in grouped:
-                grouped[model] = []
-            grouped[model].append(result)
+            answering_model = result.metadata.answering_model
+            parsing_model = result.metadata.parsing_model
 
-        return {model: TemplateResults(results=results) for model, results in grouped.items()}
+            if by in ("answering", "both"):
+                mcp_servers = result.template.answering_mcp_servers if result.template else None
+                if mcp_servers and len(mcp_servers) > 0:
+                    answering_key = f"{answering_model} + MCP[{','.join(sorted(mcp_servers))}]"
+                else:
+                    answering_key = answering_model
+
+            if by == "answering":
+                key = answering_key
+            elif by == "parsing":
+                key = parsing_model
+            elif by == "both":
+                key = f"{answering_key} / {parsing_model}"
+            else:
+                raise ValueError(f"Invalid grouping mode: {by}. Must be 'answering', 'parsing', or 'both'")
+
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(result)
+
+        return {key: TemplateResults(results=results) for key, results in grouped.items()}
 
     # ========================================================================
     # Summary Statistics

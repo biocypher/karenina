@@ -246,9 +246,9 @@ print(f"Defined score trait: {scientific_rigor.name} (range {scientific_rigor.mi
 Regex traits evaluate pattern presence in the raw response text. No LLM call is needed; matching is immediate and deterministic.
 
 ```python
-from karenina.schemas.entities.rubric import RegexTrait
+from karenina.schemas.entities.rubric import RegexRubricTrait
 
-has_citations = RegexTrait(
+has_citations = RegexRubricTrait(
     name="has_citations",
     pattern=r"\[\d+\]",
     description="Response includes numbered citations in bracket notation (e.g., [1], [2]).",
@@ -256,7 +256,7 @@ has_citations = RegexTrait(
     higher_is_better=True,
 )
 
-has_year = RegexTrait(
+has_year = RegexRubricTrait(
     name="includes_approval_year",
     pattern=r"\b20\d{2}\b",
     description="Response mentions a specific year (four-digit number starting with 20).",
@@ -321,9 +321,9 @@ print("Registered callables on existing TaskEval")
 ### Create CallableTraits
 
 ```python
-from karenina.schemas.entities.rubric import CallableTrait
+from karenina.schemas.entities.rubric import CallableRubricTrait
 
-word_count_trait = CallableTrait.from_callable(
+word_count_trait = CallableRubricTrait.from_callable(
     name="check_word_count",
     func=check_word_count,
     kind="boolean",
@@ -331,7 +331,7 @@ word_count_trait = CallableTrait.from_callable(
     description="True if the response is between 30 and 200 words.",
 )
 
-sentence_count_trait = CallableTrait.from_callable(
+sentence_count_trait = CallableRubricTrait.from_callable(
     name="count_sentences",
     func=count_sentences,
     kind="score",

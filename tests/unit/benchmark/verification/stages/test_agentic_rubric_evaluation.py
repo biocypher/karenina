@@ -147,7 +147,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -175,7 +175,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -207,7 +207,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         traits = [
@@ -237,7 +237,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -249,13 +249,12 @@ class TestAgenticRubricEvaluationExecute:
         assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"code_quality": True}
         assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES) is not None
 
-    def test_execute_skips_trait_when_model_lacks_agent_support(self):
-        """Trait is skipped if its resolved model has no agent_factory."""
+    def test_execute_raises_when_model_lacks_agent_support(self):
+        """ValueError raised if resolved model lacks deep_agent tier."""
         from karenina.benchmark.verification.stages.pipeline import (
             agentic_rubric_evaluation as mod,
         )
 
-        # Use a model with an interface that has no agent_factory
         no_agent_model = ModelConfig(
             id="test",
             model_name="test-model",
@@ -265,15 +264,11 @@ class TestAgenticRubricEvaluationExecute:
 
         trait = _make_trait()
         ctx = _make_context(agentic_traits=[trait])
-        # Override the parsing_model to one without agent support
         ctx.parsing_model = no_agent_model
 
         stage = mod.AgenticRubricEvaluationStage()
-        stage.execute(ctx)
-
-        scores = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES)
-        assert scores["code_quality"] is None
-        assert ctx.error is None
+        with pytest.raises(ValueError, match="agent_tier='deep_agent'"):
+            stage.execute(ctx)
 
     def test_execute_with_workspace_path(self, monkeypatch):
         from karenina.benchmark.verification.stages.pipeline import (
@@ -286,7 +281,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(
@@ -330,7 +325,7 @@ class TestTemplateKindFlattening:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         trait = AgenticRubricTrait(
@@ -364,7 +359,7 @@ class TestTemplateKindFlattening:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait(name="quality", kind="boolean")])
@@ -442,3 +437,66 @@ class TestWriteTraceFile:
         )
         assert "/" not in trace_path.name
         assert ":" not in trace_path.name
+
+
+@pytest.mark.unit
+class TestValidateAgentSupport:
+    """Tests for _validate_agent_support raising on non-deep_agent interfaces."""
+
+    def test_raises_when_parsing_model_lacks_deep_agent(self):
+        """ValueError raised when parsing model interface is not deep_agent."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trait = _make_trait("my_trait")
+        rubric = Rubric(agentic_traits=[trait])
+        parsing_model = ModelConfig(
+            id="test",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+        )
+        ctx = VerificationContext(
+            question_id="q1",
+            template_id="t1",
+            question_text="Question",
+            template_code="class Answer: pass",
+            answering_model=parsing_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+        )
+
+        with pytest.raises(ValueError, match="agent_tier='deep_agent'"):
+            AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
+
+    def test_passes_when_parsing_model_is_deep_agent(self):
+        """No error when parsing model supports deep_agent."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trait = _make_trait("my_trait")
+        ctx = _make_context(agentic_traits=[trait])
+
+        # Should not raise
+        AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
+
+    def test_model_override_with_non_deep_agent_rejected_at_construction(self):
+        """AgenticRubricTrait rejects non-deep_agent model_override at construction."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        override = ModelConfig(
+            id="bad",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with pytest.raises(PydanticValidationError, match="agent_tier"):
+            AgenticRubricTrait(
+                name="my_trait",
+                description="Test trait",
+                kind="boolean",
+                higher_is_better=True,
+                model_override=override,
+            )

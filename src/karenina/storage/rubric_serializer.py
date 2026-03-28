@@ -21,8 +21,8 @@ def serialize_rubric_to_dict(
 
     Args:
         llm_traits: List of LLMRubricTrait objects
-        regex_traits: List of RegexTrait objects
-        callable_traits: List of CallableTrait objects
+        regex_traits: List of RegexRubricTrait objects
+        callable_traits: List of CallableRubricTrait objects
         metric_traits: List of MetricRubricTrait objects
         agentic_traits: List of AgenticRubricTrait objects
 
@@ -39,7 +39,7 @@ def serialize_rubric_to_dict(
         return None
 
     return {
-        "traits": [t.model_dump() for t in llm_traits],
+        "llm_traits": [t.model_dump() for t in llm_traits],
         "regex_traits": [t.model_dump() for t in regex_traits],
         "callable_traits": [t.model_dump() for t in callable_traits],
         "metric_traits": [t.model_dump() for t in metric_traits],
@@ -99,17 +99,17 @@ def _deserialize_llm_trait(trait_data: dict[str, Any]) -> Any:
 
 
 def _deserialize_regex_trait(trait_data: dict[str, Any]) -> Any:
-    """Deserialize a single RegexTrait from dictionary data.
+    """Deserialize a single RegexRubricTrait from dictionary data.
 
     Args:
         trait_data: Dictionary with trait data
 
     Returns:
-        RegexTrait instance
+        RegexRubricTrait instance
     """
-    from ..schemas.entities import RegexTrait
+    from ..schemas.entities import RegexRubricTrait
 
-    return RegexTrait(
+    return RegexRubricTrait(
         name=trait_data["name"],
         description=trait_data.get("description"),
         summary=trait_data.get("summary"),
@@ -121,17 +121,17 @@ def _deserialize_regex_trait(trait_data: dict[str, Any]) -> Any:
 
 
 def _deserialize_callable_trait(trait_data: dict[str, Any]) -> Any:
-    """Deserialize a single CallableTrait from dictionary data.
+    """Deserialize a single CallableRubricTrait from dictionary data.
 
     Args:
         trait_data: Dictionary with trait data
 
     Returns:
-        CallableTrait instance
+        CallableRubricTrait instance
     """
-    from ..schemas.entities import CallableTrait
+    from ..schemas.entities import CallableRubricTrait
 
-    return CallableTrait(
+    return CallableRubricTrait(
         name=trait_data["name"],
         description=trait_data.get("description"),
         summary=trait_data.get("summary"),
@@ -141,6 +141,7 @@ def _deserialize_callable_trait(trait_data: dict[str, Any]) -> Any:
         min_score=trait_data.get("min_score"),
         max_score=trait_data.get("max_score"),
         invert_result=trait_data.get("invert_result", False),
+        classes=trait_data.get("classes"),
     )
 
 
@@ -164,6 +165,7 @@ def _deserialize_metric_trait(trait_data: dict[str, Any]) -> Any:
         tp_instructions=trait_data.get("tp_instructions", []),
         tn_instructions=trait_data.get("tn_instructions", []),
         repeated_extraction=trait_data.get("repeated_extraction", True),
+        higher_is_better=trait_data.get("higher_is_better"),
     )
 
 
@@ -226,7 +228,7 @@ def deserialize_rubric_from_dict(rubric_data: dict[str, Any] | None) -> Any | No
         )
 
     # Deserialize each trait type
-    llm_traits = [_deserialize_llm_trait(t) for t in rubric_data.get("traits", [])]
+    llm_traits = [_deserialize_llm_trait(t) for t in (rubric_data.get("llm_traits") or rubric_data.get("traits", []))]
     regex_traits = [_deserialize_regex_trait(t) for t in rubric_data.get("regex_traits", [])]
     callable_traits = [_deserialize_callable_trait(t) for t in rubric_data.get("callable_traits", [])]
     metric_traits = [_deserialize_metric_trait(t) for t in rubric_data.get("metric_traits", [])]

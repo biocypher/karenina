@@ -63,13 +63,16 @@ class RubricDataFrameBuilder:
                 - "all": All trait types combined (default)
 
         Column ordering:
-            1. Status: completed_without_errors, error
-            2. Identification: question_id, template_id, question_text, keywords, replicate
+            1. Status: completed_without_errors, error, failed_stage
+            2. Identification: question_id, template_id, question_text, keywords, replicate,
+               scenario_id, scenario_node, scenario_turn, scenario_path
             3. Model Config: answering_model, parsing_model, system_prompts
-            4. Rubric Data: trait_name, trait_score, trait_label, trait_type, evaluation_method, metric_name
-            5. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
-            6. Execution Metadata: execution_time, timestamp, run_name
-            7. Deep Judgment (if include_deep_judgment=True):
+            4. Rubric Evaluation Metadata: rubric_evaluation_performed, rubric_evaluation_strategy
+            5. Rubric Data: trait_name, trait_score, trait_label, trait_type,
+               evaluation_method, metric_name
+            6. Confusion Matrix: confusion_tp, confusion_fp, confusion_fn, confusion_tn (for metrics only)
+            7. Execution Metadata: execution_time, timestamp, run_name
+            8. Deep Judgment (if include_deep_judgment=True):
                - trait_reasoning: Reasoning text for the trait score
                - trait_excerpts: JSON-serialized list of excerpts
                - trait_hallucination_risk: Hallucination risk assessment
@@ -99,9 +102,8 @@ class RubricDataFrameBuilder:
 
         for result in self._results:
             if result.rubric is None or not result.rubric.rubric_evaluation_performed:
-                # No rubric data - create single row with minimal info
-                rows.append(self._create_empty_rubric_row(result))
-                row_result_ids.append(result.metadata.result_id)
+                # No rubric data: skip entirely to avoid ghost rows with
+                # trait_name=None that pollute len(df) and value_counts().
                 continue
 
             # Process LLM traits
@@ -172,6 +174,8 @@ class RubricDataFrameBuilder:
                     row_result_ids.append(result.metadata.result_id)
 
         df = pd.DataFrame(rows)
+        if "replicate" in df.columns:
+            df["replicate"] = df["replicate"].astype(pd.Int64Dtype())
 
         # Add dynamic rubric _skipped columns if any result has dynamic rubric data
         df = self._add_dynamic_rubric_skipped_columns(df, row_result_ids)
@@ -265,17 +269,26 @@ class RubricDataFrameBuilder:
             # Status
             "completed_without_errors",
             "error",
+            "failed_stage",
             # Identification
             "question_id",
             "template_id",
             "question_text",
             "keywords",
             "replicate",
+            # Scenario Metadata
+            "scenario_id",
+            "scenario_node",
+            "scenario_turn",
+            "scenario_path",
             # Model Config
             "answering_model",
             "parsing_model",
             "answering_system_prompt",
             "parsing_system_prompt",
+            # Rubric Evaluation Metadata
+            "rubric_evaluation_performed",
+            "rubric_evaluation_strategy",
             # Rubric Data
             "trait_name",
             "trait_score",
@@ -292,6 +305,7 @@ class RubricDataFrameBuilder:
             "execution_time",
             "timestamp",
             "run_name",
+            "trait_provenance",
             # Deep Judgment (if included)
             "trait_reasoning",
             "trait_excerpts",
@@ -335,17 +349,26 @@ class RubricDataFrameBuilder:
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
             "answering_system_prompt": metadata.answering_system_prompt,
             "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Evaluation Metadata ===
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else False,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": score_type,
@@ -356,6 +379,11 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "trait_provenance": (
+                result.rubric.trait_provenance.get(trait_name)
+                if result.rubric and result.rubric.trait_provenance
+                else None
+            ),
         }
 
         # Add deep judgment columns if requested
@@ -377,17 +405,26 @@ class RubricDataFrameBuilder:
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
             "answering_system_prompt": metadata.answering_system_prompt,
             "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Evaluation Metadata ===
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else False,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": "regex",
@@ -397,6 +434,11 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "trait_provenance": (
+                result.rubric.trait_provenance.get(trait_name)
+                if result.rubric and result.rubric.trait_provenance
+                else None
+            ),
         }
 
     def _create_callable_trait_row(
@@ -412,17 +454,26 @@ class RubricDataFrameBuilder:
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
             "answering_system_prompt": metadata.answering_system_prompt,
             "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Evaluation Metadata ===
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else False,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": "callable",
@@ -432,6 +483,11 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "trait_provenance": (
+                result.rubric.trait_provenance.get(trait_name)
+                if result.rubric and result.rubric.trait_provenance
+                else None
+            ),
         }
 
     def _create_metric_trait_row(
@@ -442,24 +498,50 @@ class RubricDataFrameBuilder:
         metric_score: float,
         confusion_data: dict[str, list[str]] | None,
     ) -> dict[str, Any]:
-        """Create DataFrame row for metric trait (EXPLODED by metric)."""
+        """Create DataFrame row for metric trait (EXPLODED by metric).
+
+        Note on confusion data duplication:
+            The per-trait confusion lists (tp, fp, fn, tn) are intentionally
+            repeated across all metric rows for the same trait. For example,
+            when a trait produces precision, recall, and f1 rows, all three
+            rows carry the same confusion_tp/fp/fn/tn values. This is
+            intentional denormalization for DataFrame usability: it allows
+            filtering to any single metric row and still having the full
+            confusion context without a join.
+
+        Args:
+            result: The verification result
+            trait_name: Name of the trait
+            metric_name: Name of the specific metric (e.g. "precision", "recall", "f1")
+            metric_score: Computed score for this metric
+            confusion_data: Optional per-trait confusion lists keyed by tp/fp/fn/tn
+        """
         metadata = result.metadata
 
         return {
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
             "answering_system_prompt": metadata.answering_system_prompt,
             "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Evaluation Metadata ===
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else False,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             # === Metric Trait Data (EXPLODED) ===
             "trait_name": trait_name,
             "trait_type": "metric",
@@ -475,6 +557,11 @@ class RubricDataFrameBuilder:
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
+            "trait_provenance": (
+                result.rubric.trait_provenance.get(trait_name)
+                if result.rubric and result.rubric.trait_provenance
+                else None
+            ),
         }
 
     def _create_agentic_trait_row(
@@ -496,55 +583,45 @@ class RubricDataFrameBuilder:
             # === Status ===
             "completed_without_errors": metadata.completed_without_errors,
             "error": metadata.error,
+            "failed_stage": metadata.failed_stage,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
             "question_text": metadata.question_text,
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
+            # === Scenario Metadata ===
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
             "answering_system_prompt": metadata.answering_system_prompt,
             "parsing_system_prompt": metadata.parsing_system_prompt,
+            # === Rubric Evaluation Metadata ===
+            "rubric_evaluation_performed": result.rubric.rubric_evaluation_performed if result.rubric else False,
+            "rubric_evaluation_strategy": result.rubric.rubric_evaluation_strategy if result.rubric else None,
             # === Rubric Data ===
             "trait_name": trait_name,
             "trait_type": "agentic",
             "evaluation_method": "agentic",
             "trait_score": trait_score,
+            "investigation_trace": (
+                result.rubric.agentic_trait_investigation_traces.get(trait_name)
+                if result.rubric and result.rubric.agentic_trait_investigation_traces
+                else None
+            ),
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,
             "run_name": metadata.run_name,
-        }
-
-    def _create_empty_rubric_row(self, result: VerificationResult) -> dict[str, Any]:
-        """Create empty DataFrame row for results without rubric data."""
-        metadata = result.metadata
-
-        return {
-            # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            # === Identification Metadata ===
-            "question_id": metadata.question_id,
-            "template_id": metadata.template_id,
-            "question_text": metadata.question_text,
-            "keywords": metadata.keywords,
-            "replicate": metadata.replicate,
-            # === Model Configuration ===
-            "answering_model": metadata.answering_model,
-            "parsing_model": metadata.parsing_model,
-            "answering_system_prompt": metadata.answering_system_prompt,
-            "parsing_system_prompt": metadata.parsing_system_prompt,
-            # === Rubric Data (None) ===
-            "trait_name": None,
-            "trait_score": None,
-            "trait_type": None,
-            # === Execution Metadata ===
-            "execution_time": metadata.execution_time,
-            "timestamp": metadata.timestamp,
-            "run_name": metadata.run_name,
+            "trait_provenance": (
+                result.rubric.trait_provenance.get(trait_name)
+                if result.rubric and result.rubric.trait_provenance
+                else None
+            ),
         }
 
     def _add_deep_judgment_columns(
@@ -553,8 +630,14 @@ class RubricDataFrameBuilder:
         rubric_dj: VerificationResultDeepJudgmentRubric | None,
         trait_name: str,
     ) -> None:
-        """
-        Add deep judgment columns to a row.
+        """Add deep judgment columns to a row.
+
+        Deep judgment columns are intentionally added only to LLM trait rows.
+        Stage 12 (deep_judgment_rubric) in the verification pipeline only
+        evaluates LLM traits, so regex, callable, metric, and agentic trait
+        rows never carry deep judgment data. If deep judgment is extended to
+        other trait types in the future, the corresponding row creator methods
+        would need the same _add_deep_judgment_columns call.
 
         Args:
             row: The row dictionary to add columns to
@@ -573,9 +656,10 @@ class RubricDataFrameBuilder:
             else []
         )
 
-        # Add trait_hallucination_risk
-        row["trait_hallucination_risk"] = (
+        # Add trait_hallucination_risk (extract overall_risk string from dict)
+        risk_data = (
             rubric_dj.rubric_hallucination_risk_assessment.get(trait_name)
             if rubric_dj and rubric_dj.rubric_hallucination_risk_assessment
             else None
         )
+        row["trait_hallucination_risk"] = risk_data.get("overall_risk") if isinstance(risk_data, dict) else risk_data

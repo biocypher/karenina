@@ -10,6 +10,8 @@ conversion is in benchmark_helpers.py.
 """
 
 import logging
+import threading
+import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -19,7 +21,7 @@ if TYPE_CHECKING:
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.entities import Question
 
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
 from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from ..schemas.results import VerificationResultSet
 from ..schemas.scenario.definition import ScenarioDefinition
@@ -161,9 +163,16 @@ class Benchmark:
         instance._init_managers()
         return instance
 
-    def save(self, path: Path) -> None:
-        """Save the benchmark to a JSON-LD file."""
-        self._base.save(path)
+    def save(self, path: Path, save_deep_judgment_config: bool = False) -> None:
+        """Save the benchmark to a JSON-LD file.
+
+        Args:
+            path: Path where to save the benchmark.
+            save_deep_judgment_config: If True, include deep judgment
+                configuration in LLM rubric traits. If False (default),
+                deep judgment settings are stripped before saving.
+        """
+        self._base.save(path, save_deep_judgment_config=save_deep_judgment_config)
 
     def save_to_db(self, storage: str, checkpoint_path: Path | None = None) -> "Benchmark":
         """Save this benchmark to a database."""
@@ -223,14 +232,16 @@ class Benchmark:
             answer_notes=answer_notes,
         )
 
-    def add_questions(self, questions_data: list[dict[str, Any]]) -> list[str]:
+    def add_questions(
+        self,
+        questions_data: "list[dict[str, Any] | Question]",
+    ) -> list[str]:
         """Add multiple questions at once.
 
-        Each dict is passed to ``add_question()``, so all dict keys supported
-        there are accepted here.
+        Accepts a list of dicts, Question objects, or a mix of both.
 
         Args:
-            questions_data: List of dicts with question data.
+            questions_data: List of dicts or Question objects.
 
         Returns:
             List of question IDs that were created.
@@ -317,7 +328,7 @@ class Benchmark:
         """Remove all questions from the benchmark."""
         return self._question_manager.clear_questions()
 
-    def add_questions_batch(self, questions_data: list[dict[str, Any]]) -> list[str]:
+    def add_questions_batch(self, questions_data: "list[dict[str, Any] | Question]") -> list[str]:
         """Add multiple questions at once."""
         return self._question_manager.add_questions_batch(questions_data)
 
@@ -547,8 +558,8 @@ class Benchmark:
     def generate_template_for_question(
         self,
         question_id: str,
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
@@ -571,14 +582,16 @@ class Benchmark:
     def generate_templates(
         self,
         question_ids: list[str],
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
-        progress_callback: Callable[[float, str], None] | None = None,
+        progress_callback: "Callable[[_helpers.TemplateProgressEvent], None] | None" = None,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        max_workers: int | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> dict[str, dict[str, Any]]:
         """Generate templates for multiple questions using LLM."""
         return _helpers.generate_templates(
@@ -592,21 +605,47 @@ class Benchmark:
             progress_callback,
             endpoint_base_url,
             endpoint_api_key,
+            max_workers=max_workers,
+            cancel_event=cancel_event,
         )
 
     def generate_all_templates(
         self,
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
-        progress_callback: Callable[[float, str], None] | None = None,
+        progress_callback: "Callable[[_helpers.TemplateProgressEvent], None] | None" = None,
         only_missing: bool = True,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        progressive_backup: bool = True,
+        backup_path: Path | None = None,
+        max_workers: int | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> dict[str, dict[str, Any]]:
-        """Generate templates for all questions in the benchmark using LLM."""
+        """Generate templates for all questions in the benchmark using LLM.
+
+        Args:
+            model: Model name.
+            model_provider: Model provider.
+            temperature: Generation temperature.
+            interface: Adapter interface.
+            force_regenerate: If True, regenerate existing templates.
+            progress_callback: Optional progress callback.
+            only_missing: If True, only generate for questions without templates.
+            endpoint_base_url: Optional custom endpoint URL.
+            endpoint_api_key: Optional API key for custom endpoint.
+            progressive_backup: If True (default), save generated templates to a
+                backup file after each successful generation so interrupted runs
+                can be resumed.
+            backup_path: Path for the backup file. Defaults to
+                ``{benchmark_name}_templates_backup.json`` in the current directory.
+            max_workers: Number of parallel workers. None reads from
+                KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+            cancel_event: If set, stops generation after the current task(s) complete.
+        """
         return _helpers.generate_all_templates(
             self,
             model,
@@ -618,6 +657,10 @@ class Benchmark:
             only_missing,
             endpoint_base_url,
             endpoint_api_key,
+            progressive_backup,
+            backup_path,
+            max_workers=max_workers,
+            cancel_event=cancel_event,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:
@@ -631,7 +674,7 @@ class Benchmark:
     # ── Rubric management ────────────────────────────────────────────────
 
     def add_global_rubric_trait(
-        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+        self, trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
     ) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
@@ -639,42 +682,44 @@ class Benchmark:
     def add_question_rubric_trait(
         self,
         question_id: str,
-        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+        trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)
 
     def set_global_rubric(self, rubric: Rubric) -> None:
         """Set the complete global rubric (replaces existing)."""
-        self.clear_global_rubric()
-        for trait in rubric.llm_traits:
-            self.add_global_rubric_trait(trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_global_rubric_trait(regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_global_rubric_trait(callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_global_rubric_trait(metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_global_rubric_trait(agentic_trait)
+        self._rubric_manager.set_global_rubric(rubric)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
-        self.remove_question_rubric(question_id)
-        for trait in rubric.llm_traits:
-            self.add_question_rubric_trait(question_id, trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_question_rubric_trait(question_id, regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_question_rubric_trait(question_id, callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_question_rubric_trait(question_id, metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_question_rubric_trait(question_id, agentic_trait)
+        self._rubric_manager.set_question_rubric(question_id, rubric)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""
         return self._rubric_manager.get_global_rubric()
+
+    def get_question_rubric(self, question_id: str) -> Rubric | None:
+        """Get the question-specific rubric for a question.
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Rubric containing the question-specific traits, or None.
+        """
+        raw = self._rubric_manager.get_question_rubric(question_id)
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return Rubric(
+                llm_traits=raw.get("llm_traits", []),
+                regex_traits=raw.get("regex_traits", []),
+                callable_traits=raw.get("callable_traits", []),
+                metric_traits=raw.get("metric_traits", []),
+                agentic_traits=raw.get("agentic_traits", []),
+            )
+        return Rubric.from_traits(raw)
 
     def clear_global_rubric(self) -> bool:
         """Remove the global rubric."""
@@ -688,7 +733,7 @@ class Benchmark:
         """Remove all rubrics (global and question-specific)."""
         return self._rubric_manager.clear_all_rubrics()
 
-    def validate_rubrics(self) -> tuple[bool, list[str]]:
+    def validate_rubrics(self) -> tuple[bool, list[dict[str, str]]]:
         """Validate all rubrics are properly configured."""
         return self._rubric_manager.validate_rubrics()
 
@@ -701,10 +746,20 @@ class Benchmark:
     def set_global_dynamic_rubric(self, dynamic_rubric: DynamicRubric | None) -> None:
         """Set or clear the global dynamic rubric.
 
+        Persists the rubric to the checkpoint so it survives save/load cycles.
+
         Args:
             dynamic_rubric: The DynamicRubric to set, or None to clear.
         """
         self._base._global_dynamic_rubric = dynamic_rubric
+        if dynamic_rubric is not None:
+            self._rubric_manager.set_global_dynamic_rubric_in_checkpoint(dynamic_rubric)
+        else:
+            # Clear from checkpoint: remove dynamic rubric ratings
+            if self._base._checkpoint.rating:
+                self._base._checkpoint.rating = [
+                    r for r in self._base._checkpoint.rating if r.additionalType != "karenina:GlobalDynamicRubricTrait"
+                ]
 
     def get_merged_dynamic_rubric_for_question(self, question_id: str) -> DynamicRubric | None:
         """Get merged dynamic rubric for a question (global + question-specific).
@@ -777,6 +832,8 @@ class Benchmark:
         manager = ScenarioManager()
         global_rubric = self._rubric_manager.get_global_rubric()
         all_results: list[VerificationResult] = []
+        all_scenario_results: list[Any] = []
+        all_errors: list[tuple[str, BaseException]] = []
 
         # Build the list of (scenario, answering_model, parsing_model) combos
         combos = [
@@ -787,7 +844,7 @@ class Benchmark:
         ]
 
         if async_enabled and len(combos) > 1:
-            all_results = self._run_scenario_parallel(
+            parallel_results, parallel_exec_results, parallel_errors = self._run_scenario_parallel(
                 manager=manager,
                 combos=combos,
                 config=config,
@@ -795,6 +852,9 @@ class Benchmark:
                 global_rubric=global_rubric,
                 progress_callback=progress_callback,
             )
+            all_results = parallel_results
+            all_scenario_results = parallel_exec_results
+            all_errors = parallel_errors
         else:
             for scenario_def, ans_model, parse_model in combos:
                 exec_result = manager.run(
@@ -807,8 +867,13 @@ class Benchmark:
                     progress_callback=progress_callback,
                 )
                 all_results.extend(exec_result.turn_results)
+                all_scenario_results.append(exec_result)
 
-        return VerificationResultSet(results=all_results)
+        return VerificationResultSet(
+            results=all_results,
+            scenario_results=all_scenario_results if all_scenario_results else None,
+            errors=all_errors if all_errors else None,
+        )
 
     def _run_scenario_parallel(
         self,
@@ -818,7 +883,7 @@ class Benchmark:
         run_name: str | None,
         global_rubric: "Rubric | None",
         progress_callback: Callable[..., None] | None,
-    ) -> list[VerificationResult]:
+    ) -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
         """Run scenario combinations in parallel via asyncio.gather.
 
         Args:
@@ -830,11 +895,11 @@ class Benchmark:
             progress_callback: Optional progress callback.
 
         Returns:
-            Flat list of all per-turn VerificationResults.
+            Tuple of (turn_results, scenario_exec_results, errors).
         """
         import asyncio
 
-        async def _gather() -> list[VerificationResult]:
+        async def _gather() -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
             coros = [
                 manager.arun(
                     scenario=scenario_def,
@@ -849,15 +914,22 @@ class Benchmark:
             ]
             exec_results = await asyncio.gather(*coros, return_exceptions=True)
             results: list[VerificationResult] = []
-            for er in exec_results:
+            scenario_exec_results: list[Any] = []
+            errors: list[tuple[str, BaseException]] = []
+            for i, er in enumerate(exec_results):
                 if isinstance(er, BaseException):
-                    logger.warning(
-                        "Scenario execution raised an exception: %s",
+                    combo = combos[i]
+                    desc = f"Scenario '{combo[0].name}' with {combo[1].model_name}/{combo[2].model_name}"
+                    logger.error(
+                        "Scenario execution failed: %s: %s",
+                        desc,
                         er,
                     )
+                    errors.append((desc, er))
                     continue
                 results.extend(er.turn_results)
-            return results
+                scenario_exec_results.append(er)
+            return results, scenario_exec_results, errors
 
         # If there is already a running event loop, run in a thread
         try:
@@ -882,6 +954,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> None:
         """Store verification results in the benchmark metadata."""
+        warnings.warn(
+            "store_verification_results is deprecated. Use ResultsStore.add() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         _helpers.store_verification_results(self, results, run_name)
 
     def get_verification_results(
@@ -890,10 +967,20 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Get verification results for specific questions and/or runs."""
+        warnings.warn(
+            "get_verification_results is deprecated. Use ResultsStore.get_by_run() or ResultsStore.get_latest() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_results(question_ids, run_name)
 
     def get_verification_history(self, question_id: str | None = None) -> dict[str, dict[str, VerificationResult]]:
         """Get verification history organized by run name."""
+        warnings.warn(
+            "get_verification_history is deprecated. Use ResultsStore.get_by_question() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_history(question_id)
 
     def clear_verification_results(
@@ -902,6 +989,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> int:
         """Clear verification results."""
+        warnings.warn(
+            "clear_verification_results is deprecated. Use ResultsStore.clear() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.clear_verification_results(question_ids, run_name)
 
     def export_verification_results(
@@ -912,6 +1004,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> str:
         """Export verification results in specified format."""
+        warnings.warn(
+            "export_verification_results is deprecated. Use ResultsStore.export() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.export_verification_results(question_ids, run_name, format, global_rubric)
 
     def export_verification_results_to_file(
@@ -923,6 +1020,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> None:
         """Export verification results directly to a file."""
+        warnings.warn(
+            "export_verification_results_to_file is deprecated. Use ResultsStore.export_to_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._results_manager.export_results_to_file(file_path, question_ids, run_name, format, global_rubric)
 
     def load_verification_results_from_file(
@@ -931,18 +1033,38 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Load verification results from a previously exported file."""
+        warnings.warn(
+            "load_verification_results_from_file is deprecated. Use ResultsStore.from_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.load_results_from_file(file_path, run_name)
 
     def get_verification_summary(self, run_name: str | None = None) -> dict[str, Any]:
         """Get summary statistics for verification results."""
+        warnings.warn(
+            "get_verification_summary is deprecated. Use ResultsStore.get_summary() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_summary(run_name)
 
     def get_all_run_names(self) -> list[str]:
         """Get all verification run names."""
+        warnings.warn(
+            "get_all_run_names is deprecated. Use ResultsStore.get_all_runs() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_all_run_names()
 
     def get_results_statistics_by_run(self) -> dict[str, dict[str, Any]]:
         """Get verification statistics for each run."""
+        warnings.warn(
+            "get_results_statistics_by_run is deprecated. Use ResultsStore.get_statistics_by_run() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_results_statistics_by_run()
 
     # ── GEPA optimization (delegated to benchmark_helpers) ───────────────

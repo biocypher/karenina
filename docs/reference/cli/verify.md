@@ -50,7 +50,7 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | `--parsing-provider` | `TEXT` | — | Parsing model provider for LangChain (required without `--preset`) |
 | `--parsing-id` | `TEXT` | `parsing-1` | Parsing model ID |
 | `--temperature` | `FLOAT` | — | Model temperature (`0.0`–`2.0`) |
-| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `manual` |
+| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual` |
 
 ### General Settings
 
@@ -63,10 +63,12 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--abstention` | flag | `False` | Enable abstention detection (stage 5) |
-| `--sufficiency` | flag | `False` | Enable trace sufficiency detection (stage 6) |
-| `--embedding-check` | flag | `False` | Enable embedding similarity check (stage 9) |
-| `--deep-judgment` | flag | `False` | Enable deep judgment for templates (stage 10) |
+| `--abstention / --no-abstention` | flag pair | None (use preset/default) | Enable or disable abstention detection (stage 5) |
+| `--sufficiency / --no-sufficiency` | flag pair | None (use preset/default) | Enable or disable trace sufficiency detection (stage 6) |
+| `--embedding-check / --no-embedding-check` | flag pair | None (use preset/default) | Enable or disable embedding similarity check (stage 9) |
+| `--deep-judgment / --no-deep-judgment` | flag pair | None (use preset/default) | Enable or disable deep judgment for templates (stage 10) |
+
+Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` disables it, and passing neither preserves the preset default (or the built-in default of `False` when no preset is used).
 
 ### Deep Judgment — Rubric Settings
 
@@ -85,8 +87,8 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--embedding-threshold` | `FLOAT` | `0.85` | Embedding similarity threshold (`0.0`–`1.0`) |
-| `--embedding-model` | `TEXT` | `all-MiniLM-L6-v2` | Embedding model name |
+| `--embedding-threshold` | `FLOAT` | None (defers to env var or `0.85`) | Embedding similarity threshold (`0.0`--`1.0`). When omitted, respects `EMBEDDING_CHECK_THRESHOLD` env var; falls back to `0.85`. |
+| `--embedding-model` | `TEXT` | None (defers to env var or `all-MiniLM-L6-v2`) | Embedding model name. When omitted, respects `EMBEDDING_CHECK_MODEL` env var; falls back to `all-MiniLM-L6-v2`. |
 
 ### Trace Filtering (MCP)
 
@@ -122,8 +124,10 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | Code | Meaning |
 |------|---------|
 | `0` | Verification completed successfully |
-| `1` | Error — no templates found, invalid arguments, benchmark load failure, or unexpected error |
+| `1` | Error: no templates found, invalid arguments, benchmark load failure, partial batch failure (`VerificationBatchError`), or unexpected error |
 | `130` | Interrupted by user (Ctrl+C) |
+
+If some questions fail while others succeed, the executor raises `VerificationBatchError` with both `partial_results` and `errors`. The CLI catches this, writes any partial results to the output file, and exits with code `1`. In parallel mode, a timeout also triggers `VerificationBatchError`.
 
 When interrupted with Ctrl+C during a progressive save run, the command prints a resume hint:
 
@@ -205,6 +209,13 @@ karenina verify checkpoint.jsonld --preset default.json --questions 5-10
 ```bash
 karenina verify checkpoint.jsonld --preset default.json \
   --abstention --sufficiency --deep-judgment
+```
+
+### Disable a preset feature
+
+```bash
+# Preset has abstention_enabled=true; override it off
+karenina verify checkpoint.jsonld --preset default.json --no-abstention
 ```
 
 ### Template and rubric evaluation

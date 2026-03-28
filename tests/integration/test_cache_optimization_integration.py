@@ -84,7 +84,7 @@ def create_task(
         "few_shot_examples": None,
         "few_shot_enabled": False,
         "abstention_enabled": False,
-        "deep_judgment_enabled": False,
+        "deep_judgment_mode": "disabled",
     }
 
 

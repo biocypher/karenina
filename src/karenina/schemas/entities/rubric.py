@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import cloudpickle
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
+from karenina.schemas.entities._rubric_kind_validation import _validate_template_fields
 from karenina.schemas.entities._schema_reconstruction import _reconstruct_model_from_schema
-from karenina.schemas.entities._template_validation import _validate_template_fields
 
 if TYPE_CHECKING:
     from karenina.schemas.config.models import ModelConfig
@@ -88,12 +88,13 @@ class LLMRubricTrait(BaseModel):
     )
 
     # Directionality field
-    higher_is_better: bool = Field(
-        ...,
+    higher_is_better: bool | None = Field(
+        default=True,
         description="Whether higher values indicate better performance. "
         "For boolean: True means True is good. "
         "For score: True means higher scores are better. "
-        "For literal: True means higher indices (later classes) are better.",
+        "For literal: True means higher indices (later classes) are better. "
+        "None means directionality does not apply.",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -125,7 +126,7 @@ class LLMRubricTrait(BaseModel):
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+        if isinstance(values, dict) and "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
 
@@ -174,7 +175,7 @@ class LLMRubricTrait(BaseModel):
             return min_val <= value <= max_val
 
 
-class RegexTrait(BaseModel):
+class RegexRubricTrait(BaseModel):
     """
     Regex-based evaluation trait for deterministic pattern matching.
 
@@ -195,9 +196,11 @@ class RegexTrait(BaseModel):
     invert_result: bool = Field(False, description="Whether to invert the boolean result (for negative matching)")
 
     # Directionality field
-    higher_is_better: bool = Field(
-        ...,
-        description="Whether a regex match indicates a positive outcome. True: match = good. False: match = bad.",
+    higher_is_better: bool | None = Field(
+        default=True,
+        description="Whether a regex match indicates a positive outcome. "
+        "True: match = good. False: match = bad. "
+        "None means directionality does not apply.",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -206,7 +209,7 @@ class RegexTrait(BaseModel):
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
+        if isinstance(values, dict) and "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
 
@@ -242,7 +245,7 @@ class RegexTrait(BaseModel):
             raise RuntimeError(f"Failed to evaluate regex trait '{self.name}': {e}") from e
 
 
-class CallableTrait(BaseModel):
+class CallableRubricTrait(BaseModel):
     """
     Callable-based evaluation trait using custom Python functions.
 
@@ -251,46 +254,95 @@ class CallableTrait(BaseModel):
     expressed as simple regex patterns.
 
     **SECURITY WARNING**: Deserializing callable code can execute arbitrary Python code.
-    Only load CallableTrait instances from trusted sources. CallableTrait cannot be
+    Only load CallableRubricTrait instances from trusted sources. CallableRubricTrait cannot be
     created via the web API for security reasons.
 
-    The trait can return either boolean (pass/fail) or numeric score results, matching
-    LLMRubricTrait behavior.
+    Supported kinds:
+    - boolean: callable returns bool (pass/fail)
+    - score: callable returns int or float (numeric rating within min/max range)
+    - literal: callable returns str (class label from predefined classes dict)
+
+    For kind="literal":
+    - The ``classes`` field is REQUIRED (dict mapping class name to description)
+    - ``min_score`` is automatically set to 0 (first class index)
+    - ``max_score`` is automatically set to len(classes)-1 (last class index)
+    - The callable must return a string that matches one of the class names
+    - evaluate() returns the int index of the matched class
 
     Examples:
         Boolean:
         - Word count validation: lambda text: len(text.split()) >= 50
         - Custom domain logic: checking medical terminology consistency
 
-        Score:
+        Score (int or float):
         - Readability score: lambda text: calculate_flesch_kincaid(text)
         - Custom metric: lambda text: compute_domain_score(text)
+
+        Literal:
+        - Tone classifier: lambda text: "formal" if "therefore" in text else "casual"
     """
 
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description of what this trait evaluates")
     summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
-    kind: TraitKind = Field(..., description="Type of evaluation: 'boolean' for pass/fail, 'score' for numeric")
+    kind: TraitKind = Field(..., description="Type of evaluation: 'boolean', 'score', or 'literal'")
     callable_code: bytes = Field(..., description="Serialized callable function (cloudpickle)")
-    min_score: int | None = Field(None, description="Minimum score value (required if kind='score')")
-    max_score: int | None = Field(None, description="Maximum score value (required if kind='score')")
+    min_score: int | None = Field(
+        None, description="Minimum score value (required if kind='score', auto-derived for 'literal')"
+    )
+    max_score: int | None = Field(
+        None, description="Maximum score value (required if kind='score', auto-derived for 'literal')"
+    )
     invert_result: bool = Field(False, description="Whether to invert the boolean result (only for kind='boolean')")
 
+    # Literal-specific field (required when kind="literal")
+    classes: dict[str, str] | None = Field(
+        None,
+        description="Class name to description mapping. Required when kind='literal'. "
+        "Order determines indices (0, 1, 2...). Must have 2-20 classes.",
+    )
+
     # Directionality field
-    higher_is_better: bool = Field(
-        ...,
+    higher_is_better: bool | None = Field(
+        default=True,
         description="Whether higher return values indicate better performance. "
-        "True: high value = good. False: high value = bad.",
+        "True: high value = good. False: high value = bad. "
+        "None means directionality does not apply.",
     )
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
+    @field_validator("classes")
+    @classmethod
+    def validate_classes(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        """Validate class definitions when present."""
+        if v is None:
+            return None
+        if len(v) < 2:
+            raise ValueError("Literal trait must have at least 2 classes")
+        if len(v) > 20:
+            raise ValueError("Literal trait cannot have more than 20 classes")
+        return v
+
     @model_validator(mode="before")
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and ("higher_is_better" not in values or values.get("higher_is_better") is None):
-            values["higher_is_better"] = True
+        """Set defaults for higher_is_better and validate literal kind requires classes."""
+        if isinstance(values, dict):
+            if "higher_is_better" not in values:
+                values["higher_is_better"] = True
+
+            # Literal kind requires classes
+            if values.get("kind") == "literal":
+                if not values.get("classes"):
+                    raise ValueError("classes field is required when kind='literal'")
+                # Auto-derive min/max score from classes
+                num_classes = len(values["classes"])
+                if values.get("min_score") is None:
+                    values["min_score"] = 0
+                if values.get("max_score") is None:
+                    values["max_score"] = num_classes - 1
+
         return values
 
     @field_serializer("callable_code")
@@ -312,7 +364,7 @@ class CallableTrait(BaseModel):
     def from_callable(
         cls,
         name: str,
-        func: Callable[[str], bool | int],
+        func: Callable[[str], bool | int | float | str],
         kind: TraitKind,
         description: str | None = None,
         summary: str | None = None,
@@ -320,47 +372,49 @@ class CallableTrait(BaseModel):
         max_score: int | None = None,
         invert_result: bool = False,
         higher_is_better: bool = True,
-    ) -> "CallableTrait":
+        classes: dict[str, str] | None = None,
+    ) -> "CallableRubricTrait":
         """
-        Create a CallableTrait from a callable function.
+        Create a CallableRubricTrait from a callable function.
 
         Args:
-            name: Trait name
-            func: Function that takes a string (the verification trace/answer text) and returns bool or int
-            kind: Type of evaluation - 'boolean' or 'score'
-            description: Optional trait description
-            summary: Short concept label for dynamic rubric presence check
-            min_score: Minimum score (required if kind='score')
-            max_score: Maximum score (required if kind='score')
-            invert_result: Whether to invert boolean result (only for kind='boolean')
-            higher_is_better: Whether higher return values indicate better performance
+            name: Trait name.
+            func: Function that takes a string and returns bool, int, float, or str
+                depending on kind.
+            kind: Type of evaluation: 'boolean', 'score', or 'literal'.
+            description: Optional trait description.
+            summary: Short concept label for dynamic rubric presence check.
+            min_score: Minimum score (required if kind='score', auto-derived for 'literal').
+            max_score: Maximum score (required if kind='score', auto-derived for 'literal').
+            invert_result: Whether to invert boolean result (only for kind='boolean').
+            higher_is_better: Whether higher return values indicate better performance.
+            classes: Class name to description mapping (required if kind='literal').
 
         Returns:
-            CallableTrait instance with serialized function
+            CallableRubricTrait instance with serialized function.
 
         Raises:
-            ValueError: If function signature is invalid or score parameters are missing
+            ValueError: If function signature is invalid or required parameters are missing.
         """
-        # Validate function signature
         import inspect
 
         sig = inspect.signature(func)
         params = list(sig.parameters.keys())
-
         if len(params) != 1:
             raise ValueError(f"Callable must have exactly one parameter, got {len(params)}")
 
-        # Validate score parameters
         if kind == "score":
             if min_score is None or max_score is None:
                 raise ValueError("min_score and max_score are required when kind='score'")
             if min_score >= max_score:
                 raise ValueError(f"min_score ({min_score}) must be less than max_score ({max_score})")
-        else:  # kind == "boolean"
+        elif kind == "literal":
+            if not classes:
+                raise ValueError("classes field is required when kind='literal'")
+        elif kind == "boolean":
             if min_score is not None or max_score is not None:
                 raise ValueError("min_score and max_score should not be set when kind='boolean'")
 
-        # Serialize the function
         callable_code = cloudpickle.dumps(func)
 
         return cls(
@@ -373,9 +427,10 @@ class CallableTrait(BaseModel):
             max_score=max_score,
             invert_result=invert_result,
             higher_is_better=higher_is_better,
+            classes=classes,
         )
 
-    def deserialize_callable(self) -> Callable[[str], bool | int]:
+    def deserialize_callable(self) -> Callable[[str], bool | int | float | str]:
         """
         Deserialize the callable function from stored bytes.
 
@@ -383,10 +438,10 @@ class CallableTrait(BaseModel):
         arbitrary Python code. Only deserialize callables from trusted sources.
 
         Returns:
-            The deserialized callable function
+            The deserialized callable function.
 
         Raises:
-            RuntimeError: If deserialization fails
+            RuntimeError: If deserialization fails.
         """
         try:
             warnings.warn(
@@ -395,24 +450,26 @@ class CallableTrait(BaseModel):
                 category=UserWarning,
                 stacklevel=2,
             )
-            callable_func: Callable[[str], bool | int] = cloudpickle.loads(self.callable_code)
+            callable_func: Callable[[str], bool | int | float | str] = cloudpickle.loads(self.callable_code)
             return callable_func
         except Exception as e:
             raise RuntimeError(f"Failed to deserialize callable for trait '{self.name}': {e}") from e
 
-    def evaluate(self, text: str) -> bool | int:
+    def evaluate(self, text: str) -> bool | int | float:
         """
         Evaluate the trait against the provided text.
 
         Args:
-            text: The text to evaluate (verification trace or answer text)
+            text: The text to evaluate (verification trace or answer text).
 
         Returns:
-            Boolean result for kind='boolean', numeric score for kind='score'
+            For kind='boolean': bool result (possibly inverted).
+            For kind='score': int or float score within [min_score, max_score].
+            For kind='literal': int class index (0-based, matching classes key order).
 
         Raises:
-            RuntimeError: If evaluation fails
-            ValueError: If return type doesn't match kind or score is out of range
+            RuntimeError: If evaluation fails.
+            ValueError: If return type does not match kind or value is out of range.
         """
         try:
             func = self.deserialize_callable()
@@ -422,14 +479,25 @@ class CallableTrait(BaseModel):
                 if not isinstance(result, bool):
                     raise ValueError(f"Callable with kind='boolean' must return bool, got {type(result)}")
                 return not result if self.invert_result else result
+
+            elif self.kind == "literal":
+                if not isinstance(result, str):
+                    raise ValueError(f"Callable with kind='literal' must return str, got {type(result)}")
+                if self.classes is None:
+                    raise ValueError(f"Trait '{self.name}' has kind='literal' but no classes defined")
+                class_names = list(self.classes.keys())
+                if result not in class_names:
+                    raise ValueError(
+                        f"'{result}' is not a valid class for trait '{self.name}'. Valid classes: {class_names}"
+                    )
+                return class_names.index(result)
+
             else:  # kind == "score"
                 if not isinstance(result, int | float):
                     raise ValueError(f"Callable with kind='score' must return int or float, got {type(result)}")
 
-                # Convert to int if float
-                score = int(result) if isinstance(result, float) else result
+                score: int | float = result
 
-                # Validate score range
                 if self.min_score is not None and score < self.min_score:
                     raise ValueError(f"Score {score} is below minimum {self.min_score} for trait '{self.name}'")
                 if self.max_score is not None and score > self.max_score:
@@ -508,6 +576,13 @@ class MetricRubricTrait(BaseModel):
     )
     repeated_extraction: bool = Field(
         True, description="Whether to deduplicate repeated excerpts/instructions (case-insensitive exact match)"
+    )
+
+    # Directionality field
+    higher_is_better: bool | None = Field(
+        default=None,
+        description="Whether higher metric values indicate better performance. "
+        "None means directionality does not apply (default for metrics).",
     )
 
     model_config = ConfigDict(extra="forbid")
@@ -674,7 +749,7 @@ class AgenticRubricTrait(BaseModel):
         # Template kind: do not inject legacy default
         if not isinstance(kind, str):
             return values
-        if "higher_is_better" not in values or values.get("higher_is_better") is None:
+        if "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
 
@@ -712,11 +787,12 @@ class AgenticRubricTrait(BaseModel):
             from karenina.adapters.registry import AdapterRegistry
 
             spec = AdapterRegistry.get_spec(self.model_override.interface)
-            if spec is None or spec.agent_factory is None:
+            if spec is None or spec.agent_tier != "deep_agent":
+                tier = spec.agent_tier if spec else "unknown"
                 raise ValueError(
                     f"model_override interface '{self.model_override.interface}' "
-                    "does not support agent creation (no agent_factory registered). "
-                    "Use an interface that supports AgentPort (e.g. 'claude_agent_sdk')."
+                    f"has agent_tier='{tier}'; agentic traits require "
+                    f"agent_tier='deep_agent'."
                 )
         return self
 
@@ -752,8 +828,10 @@ class Rubric(BaseModel):
     """
 
     llm_traits: list[LLMRubricTrait] = Field(default_factory=list, description="List of LLM-based evaluation traits")
-    regex_traits: list[RegexTrait] = Field(default_factory=list, description="List of regex-based evaluation traits")
-    callable_traits: list[CallableTrait] = Field(
+    regex_traits: list[RegexRubricTrait] = Field(
+        default_factory=list, description="List of regex-based evaluation traits"
+    )
+    callable_traits: list[CallableRubricTrait] = Field(
         default_factory=list, description="List of callable function-based evaluation traits"
     )
     metric_traits: list[MetricRubricTrait] = Field(
@@ -766,14 +844,90 @@ class Rubric(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @classmethod
+    def from_traits(
+        cls,
+        traits: list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait]
+        | None,
+    ) -> "Rubric | None":
+        """Create a Rubric from a flat list of traits, categorizing by type.
+
+        Args:
+            traits: Flat list of trait objects. If None, returns None.
+
+        Returns:
+            Rubric with traits sorted into typed lists, or None if input is None.
+        """
+        if traits is None:
+            return None
+
+        llm_traits: list[LLMRubricTrait] = []
+        regex_traits: list[RegexRubricTrait] = []
+        callable_traits: list[CallableRubricTrait] = []
+        metric_traits: list[MetricRubricTrait] = []
+        agentic_traits: list[AgenticRubricTrait] = []
+
+        for trait in traits:
+            if isinstance(trait, LLMRubricTrait):
+                llm_traits.append(trait)
+            elif isinstance(trait, RegexRubricTrait):
+                regex_traits.append(trait)
+            elif isinstance(trait, CallableRubricTrait):
+                callable_traits.append(trait)
+            elif isinstance(trait, MetricRubricTrait):
+                metric_traits.append(trait)
+            elif isinstance(trait, AgenticRubricTrait):
+                agentic_traits.append(trait)
+
+        return cls(
+            llm_traits=llm_traits,
+            regex_traits=regex_traits,
+            callable_traits=callable_traits,
+            metric_traits=metric_traits,
+            agentic_traits=agentic_traits,
+        )
+
     @model_validator(mode="after")
     def validate_trait_names(self) -> "Rubric":
-        """Reject dots in agentic trait names to avoid dot-notation collisions.
+        """Reject duplicate trait names (within and across types) and dots in agentic names.
 
-        Template kind traits produce dot-expanded keys (``trait.field``). A trait
-        named ``"foo.bar"`` would be ambiguous: is it a single trait or the
-        ``bar`` field of trait ``foo``?
+        Each trait type list must have unique names. Cross-type name overlaps
+        are also rejected because downstream consumers (DataFrames, result
+        dicts) use trait names as keys without type prefixes.
+
+        Dots in agentic trait names are rejected because template kind traits
+        produce dot-expanded keys (``trait.field``). A trait named ``"foo.bar"``
+        would be ambiguous.
         """
+        type_lists: list[tuple[str, list[Any]]] = [
+            ("llm", self.llm_traits),
+            ("regex", self.regex_traits),
+            ("callable", self.callable_traits),
+            ("metric", self.metric_traits),
+            ("agentic", self.agentic_traits),
+        ]
+        for type_label, traits in type_lists:
+            seen: set[str] = set()
+            for trait in traits:
+                if trait.name in seen:
+                    raise ValueError(
+                        f"Duplicate {type_label} trait name '{trait.name}' "
+                        f"within the same rubric. Trait names must be unique "
+                        f"per type."
+                    )
+                seen.add(trait.name)
+
+        # Cross-type uniqueness check
+        all_names = self.get_trait_names()
+        seen_all: set[str] = set()
+        for name in all_names:
+            if name in seen_all:
+                raise ValueError(
+                    f"Duplicate trait name '{name}' across different trait types. "
+                    f"Trait names must be unique across all types within a rubric."
+                )
+            seen_all.add(name)
+
         for trait in self.agentic_traits:
             if "." in trait.name:
                 raise ValueError(
@@ -837,15 +991,12 @@ class Rubric(BaseModel):
         return max_scores
 
     def get_trait_directionalities(self) -> dict[str, bool | None]:
-        """Get higher_is_better for LLM, regex, callable, and agentic traits.
-
-        Note: MetricRubricTraits are excluded as metrics (precision/recall/F1)
-        are inherently 'higher is better'.
+        """Get higher_is_better for all trait types.
 
         Returns:
-            Dict mapping trait name to higher_is_better value. Template kind
-            agentic traits map to None because directionality is not meaningful
-            for structured results.
+            Dict mapping trait name to higher_is_better value. None means
+            directionality does not apply (e.g., template kind agentic traits
+            or metric traits where it was not explicitly set).
         """
         directionalities: dict[str, bool | None] = {}
 
@@ -853,18 +1004,21 @@ class Rubric(BaseModel):
         for llm_trait in self.llm_traits:
             directionalities[llm_trait.name] = llm_trait.higher_is_better
 
-        regex_trait: RegexTrait
+        regex_trait: RegexRubricTrait
         for regex_trait in self.regex_traits:
             directionalities[regex_trait.name] = regex_trait.higher_is_better
 
-        callable_trait: CallableTrait
+        callable_trait: CallableRubricTrait
         for callable_trait in self.callable_traits:
             directionalities[callable_trait.name] = callable_trait.higher_is_better
+
+        metric_trait: MetricRubricTrait
+        for metric_trait in self.metric_traits:
+            directionalities[metric_trait.name] = metric_trait.higher_is_better
 
         for agentic_trait in self.agentic_traits:
             directionalities[agentic_trait.name] = agentic_trait.higher_is_better
 
-        # MetricRubricTraits always have higher_is_better=True (implicit)
         return directionalities
 
     def validate_evaluation(self, evaluation: dict[str, int | bool]) -> bool:
@@ -940,55 +1094,98 @@ class RubricEvaluation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def merge_rubrics(global_rubric: "Rubric | None", question_rubric: "Rubric | None") -> "Rubric | None":
-    """
-    Merge global and question-specific rubrics.
+def _iter_traits(
+    rubric: "Rubric",
+) -> "list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait]":
+    """Return all traits from a rubric in a flat list.
 
     Args:
-        global_rubric: The global rubric (applied to all questions)
-        question_rubric: Question-specific rubric (overrides/adds to global)
+        rubric: The rubric to iterate over.
 
     Returns:
-        Merged rubric with global traits + question-specific traits, or None if both are None
-
-    Raises:
-        ValueError: If there are trait name conflicts between global and question rubrics
+        All traits across llm, regex, callable, metric, and agentic types.
     """
-    if not global_rubric and not question_rubric:
-        return None
-
-    if not global_rubric:
-        return question_rubric
-
-    if not question_rubric:
-        return global_rubric
-
-    # Check for trait name conflicts (across all trait types)
-    global_all_names = set(global_rubric.get_trait_names())
-    question_all_names = set(question_rubric.get_trait_names())
-    conflicts = global_all_names.intersection(question_all_names)
-
-    if conflicts:
-        raise ValueError(f"Trait name conflicts between global and question rubrics: {conflicts}")
-
-    # Merge all trait types separately
-    merged_traits = list(global_rubric.llm_traits) + list(question_rubric.llm_traits)
-    merged_regex_traits = list(global_rubric.regex_traits) + list(question_rubric.regex_traits)
-    merged_callable_traits = list(global_rubric.callable_traits) + list(question_rubric.callable_traits)
-    merged_metric_traits = list(global_rubric.metric_traits) + list(question_rubric.metric_traits)
-    merged_agentic_traits = list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits)
-
-    return Rubric(
-        llm_traits=merged_traits,
-        regex_traits=merged_regex_traits,
-        callable_traits=merged_callable_traits,
-        metric_traits=merged_metric_traits,
-        agentic_traits=merged_agentic_traits,
+    return (
+        list(rubric.llm_traits)
+        + list(rubric.regex_traits)
+        + list(rubric.callable_traits)
+        + list(rubric.metric_traits)
+        + list(rubric.agentic_traits)
     )
 
 
+def merge_rubrics(
+    global_rubric: "Rubric | None",
+    question_rubric: "Rubric | None",
+) -> "tuple[Rubric | None, dict[str, str] | None]":
+    """Merge global and question-specific rubrics.
+
+    Same-type trait name collisions (e.g., both rubrics have an LLM trait
+    named "safety") raise ``ValueError``. Cross-type collisions (e.g., global
+    regex trait "quality" + question LLM trait "quality") are rejected by the
+    ``Rubric`` constructor's cross-type uniqueness validation.
+
+    Args:
+        global_rubric: The global rubric (applied to all questions).
+        question_rubric: Question-specific rubric (adds to global).
+
+    Returns:
+        A tuple of (merged_rubric, provenance) where provenance maps each
+        trait name to its source: "global" or "question_specific". Both
+        elements are None when both inputs are None.
+
+    Raises:
+        ValueError: If a trait name appears in both rubrics within the same
+            trait type.
+    """
+    if not global_rubric and not question_rubric:
+        return None, None
+
+    if not global_rubric:
+        assert question_rubric is not None
+        q_provenance: dict[str, str] = {t.name: "question_specific" for t in _iter_traits(question_rubric)}
+        return question_rubric, q_provenance
+
+    if not question_rubric:
+        g_provenance: dict[str, str] = {t.name: "global" for t in _iter_traits(global_rubric)}
+        return global_rubric, g_provenance
+
+    # Check per-type name collisions
+    type_pairs: list[tuple[str, list[Any], list[Any]]] = [
+        ("llm", global_rubric.llm_traits, question_rubric.llm_traits),
+        ("regex", global_rubric.regex_traits, question_rubric.regex_traits),
+        ("callable", global_rubric.callable_traits, question_rubric.callable_traits),
+        ("metric", global_rubric.metric_traits, question_rubric.metric_traits),
+        ("agentic", global_rubric.agentic_traits, question_rubric.agentic_traits),
+    ]
+    all_conflicts: list[str] = []
+    for type_label, g_traits, q_traits in type_pairs:
+        g_names = {t.name for t in g_traits}
+        q_names = {t.name for t in q_traits}
+        overlap = g_names & q_names
+        if overlap:
+            all_conflicts.extend(f"{type_label}:{name}" for name in sorted(overlap))
+
+    if all_conflicts:
+        raise ValueError(f"Same-type trait name conflicts between global and question rubrics: {all_conflicts}")
+
+    merged = Rubric(
+        llm_traits=list(global_rubric.llm_traits) + list(question_rubric.llm_traits),
+        regex_traits=list(global_rubric.regex_traits) + list(question_rubric.regex_traits),
+        callable_traits=list(global_rubric.callable_traits) + list(question_rubric.callable_traits),
+        metric_traits=list(global_rubric.metric_traits) + list(question_rubric.metric_traits),
+        agentic_traits=list(global_rubric.agentic_traits) + list(question_rubric.agentic_traits),
+    )
+    provenance: dict[str, str] = {}
+    for t in _iter_traits(global_rubric):
+        provenance[t.name] = "global"
+    for t in _iter_traits(question_rubric):
+        provenance[t.name] = "question_specific"
+    return merged, provenance
+
+
 # Type alias for the union of all trait types stored in DynamicRubric
-_AnyTrait = LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+_AnyTrait = LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
 
 
 class DynamicRubric(BaseModel):
@@ -1003,10 +1200,47 @@ class DynamicRubric(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     llm_traits: list[LLMRubricTrait] = Field(default_factory=list)
-    regex_traits: list[RegexTrait] = Field(default_factory=list)
-    callable_traits: list[CallableTrait] = Field(default_factory=list)
+    regex_traits: list[RegexRubricTrait] = Field(default_factory=list)
+    callable_traits: list[CallableRubricTrait] = Field(default_factory=list)
     metric_traits: list[MetricRubricTrait] = Field(default_factory=list)
     agentic_traits: list[AgenticRubricTrait] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_trait_names(self) -> "DynamicRubric":
+        """Reject duplicate trait names within and across types.
+
+        Mirrors ``Rubric.validate_trait_names``. Both same-type and
+        cross-type duplicates are rejected.
+        """
+        type_lists: list[tuple[str, list[Any]]] = [
+            ("llm", self.llm_traits),
+            ("regex", self.regex_traits),
+            ("callable", self.callable_traits),
+            ("metric", self.metric_traits),
+            ("agentic", self.agentic_traits),
+        ]
+        for type_label, traits in type_lists:
+            seen: set[str] = set()
+            for trait in traits:
+                if trait.name in seen:
+                    raise ValueError(
+                        f"Duplicate {type_label} trait name '{trait.name}' "
+                        f"within the same dynamic rubric. Trait names must be "
+                        f"unique per type."
+                    )
+                seen.add(trait.name)
+
+        # Cross-type uniqueness check
+        all_names = self.get_trait_names()
+        seen_all: set[str] = set()
+        for name in all_names:
+            if name in seen_all:
+                raise ValueError(
+                    f"Duplicate trait name '{name}' across different trait types. "
+                    f"Trait names must be unique across all types within a dynamic rubric."
+                )
+            seen_all.add(name)
+        return self
 
     @model_validator(mode="after")
     def validate_concept_text(self) -> "DynamicRubric":
@@ -1080,9 +1314,8 @@ def merge_dynamic_rubrics(
 ) -> "DynamicRubric | None":
     """Merge global and question-specific dynamic rubrics.
 
-    Mirrors :func:`merge_rubrics` for the dynamic rubric variant. Traits from
-    both sources are concatenated. Name collisions (across all trait types) are
-    rejected.
+    Mirrors :func:`merge_rubrics` for the dynamic rubric variant. Same-type
+    name collisions are rejected; cross-type overlaps are allowed.
 
     Args:
         global_dynamic: The global dynamic rubric (applied to all questions).
@@ -1092,7 +1325,8 @@ def merge_dynamic_rubrics(
         Merged DynamicRubric with traits from both sources, or None if both are None.
 
     Raises:
-        ValueError: If there are trait name conflicts between global and question dynamic rubrics.
+        ValueError: If a trait name appears in both rubrics within the same
+            trait type.
     """
     if not global_dynamic and not question_dynamic:
         return None
@@ -1103,13 +1337,23 @@ def merge_dynamic_rubrics(
     if not question_dynamic:
         return global_dynamic
 
-    # Check for trait name conflicts across all trait types
-    global_names = set(global_dynamic.get_trait_names())
-    question_names = set(question_dynamic.get_trait_names())
-    conflicts = global_names.intersection(question_names)
+    type_pairs: list[tuple[str, list[Any], list[Any]]] = [
+        ("llm", global_dynamic.llm_traits, question_dynamic.llm_traits),
+        ("regex", global_dynamic.regex_traits, question_dynamic.regex_traits),
+        ("callable", global_dynamic.callable_traits, question_dynamic.callable_traits),
+        ("metric", global_dynamic.metric_traits, question_dynamic.metric_traits),
+        ("agentic", global_dynamic.agentic_traits, question_dynamic.agentic_traits),
+    ]
+    all_conflicts: list[str] = []
+    for type_label, g_traits, q_traits in type_pairs:
+        g_names = {t.name for t in g_traits}
+        q_names = {t.name for t in q_traits}
+        overlap = g_names & q_names
+        if overlap:
+            all_conflicts.extend(f"{type_label}:{name}" for name in sorted(overlap))
 
-    if conflicts:
-        raise ValueError(f"Trait name conflicts between global and question dynamic rubrics: {conflicts}")
+    if all_conflicts:
+        raise ValueError(f"Same-type trait name conflicts between global and question dynamic rubrics: {all_conflicts}")
 
     return DynamicRubric(
         llm_traits=list(global_dynamic.llm_traits) + list(question_dynamic.llm_traits),

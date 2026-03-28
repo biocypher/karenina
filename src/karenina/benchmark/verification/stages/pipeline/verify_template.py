@@ -126,6 +126,7 @@ class VerifyTemplateStage(BaseVerificationStage):
 
                 if field_result.error:
                     logger.warning("Field verification error: %s", field_result.error)
+                    context.set_result_field(ArtifactKeys.FIELD_VERIFICATION_ERROR, field_result.error)
                 if regex_result.error:
                     logger.warning("Regex verification error: %s", regex_result.error)
             else:
@@ -134,7 +135,11 @@ class VerifyTemplateStage(BaseVerificationStage):
 
                 # Field verification: call verify() if defined, else True (no fields)
                 if hasattr(parsed_answer, "verify") and callable(parsed_answer.verify):
-                    field_verification_result = parsed_answer.verify()
+                    try:
+                        field_verification_result = parsed_answer.verify()
+                    except Exception as e:
+                        logger.warning("Field verification error (regex-only): %s", e)
+                        field_verification_result = False
                 else:
                     field_verification_result = True
 
@@ -169,7 +174,11 @@ class VerifyTemplateStage(BaseVerificationStage):
             context.set_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS, regex_extraction_results)
 
             # Granular verification for multi-attribute templates
-            if hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
+            # Skip when field verification raised an error (issue 148): avoids
+            # contradictory signals (verify_result=False, verify_granular_result=1.0)
+            if field_result.error if evaluator is not None else False:
+                logger.debug("Skipping verify_granular() because field verification error is set")
+            elif hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
                 try:
                     granular_result = parsed_answer.verify_granular()
                     context.set_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT, granular_result)

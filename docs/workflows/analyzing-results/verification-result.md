@@ -1,8 +1,36 @@
 # VerificationResult Structure
 
-Every call to `run_verification()` returns a `VerificationResultSet` — a collection of `VerificationResult` objects, one per question verified. This page documents the complete structure of a `VerificationResult` so you know exactly what data is available for analysis.
+Every call to `run_verification()` returns a `VerificationResultSet` containing `VerificationResult` objects, one per question verified. This page documents the complete structure of both `VerificationResultSet` and `VerificationResult` so you know exactly what data is available for analysis.
 
-## Overview
+## VerificationResultSet Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `results` | `list[VerificationResult]` | All individual verification results from the run |
+| `scenario_results` | `list[ScenarioExecutionResult] \| None` | Present only for scenario runs. Each entry is a `ScenarioExecutionResult` containing the full execution trace (path taken, turn history, outcome criteria results, final state) for one scenario. `None` for non-scenario verification. |
+| `errors` | `list[tuple[str, BaseException]] \| None` | Errors from failed scenario executions, as `(description, exception)` tuples. `None` when no scenario errors occurred. |
+
+```python
+result_set = benchmark.run_verification(config)
+
+# Standard question results
+for vr in result_set.results:
+    print(vr.metadata.question_id, vr.template.verify_result)
+
+# Scenario-specific data (only present for scenario runs)
+if result_set.scenario_results:
+    for sr in result_set.scenario_results:
+        print(f"Scenario {sr.scenario_id}: {sr.status}, path={sr.path}")
+        print(f"  Outcomes: {sr.outcome_results}")
+
+if result_set.errors:
+    for desc, exc in result_set.errors:
+        print(f"Failed: {desc}: {exc}")
+```
+
+---
+
+## VerificationResult Overview
 
 A `VerificationResult` has five top-level sections:
 
@@ -108,6 +136,26 @@ Convenience properties:
 | `error` | `str \| None` | Error message if verification failed |
 | `execution_time` | `float` | Execution time in seconds |
 | `timestamp` | `str` | ISO timestamp of when verification was run |
+
+### Scenario Linking Fields
+
+These fields are populated only for results produced by scenario execution. For standalone (non-scenario) questions, all four are `None`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scenario_id` | `str \| None` | Name of the scenario that produced this result |
+| `scenario_node` | `str \| None` | Node ID within the scenario graph for this turn |
+| `scenario_turn` | `int \| None` | Zero-based turn index within the scenario execution |
+| `scenario_path` | `list[str] \| None` | Ordered list of node IDs visited up to and including this turn |
+
+```python
+# Scenario results carry linking metadata
+for vr in result_set.results:
+    if vr.metadata.scenario_id:
+        print(f"Scenario: {vr.metadata.scenario_id}, "
+              f"node: {vr.metadata.scenario_node}, "
+              f"turn: {vr.metadata.scenario_turn}")
+```
 
 ---
 
@@ -310,7 +358,7 @@ The `deep_judgment` section is present when deep judgment was enabled for templa
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `deep_judgment_enabled` | `bool` | Whether deep judgment was configured |
+| `deep_judgment_mode` | `str \| None` | Which deep-judgment mode was used (`None`, `"reasoning_only"`, `"full"`) |
 | `deep_judgment_performed` | `bool` | Whether deep judgment was successfully executed |
 | `deep_judgment_stages_completed` | `list[str] \| None` | Stages completed: `["excerpts", "reasoning", "parameters"]` |
 | `deep_judgment_model_calls` | `int` | Number of LLM invocations for deep judgment |
@@ -427,9 +475,9 @@ For verification against source code, here are the field counts per section:
 | Section | Fields | Convenience Methods |
 |---------|--------|---------------------|
 | Root level | 3 (evaluation_input, used_full_trace, trace_extraction_error) | — |
-| `metadata` | 16 fields + 2 properties | `answering_model`, `parsing_model` |
-| `template` | 28 fields | — |
-| `rubric` | 8 fields | `get_all_trait_scores()`, `get_trait_by_name()`, `get_llm_trait_labels()` |
+| `metadata` | 24 fields + 2 properties | `answering_model`, `parsing_model` |
+| `template` | 33 fields | — |
+| `rubric` | 13 fields | `get_all_trait_scores()`, `get_trait_by_name()`, `get_llm_trait_labels()` |
 | `deep_judgment` | 10 fields | — |
 | `deep_judgment_rubric` | 11 fields | — |
 

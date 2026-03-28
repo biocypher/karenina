@@ -96,9 +96,9 @@ class BenchmarkBase:
 
         Args:
             path: Path where to save the benchmark
-            save_deep_judgment_config: If True, include deep judgment configuration
-                in LLM rubric traits. If False (default), deep judgment settings
-                are stripped before saving. Default is False for backward compatibility.
+            save_deep_judgment_config: If True, include deep judgment
+                configuration in LLM rubric traits. If False (default),
+                deep judgment settings are stripped before saving.
         """
         from copy import deepcopy
 

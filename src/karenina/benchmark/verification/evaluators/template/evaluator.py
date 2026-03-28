@@ -124,7 +124,7 @@ class TemplateEvaluator:
         self,
         raw_response: str,
         question_text: str,
-        deep_judgment_enabled: bool = False,
+        deep_judgment_enabled: bool = False,  # Whether deep judgment is active
         deep_judgment_config: dict[str, Any] | None = None,
         use_full_trace: bool = False,
         usage_tracker: Any | None = None,
@@ -194,7 +194,15 @@ class TemplateEvaluator:
         result = FieldVerificationResult()
 
         try:
-            result.success = parsed_answer.verify()
+            verify_return = parsed_answer.verify()
+            if not isinstance(verify_return, bool):
+                logger.warning(
+                    "verify() returned non-bool value %r (type %s); "
+                    "expected bool. Truthy non-bool values may mask bugs.",
+                    verify_return,
+                    type(verify_return).__name__,
+                )
+            result.success = verify_return
         except Exception as e:
             result.error = f"Field verification failed: {e}"
             logger.error(result.error)
@@ -381,8 +389,6 @@ class TemplateEvaluator:
         Returns:
             ParseResult with deep judgment metadata
         """
-        from langchain_core.output_parsers import PydanticOutputParser
-
         from karenina.schemas.verification import VerificationConfig
 
         from .deep_judgment import deep_judgment_parse
@@ -395,17 +401,13 @@ class TemplateEvaluator:
             answering_models=[],
             parsing_models=[self.model_config],
             parsing_only=True,
-            deep_judgment_enabled=True,
+            deep_judgment_mode="reasoning_only" if deep_judgment_config.get("reasoning_only", False) else "full",
             deep_judgment_max_excerpts_per_attribute=deep_judgment_config.get("max_excerpts_per_attribute", 3),
             deep_judgment_fuzzy_match_threshold=deep_judgment_config.get("fuzzy_match_threshold", 0.8),
             deep_judgment_excerpt_retry_attempts=deep_judgment_config.get("excerpt_retry_attempts", 2),
             deep_judgment_search_enabled=deep_judgment_config.get("search_enabled", False),
             deep_judgment_search_tool=deep_judgment_config.get("search_tool", "wikipedia"),
         )
-
-        # Build prompts for deep judgment
-        parser = PydanticOutputParser(pydantic_object=self.answer_class)
-        format_instructions = parser.get_format_instructions()
 
         # Extract ground truth if enabled
         ground_truth = None
@@ -438,7 +440,7 @@ class TemplateEvaluator:
             user_instructions=user_instructions,
             instruction_context={
                 "json_schema": build_parsing_schema(self.answer_class),
-                "format_instructions": format_instructions,
+                "format_instructions": "",
             },
         )
 
@@ -451,7 +453,7 @@ class TemplateEvaluator:
                 parser=self._parser,
                 question_text=question_text,
                 config=dj_config,
-                format_instructions=format_instructions,
+                format_instructions="",  # Unused (ARG001), kept for interface stability
                 combined_system_prompt=combined_system_prompt,
                 usage_tracker=usage_tracker,
                 parsing_model_str=self.model_str,

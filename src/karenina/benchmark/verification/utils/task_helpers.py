@@ -23,7 +23,7 @@ def merge_rubrics_for_task(
     global_rubric: Rubric | None,
     template: FinishedTemplate,
     config: VerificationConfig,
-) -> Rubric | None:
+) -> tuple[Rubric | None, dict[str, str] | None]:
     """Merge global and question-specific rubrics for a task.
 
     This is an adapter function that bridges the verification workflow layer
@@ -36,25 +36,23 @@ def merge_rubrics_for_task(
         config: Verification configuration with rubric settings
 
     Returns:
-        Merged rubric or None if rubrics are disabled
+        Tuple of (merged_rubric, provenance) where provenance maps each
+        trait name to its source ("global" or "question_specific"). Both
+        elements are None when rubrics are disabled or both inputs are None.
     """
     if not config.rubric_enabled:
-        return None
+        return None, None
 
     question_rubric = None
     if template.question_rubric:
         try:
             question_rubric = Rubric.model_validate(template.question_rubric)
         except Exception as e:
-            logger.warning(f"Failed to parse question rubric for {template.question_id}: {e}")
+            logger.warning("Failed to parse question rubric for %s: %s", template.question_id, e)
 
-    try:
-        from karenina.schemas import merge_rubrics
+    from karenina.schemas import merge_rubrics
 
-        return merge_rubrics(global_rubric, question_rubric)
-    except ValueError as e:
-        logger.error(f"Error merging rubrics for {template.question_id}: {e}")
-        return global_rubric
+    return merge_rubrics(global_rubric, question_rubric)
 
 
 def merge_dynamic_rubrics_for_task(
@@ -90,11 +88,7 @@ def merge_dynamic_rubrics_for_task(
                 e,
             )
 
-    try:
-        return merge_dynamic_rubrics(global_dynamic_rubric, question_dynamic_rubric)
-    except ValueError as e:
-        logger.error("Error merging dynamic rubrics for %s: %s", template.question_id, e)
-        return global_dynamic_rubric
+    return merge_dynamic_rubrics(global_dynamic_rubric, question_dynamic_rubric)
 
 
 def resolve_few_shot_for_task(
@@ -114,7 +108,7 @@ def resolve_few_shot_for_task(
         List of few-shot examples or None if disabled/unavailable
     """
     few_shot_config = config.get_few_shot_config()
-    if not few_shot_config or not few_shot_config.enabled:
+    if not few_shot_config or few_shot_config.source == "disabled":
         return None
 
     return few_shot_config.resolve_examples_for_question(
@@ -178,7 +172,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "few_shot_enabled": config.is_few_shot_enabled(),
         "abstention_enabled": getattr(config, "abstention_enabled", False),
         "sufficiency_enabled": getattr(config, "sufficiency_enabled", False),
-        "deep_judgment_enabled": getattr(config, "deep_judgment_enabled", False),
+        "deep_judgment_mode": getattr(config, "deep_judgment_mode", "disabled"),
         "evaluation_mode": getattr(config, "evaluation_mode", "template_only"),
         "rubric_evaluation_strategy": getattr(config, "rubric_evaluation_strategy", "batch"),
         "deep_judgment_max_excerpts_per_attribute": getattr(config, "deep_judgment_max_excerpts_per_attribute", 3),
@@ -199,6 +193,10 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         ),
         "deep_judgment_rubric_search_enabled": getattr(config, "deep_judgment_rubric_search_enabled", False),
         "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
+        # Embedding check configuration
+        "embedding_check_enabled": getattr(config, "embedding_check_enabled", False),
+        "embedding_check_model": getattr(config, "embedding_check_model", None),
+        "embedding_check_threshold": getattr(config, "embedding_check_threshold", None),
         # Prompt configuration
         "prompt_config": getattr(config, "prompt_config", None),
         # Agentic parsing configuration

@@ -23,9 +23,9 @@ This is the exhaustive reference for every environment variable recognized by ka
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `EMBEDDING_CHECK` | `bool` | `false` | Enable embedding similarity checking. When enabled, compares the LLM's parsed answer to ground truth using vector similarity. Also read by `VerificationConfig.__init__()` to set `embedding_check_enabled` if not explicitly provided. |
-| `EMBEDDING_CHECK_MODEL` | `str` | `all-MiniLM-L6-v2` | SentenceTransformer model name for embedding computation. Also read by `VerificationConfig.__init__()` to set `embedding_check_model` if not explicitly provided. |
-| `EMBEDDING_CHECK_THRESHOLD` | `float` | `0.85` | Similarity threshold (0.0–1.0). Values outside this range are clamped. Also read by `VerificationConfig.__init__()` to set `embedding_check_threshold` if not explicitly provided. Invalid values fall back to the default. |
+| `EMBEDDING_CHECK` | `bool` | `false` | Enable embedding similarity checking. When enabled, compares the LLM's parsed answer to ground truth using vector similarity. Read by `VerificationConfig.__init__()` to set `embedding_check_enabled` if not explicitly provided. The CLI defers to this env var when `--embedding-check` / `--no-embedding-check` is not passed. |
+| `EMBEDDING_CHECK_MODEL` | `str` | `all-MiniLM-L6-v2` | SentenceTransformer model name for embedding computation. Read by `VerificationConfig.__init__()` to set `embedding_check_model` if not explicitly provided. The CLI defers to this env var when `--embedding-model` is not passed. |
+| `EMBEDDING_CHECK_THRESHOLD` | `float` | `0.85` | Similarity threshold (0.0 to 1.0). Read by `VerificationConfig.__init__()` to set `embedding_check_threshold` if not explicitly provided. The CLI defers to this env var when `--embedding-threshold` is not passed. Invalid values fall back to the default. |
 
 ### Async Execution
 

@@ -75,6 +75,8 @@ Most users start with a preset file that defines model providers, evaluation mod
 karenina verify checkpoint.jsonld --preset claude-haiku.json --answering-model claude-sonnet-4-5
 ```
 
+Feature flags (`--abstention`, `--sufficiency`, `--embedding-check`, `--deep-judgment`) are tri-state: `--flag` enables, `--no-flag` disables, and omitting both preserves the preset default. Embedding settings (`--embedding-threshold`, `--embedding-model`) defer to environment variables when not passed explicitly.
+
 See [Configuration Hierarchy](../../workflows/configuration/index.md) for how presets, CLI arguments, and environment variables interact.
 
 ### Progressive save and resume

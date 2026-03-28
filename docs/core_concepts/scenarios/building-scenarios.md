@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -256,14 +256,15 @@ Accepted `when` forms:
 
 ### 4.3 Validation
 
-`validate()` runs four structural checks before freezing the graph:
+`validate()` runs four structural checks before freezing the graph, plus one warning:
 
 1. Edge sources and targets must reference registered nodes (or `END`).
 2. All nodes must be reachable from the entry node via BFS.
 3. Every node with conditional edges must also have at least one unconditional fallback edge.
 4. Nodes with no outbound edges are valid implicit terminals (they terminate the scenario without an explicit `END` edge).
+5. If a node has multiple unconditional edges, a `UserWarning` is emitted. Only the first unconditional edge will be used; the rest are silently ignored. This is a warning, not a hard failure, but it almost always indicates a graph construction error.
 
-If any check fails, `validate()` raises `ValueError` with a description of the problem.
+If any of checks 1 through 4 fails, `validate()` raises `ValueError` with a description of the problem.
 
 ## 5. Patterns
 

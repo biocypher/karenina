@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
+    "sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext",
     "sqlalchemy.ext.declarative", "sqlalchemy.engine",
     "sqlalchemy.sql", "sqlalchemy.event",
     "karenina.storage", "karenina.storage.base",
@@ -56,7 +56,7 @@ with patch.dict("sys.modules", mock_modules):
         TraceLength,
         TraceRegex,
     )
-    from karenina.schemas.entities.normalizers import SynonymMap
+    from karenina.schemas.primitives import SynonymMap
 ```
 
 ```python
@@ -83,7 +83,7 @@ from karenina.schemas.primitives import (
     TraceLength,
     TraceRegex,
 )
-from karenina.schemas.entities.normalizers import SynonymMap
+from karenina.schemas.primitives import SynonymMap
 ```
 
 ## 1. What Verification Primitives Are
@@ -423,7 +423,7 @@ Pass if the extracted value is within a specified tolerance of the ground truth.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `tolerance` | `float` | required | Allowed deviation from ground truth |
-| `mode` | `str` | `"relative"` | `"relative"`: fraction of ground truth; `"absolute"`: raw difference |
+| `mode` | `Literal["relative", "absolute"]` | `"relative"` | `"relative"`: fraction of ground truth; `"absolute"`: raw difference |
 
 **Applies to:** `int`, `float`
 
@@ -602,7 +602,7 @@ Pass if the extracted date is within the specified tolerance of the ground truth
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `tolerance` | `int` | required | Maximum allowed difference |
-| `unit` | `str` | `"days"` | Time unit: `"days"`, `"hours"`, or `"minutes"` |
+| `unit` | `Literal["days", "hours", "minutes"]` | `"days"` | Time unit: `"days"`, `"hours"`, or `"minutes"` |
 
 **Applies to:** `str`
 

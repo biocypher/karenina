@@ -1,80 +1,14 @@
 """Helper functions for TaskEval."""
 
 import logging
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
-    from karenina.schemas.entities import Rubric
 
 from .models import LogEvent
 
 logger = logging.getLogger(__name__)
-
-
-def check_rubric_conflicts(
-    standalone_rubric: "Rubric | None", questions: list[Any], extract_traits_func: Callable[[str], list[Any]]
-) -> tuple[set[str], set[str]]:
-    """Check for conflicts between standalone and question-specific rubrics.
-
-    Args:
-        standalone_rubric: The standalone rubric
-        questions: List of questions to check
-        extract_traits_func: Function to extract traits from templates
-
-    Returns:
-        Tuple of (standalone_traits, question_traits) sets
-
-    Raises:
-        ValueError: If conflicts are found
-    """
-    standalone_traits: set[str] = set()
-    question_traits: set[str] = set()
-
-    # Collect standalone rubric traits
-    if standalone_rubric and standalone_rubric.llm_traits:
-        for trait in standalone_rubric.llm_traits:
-            standalone_traits.add(trait.name)
-
-    # Collect question-specific rubric traits
-    for question in questions:
-        if isinstance(question, dict):
-            question_dict = question
-        else:
-            question_dict = {"id": question.id, "question": question.question, "raw_answer": question.raw_answer}
-            if hasattr(question, "answer_template"):
-                question_dict["answer_template"] = question.answer_template
-
-        answer_template = question_dict.get("answer_template")
-        if answer_template:
-            extracted_traits = extract_traits_func(answer_template)
-            for trait in extracted_traits:
-                question_traits.add(trait.name)
-
-    # Check for conflicts
-    conflicts = standalone_traits.intersection(question_traits)
-    if conflicts:
-        raise ValueError(
-            f"Rubric trait name conflicts found: {conflicts}. "
-            f"Standalone rubrics and question rubrics cannot have overlapping trait names."
-        )
-
-    return standalone_traits, question_traits
-
-
-def convert_string_logs_to_messages(texts: list[str]) -> "list[Message]":
-    """Wrap each text string as an assistant Message.
-
-    Args:
-        texts: List of text strings to convert.
-
-    Returns:
-        List of Message objects, one per input text.
-    """
-    from karenina.ports.messages import Message
-
-    return [Message.assistant(text) for text in texts if text]
 
 
 def merge_logs_and_traces(logs: list[LogEvent], strategy: str = "concatenate") -> "tuple[str, list[Message] | None]":

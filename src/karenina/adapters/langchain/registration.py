@@ -109,6 +109,8 @@ _openai_endpoint_spec = AdapterSpec(
 AdapterRegistry.register(_openai_endpoint_spec)
 
 # Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.langchain.prompts.abstention  # noqa: E402, F401
 import karenina.adapters.langchain.prompts.deep_judgment  # noqa: E402, F401
 import karenina.adapters.langchain.prompts.parsing  # noqa: E402, F401
 import karenina.adapters.langchain.prompts.rubric  # noqa: E402, F401
+import karenina.adapters.langchain.prompts.sufficiency  # noqa: E402, F401

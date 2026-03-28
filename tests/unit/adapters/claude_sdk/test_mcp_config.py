@@ -1,11 +1,14 @@
 """Tests for MCP configuration conversion and validation.
 
-Tests convert_mcp_config, validate_mcp_config, and convert_and_validate_mcp_config.
+Tests convert_mcp_config, validate_mcp_config, convert_and_validate_mcp_config,
+and _convert_mcp_servers format detection on ClaudeSDKAgentAdapter.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+import pytest
 
 from karenina.adapters.claude_agent_sdk import convert_mcp_config
 from karenina.adapters.claude_agent_sdk.mcp import (
@@ -190,3 +193,79 @@ class TestConvertAndValidateMcpConfig:
 
         # All should be present
         assert len(config) == 4
+
+
+@pytest.mark.unit
+class TestConvertMcpServersFormatDetection:
+    """Tests for ClaudeSDKAgentAdapter._convert_mcp_servers format detection."""
+
+    @pytest.fixture
+    def adapter(self) -> Any:
+        """Create an adapter instance for testing."""
+        from karenina.adapters.claude_agent_sdk.agent import ClaudeSDKAgentAdapter
+        from karenina.schemas.config import ModelConfig
+
+        config = ModelConfig(
+            id="test",
+            model_name="claude-sonnet-4-20250514",
+            model_provider="anthropic",
+            interface="claude_agent_sdk",
+        )
+        return ClaudeSDKAgentAdapter(config)
+
+    def test_stdio_config_detected_as_sdk_format(self, adapter: Any) -> None:
+        """Config with 'command' key should be recognized as SDK format."""
+        servers = {"local": {"command": "/usr/bin/mcp-server", "args": ["-v"]}}
+        result = adapter._convert_mcp_servers(servers)
+
+        assert result is servers
+
+    def test_http_config_detected_as_sdk_format(self, adapter: Any) -> None:
+        """Config with 'url' and type='http' should be recognized as SDK format."""
+        servers = {"api": {"type": "http", "url": "https://mcp.example.com/"}}
+        result = adapter._convert_mcp_servers(servers)
+
+        assert result is servers
+
+    def test_sse_config_detected_as_sdk_format(self, adapter: Any) -> None:
+        """Config with 'url' and type='sse' should be recognized as SDK format."""
+        servers = {"api": {"type": "sse", "url": "https://mcp.example.com/sse"}}
+        result = adapter._convert_mcp_servers(servers)
+
+        assert result is servers
+
+    def test_generic_type_key_not_false_positive(self, adapter: Any) -> None:
+        """A dict with 'type' but no 'command' or 'url' should not match SDK format.
+
+        This was the original bug: any dict with a 'type' key was treated as
+        already-converted SDK format, causing configs to skip conversion.
+        With the fix, only configs that have 'command' (stdio) or 'url' plus
+        a known transport type are recognized as SDK format.
+        """
+        servers = {
+            "custom": {"type": "custom_plugin", "endpoint": "https://example.com"},
+            "remote": "https://mcp.example.com/mcp/",
+        }
+        result = adapter._convert_mcp_servers(servers)
+
+        # The string URL should have been converted (not passed through as-is)
+        assert result is not servers
+        assert "remote" in result
+        assert result["remote"].get("type") == "http"
+
+    def test_url_without_known_type_falls_through(self, adapter: Any) -> None:
+        """A dict with 'url' but unrecognized type should not match SDK format."""
+        servers = {"api": {"type": "grpc", "url": "https://grpc.example.com"}}
+        result = adapter._convert_mcp_servers(servers)
+
+        # Should fall through to URL extraction, not early-return as SDK format
+        assert "api" in result
+        assert result["api"].get("type") == "http"
+
+    def test_none_returns_none(self, adapter: Any) -> None:
+        """None input should return None."""
+        assert adapter._convert_mcp_servers(None) is None
+
+    def test_empty_dict_returns_none(self, adapter: Any) -> None:
+        """Empty dict should return None."""
+        assert adapter._convert_mcp_servers({}) is None

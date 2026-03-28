@@ -149,6 +149,10 @@ class BaseCheckStage(BaseVerificationStage):
             context.set_artifact(ArtifactKeys.VERIFY_RESULT, verification_result)
             context.set_result_field(ArtifactKeys.VERIFY_RESULT, verification_result)
 
+            # Record which stage caused the auto-fail (first guard wins)
+            if not context.get_result_field(ArtifactKeys.FAILED_STAGE):
+                context.set_result_field(ArtifactKeys.FAILED_STAGE, self.name)
+
             logger.warning(f"{self.name} triggered for question {context.question_id} - overriding result to False")
 
         # Store check metadata (both artifact and result field)

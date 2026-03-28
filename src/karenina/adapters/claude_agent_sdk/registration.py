@@ -76,13 +76,15 @@ _claude_sdk_spec = AdapterSpec(
     routes_to=None,
     supports_mcp=True,
     supports_tools=True,
-    natively_agentic=True,
+    agent_tier="deep_agent",
     requires_provider=False,
 )
 
 AdapterRegistry.register(_claude_sdk_spec)
 
 # Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.claude_agent_sdk.prompts.abstention  # noqa: E402, F401
 import karenina.adapters.claude_agent_sdk.prompts.deep_judgment  # noqa: E402, F401
 import karenina.adapters.claude_agent_sdk.prompts.parsing  # noqa: E402, F401
 import karenina.adapters.claude_agent_sdk.prompts.rubric  # noqa: E402, F401
+import karenina.adapters.claude_agent_sdk.prompts.sufficiency  # noqa: E402, F401

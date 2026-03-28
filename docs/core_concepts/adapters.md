@@ -80,28 +80,30 @@ For complete method signatures and detailed protocol documentation, see [Port Ty
 
 ## 3. Available Interfaces
 
-Karenina ships with six interfaces, configured via the `interface` field on `ModelConfig`. The default is `"langchain"`.
+Karenina ships with seven interfaces, configured via the `interface` field on `ModelConfig`. The default is `"langchain"`.
 
-| Interface | Backend | MCP | Tools | Parser: Native Structured Output | Natively Agentic | Fallback |
+| Interface | Backend | MCP | Tools | Parser: Native Structured Output | Agent Tier | Fallback |
 |-----------|---------|:---:|:-----:|:-------------------------------:|:----------------:|----------|
-| `langchain` | LangChain (multi-provider) | Yes | Yes | No | No | None |
-| `openrouter` | OpenRouter API (routes to `langchain`) | Yes | Yes | No | No | None |
-| `openai_endpoint` | OpenAI-compatible endpoints (routes to `langchain`) | Yes | Yes | No | No | None |
-| `claude_agent_sdk` | Anthropic Agent SDK via Claude CLI | Yes | Yes | Yes | Yes | `langchain` |
-| `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | No | `langchain` |
-| `manual` | Pre-recorded traces | No | No | N/A | No | None |
+| `langchain` | LangChain (multi-provider) | Yes | Yes | No | `tool_loop` | None |
+| `langchain_deep_agents` | LangChain Deep Agents (multi-provider) | Yes | Yes | Yes | `deep_agent` | None |
+| `openrouter` | OpenRouter API (routes to `langchain`) | Yes | Yes | No | `tool_loop` | None |
+| `openai_endpoint` | OpenAI-compatible endpoints (routes to `langchain`) | Yes | Yes | No | `tool_loop` | None |
+| `claude_agent_sdk` | Anthropic Agent SDK via Claude CLI | Yes | Yes | Yes | `deep_agent` | `langchain` |
+| `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | `tool_loop` | `langchain` |
+| `manual` | Pre-recorded traces | No | No | N/A | `tool_loop` | None |
 
 The **"Parser: Native Structured Output"** column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via `with_structured_output()`.
 
-The **"Natively Agentic"** column indicates whether the underlying runtime is itself an agent with built-in tools (e.g. Claude Code). For these adapters, the pipeline always uses `AgentPort` to capture the full tool call trace; using `LLMPort` would lose intermediate tool calls because the runtime handles them internally. Scaffolded adapters (all others) orchestrate each tool call turn explicitly. See [Agentic Evaluation](agentic-evaluation.md) for the full picture.
+The **"Agent Tier"** column indicates the adapter's agent architecture. Adapters with `agent_tier="deep_agent"` wrap a runtime that is itself an agent with built-in tools (e.g. Claude Code); the pipeline always uses `AgentPort` to capture the full tool call trace, because `LLMPort` would lose intermediate tool calls that the runtime handles internally. Adapters with `agent_tier="tool_loop"` orchestrate each tool call turn explicitly. See [Agentic Evaluation](agentic-evaluation.md) for the full picture.
 
 ### 3.1. Interface Categories
 
-The six interfaces fall into three categories.
+The seven interfaces fall into three categories.
 
 **Native adapters** have their own implementations of all three ports:
 
 - **`langchain`**: The default. Uses LangChain's `init_chat_model` and supports all LangChain-compatible providers: Anthropic, OpenAI, Google, and many more. The broadest-compatibility option.
+- **`langchain_deep_agents`**: Uses LangChain Deep Agents (`create_deep_agent`) for natively agentic evaluation with built-in planning, context management, and subagent orchestration. Supports all LangChain-compatible providers. Operates at the `deep_agent` tier. Requires: `pip install deepagents langchain-mcp-adapters`.
 - **`claude_agent_sdk`**: Uses the Claude CLI (`claude` binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.
 - **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
 - **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](../manual-interface/).
@@ -159,6 +161,7 @@ The six interfaces fall into three categories.
 | Multi-provider evaluation (Anthropic + OpenAI + Google) | `langchain` |
 | 200+ models through one API key | `openrouter` |
 | Local LLM server (Ollama, vLLM, LM Studio) | `openai_endpoint` |
+| Natively agentic evaluation with planning and subagents | `langchain_deep_agents` |
 | Claude-only with full native features | `claude_agent_sdk` |
 | Claude-only, lightweight, no CLI dependency | `claude_tool` |
 | Replay pre-recorded traces (testing, CI, TaskEval) | `manual` |
@@ -168,6 +171,7 @@ The six interfaces fall into three categories.
 | Interface | Advantage | Limitation |
 |-----------|-----------|------------|
 | `langchain` | Broadest model coverage; stable default | Parser uses JSON text parsing (less reliable on complex schemas) |
+| `langchain_deep_agents` | Full agent runtime with planning, subagents, and native structured output; multi-provider | Requires `deepagents` package; no automatic fallback |
 | `openrouter` | Single API key for many models | Same parser limitation as `langchain`; depends on OpenRouter availability |
 | `openai_endpoint` | Works with any OpenAI-compatible server | Same parser limitation as `langchain`; requires per-model endpoint config |
 | `claude_agent_sdk` | Native structured output; thinking support; direct SDK access | Requires Claude CLI binary installed in PATH |
@@ -188,6 +192,7 @@ When an adapter's required dependency is missing, the factory transparently fall
 |-----------|-----------------|---------------|
 | `claude_agent_sdk` | `claude` CLI binary in PATH | `langchain` |
 | `claude_tool` | `anthropic` Python package importable | `langchain` |
+| `langchain_deep_agents` | `deepagents` Python package importable | None (raises `AdapterUnavailableError`) |
 | `langchain` | `langchain_core` Python package importable | None (raises `AdapterUnavailableError`) |
 | `manual` | Always available | None (no dependency) |
 
@@ -237,7 +242,7 @@ config = ModelConfig(
 
 <div class="admonition note">
 <p class="admonition-title">Provider requirements</p>
-<p>Only the <code>langchain</code> interface requires <code>model_provider</code> to be set. All other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
+<p>The <code>langchain</code> and <code>langchain_deep_agents</code> interfaces require <code>model_provider</code> to be set. All other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
 </div>
 
 ### Factory Functions
@@ -271,7 +276,7 @@ VerificationConfig
 ├── answering_models[0]  →  get_agent()  →  Stage 2: generate answer
 ├── parsing_models[0]    →  get_parser() →  Stage 7: parse template
 │                        →  get_llm()    →  Stages 5-6: quality checks
-└── rubric_models[0]     →  get_llm()    →  Stage 11: rubric evaluation
+└── parsing_models[0]    →  get_llm()    →  Stage 11: rubric evaluation
 ```
 
 For example, you might generate answers with `claude_agent_sdk` (for tool use and MCP) while parsing templates with `langchain` (to use a different judge model from a different provider). The pipeline does not care; it calls the same port methods in both cases.

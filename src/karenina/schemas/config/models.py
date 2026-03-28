@@ -23,6 +23,7 @@ class ModelRetryConfig(BaseModel):
 
     max_retries: int = Field(
         default=2,
+        ge=0,
         description="Maximum retry attempts (total calls = max_retries + 1 initial)",
     )
     backoff_factor: float = Field(
@@ -57,6 +58,7 @@ class ToolRetryConfig(BaseModel):
 
     max_retries: int = Field(
         default=3,
+        ge=0,
         description="Maximum retry attempts for tool calls",
     )
     backoff_factor: float = Field(
@@ -221,10 +223,9 @@ class QuestionFewShotConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    mode: Literal["all", "k-shot", "custom", "none", "inherit"] = "inherit"
-    k: int | None = None  # Override global k for this question
+    mode: Literal["all", "k-shot", "custom", "inherit"] = "inherit"
+    k: int | None = None  # Override pool_k for this question
     selected_examples: list[str | int] | None = None  # Hash (MD5) or index selection
-    external_examples: list[dict[str, str]] | None = None  # Question-specific external examples
     excluded_examples: list[str | int] | None = None  # Examples to exclude
 
 
@@ -233,34 +234,37 @@ class FewShotConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Global fallback settings
-    global_mode: Literal["all", "k-shot", "custom", "none"] = "all"
-    global_k: int = 3  # Default number of examples for k-shot mode
-    enabled: bool = True  # Master enable/disable switch
+    # Master source selector: what types of examples are active
+    source: Literal["disabled", "question_pool", "global", "both"] = "both"
 
-    # Per-question configurations (auto-generated from convenient interfaces)
+    # Pool selection: how question-specific examples are chosen
+    # Only relevant when source includes question_pool ("question_pool" or "both")
+    pool_mode: Literal["all", "k-shot", "custom"] = "all"
+    pool_k: int = 3  # Default number of examples for k-shot mode
+
+    # Per-question pool overrides
     question_configs: dict[str, QuestionFewShotConfig] = Field(default_factory=dict)
 
-    # Global external examples that can be used across all questions
-    global_external_examples: list[dict[str, str]] = Field(default_factory=list)
+    # Global examples appended to ALL questions
+    # Only used when source includes global ("global" or "both")
+    global_examples: list[dict[str, str]] = Field(default_factory=list)
 
     @classmethod
     def from_index_selections(
         cls,
         selections: dict[str, list[int]],
-        global_mode: Literal["all", "k-shot", "custom", "none"] = "custom",
+        pool_mode: Literal["all", "k-shot", "custom"] = "custom",
         **kwargs: Any,
     ) -> "FewShotConfig":
-        """
-        Create FewShotConfig from question_id -> [example_indices] mapping.
+        """Create FewShotConfig from question_id -> [example_indices] mapping.
 
         Args:
-            selections: Dictionary mapping question IDs to lists of example indices
-            global_mode: Global mode to use (defaults to "custom")
-            **kwargs: Additional arguments passed to FewShotConfig constructor
+            selections: Dictionary mapping question IDs to lists of example indices.
+            pool_mode: Pool mode to use (defaults to "custom").
+            **kwargs: Additional arguments passed to FewShotConfig constructor.
 
         Returns:
-            Configured FewShotConfig instance
+            Configured FewShotConfig instance.
 
         Example:
             config = FewShotConfig.from_index_selections({
@@ -274,25 +278,24 @@ class FewShotConfig(BaseModel):
                 mode="custom", selected_examples=cast(list[str | int], indices)
             )
 
-        return cls(global_mode=global_mode, question_configs=question_configs, **kwargs)
+        return cls(pool_mode=pool_mode, question_configs=question_configs, **kwargs)
 
     @classmethod
     def from_hash_selections(
         cls,
         selections: dict[str, list[str]],
-        global_mode: Literal["all", "k-shot", "custom", "none"] = "custom",
+        pool_mode: Literal["all", "k-shot", "custom"] = "custom",
         **kwargs: Any,
     ) -> "FewShotConfig":
-        """
-        Create FewShotConfig from question_id -> [example_hashes] mapping.
+        """Create FewShotConfig from question_id -> [example_hashes] mapping.
 
         Args:
-            selections: Dictionary mapping question IDs to lists of MD5 hashes
-            global_mode: Global mode to use (defaults to "custom")
-            **kwargs: Additional arguments passed to FewShotConfig constructor
+            selections: Dictionary mapping question IDs to lists of MD5 hashes.
+            pool_mode: Pool mode to use (defaults to "custom").
+            **kwargs: Additional arguments passed to FewShotConfig constructor.
 
         Returns:
-            Configured FewShotConfig instance
+            Configured FewShotConfig instance.
 
         Example:
             config = FewShotConfig.from_hash_selections({
@@ -306,25 +309,24 @@ class FewShotConfig(BaseModel):
                 mode="custom", selected_examples=cast(list[str | int], hashes)
             )
 
-        return cls(global_mode=global_mode, question_configs=question_configs, **kwargs)
+        return cls(pool_mode=pool_mode, question_configs=question_configs, **kwargs)
 
     @classmethod
     def k_shot_for_questions(
         cls,
         question_k_mapping: dict[str, int],
-        global_k: int = 3,
+        pool_k: int = 3,
         **kwargs: Any,
     ) -> "FewShotConfig":
-        """
-        Create FewShotConfig with different k values per question.
+        """Create FewShotConfig with different k values per question.
 
         Args:
-            question_k_mapping: Dictionary mapping question IDs to k values
-            global_k: Global k value for questions not in mapping
-            **kwargs: Additional arguments passed to FewShotConfig constructor
+            question_k_mapping: Dictionary mapping question IDs to k values.
+            pool_k: Pool k value for questions not in mapping.
+            **kwargs: Additional arguments passed to FewShotConfig constructor.
 
         Returns:
-            Configured FewShotConfig instance
+            Configured FewShotConfig instance.
 
         Example:
             config = FewShotConfig.k_shot_for_questions({
@@ -336,7 +338,7 @@ class FewShotConfig(BaseModel):
         for question_id, k_value in question_k_mapping.items():
             question_configs[question_id] = QuestionFewShotConfig(mode="k-shot", k=k_value)
 
-        return cls(global_mode="k-shot", global_k=global_k, question_configs=question_configs, **kwargs)
+        return cls(pool_mode="k-shot", pool_k=pool_k, question_configs=question_configs, **kwargs)
 
     def add_selections_by_index(self, selections: dict[str, list[int]]) -> None:
         """
@@ -373,33 +375,28 @@ class FewShotConfig(BaseModel):
             self.question_configs[question_id] = QuestionFewShotConfig(mode="k-shot", k=k_value)
 
     def get_effective_config(self, question_id: str) -> QuestionFewShotConfig:
-        """
-        Get the effective configuration for a specific question, resolving inheritance.
+        """Get the effective configuration for a specific question, resolving inheritance.
 
         Args:
-            question_id: The question ID to get configuration for
+            question_id: The question ID to get configuration for.
 
         Returns:
-            Effective QuestionFewShotConfig with inheritance resolved
+            Effective QuestionFewShotConfig with inheritance resolved.
         """
         question_config = self.question_configs.get(question_id, QuestionFewShotConfig())
 
         if question_config.mode == "inherit":
-            # Inherit from global settings
             return QuestionFewShotConfig(
-                mode=self.global_mode,
-                k=self.global_k,
+                mode=self.pool_mode,
+                k=self.pool_k,
                 selected_examples=question_config.selected_examples,
-                external_examples=question_config.external_examples,
                 excluded_examples=question_config.excluded_examples,
             )
 
-        # Use question-specific config, filling in defaults where needed
         return QuestionFewShotConfig(
             mode=question_config.mode,
-            k=question_config.k if question_config.k is not None else self.global_k,
+            k=question_config.k if question_config.k is not None else self.pool_k,
             selected_examples=question_config.selected_examples,
-            external_examples=question_config.external_examples,
             excluded_examples=question_config.excluded_examples,
         )
 
@@ -409,87 +406,70 @@ class FewShotConfig(BaseModel):
         available_examples: list[dict[str, str]] | None = None,
         question_text: str | None = None,
     ) -> list[dict[str, str]]:
-        """
-        Resolve the final list of examples to use for a specific question.
+        """Resolve the final list of examples to use for a specific question.
 
         Args:
-            question_id: The question ID to resolve examples for
-            available_examples: Available examples from the question (can be None)
-            question_text: Question text (used for hash validation, optional)
+            question_id: The question ID to resolve examples for.
+            available_examples: Available examples from the question pool (can be None).
+            question_text: Question text (used for hash validation, optional).
 
         Returns:
-            List of resolved examples to use for few-shot prompting
+            List of resolved examples to use for few-shot prompting.
         """
         import hashlib
         import random
 
-        if not self.enabled:
+        if self.source == "disabled":
             return []
 
-        effective_config = self.get_effective_config(question_id)
+        include_pool = self.source in ("question_pool", "both")
+        include_global = self.source in ("global", "both")
 
-        if effective_config.mode == "none":
-            return []
+        resolved_examples: list[dict[str, str]] = []
 
-        # Start with available examples or empty list
-        if available_examples is None:
-            available_examples = []
+        if include_pool:
+            if available_examples is None:
+                available_examples = []
 
-        # Create lookup for hash-to-example mapping if needed
-        example_hash_map = {}
-        if question_text is not None and available_examples:
-            for i, example in enumerate(available_examples):
-                example_question = example.get("question", "")
-                example_hash = hashlib.md5(example_question.encode("utf-8")).hexdigest()
-                example_hash_map[example_hash] = i
+            effective_config = self.get_effective_config(question_id)
 
-        resolved_examples = []
+            example_hash_map: dict[str, int] = {}
+            if question_text is not None and available_examples:
+                for i, example in enumerate(available_examples):
+                    example_question = example.get("question", "")
+                    example_hash = hashlib.md5(example_question.encode("utf-8")).hexdigest()
+                    example_hash_map[example_hash] = i
 
-        # Handle different modes
-        if effective_config.mode == "all":
-            resolved_examples = available_examples.copy()
-
-        elif effective_config.mode == "k-shot":
-            k = effective_config.k if effective_config.k is not None else self.global_k
-            if len(available_examples) <= k:
+            if effective_config.mode == "all":
                 resolved_examples = available_examples.copy()
-            else:
-                # Randomly sample k examples for consistency
-                # Use question_id as seed for reproducible results
-                random.seed(hash(question_id) & 0x7FFFFFFF)
-                resolved_examples = random.sample(available_examples, k)
+            elif effective_config.mode == "k-shot":
+                k = effective_config.k if effective_config.k is not None else self.pool_k
+                if len(available_examples) <= k:
+                    resolved_examples = available_examples.copy()
+                else:
+                    random.seed(int(hashlib.md5(question_id.encode()).hexdigest(), 16) & 0x7FFFFFFF)
+                    resolved_examples = random.sample(available_examples, k)
+            elif effective_config.mode == "custom" and effective_config.selected_examples:
+                for selection in effective_config.selected_examples:
+                    if isinstance(selection, int):
+                        if 0 <= selection < len(available_examples):
+                            resolved_examples.append(available_examples[selection])
+                    elif isinstance(selection, str) and selection in example_hash_map:
+                        idx = example_hash_map[selection]
+                        resolved_examples.append(available_examples[idx])
 
-        elif effective_config.mode == "custom" and effective_config.selected_examples:
-            for selection in effective_config.selected_examples:
-                if isinstance(selection, int):
-                    # Index-based selection
-                    if 0 <= selection < len(available_examples):
-                        resolved_examples.append(available_examples[selection])
-                elif isinstance(selection, str) and selection in example_hash_map:
-                    # Hash-based selection
-                    idx = example_hash_map[selection]
-                    resolved_examples.append(available_examples[idx])
+            if effective_config.excluded_examples:
+                exclusion_indices: set[int] = set()
+                for exclusion in effective_config.excluded_examples:
+                    if isinstance(exclusion, int):
+                        exclusion_indices.add(exclusion)
+                    elif isinstance(exclusion, str) and exclusion in example_hash_map:
+                        exclusion_indices.add(example_hash_map[exclusion])
+                resolved_examples = [ex for i, ex in enumerate(resolved_examples) if i not in exclusion_indices]
 
-        # Apply exclusions if specified
-        if effective_config.excluded_examples:
-            exclusion_indices = set()
-            for exclusion in effective_config.excluded_examples:
-                if isinstance(exclusion, int):
-                    exclusion_indices.add(exclusion)
-                elif isinstance(exclusion, str) and exclusion in example_hash_map:
-                    exclusion_indices.add(example_hash_map[exclusion])
-
-            # Filter out excluded examples
-            resolved_examples = [ex for i, ex in enumerate(resolved_examples) if i not in exclusion_indices]
-
-        # Add external examples (question-specific first, then global)
         final_examples = resolved_examples.copy()
-
-        if effective_config.external_examples:
-            final_examples.extend(effective_config.external_examples)
-
-        if self.global_external_examples:
-            final_examples.extend(self.global_external_examples)
+        if include_global and self.global_examples:
+            final_examples.extend(self.global_examples)
 
         return final_examples
 
@@ -605,6 +585,12 @@ class ModelConfig(BaseModel):
     def validate_manual_interface(self) -> "ModelConfig":
         """Validate manual interface configuration and set defaults."""
         if self.interface == INTERFACE_MANUAL:
+            # Reject bool values: True/False are not ManualTraces instances
+            if isinstance(self.manual_traces, bool):
+                raise ValueError(
+                    "manual_traces must be a ManualTraces instance, not a bool. "
+                    "Create a ManualTraces instance and pass it to ModelConfig."
+                )
             # Manual interface requires manual_traces
             if self.manual_traces is None:
                 raise ValueError(

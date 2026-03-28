@@ -46,7 +46,7 @@ Adapter classes use **duck typing** — they implement the port method signature
 
 ### Implementing LLMPort
 
-The simplest port. Implement `ainvoke`, `invoke`, `with_structured_output`, and a `capabilities` property:
+The simplest port. Implement `ainvoke`, `invoke`, `with_structured_output`, `aclose`, and a `capabilities` property:
 
 ```python
 from __future__ import annotations
@@ -118,7 +118,19 @@ class MyProviderLLMAdapter:
         If your provider doesn't support native structured output,
         return self unchanged — the pipeline will handle JSON parsing.
         """
+        if max_retries is not None:
+            logger.warning(
+                "%s does not support max_retries (got %d), ignoring",
+                type(self).__name__, max_retries,
+            )
         return self
+
+    async def aclose(self) -> None:
+        """Release adapter resources.
+
+        Required protocol method. Implement even if the adapter holds
+        no resources (as a no-op). Must be safe to call multiple times.
+        """
 
     def _convert_messages(self, messages: list[Message]) -> list[dict]:
         """Convert karenina Messages to provider format."""
@@ -195,6 +207,12 @@ class MyProviderParserAdapter:
         """Sync wrapper."""
         import asyncio
         return asyncio.run(self.aparse_to_pydantic(messages, schema))
+
+    async def aclose(self) -> None:
+        """Release adapter resources.
+
+        Required protocol method. Must be safe to call multiple times.
+        """
 ```
 
 ### Implementing AgentPort
@@ -203,6 +221,7 @@ The most complex port — handles multi-turn execution with optional tools and M
 
 ```python
 from karenina.ports.agent import AgentConfig, AgentResult
+from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.messages import Message
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.config import ModelConfig
@@ -216,6 +235,17 @@ class MyProviderAgentAdapter:
 
     def __init__(self, model_config: ModelConfig) -> None:
         self._config = model_config
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Required on all three ports (AgentPort, LLMPort, ParserPort).
+        """
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_structured_output=False,
+        )
 
     async def arun(
         self,
@@ -249,6 +279,12 @@ class MyProviderAgentAdapter:
         """Sync wrapper."""
         import asyncio
         return asyncio.run(self.arun(messages, tools, mcp_servers, config))
+
+    async def aclose(self) -> None:
+        """Release adapter resources (MCP sessions, SDK clients, etc.).
+
+        Required protocol method. Must be safe to call multiple times.
+        """
 ```
 
 ---
@@ -351,14 +387,28 @@ import karenina.adapters.my_provider.prompts.rubric  # noqa: E402, F401
 import karenina.adapters.my_provider.prompts.deep_judgment  # noqa: E402, F401
 ```
 
-### Enable Lazy Discovery
+### Enable Discovery
 
-Add your adapter to the registry's initialization list in `karenina/src/karenina/adapters/registry.py` so it gets discovered automatically:
+There are two ways to make the registry discover your adapter.
+
+**Option A: Built-in adapter** (for adapters inside the karenina package). Add an import to `_load_builtins()` in `karenina/src/karenina/adapters/registry.py`:
 
 ```python
-# In AdapterRegistry._ensure_initialized():
-import karenina.adapters.my_provider.registration  # noqa: F401
+# In AdapterRegistry._load_builtins():
+try:
+    from karenina.adapters.my_provider import registration as _mp  # noqa: F401
+except ImportError:
+    logger.debug("MyProvider registration module not available")
 ```
+
+**Option B: Entry point** (for external adapter packages). Add a `karenina.adapters` entry point to your package's `pyproject.toml`:
+
+```toml
+[project.entry-points."karenina.adapters"]
+my_provider = "my_package.registration"
+```
+
+The entry point module must call `AdapterRegistry.register()` when imported. The registry discovers entry points automatically after loading built-in adapters. If an entry point's name conflicts with a built-in interface, the entry point is skipped with a warning.
 
 ---
 
@@ -445,13 +495,14 @@ The first argument is the interface name, the second is the `PromptTask` value s
 | `rubric_literal_trait_batch` | Stage 11 | For literal trait evaluation |
 | `rubric_literal_trait_single` | Stage 11 | Same, for single-trait evaluation |
 | `rubric_metric_trait` | Stage 11 | For metric trait evaluation |
-| `dj_template_excerpt` | Deep judgment | For excerpt extraction |
+| `dj_template_excerpt_extraction` | Deep judgment | For excerpt extraction |
+| `dj_template_hallucination` | Deep judgment | For hallucination risk assessment via search |
 | `dj_template_reasoning` | Deep judgment | For reasoning generation |
-| `dj_template_extraction` | Deep judgment | For parameter extraction |
-| `dj_rubric_excerpt` | Deep judgment | For rubric excerpt extraction |
+| `dj_template_reasoning_only` | Deep judgment | For reasoning-only mode (no excerpts) |
+| `dj_rubric_excerpt_extraction` | Deep judgment | For rubric excerpt extraction |
+| `dj_rubric_hallucination` | Deep judgment | For rubric hallucination risk assessment |
 | `dj_rubric_reasoning` | Deep judgment | For rubric reasoning |
-| `dj_rubric_scoring` | Deep judgment | For rubric scoring |
-| `dj_rubric_aggregation` | Deep judgment | For rubric aggregation |
+| `dj_rubric_score_extraction` | Deep judgment | For rubric score extraction |
 
 For most adapters, registering `parsing` instructions is sufficient. Rubric and deep judgment instructions are optional refinements.
 
@@ -515,18 +566,20 @@ config = VerificationConfig(
 
 ## AdapterSpec Fields Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `interface` | `str` | Interface name used in `ModelConfig.interface` |
-| `description` | `str` | Human-readable description |
-| `agent_factory` | `Callable | None` | Factory for `AgentPort` — `None` if unsupported |
-| `llm_factory` | `Callable | None` | Factory for `LLMPort` — `None` if unsupported |
-| `parser_factory` | `Callable | None` | Factory for `ParserPort` — `None` if unsupported |
-| `availability_checker` | `Callable | None` | Returns `AdapterAvailability` — `None` means always available |
-| `fallback_interface` | `str | None` | Interface to fall back to when unavailable |
-| `routes_to` | `str | None` | Interface this one delegates to (for routing interfaces) |
-| `supports_mcp` | `bool` | Whether the adapter can connect to MCP servers |
-| `supports_tools` | `bool` | Whether the adapter supports tool use |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `interface` | `str` | *(required)* | Interface name used in `ModelConfig.interface` |
+| `description` | `str` | *(required)* | Human-readable description |
+| `agent_factory` | `Callable \| None` | `None` | Factory for `AgentPort`. `None` if unsupported. |
+| `llm_factory` | `Callable \| None` | `None` | Factory for `LLMPort`. `None` if unsupported. |
+| `parser_factory` | `Callable \| None` | `None` | Factory for `ParserPort`. `None` if unsupported. |
+| `availability_checker` | `Callable \| None` | `None` | Returns `AdapterAvailability`. `None` means always available. |
+| `fallback_interface` | `str \| None` | `None` | Interface to fall back to when unavailable |
+| `routes_to` | `str \| None` | `None` | Interface this one delegates to (for routing interfaces) |
+| `supports_mcp` | `bool` | `False` | Whether the adapter can connect to MCP servers |
+| `supports_tools` | `bool` | `False` | Whether the adapter supports tool use |
+| `agent_tier` | `str` | `"tool_loop"` | Agent capability tier. `"tool_loop"`: basic tool-calling loop (e.g., LangChain ReAct), the adapter orchestrates each tool call turn. `"deep_agent"`: full agent runtime with built-in tools (e.g., Claude Code, LangChain Deep Agents), the runtime handles tool loops internally and `GenerateAnswer` prefers the `AgentPort` path to capture the full trace. |
+| `requires_provider` | `bool` | `True` | If `False`, `model_provider` is not required for this interface. Used by `validate_model_config()` to determine whether to require the provider field. |
 
 ---
 
@@ -542,7 +595,9 @@ config = VerificationConfig(
 
 **Usage tracking** — Always populate `UsageMetadata` with at least `input_tokens` and `output_tokens`. The pipeline uses these for cost tracking and reporting.
 
-**Adapter cleanup** — If your adapter holds resources (connections, sessions), implement an `aclose()` method. The registry calls `cleanup_all_adapters()` at shutdown to close tracked instances.
+**Adapter cleanup** — `aclose()` is a required protocol method on all three ports. Every adapter must implement it. If the adapter holds no resources, implement it as an empty async method. For adapters that manage MCP sessions, use `AsyncExitStack` to keep sessions alive across the agent loop and clean them up in `aclose()`. The registry calls `cleanup_all_adapters()` at shutdown.
+
+**max_retries varies by adapter** — The `with_structured_output(schema, max_retries=N)` parameter is not universally supported. If your adapter does not support it, emit `logger.warning()` when it is passed so callers know the value is being ignored.
 
 ---
 

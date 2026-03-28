@@ -1,7 +1,7 @@
 """Rubric trait conversion utilities for JSON-LD checkpoint format.
 
 This module handles the bidirectional conversion between internal rubric trait
-representations (LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait)
+representations (LLMRubricTrait, RegexRubricTrait, CallableRubricTrait, MetricRubricTrait)
 and the schema.org Rating format used in JSON-LD checkpoints.
 """
 
@@ -17,14 +17,14 @@ from ..schemas.checkpoint import (
     SchemaOrgPropertyValue,
     SchemaOrgRating,
 )
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
 from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric, TraitKind
 
 logger = logging.getLogger(__name__)
 
 
 def convert_rubric_trait_to_rating(
-    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+    trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     rubric_type: str = "global",
 ) -> SchemaOrgRating:
     """
@@ -45,12 +45,12 @@ def convert_rubric_trait_to_rating(
     if isinstance(trait, MetricRubricTrait):
         return _convert_metric_trait_to_rating(trait, rubric_type)
 
-    # Handle RegexTrait (always boolean)
-    if isinstance(trait, RegexTrait):
+    # Handle RegexRubricTrait (always boolean)
+    if isinstance(trait, RegexRubricTrait):
         return _convert_regex_trait_to_rating(trait, rubric_type)
 
-    # Handle CallableTrait (can be boolean or score)
-    if isinstance(trait, CallableTrait):
+    # Handle CallableRubricTrait (can be boolean or score)
+    if isinstance(trait, CallableRubricTrait):
         return _convert_callable_trait_to_rating(trait, rubric_type)
 
     # Handle LLMRubricTrait
@@ -65,6 +65,7 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
         SchemaOrgPropertyValue(name="metrics", value=trait.metrics),
         SchemaOrgPropertyValue(name="repeated_extraction", value=trait.repeated_extraction),
         SchemaOrgPropertyValue(name="evaluation_mode", value=trait.evaluation_mode),
+        SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
     ]
 
     # Add instruction lists (only if non-empty)
@@ -72,6 +73,8 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
         additional_props.append(SchemaOrgPropertyValue(name="tp_instructions", value=trait.tp_instructions))
     if trait.tn_instructions:
         additional_props.append(SchemaOrgPropertyValue(name="tn_instructions", value=trait.tn_instructions))
+    if trait.summary is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="summary", value=trait.summary))
 
     return SchemaOrgRating(
         name=trait.name,
@@ -85,8 +88,8 @@ def _convert_metric_trait_to_rating(trait: MetricRubricTrait, rubric_type: str) 
     )
 
 
-def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> SchemaOrgRating:
-    """Convert RegexTrait to SchemaOrgRating."""
+def _convert_regex_trait_to_rating(trait: RegexRubricTrait, rubric_type: str) -> SchemaOrgRating:
+    """Convert RegexRubricTrait to SchemaOrgRating."""
     # Store regex configuration in additionalProperty
     additional_props = [
         SchemaOrgPropertyValue(name="pattern", value=trait.pattern),
@@ -94,6 +97,8 @@ def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> Schem
         SchemaOrgPropertyValue(name="invert_result", value=trait.invert_result),
         SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better),
     ]
+    if trait.summary is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="summary", value=trait.summary))
 
     return SchemaOrgRating(
         name=trait.name,
@@ -107,8 +112,8 @@ def _convert_regex_trait_to_rating(trait: RegexTrait, rubric_type: str) -> Schem
     )
 
 
-def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) -> SchemaOrgRating:
-    """Convert CallableTrait to SchemaOrgRating."""
+def _convert_callable_trait_to_rating(trait: CallableRubricTrait, rubric_type: str) -> SchemaOrgRating:
+    """Convert CallableRubricTrait to SchemaOrgRating."""
     # Store callable code and metadata in additionalProperty
     additional_props = [
         SchemaOrgPropertyValue(name="callable_code", value=base64.b64encode(trait.callable_code).decode("utf-8")),
@@ -123,6 +128,8 @@ def _convert_callable_trait_to_rating(trait: CallableTrait, rubric_type: str) ->
             additional_props.append(SchemaOrgPropertyValue(name="min_score", value=trait.min_score))
         if trait.max_score is not None:
             additional_props.append(SchemaOrgPropertyValue(name="max_score", value=trait.max_score))
+    if trait.summary is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="summary", value=trait.summary))
 
     # Determine best/worst rating based on kind
     if trait.kind == "boolean":
@@ -168,6 +175,12 @@ def _convert_agentic_trait_to_rating(trait: AgenticRubricTrait, rubric_type: str
         additional_props.append(SchemaOrgPropertyValue(name="classes", value=trait.classes))
     if trait.model_override is not None:
         additional_props.append(SchemaOrgPropertyValue(name="model_override", value=trait.model_override.model_dump()))
+    if trait.summary is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="summary", value=trait.summary))
+    if trait.min_score is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="min_score", value=trait.min_score))
+    if trait.max_score is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="max_score", value=trait.max_score))
 
     # Determine best/worst rating based on kind
     if trait.is_template_kind:
@@ -222,6 +235,12 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
 
     # Add directionality field
     additional_props.append(SchemaOrgPropertyValue(name="higher_is_better", value=trait.higher_is_better))
+    if trait.summary is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="summary", value=trait.summary))
+    if trait.min_score is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="min_score", value=trait.min_score))
+    if trait.max_score is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="max_score", value=trait.max_score))
 
     if trait.kind == "boolean":
         return SchemaOrgRating(
@@ -269,7 +288,7 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
 
 def convert_rating_to_rubric_trait(
     rating: SchemaOrgRating,
-) -> LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait:
+) -> LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait:
     """
     Convert a schema.org Rating back to a rubric trait.
 
@@ -277,7 +296,7 @@ def convert_rating_to_rubric_trait(
         rating: The SchemaOrgRating to convert
 
     Returns:
-        A LLMRubricTrait, RegexTrait, CallableTrait, MetricRubricTrait, or AgenticRubricTrait object
+        A LLMRubricTrait, RegexRubricTrait, CallableRubricTrait, MetricRubricTrait, or AgenticRubricTrait object
 
     Raises:
         ValueError: If the rating has an unrecognized additionalType
@@ -293,11 +312,11 @@ def convert_rating_to_rubric_trait(
     if rating.additionalType in ["karenina:GlobalMetricRubricTrait", "karenina:QuestionSpecificMetricRubricTrait"]:
         return _convert_rating_to_metric_trait(rating)
 
-    # Handle RegexTrait
+    # Handle RegexRubricTrait
     if rating.additionalType in ["karenina:GlobalRegexTrait", "karenina:QuestionSpecificRegexTrait"]:
         return _convert_rating_to_regex_trait(rating)
 
-    # Handle CallableTrait
+    # Handle CallableRubricTrait
     if rating.additionalType in ["karenina:GlobalCallableTrait", "karenina:QuestionSpecificCallableTrait"]:
         return _convert_rating_to_callable_trait(rating)
 
@@ -324,6 +343,8 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
     evaluation_mode: Literal["tp_only", "full_matrix"] = "tp_only"  # Default for backward compatibility
     tp_instructions = []
     tn_instructions = []
+    higher_is_better: bool | None = None  # Default for MetricRubricTrait
+    summary: str | None = None
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -347,26 +368,32 @@ def _convert_rating_to_metric_trait(rating: SchemaOrgRating) -> MetricRubricTrai
                     tn_instructions = json.loads(prop.value)
                 except (json.JSONDecodeError, TypeError):
                     tn_instructions = prop.value if isinstance(prop.value, list) else []
+            elif prop.name == "higher_is_better":
+                higher_is_better = prop.value
+            elif prop.name == "summary":
+                summary = prop.value
 
     return MetricRubricTrait(
         name=rating.name,
         description=rating.description,
-        summary=None,
+        summary=summary,
         evaluation_mode=evaluation_mode,
         metrics=metrics,
         tp_instructions=tp_instructions,
         tn_instructions=tn_instructions,
         repeated_extraction=repeated_extraction,
+        higher_is_better=higher_is_better,
     )
 
 
-def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
-    """Convert SchemaOrgRating to RegexTrait."""
+def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexRubricTrait:
+    """Convert SchemaOrgRating to RegexRubricTrait."""
     # Extract configuration from additionalProperty
     pattern = ""
     case_sensitive = True
     invert_result = False
     higher_is_better = True  # Legacy default
+    summary: str | None = None
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -378,11 +405,13 @@ def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
                 invert_result = prop.value
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
+            elif prop.name == "summary":
+                summary = prop.value
 
-    return RegexTrait(
+    return RegexRubricTrait(
         name=rating.name,
         description=rating.description,
-        summary=None,
+        summary=summary,
         pattern=pattern,
         case_sensitive=case_sensitive,
         invert_result=invert_result,
@@ -390,8 +419,8 @@ def _convert_rating_to_regex_trait(rating: SchemaOrgRating) -> RegexTrait:
     )
 
 
-def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
-    """Convert SchemaOrgRating to CallableTrait."""
+def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableRubricTrait:
+    """Convert SchemaOrgRating to CallableRubricTrait."""
     # Extract configuration from additionalProperty
     callable_code = b""
     kind: Literal["boolean", "score"] = "boolean"
@@ -399,6 +428,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
     min_score = None
     max_score = None
     higher_is_better = True  # Legacy default
+    summary: str | None = None
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -414,17 +444,20 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableTrait:
                 max_score = prop.value
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
+            elif prop.name == "summary":
+                summary = prop.value
 
-    return CallableTrait(
+    return CallableRubricTrait(
         name=rating.name,
         description=rating.description,
-        summary=None,
+        summary=summary,
         kind=kind,
         callable_code=callable_code,
         min_score=min_score,
         max_score=max_score,
         invert_result=invert_result,
         higher_is_better=higher_is_better,
+        classes=None,
     )
 
 
@@ -432,7 +465,7 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
     """Convert SchemaOrgRating to LLMRubricTrait."""
     # Extract configuration from additionalProperty
     deep_judgment_enabled = False
-    deep_judgment_excerpt_enabled = False
+    deep_judgment_excerpt_enabled = True  # Match LLMRubricTrait model default
     deep_judgment_search_enabled = False
     deep_judgment_max_excerpts = None
     deep_judgment_fuzzy_match_threshold = None
@@ -440,6 +473,9 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
     higher_is_better = True  # Legacy default
     kind: TraitKind | None = None  # Explicit kind from property (for literal)
     classes: dict[str, str] | None = None  # Classes for literal kind
+    summary: str | None = None
+    min_score = None
+    max_score = None
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -469,6 +505,12 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
                     except json.JSONDecodeError:
                         logger.warning("Failed to parse classes JSON for trait '%s'", rating.name)
                         classes = None
+            elif prop.name == "summary":
+                summary = prop.value
+            elif prop.name == "min_score":
+                min_score = prop.value
+            elif prop.name == "max_score":
+                max_score = prop.value
 
     # Determine kind: explicit kind takes precedence, then infer from rating range
     if kind is None:
@@ -476,59 +518,31 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
         is_boolean = rating.bestRating == 1 and rating.worstRating == 0
         kind = "boolean" if is_boolean else "score"
 
-    # Build the trait based on kind
+    # Build common kwargs; omit min_score/max_score when None so Pydantic defaults apply
+    common_kwargs: dict[str, Any] = {
+        "name": rating.name,
+        "description": rating.description,
+        "summary": summary,
+        "deep_judgment_enabled": deep_judgment_enabled,
+        "deep_judgment_excerpt_enabled": deep_judgment_excerpt_enabled,
+        "deep_judgment_max_excerpts": deep_judgment_max_excerpts,
+        "deep_judgment_fuzzy_match_threshold": deep_judgment_fuzzy_match_threshold,
+        "deep_judgment_excerpt_retry_attempts": deep_judgment_excerpt_retry_attempts,
+        "deep_judgment_search_enabled": deep_judgment_search_enabled,
+        "higher_is_better": higher_is_better,
+    }
+    if min_score is not None:
+        common_kwargs["min_score"] = min_score
+    if max_score is not None:
+        common_kwargs["max_score"] = max_score
+
     if kind == "literal":
         # Literal kind: min_score/max_score are auto-derived from classes by the model validator
-        return LLMRubricTrait(
-            name=rating.name,
-            description=rating.description,
-            summary=None,
-            kind="literal",
-            classes=classes,
-            min_score=None,  # Auto-derived by model validator
-            max_score=None,  # Auto-derived by model validator
-            deep_judgment_enabled=deep_judgment_enabled,
-            deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
-            deep_judgment_max_excerpts=deep_judgment_max_excerpts,
-            deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
-            deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
-            deep_judgment_search_enabled=deep_judgment_search_enabled,
-            higher_is_better=higher_is_better,
-        )
+        return LLMRubricTrait(kind="literal", classes=classes, **common_kwargs)
     elif kind == "boolean":
-        return LLMRubricTrait(
-            name=rating.name,
-            description=rating.description,
-            summary=None,
-            kind="boolean",
-            min_score=None,
-            max_score=None,
-            classes=None,
-            deep_judgment_enabled=deep_judgment_enabled,
-            deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
-            deep_judgment_max_excerpts=deep_judgment_max_excerpts,
-            deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
-            deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
-            deep_judgment_search_enabled=deep_judgment_search_enabled,
-            higher_is_better=higher_is_better,
-        )
+        return LLMRubricTrait(kind="boolean", classes=None, **common_kwargs)
     else:  # score
-        return LLMRubricTrait(
-            name=rating.name,
-            description=rating.description,
-            summary=None,
-            kind="score",
-            min_score=int(rating.worstRating),
-            max_score=int(rating.bestRating),
-            classes=None,
-            deep_judgment_enabled=deep_judgment_enabled,
-            deep_judgment_excerpt_enabled=deep_judgment_excerpt_enabled,
-            deep_judgment_max_excerpts=deep_judgment_max_excerpts,
-            deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
-            deep_judgment_excerpt_retry_attempts=deep_judgment_excerpt_retry_attempts,
-            deep_judgment_search_enabled=deep_judgment_search_enabled,
-            higher_is_better=higher_is_better,
-        )
+        return LLMRubricTrait(kind="score", classes=None, **common_kwargs)
 
 
 def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTrait:
@@ -542,6 +556,9 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
     timeout_seconds = 120
     classes: dict[str, str] | None = None
     model_override = None
+    summary: str | None = None
+    min_score = None
+    max_score = None
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
@@ -574,23 +591,33 @@ def _convert_rating_to_agentic_trait(rating: SchemaOrgRating) -> AgenticRubricTr
                 from ..schemas.config.models import ModelConfig
 
                 model_override = ModelConfig(**prop.value)
+            elif prop.name == "summary":
+                summary = prop.value
+            elif prop.name == "min_score":
+                min_score = prop.value
+            elif prop.name == "max_score":
+                max_score = prop.value
 
-    return AgenticRubricTrait(
-        name=rating.name,
-        description=rating.description or "",
-        summary=None,
-        kind=kind,
-        higher_is_better=higher_is_better,
-        context_mode=context_mode,
-        materialize_trace=materialize_trace,
-        persist_trace=persist_trace,
-        max_turns=max_turns,
-        timeout_seconds=timeout_seconds,
-        min_score=int(rating.worstRating),
-        max_score=int(rating.bestRating),
-        classes=classes,
-        model_override=model_override,
-    )
+    kwargs: dict[str, Any] = {
+        "name": rating.name,
+        "description": rating.description or "",
+        "summary": summary,
+        "kind": kind,
+        "higher_is_better": higher_is_better,
+        "context_mode": context_mode,
+        "materialize_trace": materialize_trace,
+        "persist_trace": persist_trace,
+        "max_turns": max_turns,
+        "timeout_seconds": timeout_seconds,
+        "classes": classes,
+        "model_override": model_override,
+    }
+    if min_score is not None:
+        kwargs["min_score"] = min_score
+    if max_score is not None:
+        kwargs["max_score"] = max_score
+
+    return AgenticRubricTrait(**kwargs)
 
 
 def convert_dynamic_rubric_to_ratings(
@@ -659,8 +686,8 @@ def convert_ratings_to_dynamic_rubric(
         A DynamicRubric with all traits restored.
     """
     llm_traits: list[LLMRubricTrait] = []
-    regex_traits: list[RegexTrait] = []
-    callable_traits: list[CallableTrait] = []
+    regex_traits: list[RegexRubricTrait] = []
+    callable_traits: list[CallableRubricTrait] = []
     metric_traits: list[MetricRubricTrait] = []
     agentic_traits: list[AgenticRubricTrait] = []
 
@@ -729,16 +756,16 @@ def convert_ratings_to_dynamic_rubric(
 
 
 def _trait_type_tag(
-    trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+    trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
 ) -> str:
     """Return a short string tag identifying the trait type for serialization."""
     if isinstance(trait, AgenticRubricTrait):
         return "agentic"
     if isinstance(trait, MetricRubricTrait):
         return "metric"
-    if isinstance(trait, RegexTrait):
+    if isinstance(trait, RegexRubricTrait):
         return "regex"
-    if isinstance(trait, CallableTrait):
+    if isinstance(trait, CallableRubricTrait):
         return "callable"
     return "llm"
 
@@ -758,7 +785,13 @@ def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> 
     if checkpoint.rating:
         for rating in checkpoint.rating:
             if (
-                rating.additionalType in ["karenina:GlobalRubricTrait", "karenina:QuestionSpecificRubricTrait"]
+                rating.additionalType
+                in [
+                    "karenina:GlobalRubricTrait",
+                    "karenina:QuestionSpecificRubricTrait",
+                    "karenina:GlobalLLMRubricTrait",
+                    "karenina:QuestionSpecificLLMRubricTrait",
+                ]
                 and rating.additionalProperty
             ):
                 # Filter out deep judgment properties
@@ -774,7 +807,13 @@ def strip_deep_judgment_config_from_checkpoint(checkpoint: JsonLdCheckpoint) -> 
         if item.item.rating:
             for rating in item.item.rating:
                 if (
-                    rating.additionalType in ["karenina:QuestionSpecificRubricTrait", "karenina:GlobalRubricTrait"]
+                    rating.additionalType
+                    in [
+                        "karenina:GlobalRubricTrait",
+                        "karenina:QuestionSpecificRubricTrait",
+                        "karenina:GlobalLLMRubricTrait",
+                        "karenina:QuestionSpecificLLMRubricTrait",
+                    ]
                     and rating.additionalProperty
                 ):
                     # Filter out deep judgment properties

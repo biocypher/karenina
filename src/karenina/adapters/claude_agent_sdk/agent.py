@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any
 
 from karenina.ports import (
     AgentConfig,
-    AgentExecutionError,
     AgentPort,
     AgentResponseError,
     AgentResult,
@@ -35,6 +34,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
@@ -92,6 +92,15 @@ class ClaudeSDKAgentAdapter:
         """
         self._config = model_config
         self._converter = ClaudeSDKMessageConverter()
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(supports_system_prompt=True)
 
     def _build_options(
         self,
@@ -269,11 +278,19 @@ class ClaudeSDKAgentAdapter:
         if not mcp_servers:
             return None
 
-        # Check if already in SDK format (has 'type' or 'command' keys)
         first_config: Any = next(iter(mcp_servers.values()), {})
-        if isinstance(first_config, dict) and ("type" in first_config or "command" in first_config):
-            # Already SDK format - return as-is
-            return mcp_servers
+        if isinstance(first_config, dict):
+            # Detect karenina's MCPServerConfig format by checking for
+            # required TypedDict fields rather than generic key sniffing.
+            is_karenina_stdio = "command" in first_config
+            is_karenina_http = "url" in first_config and first_config.get("type") in (
+                "http",
+                "sse",
+            )
+
+            if is_karenina_stdio or is_karenina_http:
+                # Karenina simplified format: convert to SDK format
+                return mcp_servers
 
         # Assume simplified format {"name": "url"} - convert
         # This handles the case where mcp_servers is still in karenina's
@@ -363,14 +380,14 @@ class ClaudeSDKAgentAdapter:
         except TimeoutError as e:
             raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
         except Exception as e:
-            error_str = str(e).lower()
+            from .errors import wrap_sdk_error
 
-            # Check for limit-related errors
-            if "recursion" in error_str or "limit" in error_str or "max_turns" in error_str:
+            translated = wrap_sdk_error(e)
+            if getattr(translated, "limit_reached", False):
                 limit_reached = True
-                logger.warning(f"Agent hit turn limit: {e}")
+                logger.warning("Agent hit turn limit: %s", e)
             else:
-                raise AgentExecutionError(f"Agent execution failed: {e}") from e
+                raise translated from e
 
         if result_message is None and not collected_messages:
             raise AgentResponseError("No messages received from SDK agent")

@@ -30,6 +30,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
 )
 
 if TYPE_CHECKING:
@@ -84,6 +85,9 @@ class ArtifactKeys:
     VERIFY_RESULT = "verify_result"
     VERIFY_GRANULAR_RESULT = "verify_granular_result"
     FIELD_VERIFICATION_RESULT = "field_verification_result"
+    FIELD_VERIFICATION_ERROR = "field_verification_error"
+    FIELD_RESULTS = "field_results"
+    COMPOSITION_STRATEGY = "composition_strategy"
     FINAL_RESULT = "final_result"
 
     # Regex Verification
@@ -136,7 +140,7 @@ class ArtifactKeys:
     # Deep Judgment (Template)
     # ==========================================================================
 
-    DEEP_JUDGMENT_ENABLED = "deep_judgment_enabled"
+    DEEP_JUDGMENT_MODE = "deep_judgment_mode"
     DEEP_JUDGMENT_PERFORMED = "deep_judgment_performed"
     EXTRACTED_EXCERPTS = "extracted_excerpts"
     ATTRIBUTE_REASONING = "attribute_reasoning"
@@ -145,6 +149,7 @@ class ArtifactKeys:
     DEEP_JUDGMENT_EXCERPT_RETRY_COUNT = "deep_judgment_excerpt_retry_count"
     ATTRIBUTES_WITHOUT_EXCERPTS = "attributes_without_excerpts"
     DEEP_JUDGMENT_SEARCH_ENABLED = "deep_judgment_search_enabled"
+    DEEP_JUDGMENT_REASONING_ONLY = "deep_judgment_reasoning_only"  # Inter-stage flag for reasoning-only mode
     HALLUCINATION_RISK_ASSESSMENT = "hallucination_risk_assessment"
 
     # ==========================================================================
@@ -189,6 +194,8 @@ class ArtifactKeys:
 
     TIMESTAMP = "timestamp"
     EXECUTION_TIME = "execution_time"
+    FAILED_STAGE = "failed_stage"
+    EVALUATION_MODE = "evaluation_mode"
 
     # ==========================================================================
     # Agentic Parsing
@@ -236,7 +243,7 @@ class VerificationContext:
         few_shot_enabled: Whether few-shot prompting is enabled.
         abstention_enabled: Whether abstention detection is enabled.
         sufficiency_enabled: Whether trace sufficiency detection is enabled.
-        deep_judgment_enabled: Whether deep-judgment parsing is enabled.
+        deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full").
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
             ("batch" or "sequential").
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
@@ -276,11 +283,12 @@ class VerificationContext:
     few_shot_enabled: bool = False
     abstention_enabled: bool = False
     sufficiency_enabled: bool = False
-    deep_judgment_enabled: bool = False
+    deep_judgment_mode: str = "disabled"  # Template deep-judgment mode: "disabled", "reasoning_only", "full"
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
+    trait_provenance: dict[str, str] | None = None  # Trait provenance: "global", "question_specific", "dynamic"
 
     # Deep-Judgment Configuration
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS
@@ -292,7 +300,7 @@ class VerificationContext:
     # Deep-Judgment Rubric Configuration (NEW - runtime control of deep judgment for rubrics)
     deep_judgment_rubric_mode: str = "disabled"  # Mode: disabled, enable_all, use_checkpoint, custom
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts
-    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None  # For custom mode: per-trait config
     deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS
     deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
     deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
@@ -325,8 +333,16 @@ class VerificationContext:
     agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
     agentic_rubric_parallel: bool = False
 
+    # Embedding Check Configuration
+    embedding_check_enabled: bool = False
+    embedding_check_model: str | None = None
+    embedding_check_threshold: float | None = None
+
     # Scenario
     scenario_turn: int | None = None
+    scenario_id: str | None = None
+    scenario_node: str | None = None
+    scenario_path: list[str] | None = None
 
     # Workspace
     question_workspace_path: str | None = None  # Raw relative path from Question

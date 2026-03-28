@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from karenina.integrations.gepa.prompts.defaults import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
@@ -36,6 +36,8 @@ class MetricObjectiveConfig(BaseModel):
     Metric traits (e.g., entity extraction) produce precision, recall, and f1.
     This config controls which of those metrics become optimization objectives.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     include_precision: bool = Field(
         default=False,
@@ -76,6 +78,8 @@ class ObjectiveConfig(BaseModel):
         ... )
         # Produces keys: "claude-haiku:template", "claude-haiku:clarity", etc.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     include_template: bool = Field(
         default=True,
@@ -152,6 +156,8 @@ class OptimizationConfig(BaseModel):
         ...     max_metric_calls=150,
         ... )
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # What to optimize
     targets: list[OptimizationTarget] = Field(description="Text components to optimize")

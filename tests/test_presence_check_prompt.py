@@ -14,7 +14,7 @@ import json
 import pytest
 
 from karenina.benchmark.verification.prompts.task_types import PromptTask
-from karenina.schemas.entities import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait
 
 # =============================================================================
 # Helpers
@@ -40,9 +40,9 @@ def _make_regex_trait(
     name: str,
     summary: str | None = None,
     description: str | None = None,
-) -> RegexTrait:
-    """Create a minimal RegexTrait for testing."""
-    return RegexTrait(
+) -> RegexRubricTrait:
+    """Create a minimal RegexRubricTrait for testing."""
+    return RegexRubricTrait(
         name=name,
         pattern=r"\btest\b",
         higher_is_better=True,

@@ -256,3 +256,171 @@ class TestDeepAgentsAgentAdapter:
         """aclose() should not raise."""
         adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
         await adapter.aclose()
+
+
+@pytest.mark.unit
+class TestDeepAgentsAgentCapabilities:
+    def test_capabilities_returns_port_capabilities(self, deep_agents_model_config):
+        """DeepAgentsAgentAdapter should expose a capabilities property."""
+        from karenina.ports.capabilities import PortCapabilities
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        caps = adapter.capabilities
+        assert isinstance(caps, PortCapabilities)
+        assert caps.supports_system_prompt is True
+
+
+@pytest.mark.unit
+class TestDeepAgentsMCPToolsWiring:
+    """Test that arun() passes tools and MCP-derived tools to the agent."""
+
+    @pytest.mark.asyncio
+    async def test_explicit_tools_passed_to_agent(self, deep_agents_model_config, monkeypatch):
+        """Explicit tools should be forwarded to create_deep_agent."""
+        from karenina.ports import AgentConfig, Message, Tool
+        from karenina.ports.usage import UsageMetadata
+
+        captured_kwargs = {}
+
+        def mock_create_deep_agent(**kwargs):
+            captured_kwargs.update(kwargs)
+            mock_agent = AsyncMock()
+            mock_agent.ainvoke = AsyncMock(
+                return_value={
+                    "messages": [MagicMock(content="Done", type="ai")],
+                    "is_last_step": False,
+                }
+            )
+            return mock_agent
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            mock_create_deep_agent,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.deep_agents_messages_to_raw_trace",
+            lambda _msgs: "trace",
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.extract_deep_agents_usage",
+            lambda _msgs, model: UsageMetadata(model=model),
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.extract_actual_model",
+            lambda _msgs: None,
+        )
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        test_tool = Tool(name="test_tool", description="A test tool", input_schema={})
+
+        await adapter.arun(
+            messages=[Message.user("Hello")],
+            tools=[test_tool],
+            config=AgentConfig(max_turns=5),
+        )
+
+        assert "tools" in captured_kwargs
+        assert len(captured_kwargs["tools"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_mcp_tools_loaded_and_combined(self, deep_agents_model_config, monkeypatch):
+        """MCP servers should be converted to tools and combined with explicit tools."""
+        from karenina.ports import AgentConfig, Message, Tool
+        from karenina.ports.usage import UsageMetadata
+
+        captured_kwargs = {}
+        fake_mcp_tool = MagicMock()
+        fake_mcp_tool.name = "mcp_tool"
+
+        def mock_create_deep_agent(**kwargs):
+            captured_kwargs.update(kwargs)
+            mock_agent = AsyncMock()
+            mock_agent.ainvoke = AsyncMock(
+                return_value={
+                    "messages": [MagicMock(content="Done", type="ai")],
+                    "is_last_step": False,
+                }
+            )
+            return mock_agent
+
+        async def mock_convert_mcp(servers, exit_stack):
+            return [fake_mcp_tool]
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            mock_create_deep_agent,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.mcp.convert_mcp_to_tools",
+            mock_convert_mcp,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.deep_agents_messages_to_raw_trace",
+            lambda _msgs: "trace",
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.extract_deep_agents_usage",
+            lambda _msgs, model: UsageMetadata(model=model),
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.extract_actual_model",
+            lambda _msgs: None,
+        )
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        test_tool = Tool(name="explicit_tool", description="Explicit", input_schema={})
+
+        await adapter.arun(
+            messages=[Message.user("Hello")],
+            tools=[test_tool],
+            mcp_servers={"server1": {"type": "stdio", "command": "echo"}},
+            config=AgentConfig(max_turns=5),
+        )
+
+        assert "tools" in captured_kwargs
+        tool_names = [t.name if hasattr(t, "name") else str(t) for t in captured_kwargs["tools"]]
+        assert "mcp_tool" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_no_tools_kwarg_when_none_provided(self, deep_agents_model_config, monkeypatch):
+        """When neither tools nor mcp_servers are given, tools kwarg should be absent."""
+        from karenina.ports import AgentConfig, Message
+        from karenina.ports.usage import UsageMetadata
+
+        captured_kwargs = {}
+
+        def mock_create_deep_agent(**kwargs):
+            captured_kwargs.update(kwargs)
+            mock_agent = AsyncMock()
+            mock_agent.ainvoke = AsyncMock(
+                return_value={
+                    "messages": [MagicMock(content="Done", type="ai")],
+                    "is_last_step": False,
+                }
+            )
+            return mock_agent
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            mock_create_deep_agent,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.deep_agents_messages_to_raw_trace",
+            lambda _msgs: "trace",
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.extract_deep_agents_usage",
+            lambda _msgs, model: UsageMetadata(model=model),
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.extract_actual_model",
+            lambda _msgs: None,
+        )
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        await adapter.arun(
+            messages=[Message.user("Hello")],
+            config=AgentConfig(max_turns=5),
+        )
+
+        assert "tools" not in captured_kwargs
