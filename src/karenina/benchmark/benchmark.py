@@ -856,18 +856,27 @@ class Benchmark:
             all_scenario_results = parallel_exec_results
             all_errors = parallel_errors
         else:
-            for scenario_def, ans_model, parse_model in combos:
-                exec_result = manager.run(
-                    scenario=scenario_def,
-                    config=config,
-                    base_answering_model=ans_model,
-                    base_parsing_model=parse_model,
-                    run_name=run_name,
-                    global_rubric=global_rubric,
-                    progress_callback=progress_callback,
-                )
-                all_results.extend(exec_result.turn_results)
-                all_scenario_results.append(exec_result)
+            from anyio.from_thread import start_blocking_portal
+
+            from karenina.benchmark.verification.executor import set_async_portal
+
+            with start_blocking_portal(backend="asyncio") as portal:
+                set_async_portal(portal)
+                try:
+                    for scenario_def, ans_model, parse_model in combos:
+                        exec_result = manager.run(
+                            scenario=scenario_def,
+                            config=config,
+                            base_answering_model=ans_model,
+                            base_parsing_model=parse_model,
+                            run_name=run_name,
+                            global_rubric=global_rubric,
+                            progress_callback=progress_callback,
+                        )
+                        all_results.extend(exec_result.turn_results)
+                        all_scenario_results.append(exec_result)
+                finally:
+                    set_async_portal(None)
 
         return VerificationResultSet(
             results=all_results,

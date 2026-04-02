@@ -423,3 +423,84 @@ class TestErrorDetailQuality:
         task_key, exc = err.errors[0]
         assert isinstance(exc, TypeError)
         assert "type mismatch" in str(exc)
+
+
+# ============================================================================
+# Sequential portal management
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestSequentialPortalManagement:
+    """Verify _run_sequential sets a BlockingPortal for event loop reuse."""
+
+    def test_sequential_sets_portal_during_execution(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Portal is available during task execution and cleared after."""
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        captured_portals: list = []
+
+        def mock_execute_task(task: dict, answer_cache: object) -> tuple[str, VerificationResult]:
+            captured_portals.append(get_async_portal())
+            return (task["question_id"], _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task("q1"), _make_task("q2")]
+        executor = VerificationExecutor(parallel=False, config=ExecutorConfig(enable_cache=False))
+        executor.run_batch(tasks)
+
+        # Portal was set during both task executions
+        assert len(captured_portals) == 2
+        assert all(p is not None for p in captured_portals)
+
+        # Portal is cleared after run_batch returns
+        assert get_async_portal() is None
+
+    def test_sequential_clears_portal_on_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Portal is cleared even when all tasks fail."""
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        def mock_execute_task(task: dict, answer_cache: object) -> tuple[str, VerificationResult]:
+            raise RuntimeError("task failed")
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task("q1")]
+        executor = VerificationExecutor(parallel=False, config=ExecutorConfig(enable_cache=False))
+
+        with pytest.raises(VerificationBatchError):
+            executor.run_batch(tasks)
+
+        assert get_async_portal() is None
+
+    def test_sequential_portal_is_functional(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Portal can execute async functions during task execution."""
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        async_results: list = []
+
+        async def async_fn() -> str:
+            return "ok"
+
+        def mock_execute_task(task: dict, answer_cache: object) -> tuple[str, VerificationResult]:
+            portal = get_async_portal()
+            async_results.append(portal.call(async_fn))
+            return (task["question_id"], _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task("q1")]
+        executor = VerificationExecutor(parallel=False, config=ExecutorConfig(enable_cache=False))
+        executor.run_batch(tasks)
+
+        assert async_results == ["ok"]

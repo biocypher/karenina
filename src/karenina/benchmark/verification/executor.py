@@ -160,24 +160,33 @@ class VerificationExecutor:
         errors: list[tuple[str, Exception]] = []
         total = len(tasks)
 
-        for idx, task in enumerate(tasks, 1):
-            # Call progress callback BEFORE starting task (with preview result)
-            if progress_callback:
-                preview_result = create_preview_result(task)
-                progress_callback(idx, total, preview_result)
-
+        # Use a shared BlockingPortal so that sync invoke() calls reuse the
+        # same event loop instead of creating/destroying one per call via
+        # asyncio.run(). This prevents httpx connection pool errors caused
+        # by closed event loops.
+        with start_blocking_portal(backend="asyncio") as portal:
+            set_async_portal(portal)
             try:
-                # Execute the task with answer cache
-                result_key, result = execute_task(task, answer_cache)
-                results[result_key] = result
-            except Exception as e:
-                logger.error("Sequential task %s failed: %s", task["question_id"], e)
-                errors.append((task["question_id"], e))
-                continue
+                for idx, task in enumerate(tasks, 1):
+                    # Call progress callback BEFORE starting task (with preview result)
+                    if progress_callback:
+                        preview_result = create_preview_result(task)
+                        progress_callback(idx, total, preview_result)
 
-            # Call progress callback AFTER completion (with actual result)
-            if progress_callback:
-                progress_callback(idx, total, result)
+                    try:
+                        # Execute the task with answer cache
+                        result_key, result = execute_task(task, answer_cache)
+                        results[result_key] = result
+                    except Exception as e:
+                        logger.error("Sequential task %s failed: %s", task["question_id"], e)
+                        errors.append((task["question_id"], e))
+                        continue
+
+                    # Call progress callback AFTER completion (with actual result)
+                    if progress_callback:
+                        progress_callback(idx, total, result)
+            finally:
+                set_async_portal(None)
 
         # Log cache statistics
         if answer_cache:
