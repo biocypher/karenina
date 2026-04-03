@@ -106,5 +106,5 @@ def apply_handover(
         combined = question_text + TRANSCRIPT_SEPARATOR + transcript
         return combined, []
 
-    # Unknown strategy (should have been caught by builder validation)
-    return None
+    msg = f"Unknown handover strategy '{edge.handover}'"
+    raise ValueError(msg)

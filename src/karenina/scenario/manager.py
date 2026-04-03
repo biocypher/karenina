@@ -156,7 +156,7 @@ class ScenarioManager:
             record = TurnRecord(
                 node_id=state.current_node,
                 question_text=node.question.question,
-                question_messages=[question_msg],
+                question_messages=[Message.user(node.question.question)],
                 trace_messages=trace_messages or [],
                 raw_response=raw_response or "",
                 parsed_answer=parsed_answer,
