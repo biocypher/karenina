@@ -71,6 +71,10 @@ class ScenarioEdge(BaseModel):
     condition_callable: Callable[..., Any] | None = Field(default=None, exclude=True)
     condition_source: str | None = None
 
+    # Handover: context routing when transitioning between nodes
+    handover: str | None = None
+    handover_callable: Callable[..., Any] | None = Field(default=None, exclude=True)
+
 
 class ScenarioNode(BaseModel):
     """A unique execution point in a scenario graph."""

@@ -1,11 +1,12 @@
-"""Tests for scenario handover: TaggedMessage and transcript formatting."""
+"""Tests for scenario handover: TaggedMessage, transcript formatting, and apply_handover."""
 
 from __future__ import annotations
 
 import pytest
 
 from karenina.ports.messages import Message, ToolUseContent
-from karenina.scenario.handover import TaggedMessage, format_transcript
+from karenina.scenario.handover import TaggedMessage, apply_handover, format_transcript
+from karenina.schemas.scenario.types import ScenarioEdge
 
 
 @pytest.mark.unit
@@ -71,3 +72,75 @@ class TestFormatTranscript:
         result = format_transcript(tagged)
         assert "[primary:text] A1" in result
         assert "[guardrail:text] A2" in result
+
+
+def _make_state(**overrides):
+    from karenina.schemas.scenario.state import ScenarioState
+
+    defaults = {
+        "turn": 0,
+        "current_node": "a",
+        "verify_result": None,
+        "parsed": {},
+        "node_visits": {},
+        "history": [],
+        "accumulated": {},
+        "node_results": {},
+    }
+    defaults.update(overrides)
+    return ScenarioState(**defaults)
+
+
+@pytest.mark.unit
+class TestApplyHandover:
+    def test_transcript_prepend(self) -> None:
+        tagged = [
+            TaggedMessage(Message.user("Q1"), agent_id="__user__"),
+            TaggedMessage(Message.assistant("A1"), agent_id="primary"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_prepend")
+        question_text = "Review the conversation above."
+        result_text, history = apply_handover(edge, tagged, _make_state(), question_text)
+        assert "[__user__] Q1" in result_text
+        assert "[primary:text] A1" in result_text
+        assert result_text.index("[primary:text] A1") < result_text.index("Review the conversation above.")
+        assert history == []
+
+    def test_transcript_append(self) -> None:
+        tagged = [
+            TaggedMessage(Message.user("Q1"), agent_id="__user__"),
+            TaggedMessage(Message.assistant("A1"), agent_id="primary"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_append")
+        question_text = "Review the conversation below."
+        result_text, history = apply_handover(edge, tagged, _make_state(), question_text)
+        assert result_text.index("Review the conversation below.") < result_text.index("[primary:text] A1")
+        assert history == []
+
+    def test_callable_handover(self) -> None:
+        tagged = [
+            TaggedMessage(Message.user("Q1"), agent_id="__user__"),
+            TaggedMessage(Message.assistant("A1"), agent_id="primary"),
+        ]
+
+        def my_handover(msgs, state):
+            return [Message.system("custom context")]
+
+        edge = ScenarioEdge(source="a", target="b", handover_callable=my_handover)
+        result_text, history = apply_handover(edge, tagged, _make_state(), "original question")
+        assert result_text == "original question"
+        assert len(history) == 1
+        assert history[0].text == "custom context"
+
+    def test_no_handover_returns_none(self) -> None:
+        edge = ScenarioEdge(source="a", target="b")
+        result = apply_handover(edge, [], _make_state(), "Q")
+        assert result is None
+
+    def test_separator_between_transcript_and_question(self) -> None:
+        tagged = [
+            TaggedMessage(Message.user("Q1"), agent_id="__user__"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_prepend")
+        result_text, _ = apply_handover(edge, tagged, _make_state(), "My question")
+        assert "---" in result_text
