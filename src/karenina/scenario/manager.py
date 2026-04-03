@@ -200,7 +200,7 @@ class ScenarioManager:
 
             # Resolve next node
             outbound_edges = [e for e in scenario.edges if e.source == state.current_node]
-            next_node = resolve_next_node(outbound_edges, state)
+            next_node, _followed_edge = resolve_next_node(outbound_edges, state)
 
             # Report progress (after edge resolution so next_node is known)
             self._report_progress(

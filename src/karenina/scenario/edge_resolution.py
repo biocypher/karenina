@@ -11,29 +11,37 @@ from karenina.schemas.scenario.types import ScenarioEdge, StateCheck
 logger = logging.getLogger(__name__)
 
 
-def resolve_next_node(edges: list[ScenarioEdge], state: ScenarioState) -> str | None:
+def resolve_next_node(
+    edges: list[ScenarioEdge],
+    state: ScenarioState,
+) -> tuple[str | None, ScenarioEdge | None]:
     """Resolve the next node given outbound edges and current state.
 
     Conditional edges are evaluated in definition order; first match wins.
     Unconditional edges serve as fallback regardless of position.
-    Returns None if no edges match (implicit terminal).
+
+    Returns:
+        Tuple of (target_node_id, matched_edge). Both are None if no
+        edges match (implicit terminal).
     """
     if not edges:
-        return None
+        return None, None
 
     fallback_target: str | None = None
+    fallback_edge: ScenarioEdge | None = None
 
     for edge in edges:
         is_unconditional = edge.condition is None and edge.condition_callable is None
         if is_unconditional:
             if fallback_target is None:
                 fallback_target = edge.target
+                fallback_edge = edge
             continue
 
         if _edge_matches(edge, state):
-            return edge.target
+            return edge.target, edge
 
-    return fallback_target
+    return fallback_target, fallback_edge
 
 
 def _edge_matches(edge: ScenarioEdge, state: ScenarioState) -> bool:
