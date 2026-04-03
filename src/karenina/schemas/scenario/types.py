@@ -86,6 +86,7 @@ class ScenarioNode(BaseModel):
     model_override: ModelOverride | None = None
     tool_filter: ToolFilter | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    agent_identity: str | None = None
 
     # Callable field (excluded from serialization)
     state_update: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = Field(default=None, exclude=True)

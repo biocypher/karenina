@@ -328,3 +328,47 @@ class TestScenarioValidate:
         # q2 has no outbound edges: that is valid (implicit terminal)
         defn = s.validate()
         assert isinstance(defn, ScenarioDefinition)
+
+
+# ---------------------------------------------------------------------------
+# Agent identity and handover fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestAgentIdentity:
+    def test_scenario_node_agent_identity_default_none(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioNode
+
+        node = ScenarioNode(node_id="n", question=_make_question())
+        assert node.agent_identity is None
+
+    def test_scenario_node_agent_identity_set(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioNode
+
+        node = ScenarioNode(node_id="n", question=_make_question(), agent_identity="guardrail")
+        assert node.agent_identity == "guardrail"
+
+    def test_scenario_edge_handover_default_none(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioEdge
+
+        edge = ScenarioEdge(source="a", target="b")
+        assert edge.handover is None
+        assert edge.handover_callable is None
+
+    def test_scenario_edge_handover_string(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioEdge
+
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_prepend")
+        assert edge.handover == "transcript_prepend"
+
+    def test_scenario_edge_handover_callable_excluded_from_dump(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioEdge
+
+        edge = ScenarioEdge(
+            source="a",
+            target="b",
+            handover_callable=lambda _msgs, _state: [],
+        )
+        data = edge.model_dump()
+        assert "handover_callable" not in data
