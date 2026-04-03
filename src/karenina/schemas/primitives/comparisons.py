@@ -205,6 +205,42 @@ class NumericRange(VerificationPrimitive):
         return True
 
 
+@_register_primitive
+class NumericMinimum(VerificationPrimitive):
+    """Check that extracted number is at least the expected (ground truth) value.
+
+    The threshold comes from ``ground_truth`` via the ``expected`` parameter.
+    Set ``exclusive`` to True for strict inequality (>).
+    """
+
+    exclusive: bool = False
+
+    def check(self, extracted: Any, expected: Any) -> bool:
+        val = float(extracted)
+        threshold = float(expected)
+        if self.exclusive:
+            return val > threshold
+        return val >= threshold
+
+
+@_register_primitive
+class NumericMaximum(VerificationPrimitive):
+    """Check that extracted number does not exceed the expected (ground truth) value.
+
+    The threshold comes from ``ground_truth`` via the ``expected`` parameter.
+    Set ``exclusive`` to True for strict inequality (<).
+    """
+
+    exclusive: bool = False
+
+    def check(self, extracted: Any, expected: Any) -> bool:
+        val = float(extracted)
+        threshold = float(expected)
+        if self.exclusive:
+            return val < threshold
+        return val <= threshold
+
+
 # --- List Primitives ---
 
 

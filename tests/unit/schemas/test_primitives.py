@@ -13,6 +13,8 @@ from karenina.schemas.primitives import (
     ExactMatch,
     LiteralMatch,
     NumericExact,
+    NumericMaximum,
+    NumericMinimum,
     NumericRange,
     NumericTolerance,
     OrderedMatch,
@@ -217,6 +219,80 @@ class TestNumericRange:
         p = NumericRange(min=1.0, max=10.0)
         assert p.check(1.0, "ignored") is True
         assert p.check(10.0, "ignored") is True
+
+
+@pytest.mark.unit
+class TestNumericMinimum:
+    """Test NumericMinimum primitive."""
+
+    def test_at_minimum(self):
+        p = NumericMinimum()
+        assert p.check(10, 10) is True
+
+    def test_above_minimum(self):
+        p = NumericMinimum()
+        assert p.check(15, 10) is True
+
+    def test_below_minimum(self):
+        p = NumericMinimum()
+        assert p.check(5, 10) is False
+
+    def test_exclusive_at_boundary(self):
+        p = NumericMinimum(exclusive=True)
+        assert p.check(10, 10) is False
+
+    def test_exclusive_above(self):
+        p = NumericMinimum(exclusive=True)
+        assert p.check(10.001, 10) is True
+
+    def test_string_coercion(self):
+        p = NumericMinimum()
+        assert p.check("10", 5) is True
+
+    def test_negative_minimum(self):
+        p = NumericMinimum()
+        assert p.check(-5, -10) is True
+
+    def test_zero_minimum(self):
+        p = NumericMinimum()
+        assert p.check(0, 0) is True
+
+
+@pytest.mark.unit
+class TestNumericMaximum:
+    """Test NumericMaximum primitive."""
+
+    def test_at_maximum(self):
+        p = NumericMaximum()
+        assert p.check(10, 10) is True
+
+    def test_below_maximum(self):
+        p = NumericMaximum()
+        assert p.check(5, 10) is True
+
+    def test_above_maximum(self):
+        p = NumericMaximum()
+        assert p.check(15, 10) is False
+
+    def test_exclusive_at_boundary(self):
+        p = NumericMaximum(exclusive=True)
+        assert p.check(10, 10) is False
+
+    def test_exclusive_below(self):
+        p = NumericMaximum(exclusive=True)
+        assert p.check(9.999, 10) is True
+
+    def test_string_coercion(self):
+        p = NumericMaximum()
+        assert p.check("3", 5) is True
+
+    def test_negative_maximum(self):
+        p = NumericMaximum()
+        assert p.check(-5, -1) is True
+
+    def test_zero_maximum(self):
+        p = NumericMaximum()
+        assert p.check(0, 0) is True
 
 
 @pytest.mark.unit

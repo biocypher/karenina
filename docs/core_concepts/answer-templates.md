@@ -724,6 +724,8 @@ For complete parameter documentation and examples, see [Verification Primitives]
 | `NumericExact` | Numeric | Exact equality after float coercion | `int`, `float` |
 | `NumericTolerance` | Numeric | Within tolerance (relative or absolute) | `int`, `float` |
 | `NumericRange` | Numeric | Within bounds | `int`, `float` |
+| `NumericMinimum` | Numeric | At least N | `int`, `float` |
+| `NumericMaximum` | Numeric | At most N | `int`, `float` |
 | `SetContainment` | List | Set comparison (exact, subset, superset, overlap) | `list[str]` |
 | `OrderedMatch` | List | Element-by-element comparison | `list[str]` |
 | `LiteralMatch` | Categorical | Exact equality | `Literal[...]` |

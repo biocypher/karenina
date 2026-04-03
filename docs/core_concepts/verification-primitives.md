@@ -186,7 +186,7 @@ Use trace primitives when the check is a pure pattern match or length constraint
 |-----------|-------------------|---------------------------|
 | `bool` | `BooleanMatch` | Always use `BooleanMatch` for parsed booleans |
 | `str` | `ExactMatch` | `ContainsAny`/`ContainsAll` for multiple acceptable answers; `RegexMatch` for format validation; `SemanticMatch` for meaning-based comparison |
-| `int`, `float` | `NumericExact` | `NumericTolerance` for measurements with acceptable variance; `NumericRange` when no single correct value exists |
+| `int`, `float` | `NumericExact` | `NumericTolerance` for measurements with acceptable variance; `NumericRange` when no single correct value exists; `NumericMinimum`/`NumericMaximum` for one-sided bounds |
 | `list[str]` | `SetContainment` | `OrderedMatch` when element order matters |
 | `Literal[...]` | `LiteralMatch` | Always use `LiteralMatch` for Literal fields |
 | `str` (date) | `DateMatch` | `DateTolerance` for approximate dates; `DateRange` when any date in a window is acceptable |
@@ -203,6 +203,8 @@ Use trace primitives when the check is a pure pattern match or length constraint
 | Exact number | `NumericExact` | (none) |
 | Number within tolerance | `NumericTolerance` | `tolerance`, `mode` |
 | Number in a range | `NumericRange` | `min`, `max` |
+| Number at least N | `NumericMinimum` | `minimum` |
+| Number at most N | `NumericMaximum` | `maximum` |
 | Set membership | `SetContainment` | `mode` |
 | Ordered list equality | `OrderedMatch` | `normalize` |
 | Fixed category match | `LiteralMatch` | (none) |
@@ -218,7 +220,7 @@ Use trace primitives when the check is a pure pattern match or length constraint
 - **Start simple.** `BooleanMatch`, `ExactMatch`, and `NumericExact` cover most cases. Reach for more complex primitives only when these are insufficient.
 - **Use normalization before adding alternatives.** If `ExactMatch` fails because of case or whitespace differences, add normalizers rather than switching to `ContainsAny`.
 - **Prefer parsed primitives over trace primitives** unless the check is a pure pattern match. Parsed primitives benefit from the judge's ability to interpret context and synonyms.
-- **Use `ground_truth` when a single correct answer exists.** Use parameter-based primitives (`ContainsAny`, `NumericRange`, `DateRange`) when the answer space is a set or range rather than a single point.
+- **Use `ground_truth` when a single correct answer exists.** Use parameter-based primitives (`ContainsAny`, `NumericRange`, `NumericMinimum`, `NumericMaximum`, `DateRange`) when the answer space is a set or range rather than a single point.
 
 ## 5. Parsed Primitives Reference
 
@@ -472,6 +474,30 @@ for value in [0.001, 0.05, 0.10]:
     parsed = Answer(p_value=value)
     print(f"{value} -> verify(): {parsed.verify()}")
 ```
+
+---
+
+#### NumericMinimum
+
+Pass if the extracted value is at least the `ground_truth` value (inclusive by default).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `exclusive` | `bool` | `False` | If `True`, use strict `>` instead of `>=` |
+
+**Applies to:** `int`, `float`
+
+---
+
+#### NumericMaximum
+
+Pass if the extracted value does not exceed the `ground_truth` value (inclusive by default).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `exclusive` | `bool` | `False` | If `True`, use strict `<` instead of `<=` |
+
+**Applies to:** `int`, `float`
 
 ---
 
