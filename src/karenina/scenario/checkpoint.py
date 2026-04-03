@@ -114,6 +114,7 @@ def _serialize_edge(edge: ScenarioEdge) -> SchemaOrgScenarioEdge:
         target=edge.target,
         condition=_serialize_condition(edge.condition),
         conditionSource=edge.condition_source,
+        handover=edge.handover,
     )
 
 
@@ -151,6 +152,7 @@ def scenario_to_schema_org(defn: ScenarioDefinition) -> SchemaOrgScenario:
             toolFilter=(node.tool_filter.model_dump() if node.tool_filter else None),
             stateUpdateSource=node.state_update_source,
             questionData=node.question.model_dump(),
+            agentIdentity=node.agent_identity,
             metadata=node.metadata or {},
         )
 
@@ -319,6 +321,7 @@ def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
             tool_filter=tool_filter,
             state_update=state_update_fn,
             state_update_source=snode.stateUpdateSource,
+            agent_identity=snode.agentIdentity,
             metadata=snode.metadata or {},
         )
 
@@ -335,6 +338,7 @@ def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
                 condition=_deserialize_condition(sedge.condition),
                 condition_callable=condition_callable,
                 condition_source=sedge.conditionSource,
+                handover=sedge.handover,
             )
         )
 
