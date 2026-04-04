@@ -48,17 +48,14 @@ def _build_fake_sdk() -> types.ModuleType:
             self.total_cost_usd = total_cost_usd
             self.structured_output = structured_output
 
-    # Placeholder async generator; each test replaces via monkeypatch.setattr.
-    async def _placeholder_query(prompt: str, options: Any) -> Any:  # pragma: no cover
-        yield  # Makes this an async generator; each test replaces via monkeypatch
-
     mod = types.ModuleType("claude_agent_sdk")
     for _name, _obj in [
         ("ClaudeAgentOptions", ClaudeAgentOptions),
         ("TextBlock", TextBlock),
         ("AssistantMessage", AssistantMessage),
         ("ResultMessage", ResultMessage),
-        ("query", _placeholder_query),
+        # query is a sentinel; every test replaces it via monkeypatch before use.
+        ("query", None),
     ]:
         setattr(mod, _name, _obj)
     return mod
