@@ -300,6 +300,7 @@ class LangChainLLMAdapter:
             usage=sr.usage,
             raw=None,
             is_partial=is_partial,
+            usage_unavailable=is_partial,
         )
 
     @with_llm_semaphore
