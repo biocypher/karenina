@@ -310,6 +310,14 @@ class ClaudeSDKLLMAdapter:
             _max_turns=max_turns,
         )
 
+    def astream(self, messages: list[Message]) -> Any:  # noqa: ARG002
+        """Not supported: claude_agent_sdk adapter does not support streaming."""
+        raise NotImplementedError("claude_agent_sdk adapter does not support streaming")
+
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:  # noqa: ARG002
+        """Not supported: claude_agent_sdk adapter does not support streaming."""
+        raise NotImplementedError("claude_agent_sdk adapter does not support streaming")
+
     async def aclose(self) -> None:
         """Close underlying resources.
 

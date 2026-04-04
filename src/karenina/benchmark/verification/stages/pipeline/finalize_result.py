@@ -235,6 +235,7 @@ class FinalizeResultStage(BaseVerificationStage):
             regex_overall_success=context.get_result_field(ArtifactKeys.REGEX_OVERALL_SUCCESS),
             regex_extraction_results=context.get_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS),
             recursion_limit_reached=context.get_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED, False),
+            response_timeout_partial=context.get_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False),
             # Agentic parsing
             investigation_trace=context.get_result_field(ArtifactKeys.INVESTIGATION_TRACE),
             agentic_parsing_performed=context.get_result_field(ArtifactKeys.AGENTIC_PARSING_PERFORMED, False),

@@ -137,6 +137,9 @@ class VerificationResultTemplate(BaseModel):
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
+    # Streaming timeout metadata
+    response_timeout_partial: bool = False  # Whether response was truncated due to streaming timeout
+
     # Agentic parsing
     investigation_trace: str | None = Field(
         default=None,

@@ -39,11 +39,14 @@ def _capture_adapter_messages(context: VerificationContext) -> list[Message]:
     stage = GenerateAnswerStage()
     captured: list[Message] = []
 
+    from karenina.ports.capabilities import PortCapabilities
+
     mock_llm = MagicMock()
     mock_response = MagicMock()
     mock_response.content = "4"
     mock_response.usage = None
     mock_llm.invoke.side_effect = lambda msgs: (captured.extend(msgs), mock_response)[1]
+    mock_llm.capabilities = PortCapabilities(supports_streaming=False)
 
     with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm", return_value=mock_llm):
         stage.execute(context)

@@ -547,11 +547,14 @@ class TestArtifactDependencies:
 
         # Mock get_llm (no MCP URLs → LLMPort path, not AgentPort)
         with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm:
+            from karenina.ports.capabilities import PortCapabilities
+
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = LLMResponse(
                 content="The capital is Paris.",
                 usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
+            mock_llm.capabilities = PortCapabilities(supports_streaming=False)
             mock_get_llm.return_value = mock_llm
 
             stage = GenerateAnswerStage()
@@ -613,11 +616,14 @@ class TestPipelineIntegration:
             patch("karenina.benchmark.verification.stages.pipeline.parse_template.TemplateEvaluator") as MockEvaluator,
         ):
             # Answer generation mock - return LLMResponse
+            from karenina.ports.capabilities import PortCapabilities
+
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = LLMResponse(
                 content="The capital of France is Paris.",
                 usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
+            mock_llm.capabilities = PortCapabilities(supports_streaming=False)
             mock_get_llm.return_value = mock_llm
 
             # Template parsing mock - use proper return types
@@ -693,11 +699,14 @@ class TestPipelineIntegration:
             ) as mock_abstention,
         ):
             # Generate a refusal response - return LLMResponse (no MCP URLs → LLMPort path)
+            from karenina.ports.capabilities import PortCapabilities
+
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = LLMResponse(
                 content="I'm sorry, but I cannot provide information about that topic.",
                 usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
+            mock_llm.capabilities = PortCapabilities(supports_streaming=False)
             mock_get_llm.return_value = mock_llm
 
             # Abstention detector returns (detected, check_performed, reasoning, usage_metadata)

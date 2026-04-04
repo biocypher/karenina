@@ -197,6 +197,14 @@ class DeepAgentsLLMAdapter:
             _structured_schema=schema,
         )
 
+    def astream(self, messages: list[Message]) -> Any:  # noqa: ARG002
+        """Not supported: langchain_deep_agents adapter does not support streaming."""
+        raise NotImplementedError("langchain_deep_agents adapter does not support streaming")
+
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:  # noqa: ARG002
+        """Not supported: langchain_deep_agents adapter does not support streaming."""
+        raise NotImplementedError("langchain_deep_agents adapter does not support streaming")
+
     async def aclose(self) -> None:
         """Close underlying resources.
 

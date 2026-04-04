@@ -105,6 +105,9 @@ class ArtifactKeys:
     # Recursion Limit
     RECURSION_LIMIT_REACHED = "recursion_limit_reached"
 
+    # Streaming Timeout
+    RESPONSE_TIMEOUT_PARTIAL = "response_timeout_partial"
+
     # Trace Validation
     MCP_ENABLED = "mcp_enabled"
     TRACE_VALIDATION_FAILED = "trace_validation_failed"

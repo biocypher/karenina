@@ -214,6 +214,35 @@ def extract_usage_cumulative(
     )
 
 
+def extract_usage_from_chunk(chunk: Any, *, model_name: str | None = None) -> UsageMetadata:
+    """Extract usage metadata from a LangChain AIMessageChunk.
+
+    During streaming, usage metadata typically arrives on the final chunk
+    via the ``usage_metadata`` attribute.
+
+    Args:
+        chunk: LangChain AIMessageChunk with optional usage_metadata.
+        model_name: Optional model name to include in metadata.
+
+    Returns:
+        UsageMetadata with extracted token counts.
+    """
+    meta: dict[str, Any] = {}
+    if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+        um = chunk.usage_metadata
+        meta = (
+            um
+            if isinstance(um, dict)
+            else {
+                "input_tokens": getattr(um, "input_tokens", 0),
+                "output_tokens": getattr(um, "output_tokens", 0),
+                "cache_read_input_tokens": getattr(um, "cache_read_input_tokens", None),
+                "cache_creation_input_tokens": getattr(um, "cache_creation_input_tokens", None),
+            }
+        )
+    return _build_usage_metadata(meta, model_name)
+
+
 def _extract_from_response(response: Any) -> dict[str, Any]:
     """Extract usage dict from a response object.
 
