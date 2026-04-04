@@ -10,6 +10,8 @@ Tests cover:
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import BaseModel
 
@@ -39,7 +41,8 @@ from karenina.ports.capabilities import PortCapabilities
 class MockLLMPort:
     """Mock implementation of LLMPort for testing isinstance checks.
 
-    Implements all required members: capabilities, ainvoke, invoke, with_structured_output.
+    Implements all required members: capabilities, ainvoke, invoke,
+    with_structured_output, astream, stream_invoke, aclose.
     """
 
     @property
@@ -63,6 +66,14 @@ class MockLLMPort:
     def with_structured_output(self, schema: type[BaseModel]) -> LLMPort:
         """Mock structured output configuration."""
         return self
+
+    def astream(self, messages: list[Message]) -> Any:
+        """Mock streaming (raises NotImplementedError)."""
+        raise NotImplementedError
+
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Mock stream invoke (raises NotImplementedError)."""
+        raise NotImplementedError
 
     async def aclose(self) -> None:
         """Mock cleanup."""
