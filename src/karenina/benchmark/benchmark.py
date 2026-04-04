@@ -816,7 +816,7 @@ class Benchmark:
         Creates a ScenarioManager and iterates over the cross-product of
         scenarios, answering models, and parsing models. When ``async_enabled``
         is True and there are multiple task combinations, uses
-        ``asyncio.gather`` with ``manager.arun()`` for parallel execution.
+        ``asyncio.gather`` with ``asyncio.to_thread(manager.run, ...)`` for parallel execution.
 
         Args:
             config: Verification configuration.
@@ -916,7 +916,8 @@ class Benchmark:
 
         async def _gather() -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
             coros = [
-                manager.arun(
+                asyncio.to_thread(
+                    manager.run,
                     scenario=scenario_def,
                     config=config,
                     base_answering_model=ans_model,

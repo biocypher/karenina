@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import hashlib
 import logging
 import warnings
 from collections.abc import Callable
@@ -22,12 +23,25 @@ from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioSta
 from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.utils.answer_cache import AnswerTraceCache
 from karenina.utils.checkpoint import generate_question_id, generate_template_id
 
 from .edge_resolution import resolve_next_node
 from .handover import TaggedMessage, apply_handover
 
 logger = logging.getLogger(__name__)
+
+
+def build_scenario_cache_key(
+    scenario_id: str,
+    node_id: str,
+    answering_model_id: str,
+    conversation_history_strs: list[str],
+) -> str:
+    """Build a cache key for node-level answer caching in scenarios."""
+    history_str = "|".join(conversation_history_strs)
+    history_hash = hashlib.sha256(history_str.encode()).hexdigest()[:16]
+    return f"{scenario_id}_{node_id}_{answering_model_id}_{history_hash}"
 
 
 class ScenarioManager:
@@ -42,6 +56,7 @@ class ScenarioManager:
         run_name: str | None = None,
         global_rubric: Rubric | None = None,
         progress_callback: Callable[..., None] | None = None,
+        answer_cache: AnswerTraceCache | None = None,
     ) -> ScenarioExecutionResult:
         """Execute a scenario with a specific model pair.
 
@@ -53,6 +68,7 @@ class ScenarioManager:
             run_name: Optional run name for tracking.
             global_rubric: Optional global rubric applied per-turn.
             progress_callback: Optional callback for turn-level progress.
+            answer_cache: Optional cache for sharing answers across runs.
 
         Returns:
             ScenarioExecutionResult with all turn data.
@@ -136,6 +152,25 @@ class ScenarioManager:
             # Determine question_text_override (only when handover modified it)
             question_text_override = question_text if question_text != node.question.question else None
 
+            # Build answer cache key for this turn
+            cached_answer_data = None
+            cache_key = None
+            if answer_cache is not None:
+                answering_model_id = answering_model.id or answering_model.model_name or "unknown"
+                history_strs = [str(m) for m in conversation_history]
+                cache_key = build_scenario_cache_key(
+                    scenario.name,
+                    state.current_node,
+                    answering_model_id,
+                    history_strs,
+                )
+                cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                if cache_status == "IN_PROGRESS":
+                    answer_cache.wait_for_completion(cache_key, timeout=config.request_timeout or 120.0)
+                    cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                if cache_status == "HIT":
+                    logger.debug("Scenario cache hit for %s/%s", scenario.name, state.current_node)
+
             # Run the verification pipeline for this turn
             vr, trace_messages, parsed_answer, raw_response = self._run_turn(
                 node=node,
@@ -150,7 +185,24 @@ class ScenarioManager:
                 scenario_node=state.current_node,
                 scenario_path=list(path),
                 question_text_override=question_text_override,
+                cached_answer_data=cached_answer_data,
             )
+
+            # Complete cache entry after generation
+            if answer_cache is not None and cache_key is not None and cached_answer_data is None:
+                from karenina.benchmark.verification.utils.cache_helpers import extract_answer_data_from_result
+
+                try:
+                    answer_data = extract_answer_data_from_result(vr)
+                    answer_cache.complete(cache_key, answer_data)
+                except Exception:
+                    logger.warning(
+                        "Failed to cache answer for %s/%s",
+                        scenario.name,
+                        state.current_node,
+                        exc_info=True,
+                    )
+                    answer_cache.complete(cache_key, None, error=Exception("extraction failed"))
 
             # Grow tagged history with trace
             if trace_messages:
@@ -298,6 +350,7 @@ class ScenarioManager:
         scenario_node: str | None = None,
         scenario_path: list[str] | None = None,
         question_text_override: str | None = None,
+        cached_answer_data: dict[str, Any] | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -362,6 +415,9 @@ class ScenarioManager:
         context.set_artifact(ArtifactKeys.ANSWERING_MODEL_IDENTITY, answering_identity)
         context.set_artifact(ArtifactKeys.PARSING_MODEL_IDENTITY, parsing_identity)
 
+        if cached_answer_data is not None:
+            context.cached_answer_data = cached_answer_data
+
         # Build and execute orchestrator
         orchestrator = StageOrchestrator.from_config(
             rubric=rubric,
@@ -402,32 +458,6 @@ class ScenarioManager:
             )
         except Exception:
             logger.warning("Progress callback failed", exc_info=True)
-
-    async def arun(
-        self,
-        scenario: ScenarioDefinition,
-        config: VerificationConfig,
-        base_answering_model: ModelConfig,
-        base_parsing_model: ModelConfig,
-        run_name: str | None = None,
-        global_rubric: Rubric | None = None,
-        progress_callback: Callable[..., None] | None = None,
-    ) -> ScenarioExecutionResult:
-        """Async variant of run(). Turns are still sequential.
-
-        For Phase 3 parallel execution via asyncio.gather().
-        """
-        # Turns within a scenario are sequential, so delegate to sync run.
-        # In a future phase, individual pipeline stages may be async.
-        return self.run(
-            scenario=scenario,
-            config=config,
-            base_answering_model=base_answering_model,
-            base_parsing_model=base_parsing_model,
-            run_name=run_name,
-            global_rubric=global_rubric,
-            progress_callback=progress_callback,
-        )
 
 
 def _resolve_models(

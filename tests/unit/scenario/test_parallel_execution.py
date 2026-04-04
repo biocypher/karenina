@@ -147,7 +147,7 @@ class TestScenarioRunSync:
 class TestScenarioRunParallel:
     """Tests for parallel scenario execution via asyncio.gather."""
 
-    def test_async_enabled_calls_arun(self, monkeypatch):
+    def test_async_enabled_calls_parallel(self, monkeypatch):
         """When async_enabled=True and multiple combos, uses _run_scenario_parallel."""
         bm = Benchmark("scenario_bm")
         bm.add_scenario(_build_scenario("alpha"))
@@ -192,8 +192,8 @@ class TestScenarioRunParallel:
         bm._run_scenario_verification(config=config, async_enabled=True)
         assert sync_called["n"] == 1
 
-    def test_parallel_gathers_results_from_arun(self, monkeypatch):
-        """_run_scenario_parallel invokes arun for each combo and collects results."""
+    def test_parallel_gathers_results_from_run(self, monkeypatch):
+        """_run_scenario_parallel invokes run (via to_thread) for each combo and collects results."""
         from karenina.scenario.manager import ScenarioManager
 
         bm = Benchmark("scenario_bm")
@@ -202,13 +202,13 @@ class TestScenarioRunParallel:
 
         config = _make_config()
 
-        arun_count = {"n": 0}
+        run_count = {"n": 0}
 
-        async def fake_arun(_self, **kwargs: Any) -> ScenarioExecutionResult:
-            arun_count["n"] += 1
+        def fake_run(_self, **kwargs: Any) -> ScenarioExecutionResult:
+            run_count["n"] += 1
             return _make_exec_result()
 
-        monkeypatch.setattr(ScenarioManager, "arun", fake_arun)
+        monkeypatch.setattr(ScenarioManager, "run", fake_run)
 
         manager = ScenarioManager()
         combos = [
@@ -225,14 +225,14 @@ class TestScenarioRunParallel:
             progress_callback=None,
         )
 
-        assert arun_count["n"] == 2
+        assert run_count["n"] == 2
         # Both exec_results have empty turn_results, so total is 0
         assert len(turn_results) == 0
         assert len(exec_results) == 2
         assert len(errors) == 0
 
     def test_parallel_exception_in_one_combo_does_not_block_others(self, monkeypatch):
-        """If one arun raises, the others still complete successfully."""
+        """If one run raises, the others still complete successfully."""
         from karenina.scenario.manager import ScenarioManager
 
         bm = Benchmark("scenario_bm")
@@ -243,14 +243,14 @@ class TestScenarioRunParallel:
 
         call_index = {"n": 0}
 
-        async def fake_arun(_self, **kwargs: Any) -> ScenarioExecutionResult:
+        def fake_run(_self, **kwargs: Any) -> ScenarioExecutionResult:
             idx = call_index["n"]
             call_index["n"] += 1
             if idx == 0:
                 raise RuntimeError("boom")
             return _make_exec_result()
 
-        monkeypatch.setattr(ScenarioManager, "arun", fake_arun)
+        monkeypatch.setattr(ScenarioManager, "run", fake_run)
 
         manager = ScenarioManager()
         combos = [
