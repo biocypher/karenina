@@ -98,6 +98,8 @@ class ClaudeToolLLMAdapter:
                 kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
             if self._config.anthropic_base_url:
                 kwargs["base_url"] = self._config.anthropic_base_url
+            if self._config.request_timeout is not None:
+                kwargs["timeout"] = self._config.request_timeout
 
             # SDK handles retries automatically (default: 2 retries with exponential backoff)
             self._client = Anthropic(**kwargs)
@@ -114,6 +116,8 @@ class ClaudeToolLLMAdapter:
                 kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
             if self._config.anthropic_base_url:
                 kwargs["base_url"] = self._config.anthropic_base_url
+            if self._config.request_timeout is not None:
+                kwargs["timeout"] = self._config.request_timeout
 
             # SDK handles retries automatically (default: 2 retries with exponential backoff)
             self._async_client = AsyncAnthropic(**kwargs)
