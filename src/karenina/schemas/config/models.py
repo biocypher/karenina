@@ -580,6 +580,10 @@ class ModelConfig(BaseModel):
     # Timeout in seconds for agent execution. Overrides the default timeout (180s)
     # used in answer generation. Set higher for complex questions with many tool calls.
     agent_timeout: int | None = None
+    # HTTP request timeout in seconds for individual LLM API calls.
+    # Typically set by the pipeline from VerificationConfig.request_timeout.
+    # None means use the provider SDK default (no timeout).
+    request_timeout: float | None = None
 
     @model_validator(mode="after")
     def validate_manual_interface(self) -> "ModelConfig":
