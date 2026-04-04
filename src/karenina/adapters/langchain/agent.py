@@ -18,7 +18,6 @@ from karenina.ports import (
     AgentExecutionError,
     AgentPort,
     AgentResult,
-    AgentTimeoutError,
     MCPHttpServerConfig,
     MCPServerConfig,
     Message,
@@ -308,7 +307,6 @@ class LangChainAgentAdapter:
 
         Raises:
             AgentExecutionError: If the agent fails during execution.
-            AgentTimeoutError: If execution exceeds the timeout.
         """
         from karenina.adapters.langchain.trace import (
             extract_final_ai_message_from_response,
@@ -340,6 +338,7 @@ class LangChainAgentAdapter:
 
         # Prepare agent invocation
         recursion_limit_reached = False
+        timeout_reached = False
         agent_response: dict[str, Any] = {"messages": []}
 
         # Use session-based thread_id for checkpointing
@@ -400,10 +399,12 @@ class LangChainAgentAdapter:
                                 try:
                                     agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
                                 except TimeoutError as e:
-                                    deferred_error = AgentTimeoutError(
-                                        f"Agent execution timed out after {config.timeout}s"
+                                    logger.warning(
+                                        "Agent timed out after %ss, attempting partial state recovery",
+                                        config.timeout,
                                     )
-                                    deferred_error.__cause__ = e
+                                    timeout_reached = True
+                                    agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
                             else:
                                 agent_response = await coro
                         except Exception as e:
@@ -429,8 +430,12 @@ class LangChainAgentAdapter:
                             try:
                                 agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
                             except TimeoutError as e:
-                                deferred_error = AgentTimeoutError(f"Agent execution timed out after {config.timeout}s")
-                                deferred_error.__cause__ = e
+                                logger.warning(
+                                    "Agent timed out after %ss, attempting partial state recovery",
+                                    config.timeout,
+                                )
+                                timeout_reached = True
+                                agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
                         else:
                             agent_response = await coro
                     except Exception as e:
@@ -459,6 +464,8 @@ class LangChainAgentAdapter:
         raw_trace = harmonize_agent_response(agent_response)
         if recursion_limit_reached:
             raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
+        if timeout_reached:
+            raw_trace += "\n\n[Note: Agent timed out - partial response shown]"
 
         # Build trace_messages (new structured format)
         # Exclude user messages — the trace should only contain assistant and
@@ -493,6 +500,7 @@ class LangChainAgentAdapter:
             limit_reached=recursion_limit_reached,
             session_id=thread_id,
             actual_model=self._config.model_name,
+            timeout_reached=timeout_reached,
         )
 
     def run(
@@ -515,7 +523,6 @@ class LangChainAgentAdapter:
 
         Raises:
             AgentExecutionError: If the agent fails during execution.
-            AgentTimeoutError: If execution exceeds the timeout.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 
