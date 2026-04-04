@@ -17,7 +17,6 @@ from karenina.benchmark.verification.scenario_executor import (
     ScenarioExecutorConfig,
 )
 
-
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -278,10 +277,6 @@ class TestProgressCallbackWiring:
     def test_callback_receives_expected_kwargs(self, mock_manager_cls: MagicMock) -> None:
         """The make_turn_callback closure correctly receives and stores kwargs."""
         combos = [_make_combo("kwarg_check")]
-
-        captured_kwargs: list[dict] = []
-
-        original_run = None
 
         def mock_run(**kwargs):
             cb = kwargs.get("progress_callback")

@@ -50,8 +50,7 @@ def _build_fake_sdk() -> types.ModuleType:
 
     # Placeholder async generator; each test replaces via monkeypatch.setattr.
     async def _placeholder_query(prompt: str, options: Any) -> Any:  # pragma: no cover
-        return
-        yield  # makes this an async generator  # type: ignore[misc]
+        yield  # Makes this an async generator; each test replaces via monkeypatch
 
     mod = types.ModuleType("claude_agent_sdk")
     for _name, _obj in [
