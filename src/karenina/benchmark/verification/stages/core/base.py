@@ -107,6 +107,7 @@ class ArtifactKeys:
 
     # Streaming Timeout
     RESPONSE_TIMEOUT_PARTIAL = "response_timeout_partial"
+    USAGE_UNAVAILABLE = "usage_unavailable"
 
     # Trace Validation
     MCP_ENABLED = "mcp_enabled"

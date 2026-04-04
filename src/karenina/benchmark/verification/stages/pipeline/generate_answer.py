@@ -383,6 +383,10 @@ class GenerateAnswerStage(BaseVerificationStage):
                         len(llm_response.content),
                     )
 
+                # Propagate usage_unavailable flag if present
+                if llm_response.usage_unavailable:
+                    self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
+
                 # Build trace_messages for the LLM path too
                 llm_trace_messages = [
                     Message.assistant(llm_response.content),

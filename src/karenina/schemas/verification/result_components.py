@@ -139,6 +139,7 @@ class VerificationResultTemplate(BaseModel):
 
     # Streaming timeout metadata
     response_timeout_partial: bool = False  # Whether response was truncated due to streaming timeout
+    usage_unavailable: bool = False  # Whether usage metadata could not be captured (e.g., streaming timeout)
 
     # Agentic parsing
     investigation_trace: str | None = Field(
