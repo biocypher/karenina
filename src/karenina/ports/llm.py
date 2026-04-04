@@ -26,6 +26,9 @@ class LLMResponse:
         usage: Token usage and cost metadata.
         raw: Provider-specific raw response object for advanced use cases.
         is_partial: Whether the response was truncated (e.g., due to streaming timeout).
+        usage_unavailable: Whether usage metadata could not be captured (e.g., streaming
+            timeout interrupted the final chunk that carries token counts). When True,
+            usage fields are zero but do not reflect actual consumption.
 
     Example:
         >>> response = LLMResponse(
@@ -41,6 +44,7 @@ class LLMResponse:
     usage: UsageMetadata
     raw: Any = None
     is_partial: bool = False
+    usage_unavailable: bool = False
 
 
 class StreamingLLMResponse:
