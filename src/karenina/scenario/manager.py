@@ -78,6 +78,17 @@ class ScenarioManager:
             node_results={},
         )
 
+        # Stamp pipeline-level request_timeout onto base models (same as batch_runner)
+        if config.request_timeout is not None:
+            if base_answering_model.request_timeout is None:
+                base_answering_model = base_answering_model.model_copy(
+                    update={"request_timeout": config.request_timeout},
+                )
+            if base_parsing_model.request_timeout is None:
+                base_parsing_model = base_parsing_model.model_copy(
+                    update={"request_timeout": config.request_timeout},
+                )
+
         tagged_messages: list[TaggedMessage] = []
         pending_handover_edge: ScenarioEdge | None = None
         turn_results: list[VerificationResult] = []
@@ -424,10 +435,21 @@ def _resolve_models(
     base_answering: ModelConfig,
     base_parsing: ModelConfig,
 ) -> tuple[ModelConfig, ModelConfig]:
-    """Resolve per-turn models from node override or base config."""
+    """Resolve per-turn models from node override or base config.
+
+    Override models inherit request_timeout from the base model when not set,
+    so the pipeline-level timeout propagates to per-node model overrides.
+    """
     override = node.model_override
     answering = override.answering_model if override and override.answering_model else base_answering
     parsing = override.parsing_model if override and override.parsing_model else base_parsing
+
+    # Propagate request_timeout from base models to overrides that don't set their own
+    if answering.request_timeout is None and base_answering.request_timeout is not None:
+        answering = answering.model_copy(update={"request_timeout": base_answering.request_timeout})
+    if parsing.request_timeout is None and base_parsing.request_timeout is not None:
+        parsing = parsing.model_copy(update={"request_timeout": base_parsing.request_timeout})
+
     return answering, parsing
 
 

@@ -836,8 +836,14 @@ class Benchmark:
         all_errors: list[tuple[str, BaseException]] = []
 
         # Build the list of (scenario, answering_model, parsing_model) combos
+        # Stamp pipeline-level request_timeout onto models that don't have their own
+        def _apply_timeout(model: Any) -> Any:
+            if config.request_timeout is not None and model.request_timeout is None:
+                return model.model_copy(update={"request_timeout": config.request_timeout})
+            return model
+
         combos = [
-            (scenario_def, ans_model, parse_model)
+            (scenario_def, _apply_timeout(ans_model), _apply_timeout(parse_model))
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models
