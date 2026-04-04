@@ -19,6 +19,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
@@ -277,6 +278,7 @@ class ClaudeToolLLMAdapter:
             raw=parsed_output,
         )
 
+    @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
 

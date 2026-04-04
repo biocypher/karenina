@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
+from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.errors import is_retryable_error
@@ -189,6 +190,7 @@ class LangChainLLMAdapter:
         # Regular text mode
         return await self._ainvoke_text(messages)
 
+    @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
 
