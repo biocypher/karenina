@@ -27,6 +27,10 @@ def _build_fake_sdk() -> types.ModuleType:
             for key, value in kwargs.items():
                 setattr(self, key, value)
 
+        def __getattr__(self, name: str) -> None:
+            # Return None for any attribute not explicitly set (matches real SDK defaults)
+            return None
+
     class TextBlock:
         def __init__(self, text: str = "") -> None:
             self.text = text
@@ -61,14 +65,25 @@ def _build_fake_sdk() -> types.ModuleType:
     return mod
 
 
-# Install the stub once at module level so that `from claude_agent_sdk import ...`
-# inside the adapter resolves all names. Individual tests replace mod.query.
+# Install the stub so that `from claude_agent_sdk import ...` inside the adapter
+# resolves all names. Preserved and restored to avoid polluting other tests.
 _SDK = _build_fake_sdk()
-if "claude_agent_sdk" not in sys.modules:
-    sys.modules["claude_agent_sdk"] = _SDK
+_ORIGINAL_SDK = sys.modules.get("claude_agent_sdk")
+sys.modules["claude_agent_sdk"] = _SDK
 
 
 from karenina.adapters.claude_agent_sdk.llm import ClaudeSDKLLMAdapter  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _restore_sdk_module():
+    """Ensure the real SDK module is restored after each test."""
+    sys.modules["claude_agent_sdk"] = _SDK
+    yield
+    if _ORIGINAL_SDK is not None:
+        sys.modules["claude_agent_sdk"] = _ORIGINAL_SDK
+    else:
+        sys.modules.pop("claude_agent_sdk", None)
 
 
 @pytest.fixture
