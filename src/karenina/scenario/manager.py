@@ -19,12 +19,13 @@ from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
 from karenina.schemas.scenario.definition import ScenarioDefinition
 from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState, TurnRecord
-from karenina.schemas.scenario.types import END, ScenarioNode
+from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.checkpoint import generate_question_id, generate_template_id
 
 from .edge_resolution import resolve_next_node
+from .handover import TaggedMessage, apply_handover
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +78,33 @@ class ScenarioManager:
             node_results={},
         )
 
-        accumulated_messages: list[Message] = []
+        # Stamp pipeline-level request_timeout onto base models (same as batch_runner)
+        if config.request_timeout is not None:
+            if base_answering_model.request_timeout is None:
+                base_answering_model = base_answering_model.model_copy(
+                    update={"request_timeout": config.request_timeout},
+                )
+            if base_parsing_model.request_timeout is None:
+                base_parsing_model = base_parsing_model.model_copy(
+                    update={"request_timeout": config.request_timeout},
+                )
+
+        tagged_messages: list[TaggedMessage] = []
+        pending_handover_edge: ScenarioEdge | None = None
         turn_results: list[VerificationResult] = []
         path: list[str] = []
         status: Literal["completed", "limit_reached", "error"] = "completed"
 
+        # Resolve base identity from entry node
+        entry_node_obj = scenario.nodes[scenario.entry_node]
+        base_identity = (
+            entry_node_obj.agent_identity or base_answering_model.id or base_answering_model.model_name or "unknown"
+        )
+
         while True:
             node = scenario.nodes[state.current_node]
             path.append(state.current_node)
+            agent_id = node.agent_identity or base_identity
 
             # Resolve models for this turn
             answering_model, parsing_model = _resolve_models(
@@ -93,14 +113,33 @@ class ScenarioManager:
                 base_parsing_model,
             )
 
-            # Build the question message and add to accumulated history
-            question_msg = Message.user(node.question.question)
-            accumulated_messages.append(question_msg)
+            # Build conversation_history for this turn
+            question_text = node.question.question
+            if pending_handover_edge is not None:
+                handover_result = apply_handover(
+                    pending_handover_edge,
+                    tagged_messages,
+                    state,
+                    question_text,
+                )
+                if handover_result is not None:
+                    question_text, conversation_history = handover_result
+                else:
+                    conversation_history = [tm.message for tm in tagged_messages]
+            else:
+                conversation_history = [tm.message for tm in tagged_messages]
+
+            # Build question message and tag it
+            question_msg = Message.user(question_text)
+            tagged_messages.append(TaggedMessage(question_msg, agent_id="__user__"))
+
+            # Determine question_text_override (only when handover modified it)
+            question_text_override = question_text if question_text != node.question.question else None
 
             # Run the verification pipeline for this turn
             vr, trace_messages, parsed_answer, raw_response = self._run_turn(
                 node=node,
-                accumulated_messages=accumulated_messages,
+                conversation_history=conversation_history,
                 answering_model=answering_model,
                 parsing_model=parsing_model,
                 config=config,
@@ -110,11 +149,13 @@ class ScenarioManager:
                 scenario_id=scenario.name,
                 scenario_node=state.current_node,
                 scenario_path=list(path),
+                question_text_override=question_text_override,
             )
 
-            # Grow accumulated history with trace
+            # Grow tagged history with trace
             if trace_messages:
-                accumulated_messages.extend(trace_messages)
+                for msg in trace_messages:
+                    tagged_messages.append(TaggedMessage(msg, agent_id=agent_id))
 
             # Build TurnRecord
             verify_result = vr.template.verify_result if vr.template is not None else None
@@ -126,7 +167,7 @@ class ScenarioManager:
             record = TurnRecord(
                 node_id=state.current_node,
                 question_text=node.question.question,
-                question_messages=[question_msg],
+                question_messages=[Message.user(node.question.question)],
                 trace_messages=trace_messages or [],
                 raw_response=raw_response or "",
                 parsed_answer=parsed_answer,
@@ -200,7 +241,7 @@ class ScenarioManager:
 
             # Resolve next node
             outbound_edges = [e for e in scenario.edges if e.source == state.current_node]
-            next_node = resolve_next_node(outbound_edges, state)
+            next_node, followed_edge = resolve_next_node(outbound_edges, state)
 
             # Report progress (after edge resolution so next_node is known)
             self._report_progress(
@@ -221,6 +262,7 @@ class ScenarioManager:
                 status = "completed"
                 break
 
+            pending_handover_edge = followed_edge
             state.current_node = next_node
 
         # Evaluate outcome criteria
@@ -245,7 +287,7 @@ class ScenarioManager:
     def _run_turn(
         self,
         node: ScenarioNode,
-        accumulated_messages: list[Message],
+        conversation_history: list[Message],
         answering_model: ModelConfig,
         parsing_model: ModelConfig,
         config: VerificationConfig,
@@ -255,6 +297,7 @@ class ScenarioManager:
         scenario_id: str | None = None,
         scenario_node: str | None = None,
         scenario_path: list[str] | None = None,
+        question_text_override: str | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -291,7 +334,7 @@ class ScenarioManager:
         context = VerificationContext(
             question_id=generate_question_id(node.question.question),
             template_id=template_id,
-            question_text=node.question.question,
+            question_text=question_text_override or node.question.question,
             template_code=template_code,
             answering_model=answering_model,
             parsing_model=parsing_model,
@@ -311,9 +354,7 @@ class ScenarioManager:
 
         # Set conversation history artifact (the key integration point).
         # Pass a copy so the pipeline does not mutate our accumulator.
-        # Exclude the last message (the current question) because
-        # GenerateAnswerStage will append it as the constructed_prompt.
-        context.set_artifact("conversation_history", list(accumulated_messages[:-1]))
+        context.set_artifact("conversation_history", list(conversation_history))
 
         # Set model identity artifacts
         answering_identity = ModelIdentity.from_model_config(answering_model, role="answering")
@@ -394,10 +435,21 @@ def _resolve_models(
     base_answering: ModelConfig,
     base_parsing: ModelConfig,
 ) -> tuple[ModelConfig, ModelConfig]:
-    """Resolve per-turn models from node override or base config."""
+    """Resolve per-turn models from node override or base config.
+
+    Override models inherit request_timeout from the base model when not set,
+    so the pipeline-level timeout propagates to per-node model overrides.
+    """
     override = node.model_override
     answering = override.answering_model if override and override.answering_model else base_answering
     parsing = override.parsing_model if override and override.parsing_model else base_parsing
+
+    # Propagate request_timeout from base models to overrides that don't set their own
+    if answering.request_timeout is None and base_answering.request_timeout is not None:
+        answering = answering.model_copy(update={"request_timeout": base_answering.request_timeout})
+    if parsing.request_timeout is None and base_parsing.request_timeout is not None:
+        parsing = parsing.model_copy(update={"request_timeout": base_parsing.request_timeout})
+
     return answering, parsing
 
 

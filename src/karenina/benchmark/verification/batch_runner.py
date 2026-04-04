@@ -38,6 +38,16 @@ from .utils.task_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _apply_request_timeout(model: Any, pipeline_timeout: float | None) -> Any:
+    """Stamp pipeline-level request_timeout onto a ModelConfig if not already set.
+
+    Returns the original model if no change is needed, or a copy with the timeout applied.
+    """
+    if pipeline_timeout is not None and model.request_timeout is None:
+        return model.model_copy(update={"request_timeout": pipeline_timeout})
+    return model
+
+
 # ============================================================================
 # Task Queue Generation
 # ============================================================================
@@ -80,8 +90,11 @@ def generate_task_queue(
         few_shot = resolve_few_shot_for_task(template, config)
 
         # Expand over model combinations
-        for ans_model in config.answering_models:
-            for parse_model in config.parsing_models:
+        for ans_model_raw in config.answering_models:
+            for parse_model_raw in config.parsing_models:
+                # Stamp pipeline-level request_timeout onto models that don't have their own
+                ans_model = _apply_request_timeout(ans_model_raw, config.request_timeout)
+                parse_model = _apply_request_timeout(parse_model_raw, config.request_timeout)
                 # Expand over replicates
                 for rep in range(1, config.replicate_count + 1):
                     # For single replicate, don't include replicate numbers

@@ -328,3 +328,116 @@ class TestScenarioValidate:
         # q2 has no outbound edges: that is valid (implicit terminal)
         defn = s.validate()
         assert isinstance(defn, ScenarioDefinition)
+
+
+# ---------------------------------------------------------------------------
+# Agent identity and handover fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestAgentIdentity:
+    def test_scenario_node_agent_identity_default_none(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioNode
+
+        node = ScenarioNode(node_id="n", question=_make_question())
+        assert node.agent_identity is None
+
+    def test_scenario_node_agent_identity_set(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioNode
+
+        node = ScenarioNode(node_id="n", question=_make_question(), agent_identity="guardrail")
+        assert node.agent_identity == "guardrail"
+
+    def test_scenario_edge_handover_default_none(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioEdge
+
+        edge = ScenarioEdge(source="a", target="b")
+        assert edge.handover is None
+        assert edge.handover_callable is None
+
+    def test_scenario_edge_handover_string(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioEdge
+
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_prepend")
+        assert edge.handover == "transcript_prepend"
+
+    def test_scenario_edge_handover_callable_excluded_from_dump(self) -> None:
+        from karenina.schemas.scenario.types import ScenarioEdge
+
+        edge = ScenarioEdge(
+            source="a",
+            target="b",
+            handover_callable=lambda _msgs, _state: [],
+        )
+        data = edge.model_dump()
+        assert "handover_callable" not in data
+
+
+@pytest.mark.unit
+class TestAddNodeAgentIdentity:
+    def test_add_node_with_agent_identity(self) -> None:
+        s = Scenario("test")
+        s.add_node("g", question=_make_question(), agent_identity="guardrail")
+        assert s._nodes["g"].agent_identity == "guardrail"
+
+    def test_add_node_without_agent_identity(self) -> None:
+        s = Scenario("test")
+        s.add_node("g", question=_make_question())
+        assert s._nodes["g"].agent_identity is None
+
+    def test_add_node_reserved_user_identity_raises(self) -> None:
+        s = Scenario("test")
+        with pytest.raises(ValueError, match="__user__"):
+            s.add_node("g", question=_make_question(), agent_identity="__user__")
+
+
+@pytest.mark.unit
+class TestAddEdgeHandover:
+    def _scenario_with_nodes(self) -> Scenario:
+        s = Scenario("test")
+        s.add_node("a", question=_make_question("A"))
+        s.add_node("b", question=_make_question("B"))
+        return s
+
+    def test_add_edge_with_transcript_prepend(self) -> None:
+        s = self._scenario_with_nodes()
+        s.add_edge("a", "b", handover="transcript_prepend")
+        assert s._edges[0].handover == "transcript_prepend"
+        assert s._edges[0].handover_callable is None
+
+    def test_add_edge_with_transcript_append(self) -> None:
+        s = self._scenario_with_nodes()
+        s.add_edge("a", "b", handover="transcript_append")
+        assert s._edges[0].handover == "transcript_append"
+
+    def test_add_edge_with_callable_handover(self) -> None:
+        def fn(_msgs: object, _state: object) -> list:  # noqa: UP006
+            return []
+
+        s = self._scenario_with_nodes()
+        s.add_edge("a", "b", handover=fn)
+        assert s._edges[0].handover is None
+        assert s._edges[0].handover_callable is fn
+
+    def test_add_edge_with_unknown_strategy_raises(self) -> None:
+        s = self._scenario_with_nodes()
+        with pytest.raises(ValueError, match="Unknown handover strategy"):
+            s.add_edge("a", "b", handover="invalid_strategy")
+
+    def test_add_edge_callable_handover_emits_warning(self) -> None:
+        import warnings
+
+        s = self._scenario_with_nodes()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            s.add_edge("a", "b", handover=lambda _msgs, _state: [])
+            assert len(w) == 1
+            assert "not be serialized" in str(w[0].message)
+
+    def test_add_edge_with_both_when_and_handover(self) -> None:
+        s = self._scenario_with_nodes()
+        s.add_edge("a", "b", when={"verify_result": True}, handover="transcript_prepend")
+        edge = s._edges[0]
+        assert edge.condition is not None
+        assert edge.handover == "transcript_prepend"

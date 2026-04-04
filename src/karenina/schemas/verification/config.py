@@ -235,6 +235,11 @@ class VerificationConfig(BaseModel):
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
+    # HTTP request timeout (seconds) for all LLM calls in the pipeline.
+    # Applies to answer generation, parsing, rubric evaluation, and guardrail calls.
+    # Set to None to disable (use provider SDK defaults).
+    request_timeout: float = 120.0
+
     # Scenario execution settings
     scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
 

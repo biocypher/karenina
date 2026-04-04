@@ -124,6 +124,9 @@ class LangChainLLMAdapter:
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
 
+        if self._config.request_timeout is not None:
+            kwargs["request_timeout"] = self._config.request_timeout
+
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
 

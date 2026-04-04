@@ -169,7 +169,8 @@ class TestResolveNextNode:
             ),
         ]
         state = _make_state(verify_result=True)
-        assert resolve_next_node(edges, state) == "c"
+        target, edge = resolve_next_node(edges, state)
+        assert target == "c"
 
     def test_unconditional_fallback_taken(self) -> None:
         edges = [
@@ -181,10 +182,13 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="b"),
         ]
         state = _make_state(verify_result=False)
-        assert resolve_next_node(edges, state) == "b"
+        target, edge = resolve_next_node(edges, state)
+        assert target == "b"
 
     def test_no_edges_returns_none(self) -> None:
-        assert resolve_next_node([], _make_state()) is None
+        target, edge = resolve_next_node([], _make_state())
+        assert target is None
+        assert edge is None
 
     def test_callable_condition(self) -> None:
         edges = [
@@ -192,7 +196,8 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="c"),
         ]
         state = _make_state(turn=5)
-        assert resolve_next_node(edges, state) == "b"
+        target, edge = resolve_next_node(edges, state)
+        assert target == "b"
 
     def test_callable_condition_not_matched(self) -> None:
         edges = [
@@ -200,7 +205,8 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="c"),
         ]
         state = _make_state(turn=5)
-        assert resolve_next_node(edges, state) == "c"
+        target, edge = resolve_next_node(edges, state)
+        assert target == "c"
 
     def test_callable_exception_treated_as_no_match(self) -> None:
         def bad_callable(s: ScenarioState) -> bool:
@@ -210,7 +216,8 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="b", condition_callable=bad_callable),
             ScenarioEdge(source="a", target="c"),
         ]
-        assert resolve_next_node(edges, _make_state()) == "c"
+        target, edge = resolve_next_node(edges, _make_state())
+        assert target == "c"
 
     def test_first_match_wins(self) -> None:
         edges = [
@@ -227,11 +234,13 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="d"),
         ]
         state = _make_state(verify_result=True)
-        assert resolve_next_node(edges, state) == "b"
+        target, edge = resolve_next_node(edges, state)
+        assert target == "b"
 
     def test_end_target_returned(self) -> None:
         edges = [ScenarioEdge(source="a", target=END)]
-        assert resolve_next_node(edges, _make_state()) == END
+        target, edge = resolve_next_node(edges, _make_state())
+        assert target == END
 
     def test_list_condition_all_must_pass(self) -> None:
         edges = [
@@ -246,9 +255,11 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="c"),
         ]
         # Both conditions met
-        assert resolve_next_node(edges, _make_state(verify_result=True, turn=3)) == "b"
+        target, edge = resolve_next_node(edges, _make_state(verify_result=True, turn=3))
+        assert target == "b"
         # Only one condition met
-        assert resolve_next_node(edges, _make_state(verify_result=True, turn=1)) == "c"
+        target, edge = resolve_next_node(edges, _make_state(verify_result=True, turn=1))
+        assert target == "c"
 
     def test_only_unconditional_edges(self) -> None:
         edges = [
@@ -256,7 +267,8 @@ class TestResolveNextNode:
             ScenarioEdge(source="a", target="c"),
         ]
         # First unconditional wins as fallback
-        assert resolve_next_node(edges, _make_state()) == "b"
+        target, edge = resolve_next_node(edges, _make_state())
+        assert target == "b"
 
     def test_no_match_no_fallback_returns_none(self) -> None:
         edges = [
@@ -267,4 +279,32 @@ class TestResolveNextNode:
             ),
         ]
         state = _make_state(verify_result=False)
-        assert resolve_next_node(edges, state) is None
+        target, edge = resolve_next_node(edges, state)
+        assert target is None
+        assert edge is None
+
+    def test_returns_matched_edge(self) -> None:
+        edge_cond = ScenarioEdge(
+            source="a",
+            target="b",
+            condition=StateCheck(field="verify_result", expected=True, verify_with=BooleanMatch()),
+        )
+        edge_fallback = ScenarioEdge(source="a", target="c")
+        edges = [edge_cond, edge_fallback]
+        state = _make_state(verify_result=True)
+        target, matched = resolve_next_node(edges, state)
+        assert target == "b"
+        assert matched is edge_cond
+
+    def test_returns_fallback_edge(self) -> None:
+        edge_cond = ScenarioEdge(
+            source="a",
+            target="b",
+            condition=StateCheck(field="verify_result", expected=True, verify_with=BooleanMatch()),
+        )
+        edge_fallback = ScenarioEdge(source="a", target="c")
+        edges = [edge_cond, edge_fallback]
+        state = _make_state(verify_result=False)
+        target, matched = resolve_next_node(edges, state)
+        assert target == "c"
+        assert matched is edge_fallback

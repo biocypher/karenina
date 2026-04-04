@@ -175,6 +175,7 @@ class SchemaOrgScenarioNode(BaseModel):
     toolFilter: dict[str, Any] | None = None
     stateUpdateSource: str | None = None
     questionData: dict[str, Any] | None = None
+    agentIdentity: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -187,6 +188,7 @@ class SchemaOrgScenarioEdge(BaseModel):
     target: str
     condition: dict[str, Any] | list[dict[str, Any]] | None = None
     conditionSource: str | None = None
+    handover: str | None = None
 
 
 class SchemaOrgScenarioOutcome(BaseModel):
