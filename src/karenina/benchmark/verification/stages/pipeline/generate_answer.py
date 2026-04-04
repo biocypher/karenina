@@ -324,6 +324,24 @@ class GenerateAnswerStage(BaseVerificationStage):
                 raw_llm_response = result.raw_trace
                 recursion_limit_reached = result.limit_reached
 
+                # Handle agent timeout with partial trace
+                if result.timeout_reached:
+                    if result.raw_trace:
+                        self.set_artifact_and_result(context, "response_timeout_partial", True)
+                        self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
+                        logger.warning(
+                            "Question %s: agent timed out with partial trace (%d chars, %d turns)",
+                            context.question_id,
+                            len(result.raw_trace),
+                            result.turns,
+                        )
+                    else:
+                        error_msg = "Agent timed out with no trace messages"
+                        context.mark_error(error_msg)
+                        context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
+                        context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
+                        return
+
                 # Track usage metadata from adapter
                 if result.usage:
                     inner_usage: dict[str, int | float] = {
