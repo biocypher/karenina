@@ -134,6 +134,13 @@ class VerificationConfig(BaseModel):
     # Async execution settings
     async_enabled: bool = DEFAULT_ASYNC_ENABLED  # Enable parallel execution
     async_max_workers: int = Field(default=DEFAULT_ASYNC_MAX_WORKERS, ge=1)  # Number of parallel workers
+    max_concurrent_requests: int | None = Field(
+        default=None,
+        ge=1,
+        description="Global cap on concurrent LLM requests across all workers. "
+        "None means no global limit (concurrency bounded by max_workers only). "
+        "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
+    )
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_mode: Literal["disabled", "reasoning_only", "full"] = "disabled"  # Template deep-judgment mode
@@ -317,6 +324,12 @@ class VerificationConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     data["async_max_workers"] = int(env_val)
             # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
+
+        if "max_concurrent_requests" not in data:
+            env_val = os.getenv("KARENINA_MAX_CONCURRENT_LLM_REQUESTS")
+            if env_val is not None:
+                with contextlib.suppress(ValueError):
+                    data["max_concurrent_requests"] = int(env_val)
 
         # Apply default system prompts to models that don't have one.
         # Deep-copy ModelConfig instances to avoid mutating shared objects.
@@ -694,6 +707,7 @@ class VerificationConfig(BaseModel):
         embedding_model: str | None = None,
         async_execution: bool | None = None,
         async_workers: int | None = None,
+        max_concurrent_requests: int | None = None,
         # Trace filtering
         use_full_trace_for_template: bool | None = None,
         use_full_trace_for_rubric: bool | None = None,
@@ -738,6 +752,7 @@ class VerificationConfig(BaseModel):
             embedding_model: Override for embedding model name.
             async_execution: Override for async execution flag.
             async_workers: Override for number of async workers.
+            max_concurrent_requests: Override for global concurrent LLM request cap.
             use_full_trace_for_template: Override for full trace template flag.
             use_full_trace_for_rubric: Override for full trace rubric flag.
             deep_judgment_rubric_mode: Override for deep judgment rubric mode.
@@ -784,6 +799,8 @@ class VerificationConfig(BaseModel):
             config_dict["async_enabled"] = async_execution
         if async_workers is not None:
             config_dict["async_max_workers"] = async_workers
+        if max_concurrent_requests is not None:
+            config_dict["max_concurrent_requests"] = max_concurrent_requests
 
         # Trace filtering
         if use_full_trace_for_template is not None:
