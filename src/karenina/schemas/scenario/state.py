@@ -56,7 +56,7 @@ class ScenarioExecutionResult:
     """
 
     scenario_id: str
-    status: Literal["completed", "limit_reached", "error"]
+    status: Literal["completed", "limit_reached", "error", "timeout"]
     path: list[str]
     turn_count: int
     history: list[TurnRecord]
