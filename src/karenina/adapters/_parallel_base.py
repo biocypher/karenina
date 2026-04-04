@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import functools
 import logging
 import os
 from collections.abc import Callable, Coroutine
@@ -59,6 +60,39 @@ def read_async_config() -> tuple[bool, int]:
             max_workers = int(env_val)
 
     return async_enabled, max_workers
+
+
+def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
+    """Wrap a sync LLM invoke() call with global semaphore acquisition.
+
+    When a global LLM semaphore is active (set by ScenarioExecutor or
+    VerificationExecutor), this decorator acquires one permit before calling
+    the wrapped function and releases it after (including on exception).
+
+    When no global semaphore is set, the function is called directly with
+    no overhead.
+
+    Args:
+        fn: The sync invoke() method to wrap.
+
+    Returns:
+        Wrapped function with semaphore acquisition.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> T:
+        from karenina.benchmark.verification.executor import get_global_llm_semaphore
+
+        sem = get_global_llm_semaphore()
+        if sem is not None:
+            sem.acquire()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            if sem is not None:
+                sem.release()
+
+    return wrapper
 
 
 def get_max_workers(override: int | None = None) -> int:

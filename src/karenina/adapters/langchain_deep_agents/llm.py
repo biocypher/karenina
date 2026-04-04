@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.usage import UsageMetadata
@@ -140,6 +141,7 @@ class DeepAgentsLLMAdapter:
 
         return LLMResponse(content=content, usage=usage, raw=response)
 
+    @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
 

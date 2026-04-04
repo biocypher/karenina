@@ -59,6 +59,39 @@ def set_async_portal(portal: BlockingPortal | None) -> None:
 
 
 # ============================================================================
+# Global LLM Semaphore
+# ============================================================================
+
+_global_llm_semaphore: threading.Semaphore | None = None
+
+
+def get_global_llm_semaphore() -> threading.Semaphore | None:
+    """Get the global LLM request semaphore.
+
+    Module-level (not thread-local) because the semaphore must be visible
+    from any thread, including the BlockingPortal event loop thread.
+    The semaphore itself is thread-safe.
+
+    Returns:
+        The active Semaphore if set, None otherwise.
+    """
+    return _global_llm_semaphore
+
+
+def set_global_llm_semaphore(sem: threading.Semaphore | None) -> None:
+    """Set the global LLM request semaphore.
+
+    Called by ScenarioExecutor before spawning workers and cleared after
+    all workers finish.
+
+    Args:
+        sem: The Semaphore to use, or None to clear.
+    """
+    global _global_llm_semaphore  # noqa: PLW0603
+    _global_llm_semaphore = sem
+
+
+# ============================================================================
 # Configuration
 # ============================================================================
 

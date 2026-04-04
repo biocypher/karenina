@@ -107,15 +107,15 @@ class TestParallelErrorCollection:
 
         call_count = {"n": 0}
 
-        async def fake_arun(_self, **kwargs: Any) -> ScenarioExecutionResult:
+        def fake_run(_self, **kwargs: Any) -> ScenarioExecutionResult:
             call_count["n"] += 1
             if call_count["n"] == 1:
                 return exec_ok
             raise err
 
         monkeypatch.setattr(
-            "karenina.scenario.manager.ScenarioManager.arun",
-            fake_arun,
+            "karenina.scenario.manager.ScenarioManager.run",
+            fake_run,
         )
 
         result_set = bm._run_scenario_verification(

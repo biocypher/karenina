@@ -1,9 +1,9 @@
-"""Tests for parallel scenario execution via asyncio.gather."""
+"""Tests for parallel scenario execution via ScenarioExecutor."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -145,96 +145,70 @@ class TestScenarioRunSync:
 
 @pytest.mark.unit
 class TestScenarioRunParallel:
-    """Tests for parallel scenario execution via asyncio.gather."""
+    """Tests for parallel scenario execution via ScenarioExecutor."""
 
-    def test_async_enabled_calls_arun(self, monkeypatch):
-        """When async_enabled=True and multiple combos, uses _run_scenario_parallel."""
+    @patch("karenina.benchmark.verification.scenario_executor.ScenarioExecutor")
+    def test_async_enabled_creates_parallel_executor(self, MockExecutor):
+        """When async_enabled=True and multiple combos, ScenarioExecutor is created with parallel=True."""
+        mock_executor = MockExecutor.return_value
+        mock_executor.run_batch.return_value = ([], [])
+
         bm = Benchmark("scenario_bm")
         bm.add_scenario(_build_scenario("alpha"))
         bm.add_scenario(_build_scenario("beta"))
 
         config = _make_config()
 
-        parallel_called = {"called": False}
-
-        def fake_parallel(_self, **kwargs: Any) -> tuple:
-            parallel_called["called"] = True
-            return ([], [], [])
-
-        monkeypatch.setattr(
-            Benchmark,
-            "_run_scenario_parallel",
-            fake_parallel,
-        )
-
         bm._run_scenario_verification(config=config, async_enabled=True)
-        assert parallel_called["called"] is True
 
-    def test_async_single_combo_stays_sync(self, monkeypatch):
-        """With only one combo, async_enabled=True still runs synchronously."""
+        MockExecutor.assert_called_once()
+        call_kwargs = MockExecutor.call_args
+        assert call_kwargs.kwargs.get("parallel") is True or call_kwargs[1].get("parallel") is True
+
+    @patch("karenina.benchmark.verification.scenario_executor.ScenarioExecutor")
+    def test_async_single_combo_stays_sequential(self, MockExecutor):
+        """With only one combo, async_enabled=True still creates executor with parallel=False."""
+        mock_executor = MockExecutor.return_value
+        mock_executor.run_batch.return_value = ([], [])
+
         bm = Benchmark("scenario_bm")
         bm.add_scenario(_build_scenario("alpha"))
 
         config = _make_config()
 
-        sync_called = {"n": 0}
+        bm._run_scenario_verification(config=config, async_enabled=True)
 
-        def fake_run(**kwargs: Any) -> ScenarioExecutionResult:
-            sync_called["n"] += 1
+        MockExecutor.assert_called_once()
+        call_kwargs = MockExecutor.call_args
+        assert call_kwargs.kwargs.get("parallel") is False or call_kwargs[1].get("parallel") is False
+
+    def test_parallel_gathers_results_via_executor(self, monkeypatch):
+        """ScenarioExecutor collects results from manager.run for each combo."""
+        bm = Benchmark("scenario_bm")
+        bm.add_scenario(_build_scenario("alpha"))
+        bm.add_scenario(_build_scenario("beta"))
+
+        config = _make_config()
+
+        run_count = {"n": 0}
+
+        def fake_run(_self, **kwargs: Any) -> ScenarioExecutionResult:
+            run_count["n"] += 1
             return _make_exec_result()
 
         monkeypatch.setattr(
             "karenina.scenario.manager.ScenarioManager.run",
-            lambda _self, **kw: fake_run(**kw),
+            fake_run,
         )
 
-        # Should NOT call _run_scenario_parallel because len(combos) == 1
-        bm._run_scenario_verification(config=config, async_enabled=True)
-        assert sync_called["n"] == 1
-
-    def test_parallel_gathers_results_from_arun(self, monkeypatch):
-        """_run_scenario_parallel invokes arun for each combo and collects results."""
-        from karenina.scenario.manager import ScenarioManager
-
-        bm = Benchmark("scenario_bm")
-        bm.add_scenario(_build_scenario("alpha"))
-        bm.add_scenario(_build_scenario("beta"))
-
-        config = _make_config()
-
-        arun_count = {"n": 0}
-
-        async def fake_arun(_self, **kwargs: Any) -> ScenarioExecutionResult:
-            arun_count["n"] += 1
-            return _make_exec_result()
-
-        monkeypatch.setattr(ScenarioManager, "arun", fake_arun)
-
-        manager = ScenarioManager()
-        combos = [
-            (bm.get_scenario("alpha"), _make_model("claude"), _make_model("haiku")),
-            (bm.get_scenario("beta"), _make_model("claude"), _make_model("haiku")),
-        ]
-
-        turn_results, exec_results, errors = bm._run_scenario_parallel(
-            manager=manager,
-            combos=combos,
-            config=config,
-            run_name=None,
-            global_rubric=None,
-            progress_callback=None,
-        )
-
-        assert arun_count["n"] == 2
-        # Both exec_results have empty turn_results, so total is 0
-        assert len(turn_results) == 0
-        assert len(exec_results) == 2
-        assert len(errors) == 0
+        result = bm._run_scenario_verification(config=config, async_enabled=True)
+        assert run_count["n"] == 2
+        assert result.scenario_results is not None
+        assert len(result.scenario_results) == 2
+        assert result.errors is None
 
     def test_parallel_exception_in_one_combo_does_not_block_others(self, monkeypatch):
-        """If one arun raises, the others still complete successfully."""
-        from karenina.scenario.manager import ScenarioManager
-
+        """If one run raises, the others still complete successfully."""
         bm = Benchmark("scenario_bm")
         bm.add_scenario(_build_scenario("alpha"))
         bm.add_scenario(_build_scenario("beta"))
@@ -243,31 +217,20 @@ class TestScenarioRunParallel:
 
         call_index = {"n": 0}
 
-        async def fake_arun(_self, **kwargs: Any) -> ScenarioExecutionResult:
+        def fake_run(_self, **kwargs: Any) -> ScenarioExecutionResult:
             idx = call_index["n"]
             call_index["n"] += 1
             if idx == 0:
                 raise RuntimeError("boom")
             return _make_exec_result()
 
-        monkeypatch.setattr(ScenarioManager, "arun", fake_arun)
-
-        manager = ScenarioManager()
-        combos = [
-            (bm.get_scenario("alpha"), _make_model("claude"), _make_model("haiku")),
-            (bm.get_scenario("beta"), _make_model("claude"), _make_model("haiku")),
-        ]
-
-        # Should not raise; the exception is logged and collected
-        turn_results, exec_results, errors = bm._run_scenario_parallel(
-            manager=manager,
-            combos=combos,
-            config=config,
-            run_name=None,
-            global_rubric=None,
-            progress_callback=None,
+        monkeypatch.setattr(
+            "karenina.scenario.manager.ScenarioManager.run",
+            fake_run,
         )
-        # Only the second combo succeeded (with empty turn_results)
-        assert isinstance(turn_results, list)
-        assert len(errors) == 1
-        assert "alpha" in errors[0][0]
+
+        result = bm._run_scenario_verification(config=config, async_enabled=True)
+        # One combo failed, one succeeded
+        assert result.errors is not None
+        assert len(result.errors) == 1
+        assert "alpha" in result.errors[0][0]

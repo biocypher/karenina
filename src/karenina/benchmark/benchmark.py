@@ -813,30 +813,22 @@ class Benchmark:
     ) -> VerificationResultSet:
         """Run verification for scenario benchmarks.
 
-        Creates a ScenarioManager and iterates over the cross-product of
-        scenarios, answering models, and parsing models. When ``async_enabled``
-        is True and there are multiple task combinations, uses
-        ``asyncio.gather`` with ``manager.arun()`` for parallel execution.
+        Delegates to ScenarioExecutor for parallel/sequential dispatch,
+        answer caching, and global LLM semaphore management.
 
         Args:
             config: Verification configuration.
             run_name: Optional run name for tracking.
-            async_enabled: If True, run combinations in parallel via asyncio.
+            async_enabled: If True, run combinations in parallel.
             progress_callback: Optional callback for progress updates.
 
         Returns:
             VerificationResultSet containing all per-turn results.
         """
-        from ..scenario.manager import ScenarioManager
+        from ..benchmark.verification.scenario_executor import ScenarioExecutor, ScenarioExecutorConfig
 
-        manager = ScenarioManager()
         global_rubric = self._rubric_manager.get_global_rubric()
-        all_results: list[VerificationResult] = []
-        all_scenario_results: list[Any] = []
-        all_errors: list[tuple[str, BaseException]] = []
 
-        # Build the list of (scenario, answering_model, parsing_model) combos
-        # Stamp pipeline-level request_timeout onto models that don't have their own
         def _apply_timeout(model: Any) -> Any:
             if config.request_timeout is not None and model.request_timeout is None:
                 return model.model_copy(update={"request_timeout": config.request_timeout})
@@ -849,117 +841,45 @@ class Benchmark:
             for parse_model in config.parsing_models
         ]
 
-        if async_enabled and len(combos) > 1:
-            parallel_results, parallel_exec_results, parallel_errors = self._run_scenario_parallel(
-                manager=manager,
-                combos=combos,
-                config=config,
-                run_name=run_name,
-                global_rubric=global_rubric,
-                progress_callback=progress_callback,
-            )
-            all_results = parallel_results
-            all_scenario_results = parallel_exec_results
-            all_errors = parallel_errors
-        else:
-            from anyio.from_thread import start_blocking_portal
-
-            from karenina.benchmark.verification.executor import set_async_portal
-
-            with start_blocking_portal(backend="asyncio") as portal:
-                set_async_portal(portal)
-                try:
-                    for scenario_def, ans_model, parse_model in combos:
-                        exec_result = manager.run(
-                            scenario=scenario_def,
-                            config=config,
-                            base_answering_model=ans_model,
-                            base_parsing_model=parse_model,
-                            run_name=run_name,
-                            global_rubric=global_rubric,
-                            progress_callback=progress_callback,
-                        )
-                        all_results.extend(exec_result.turn_results)
-                        all_scenario_results.append(exec_result)
-                finally:
-                    set_async_portal(None)
-
-        return VerificationResultSet(
-            results=all_results,
-            scenario_results=all_scenario_results if all_scenario_results else None,
-            errors=all_errors if all_errors else None,
+        executor = ScenarioExecutor(
+            parallel=bool(async_enabled) and len(combos) > 1,
+            config=ScenarioExecutorConfig(
+                max_workers=config.async_max_workers,
+                max_concurrent_requests=config.max_concurrent_requests,
+                enable_cache=True,
+                timeout_seconds=1200.0,
+            ),
         )
 
-    def _run_scenario_parallel(
-        self,
-        manager: Any,
-        combos: list[tuple[Any, Any, Any]],
-        config: VerificationConfig,
-        run_name: str | None,
-        global_rubric: "Rubric | None",
-        progress_callback: Callable[..., None] | None,
-    ) -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
-        """Run scenario combinations in parallel via asyncio.gather.
+        # Adapt the facade callback (float, str) to the executor callback
+        # (completed: int, total: int, result_or_none)
+        executor_callback = None
+        if progress_callback is not None:
+            total = len(combos)
 
-        Args:
-            manager: ScenarioManager instance.
-            combos: List of (scenario, answering_model, parsing_model) tuples.
-            config: Verification configuration.
-            run_name: Optional run name.
-            global_rubric: Optional global rubric.
-            progress_callback: Optional progress callback.
+            def _adapter(completed: int, _total: int, _result: Any) -> None:
+                pct = completed / total if total > 0 else 1.0
+                progress_callback(pct, f"Scenario {completed}/{total}")
 
-        Returns:
-            Tuple of (turn_results, scenario_exec_results, errors).
-        """
-        import asyncio
+            executor_callback = _adapter
 
-        async def _gather() -> tuple[list[VerificationResult], list[Any], list[tuple[str, BaseException]]]:
-            coros = [
-                manager.arun(
-                    scenario=scenario_def,
-                    config=config,
-                    base_answering_model=ans_model,
-                    base_parsing_model=parse_model,
-                    run_name=run_name,
-                    global_rubric=global_rubric,
-                    progress_callback=progress_callback,
-                )
-                for scenario_def, ans_model, parse_model in combos
-            ]
-            exec_results = await asyncio.gather(*coros, return_exceptions=True)
-            results: list[VerificationResult] = []
-            scenario_exec_results: list[Any] = []
-            errors: list[tuple[str, BaseException]] = []
-            for i, er in enumerate(exec_results):
-                if isinstance(er, BaseException):
-                    combo = combos[i]
-                    desc = f"Scenario '{combo[0].name}' with {combo[1].model_name}/{combo[2].model_name}"
-                    logger.error(
-                        "Scenario execution failed: %s: %s",
-                        desc,
-                        er,
-                    )
-                    errors.append((desc, er))
-                    continue
-                results.extend(er.turn_results)
-                scenario_exec_results.append(er)
-            return results, scenario_exec_results, errors
+        exec_results, errors = executor.run_batch(
+            combos=combos,
+            config=config,
+            global_rubric=global_rubric,
+            run_name=run_name,
+            progress_callback=executor_callback,
+        )
 
-        # If there is already a running event loop, run in a thread
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+        all_turn_results: list[VerificationResult] = []
+        for er in exec_results:
+            all_turn_results.extend(er.turn_results)
 
-        if loop is not None:
-            from concurrent.futures import ThreadPoolExecutor
-
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, _gather())
-                return future.result()
-        else:
-            return asyncio.run(_gather())
+        return VerificationResultSet(
+            results=all_turn_results,
+            scenario_results=exec_results if exec_results else None,
+            errors=[(d, e) for d, e in errors] if errors else None,
+        )
 
     # ── Results management ───────────────────────────────────────────────
 
