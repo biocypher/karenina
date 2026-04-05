@@ -430,24 +430,23 @@ class TestParallelPortalManagement:
 
 @pytest.mark.unit
 class TestScenarioPerWorkerPortals:
-    """Each worker thread creates its own distinct BlockingPortal."""
+    """Each submitted combo creates its own distinct BlockingPortal."""
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
     @patch("karenina.benchmark.verification.scenario_executor.start_blocking_portal")
-    def test_each_worker_gets_distinct_portal(
+    def test_each_combo_gets_distinct_portal(
         self,
         mock_start_portal: MagicMock,
         mock_manager_cls: MagicMock,
     ) -> None:
-        """With max_workers=4 and 4 combos, 4 distinct portals are created.
+        """With 6 combos and 2 workers, 6 distinct portals are created (one per combo).
 
-        Each worker should call start_blocking_portal independently,
-        producing a unique portal instance per worker thread.
+        Uses different combo and worker counts to distinguish portal-per-combo
+        from portal-per-worker behavior.
         """
         created_portals: list[MagicMock] = []
         lock = threading.Lock()
 
-        # Each call to start_blocking_portal returns a unique mock portal
         def make_portal(*args, **kwargs):  # noqa: ARG001
             portal = MagicMock()
             with lock:
@@ -461,19 +460,19 @@ class TestScenarioPerWorkerPortals:
 
         mock_manager_cls.return_value.run.return_value = _make_exec_result("s")
 
-        combos = [_make_combo(f"s{i}") for i in range(4)]
+        combos = [_make_combo(f"s{i}") for i in range(6)]
         config = MagicMock()
         executor = ScenarioExecutor(
             parallel=True,
-            config=ScenarioExecutorConfig(max_workers=4, enable_cache=False),
+            config=ScenarioExecutorConfig(max_workers=2, enable_cache=False),
         )
         executor.run_batch(combos, config)
 
-        # Each worker creates its own portal (one per worker thread)
-        assert mock_start_portal.call_count == 4
-        assert len(created_portals) == 4
+        # One portal per combo (not per worker)
+        assert mock_start_portal.call_count == 6
+        assert len(created_portals) == 6
         portal_ids = {id(p) for p in created_portals}
-        assert len(portal_ids) == 4, (
-            "Expected 4 distinct portal objects (one per worker), "
+        assert len(portal_ids) == 6, (
+            "Expected 6 distinct portal objects (one per combo), "
             f"got {len(portal_ids)} unique out of {len(created_portals)}"
         )
