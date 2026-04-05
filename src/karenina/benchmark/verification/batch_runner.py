@@ -367,6 +367,24 @@ def run_verification_batch(
         workspace_root=workspace_root,
     )
 
+    # Apply task ordering strategy
+    from .utils.task_helpers import model_sort_key
+
+    if config.task_ordering == "prefix_cache":
+        task_queue.sort(
+            key=lambda t: (
+                model_sort_key(t["answering_model"]),
+                t["question_id"],
+                model_sort_key(t["parsing_model"]),
+                t.get("replicate") or 0,
+            )
+        )
+    elif config.task_ordering == "random":
+        import random
+
+        random.shuffle(task_queue)
+    # "generation_order": no-op, preserve loop order
+
     # Log execution plan
     logger.info(f"Starting verification: {len(task_queue)} tasks ({'parallel' if async_enabled else 'sequential'})")
 

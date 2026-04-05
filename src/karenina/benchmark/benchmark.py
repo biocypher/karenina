@@ -841,6 +841,23 @@ class Benchmark:
             for parse_model in config.parsing_models
         ]
 
+        # Apply task ordering to scenario combos
+        from karenina.benchmark.verification.utils.task_helpers import model_sort_key
+
+        if config.task_ordering == "prefix_cache":
+            combos.sort(
+                key=lambda c: (
+                    model_sort_key(c[1]),  # answering_model
+                    c[0].name,  # scenario name
+                    model_sort_key(c[2]),  # parsing_model
+                )
+            )
+        elif config.task_ordering == "random":
+            import random
+
+            random.shuffle(combos)
+        # "generation_order": no-op, preserve original list comprehension order
+
         executor = ScenarioExecutor(
             parallel=bool(async_enabled) and len(combos) > 1,
             config=ScenarioExecutorConfig(
