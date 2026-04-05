@@ -392,9 +392,9 @@ class GenerateAnswerStage(BaseVerificationStage):
 
                 # Mark partial response if streaming timed out
                 if llm_response.is_partial:
+                    self.set_artifact_and_result(context, "response_timeout_partial", True)
                     if not llm_response.content:
                         raise TimeoutError("LLM request timed out with no content received")
-                    self.set_artifact_and_result(context, "response_timeout_partial", True)
                     logger.warning(
                         "Question %s: response truncated by streaming timeout (%d chars captured)",
                         context.question_id,
