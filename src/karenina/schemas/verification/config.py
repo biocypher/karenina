@@ -280,6 +280,20 @@ class VerificationConfig(BaseModel):
             raise TypeError(f"db_config must be a DBConfig instance or None, got {type(v).__name__}")
         return v
 
+    # Retry settings for transient errors and executor requeue
+    max_transient_retries: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum retry attempts for transient LLM errors (timeouts, "
+        "connection errors, rate limits). Controls TRANSIENT_RETRY behavior.",
+    )
+    max_requeue_count: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum times a task can be requeued in the parallel executor's "
+        "IN_PROGRESS cache loop before generating the answer fresh.",
+    )
+
     def __init__(self, **data: Any) -> None:
         """
         Initialize with environment variable support and default system prompts.

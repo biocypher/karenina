@@ -1528,3 +1528,66 @@ class TestRetryConfigMaxRetriesConstraint:
         """ToolRetryConfig accepts max_retries=3."""
         config = ToolRetryConfig(max_retries=3)
         assert config.max_retries == 3
+
+
+# =============================================================================
+# Retry Configuration Fields Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRetryConfigFields:
+    """Tests for max_transient_retries and max_requeue_count fields."""
+
+    def test_verification_config_defaults(self) -> None:
+        """Test default values for new retry fields."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+        )
+        assert config.max_transient_retries == 3
+        assert config.max_requeue_count == 5
+
+    def test_verification_config_custom_values(self) -> None:
+        """Test custom values for retry fields."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            max_transient_retries=1,
+            max_requeue_count=10,
+        )
+        assert config.max_transient_retries == 1
+        assert config.max_requeue_count == 10
+
+    def test_verification_config_rejects_zero_retries(self) -> None:
+        """Test that max_transient_retries must be >= 1."""
+        with pytest.raises(ValidationError):
+            VerificationConfig(
+                parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+                parsing_only=True,
+                max_transient_retries=0,
+            )
+
+    def test_verification_config_rejects_zero_requeue(self) -> None:
+        """Test that max_requeue_count must be >= 1."""
+        with pytest.raises(ValidationError):
+            VerificationConfig(
+                parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+                parsing_only=True,
+                max_requeue_count=0,
+            )
+
+    def test_model_config_default_max_transient_retries(self) -> None:
+        """Test ModelConfig has max_transient_retries defaulting to None."""
+        config = ModelConfig(id="test", model_name="test", model_provider="openai")
+        assert config.max_transient_retries is None
+
+    def test_model_config_custom_max_transient_retries(self) -> None:
+        """Test ModelConfig accepts max_transient_retries."""
+        config = ModelConfig(
+            id="test",
+            model_name="test",
+            model_provider="openai",
+            max_transient_retries=2,
+        )
+        assert config.max_transient_retries == 2
