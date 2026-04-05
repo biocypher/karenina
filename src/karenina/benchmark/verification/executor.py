@@ -193,7 +193,7 @@ class VerificationExecutor:
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
         results: dict[str, VerificationResult] = {}
-        errors: list[tuple[str, Exception]] = []
+        errors: list[tuple[str, BaseException]] = []
         total = len(tasks)
 
         # Use a shared BlockingPortal so that sync invoke() calls reuse the
@@ -286,7 +286,7 @@ class VerificationExecutor:
 
         # Thread-safe error tracking
         failed_count = [0]
-        failed_tasks: list[tuple[str, Exception]] = []
+        failed_tasks: list[tuple[str, BaseException]] = []
 
         # Thread-safe progress tracking
         progress_lock = threading.Lock()
