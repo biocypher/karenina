@@ -105,12 +105,16 @@ class ExecutorConfig:
         enable_cache: Whether to enable answer caching (default: True)
         retry_wait_seconds: Seconds to wait for IN_PROGRESS cache entries (default: 5.0)
         timeout_seconds: Maximum wall-clock seconds for a parallel batch (default: 600.0)
+        max_requeue_count: Maximum times a task can be requeued before forcing a
+            fresh generation (default: 5). When exceeded, the cache entry is reset
+            and the task restarts with retry_count=0.
     """
 
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
     enable_cache: bool = True
     retry_wait_seconds: float = 5.0
     timeout_seconds: float = 600.0
+    max_requeue_count: int = 5
 
 
 # ============================================================================
@@ -264,7 +268,7 @@ class VerificationExecutor:
         from .utils.task_helpers import create_preview_result
 
         max_workers = self.config.max_workers
-        logger.info(f"Parallel execution: {len(tasks)} tasks with {max_workers} workers")
+        logger.info("Parallel execution: %d tasks with %d workers", len(tasks), max_workers)
 
         # Create thread-safe answer cache for sharing traces across judges
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
@@ -330,10 +334,25 @@ class VerificationExecutor:
                                 # Always call task_done() immediately after get()
                                 work_queue.task_done()
 
+                                max_requeue = self.config.max_requeue_count
+
+                                if retry_count >= max_requeue:
+                                    # Requeue limit exceeded: force reset and generate fresh
+                                    logger.warning(
+                                        "Task %s exceeded max requeue count (%d), generating fresh",
+                                        cache_key,
+                                        max_requeue,
+                                    )
+                                    answer_cache.force_reset(cache_key)
+                                    work_queue.put((original_index, task, 0))
+                                    continue
+
                                 if retry_count == 0:
                                     # First encounter: immediately requeue and move to next task
                                     logger.debug(
-                                        f"Task {cache_key} in progress (retry={retry_count}), requeueing immediately"
+                                        "Task %s in progress (retry=%d), requeueing immediately",
+                                        cache_key,
+                                        retry_count,
                                     )
                                     work_queue.put((original_index, task, retry_count + 1))
                                     continue
@@ -342,7 +361,9 @@ class VerificationExecutor:
                                     completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait_seconds)
                                     if not completed:
                                         logger.debug(
-                                            f"Task {cache_key} still in progress after {retry_wait_seconds}s, requeueing"
+                                            "Task %s still in progress after %ss, requeueing",
+                                            cache_key,
+                                            retry_wait_seconds,
                                         )
                                     work_queue.put((original_index, task, retry_count + 1))
                                     continue
@@ -387,7 +408,7 @@ class VerificationExecutor:
                             work_queue.task_done()
 
                     except Exception as e:
-                        logger.error(f"Worker error: {e}")
+                        logger.error("Worker error: %s", e)
                         with contextlib.suppress(ValueError):
                             # task_done() called more times than get()
                             work_queue.task_done()

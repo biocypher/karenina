@@ -504,3 +504,48 @@ class TestSequentialPortalManagement:
         executor.run_batch(tasks)
 
         assert async_results == ["ok"]
+
+
+# ============================================================================
+# Executor requeue bound (issue 188)
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestExecutorRequeueBound:
+    """Tests for max_requeue_count in ExecutorConfig."""
+
+    def test_executor_config_default_requeue_count(self) -> None:
+        """Test ExecutorConfig has max_requeue_count defaulting to 5."""
+        config = ExecutorConfig()
+        assert config.max_requeue_count == 5
+
+    def test_executor_config_custom_requeue_count(self) -> None:
+        """Test ExecutorConfig accepts custom max_requeue_count."""
+        config = ExecutorConfig(max_requeue_count=10)
+        assert config.max_requeue_count == 10
+
+
+@pytest.mark.unit
+class TestForceResetOnRequeueLimit:
+    """Tests for force_reset behavior when requeue limit is reached."""
+
+    def test_cache_force_reset_after_max_requeues(self) -> None:
+        """Test that exceeding max_requeue_count triggers force_reset."""
+        from karenina.utils.answer_cache import AnswerTraceCache
+
+        cache = AnswerTraceCache()
+        max_requeue = 3
+
+        # Simulate: key reserved by another worker
+        cache.get_or_reserve("key1")
+
+        # Simulate requeue loop hitting the limit
+        for _i in range(max_requeue):
+            status, _ = cache.get_or_reserve("key1")
+            assert status == "IN_PROGRESS"
+
+        # After limit: force_reset should make next access return MISS
+        cache.force_reset("key1")
+        status, _ = cache.get_or_reserve("key1")
+        assert status == "MISS"

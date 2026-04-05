@@ -375,7 +375,10 @@ def run_verification_batch(
 
     executor = VerificationExecutor(
         parallel=async_enabled,
-        config=ExecutorConfig(max_workers=max_workers),
+        config=ExecutorConfig(
+            max_workers=max_workers,
+            max_requeue_count=config.max_requeue_count,
+        ),
     )
     results = executor.run_batch(task_queue, progress_callback)
 
