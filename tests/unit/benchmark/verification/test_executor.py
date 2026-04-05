@@ -6,7 +6,7 @@ Tests verify:
 - Parallel mode: counts failures toward completion (no deadlock), raises aggregate error
 - Both modes raise the same error type with equivalent information (symmetry)
 - Timeout safety net prevents indefinite hangs
-- Per-worker portal creation (each worker gets its own BlockingPortal)
+- Per-task portal creation (each submitted task gets its own BlockingPortal)
 """
 
 import threading
@@ -555,20 +555,23 @@ class TestForceResetOnRequeueLimit:
 
 
 # ============================================================================
-# Per-worker portal creation (executor concurrency optimization)
+# Per-task portal creation (executor concurrency optimization)
 # ============================================================================
 
 
 @pytest.mark.unit
 class TestPerWorkerPortals:
-    """Each parallel worker thread creates its own distinct BlockingPortal."""
+    """Each submitted task creates its own distinct BlockingPortal."""
 
-    def test_parallel_workers_create_distinct_portals(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """With max_workers=4 and 8 tasks, 4 distinct portal ids are observed."""
-        portal_ids_by_thread: dict[int, int] = {}
-        portal_ids_lock = threading.Lock()
+    def test_parallel_tasks_create_distinct_portals(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With 6 tasks and 2 workers, 6 distinct portal ids are observed (one per task).
 
-        # Capture the real start_blocking_portal so we can wrap it
+        Uses different task and worker counts to distinguish portal-per-task
+        from portal-per-worker behavior.
+        """
+        portal_ids: list[int] = []
+        portal_lock = threading.Lock()
+
         from anyio.from_thread import start_blocking_portal as original_start_blocking_portal
 
         class PortalTracker:
@@ -579,9 +582,8 @@ class TestPerWorkerPortals:
 
             def __enter__(self):
                 portal = self._real_cm.__enter__()
-                thread_id = threading.current_thread().ident
-                with portal_ids_lock:
-                    portal_ids_by_thread[thread_id] = id(portal)
+                with portal_lock:
+                    portal_ids.append(id(portal))
                 return portal
 
             def __exit__(self, *args):
@@ -603,19 +605,18 @@ class TestPerWorkerPortals:
             mock_execute_task,
         )
 
-        tasks = [_make_task(f"q{i}") for i in range(8)]
+        tasks = [_make_task(f"q{i}") for i in range(6)]
         executor = VerificationExecutor(
             parallel=True,
-            config=ExecutorConfig(max_workers=4, enable_cache=False),
+            config=ExecutorConfig(max_workers=2, enable_cache=False),
         )
         results = executor.run_batch(tasks)
 
-        # All 8 tasks completed
-        assert len(results) == 8
+        # All 6 tasks completed
+        assert len(results) == 6
 
-        # 4 distinct portals were created (one per worker thread)
-        distinct_portal_ids = set(portal_ids_by_thread.values())
-        assert len(distinct_portal_ids) == 4, (
-            "Expected 4 distinct portals (one per worker), "
-            f"got {len(distinct_portal_ids)}: workers are sharing a single portal"
+        # 6 distinct portals were created (one per task, not per worker)
+        distinct_portal_ids = set(portal_ids)
+        assert len(distinct_portal_ids) == 6, (
+            f"Expected 6 distinct portals (one per task), got {len(distinct_portal_ids)}: {len(portal_ids)} total calls"
         )
