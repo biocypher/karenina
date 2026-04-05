@@ -49,6 +49,21 @@ def _apply_request_timeout(model: Any, pipeline_timeout: float | None) -> Any:
 
 
 # ============================================================================
+# Config Helpers
+# ============================================================================
+
+
+def _apply_retry_config(model: Any, max_transient_retries: int | None) -> Any:
+    """Stamp pipeline-level max_transient_retries onto a ModelConfig if not already set.
+
+    Returns the original model if no change is needed, or a copy with the value applied.
+    """
+    if max_transient_retries is not None and model.max_transient_retries is None:
+        return model.model_copy(update={"max_transient_retries": max_transient_retries})
+    return model
+
+
+# ============================================================================
 # Task Queue Generation
 # ============================================================================
 
@@ -95,6 +110,9 @@ def generate_task_queue(
                 # Stamp pipeline-level request_timeout onto models that don't have their own
                 ans_model = _apply_request_timeout(ans_model_raw, config.request_timeout)
                 parse_model = _apply_request_timeout(parse_model_raw, config.request_timeout)
+                # Stamp pipeline-level max_transient_retries onto models that don't have their own
+                ans_model = _apply_retry_config(ans_model, config.max_transient_retries)
+                parse_model = _apply_retry_config(parse_model, config.max_transient_retries)
                 # Expand over replicates
                 for rep in range(1, config.replicate_count + 1):
                     # For single replicate, don't include replicate numbers
