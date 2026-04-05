@@ -6,7 +6,10 @@ Tests verify:
 - Parallel mode: counts failures toward completion (no deadlock), raises aggregate error
 - Both modes raise the same error type with equivalent information (symmetry)
 - Timeout safety net prevents indefinite hangs
+- Per-worker portal creation (each worker gets its own BlockingPortal)
 """
+
+import threading
 
 import pytest
 
@@ -549,3 +552,70 @@ class TestForceResetOnRequeueLimit:
         cache.force_reset("key1")
         status, _ = cache.get_or_reserve("key1")
         assert status == "MISS"
+
+
+# ============================================================================
+# Per-worker portal creation (executor concurrency optimization)
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestPerWorkerPortals:
+    """Each parallel worker thread creates its own distinct BlockingPortal."""
+
+    def test_parallel_workers_create_distinct_portals(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With max_workers=4 and 8 tasks, 4 distinct portal ids are observed."""
+        portal_ids_by_thread: dict[int, int] = {}
+        portal_ids_lock = threading.Lock()
+
+        # Capture the real start_blocking_portal so we can wrap it
+        from anyio.from_thread import start_blocking_portal as original_start_blocking_portal
+
+        class PortalTracker:
+            """Context manager that wraps start_blocking_portal to track portal identity."""
+
+            def __init__(self) -> None:
+                self._real_cm = original_start_blocking_portal(backend="asyncio")
+
+            def __enter__(self):
+                portal = self._real_cm.__enter__()
+                thread_id = threading.current_thread().ident
+                with portal_ids_lock:
+                    portal_ids_by_thread[thread_id] = id(portal)
+                return portal
+
+            def __exit__(self, *args):
+                return self._real_cm.__exit__(*args)
+
+        def mock_start_blocking_portal(**kwargs):
+            return PortalTracker()
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.executor.start_blocking_portal",
+            mock_start_blocking_portal,
+        )
+
+        def mock_execute_task(task, answer_cache=None, **kwargs):
+            return (f"key_{task['question_id']}", _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task(f"q{i}") for i in range(8)]
+        executor = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(max_workers=4, enable_cache=False),
+        )
+        results = executor.run_batch(tasks)
+
+        # All 8 tasks completed
+        assert len(results) == 8
+
+        # 4 distinct portals were created (one per worker thread)
+        distinct_portal_ids = set(portal_ids_by_thread.values())
+        assert len(distinct_portal_ids) == 4, (
+            "Expected 4 distinct portals (one per worker), "
+            f"got {len(distinct_portal_ids)}: workers are sharing a single portal"
+        )

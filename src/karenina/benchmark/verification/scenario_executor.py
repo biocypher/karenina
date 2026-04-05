@@ -21,8 +21,6 @@ from typing import TYPE_CHECKING, Any
 from anyio.from_thread import start_blocking_portal
 
 if TYPE_CHECKING:
-    from anyio.from_thread import BlockingPortal
-
     from karenina.schemas.entities import Rubric
     from karenina.schemas.verification import VerificationConfig
 
@@ -204,10 +202,11 @@ class ScenarioExecutor:
         run_name: str | None,
         progress_callback: ProgressCallback | None,
     ) -> tuple[list[ScenarioExecutionResult], list[tuple[str, BaseException]]]:
-        """Execute combos in parallel with thread pool and shared BlockingPortal.
+        """Execute combos in parallel with per-worker BlockingPortals.
 
-        Uses threading.Thread workers with a shared work queue, mirroring the
-        pattern in VerificationExecutor._run_parallel.
+        Each worker thread creates its own BlockingPortal, giving it a
+        dedicated asyncio event loop. This eliminates the shared event loop
+        bottleneck that occurs when all workers funnel through a single portal.
 
         Args:
             combos: Scenario combos to execute.
@@ -252,104 +251,106 @@ class ScenarioExecutor:
         # Completion tracking
         tasks_completed_event = threading.Event()
 
-        def worker(portal: BlockingPortal) -> None:
+        def worker() -> None:
             """Worker that processes scenario combos from the shared queue."""
-            set_async_portal(portal)
-            try:
-                while True:
-                    try:
-                        item = work_queue.get(timeout=1.0)
-                    except queue.Empty:
-                        with results_lock:
-                            if len(results_by_index) + len(failed_tasks) >= total:
-                                tasks_completed_event.set()
-                        continue
+            with start_blocking_portal(backend="asyncio") as portal:
+                set_async_portal(portal)
+                try:
+                    while True:
+                        try:
+                            item = work_queue.get(timeout=1.0)
+                        except queue.Empty:
+                            with results_lock:
+                                if len(results_by_index) + len(failed_tasks) >= total:
+                                    tasks_completed_event.set()
+                            continue
 
-                    if item is None:
-                        work_queue.task_done()
-                        break
+                        if item is None:
+                            work_queue.task_done()
+                            break
 
-                    original_index, (scenario_def, ans_model, parse_model) = item
-                    combo_desc = f"Scenario '{scenario_def.name}' with {ans_model.model_name}/{parse_model.model_name}"
-
-                    # Progress callback before starting (result=None)
-                    if progress_callback:
-                        with progress_lock:
-                            progress_callback(completed_count[0] + 1, total, None)
-
-                    try:
-                        manager = ScenarioManager()
-
-                        def make_turn_callback(idx: int, scenario_name: str) -> Callable[..., None]:
-                            """Create a per-turn callback that tracks progress."""
-
-                            def _on_turn(**kwargs: Any) -> None:
-                                turn_num = kwargs.get("scenario_turn", 0)
-                                node_id = kwargs.get("scenario_node", "")
-                                with results_lock:
-                                    partial_progress[idx] = {
-                                        "scenario_id": scenario_name,
-                                        "turn": turn_num,
-                                        "node": node_id,
-                                    }
-
-                            return _on_turn
-
-                        exec_result = manager.run(
-                            scenario=scenario_def,
-                            config=config,
-                            base_answering_model=ans_model,
-                            base_parsing_model=parse_model,
-                            run_name=run_name,
-                            global_rubric=global_rubric,
-                            answer_cache=answer_cache,
-                            progress_callback=make_turn_callback(original_index, scenario_def.name),
+                        original_index, (scenario_def, ans_model, parse_model) = item
+                        combo_desc = (
+                            f"Scenario '{scenario_def.name}' with {ans_model.model_name}/{parse_model.model_name}"
                         )
 
-                        with results_lock:
-                            results_by_index[original_index] = exec_result
-                            if len(results_by_index) + len(failed_tasks) >= total:
-                                tasks_completed_event.set()
-
-                        # Progress callback after completion (with result)
+                        # Progress callback before starting (result=None)
                         if progress_callback:
                             with progress_lock:
-                                completed_count[0] += 1
-                                progress_callback(completed_count[0], total, exec_result)
+                                progress_callback(completed_count[0] + 1, total, None)
 
-                    except Exception as e:
-                        logger.error("Parallel scenario failed: %s: %s", combo_desc, e)
-                        with results_lock:
-                            failed_tasks.append((combo_desc, e))
-                            if len(results_by_index) + len(failed_tasks) >= total:
-                                tasks_completed_event.set()
+                        try:
+                            manager = ScenarioManager()
 
-                    finally:
-                        work_queue.task_done()
+                            def make_turn_callback(idx: int, scenario_name: str) -> Callable[..., None]:
+                                """Create a per-turn callback that tracks progress."""
 
-            finally:
-                set_async_portal(None)
+                                def _on_turn(**kwargs: Any) -> None:
+                                    turn_num = kwargs.get("scenario_turn", 0)
+                                    node_id = kwargs.get("scenario_node", "")
+                                    with results_lock:
+                                        partial_progress[idx] = {
+                                            "scenario_id": scenario_name,
+                                            "turn": turn_num,
+                                            "node": node_id,
+                                        }
+
+                                return _on_turn
+
+                            exec_result = manager.run(
+                                scenario=scenario_def,
+                                config=config,
+                                base_answering_model=ans_model,
+                                base_parsing_model=parse_model,
+                                run_name=run_name,
+                                global_rubric=global_rubric,
+                                answer_cache=answer_cache,
+                                progress_callback=make_turn_callback(original_index, scenario_def.name),
+                            )
+
+                            with results_lock:
+                                results_by_index[original_index] = exec_result
+                                if len(results_by_index) + len(failed_tasks) >= total:
+                                    tasks_completed_event.set()
+
+                            # Progress callback after completion (with result)
+                            if progress_callback:
+                                with progress_lock:
+                                    completed_count[0] += 1
+                                    progress_callback(completed_count[0], total, exec_result)
+
+                        except Exception as e:
+                            logger.error("Parallel scenario failed: %s: %s", combo_desc, e)
+                            with results_lock:
+                                failed_tasks.append((combo_desc, e))
+                                if len(results_by_index) + len(failed_tasks) >= total:
+                                    tasks_completed_event.set()
+
+                        finally:
+                            work_queue.task_done()
+
+                finally:
+                    set_async_portal(None)
 
         # Set global semaphore before spawning workers
         set_global_llm_semaphore(sem)
         try:
-            with start_blocking_portal(backend="asyncio") as portal:
-                workers = []
-                for _ in range(max_workers):
-                    t = threading.Thread(target=worker, args=(portal,), daemon=True)
-                    t.start()
-                    workers.append(t)
+            workers = []
+            for _ in range(max_workers):
+                t = threading.Thread(target=worker, daemon=True)
+                t.start()
+                workers.append(t)
 
-                # Wait for all combos to complete, with timeout
-                completed = tasks_completed_event.wait(timeout=self.config.timeout_seconds)
+            # Wait for all combos to complete, with timeout
+            completed = tasks_completed_event.wait(timeout=self.config.timeout_seconds)
 
-                # Send shutdown signal to workers
-                for _ in range(max_workers):
-                    work_queue.put(None)
+            # Send shutdown signal to workers
+            for _ in range(max_workers):
+                work_queue.put(None)
 
-                # Wait for workers to finish
-                for t in workers:
-                    t.join(timeout=5.0)
+            # Wait for workers to finish
+            for t in workers:
+                t.join(timeout=5.0)
         finally:
             set_global_llm_semaphore(None)
 
