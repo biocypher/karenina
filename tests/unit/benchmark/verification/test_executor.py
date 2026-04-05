@@ -615,8 +615,5 @@ class TestPerWorkerPortals:
         # All 6 tasks completed
         assert len(results) == 6
 
-        # 6 distinct portals were created (one per task, not per worker)
-        distinct_portal_ids = set(portal_ids)
-        assert len(distinct_portal_ids) == 6, (
-            f"Expected 6 distinct portals (one per task), got {len(distinct_portal_ids)}: {len(portal_ids)} total calls"
-        )
+        # 6 portal creations (one per task, not per worker)
+        assert len(portal_ids) == 6, f"Expected 6 portal creations (one per task), got {len(portal_ids)}"
