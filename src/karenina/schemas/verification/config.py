@@ -142,6 +142,15 @@ class VerificationConfig(BaseModel):
         "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
     )
 
+    # Task ordering strategy for queue generation
+    task_ordering: Literal["prefix_cache", "generation_order", "random"] = Field(
+        default="prefix_cache",
+        description="Task queue ordering strategy. "
+        "'prefix_cache' (default) groups by answering model for KV cache hits. "
+        "'generation_order' preserves template-first loop order. "
+        "'random' shuffles tasks.",
+    )
+
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_mode: Literal["disabled", "reasoning_only", "full"] = "disabled"  # Template deep-judgment mode
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute

@@ -1591,3 +1591,48 @@ class TestRetryConfigFields:
             max_transient_retries=2,
         )
         assert config.max_transient_retries == 2
+
+
+# =============================================================================
+# Task Ordering Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTaskOrdering:
+    """Tests for the task_ordering field on VerificationConfig."""
+
+    def test_default_is_prefix_cache(self) -> None:
+        """Test that task_ordering defaults to 'prefix_cache'."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+        )
+        assert config.task_ordering == "prefix_cache"
+
+    def test_accepts_generation_order(self) -> None:
+        """Test that task_ordering accepts 'generation_order'."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            task_ordering="generation_order",
+        )
+        assert config.task_ordering == "generation_order"
+
+    def test_accepts_random(self) -> None:
+        """Test that task_ordering accepts 'random'."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            task_ordering="random",
+        )
+        assert config.task_ordering == "random"
+
+    def test_rejects_invalid_value(self) -> None:
+        """Test that task_ordering rejects values outside the allowed literal."""
+        with pytest.raises(ValidationError):
+            VerificationConfig(
+                parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+                parsing_only=True,
+                task_ordering="invalid",
+            )
