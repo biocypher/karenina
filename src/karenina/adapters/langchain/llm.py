@@ -316,7 +316,9 @@ class LangChainLLMAdapter:
         """Stream with wall-clock timeout, returning accumulated content synchronously.
 
         Uses streaming internally so that partial content can be captured on
-        timeout. Returns the same LLMResponse type as invoke().
+        timeout. Returns the same LLMResponse type as invoke(). Retries via
+        RetryExecutor on transient errors (including StreamingTimeoutError
+        with zero content, classified as RATE_LIMIT for queue congestion).
 
         Args:
             messages: List of unified Message objects.
@@ -326,8 +328,14 @@ class LangChainLLMAdapter:
             LLMResponse with accumulated content.
 
         Raises:
-            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
+            StreamingTimeoutError: If retries are exhausted and the stream
+                still exceeds the wall-clock timeout.
         """
+        result: LLMResponse = self._retry_executor.execute(self._stream_invoke_once, messages, timeout)
+        return result
+
+    def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Single stream_invoke attempt (no retry). Called by RetryExecutor."""
         from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
