@@ -26,6 +26,7 @@ from .file_ops import atomic_write
 from .json_extraction import extract_json_from_response
 from .messages import append_error_feedback
 from .retry import TRANSIENT_RETRY, create_transient_retry, log_retry
+from .retry_policy import CategoryRetryConfig, ErrorPatternConfig, RetryExecutor, RetryPolicy
 from .testing import FixtureBackedLLMClient, MockResponse, MockUsage
 from .version import get_karenina_version
 
@@ -60,6 +61,11 @@ __all__ = [
     "TRANSIENT_RETRY",
     "create_transient_retry",
     "log_retry",
+    # Retry policy (category-aware)
+    "CategoryRetryConfig",
+    "ErrorPatternConfig",
+    "RetryExecutor",
+    "RetryPolicy",
     # Testing utilities
     "FixtureBackedLLMClient",
     "MockResponse",
