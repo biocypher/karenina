@@ -9,7 +9,6 @@ from typing import Any
 from karenina.benchmark.verification.evaluators import TemplateEvaluator
 from karenina.benchmark.verification.utils.template_parsing_helpers import is_regex_only_template
 from karenina.schemas.entities.answer import BaseAnswer
-from karenina.utils.errors import ErrorRegistry
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -197,7 +196,7 @@ class ParseTemplateStage(BaseVerificationStage):
         except Exception as e:
             error_msg = f"Failed to create TemplateEvaluator: {type(e).__name__}: {e}"
             logger.error(error_msg)
-            context.mark_error(error_msg, category=ErrorRegistry().classify(e))
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             return
 
         # Store evaluator for reuse by verify stage

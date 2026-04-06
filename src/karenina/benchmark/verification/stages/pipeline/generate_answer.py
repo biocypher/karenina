@@ -18,7 +18,7 @@ from karenina.benchmark.verification.utils.trace_agent_metrics import extract_ag
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 from karenina.ports import AgentConfig, AgentPort, LLMPort, LLMResponse, Message
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.utils.errors import ErrorCategory, ErrorRegistry
+from karenina.utils.errors import ErrorCategory
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -252,7 +252,7 @@ class GenerateAnswerStage(BaseVerificationStage):
         except Exception as e:
             error_msg = f"Failed to initialize answering model: {type(e).__name__}: {e}"
             logger.error(error_msg)
-            context.mark_error(error_msg, category=ErrorRegistry().classify(e))
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             return
 
         # Step 3: Construct prompt text
@@ -463,7 +463,7 @@ class GenerateAnswerStage(BaseVerificationStage):
 
             # Mark error (category classification determines if scenario retries)
             error_msg = f"Adapter call failed: {type(e).__name__}: {e}"
-            context.mark_error(error_msg, category=ErrorRegistry().classify(e))
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
             context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
             return

@@ -225,6 +225,8 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         # Agentic rubric evaluation configuration
         "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
         "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),
+        # Error classification
+        "custom_error_patterns": getattr(config, "custom_error_patterns", []),
     }
 
 

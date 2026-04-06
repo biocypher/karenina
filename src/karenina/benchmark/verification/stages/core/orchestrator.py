@@ -9,7 +9,6 @@ import time
 from karenina.schemas.entities import Rubric
 from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import VerificationResult
-from karenina.utils.errors import ErrorRegistry
 
 from ..pipeline.abstention_check import AbstentionCheckStage
 from ..pipeline.agentic_parse_template import AgenticParseTemplateStage
@@ -282,7 +281,7 @@ class StageOrchestrator:
                 # Stage execution failed - mark error and continue to finalize
                 error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
                 logger.error(error_msg, exc_info=True)
-                context.mark_error(error_msg, category=ErrorRegistry().classify(e))
+                context.mark_error(error_msg, category=context.error_registry.classify(e))
                 # Continue to FinalizeResultStage even on error
 
             # Update execution time after each stage so FinalizeResultStage has access to it

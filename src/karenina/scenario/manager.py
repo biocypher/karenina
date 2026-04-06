@@ -403,6 +403,11 @@ class ScenarioManager:
         ):
             evaluation_mode = "template_and_rubric"
 
+        # Build ErrorRegistry from config custom patterns
+        from karenina.benchmark.verification.runner import _build_error_registry
+
+        error_registry = _build_error_registry(config.custom_error_patterns)
+
         # Build VerificationContext
         context = VerificationContext(
             question_id=generate_question_id(node.question.question),
@@ -423,6 +428,7 @@ class ScenarioManager:
             scenario_id=scenario_id,
             scenario_node=scenario_node,
             scenario_path=scenario_path,
+            error_registry=error_registry,
         )
 
         # Set conversation history artifact (the key integration point).

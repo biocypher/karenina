@@ -32,7 +32,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_RUBRIC_MAX_EXCERPTS,
     DeepJudgmentRubricCustomConfig,
 )
-from karenina.utils.errors import ErrorCategory
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
 
 if TYPE_CHECKING:
     from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
@@ -262,6 +262,9 @@ class VerificationContext:
             Used to share answers across multiple judges.
         artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.).
         result_builder: Dictionary accumulating result fields.
+        error_registry: Pre-configured ErrorRegistry for classifying exceptions
+            into ErrorCategory values. Built from VerificationConfig.custom_error_patterns
+            by the runner before pipeline execution.
         error: Optional error message if pipeline fails.
         completed_without_errors: Whether pipeline completed successfully.
     """
@@ -364,6 +367,7 @@ class VerificationContext:
     result_builder: dict[str, Any] = field(default_factory=dict)
 
     # Error Tracking
+    error_registry: ErrorRegistry = field(default_factory=ErrorRegistry)
     error: str | None = None
     error_category: ErrorCategory | None = None
     completed_without_errors: bool = True
