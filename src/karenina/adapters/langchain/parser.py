@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
-from karenina.utils.errors import is_retryable_error
+from karenina.utils.errors import ErrorRegistry
 from karenina.utils.json_extraction import extract_json_from_response, is_invalid_json_error
 
 from .llm import LangChainLLMAdapter
@@ -222,7 +222,7 @@ class LangChainParserAdapter:
             return ParsePortResult(parsed=result, usage=total_usage)
 
         except Exception as structured_error:
-            if is_retryable_error(structured_error):
+            if ErrorRegistry().classify(structured_error).is_retryable():
                 raise
             logger.debug("Structured output parsing failed: %s", structured_error)
 
@@ -423,7 +423,7 @@ class LangChainParserAdapter:
             return result, retry_usage
 
         except Exception as e:
-            if is_retryable_error(e):
+            if ErrorRegistry().classify(e).is_retryable():
                 raise
             logger.warning("Retry parsing failed after null-value feedback: %s", e)
             return None, empty_usage
@@ -489,7 +489,7 @@ class LangChainParserAdapter:
             return result, retry_usage
 
         except Exception as e:
-            if is_retryable_error(e):
+            if ErrorRegistry().classify(e).is_retryable():
                 raise
             logger.warning("Retry parsing failed after format feedback: %s", e)
             return None, empty_usage

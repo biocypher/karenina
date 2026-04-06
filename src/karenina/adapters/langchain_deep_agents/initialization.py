@@ -58,6 +58,11 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
 
     model_kwargs.update(kwargs)
 
+    # Suppress SDK-level retries. Retry logic is handled by RetryExecutor
+    # at the adapter layer to ensure unified retry behavior across all adapters.
+    # Placed after kwargs merge to ensure SDK retries stay at 0.
+    model_kwargs["max_retries"] = 0
+
     return init_chat_model(
         model=model_config.model_name,
         model_provider=model_config.model_provider,
