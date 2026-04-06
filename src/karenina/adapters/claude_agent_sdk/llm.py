@@ -394,28 +394,28 @@ class ClaudeSDKLLMAdapter:
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content and is_partial flag.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
         """
-        is_partial = False
         async with self.astream(messages) as sr:
             try:
                 async with asyncio.timeout(timeout):
                     async for _chunk in sr:
                         pass
             except TimeoutError:
-                is_partial = True
-                logger.warning(
-                    "Streaming timeout after %ss: captured %d chars of partial response",
-                    timeout,
-                    len(sr.accumulated_content),
-                )
+                from karenina.exceptions import StreamingTimeoutError
+
+                raise StreamingTimeoutError(
+                    f"Streaming timed out after {timeout}s",
+                    partial_content=sr.accumulated_content,
+                ) from None
 
         return LLMResponse(
             content=sr.accumulated_content,
             usage=sr.usage,
             raw=None,
-            is_partial=is_partial,
-            usage_unavailable=is_partial,
         )
 
     @with_llm_semaphore

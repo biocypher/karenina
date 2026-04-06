@@ -7,7 +7,7 @@ Key features:
 - Uses Anthropic's native Python SDK for efficient API calls
 - Supports structured output via client.beta.messages.parse() with Pydantic
 - Implements prompt caching for efficiency
-- Uses SDK's built-in retry logic for transient errors
+- Derives SDK max_retries from RetryPolicy for consistent retry budgets
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
 from karenina.schemas.config import ModelConfig
 from karenina.utils.messages import append_error_feedback
+from karenina.utils.retry_policy import RetryPolicy
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
 from .usage import extract_usage_from_response
@@ -46,8 +47,9 @@ class ClaudeToolLLMAdapter:
     - Structured output via client.beta.messages.parse() with Pydantic
     - Prompt caching for efficiency
 
-    Note: Transient error retries are handled by the Anthropic SDK (default: 2 retries
-    with exponential backoff for connection errors, timeouts, rate limits, and 5xx errors).
+    Note: Transient error retries are handled by the Anthropic SDK. The max_retries
+    parameter is derived from the model's RetryPolicy so retry budgets stay consistent
+    across all adapters.
 
     Example:
         >>> from karenina.schemas.config import ModelConfig
@@ -105,7 +107,10 @@ class ClaudeToolLLMAdapter:
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
 
-            # SDK handles retries automatically (default: 2 retries with exponential backoff)
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
             self._client = Anthropic(**kwargs)
         return self._client
 
@@ -123,7 +128,10 @@ class ClaudeToolLLMAdapter:
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
 
-            # SDK handles retries automatically (default: 2 retries with exponential backoff)
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
             self._async_client = AsyncAnthropic(**kwargs)
         return self._async_client
 
@@ -356,28 +364,28 @@ class ClaudeToolLLMAdapter:
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content and is_partial flag.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
         """
-        is_partial = False
         async with self.astream(messages) as sr:
             try:
                 async with asyncio.timeout(timeout):
                     async for _chunk in sr:
                         pass
             except TimeoutError:
-                is_partial = True
-                logger.warning(
-                    "Streaming timeout after %ss: captured %d chars of partial response",
-                    timeout,
-                    len(sr.accumulated_content),
-                )
+                from karenina.exceptions import StreamingTimeoutError
+
+                raise StreamingTimeoutError(
+                    f"Streaming timed out after {timeout}s",
+                    partial_content=sr.accumulated_content,
+                ) from None
 
         return LLMResponse(
             content=sr.accumulated_content,
             usage=sr.usage,
             raw=None,
-            is_partial=is_partial,
-            usage_unavailable=is_partial,
         )
 
     @with_llm_semaphore
