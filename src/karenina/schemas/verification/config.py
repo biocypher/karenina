@@ -303,6 +303,16 @@ class VerificationConfig(BaseModel):
         "IN_PROGRESS cache loop before generating the answer fresh.",
     )
 
+    max_scenario_turn_retries: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Maximum attempts for a scenario turn that fails with a transient "
+            "error. Each attempt runs the full verification pipeline. Separate "
+            "from max_transient_retries (which controls per-LLM-call retries)."
+        ),
+    )
+
     def __init__(self, **data: Any) -> None:
         """
         Initialize with environment variable support and default system prompts.
