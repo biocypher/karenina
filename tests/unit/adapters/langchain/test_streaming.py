@@ -139,8 +139,10 @@ class TestLangChainStreaming:
         assert result.usage_unavailable is False
 
     @pytest.mark.asyncio
-    async def test_astream_with_timeout_captures_partial(self, model_config: Any) -> None:
-        """_astream_with_timeout() sets is_partial and usage_unavailable on timeout."""
+    async def test_astream_with_timeout_raises_streaming_timeout_error(self, model_config: Any) -> None:
+        """_astream_with_timeout() raises StreamingTimeoutError on timeout."""
+        from karenina.exceptions import StreamingTimeoutError
+
         chunks = [
             _FakeChunk(content="First"),
             _FakeChunk(content="Second"),
@@ -148,8 +150,20 @@ class TestLangChainStreaming:
         ]
         adapter = _build_slow_adapter(model_config, chunks, delay=5.0)
 
-        result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
+        with pytest.raises(StreamingTimeoutError) as exc_info:
+            await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
 
-        assert result.is_partial is True
-        assert result.usage_unavailable is True
-        assert "First" in result.content
+        assert "First" in exc_info.value.partial_content
+
+    @pytest.mark.asyncio
+    async def test_astream_with_timeout_no_partial_flag(self, model_config: Any) -> None:
+        """_astream_with_timeout() does not set is_partial on success."""
+        chunks = [
+            _FakeChunk(content="All "),
+            _FakeChunk(content="done."),
+        ]
+        adapter = _build_adapter(model_config, chunks)
+
+        result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=10.0)
+
+        assert result.is_partial is False

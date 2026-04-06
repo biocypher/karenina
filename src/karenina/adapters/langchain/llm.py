@@ -4,9 +4,10 @@ This module provides the LangChainLLMAdapter class that wraps existing
 LangChain infrastructure (init_chat_model) behind the unified LLMPort interface.
 
 Retry Logic:
-    This adapter includes tenacity-based retry for transient errors (connection
-    errors, timeouts, rate limits, 5xx errors). Retry is applied to both
-    ainvoke() and with_structured_output() calls with exponential backoff.
+    This adapter uses RetryExecutor with per-category retry budgets for
+    transient errors (connection errors, timeouts, rate limits, 5xx errors).
+    Retry is applied to both ainvoke() and with_structured_output() calls
+    with exponential backoff.
 
 Structured Output Fallback:
     When the underlying model doesn't support with_structured_output(), the
@@ -33,10 +34,10 @@ from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
-from karenina.utils.errors import is_retryable_error
+from karenina.utils.errors import ErrorRegistry, is_retryable_error
 from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
-from karenina.utils.retry import TRANSIENT_RETRY, create_transient_retry
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .messages import LangChainMessageConverter
 from .prompts import FORMAT_INSTRUCTIONS
@@ -109,6 +110,8 @@ class LangChainLLMAdapter:
         self._base_model = _base_model
         self._max_retries = _max_retries
         self._retry_policy = model_config.retry_policy
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
 
         if _base_model is not None:
             self._model = _structured_model if _structured_model else _base_model
@@ -140,7 +143,7 @@ class LangChainLLMAdapter:
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
 
-        # Suppress SDK-level retries. TRANSIENT_RETRY is the sole retry layer.
+        # Suppress SDK-level retries. RetryExecutor is the sole retry layer.
         # Placed after extra_kwargs merge to ensure SDK retries stay at 0.
         kwargs["max_retries"] = 0
 
@@ -179,7 +182,7 @@ class LangChainLLMAdapter:
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously with automatic retry for transient errors.
 
-        Uses tenacity for exponential backoff retry logic on transient errors
+        Uses RetryExecutor with per-category retry budgets for transient errors
         (connection errors, timeouts, rate limits, 5xx errors).
 
         For structured output mode, tries native with_structured_output() first.
@@ -284,28 +287,28 @@ class LangChainLLMAdapter:
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content and is_partial flag.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
         """
-        is_partial = False
         async with self.astream(messages) as sr:
             try:
                 async with asyncio.timeout(timeout):
                     async for _chunk in sr:
                         pass
             except TimeoutError:
-                is_partial = True
-                logger.warning(
-                    "Streaming timeout after %ss: captured %d chars of partial response",
-                    timeout,
-                    len(sr.accumulated_content),
-                )
+                from karenina.exceptions import StreamingTimeoutError
+
+                raise StreamingTimeoutError(
+                    f"Streaming timed out after {timeout}s",
+                    partial_content=sr.accumulated_content,
+                ) from None
 
         return LLMResponse(
             content=sr.accumulated_content,
             usage=sr.usage,
             raw=None,
-            is_partial=is_partial,
-            usage_unavailable=is_partial,
         )
 
     @with_llm_semaphore
@@ -320,8 +323,10 @@ class LangChainLLMAdapter:
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content. ``is_partial`` is True if
-            the stream was interrupted by timeout.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 
@@ -398,7 +403,7 @@ class LangChainLLMAdapter:
     async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
         """Invoke LLM for regular text output."""
         lc_messages = self._converter.to_provider(messages)
-        response = await self._invoke_model_with_retry(self._model, lc_messages)
+        response = await self._retry_executor.aexecute(self._model.ainvoke, lc_messages)
 
         content = str(response.content) if hasattr(response, "content") else str(response)
         usage = extract_usage_from_response(response, model_name=self._config.model_name)
@@ -465,7 +470,7 @@ class LangChainLLMAdapter:
                 # Use callback to capture usage since with_structured_output
                 # may return a BaseModel directly (losing response_metadata)
                 with get_usage_metadata_callback() as cb:
-                    response = await self._invoke_model_with_retry(self._structured_model, lc_messages)
+                    response = await self._retry_executor.aexecute(self._structured_model.ainvoke, lc_messages)
 
                 if isinstance(response, BaseModel):
                     # Prefer callback usage (reliable), fall back to response extraction
@@ -530,7 +535,7 @@ class LangChainLLMAdapter:
         # Use base model for fallback (not the structured model)
         model_to_use = self._base_model if self._base_model is not None else self._model
         lc_messages = self._converter.to_provider(augmented_messages)
-        response = await self._invoke_model_with_retry(model_to_use, lc_messages)
+        response = await self._retry_executor.aexecute(model_to_use.ainvoke, lc_messages)
 
         # Extract and parse response
         text_content = str(response.content) if hasattr(response, "content") else str(response)
@@ -597,35 +602,6 @@ class LangChainLLMAdapter:
     # =========================================================================
     # Low-level Helpers
     # =========================================================================
-
-    async def _invoke_model_with_retry(self, model: Any, lc_messages: list[Any]) -> Any:
-        """Invoke a LangChain model with automatic retry for transient errors.
-
-        Uses the RetryPolicy from ModelConfig when set, otherwise falls back
-        to the module-level TRANSIENT_RETRY singleton.
-
-        Args:
-            model: The LangChain model to invoke.
-            lc_messages: LangChain-formatted messages.
-
-        Returns:
-            The model's response.
-
-        Raises:
-            Exception: After all retries are exhausted.
-        """
-        if self._retry_policy is not None:
-            retry_decorator = create_transient_retry(
-                max_attempts=self._retry_policy.derive_sdk_max_retries(),
-            )
-        else:
-            retry_decorator = TRANSIENT_RETRY
-
-        @retry_decorator
-        async def _invoke() -> Any:
-            return await model.ainvoke(lc_messages)
-
-        return await _invoke()
 
     async def aclose(self) -> None:
         """Close underlying resources.
