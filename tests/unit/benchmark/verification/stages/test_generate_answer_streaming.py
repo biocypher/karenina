@@ -103,9 +103,9 @@ class TestStreamingLLMPath:
         # Raw response should still be captured
         assert "partial content here" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
-        # Partial timeout is an error (transient)
+        # Partial timeout is an error (timeout category)
         assert ctx.completed_without_errors is False
-        assert ctx.is_transient_error is True
+        assert ctx.error_category.value == "timeout"
         assert "streaming timeout" in ctx.error.lower()
 
     def test_streaming_no_content_raises_timeout_error(self) -> None:
@@ -270,9 +270,9 @@ class TestAgentTimeoutPath:
         raw = ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         assert "Partial response from agent" in raw
 
-        # Partial timeout is an error (transient)
+        # Partial timeout is an error (timeout category)
         assert ctx.completed_without_errors is False
-        assert ctx.is_transient_error is True
+        assert ctx.error_category.value == "timeout"
         assert "timed out" in ctx.error.lower()
 
     def test_agent_timeout_with_no_trace_marks_error(self) -> None:

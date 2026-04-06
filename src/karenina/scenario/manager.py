@@ -194,7 +194,7 @@ class ScenarioManager:
                 if vr.metadata.completed_without_errors:
                     break
 
-                if not vr.metadata.is_transient_error:
+                if vr.metadata.error_category is None or vr.metadata.error_category == "permanent":
                     break  # permanent error, no retry
 
                 if turn_attempt < max_turn_attempts:

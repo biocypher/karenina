@@ -32,6 +32,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_RUBRIC_MAX_EXCERPTS,
     DeepJudgmentRubricCustomConfig,
 )
+from karenina.utils.errors import ErrorCategory
 
 if TYPE_CHECKING:
     from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
@@ -364,8 +365,9 @@ class VerificationContext:
 
     # Error Tracking
     error: str | None = None
+    error_category: ErrorCategory | None = None
     completed_without_errors: bool = True
-    is_transient_error: bool = False
+    warnings: list[str] = field(default_factory=list)
 
     def set_artifact(self, key: str, value: Any) -> None:
         """Store an artifact produced by a stage."""
@@ -387,18 +389,35 @@ class VerificationContext:
         """Get a field from the result builder."""
         return self.result_builder.get(key, default)
 
-    def mark_error(self, error_message: str, *, transient: bool = False) -> None:
+    def mark_error(
+        self,
+        error_message: str,
+        *,
+        category: ErrorCategory = ErrorCategory.PERMANENT,
+    ) -> None:
         """Mark the context as failed with an error message.
 
         Args:
             error_message: Human-readable error description.
-            transient: Whether the error is transient (retryable). Sticky: once
-                True, subsequent calls with transient=False keep it True.
+            category: Classification of the error for retry decisions.
+                Defaults to PERMANENT (non-retryable).
         """
+        if self.error is not None:
+            self.add_warning(f"Previous error overwritten: {self.error}")
         self.error = error_message
+        self.error_category = category
         self.completed_without_errors = False
-        if transient:
-            self.is_transient_error = True
+
+    def add_warning(self, message: str) -> None:
+        """Add a non-fatal warning. Capped at 50 entries.
+
+        Args:
+            message: Warning text to record.
+        """
+        if len(self.warnings) < 50:
+            self.warnings.append(message)
+        elif len(self.warnings) == 50:
+            self.warnings.append("(additional warnings truncated)")
 
 
 class VerificationStage(Protocol):

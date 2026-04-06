@@ -1,4 +1,4 @@
-"""Tests for GenerateAnswerStage transient error classification."""
+"""Tests for GenerateAnswerStage error category classification."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import pytest
 from karenina.benchmark.verification.stages.core.base import VerificationContext
 from karenina.benchmark.verification.stages.pipeline.generate_answer import GenerateAnswerStage
 from karenina.schemas.config import ModelConfig
+from karenina.utils.errors import ErrorCategory
 
 
 def _make_context() -> VerificationContext:
@@ -32,10 +33,10 @@ def _make_context() -> VerificationContext:
 
 
 @pytest.mark.unit
-class TestGenerateAnswerTransientClassification:
+class TestGenerateAnswerErrorCategoryClassification:
     @patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm")
-    def test_adapter_init_connection_error_transient(self, mock_get_llm: MagicMock) -> None:
-        """When get_llm() raises ConnectionError, context.is_transient_error should be True."""
+    def test_adapter_init_connection_error_category(self, mock_get_llm: MagicMock) -> None:
+        """When get_llm() raises ConnectionError, error_category should be CONNECTION."""
         mock_get_llm.side_effect = ConnectionError("connection refused")
 
         ctx = _make_context()
@@ -43,11 +44,11 @@ class TestGenerateAnswerTransientClassification:
         stage.execute(ctx)
 
         assert ctx.completed_without_errors is False
-        assert ctx.is_transient_error is True
+        assert ctx.error_category == ErrorCategory.CONNECTION
 
     @patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm")
-    def test_adapter_call_connection_error_transient(self, mock_get_llm: MagicMock) -> None:
-        """When llm.stream_invoke() raises ConnectionError, context.is_transient_error should be True."""
+    def test_adapter_call_connection_error_category(self, mock_get_llm: MagicMock) -> None:
+        """When llm.stream_invoke() raises ConnectionError, error_category should be CONNECTION."""
         mock_llm = MagicMock()
         mock_llm.capabilities = MagicMock(supports_streaming=True)
         mock_llm.stream_invoke.side_effect = ConnectionError("connection reset")
@@ -58,11 +59,11 @@ class TestGenerateAnswerTransientClassification:
         stage.execute(ctx)
 
         assert ctx.completed_without_errors is False
-        assert ctx.is_transient_error is True
+        assert ctx.error_category == ErrorCategory.CONNECTION
 
     @patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm")
-    def test_adapter_call_value_error_not_transient(self, mock_get_llm: MagicMock) -> None:
-        """When llm.stream_invoke() raises ValueError, context.is_transient_error should be False."""
+    def test_adapter_call_value_error_permanent_category(self, mock_get_llm: MagicMock) -> None:
+        """When llm.stream_invoke() raises ValueError, error_category should be PERMANENT."""
         mock_llm = MagicMock()
         mock_llm.capabilities = MagicMock(supports_streaming=True)
         mock_llm.stream_invoke.side_effect = ValueError("invalid prompt")
@@ -73,4 +74,4 @@ class TestGenerateAnswerTransientClassification:
         stage.execute(ctx)
 
         assert ctx.completed_without_errors is False
-        assert ctx.is_transient_error is False
+        assert ctx.error_category == ErrorCategory.PERMANENT

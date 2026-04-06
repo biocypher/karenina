@@ -29,7 +29,7 @@ def _make_model(name: str = "test-model") -> ModelConfig:
 def _make_vr(
     *,
     completed: bool = True,
-    transient: bool = False,
+    error_category: str | None = None,
     error: str | None = None,
     verify_result: bool | None = True,
 ) -> VerificationResult:
@@ -40,7 +40,7 @@ def _make_vr(
         template_id="tpl1",
         completed_without_errors=completed,
         error=error,
-        is_transient_error=transient,
+        error_category=error_category,
         question_text="What?",
         answering=identity,
         parsing=identity,
@@ -108,7 +108,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_retry_on_transient_error_then_success(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
         """Transient error on first attempt, success on second."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
+        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection error")
         vr_ok = _make_vr(completed=True)
         mock_run_turn.side_effect = [
             (vr_fail, None, None, ""),
@@ -129,7 +129,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_no_retry_on_permanent_error(self, mock_run_turn: MagicMock) -> None:
         """Non-transient error: no retry, status is 'error'."""
-        vr_fail = _make_vr(completed=False, transient=False, error="ValueError: bad")
+        vr_fail = _make_vr(completed=False, error_category="permanent", error="ValueError: bad")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -147,7 +147,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_retries_exhaust_then_error(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
         """All retry attempts fail with transient errors."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
+        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection error")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -165,7 +165,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_retry_count_from_config(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
         """max_scenario_turn_retries controls total attempts."""
-        vr_fail = _make_vr(completed=False, transient=True, error="timeout")
+        vr_fail = _make_vr(completed=False, error_category="timeout", error="timeout")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -182,7 +182,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_retry_sleeps_between_attempts(self, mock_run_turn: MagicMock, mock_sleep: MagicMock) -> None:
         """time.sleep(1) called between retries but not after the last attempt."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
+        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection error")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -203,7 +203,7 @@ class TestScenarioManagerTurnRetry:
         self, mock_run_turn: MagicMock, _mock_sleep: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Warning logged for each retry with scenario name, node, attempt number."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
+        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection error")
         vr_ok = _make_vr(completed=True)
         mock_run_turn.side_effect = [
             (vr_fail, None, None, ""),
@@ -230,7 +230,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_retry_preserves_conversation_history(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
         """Same conversation_history passed on each retry attempt."""
-        vr_fail = _make_vr(completed=False, transient=True, error="timeout")
+        vr_fail = _make_vr(completed=False, error_category="timeout", error="timeout")
         vr_ok = _make_vr(completed=True)
         mock_run_turn.side_effect = [
             (vr_fail, None, None, ""),
@@ -255,7 +255,7 @@ class TestScenarioManagerTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_cache_completed_only_after_final_attempt(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
         """Cache complete() called once after the retry loop, not between attempts."""
-        vr_fail = _make_vr(completed=False, transient=True, error="timeout")
+        vr_fail = _make_vr(completed=False, error_category="timeout", error="timeout")
         vr_ok = _make_vr(completed=True)
         mock_run_turn.side_effect = [
             (vr_fail, None, None, ""),
