@@ -25,7 +25,6 @@ from .errors import ErrorCategory, ErrorRegistry, is_retryable_error
 from .file_ops import atomic_write
 from .json_extraction import extract_json_from_response
 from .messages import append_error_feedback
-from .retry import TRANSIENT_RETRY, create_transient_retry, log_retry
 from .retry_policy import CategoryRetryConfig, ErrorPatternConfig, RetryExecutor, RetryPolicy
 from .testing import FixtureBackedLLMClient, MockResponse, MockUsage
 from .version import get_karenina_version
@@ -57,10 +56,6 @@ __all__ = [
     "extract_json_from_response",
     # Message utilities
     "append_error_feedback",
-    # Retry utilities
-    "TRANSIENT_RETRY",
-    "create_transient_retry",
-    "log_retry",
     # Retry policy (category-aware)
     "CategoryRetryConfig",
     "ErrorPatternConfig",
