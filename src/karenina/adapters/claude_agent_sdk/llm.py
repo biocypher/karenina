@@ -28,6 +28,8 @@ from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
+from karenina.utils.errors import ErrorRegistry
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
@@ -146,6 +148,9 @@ class ClaudeSDKLLMAdapter:
         self._converter = ClaudeSDKMessageConverter()
         self._structured_schema = _structured_schema
         self._max_turns = _max_turns if _max_turns is not None else self.DEFAULT_STRUCTURED_MAX_TURNS
+
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
 
     def _build_options(self, system_prompt: str | None) -> ClaudeAgentOptions:
         """Build ClaudeAgentOptions for the query.
@@ -424,16 +429,26 @@ class ClaudeSDKLLMAdapter:
 
         Always uses a dedicated thread with asyncio.run() to give the
         Claude Agent SDK a fresh event loop, avoiding cancel scope
-        conflicts with BlockingPortal.
+        conflicts with BlockingPortal. Retries via RetryExecutor on
+        transient errors (including StreamingTimeoutError with zero
+        content, classified as RATE_LIMIT for queue congestion).
 
         Args:
             messages: List of unified Message objects.
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content. is_partial is True if
-            the stream was interrupted by timeout.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If retries are exhausted and the stream
+                still exceeds the wall-clock timeout.
         """
+        result: LLMResponse = self._retry_executor.execute(self._stream_invoke_once, messages, timeout)
+        return result
+
+    def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Single stream_invoke attempt (no retry). Called by RetryExecutor."""
         return _run_in_fresh_loop(
             self._astream_with_timeout,
             messages,

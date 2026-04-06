@@ -24,6 +24,8 @@ from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
 from karenina.ports.usage import UsageMetadata
+from karenina.utils.errors import ErrorRegistry
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .initialization import create_chat_model
 from .messages import DeepAgentsMessageConverter
@@ -67,6 +69,9 @@ class DeepAgentsLLMAdapter:
         self._config = model_config
         self._converter = DeepAgentsMessageConverter()
         self._structured_schema = _structured_schema
+
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
 
     @property
     def capabilities(self) -> PortCapabilities:
@@ -276,6 +281,11 @@ class DeepAgentsLLMAdapter:
     def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
         """Stream with wall-clock timeout synchronously.
 
+        Uses streaming internally so that partial content can be captured on
+        timeout. Returns the same LLMResponse type as invoke(). Retries via
+        RetryExecutor on transient errors (including StreamingTimeoutError
+        with zero content, classified as RATE_LIMIT for queue congestion).
+
         Args:
             messages: List of unified Message objects.
             timeout: Wall-clock timeout in seconds. None means no timeout.
@@ -284,8 +294,14 @@ class DeepAgentsLLMAdapter:
             LLMResponse with accumulated content.
 
         Raises:
-            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
+            StreamingTimeoutError: If retries are exhausted and the stream
+                still exceeds the wall-clock timeout.
         """
+        result: LLMResponse = self._retry_executor.execute(self._stream_invoke_once, messages, timeout)
+        return result
+
+    def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Single stream_invoke attempt (no retry). Called by RetryExecutor."""
         from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
