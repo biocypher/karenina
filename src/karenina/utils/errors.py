@@ -142,6 +142,11 @@ class ErrorRegistry:
         built-in rules (types, then messages). Returns PERMANENT if no rule
         matches.
 
+        Special case: StreamingTimeoutError with no partial content is
+        classified as RATE_LIMIT (server never started responding, likely
+        queued due to congestion), not TIMEOUT. This gives it more retries
+        with longer backoff, which is appropriate for overloaded servers.
+
         Args:
             exception: The exception to classify.
 
@@ -167,7 +172,17 @@ class ErrorRegistry:
             if pattern.lower() in exc_message:
                 return category
 
-        # 4. Built-in type name rules (check full MRO for built-in types)
+        # 4. StreamingTimeoutError: zero content = congestion (RATE_LIMIT),
+        #    partial content = genuine slow response (TIMEOUT).
+        #    Placed after user patterns so custom registrations take precedence.
+        if (
+            exc_type_name == "StreamingTimeoutError"
+            and hasattr(exception, "partial_content")
+            and not exception.partial_content
+        ):
+            return ErrorCategory.RATE_LIMIT
+
+        # 5. Built-in type name rules (check full MRO for built-in types)
         for ancestor in exc_type.__mro__:
             ancestor_name = ancestor.__name__
             if ancestor_name in _BUILTIN_TYPE_RULES:

@@ -39,8 +39,13 @@ class TestStreamingTimeoutError:
         with pytest.raises(KareninaError):
             raise StreamingTimeoutError("timed out")
 
-    def test_error_registry_classifies_as_timeout(self) -> None:
+    def test_error_registry_classifies_partial_as_timeout(self) -> None:
         registry = ErrorRegistry()
-        err = StreamingTimeoutError("streaming timed out")
-        category = registry.classify(err)
-        assert category == ErrorCategory.TIMEOUT
+        err = StreamingTimeoutError("streaming timed out", partial_content="some data")
+        assert registry.classify(err) == ErrorCategory.TIMEOUT
+
+    def test_error_registry_classifies_empty_as_rate_limit(self) -> None:
+        """Zero content timeout = queue congestion, classified as RATE_LIMIT."""
+        registry = ErrorRegistry()
+        err = StreamingTimeoutError("streaming timed out", partial_content="")
+        assert registry.classify(err) == ErrorCategory.RATE_LIMIT

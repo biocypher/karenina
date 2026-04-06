@@ -278,3 +278,41 @@ class TestIsRetryableErrorBackwardCompat:
 
     def test_generic_exception_is_not_retryable(self) -> None:
         assert is_retryable_error(Exception("something random")) is False
+
+
+@pytest.mark.unit
+class TestStreamingTimeoutErrorClassification:
+    """StreamingTimeoutError classification depends on partial_content."""
+
+    def test_zero_content_timeout_is_rate_limit(self) -> None:
+        """Server never started responding: likely queued/congested."""
+        from karenina.exceptions import StreamingTimeoutError
+
+        registry = ErrorRegistry()
+        exc = StreamingTimeoutError("Streaming timed out after 120s", partial_content="")
+        assert registry.classify(exc) == ErrorCategory.RATE_LIMIT
+
+    def test_partial_content_timeout_is_timeout(self) -> None:
+        """Server started responding but was too slow: genuine timeout."""
+        from karenina.exceptions import StreamingTimeoutError
+
+        registry = ErrorRegistry()
+        exc = StreamingTimeoutError("Streaming timed out after 120s", partial_content="The answer is")
+        assert registry.classify(exc) == ErrorCategory.TIMEOUT
+
+    def test_zero_content_gets_more_retries_than_timeout(self) -> None:
+        """Zero-content (RATE_LIMIT) gets 3 retries; partial (TIMEOUT) gets 1."""
+        from karenina.utils.retry_policy import RetryPolicy
+
+        policy = RetryPolicy()
+        assert policy.rate_limit.max_attempts > policy.timeout.max_attempts
+
+    def test_user_override_takes_precedence(self) -> None:
+        """User can override StreamingTimeoutError classification."""
+        from karenina.exceptions import StreamingTimeoutError
+
+        registry = ErrorRegistry()
+        registry.register(StreamingTimeoutError, ErrorCategory.SERVER_ERROR)
+        exc = StreamingTimeoutError("timed out", partial_content="")
+        # User registration (step 1) beats the special case (step 0)
+        assert registry.classify(exc) == ErrorCategory.SERVER_ERROR
