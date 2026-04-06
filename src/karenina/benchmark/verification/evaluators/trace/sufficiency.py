@@ -2,11 +2,9 @@
 
 import json
 import logging
-from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, Field
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from karenina.adapters import get_llm
 from karenina.benchmark.verification.prompts.assembler import PromptAssembler
@@ -20,8 +18,6 @@ from karenina.ports import LLMResponse
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification.prompt_config import PromptConfig
-from karenina.utils.errors import is_retryable_error
-from karenina.utils.retry import log_retry
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -47,8 +43,8 @@ def detect_sufficiency(
     Detect if the response contains sufficient information to populate the template schema.
 
     This function uses an LLM to analyze the response against the template schema and
-    determine if all required fields can be populated. Uses retry logic for transient
-    errors (connection issues, rate limits, etc.).
+    determine if all required fields can be populated. The adapter handles retries
+    for transient errors internally via RetryExecutor.
 
     Args:
         raw_llm_response: The raw response text from the answering model
@@ -73,84 +69,61 @@ def detect_sufficiency(
         True, True
     """
 
-    @retry(
-        retry=retry_if_exception_type(Exception),
-        stop=stop_after_attempt(3),  # Try 3 times
-        wait=wait_exponential(multiplier=1, min=2, max=10),  # Exponential backoff: 2s, 4s, 8s
-        reraise=True,
-        before_sleep=partial(log_retry, context="sufficiency detection", max_attempts=3),
-    )
-    def _detect_with_retry() -> tuple[bool, bool, str | None, dict[str, Any]]:
-        """Inner function with retry logic."""
-        usage_metadata: dict[str, Any] = {}
-
-        try:
-            # Create config copy with temperature=0 for consistent detection
-            # Note: LangChain adapter respects temperature; Claude SDK adapter ignores it
-            detection_config = parsing_model.model_copy(update={"temperature": 0.0})
-
-            # Get LLM via adapter factory
-            llm = get_llm(detection_config)
-
-            # Configure for structured output
-            structured_llm = llm.with_structured_output(SufficiencyResult)
-
-            # Convert schema to string for prompt
-            schema_str = json.dumps(template_schema, indent=2)
-
-            # Build messages using PromptAssembler (tri-section pattern)
-            user_prompt = SUFFICIENCY_DETECTION_USER.format(
-                question=question_text,
-                response=raw_llm_response,
-                schema=schema_str,
-            )
-            assembler = PromptAssembler(
-                task=PromptTask.SUFFICIENCY_DETECTION,
-                interface=parsing_model.interface,
-                capabilities=PortCapabilities(),
-            )
-            user_instructions = (
-                prompt_config.get_for_task(PromptTask.SUFFICIENCY_DETECTION.value) if prompt_config else None
-            )
-            messages = assembler.assemble(
-                system_text=SUFFICIENCY_DETECTION_SYS,
-                user_text=user_prompt,
-                user_instructions=user_instructions,
-            )
-
-            # Invoke with structured output
-            response: LLMResponse = structured_llm.invoke(messages)
-            usage_metadata = response.usage.to_dict()
-
-            # Extract result from structured output or fall back to manual parsing
-            result = extract_judge_result(response, SufficiencyResult, "sufficient")
-            if result is not None:
-                logger.debug(f"Sufficiency check: {result.sufficient} - Reasoning: {result.reasoning}")
-                return result.sufficient, True, result.reasoning, usage_metadata
-
-            # Fallback: manual JSON parsing from content
-            return fallback_json_parse(
-                response.content, usage_metadata, "sufficient", True, "Sufficiency check (fallback)"
-            )
-
-        except json.JSONDecodeError as e:
-            # JSON parsing failed - log and treat as check failure
-            logger.warning(f"Failed to parse sufficiency detection response as JSON: {e}")
-            return True, False, None, usage_metadata  # Default to sufficient on failure
-
-        except Exception as e:
-            # Check if this is a retryable error
-            if is_retryable_error(e):
-                logger.info(f"Detected retryable error in sufficiency check: {type(e).__name__}: {e}")
-                raise  # Re-raise to trigger retry
-            else:
-                # Non-retryable error - log and treat as check failure
-                logger.warning(f"Sufficiency detection failed with non-retryable error: {e}")
-                return True, False, None, usage_metadata  # Default to sufficient on failure
+    usage_metadata: dict[str, Any] = {}
 
     try:
-        return _detect_with_retry()
+        # Create config copy with temperature=0 for consistent detection
+        # Note: LangChain adapter respects temperature; Claude SDK adapter ignores it
+        detection_config = parsing_model.model_copy(update={"temperature": 0.0})
+
+        # Get LLM via adapter factory (adapter handles retries internally)
+        llm = get_llm(detection_config)
+
+        # Configure for structured output
+        structured_llm = llm.with_structured_output(SufficiencyResult)
+
+        # Convert schema to string for prompt
+        schema_str = json.dumps(template_schema, indent=2)
+
+        # Build messages using PromptAssembler (tri-section pattern)
+        user_prompt = SUFFICIENCY_DETECTION_USER.format(
+            question=question_text,
+            response=raw_llm_response,
+            schema=schema_str,
+        )
+        assembler = PromptAssembler(
+            task=PromptTask.SUFFICIENCY_DETECTION,
+            interface=parsing_model.interface,
+            capabilities=PortCapabilities(),
+        )
+        user_instructions = (
+            prompt_config.get_for_task(PromptTask.SUFFICIENCY_DETECTION.value) if prompt_config else None
+        )
+        messages = assembler.assemble(
+            system_text=SUFFICIENCY_DETECTION_SYS,
+            user_text=user_prompt,
+            user_instructions=user_instructions,
+        )
+
+        # Invoke with structured output
+        response: LLMResponse = structured_llm.invoke(messages)
+        usage_metadata = response.usage.to_dict()
+
+        # Extract result from structured output or fall back to manual parsing
+        result = extract_judge_result(response, SufficiencyResult, "sufficient")
+        if result is not None:
+            logger.debug("Sufficiency check: %s - Reasoning: %s", result.sufficient, result.reasoning)
+            return result.sufficient, True, result.reasoning, usage_metadata
+
+        # Fallback: manual JSON parsing from content
+        return fallback_json_parse(response.content, usage_metadata, "sufficient", True, "Sufficiency check (fallback)")
+
+    except json.JSONDecodeError as e:
+        # JSON parsing failed: log and treat as check failure
+        logger.warning("Failed to parse sufficiency detection response as JSON: %s", e)
+        return True, False, None, usage_metadata  # Default to sufficient on failure
+
     except Exception as e:
-        # All retries exhausted or unhandled error
-        logger.error(f"Sufficiency detection failed after all retries: {e}")
-        return True, False, None, {}  # Default to sufficient on failure
+        # Non-recoverable error: log and treat as check failure
+        logger.warning("Sufficiency detection failed: %s", e)
+        return True, False, None, usage_metadata  # Default to sufficient on failure

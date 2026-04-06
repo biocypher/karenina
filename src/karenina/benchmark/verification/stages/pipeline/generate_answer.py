@@ -16,7 +16,7 @@ from karenina.adapters import get_agent, get_llm
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
-from karenina.ports import AgentConfig, AgentPort, LLMPort, LLMResponse, Message
+from karenina.ports import AgentConfig, AgentPort, LLMPort, Message
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.errors import ErrorCategory
 
@@ -379,39 +379,15 @@ class GenerateAnswerStage(BaseVerificationStage):
                 assert answering_llm is not None
 
                 # Use streaming when available to capture partial output on timeout.
-                # Zero-content streaming timeouts are retried at this level because
-                # stream_invoke handles the timeout internally (returns a partial
-                # response) rather than raising, so TRANSIENT_RETRY never sees it.
-                _rp = context.answering_model.retry_policy
-                max_attempts = _rp.derive_sdk_max_retries() if _rp else 3
-                llm_response: LLMResponse | None = None
-                for attempt in range(1, max_attempts + 1):
-                    if answering_llm.capabilities.supports_streaming:
-                        llm_response = answering_llm.stream_invoke(
-                            adapter_messages,
-                            timeout=context.answering_model.request_timeout,
-                        )
-                    else:
-                        llm_response = answering_llm.invoke(adapter_messages)
-
-                    if not llm_response.is_partial or llm_response.content:
-                        break
-
-                    # Zero-content streaming timeout: retry if attempts remain
-                    if attempt < max_attempts:
-                        logger.warning(
-                            "Question %s: zero-content streaming timeout (attempt %d/%d), retrying",
-                            context.question_id,
-                            attempt,
-                            max_attempts,
-                        )
-                        continue
-
-                    # Final attempt also returned zero content
-                    self.set_artifact_and_result(context, "response_timeout_partial", True)
-                    raise TimeoutError("LLM request timed out with no content received")
-
-                assert llm_response is not None  # Loop always breaks or raises
+                # The adapter handles retries internally via RetryExecutor.
+                # StreamingTimeoutError propagates to the outer exception handler.
+                if answering_llm.capabilities.supports_streaming:
+                    llm_response = answering_llm.stream_invoke(
+                        adapter_messages,
+                        timeout=context.answering_model.request_timeout,
+                    )
+                else:
+                    llm_response = answering_llm.invoke(adapter_messages)
 
                 # Format response as trace (AI message only, question is not part of the trace)
                 raw_llm_response = f"--- AI Message ---\n{llm_response.content}"

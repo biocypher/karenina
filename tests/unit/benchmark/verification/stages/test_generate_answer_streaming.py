@@ -108,9 +108,9 @@ class TestStreamingLLMPath:
         assert ctx.error_category.value == "timeout"
         assert "streaming timeout" in ctx.error.lower()
 
-    def test_streaming_no_content_raises_timeout_error(self) -> None:
-        """When stream_invoke returns partial with empty content, a TimeoutError
-        should propagate and mark_error on the context."""
+    def test_streaming_empty_partial_marks_timeout_error(self) -> None:
+        """When stream_invoke returns partial with empty content, the stage marks
+        a timeout error on context (no retry loop; adapter handles retries)."""
         ctx = _make_context()
         stage = GenerateAnswerStage()
         mock_llm = _make_mock_llm(supports_streaming=True)
@@ -132,10 +132,14 @@ class TestStreamingLLMPath:
         ):
             stage.execute(ctx)
 
-        # The TimeoutError is caught by the outer except block and marks error
+        # stream_invoke called exactly once (no retry loop)
+        assert mock_llm.stream_invoke.call_count == 1
+
+        # The is_partial check marks a timeout error on context
         assert ctx.error is not None
-        assert "timed out" in ctx.error.lower() or "TimeoutError" in ctx.error
+        assert "timeout" in ctx.error.lower() or "truncated" in ctx.error.lower()
         assert ctx.completed_without_errors is False
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is True
 
     def test_non_streaming_fallback_uses_invoke(self) -> None:
         """When LLM does not support streaming, invoke() should be called
