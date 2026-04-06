@@ -20,6 +20,7 @@ Exception hierarchy::
     │   ├── McpTimeoutError
     │   ├── McpClientError
     │   └── McpConfigValidationError
+    ├── StreamingTimeoutError        # LLM streaming timeout (also inherits TimeoutError)
     ├── VerificationBatchError       # Partial-failure batch verification errors
     └── BenchmarkConversionError     # Benchmark conversion errors
 
@@ -85,6 +86,22 @@ class McpClientError(McpError):
     ) -> None:
         super().__init__(message)
         self.server_name = server_name
+
+
+class StreamingTimeoutError(KareninaError, TimeoutError):
+    """Raised when an LLM streaming operation times out.
+
+    Inherits from both KareninaError (karenina exception hierarchy) and
+    TimeoutError (for adapter retry classification as TIMEOUT category).
+
+    Args:
+        message: Human-readable description of the timeout.
+        partial_content: Any content accumulated before the timeout occurred.
+    """
+
+    def __init__(self, message: str, partial_content: str = "") -> None:
+        super().__init__(message)
+        self.partial_content = partial_content
 
 
 class VerificationBatchError(KareninaError):
