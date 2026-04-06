@@ -561,30 +561,29 @@ class TestForceResetOnRequeueLimit:
 
 @pytest.mark.unit
 class TestPerWorkerPortals:
-    """Each submitted task creates its own distinct BlockingPortal."""
+    """Each worker thread creates one portal, reused across tasks."""
 
-    def test_parallel_tasks_create_distinct_portals(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """With 6 tasks and 2 workers, 6 distinct portal ids are observed (one per task).
+    def test_parallel_workers_create_portals(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With 6 tasks and 2 workers, 2 portals are created (one per worker).
 
-        Uses different task and worker counts to distinguish portal-per-task
-        from portal-per-worker behavior.
+        Each worker lazily creates a portal on its first task and reuses it
+        for subsequent tasks. This preserves connection pools.
         """
-        portal_ids: list[int] = []
+        portal_count = [0]
         portal_lock = threading.Lock()
 
         from anyio.from_thread import start_blocking_portal as original_start_blocking_portal
 
         class PortalTracker:
-            """Context manager that wraps start_blocking_portal to track portal identity."""
+            """Context manager that wraps start_blocking_portal to count creations."""
 
             def __init__(self) -> None:
                 self._real_cm = original_start_blocking_portal(backend="asyncio")
+                with portal_lock:
+                    portal_count[0] += 1
 
             def __enter__(self):
-                portal = self._real_cm.__enter__()
-                with portal_lock:
-                    portal_ids.append(id(portal))
-                return portal
+                return self._real_cm.__enter__()
 
             def __exit__(self, *args):
                 return self._real_cm.__exit__(*args)
@@ -615,5 +614,5 @@ class TestPerWorkerPortals:
         # All 6 tasks completed
         assert len(results) == 6
 
-        # 6 portal creations (one per task, not per worker)
-        assert len(portal_ids) == 6, f"Expected 6 portal creations (one per task), got {len(portal_ids)}"
+        # 2 portal creations (one per worker, reused across tasks)
+        assert portal_count[0] == 2, f"Expected 2 portal creations (one per worker), got {portal_count[0]}"

@@ -29,6 +29,8 @@ from karenina.utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)
 
+_SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
+
 # ============================================================================
 # Thread-Local Portal Storage
 # ============================================================================
@@ -40,11 +42,20 @@ def get_async_portal() -> BlockingPortal | None:
     """Get the current async portal for running async code from threads.
 
     Each worker thread has its own thread-local portal reference.
+    Returns None (and clears the stale reference) if the portal's event loop
+    has ended, allowing callers to fall back to asyncio.run().
 
     Returns:
         The BlockingPortal if one is active for this thread, None otherwise
     """
-    return getattr(_portal_storage, "portal", None)
+    portal = getattr(_portal_storage, "portal", None)
+    if portal is not None:
+        thread_id = getattr(portal, "_event_loop_thread_id", _SENTINEL)
+        if thread_id is None:
+            logger.warning("Clearing stale portal reference (event loop thread ended)")
+            _portal_storage.portal = None
+            return None
+    return portal
 
 
 def set_async_portal(portal: BlockingPortal | None) -> None:
@@ -275,60 +286,74 @@ class VerificationExecutor:
         progress_lock = threading.Lock()
         completed_count = [0]
 
+        # Per-worker portal management: each worker thread creates one portal
+        # that is reused across all tasks on that thread. This preserves httpx
+        # connection pools and avoids "Event loop is closed" errors from rapid
+        # portal churn.
+        _portal_cms: list[Any] = []
+        _portal_init_lock = threading.Lock()
+
+        def _ensure_worker_portal() -> None:
+            """Lazily create a BlockingPortal for this worker thread."""
+            if get_async_portal() is not None:
+                return
+            cm = start_blocking_portal(backend="asyncio")
+            portal = cm.__enter__()
+            set_async_portal(portal)
+            with _portal_init_lock:
+                _portal_cms.append(cm)
+
         def execute_task_with_retry(idx: int, task: dict[str, Any]) -> tuple[int, tuple[str, VerificationResult]]:
-            """Execute a single verification task with cache retry and its own portal."""
-            with start_blocking_portal(backend="asyncio") as portal:
-                set_async_portal(portal)
-                try:
-                    # Call preview progress callback
-                    if progress_callback:
-                        preview_result = create_preview_result(task)
-                        with progress_lock:
-                            progress_callback(completed_count[0] + 1, total, preview_result)
+            """Execute a single verification task with cache retry."""
+            _ensure_worker_portal()
 
-                    if not answer_cache:
-                        return idx, execute_task(task, answer_cache)
+            # Call preview progress callback
+            if progress_callback:
+                preview_result = create_preview_result(task)
+                with progress_lock:
+                    progress_callback(completed_count[0] + 1, total, preview_result)
 
-                    cache_key = generate_answer_cache_key(task)
-                    for attempt in range(max_requeue + 1):
-                        status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+            if not answer_cache:
+                return idx, execute_task(task, answer_cache)
 
-                        if status == "IN_PROGRESS":
-                            if attempt == 0:
-                                logger.debug(
-                                    "Task %s in progress (retry=%d), retrying immediately",
-                                    cache_key,
-                                    attempt,
-                                )
-                                continue
+            cache_key = generate_answer_cache_key(task)
+            for attempt in range(max_requeue + 1):
+                status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
 
-                            completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
-                            if not completed:
-                                logger.debug(
-                                    "Task %s still in progress after %ss, retrying",
-                                    cache_key,
-                                    retry_wait,
-                                )
-                            continue
-
-                        # MISS or HIT: execute
-                        return idx, execute_task(
-                            task,
-                            answer_cache,
-                            cache_status=status,
-                            cached_answer_data=cached_answer_data,
+                if status == "IN_PROGRESS":
+                    if attempt == 0:
+                        logger.debug(
+                            "Task %s in progress (retry=%d), retrying immediately",
+                            cache_key,
+                            attempt,
                         )
+                        continue
 
-                    # Exceeded max requeue: force reset, generate fresh
-                    logger.warning(
-                        "Task %s exceeded max requeue count (%d), generating fresh",
-                        cache_key,
-                        max_requeue,
-                    )
-                    answer_cache.force_reset(cache_key)
-                    return idx, execute_task(task, answer_cache)
-                finally:
-                    set_async_portal(None)
+                    completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
+                    if not completed:
+                        logger.debug(
+                            "Task %s still in progress after %ss, retrying",
+                            cache_key,
+                            retry_wait,
+                        )
+                    continue
+
+                # MISS or HIT: execute
+                return idx, execute_task(
+                    task,
+                    answer_cache,
+                    cache_status=status,
+                    cached_answer_data=cached_answer_data,
+                )
+
+            # Exceeded max requeue: force reset, generate fresh
+            logger.warning(
+                "Task %s exceeded max requeue count (%d), generating fresh",
+                cache_key,
+                max_requeue,
+            )
+            answer_cache.force_reset(cache_key)
+            return idx, execute_task(task, answer_cache)
 
         # Preserve incoming order (ordering is controlled by task_ordering config)
         indexed_tasks = list(enumerate(tasks))
@@ -373,7 +398,13 @@ class VerificationExecutor:
                         except BaseException as e:
                             failed_tasks.append((question_id, e))
         finally:
-            pool.shutdown(wait=False, cancel_futures=True)
+            pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+            # Clean up worker portals (event loops)
+            for cm in _portal_cms:
+                try:
+                    cm.__exit__(None, None, None)
+                except Exception:
+                    logger.debug("Portal cleanup error", exc_info=True)
 
         # Restore original order and convert to dictionary
         results: dict[str, VerificationResult] = {}

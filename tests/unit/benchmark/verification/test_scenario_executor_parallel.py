@@ -430,19 +430,19 @@ class TestParallelPortalManagement:
 
 @pytest.mark.unit
 class TestScenarioPerWorkerPortals:
-    """Each submitted combo creates its own distinct BlockingPortal."""
+    """Each worker thread creates one portal, reused across combos."""
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
     @patch("karenina.benchmark.verification.scenario_executor.start_blocking_portal")
-    def test_each_combo_gets_distinct_portal(
+    def test_each_worker_gets_one_portal(
         self,
         mock_start_portal: MagicMock,
         mock_manager_cls: MagicMock,
     ) -> None:
-        """With 6 combos and 2 workers, 6 distinct portals are created (one per combo).
+        """With 6 combos and 2 workers, 2 portals are created (one per worker).
 
-        Uses different combo and worker counts to distinguish portal-per-combo
-        from portal-per-worker behavior.
+        Each worker lazily creates a portal on its first combo and reuses it
+        for subsequent combos. This preserves connection pools.
         """
         created_portals: list[MagicMock] = []
         lock = threading.Lock()
@@ -468,11 +468,6 @@ class TestScenarioPerWorkerPortals:
         )
         executor.run_batch(combos, config)
 
-        # One portal per combo (not per worker)
-        assert mock_start_portal.call_count == 6
-        assert len(created_portals) == 6
-        portal_ids = {id(p) for p in created_portals}
-        assert len(portal_ids) == 6, (
-            "Expected 6 distinct portal objects (one per combo), "
-            f"got {len(portal_ids)} unique out of {len(created_portals)}"
-        )
+        # One portal per worker (reused across combos)
+        assert mock_start_portal.call_count == 2
+        assert len(created_portals) == 2

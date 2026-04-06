@@ -29,7 +29,7 @@ from karenina.schemas.scenario.state import ScenarioExecutionResult
 from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from karenina.utils.answer_cache import AnswerTraceCache
 
-from .executor import set_async_portal, set_global_llm_semaphore
+from .executor import get_async_portal, set_async_portal, set_global_llm_semaphore
 
 logger = logging.getLogger(__name__)
 
@@ -248,26 +248,39 @@ class ScenarioExecutor:
 
             return _on_turn
 
+        # Per-worker portal management: each worker thread creates one portal
+        # that is reused across all combos on that thread. This preserves httpx
+        # connection pools and avoids "Event loop is closed" errors from rapid
+        # portal churn.
+        _portal_cms: list[Any] = []
+        _portal_init_lock = threading.Lock()
+
+        def _ensure_worker_portal() -> None:
+            """Lazily create a BlockingPortal for this worker thread."""
+            if get_async_portal() is not None:
+                return
+            cm = start_blocking_portal(backend="asyncio")
+            portal = cm.__enter__()
+            set_async_portal(portal)
+            with _portal_init_lock:
+                _portal_cms.append(cm)
+
         def execute_combo(idx: int, combo: ScenarioCombo) -> tuple[int, ScenarioExecutionResult]:
-            """Execute a single scenario combo with its own BlockingPortal."""
+            """Execute a single scenario combo using the worker's portal."""
+            _ensure_worker_portal()
             scenario_def, ans_model, parse_model = combo
-            with start_blocking_portal(backend="asyncio") as portal:
-                set_async_portal(portal)
-                try:
-                    manager = ScenarioManager()
-                    result = manager.run(
-                        scenario=scenario_def,
-                        config=config,
-                        base_answering_model=ans_model,
-                        base_parsing_model=parse_model,
-                        run_name=run_name,
-                        global_rubric=global_rubric,
-                        answer_cache=answer_cache,
-                        progress_callback=make_turn_callback(idx, scenario_def.name),
-                    )
-                    return (idx, result)
-                finally:
-                    set_async_portal(None)
+            manager = ScenarioManager()
+            result = manager.run(
+                scenario=scenario_def,
+                config=config,
+                base_answering_model=ans_model,
+                base_parsing_model=parse_model,
+                run_name=run_name,
+                global_rubric=global_rubric,
+                answer_cache=answer_cache,
+                progress_callback=make_turn_callback(idx, scenario_def.name),
+            )
+            return (idx, result)
 
         results_by_index: dict[int, ScenarioExecutionResult] = {}
         failed_tasks: list[tuple[str, BaseException]] = []
@@ -312,7 +325,13 @@ class ScenarioExecutor:
                             except BaseException as e:
                                 failed_tasks.append((combo_desc, e))
             finally:
-                pool.shutdown(wait=False, cancel_futures=True)
+                pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+                # Clean up worker portals (event loops)
+                for cm in _portal_cms:
+                    try:
+                        cm.__exit__(None, None, None)
+                    except Exception:
+                        logger.debug("Portal cleanup error", exc_info=True)
         finally:
             set_global_llm_semaphore(None)
 
