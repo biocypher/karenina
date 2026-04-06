@@ -103,6 +103,11 @@ class TestStreamingLLMPath:
         # Raw response should still be captured
         assert "partial content here" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
+        # Partial timeout is an error (transient)
+        assert ctx.completed_without_errors is False
+        assert ctx.is_transient_error is True
+        assert "streaming timeout" in ctx.error.lower()
+
     def test_streaming_no_content_raises_timeout_error(self) -> None:
         """When stream_invoke returns partial with empty content, a TimeoutError
         should propagate and mark_error on the context."""
@@ -244,7 +249,8 @@ class TestAgentTimeoutPath:
 
     def test_agent_timeout_with_trace_sets_partial_and_usage_unavailable(self) -> None:
         """When agent times out but has a partial trace, RESPONSE_TIMEOUT_PARTIAL
-        and USAGE_UNAVAILABLE should be set, and the trace should be stored."""
+        and USAGE_UNAVAILABLE should be set, the trace stored, and the context
+        marked as an error (transient timeout)."""
         ctx = _make_context()
         result = _make_agent_result(
             timeout_reached=True,
@@ -264,8 +270,10 @@ class TestAgentTimeoutPath:
         raw = ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         assert "Partial response from agent" in raw
 
-        # Pipeline should continue (no error)
-        assert ctx.error is None
+        # Partial timeout is an error (transient)
+        assert ctx.completed_without_errors is False
+        assert ctx.is_transient_error is True
+        assert "timed out" in ctx.error.lower()
 
     def test_agent_timeout_with_no_trace_marks_error(self) -> None:
         """When agent times out with no trace at all, the context should be

@@ -18,6 +18,7 @@ from karenina.benchmark.verification.utils.trace_agent_metrics import extract_ag
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 from karenina.ports import AgentConfig, AgentPort, LLMPort, LLMResponse, Message
 from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.utils.errors import is_retryable_error
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -251,7 +252,7 @@ class GenerateAnswerStage(BaseVerificationStage):
         except Exception as e:
             error_msg = f"Failed to initialize answering model: {type(e).__name__}: {e}"
             logger.error(error_msg)
-            context.mark_error(error_msg)
+            context.mark_error(error_msg, transient=is_retryable_error(e))
             return
 
         # Step 3: Construct prompt text
@@ -329,15 +330,14 @@ class GenerateAnswerStage(BaseVerificationStage):
                     if result.raw_trace:
                         self.set_artifact_and_result(context, "response_timeout_partial", True)
                         self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
-                        logger.warning(
-                            "Question %s: agent timed out with partial trace (%d chars, %d turns)",
-                            context.question_id,
-                            len(result.raw_trace),
-                            result.turns,
+                        error_msg = (
+                            f"Agent timed out with partial trace ({len(result.raw_trace)} chars, {result.turns} turns)"
                         )
+                        context.mark_error(error_msg, transient=True)
+                        logger.warning("Question %s: %s", context.question_id, error_msg)
                     else:
                         error_msg = "Agent timed out with no trace messages"
-                        context.mark_error(error_msg)
+                        context.mark_error(error_msg, transient=True)
                         context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
                         context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
                         return
@@ -418,11 +418,9 @@ class GenerateAnswerStage(BaseVerificationStage):
                 # Mark partial response if streaming timed out with some content
                 if llm_response.is_partial:
                     self.set_artifact_and_result(context, "response_timeout_partial", True)
-                    logger.warning(
-                        "Question %s: response truncated by streaming timeout (%d chars captured)",
-                        context.question_id,
-                        len(llm_response.content),
-                    )
+                    error_msg = f"Response truncated by streaming timeout ({len(llm_response.content)} chars captured)"
+                    context.mark_error(error_msg, transient=True)
+                    logger.warning("Question %s: %s", context.question_id, error_msg)
 
                 # Propagate usage_unavailable flag if present
                 if llm_response.usage_unavailable:
@@ -462,9 +460,9 @@ class GenerateAnswerStage(BaseVerificationStage):
                 f"Full traceback:\n{error_details}"
             )
 
-            # Mark as fatal error
+            # Mark error (transient classification determines if scenario retries)
             error_msg = f"Adapter call failed: {type(e).__name__}: {e}"
-            context.mark_error(error_msg)
+            context.mark_error(error_msg, transient=is_retryable_error(e))
             context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
             context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
             return
