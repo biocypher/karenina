@@ -382,7 +382,8 @@ class GenerateAnswerStage(BaseVerificationStage):
                 # Zero-content streaming timeouts are retried at this level because
                 # stream_invoke handles the timeout internally (returns a partial
                 # response) rather than raising, so TRANSIENT_RETRY never sees it.
-                max_attempts = context.answering_model.max_transient_retries or 3
+                _rp = context.answering_model.retry_policy
+                max_attempts = _rp.derive_sdk_max_retries() if _rp else 3
                 llm_response: LLMResponse | None = None
                 for attempt in range(1, max_attempts + 1):
                     if answering_llm.capabilities.supports_streaming:

@@ -108,7 +108,7 @@ class LangChainLLMAdapter:
         self._structured_model = _structured_model
         self._base_model = _base_model
         self._max_retries = _max_retries
-        self._max_transient_retries = model_config.max_transient_retries
+        self._retry_policy = model_config.retry_policy
 
         if _base_model is not None:
             self._model = _structured_model if _structured_model else _base_model
@@ -601,8 +601,8 @@ class LangChainLLMAdapter:
     async def _invoke_model_with_retry(self, model: Any, lc_messages: list[Any]) -> Any:
         """Invoke a LangChain model with automatic retry for transient errors.
 
-        Uses the configurable max_transient_retries from ModelConfig when set,
-        otherwise falls back to the module-level TRANSIENT_RETRY singleton.
+        Uses the RetryPolicy from ModelConfig when set, otherwise falls back
+        to the module-level TRANSIENT_RETRY singleton.
 
         Args:
             model: The LangChain model to invoke.
@@ -614,8 +614,10 @@ class LangChainLLMAdapter:
         Raises:
             Exception: After all retries are exhausted.
         """
-        if self._max_transient_retries is not None:
-            retry_decorator = create_transient_retry(max_attempts=self._max_transient_retries)
+        if self._retry_policy is not None:
+            retry_decorator = create_transient_retry(
+                max_attempts=self._retry_policy.derive_sdk_max_retries(),
+            )
         else:
             retry_decorator = TRANSIENT_RETRY
 

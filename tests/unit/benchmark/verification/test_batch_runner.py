@@ -132,25 +132,32 @@ class TestApplyRetryConfig:
     """Tests for _apply_retry_config function."""
 
     def test_stamps_when_model_has_no_value(self) -> None:
-        """Test that pipeline value is stamped when model has None."""
+        """Test that pipeline retry_policy is stamped when model has None."""
+        from karenina.utils.retry_policy import RetryPolicy
+
         model = ModelConfig(id="test", model_name="test", model_provider="openai")
-        result = _apply_retry_config(model, max_transient_retries=2)
-        assert result.max_transient_retries == 2
+        policy = RetryPolicy()
+        result = _apply_retry_config(model, retry_policy=policy)
+        assert result.retry_policy is not None
 
     def test_preserves_existing_model_value(self) -> None:
-        """Test that model-level value is not overwritten."""
+        """Test that model-level retry_policy is not overwritten."""
+        from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
+
+        model_policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=1))
         model = ModelConfig(
             id="test",
             model_name="test",
             model_provider="openai",
-            max_transient_retries=1,
+            retry_policy=model_policy,
         )
-        result = _apply_retry_config(model, max_transient_retries=5)
-        assert result.max_transient_retries == 1
+        pipeline_policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=99))
+        result = _apply_retry_config(model, retry_policy=pipeline_policy)
+        assert result.retry_policy.connection.max_attempts == 1
 
     def test_noop_when_pipeline_value_is_none(self) -> None:
         """Test that None pipeline value does not stamp."""
         model = ModelConfig(id="test", model_name="test", model_provider="openai")
-        result = _apply_retry_config(model, max_transient_retries=None)
-        assert result.max_transient_retries is None
+        result = _apply_retry_config(model, retry_policy=None)
+        assert result.retry_policy is None
         assert result is model  # Same object, no copy

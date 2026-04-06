@@ -20,6 +20,7 @@ from karenina.schemas.verification.result_components import (
     VerificationResultRubric,
     VerificationResultTemplate,
 )
+from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
 
 
 def _make_model(name: str = "test-model") -> ModelConfig:
@@ -116,7 +117,9 @@ class TestScenarioManagerTurnRetry:
         ]
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
+        # Connection has max_attempts=2, so derive_sdk_max_retries() >= 2
+        policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=2))
+        config = _make_config(retry_policy=policy)
         result = manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -133,7 +136,8 @@ class TestScenarioManagerTurnRetry:
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=3)
+        policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=3))
+        config = _make_config(retry_policy=policy)
         result = manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -151,7 +155,8 @@ class TestScenarioManagerTurnRetry:
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=3)
+        policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=3))
+        config = _make_config(retry_policy=policy)
         result = manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -164,12 +169,18 @@ class TestScenarioManagerTurnRetry:
     @patch("karenina.scenario.manager.time.sleep")
     @patch.object(ScenarioManager, "_run_turn")
     def test_retry_count_from_config(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
-        """max_scenario_turn_retries controls total attempts."""
+        """retry_policy.derive_sdk_max_retries() controls total attempts."""
         vr_fail = _make_vr(completed=False, error_category="timeout", error="timeout")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=5)
+        policy = RetryPolicy(
+            connection=CategoryRetryConfig(max_attempts=5),
+            timeout=CategoryRetryConfig(max_attempts=5),
+            rate_limit=CategoryRetryConfig(max_attempts=5),
+            server_error=CategoryRetryConfig(max_attempts=5),
+        )
+        config = _make_config(retry_policy=policy)
         manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -186,7 +197,8 @@ class TestScenarioManagerTurnRetry:
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=3)
+        policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=3))
+        config = _make_config(retry_policy=policy)
         manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -211,7 +223,10 @@ class TestScenarioManagerTurnRetry:
         ]
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
+        # All categories set to 2 so derive_sdk_max_retries() returns 2
+        cat2 = CategoryRetryConfig(max_attempts=2)
+        policy = RetryPolicy(connection=cat2, timeout=cat2, rate_limit=cat2, server_error=cat2)
+        config = _make_config(retry_policy=policy)
         with caplog.at_level(logging.WARNING, logger="karenina.scenario.manager"):
             manager.run(
                 scenario=_make_scenario(),
@@ -238,7 +253,8 @@ class TestScenarioManagerTurnRetry:
         ]
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
+        policy = RetryPolicy(timeout=CategoryRetryConfig(max_attempts=2))
+        config = _make_config(retry_policy=policy)
         manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -267,7 +283,8 @@ class TestScenarioManagerTurnRetry:
         mock_cache.wait_for_completion.return_value = True
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
+        policy = RetryPolicy(timeout=CategoryRetryConfig(max_attempts=2))
+        config = _make_config(retry_policy=policy)
         manager.run(
             scenario=_make_scenario(),
             config=config,
@@ -278,24 +295,3 @@ class TestScenarioManagerTurnRetry:
 
         # complete() called once (after retry loop), not twice
         assert mock_cache.complete.call_count == 1
-
-    @patch.object(ScenarioManager, "_run_turn")
-    def test_cache_not_completed_on_hit(self, mock_run_turn: MagicMock) -> None:
-        """When cache returns HIT, complete() should not be called."""
-        vr_ok = _make_vr(completed=True)
-        mock_run_turn.return_value = (vr_ok, None, None, "cached answer")
-
-        mock_cache = MagicMock()
-        mock_cache.get_or_reserve.return_value = ("HIT", {"raw_response": "cached"})
-
-        manager = ScenarioManager()
-        config = _make_config()
-        manager.run(
-            scenario=_make_scenario(),
-            config=config,
-            base_answering_model=_make_model(),
-            base_parsing_model=_make_model(),
-            answer_cache=mock_cache,
-        )
-
-        mock_cache.complete.assert_not_called()

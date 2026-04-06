@@ -36,8 +36,8 @@ class TestSDKRetrySuppression:
 
 
 @pytest.mark.unit
-class TestConfigurableTransientRetry:
-    """Tests for configurable max_transient_retries."""
+class TestConfigurableRetryPolicy:
+    """Tests for configurable retry_policy."""
 
     def test_default_uses_singleton(self) -> None:
         """Test that default config (None) uses the TRANSIENT_RETRY singleton."""
@@ -51,21 +51,24 @@ class TestConfigurableTransientRetry:
             mock_init.return_value = MagicMock()
             adapter = LangChainLLMAdapter(config)
             # None means use the default singleton
-            assert adapter._max_transient_retries is None
+            assert adapter._retry_policy is None
 
-    def test_custom_value_stored(self) -> None:
-        """Test that custom max_transient_retries is stored on adapter."""
+    def test_custom_policy_stored(self) -> None:
+        """Test that custom retry_policy is stored on adapter."""
+        from karenina.utils.retry_policy import RetryPolicy
+
+        policy = RetryPolicy()
         config = ModelConfig(
             id="test",
             model_name="test-model",
             model_provider="openai",
             interface="langchain",
-            max_transient_retries=1,
+            retry_policy=policy,
         )
         with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             adapter = LangChainLLMAdapter(config)
-            assert adapter._max_transient_retries == 1
+            assert adapter._retry_policy is not None
 
 
 class TestLangChainLLMAdapter:

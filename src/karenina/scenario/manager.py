@@ -173,7 +173,7 @@ class ScenarioManager:
                     logger.debug("Scenario cache hit for %s/%s", scenario.name, state.current_node)
 
             # Run the verification pipeline for this turn (with retry on transient errors)
-            max_turn_attempts = config.max_scenario_turn_retries
+            max_turn_attempts = config.retry_policy.derive_sdk_max_retries()
             for turn_attempt in range(1, max_turn_attempts + 1):
                 vr, trace_messages, parsed_answer, raw_response = self._run_turn(
                     node=node,

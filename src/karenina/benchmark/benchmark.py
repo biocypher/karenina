@@ -835,8 +835,8 @@ class Benchmark:
             return model
 
         def _apply_retry(model: Any) -> Any:
-            if config.max_transient_retries is not None and model.max_transient_retries is None:
-                return model.model_copy(update={"max_transient_retries": config.max_transient_retries})
+            if config.retry_policy is not None and model.retry_policy is None:
+                return model.model_copy(update={"retry_policy": config.retry_policy})
             return model
 
         def _prepare_model(model: Any) -> Any:
