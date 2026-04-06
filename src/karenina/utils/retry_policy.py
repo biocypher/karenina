@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import time
 from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -204,7 +205,7 @@ class RetryExecutor:
         while True:
             try:
                 return fn(*args, **kwargs)
-            except BaseException as exc:
+            except Exception as exc:
                 category = self._registry.classify(exc)
                 config = _get_category_config(self._policy, category)
                 used = budgets.get(category, 0)
@@ -222,8 +223,6 @@ class RetryExecutor:
                     exc,
                 )
                 if delay > 0:
-                    import time
-
                     time.sleep(delay)
 
     async def aexecute(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -245,7 +244,7 @@ class RetryExecutor:
         while True:
             try:
                 return await fn(*args, **kwargs)
-            except BaseException as exc:
+            except Exception as exc:
                 category = self._registry.classify(exc)
                 config = _get_category_config(self._policy, category)
                 used = budgets.get(category, 0)
