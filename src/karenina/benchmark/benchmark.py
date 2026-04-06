@@ -834,8 +834,16 @@ class Benchmark:
                 return model.model_copy(update={"request_timeout": config.request_timeout})
             return model
 
+        def _apply_retry(model: Any) -> Any:
+            if config.max_transient_retries is not None and model.max_transient_retries is None:
+                return model.model_copy(update={"max_transient_retries": config.max_transient_retries})
+            return model
+
+        def _prepare_model(model: Any) -> Any:
+            return _apply_retry(_apply_timeout(model))
+
         combos = [
-            (scenario_def, _apply_timeout(ans_model), _apply_timeout(parse_model))
+            (scenario_def, _prepare_model(ans_model), _prepare_model(parse_model))
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models

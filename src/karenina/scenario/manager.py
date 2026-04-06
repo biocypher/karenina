@@ -9,6 +9,7 @@ import contextlib
 import copy
 import hashlib
 import logging
+import time
 import warnings
 from collections.abc import Callable
 from typing import Any, Literal
@@ -171,24 +172,43 @@ class ScenarioManager:
                 if cache_status == "HIT":
                     logger.debug("Scenario cache hit for %s/%s", scenario.name, state.current_node)
 
-            # Run the verification pipeline for this turn
-            vr, trace_messages, parsed_answer, raw_response = self._run_turn(
-                node=node,
-                conversation_history=conversation_history,
-                answering_model=answering_model,
-                parsing_model=parsing_model,
-                config=config,
-                run_name=run_name,
-                global_rubric=global_rubric,
-                turn_index=state.turn,
-                scenario_id=scenario.name,
-                scenario_node=state.current_node,
-                scenario_path=list(path),
-                question_text_override=question_text_override,
-                cached_answer_data=cached_answer_data,
-            )
+            # Run the verification pipeline for this turn (with retry on transient errors)
+            max_turn_attempts = config.max_scenario_turn_retries
+            for turn_attempt in range(1, max_turn_attempts + 1):
+                vr, trace_messages, parsed_answer, raw_response = self._run_turn(
+                    node=node,
+                    conversation_history=conversation_history,
+                    answering_model=answering_model,
+                    parsing_model=parsing_model,
+                    config=config,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    turn_index=state.turn,
+                    scenario_id=scenario.name,
+                    scenario_node=state.current_node,
+                    scenario_path=list(path),
+                    question_text_override=question_text_override,
+                    cached_answer_data=cached_answer_data,
+                )
 
-            # Complete cache entry after generation
+                if vr.metadata.completed_without_errors:
+                    break
+
+                if not vr.metadata.is_transient_error:
+                    break  # permanent error, no retry
+
+                if turn_attempt < max_turn_attempts:
+                    logger.warning(
+                        "Scenario %s, node %s: transient pipeline error on attempt %d/%d, retrying: %s",
+                        scenario.name,
+                        state.current_node,
+                        turn_attempt,
+                        max_turn_attempts,
+                        vr.metadata.error,
+                    )
+                    time.sleep(1)
+
+            # Complete cache entry after final attempt
             if answer_cache is not None and cache_key is not None and cached_answer_data is None:
                 from karenina.benchmark.verification.utils.cache_helpers import extract_answer_data_from_result
 
