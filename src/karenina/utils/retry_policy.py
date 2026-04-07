@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import ErrorCategory, ErrorRegistry
 
@@ -32,6 +32,8 @@ __all__ = [
     "ErrorPatternConfig",
     "RetryExecutor",
     "RetryPolicy",
+    "TimeoutEscalationConfig",
+    "compute_escalated_timeout",
     "track_retries",
 ]
 
@@ -123,6 +125,47 @@ class CategoryRetryConfig(BaseModel):
     backoff_multiplier: float = Field(default=2.0, ge=1.0)
 
 
+class TimeoutEscalationConfig(BaseModel):
+    """Progressive timeout strategy applied to TIMEOUT-category retries.
+
+    On each retry triggered by a TIMEOUT error, the per-attempt request
+    timeout is increased according to the chosen strategy. Other retry
+    categories (connection, rate_limit, server_error) keep using the
+    base request_timeout unchanged.
+
+    Strategies:
+        additive: timeout(n) = min(base + increment * n, max_timeout)
+        multiplicative: timeout(n) = min(base * multiplier ** n, max_timeout)
+        linear: timeout(n) = base + (max_timeout - base) * n / max_attempts
+            where max_attempts is the configured timeout retry budget.
+            n=0 returns the base; n=max_attempts returns max_timeout.
+
+    Attributes:
+        strategy: Which growth function to use.
+        increment: Seconds added per retry. Used by additive only.
+        multiplier: Factor applied per retry. Used by multiplicative only.
+        max_timeout: Optional cap (additive/multiplicative) or required
+            endpoint (linear).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: Literal["additive", "multiplicative", "linear"]
+    increment: float = Field(default=0.0, ge=0.0)
+    multiplier: float = Field(default=1.0, ge=1.0)
+    max_timeout: float | None = Field(default=None, ge=0.0)
+
+    @model_validator(mode="after")
+    def _validate_strategy_params(self) -> TimeoutEscalationConfig:
+        if self.strategy == "additive" and self.increment <= 0:
+            raise ValueError("additive strategy requires increment > 0")
+        if self.strategy == "multiplicative" and self.multiplier <= 1.0:
+            raise ValueError("multiplicative strategy requires multiplier > 1.0")
+        if self.strategy == "linear" and self.max_timeout is None:
+            raise ValueError("linear strategy requires max_timeout")
+        return self
+
+
 class RetryPolicy(BaseModel):
     """Grouped retry configuration for all error categories.
 
@@ -164,6 +207,14 @@ class RetryPolicy(BaseModel):
             max_attempts=2,
             backoff_min=2.0,
             backoff_max=15.0,
+        ),
+    )
+    timeout_escalation: TimeoutEscalationConfig | None = Field(
+        default=None,
+        description=(
+            "Progressive timeout strategy applied on retries triggered by "
+            "TIMEOUT errors. None means use the same request_timeout on "
+            "every retry."
         ),
     )
 
@@ -237,6 +288,55 @@ def _compute_backoff(config: CategoryRetryConfig, attempt: int) -> float:
     if clamped <= 0:
         return 0.0
     return random.uniform(0, clamped)  # noqa: S311
+
+
+def compute_escalated_timeout(
+    base_timeout: float | None,
+    timeout_attempt: int,
+    config: TimeoutEscalationConfig | None,
+    max_attempts: int,
+) -> float | None:
+    """Compute the request timeout for the next attempt.
+
+    Args:
+        base_timeout: The original timeout configured for the call.
+            If None, escalation is a no-op and None is returned.
+        timeout_attempt: How many TIMEOUT retries have been used so far,
+            counting the upcoming attempt. 0 means the original call
+            (returns base unchanged). k in 1..max_attempts means the
+            k-th retry.
+        config: The escalation configuration. None disables escalation
+            and returns base_timeout unchanged.
+        max_attempts: The TIMEOUT category retry budget. Used by the
+            "linear" strategy to interpolate between base and max.
+
+    Returns:
+        The escalated timeout in seconds, or base_timeout if escalation
+        is disabled.
+    """
+    if base_timeout is None or config is None:
+        return base_timeout
+
+    n = timeout_attempt
+    if n <= 0:
+        return base_timeout
+
+    if config.strategy == "additive":
+        scaled = base_timeout + config.increment * n
+    elif config.strategy == "multiplicative":
+        scaled = base_timeout * (config.multiplier**n)
+    else:  # linear
+        # max_timeout is guaranteed non-None by the validator.
+        assert config.max_timeout is not None
+        if max_attempts <= 0:
+            # Cannot interpolate without a denominator. Fall back to the cap.
+            return config.max_timeout
+        fraction = min(n / max_attempts, 1.0)
+        scaled = base_timeout + (config.max_timeout - base_timeout) * fraction
+
+    if config.max_timeout is not None:
+        scaled = min(scaled, config.max_timeout)
+    return scaled
 
 
 class RetryExecutor:
@@ -335,6 +435,136 @@ class RetryExecutor:
                     category.value,
                     used + 1,
                     config.max_attempts,
+                    exc,
+                )
+                if delay > 0:
+                    await asyncio.sleep(delay)
+
+    def execute_with_timeout(
+        self,
+        fn: Any,
+        *args: Any,
+        timeout: float | None,
+        **kwargs: Any,
+    ) -> Any:
+        """Execute fn with category-aware retry and timeout escalation (sync).
+
+        Like ``execute``, but the ``timeout`` keyword argument forwarded to
+        ``fn`` is escalated on each TIMEOUT-category retry according to
+        ``self._policy.timeout_escalation``. Other retry categories reuse
+        the original ``timeout`` value.
+
+        Args:
+            fn: Sync callable to invoke. Must accept ``timeout`` as a keyword
+                argument.
+            *args: Positional arguments forwarded to fn.
+            timeout: Initial wall-clock timeout passed on the first attempt
+                and used as the base for escalation. None disables timeout.
+            **kwargs: Additional keyword arguments forwarded to fn.
+
+        Returns:
+            The return value of fn on success.
+
+        Raises:
+            The last exception if all retries are exhausted, or immediately
+            for permanent errors.
+        """
+        budgets: dict[ErrorCategory, int] = {}
+        escalation = self._policy.timeout_escalation
+        timeout_max_attempts = self._policy.timeout.max_attempts
+        current_timeout = timeout
+        while True:
+            try:
+                return fn(*args, timeout=current_timeout, **kwargs)
+            except Exception as exc:
+                category = self._registry.classify(exc)
+                config = _get_category_config(self._policy, category)
+                used = budgets.get(category, 0)
+
+                if not category.is_retryable() or used >= config.max_attempts:
+                    raise
+
+                budgets[category] = used + 1
+                _record_retry(category)
+                delay = _compute_backoff(config, used)
+                if category is ErrorCategory.TIMEOUT:
+                    current_timeout = compute_escalated_timeout(
+                        base_timeout=timeout,
+                        timeout_attempt=used + 1,
+                        config=escalation,
+                        max_attempts=timeout_max_attempts,
+                    )
+                logger.warning(
+                    "Retrying after %s error (attempt %d/%d, next timeout=%s): %s",
+                    category.value,
+                    used + 1,
+                    config.max_attempts,
+                    current_timeout,
+                    exc,
+                )
+                if delay > 0:
+                    time.sleep(delay)
+
+    async def aexecute_with_timeout(
+        self,
+        fn: Any,
+        *args: Any,
+        timeout: float | None,
+        **kwargs: Any,
+    ) -> Any:
+        """Execute fn with category-aware retry and timeout escalation (async).
+
+        Like ``aexecute``, but the ``timeout`` keyword argument forwarded to
+        ``fn`` is escalated on each TIMEOUT-category retry according to
+        ``self._policy.timeout_escalation``. Other retry categories reuse
+        the original ``timeout`` value.
+
+        Args:
+            fn: Async callable to invoke. Must accept ``timeout`` as a keyword
+                argument.
+            *args: Positional arguments forwarded to fn.
+            timeout: Initial wall-clock timeout passed on the first attempt
+                and used as the base for escalation. None disables timeout.
+            **kwargs: Additional keyword arguments forwarded to fn.
+
+        Returns:
+            The return value of fn on success.
+
+        Raises:
+            The last exception if all retries are exhausted, or immediately
+            for permanent errors.
+        """
+        budgets: dict[ErrorCategory, int] = {}
+        escalation = self._policy.timeout_escalation
+        timeout_max_attempts = self._policy.timeout.max_attempts
+        current_timeout = timeout
+        while True:
+            try:
+                return await fn(*args, timeout=current_timeout, **kwargs)
+            except Exception as exc:
+                category = self._registry.classify(exc)
+                config = _get_category_config(self._policy, category)
+                used = budgets.get(category, 0)
+
+                if not category.is_retryable() or used >= config.max_attempts:
+                    raise
+
+                budgets[category] = used + 1
+                _record_retry(category)
+                delay = _compute_backoff(config, used)
+                if category is ErrorCategory.TIMEOUT:
+                    current_timeout = compute_escalated_timeout(
+                        base_timeout=timeout,
+                        timeout_attempt=used + 1,
+                        config=escalation,
+                        max_attempts=timeout_max_attempts,
+                    )
+                logger.warning(
+                    "Retrying after %s error (attempt %d/%d, next timeout=%s): %s",
+                    category.value,
+                    used + 1,
+                    config.max_attempts,
+                    current_timeout,
                     exc,
                 )
                 if delay > 0:

@@ -11,6 +11,8 @@ from karenina.utils.retry_policy import (
     ErrorPatternConfig,
     RetryExecutor,
     RetryPolicy,
+    TimeoutEscalationConfig,
+    compute_escalated_timeout,
     track_retries,
 )
 
@@ -613,3 +615,502 @@ class TestTrackRetries:
         with track_retries(self._make_policy()) as tracker:
             _record_retry(ErrorCategory.PERMANENT)
             assert "permanent" not in tracker
+
+
+# ---------------------------------------------------------------------------
+# TimeoutEscalationConfig
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestTimeoutEscalationConfig:
+    """TimeoutEscalationConfig schema and per-strategy validation."""
+
+    def test_additive_requires_positive_increment(self) -> None:
+        with pytest.raises(ValidationError, match="additive strategy requires increment > 0"):
+            TimeoutEscalationConfig(strategy="additive")
+
+    def test_additive_with_increment_ok(self) -> None:
+        config = TimeoutEscalationConfig(strategy="additive", increment=30.0)
+        assert config.strategy == "additive"
+        assert config.increment == 30.0
+
+    def test_multiplicative_requires_multiplier_above_one(self) -> None:
+        with pytest.raises(ValidationError, match="multiplicative strategy requires multiplier > 1.0"):
+            TimeoutEscalationConfig(strategy="multiplicative", multiplier=1.0)
+
+    def test_multiplicative_with_valid_multiplier_ok(self) -> None:
+        config = TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0)
+        assert config.multiplier == 2.0
+
+    def test_linear_requires_max_timeout(self) -> None:
+        with pytest.raises(ValidationError, match="linear strategy requires max_timeout"):
+            TimeoutEscalationConfig(strategy="linear")
+
+    def test_linear_with_max_timeout_ok(self) -> None:
+        config = TimeoutEscalationConfig(strategy="linear", max_timeout=300.0)
+        assert config.max_timeout == 300.0
+
+    def test_invalid_strategy_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TimeoutEscalationConfig(strategy="bogus")
+
+    def test_negative_increment_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TimeoutEscalationConfig(strategy="additive", increment=-5.0)
+
+    def test_multiplier_below_one_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TimeoutEscalationConfig(strategy="multiplicative", multiplier=0.5)
+
+    def test_negative_max_timeout_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TimeoutEscalationConfig(strategy="linear", max_timeout=-1.0)
+
+    def test_extra_fields_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            TimeoutEscalationConfig(strategy="additive", increment=30.0, bogus=True)
+
+    def test_serialization_roundtrip(self) -> None:
+        config = TimeoutEscalationConfig(
+            strategy="multiplicative",
+            multiplier=1.5,
+            max_timeout=600.0,
+        )
+        data = config.model_dump()
+        restored = TimeoutEscalationConfig.model_validate(data)
+        assert restored == config
+
+    def test_retry_policy_default_no_escalation(self) -> None:
+        """RetryPolicy.timeout_escalation defaults to None (backwards compatible)."""
+        policy = RetryPolicy()
+        assert policy.timeout_escalation is None
+
+    def test_retry_policy_accepts_escalation(self) -> None:
+        policy = RetryPolicy(
+            timeout_escalation=TimeoutEscalationConfig(
+                strategy="additive",
+                increment=60.0,
+            ),
+        )
+        assert policy.timeout_escalation is not None
+        assert policy.timeout_escalation.strategy == "additive"
+
+
+# ---------------------------------------------------------------------------
+# compute_escalated_timeout
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestComputeEscalatedTimeout:
+    """compute_escalated_timeout helper across strategies."""
+
+    def test_none_config_returns_base(self) -> None:
+        assert compute_escalated_timeout(120.0, 3, None, max_attempts=3) == 120.0
+
+    def test_none_base_returns_none(self) -> None:
+        config = TimeoutEscalationConfig(strategy="additive", increment=10.0)
+        assert compute_escalated_timeout(None, 2, config, max_attempts=3) is None
+
+    def test_attempt_zero_returns_base(self) -> None:
+        config = TimeoutEscalationConfig(strategy="multiplicative", multiplier=3.0)
+        assert compute_escalated_timeout(120.0, 0, config, max_attempts=3) == 120.0
+
+    def test_negative_attempt_returns_base(self) -> None:
+        config = TimeoutEscalationConfig(strategy="multiplicative", multiplier=3.0)
+        assert compute_escalated_timeout(120.0, -1, config, max_attempts=3) == 120.0
+
+    def test_additive_growth(self) -> None:
+        config = TimeoutEscalationConfig(strategy="additive", increment=60.0)
+        assert compute_escalated_timeout(120.0, 1, config, max_attempts=3) == 180.0
+        assert compute_escalated_timeout(120.0, 2, config, max_attempts=3) == 240.0
+        assert compute_escalated_timeout(120.0, 3, config, max_attempts=3) == 300.0
+
+    def test_additive_capped(self) -> None:
+        config = TimeoutEscalationConfig(strategy="additive", increment=60.0, max_timeout=200.0)
+        assert compute_escalated_timeout(120.0, 1, config, max_attempts=3) == 180.0
+        assert compute_escalated_timeout(120.0, 2, config, max_attempts=3) == 200.0
+        assert compute_escalated_timeout(120.0, 3, config, max_attempts=3) == 200.0
+
+    def test_multiplicative_growth(self) -> None:
+        config = TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0)
+        assert compute_escalated_timeout(120.0, 1, config, max_attempts=3) == 240.0
+        assert compute_escalated_timeout(120.0, 2, config, max_attempts=3) == 480.0
+        assert compute_escalated_timeout(120.0, 3, config, max_attempts=3) == 960.0
+
+    def test_multiplicative_capped(self) -> None:
+        config = TimeoutEscalationConfig(
+            strategy="multiplicative",
+            multiplier=2.0,
+            max_timeout=600.0,
+        )
+        assert compute_escalated_timeout(120.0, 1, config, max_attempts=3) == 240.0
+        assert compute_escalated_timeout(120.0, 2, config, max_attempts=3) == 480.0
+        assert compute_escalated_timeout(120.0, 3, config, max_attempts=3) == 600.0
+
+    def test_linear_interpolation(self) -> None:
+        """linspace(120, 480, 4) = [120, 240, 360, 480]."""
+        config = TimeoutEscalationConfig(strategy="linear", max_timeout=480.0)
+        assert compute_escalated_timeout(120.0, 1, config, max_attempts=3) == 240.0
+        assert compute_escalated_timeout(120.0, 2, config, max_attempts=3) == 360.0
+        assert compute_escalated_timeout(120.0, 3, config, max_attempts=3) == 480.0
+
+    def test_linear_clamped_above_max_attempts(self) -> None:
+        config = TimeoutEscalationConfig(strategy="linear", max_timeout=480.0)
+        # n exceeds max_attempts -> still capped at max_timeout
+        assert compute_escalated_timeout(120.0, 5, config, max_attempts=3) == 480.0
+
+    def test_linear_zero_max_attempts_falls_back_to_cap(self) -> None:
+        config = TimeoutEscalationConfig(strategy="linear", max_timeout=480.0)
+        assert compute_escalated_timeout(120.0, 1, config, max_attempts=0) == 480.0
+
+
+# ---------------------------------------------------------------------------
+# RetryExecutor.execute_with_timeout / aexecute_with_timeout
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestRetryExecutorTimeoutEscalationSync:
+    """RetryExecutor.execute_with_timeout escalates only on TIMEOUT retries."""
+
+    def _make_policy(
+        self,
+        *,
+        escalation: TimeoutEscalationConfig | None = None,
+        timeout_attempts: int = 3,
+    ) -> RetryPolicy:
+        return RetryPolicy(
+            connection=CategoryRetryConfig(max_attempts=3, backoff_min=0, backoff_max=0),
+            timeout=CategoryRetryConfig(max_attempts=timeout_attempts, backoff_min=0, backoff_max=0),
+            rate_limit=CategoryRetryConfig(max_attempts=3, backoff_min=0, backoff_max=0),
+            server_error=CategoryRetryConfig(max_attempts=2, backoff_min=0, backoff_max=0),
+            timeout_escalation=escalation,
+        )
+
+    def test_first_call_receives_base_timeout(self) -> None:
+        executor = RetryExecutor(self._make_policy(), ErrorRegistry())
+        observed: list[float | None] = []
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            return "ok"
+
+        result = executor.execute_with_timeout(fn, timeout=120.0)
+        assert result == "ok"
+        assert observed == [120.0]
+
+    def test_no_escalation_uses_constant_timeout(self) -> None:
+        """Regression: when escalation is None, timeout stays the same on retries."""
+        executor = RetryExecutor(self._make_policy(escalation=None), ErrorRegistry())
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise TimeoutError("slow")
+            return "ok"
+
+        result = executor.execute_with_timeout(fn, timeout=120.0)
+        assert result == "ok"
+        assert observed == [120.0, 120.0, 120.0]
+
+    def test_multiplicative_escalation_on_timeout_retries(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 4:
+                raise TimeoutError("slow")
+            return "ok"
+
+        result = executor.execute_with_timeout(fn, timeout=120.0)
+        assert result == "ok"
+        assert observed == [120.0, 240.0, 480.0, 960.0]
+
+    def test_additive_escalation_with_cap(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(
+                    strategy="additive",
+                    increment=60.0,
+                    max_timeout=200.0,
+                ),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 4:
+                raise TimeoutError("slow")
+            return "ok"
+
+        executor.execute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 180.0, 200.0, 200.0]
+
+    def test_linear_escalation(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="linear", max_timeout=480.0),
+                timeout_attempts=3,
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 4:
+                raise TimeoutError("slow")
+            return "ok"
+
+        executor.execute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 240.0, 360.0, 480.0]
+
+    def test_non_timeout_retry_does_not_escalate(self) -> None:
+        """A connection-error retry must not change the timeout passed to fn."""
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise ConnectionError("net")
+            return "ok"
+
+        executor.execute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 120.0, 120.0]
+
+    def test_mixed_categories_only_advance_on_timeout(self) -> None:
+        """Only TIMEOUT failures advance the escalation index."""
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        sequence = iter(
+            [
+                ConnectionError("net"),  # call 1: still 120
+                TimeoutError("slow"),  # call 2: still 120 (this raises, escalates next)
+                ConnectionError("net"),  # call 3: 240 (escalated by previous timeout)
+                TimeoutError("slow"),  # call 4: 240 (this raises, escalates next)
+                None,  # call 5: 480
+            ]
+        )
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            exc = next(sequence)
+            if exc is not None:
+                raise exc
+            return "ok"
+
+        result = executor.execute_with_timeout(fn, timeout=120.0)
+        assert result == "ok"
+        assert observed == [120.0, 120.0, 240.0, 240.0, 480.0]
+
+    def test_permanent_error_not_retried(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            raise ValueError("bad input")
+
+        with pytest.raises(ValueError, match="bad input"):
+            executor.execute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0]
+
+    def test_budget_exhaustion_re_raises(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+                timeout_attempts=2,
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            raise TimeoutError("always slow")
+
+        with pytest.raises(TimeoutError):
+            executor.execute_with_timeout(fn, timeout=120.0)
+        # 1 initial + 2 retries = 3 calls; sequence 120, 240, 480
+        assert observed == [120.0, 240.0, 480.0]
+
+    def test_none_base_timeout_passes_through(self) -> None:
+        """Calling with timeout=None disables escalation gracefully."""
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 2:
+                raise TimeoutError("slow")
+            return "ok"
+
+        executor.execute_with_timeout(fn, timeout=None)
+        assert observed == [None, None]
+
+    def test_passes_args_and_kwargs(self) -> None:
+        executor = RetryExecutor(self._make_policy(), ErrorRegistry())
+
+        def fn(a: int, b: int, *, timeout: float | None, c: int = 0) -> int:
+            assert timeout == 30.0
+            return a + b + c
+
+        result = executor.execute_with_timeout(fn, 1, 2, timeout=30.0, c=3)
+        assert result == 6
+
+
+@pytest.mark.unit
+class TestRetryExecutorTimeoutEscalationAsync:
+    """RetryExecutor.aexecute_with_timeout escalates only on TIMEOUT retries."""
+
+    def _make_policy(
+        self,
+        *,
+        escalation: TimeoutEscalationConfig | None = None,
+        timeout_attempts: int = 3,
+    ) -> RetryPolicy:
+        return RetryPolicy(
+            connection=CategoryRetryConfig(max_attempts=3, backoff_min=0, backoff_max=0),
+            timeout=CategoryRetryConfig(max_attempts=timeout_attempts, backoff_min=0, backoff_max=0),
+            rate_limit=CategoryRetryConfig(max_attempts=3, backoff_min=0, backoff_max=0),
+            server_error=CategoryRetryConfig(max_attempts=2, backoff_min=0, backoff_max=0),
+            timeout_escalation=escalation,
+        )
+
+    async def test_first_call_receives_base_timeout(self) -> None:
+        executor = RetryExecutor(self._make_policy(), ErrorRegistry())
+        observed: list[float | None] = []
+
+        async def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            return "ok"
+
+        await executor.aexecute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0]
+
+    async def test_multiplicative_escalation_on_timeout_retries(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        async def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 4:
+                raise TimeoutError("slow")
+            return "ok"
+
+        await executor.aexecute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 240.0, 480.0, 960.0]
+
+    async def test_no_escalation_uses_constant_timeout(self) -> None:
+        executor = RetryExecutor(self._make_policy(escalation=None), ErrorRegistry())
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        async def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise TimeoutError("slow")
+            return "ok"
+
+        await executor.aexecute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 120.0, 120.0]
+
+    async def test_non_timeout_retry_does_not_escalate(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0),
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+        attempts = {"n": 0}
+
+        async def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise ConnectionError("net")
+            return "ok"
+
+        await executor.aexecute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 120.0, 120.0]
+
+    async def test_budget_exhaustion_re_raises(self) -> None:
+        executor = RetryExecutor(
+            self._make_policy(
+                escalation=TimeoutEscalationConfig(strategy="additive", increment=60.0),
+                timeout_attempts=2,
+            ),
+            ErrorRegistry(),
+        )
+        observed: list[float | None] = []
+
+        async def fn(*, timeout: float | None) -> str:
+            observed.append(timeout)
+            raise TimeoutError("always slow")
+
+        with pytest.raises(TimeoutError):
+            await executor.aexecute_with_timeout(fn, timeout=120.0)
+        assert observed == [120.0, 180.0, 240.0]
+
+    async def test_passes_args_and_kwargs(self) -> None:
+        executor = RetryExecutor(self._make_policy(), ErrorRegistry())
+
+        async def fn(a: int, b: int, *, timeout: float | None, c: int = 0) -> int:
+            assert timeout == 30.0
+            return a + b + c
+
+        result = await executor.aexecute_with_timeout(fn, 1, 2, timeout=30.0, c=3)
+        assert result == 6
