@@ -38,18 +38,24 @@ def test_mcp_agent_middleware_signature() -> None:
 
     from karenina.adapters.langchain.mcp import create_mcp_client_and_tools
     from karenina.adapters.langchain.middleware import build_agent_middleware
-    from karenina.exceptions import McpTimeoutError
+    from karenina.exceptions import McpClientError, McpTimeoutError
     from karenina.schemas.config import AgentMiddlewareConfig
 
     # Create fixture-backed LLM client
     llm = FixtureBackedLLMClient(FIXTURE_DIR)
 
     # Connect to Open Targets MCP server to get tools
-    # (tools come from MCP server, LLM responses come from fixtures)
+    # (tools come from MCP server, LLM responses come from fixtures).
+    # We treat any MCP client error as a skip condition: this test depends
+    # on a live external service and underlying anyio task groups wrap
+    # network errors (ConnectionError, DNS failures, TLS handshake issues)
+    # in BaseExceptionGroup, which surfaces as McpClientError after the
+    # adapter's "except Exception" catches it. Skipping keeps the suite
+    # green when the external MCP endpoint is unavailable or flaky in CI.
     mcp_urls = {"opentargets": "https://mcp.platform.opentargets.org/mcp"}
     try:
         _, tools = create_mcp_client_and_tools(mcp_urls, None, None)
-    except (TimeoutError, ConnectionError, OSError, McpTimeoutError) as e:
+    except (TimeoutError, ConnectionError, OSError, McpTimeoutError, McpClientError) as e:
         pytest.skip(f"MCP server unavailable: {e}")
 
     assert len(tools) > 0, "Should retrieve tools from MCP server"
