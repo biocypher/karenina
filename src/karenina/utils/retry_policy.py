@@ -5,14 +5,20 @@ This module provides:
 - RetryPolicy: groups CategoryRetryConfig for each ErrorCategory.
 - ErrorPatternConfig: declarative pattern registration for serialization.
 - RetryExecutor: sync/async executor that retries with per-category budgets.
+- track_retries: contextvar-based context manager that lets callers record
+  retries (with the budgets that were available) over the course of a
+  pipeline execution.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import random
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,9 +32,77 @@ __all__ = [
     "ErrorPatternConfig",
     "RetryExecutor",
     "RetryPolicy",
+    "track_retries",
 ]
 
 T = TypeVar("T")
+
+# Context-local active retry tracker. Set by track_retries() and read by
+# RetryExecutor every time a retry decision is made. Using contextvars makes
+# the tracker visible across both sync and async paths within the same logical
+# execution context, while remaining isolated between concurrent worker threads
+# and asyncio tasks.
+#
+# Tracker shape: {category_name: {"used": int, "budget": int}}
+# where category_name is one of "connection", "timeout", "rate_limit",
+# "server_error", and budget reflects the max_attempts in effect for that
+# category at the moment track_retries() opened. Pre-populated with budgets so
+# consumers can see "we had N attempts available, used K of them" even when no
+# retries fired for a given category.
+RetryTracker = dict[str, dict[str, int]]
+_active_retry_tracker: contextvars.ContextVar[RetryTracker | None] = contextvars.ContextVar(
+    "_active_retry_tracker",
+    default=None,
+)
+
+
+def _build_initial_tracker(policy: RetryPolicy | None) -> RetryTracker:
+    """Pre-populate a tracker with budgets from ``policy``.
+
+    A None policy is treated as the default RetryPolicy. Each retryable
+    category gets an entry with ``used=0`` and ``budget=max_attempts``.
+    """
+    effective = policy or RetryPolicy()
+    return {
+        ErrorCategory.CONNECTION.value: {"used": 0, "budget": effective.connection.max_attempts},
+        ErrorCategory.TIMEOUT.value: {"used": 0, "budget": effective.timeout.max_attempts},
+        ErrorCategory.RATE_LIMIT.value: {"used": 0, "budget": effective.rate_limit.max_attempts},
+        ErrorCategory.SERVER_ERROR.value: {"used": 0, "budget": effective.server_error.max_attempts},
+    }
+
+
+@contextmanager
+def track_retries(policy: RetryPolicy | None = None) -> Iterator[RetryTracker]:
+    """Bind a fresh retry tracker to the current execution context.
+
+    The tracker is pre-populated with the per-category budgets from
+    ``policy`` (defaulting to ``RetryPolicy()`` when None). Within the
+    ``with`` block, every retry decision made by ``RetryExecutor``
+    increments ``used`` for the matching category. The tracker is yielded so
+    the caller can read counts and budgets after exiting the block.
+
+    Example:
+        >>> with track_retries(RetryPolicy()) as tracker:
+        ...     adapter.stream_invoke(messages)
+        >>> tracker["timeout"]
+        {'used': 2, 'budget': 3}
+    """
+    tracker = _build_initial_tracker(policy)
+    token = _active_retry_tracker.set(tracker)
+    try:
+        yield tracker
+    finally:
+        _active_retry_tracker.reset(token)
+
+
+def _record_retry(category: ErrorCategory) -> None:
+    """Increment the active retry tracker for ``category`` if one is bound."""
+    tracker = _active_retry_tracker.get()
+    if tracker is None:
+        return
+    entry = tracker.get(category.value)
+    if entry is not None:
+        entry["used"] += 1
 
 
 class CategoryRetryConfig(BaseModel):
@@ -214,6 +288,7 @@ class RetryExecutor:
                     raise
 
                 budgets[category] = used + 1
+                _record_retry(category)
                 delay = _compute_backoff(config, used)
                 logger.warning(
                     "Retrying after %s error (attempt %d/%d): %s",
@@ -253,6 +328,7 @@ class RetryExecutor:
                     raise
 
                 budgets[category] = used + 1
+                _record_retry(category)
                 delay = _compute_backoff(config, used)
                 logger.warning(
                     "Retrying after %s error (attempt %d/%d): %s",

@@ -5,12 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from karenina.utils.errors import ErrorRegistry
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
 from karenina.utils.retry_policy import (
     CategoryRetryConfig,
     ErrorPatternConfig,
     RetryExecutor,
     RetryPolicy,
+    track_retries,
 )
 
 # ---------------------------------------------------------------------------
@@ -446,3 +447,169 @@ class TestRetryExecutorAsync:
         with pytest.raises(ConnectionError):
             await executor.aexecute(fn)
         assert call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# track_retries (contextvar-based retry tracking)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestTrackRetries:
+    """track_retries() context manager records used + budget per category."""
+
+    def _make_policy(self) -> RetryPolicy:
+        """Zero-delay policy for fast tests."""
+        return RetryPolicy(
+            connection=CategoryRetryConfig(max_attempts=3, backoff_min=0, backoff_max=0),
+            timeout=CategoryRetryConfig(max_attempts=2, backoff_min=0, backoff_max=0),
+            rate_limit=CategoryRetryConfig(max_attempts=4, backoff_min=0, backoff_max=0),
+            server_error=CategoryRetryConfig(max_attempts=1, backoff_min=0, backoff_max=0),
+        )
+
+    def test_initial_tracker_carries_budgets(self) -> None:
+        """Tracker is pre-populated with budgets and used=0 for every category."""
+        with track_retries(self._make_policy()) as tracker:
+            assert tracker == {
+                "connection": {"used": 0, "budget": 3},
+                "timeout": {"used": 0, "budget": 2},
+                "rate_limit": {"used": 0, "budget": 4},
+                "server_error": {"used": 0, "budget": 1},
+            }
+
+    def test_default_policy_used_when_none(self) -> None:
+        """Passing None falls back to RetryPolicy() defaults for budgets."""
+        with track_retries(None) as tracker:
+            default = RetryPolicy()
+            assert tracker["connection"]["budget"] == default.connection.max_attempts
+            assert tracker["timeout"]["budget"] == default.timeout.max_attempts
+            assert tracker["rate_limit"]["budget"] == default.rate_limit.max_attempts
+            assert tracker["server_error"]["budget"] == default.server_error.max_attempts
+            assert all(entry["used"] == 0 for entry in tracker.values())
+
+    def test_retries_increment_used_count(self) -> None:
+        """Each retry observed by RetryExecutor increments the matching used."""
+        policy = self._make_policy()
+        executor = RetryExecutor(policy, ErrorRegistry())
+
+        attempts = {"connection": 0, "timeout": 0}
+
+        def fail_then_succeed(category: str) -> str:
+            attempts[category] += 1
+            if attempts[category] == 1:
+                if category == "connection":
+                    raise ConnectionError("network down")
+                raise TimeoutError("slow")
+            return "ok"
+
+        with track_retries(policy) as tracker:
+            executor.execute(fail_then_succeed, "connection")
+            executor.execute(fail_then_succeed, "timeout")
+
+            assert tracker["connection"] == {"used": 1, "budget": 3}
+            assert tracker["timeout"] == {"used": 1, "budget": 2}
+            # Untouched categories retain budget and used=0
+            assert tracker["rate_limit"] == {"used": 0, "budget": 4}
+            assert tracker["server_error"] == {"used": 0, "budget": 1}
+
+    def test_multiple_retries_in_one_call(self) -> None:
+        """A function that retries N times produces used=N for that category."""
+        policy = self._make_policy()
+        executor = RetryExecutor(policy, ErrorRegistry())
+
+        call_count = {"n": 0}
+
+        def fn() -> str:
+            call_count["n"] += 1
+            if call_count["n"] < 3:
+                raise ConnectionError("flaky")
+            return "ok"
+
+        with track_retries(policy) as tracker:
+            executor.execute(fn)
+            assert tracker["connection"]["used"] == 2
+
+    def test_budget_exhaustion_still_counted(self) -> None:
+        """Even when retries exhaust the budget, every retry attempt is counted."""
+        policy = self._make_policy()
+        executor = RetryExecutor(policy, ErrorRegistry())
+
+        def fn() -> None:
+            raise TimeoutError("always slow")
+
+        with track_retries(policy) as tracker:
+            with pytest.raises(TimeoutError):
+                executor.execute(fn)
+            # max_attempts=2 → 2 retries fired before raising
+            assert tracker["timeout"]["used"] == 2
+            assert tracker["timeout"]["budget"] == 2
+
+    def test_no_retries_outside_context(self) -> None:
+        """Retries that happen outside any track_retries() block are not recorded."""
+        policy = self._make_policy()
+        executor = RetryExecutor(policy, ErrorRegistry())
+
+        call_count = {"n": 0}
+
+        def fn() -> str:
+            call_count["n"] += 1
+            if call_count["n"] < 2:
+                raise ConnectionError("flaky")
+            return "ok"
+
+        # No track_retries() wrapper: executor still retries, just nothing
+        # gets recorded. Subsequent track_retries() should still start clean.
+        executor.execute(fn)
+
+        with track_retries(policy) as tracker:
+            assert tracker["connection"]["used"] == 0
+
+    def test_nested_contexts_isolate(self) -> None:
+        """Inner track_retries() does not bleed retries into the outer one."""
+        policy = self._make_policy()
+        executor = RetryExecutor(policy, ErrorRegistry())
+
+        counts = {"outer": 0, "inner": 0}
+
+        def fail_once(key: str) -> str:
+            counts[key] += 1
+            if counts[key] == 1:
+                raise ConnectionError("fail")
+            return "ok"
+
+        with track_retries(policy) as outer:
+            executor.execute(fail_once, "outer")
+            with track_retries(policy) as inner:
+                executor.execute(fail_once, "inner")
+                assert inner["connection"]["used"] == 1
+            assert outer["connection"]["used"] == 1
+
+    async def test_aexecute_retries_recorded(self) -> None:
+        """The async retry path also feeds the tracker."""
+        policy = self._make_policy()
+        executor = RetryExecutor(policy, ErrorRegistry())
+
+        call_count = {"n": 0}
+
+        async def fn() -> str:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise TimeoutError("slow")
+            return "ok"
+
+        with track_retries(policy) as tracker:
+            await executor.aexecute(fn)
+            assert tracker["timeout"]["used"] == 1
+
+    def test_unknown_category_record_is_noop(self) -> None:
+        """A retry for a category not in the pre-populated tracker is ignored.
+
+        This guards against a future ErrorCategory being added without
+        updating the initial tracker shape: we should never KeyError on
+        record, just silently skip it.
+        """
+        from karenina.utils.retry_policy import _record_retry
+
+        with track_retries(self._make_policy()) as tracker:
+            _record_retry(ErrorCategory.PERMANENT)
+            assert "permanent" not in tracker
