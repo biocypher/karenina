@@ -97,7 +97,7 @@ class VerificationBatchError(KareninaError):
         message: Human-readable summary of the batch failure.
         partial_results: Mapping of question ID to its completed
             VerificationResult for questions that succeeded.
-        errors: List of (question_id, exception) pairs for questions
+        errors: List of (identifier, exception) pairs for items
             that failed during verification.
     """
 
@@ -105,7 +105,7 @@ class VerificationBatchError(KareninaError):
         self,
         message: str,
         partial_results: dict[str, VerificationResult],
-        errors: list[tuple[str, Exception]],
+        errors: list[tuple[str, BaseException]],
     ) -> None:
         super().__init__(message)
         self.partial_results = partial_results

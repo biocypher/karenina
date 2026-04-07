@@ -49,6 +49,21 @@ def _apply_request_timeout(model: Any, pipeline_timeout: float | None) -> Any:
 
 
 # ============================================================================
+# Config Helpers
+# ============================================================================
+
+
+def _apply_retry_config(model: Any, max_transient_retries: int | None) -> Any:
+    """Stamp pipeline-level max_transient_retries onto a ModelConfig if not already set.
+
+    Returns the original model if no change is needed, or a copy with the value applied.
+    """
+    if max_transient_retries is not None and model.max_transient_retries is None:
+        return model.model_copy(update={"max_transient_retries": max_transient_retries})
+    return model
+
+
+# ============================================================================
 # Task Queue Generation
 # ============================================================================
 
@@ -95,6 +110,9 @@ def generate_task_queue(
                 # Stamp pipeline-level request_timeout onto models that don't have their own
                 ans_model = _apply_request_timeout(ans_model_raw, config.request_timeout)
                 parse_model = _apply_request_timeout(parse_model_raw, config.request_timeout)
+                # Stamp pipeline-level max_transient_retries onto models that don't have their own
+                ans_model = _apply_retry_config(ans_model, config.max_transient_retries)
+                parse_model = _apply_retry_config(parse_model, config.max_transient_retries)
                 # Expand over replicates
                 for rep in range(1, config.replicate_count + 1):
                     # For single replicate, don't include replicate numbers
@@ -349,6 +367,24 @@ def run_verification_batch(
         workspace_root=workspace_root,
     )
 
+    # Apply task ordering strategy
+    from .utils.task_helpers import model_sort_key
+
+    if config.task_ordering == "prefix_cache":
+        task_queue.sort(
+            key=lambda t: (
+                model_sort_key(t["answering_model"]),
+                t["question_id"],
+                model_sort_key(t["parsing_model"]),
+                t.get("replicate") or 0,
+            )
+        )
+    elif config.task_ordering == "random":
+        import random
+
+        random.shuffle(task_queue)
+    # "generation_order": no-op, preserve loop order
+
     # Log execution plan
     logger.info(f"Starting verification: {len(task_queue)} tasks ({'parallel' if async_enabled else 'sequential'})")
 
@@ -357,7 +393,10 @@ def run_verification_batch(
 
     executor = VerificationExecutor(
         parallel=async_enabled,
-        config=ExecutorConfig(max_workers=max_workers),
+        config=ExecutorConfig(
+            max_workers=max_workers,
+            max_requeue_count=config.max_requeue_count,
+        ),
     )
     results = executor.run_batch(task_queue, progress_callback)
 

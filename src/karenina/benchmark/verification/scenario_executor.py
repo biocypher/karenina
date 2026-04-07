@@ -1,7 +1,7 @@
 """Scenario execution with parallel/sequential support.
 
 This module provides the ScenarioExecutor class for running scenario verification
-combos either sequentially or in parallel using a thread pool with asyncio
+combos either sequentially or in parallel using ThreadPoolExecutor with asyncio
 BlockingPortal for proper async event loop management.
 
 Peer to VerificationExecutor, adapted for multi-turn scenario execution
@@ -12,17 +12,15 @@ question verification.
 from __future__ import annotations
 
 import logging
-import queue
 import threading
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from anyio.from_thread import start_blocking_portal
 
 if TYPE_CHECKING:
-    from anyio.from_thread import BlockingPortal
-
     from karenina.schemas.entities import Rubric
     from karenina.schemas.verification import VerificationConfig
 
@@ -31,7 +29,7 @@ from karenina.schemas.scenario.state import ScenarioExecutionResult
 from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from karenina.utils.answer_cache import AnswerTraceCache
 
-from .executor import set_async_portal, set_global_llm_semaphore
+from .executor import get_async_portal, set_async_portal, set_global_llm_semaphore
 
 logger = logging.getLogger(__name__)
 
@@ -204,10 +202,11 @@ class ScenarioExecutor:
         run_name: str | None,
         progress_callback: ProgressCallback | None,
     ) -> tuple[list[ScenarioExecutionResult], list[tuple[str, BaseException]]]:
-        """Execute combos in parallel with thread pool and shared BlockingPortal.
+        """Execute combos in parallel using ThreadPoolExecutor.
 
-        Uses threading.Thread workers with a shared work queue, mirroring the
-        pattern in VerificationExecutor._run_parallel.
+        Each combo is submitted as a separate Future with its own BlockingPortal.
+        Results are collected via as_completed() with a timeout. Every submission
+        produces a Future, so no combo can be silently lost.
 
         Args:
             combos: Scenario combos to execute.
@@ -230,126 +229,109 @@ class ScenarioExecutor:
         )
 
         total = len(combos)
-
-        # Create work queue with (original_index, combo)
-        work_queue: queue.Queue[tuple[int, ScenarioCombo] | None] = queue.Queue()
-        for idx, combo in enumerate(combos):
-            work_queue.put((idx, combo))
-
-        # Thread-safe storage for results (indexed by original position)
-        results_lock = threading.Lock()
-        results_by_index: dict[int, ScenarioExecutionResult] = {}
-        # Partial progress for in-flight combos (turn tracking via callback)
         partial_progress: dict[int, dict[str, Any]] = {}
-
-        # Thread-safe error tracking
-        failed_tasks: list[tuple[str, BaseException]] = []
-
-        # Thread-safe progress tracking
         progress_lock = threading.Lock()
         completed_count = [0]
 
-        # Completion tracking
-        tasks_completed_event = threading.Event()
+        def make_turn_callback(idx: int, scenario_name: str) -> Callable[..., None]:
+            """Create a per-turn callback that tracks progress."""
 
-        def worker(portal: BlockingPortal) -> None:
-            """Worker that processes scenario combos from the shared queue."""
+            def _on_turn(**kwargs: Any) -> None:
+                turn_num = kwargs.get("scenario_turn", 0)
+                node_id = kwargs.get("scenario_node", "")
+                with progress_lock:
+                    partial_progress[idx] = {
+                        "scenario_id": scenario_name,
+                        "turn": turn_num,
+                        "node": node_id,
+                    }
+
+            return _on_turn
+
+        # Per-worker portal management: each worker thread creates one portal
+        # that is reused across all combos on that thread. This preserves httpx
+        # connection pools and avoids "Event loop is closed" errors from rapid
+        # portal churn.
+        _portal_cms: list[Any] = []
+        _portal_init_lock = threading.Lock()
+
+        def _ensure_worker_portal() -> None:
+            """Lazily create a BlockingPortal for this worker thread."""
+            if get_async_portal() is not None:
+                return
+            cm = start_blocking_portal(backend="asyncio")
+            portal = cm.__enter__()
             set_async_portal(portal)
-            try:
-                while True:
-                    try:
-                        item = work_queue.get(timeout=1.0)
-                    except queue.Empty:
-                        with results_lock:
-                            if len(results_by_index) + len(failed_tasks) >= total:
-                                tasks_completed_event.set()
-                        continue
+            with _portal_init_lock:
+                _portal_cms.append(cm)
 
-                    if item is None:
-                        work_queue.task_done()
-                        break
+        def execute_combo(idx: int, combo: ScenarioCombo) -> tuple[int, ScenarioExecutionResult]:
+            """Execute a single scenario combo using the worker's portal."""
+            _ensure_worker_portal()
+            scenario_def, ans_model, parse_model = combo
+            manager = ScenarioManager()
+            result = manager.run(
+                scenario=scenario_def,
+                config=config,
+                base_answering_model=ans_model,
+                base_parsing_model=parse_model,
+                run_name=run_name,
+                global_rubric=global_rubric,
+                answer_cache=answer_cache,
+                progress_callback=make_turn_callback(idx, scenario_def.name),
+            )
+            return (idx, result)
 
-                    original_index, (scenario_def, ans_model, parse_model) = item
-                    combo_desc = f"Scenario '{scenario_def.name}' with {ans_model.model_name}/{parse_model.model_name}"
+        results_by_index: dict[int, ScenarioExecutionResult] = {}
+        failed_tasks: list[tuple[str, BaseException]] = []
 
-                    # Progress callback before starting (result=None)
-                    if progress_callback:
-                        with progress_lock:
-                            progress_callback(completed_count[0] + 1, total, None)
-
-                    try:
-                        manager = ScenarioManager()
-
-                        def make_turn_callback(idx: int, scenario_name: str) -> Callable[..., None]:
-                            """Create a per-turn callback that tracks progress."""
-
-                            def _on_turn(**kwargs: Any) -> None:
-                                turn_num = kwargs.get("scenario_turn", 0)
-                                node_id = kwargs.get("scenario_node", "")
-                                with results_lock:
-                                    partial_progress[idx] = {
-                                        "scenario_id": scenario_name,
-                                        "turn": turn_num,
-                                        "node": node_id,
-                                    }
-
-                            return _on_turn
-
-                        exec_result = manager.run(
-                            scenario=scenario_def,
-                            config=config,
-                            base_answering_model=ans_model,
-                            base_parsing_model=parse_model,
-                            run_name=run_name,
-                            global_rubric=global_rubric,
-                            answer_cache=answer_cache,
-                            progress_callback=make_turn_callback(original_index, scenario_def.name),
-                        )
-
-                        with results_lock:
-                            results_by_index[original_index] = exec_result
-                            if len(results_by_index) + len(failed_tasks) >= total:
-                                tasks_completed_event.set()
-
-                        # Progress callback after completion (with result)
-                        if progress_callback:
-                            with progress_lock:
-                                completed_count[0] += 1
-                                progress_callback(completed_count[0], total, exec_result)
-
-                    except Exception as e:
-                        logger.error("Parallel scenario failed: %s: %s", combo_desc, e)
-                        with results_lock:
-                            failed_tasks.append((combo_desc, e))
-                            if len(results_by_index) + len(failed_tasks) >= total:
-                                tasks_completed_event.set()
-
-                    finally:
-                        work_queue.task_done()
-
-            finally:
-                set_async_portal(None)
-
-        # Set global semaphore before spawning workers
         set_global_llm_semaphore(sem)
         try:
-            with start_blocking_portal(backend="asyncio") as portal:
-                workers = []
-                for _ in range(max_workers):
-                    t = threading.Thread(target=worker, args=(portal,), daemon=True)
-                    t.start()
-                    workers.append(t)
+            pool = ThreadPoolExecutor(max_workers=max_workers)
+            try:
+                # Submit all combos
+                future_to_meta: dict[Future[tuple[int, ScenarioExecutionResult]], tuple[int, str]] = {}
+                for idx, (scenario_def, ans_model, parse_model) in enumerate(combos):
+                    combo_desc = f"Scenario '{scenario_def.name}' with {ans_model.model_name}/{parse_model.model_name}"
+                    future = pool.submit(execute_combo, idx, (scenario_def, ans_model, parse_model))
+                    future_to_meta[future] = (idx, combo_desc)
 
-                # Wait for all combos to complete, with timeout
-                completed = tasks_completed_event.wait(timeout=self.config.timeout_seconds)
+                # Collect results as they complete
+                collected: set[Future[tuple[int, ScenarioExecutionResult]]] = set()
+                timed_out = False
+                try:
+                    for future in as_completed(future_to_meta, timeout=self.config.timeout_seconds):
+                        collected.add(future)
+                        idx, combo_desc = future_to_meta[future]
+                        try:
+                            result_idx, exec_result = future.result()
+                            results_by_index[result_idx] = exec_result
 
-                # Send shutdown signal to workers
-                for _ in range(max_workers):
-                    work_queue.put(None)
-
-                # Wait for workers to finish
-                for t in workers:
-                    t.join(timeout=5.0)
+                            if progress_callback:
+                                with progress_lock:
+                                    completed_count[0] += 1
+                                    progress_callback(completed_count[0], total, exec_result)
+                        except BaseException as e:
+                            logger.error("Parallel scenario failed: %s: %s", combo_desc, e)
+                            failed_tasks.append((combo_desc, e))
+                except TimeoutError:
+                    timed_out = True
+                    # Sweep futures that completed between last yield and timeout
+                    for future, (_idx, combo_desc) in future_to_meta.items():
+                        if future.done() and future not in collected:
+                            try:
+                                result_idx, exec_result = future.result()
+                                results_by_index[result_idx] = exec_result
+                            except BaseException as e:
+                                failed_tasks.append((combo_desc, e))
+            finally:
+                pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+                # Clean up worker portals (event loops)
+                for cm in _portal_cms:
+                    try:
+                        cm.__exit__(None, None, None)
+                    except Exception:
+                        logger.debug("Portal cleanup error", exc_info=True)
         finally:
             set_global_llm_semaphore(None)
 
@@ -358,7 +340,7 @@ class ScenarioExecutor:
         for idx in sorted(results_by_index.keys()):
             results.append(results_by_index[idx])
 
-        if not completed:
+        if timed_out:
             # Log partial progress for in-flight combos
             in_flight_info: list[str] = []
             for idx in range(total):

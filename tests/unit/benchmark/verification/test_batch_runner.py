@@ -2,7 +2,11 @@
 
 import pytest
 
-from karenina.benchmark.verification.batch_runner import generate_task_queue, run_verification_batch
+from karenina.benchmark.verification.batch_runner import (
+    _apply_retry_config,
+    generate_task_queue,
+    run_verification_batch,
+)
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import FinishedTemplate, VerificationConfig
 
@@ -116,3 +120,37 @@ class TestParsingOnlyGuard:
         # Should not raise (we don't run the full pipeline, just check no guard fires)
         tasks = generate_task_queue(templates, config)
         assert len(tasks) == 1
+
+
+# =============================================================================
+# _apply_retry_config
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestApplyRetryConfig:
+    """Tests for _apply_retry_config function."""
+
+    def test_stamps_when_model_has_no_value(self) -> None:
+        """Test that pipeline value is stamped when model has None."""
+        model = ModelConfig(id="test", model_name="test", model_provider="openai")
+        result = _apply_retry_config(model, max_transient_retries=2)
+        assert result.max_transient_retries == 2
+
+    def test_preserves_existing_model_value(self) -> None:
+        """Test that model-level value is not overwritten."""
+        model = ModelConfig(
+            id="test",
+            model_name="test",
+            model_provider="openai",
+            max_transient_retries=1,
+        )
+        result = _apply_retry_config(model, max_transient_retries=5)
+        assert result.max_transient_retries == 1
+
+    def test_noop_when_pipeline_value_is_none(self) -> None:
+        """Test that None pipeline value does not stamp."""
+        model = ModelConfig(id="test", model_name="test", model_provider="openai")
+        result = _apply_retry_config(model, max_transient_retries=None)
+        assert result.max_transient_retries is None
+        assert result is model  # Same object, no copy

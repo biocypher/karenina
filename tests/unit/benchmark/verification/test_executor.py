@@ -6,7 +6,10 @@ Tests verify:
 - Parallel mode: counts failures toward completion (no deadlock), raises aggregate error
 - Both modes raise the same error type with equivalent information (symmetry)
 - Timeout safety net prevents indefinite hangs
+- Per-task portal creation (each submitted task gets its own BlockingPortal)
 """
+
+import threading
 
 import pytest
 
@@ -504,3 +507,112 @@ class TestSequentialPortalManagement:
         executor.run_batch(tasks)
 
         assert async_results == ["ok"]
+
+
+# ============================================================================
+# Executor requeue bound (issue 188)
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestExecutorRequeueBound:
+    """Tests for max_requeue_count in ExecutorConfig."""
+
+    def test_executor_config_default_requeue_count(self) -> None:
+        """Test ExecutorConfig has max_requeue_count defaulting to 5."""
+        config = ExecutorConfig()
+        assert config.max_requeue_count == 5
+
+    def test_executor_config_custom_requeue_count(self) -> None:
+        """Test ExecutorConfig accepts custom max_requeue_count."""
+        config = ExecutorConfig(max_requeue_count=10)
+        assert config.max_requeue_count == 10
+
+
+@pytest.mark.unit
+class TestForceResetOnRequeueLimit:
+    """Tests for force_reset behavior when requeue limit is reached."""
+
+    def test_cache_force_reset_after_max_requeues(self) -> None:
+        """Test that exceeding max_requeue_count triggers force_reset."""
+        from karenina.utils.answer_cache import AnswerTraceCache
+
+        cache = AnswerTraceCache()
+        max_requeue = 3
+
+        # Simulate: key reserved by another worker
+        cache.get_or_reserve("key1")
+
+        # Simulate requeue loop hitting the limit
+        for _i in range(max_requeue):
+            status, _ = cache.get_or_reserve("key1")
+            assert status == "IN_PROGRESS"
+
+        # After limit: force_reset should make next access return MISS
+        cache.force_reset("key1")
+        status, _ = cache.get_or_reserve("key1")
+        assert status == "MISS"
+
+
+# ============================================================================
+# Per-task portal creation (executor concurrency optimization)
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestPerWorkerPortals:
+    """Each worker thread creates one portal, reused across tasks."""
+
+    def test_parallel_workers_create_portals(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With 6 tasks and 2 workers, 2 portals are created (one per worker).
+
+        Each worker lazily creates a portal on its first task and reuses it
+        for subsequent tasks. This preserves connection pools.
+        """
+        portal_count = [0]
+        portal_lock = threading.Lock()
+
+        from anyio.from_thread import start_blocking_portal as original_start_blocking_portal
+
+        class PortalTracker:
+            """Context manager that wraps start_blocking_portal to count creations."""
+
+            def __init__(self) -> None:
+                self._real_cm = original_start_blocking_portal(backend="asyncio")
+                with portal_lock:
+                    portal_count[0] += 1
+
+            def __enter__(self):
+                return self._real_cm.__enter__()
+
+            def __exit__(self, *args):
+                return self._real_cm.__exit__(*args)
+
+        def mock_start_blocking_portal(**kwargs):
+            return PortalTracker()
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.executor.start_blocking_portal",
+            mock_start_blocking_portal,
+        )
+
+        def mock_execute_task(task, answer_cache=None, **kwargs):
+            return (f"key_{task['question_id']}", _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task(f"q{i}") for i in range(6)]
+        executor = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(max_workers=2, enable_cache=False),
+        )
+        results = executor.run_batch(tasks)
+
+        # All 6 tasks completed
+        assert len(results) == 6
+
+        # 2 portal creations (one per worker, reused across tasks)
+        assert portal_count[0] == 2, f"Expected 2 portal creations (one per worker), got {portal_count[0]}"

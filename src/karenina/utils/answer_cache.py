@@ -180,6 +180,21 @@ class AnswerTraceCache:
             self._stats_timeouts += 1
         return completed
 
+    def force_reset(self, key: str) -> None:
+        """Remove a cache entry, allowing fresh generation on next access.
+
+        Used by the executor when the requeue limit is exceeded for an
+        IN_PROGRESS entry. The next call to get_or_reserve for this key
+        will return MISS.
+
+        Args:
+            key: Cache key to remove.
+        """
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+                logger.debug("Force-reset cache entry: %s", key)
+
     def get_stats(self) -> dict[str, int]:
         """Get cache statistics.
 

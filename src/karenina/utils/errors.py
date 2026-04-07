@@ -47,6 +47,8 @@ def is_retryable_error(exception: BaseException) -> bool:
         "network",
         "temporary failure",
         "overloaded",
+        "event loop",
+        "portal",
     ]
 
     if any(keyword in exception_str for keyword in transient_keywords):

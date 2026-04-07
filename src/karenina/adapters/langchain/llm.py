@@ -36,7 +36,7 @@ from karenina.ports.llm import StreamingLLMResponse
 from karenina.utils.errors import is_retryable_error
 from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
-from karenina.utils.retry import TRANSIENT_RETRY
+from karenina.utils.retry import TRANSIENT_RETRY, create_transient_retry
 
 from .messages import LangChainMessageConverter
 from .prompts import FORMAT_INSTRUCTIONS
@@ -108,6 +108,7 @@ class LangChainLLMAdapter:
         self._structured_model = _structured_model
         self._base_model = _base_model
         self._max_retries = _max_retries
+        self._max_transient_retries = model_config.max_transient_retries
 
         if _base_model is not None:
             self._model = _structured_model if _structured_model else _base_model
@@ -138,6 +139,10 @@ class LangChainLLMAdapter:
 
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
+
+        # Suppress SDK-level retries. TRANSIENT_RETRY is the sole retry layer.
+        # Placed after extra_kwargs merge to ensure SDK retries stay at 0.
+        kwargs["max_retries"] = 0
 
         # Initialize model via existing infrastructure
         model = init_chat_model_unified(
@@ -596,8 +601,8 @@ class LangChainLLMAdapter:
     async def _invoke_model_with_retry(self, model: Any, lc_messages: list[Any]) -> Any:
         """Invoke a LangChain model with automatic retry for transient errors.
 
-        This is a helper that applies the standard transient retry policy
-        to any model invocation.
+        Uses the configurable max_transient_retries from ModelConfig when set,
+        otherwise falls back to the module-level TRANSIENT_RETRY singleton.
 
         Args:
             model: The LangChain model to invoke.
@@ -609,8 +614,12 @@ class LangChainLLMAdapter:
         Raises:
             Exception: After all retries are exhausted.
         """
+        if self._max_transient_retries is not None:
+            retry_decorator = create_transient_retry(max_attempts=self._max_transient_retries)
+        else:
+            retry_decorator = TRANSIENT_RETRY
 
-        @TRANSIENT_RETRY
+        @retry_decorator
         async def _invoke() -> Any:
             return await model.ainvoke(lc_messages)
 

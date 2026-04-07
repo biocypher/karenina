@@ -19,6 +19,22 @@ from karenina.schemas.verification import (
 logger = logging.getLogger(__name__)
 
 
+def model_sort_key(model: Any) -> str:
+    """Return a stable string key for sorting models by identity.
+
+    Uses the model's ``id`` if available, falling back to ``model_name``,
+    then to an empty string. This groups tasks by answering model so that
+    prefix caches (KV caches) can be reused across consecutive requests.
+
+    Args:
+        model: A ModelConfig instance (or any object with ``id`` / ``model_name``).
+
+    Returns:
+        A string suitable for use as a sort key.
+    """
+    return getattr(model, "id", None) or getattr(model, "model_name", None) or ""
+
+
 def merge_rubrics_for_task(
     global_rubric: Rubric | None,
     template: FinishedTemplate,
@@ -210,3 +226,14 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
         "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),
     }
+
+
+def replicate_range(count: int) -> list[int | None]:
+    """Replicate iteration matching the task queue convention.
+
+    Returns [None] for count <= 1 (no replicate numbering),
+    list[1..count] otherwise.
+    """
+    if count <= 1:
+        return [None]
+    return list(range(1, count + 1))

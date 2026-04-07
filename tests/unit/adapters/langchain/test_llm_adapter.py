@@ -13,6 +13,59 @@ from pydantic import BaseModel
 
 from karenina.adapters.langchain import LangChainLLMAdapter
 from karenina.ports import Message
+from karenina.schemas.config import ModelConfig
+
+
+@pytest.mark.unit
+class TestSDKRetrySuppression:
+    """Tests for SDK max_retries=0."""
+
+    def test_initialize_model_passes_max_retries_zero(self) -> None:
+        """Test that _initialize_model passes max_retries=0 to suppress SDK retries."""
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+            LangChainLLMAdapter(config)
+            _, kwargs = mock_init.call_args
+            assert kwargs.get("max_retries") == 0
+
+
+@pytest.mark.unit
+class TestConfigurableTransientRetry:
+    """Tests for configurable max_transient_retries."""
+
+    def test_default_uses_singleton(self) -> None:
+        """Test that default config (None) uses the TRANSIENT_RETRY singleton."""
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+            adapter = LangChainLLMAdapter(config)
+            # None means use the default singleton
+            assert adapter._max_transient_retries is None
+
+    def test_custom_value_stored(self) -> None:
+        """Test that custom max_transient_retries is stored on adapter."""
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+            max_transient_retries=1,
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+            adapter = LangChainLLMAdapter(config)
+            assert adapter._max_transient_retries == 1
 
 
 class TestLangChainLLMAdapter:

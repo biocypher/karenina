@@ -1,7 +1,7 @@
 """Verification task execution with parallel/sequential support.
 
 This module provides the VerificationExecutor class for running verification
-tasks either sequentially or in parallel using a thread pool with asyncio
+tasks either sequentially or in parallel using ThreadPoolExecutor with asyncio
 BlockingPortal for proper async event loop management.
 
 The thread-local portal storage allows worker threads to share async execution
@@ -10,13 +10,11 @@ context without passing the portal through all function signatures.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
-import queue
-import random
 import threading
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +29,8 @@ from karenina.utils.answer_cache import AnswerTraceCache
 
 logger = logging.getLogger(__name__)
 
+_SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
+
 # ============================================================================
 # Thread-Local Portal Storage
 # ============================================================================
@@ -42,11 +42,20 @@ def get_async_portal() -> BlockingPortal | None:
     """Get the current async portal for running async code from threads.
 
     Each worker thread has its own thread-local portal reference.
+    Returns None (and clears the stale reference) if the portal's event loop
+    has ended, allowing callers to fall back to asyncio.run().
 
     Returns:
         The BlockingPortal if one is active for this thread, None otherwise
     """
-    return getattr(_portal_storage, "portal", None)
+    portal = getattr(_portal_storage, "portal", None)
+    if portal is not None:
+        thread_id = getattr(portal, "_event_loop_thread_id", _SENTINEL)
+        if thread_id is None:
+            logger.warning("Clearing stale portal reference (event loop thread ended)")
+            _portal_storage.portal = None
+            return None
+    return portal
 
 
 def set_async_portal(portal: BlockingPortal | None) -> None:
@@ -105,12 +114,16 @@ class ExecutorConfig:
         enable_cache: Whether to enable answer caching (default: True)
         retry_wait_seconds: Seconds to wait for IN_PROGRESS cache entries (default: 5.0)
         timeout_seconds: Maximum wall-clock seconds for a parallel batch (default: 600.0)
+        max_requeue_count: Maximum times a task can be requeued before forcing a
+            fresh generation (default: 5). When exceeded, the cache entry is reset
+            and the task restarts with retry_count=0.
     """
 
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
     enable_cache: bool = True
     retry_wait_seconds: float = 5.0
     timeout_seconds: float = 600.0
+    max_requeue_count: int = 5
 
 
 # ============================================================================
@@ -190,7 +203,7 @@ class VerificationExecutor:
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
         results: dict[str, VerificationResult] = {}
-        errors: list[tuple[str, Exception]] = []
+        errors: list[tuple[str, BaseException]] = []
         total = len(tasks)
 
         # Use a shared BlockingPortal so that sync invoke() calls reuse the
@@ -239,13 +252,11 @@ class VerificationExecutor:
         tasks: list[dict[str, Any]],
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
     ) -> dict[str, VerificationResult]:
-        """Execute tasks in parallel with thread pool.
+        """Execute tasks in parallel using ThreadPoolExecutor.
 
-        Uses intelligent retry and answer cache optimization with task shuffling
-        and progressive retry to maximize cache hits while avoiding blocking.
-
-        Uses AnyIO BlockingPortal to properly manage async event loops across
-        worker threads, preventing connection pool degradation.
+        Each task is submitted as a separate Future with its own BlockingPortal.
+        Cache retry logic runs internally within each callable. Every submission
+        produces a Future, so no task can be silently lost.
 
         Args:
             tasks: List of task dictionaries
@@ -264,157 +275,136 @@ class VerificationExecutor:
         from .utils.task_helpers import create_preview_result
 
         max_workers = self.config.max_workers
-        logger.info(f"Parallel execution: {len(tasks)} tasks with {max_workers} workers")
+        logger.info("Parallel execution: %d tasks with %d workers", len(tasks), max_workers)
 
-        # Create thread-safe answer cache for sharing traces across judges
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
-
-        # Preserve original order and shuffle for better cache distribution
-        indexed_tasks = [(idx, task) for idx, task in enumerate(tasks)]
-        random.shuffle(indexed_tasks)
-
-        # Create work queue with (original_index, task, retry_count)
-        work_queue: queue.Queue[tuple[int, dict[str, Any], int] | None] = queue.Queue()
-        for idx, task in indexed_tasks:
-            work_queue.put((idx, task, 0))
-
-        # Thread-safe storage for results (indexed by original position)
-        results_lock = threading.Lock()
-        results_by_index: dict[int, tuple[str, VerificationResult]] = {}
-
-        # Thread-safe error tracking
-        failed_count = [0]
-        failed_tasks: list[tuple[str, Exception]] = []
+        total = len(tasks)
+        max_requeue = self.config.max_requeue_count
+        retry_wait = self.config.retry_wait_seconds
 
         # Thread-safe progress tracking
         progress_lock = threading.Lock()
         completed_count = [0]
-        total = len(tasks)
 
-        # Completion tracking
-        tasks_completed_event = threading.Event()
+        # Per-worker portal management: each worker thread creates one portal
+        # that is reused across all tasks on that thread. This preserves httpx
+        # connection pools and avoids "Event loop is closed" errors from rapid
+        # portal churn.
+        _portal_cms: list[Any] = []
+        _portal_init_lock = threading.Lock()
 
-        retry_wait_seconds = self.config.retry_wait_seconds
-
-        def worker(portal: BlockingPortal) -> None:
-            """Worker function that processes tasks from queue with retry logic."""
-            # Each worker sets its own thread-local portal
+        def _ensure_worker_portal() -> None:
+            """Lazily create a BlockingPortal for this worker thread."""
+            if get_async_portal() is not None:
+                return
+            cm = start_blocking_portal(backend="asyncio")
+            portal = cm.__enter__()
             set_async_portal(portal)
+            with _portal_init_lock:
+                _portal_cms.append(cm)
+
+        def execute_task_with_retry(idx: int, task: dict[str, Any]) -> tuple[int, tuple[str, VerificationResult]]:
+            """Execute a single verification task with cache retry."""
+            _ensure_worker_portal()
+
+            # Call preview progress callback
+            if progress_callback:
+                preview_result = create_preview_result(task)
+                with progress_lock:
+                    progress_callback(completed_count[0] + 1, total, preview_result)
+
+            if not answer_cache:
+                return idx, execute_task(task, answer_cache)
+
+            cache_key = generate_answer_cache_key(task)
+            for attempt in range(max_requeue + 1):
+                status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+
+                if status == "IN_PROGRESS":
+                    if attempt == 0:
+                        logger.debug(
+                            "Task %s in progress (retry=%d), retrying immediately",
+                            cache_key,
+                            attempt,
+                        )
+                        continue
+
+                    completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
+                    if not completed:
+                        logger.debug(
+                            "Task %s still in progress after %ss, retrying",
+                            cache_key,
+                            retry_wait,
+                        )
+                    continue
+
+                # MISS or HIT: execute
+                return idx, execute_task(
+                    task,
+                    answer_cache,
+                    cache_status=status,
+                    cached_answer_data=cached_answer_data,
+                )
+
+            # Exceeded max requeue: force reset, generate fresh
+            logger.warning(
+                "Task %s exceeded max requeue count (%d), generating fresh",
+                cache_key,
+                max_requeue,
+            )
+            answer_cache.force_reset(cache_key)
+            return idx, execute_task(task, answer_cache)
+
+        # Preserve incoming order (ordering is controlled by task_ordering config)
+        indexed_tasks = list(enumerate(tasks))
+
+        results_by_index: dict[int, tuple[str, VerificationResult]] = {}
+        failed_tasks: list[tuple[str, BaseException]] = []
+
+        pool = ThreadPoolExecutor(max_workers=max_workers)
+        try:
+            # Submit all tasks
+            future_to_meta: dict[Future[tuple[int, tuple[str, VerificationResult]]], tuple[int, str]] = {}
+            for idx, task in indexed_tasks:
+                future = pool.submit(execute_task_with_retry, idx, task)
+                future_to_meta[future] = (idx, task["question_id"])
+
+            # Collect results as they complete
+            collected: set[Future[tuple[int, tuple[str, VerificationResult]]]] = set()
+            timed_out = False
             try:
-                while True:
+                for future in as_completed(future_to_meta, timeout=self.config.timeout_seconds):
+                    collected.add(future)
+                    idx, question_id = future_to_meta[future]
                     try:
-                        # Get next task (non-blocking to allow checking for shutdown)
-                        try:
-                            item = work_queue.get(timeout=1.0)
-                        except queue.Empty:
-                            # Check if all tasks are completed (successes + failures)
-                            with results_lock:
-                                if len(results_by_index) + failed_count[0] >= total:
-                                    tasks_completed_event.set()
-                            continue
+                        result_idx, (result_key, verification_result) = future.result()
+                        results_by_index[result_idx] = (result_key, verification_result)
 
-                        # Check for shutdown signal
-                        if item is None:
-                            work_queue.task_done()
-                            break
-
-                        original_index, task, retry_count = item
-
-                        # Check answer cache first
-                        if answer_cache:
-                            cache_key = generate_answer_cache_key(task)
-                            status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
-
-                            if status == "IN_PROGRESS":
-                                # Another worker is generating this answer
-                                # Always call task_done() immediately after get()
-                                work_queue.task_done()
-
-                                if retry_count == 0:
-                                    # First encounter: immediately requeue and move to next task
-                                    logger.debug(
-                                        f"Task {cache_key} in progress (retry={retry_count}), requeueing immediately"
-                                    )
-                                    work_queue.put((original_index, task, retry_count + 1))
-                                    continue
-                                else:
-                                    # Subsequent encounter: use cache event-based waiting
-                                    completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait_seconds)
-                                    if not completed:
-                                        logger.debug(
-                                            f"Task {cache_key} still in progress after {retry_wait_seconds}s, requeueing"
-                                        )
-                                    work_queue.put((original_index, task, retry_count + 1))
-                                    continue
-                        else:
-                            status, cached_answer_data = "MISS", None
-
-                        # Status is MISS or HIT - ready to execute
-                        # Call preview progress callback
                         if progress_callback:
-                            preview_result = create_preview_result(task)
                             with progress_lock:
-                                progress_callback(completed_count[0] + 1, total, preview_result)
-
-                        # Execute the task with pre-checked cache status
+                                completed_count[0] += 1
+                                progress_callback(completed_count[0], total, verification_result)
+                    except BaseException as e:
+                        logger.error("Parallel task %s failed: %s", question_id, e)
+                        failed_tasks.append((question_id, e))
+            except TimeoutError:
+                timed_out = True
+                # Sweep futures that completed between last yield and timeout
+                for future, (_idx, question_id) in future_to_meta.items():
+                    if future.done() and future not in collected:
                         try:
-                            result_key, verification_result = execute_task(
-                                task, answer_cache, cache_status=status, cached_answer_data=cached_answer_data
-                            )
-
-                            # Store result at original index
-                            with results_lock:
-                                results_by_index[original_index] = (result_key, verification_result)
-                                # Check if all tasks are now complete
-                                if len(results_by_index) + failed_count[0] >= total:
-                                    tasks_completed_event.set()
-
-                            # Call completion progress callback
-                            if progress_callback:
-                                with progress_lock:
-                                    completed_count[0] += 1
-                                    progress_callback(completed_count[0], total, verification_result)
-
-                        except Exception as e:
-                            logger.error("Parallel task %s failed: %s", task["question_id"], e)
-                            with results_lock:
-                                failed_count[0] += 1
-                                failed_tasks.append((task["question_id"], e))
-                                if len(results_by_index) + failed_count[0] >= total:
-                                    tasks_completed_event.set()
-
-                        finally:
-                            work_queue.task_done()
-
-                    except Exception as e:
-                        logger.error(f"Worker error: {e}")
-                        with contextlib.suppress(ValueError):
-                            # task_done() called more times than get()
-                            work_queue.task_done()
-
-            finally:
-                # Clear the portal when worker exits
-                set_async_portal(None)
-
-        # Use BlockingPortal to properly manage async event loop for all worker threads
-        with start_blocking_portal(backend="asyncio") as portal:
-            # Start worker threads, each with a reference to the shared portal
-            workers = []
-            for _ in range(max_workers):
-                t = threading.Thread(target=worker, args=(portal,), daemon=True)
-                t.start()
-                workers.append(t)
-
-            # Wait for all tasks to complete, with timeout
-            completed = tasks_completed_event.wait(timeout=self.config.timeout_seconds)
-
-            # Send shutdown signal to workers
-            for _ in range(max_workers):
-                work_queue.put(None)
-
-            # Wait for workers to finish
-            for t in workers:
-                t.join(timeout=5.0)
+                            result_idx, (result_key, verification_result) = future.result()
+                            results_by_index[result_idx] = (result_key, verification_result)
+                        except BaseException as e:
+                            failed_tasks.append((question_id, e))
+        finally:
+            pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+            # Clean up worker portals (event loops)
+            for cm in _portal_cms:
+                try:
+                    cm.__exit__(None, None, None)
+                except Exception:
+                    logger.debug("Portal cleanup error", exc_info=True)
 
         # Restore original order and convert to dictionary
         results: dict[str, VerificationResult] = {}
@@ -427,9 +417,10 @@ class VerificationExecutor:
             log_cache_stats(answer_cache, mode="parallel mode")
 
         # Handle timeout
-        if not completed:
+        if timed_out:
             raise VerificationBatchError(
-                f"Parallel batch timed out after {self.config.timeout_seconds:.0f} seconds ({len(results)} of {total} tasks completed)",
+                f"Parallel batch timed out after {self.config.timeout_seconds:.0f} seconds "
+                f"({len(results)} of {total} tasks completed)",
                 partial_results=results,
                 errors=failed_tasks,
             )

@@ -215,12 +215,8 @@ class TestScenarioRunParallel:
 
         config = _make_config()
 
-        call_index = {"n": 0}
-
         def fake_run(_self, **kwargs: Any) -> ScenarioExecutionResult:
-            idx = call_index["n"]
-            call_index["n"] += 1
-            if idx == 0:
+            if kwargs["scenario"].name == "alpha":
                 raise RuntimeError("boom")
             return _make_exec_result()
 

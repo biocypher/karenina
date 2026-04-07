@@ -365,6 +365,7 @@ class VerificationContext:
     # Error Tracking
     error: str | None = None
     completed_without_errors: bool = True
+    is_transient_error: bool = False
 
     def set_artifact(self, key: str, value: Any) -> None:
         """Store an artifact produced by a stage."""
@@ -386,10 +387,18 @@ class VerificationContext:
         """Get a field from the result builder."""
         return self.result_builder.get(key, default)
 
-    def mark_error(self, error_message: str) -> None:
-        """Mark the context as failed with an error message."""
+    def mark_error(self, error_message: str, *, transient: bool = False) -> None:
+        """Mark the context as failed with an error message.
+
+        Args:
+            error_message: Human-readable error description.
+            transient: Whether the error is transient (retryable). Sticky: once
+                True, subsequent calls with transient=False keep it True.
+        """
         self.error = error_message
         self.completed_without_errors = False
+        if transient:
+            self.is_transient_error = True
 
 
 class VerificationStage(Protocol):

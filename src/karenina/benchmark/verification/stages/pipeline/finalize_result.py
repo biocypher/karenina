@@ -171,6 +171,7 @@ class FinalizeResultStage(BaseVerificationStage):
             template_id=context.template_id,
             completed_without_errors=context.completed_without_errors,
             error=context.error,
+            is_transient_error=context.is_transient_error,
             failed_stage=context.get_result_field(ArtifactKeys.FAILED_STAGE),
             keywords=context.keywords,
             question_text=context.question_text,

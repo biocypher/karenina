@@ -142,6 +142,15 @@ class VerificationConfig(BaseModel):
         "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
     )
 
+    # Task ordering strategy for queue generation
+    task_ordering: Literal["prefix_cache", "generation_order", "random"] = Field(
+        default="prefix_cache",
+        description="Task queue ordering strategy. "
+        "'prefix_cache' (default) groups by answering model for KV cache hits. "
+        "'generation_order' preserves template-first loop order. "
+        "'random' shuffles tasks.",
+    )
+
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
     deep_judgment_mode: Literal["disabled", "reasoning_only", "full"] = "disabled"  # Template deep-judgment mode
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
@@ -279,6 +288,30 @@ class VerificationConfig(BaseModel):
         if not isinstance(v, DBConfig):
             raise TypeError(f"db_config must be a DBConfig instance or None, got {type(v).__name__}")
         return v
+
+    # Retry settings for transient errors and executor requeue
+    max_transient_retries: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum retry attempts for transient LLM errors (timeouts, "
+        "connection errors, rate limits). Controls TRANSIENT_RETRY behavior.",
+    )
+    max_requeue_count: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum times a task can be requeued in the parallel executor's "
+        "IN_PROGRESS cache loop before generating the answer fresh.",
+    )
+
+    max_scenario_turn_retries: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Maximum attempts for a scenario turn that fails with a transient "
+            "error. Each attempt runs the full verification pipeline. Separate "
+            "from max_transient_retries (which controls per-LLM-call retries)."
+        ),
+    )
 
     def __init__(self, **data: Any) -> None:
         """

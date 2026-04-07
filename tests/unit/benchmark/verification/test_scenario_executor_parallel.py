@@ -421,3 +421,53 @@ class TestParallelPortalManagement:
 
         # Portal is cleared after run_batch (on the main thread)
         assert get_async_portal() is None
+
+
+# ============================================================================
+# Parallel: per-worker portals
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestScenarioPerWorkerPortals:
+    """Each worker thread creates one portal, reused across combos."""
+
+    @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
+    @patch("karenina.benchmark.verification.scenario_executor.start_blocking_portal")
+    def test_each_worker_gets_one_portal(
+        self,
+        mock_start_portal: MagicMock,
+        mock_manager_cls: MagicMock,
+    ) -> None:
+        """With 6 combos and 2 workers, 2 portals are created (one per worker).
+
+        Each worker lazily creates a portal on its first combo and reuses it
+        for subsequent combos. This preserves connection pools.
+        """
+        created_portals: list[MagicMock] = []
+        lock = threading.Lock()
+
+        def make_portal(*args, **kwargs):  # noqa: ARG001
+            portal = MagicMock()
+            with lock:
+                created_portals.append(portal)
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=portal)
+            ctx.__exit__ = MagicMock(return_value=False)
+            return ctx
+
+        mock_start_portal.side_effect = make_portal
+
+        mock_manager_cls.return_value.run.return_value = _make_exec_result("s")
+
+        combos = [_make_combo(f"s{i}") for i in range(6)]
+        config = MagicMock()
+        executor = ScenarioExecutor(
+            parallel=True,
+            config=ScenarioExecutorConfig(max_workers=2, enable_cache=False),
+        )
+        executor.run_batch(combos, config)
+
+        # One portal per worker (reused across combos)
+        assert mock_start_portal.call_count == 2
+        assert len(created_portals) == 2

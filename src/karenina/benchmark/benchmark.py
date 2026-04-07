@@ -834,12 +834,37 @@ class Benchmark:
                 return model.model_copy(update={"request_timeout": config.request_timeout})
             return model
 
+        def _apply_retry(model: Any) -> Any:
+            if config.max_transient_retries is not None and model.max_transient_retries is None:
+                return model.model_copy(update={"max_transient_retries": config.max_transient_retries})
+            return model
+
+        def _prepare_model(model: Any) -> Any:
+            return _apply_retry(_apply_timeout(model))
+
         combos = [
-            (scenario_def, _apply_timeout(ans_model), _apply_timeout(parse_model))
+            (scenario_def, _prepare_model(ans_model), _prepare_model(parse_model))
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models
         ]
+
+        # Apply task ordering to scenario combos
+        from karenina.benchmark.verification.utils.task_helpers import model_sort_key
+
+        if config.task_ordering == "prefix_cache":
+            combos.sort(
+                key=lambda c: (
+                    model_sort_key(c[1]),  # answering_model
+                    c[0].name,  # scenario name
+                    model_sort_key(c[2]),  # parsing_model
+                )
+            )
+        elif config.task_ordering == "random":
+            import random
+
+            random.shuffle(combos)
+        # "generation_order": no-op, preserve original list comprehension order
 
         executor = ScenarioExecutor(
             parallel=bool(async_enabled) and len(combos) > 1,

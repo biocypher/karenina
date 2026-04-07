@@ -584,6 +584,11 @@ class ModelConfig(BaseModel):
     # Typically set by the pipeline from VerificationConfig.request_timeout.
     # None means use the provider SDK default (no timeout).
     request_timeout: float | None = None
+    # Maximum retry attempts for transient LLM errors (timeouts, connection errors,
+    # rate limits). Controls the tenacity TRANSIENT_RETRY decorator.
+    # None means use the default (3 attempts). Typically stamped by the pipeline
+    # from VerificationConfig.max_transient_retries.
+    max_transient_retries: int | None = None
 
     @model_validator(mode="after")
     def validate_manual_interface(self) -> "ModelConfig":

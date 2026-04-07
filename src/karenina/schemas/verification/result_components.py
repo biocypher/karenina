@@ -18,6 +18,7 @@ class VerificationResultMetadata(BaseModel):
     )  # MD5 of template or "no_template" (composite key component)
     completed_without_errors: bool = Field(default=..., json_schema_extra={"index": True})
     error: str | None = None
+    is_transient_error: bool = False
     failed_stage: str | None = None  # Stage name of the first guard that caused an auto-fail
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint

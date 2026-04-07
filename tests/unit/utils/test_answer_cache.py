@@ -331,6 +331,37 @@ class TestCacheEntryTimestamp:
         assert entry1.timestamp < entry2.timestamp
 
 
+class TestForceReset:
+    """Tests for force_reset method."""
+
+    def test_force_reset_removes_entry(self) -> None:
+        """Test that force_reset removes an existing cache entry."""
+        cache = AnswerTraceCache()
+        cache.get_or_reserve("key1")  # Creates IN_PROGRESS entry
+        cache.force_reset("key1")
+
+        # Next get_or_reserve should return MISS (not IN_PROGRESS)
+        status, data = cache.get_or_reserve("key1")
+        assert status == "MISS"
+        assert data is None
+
+    def test_force_reset_nonexistent_key_is_noop(self) -> None:
+        """Test that force_reset on missing key does not raise."""
+        cache = AnswerTraceCache()
+        cache.force_reset("nonexistent")  # Should not raise
+
+    def test_force_reset_completed_entry(self) -> None:
+        """Test that force_reset can remove a completed entry."""
+        cache = AnswerTraceCache()
+        cache.get_or_reserve("key1")
+        cache.complete("key1", {"answer": "test"})
+        cache.force_reset("key1")
+
+        status, data = cache.get_or_reserve("key1")
+        assert status == "MISS"
+        assert data is None
+
+
 class TestEdgeCases:
     """Tests for edge cases and error conditions."""
 
