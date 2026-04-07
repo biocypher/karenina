@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from pydantic import BaseModel
@@ -22,6 +24,7 @@ from pydantic import BaseModel
 from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import StreamingLLMResponse
 from karenina.schemas.config import ModelConfig
 from karenina.utils.messages import append_error_feedback
 
@@ -129,11 +132,12 @@ class ClaudeToolLLMAdapter:
         """Declare what prompt features this adapter supports.
 
         Returns:
-            PortCapabilities with system prompt support and structured output support.
+            PortCapabilities with system prompt, structured output, and streaming support.
         """
         return PortCapabilities(
             supports_system_prompt=True,
             supports_structured_output=True,
+            supports_streaming=True,
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
@@ -157,31 +161,7 @@ class ClaudeToolLLMAdapter:
     async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
         """Invoke LLM for regular text output."""
         client = self._get_async_client()
-
-        # Convert messages
-        anthropic_messages = convert_to_anthropic(messages)
-        system_prompt = extract_system_prompt(messages)
-
-        # Build kwargs
-        if not self._config.model_name:
-            raise AdapterUnavailableError("model_name is required in ModelConfig", reason="missing_model_name")
-
-        kwargs: dict[str, Any] = {
-            "model": self._config.model_name,
-            "max_tokens": self._config.max_tokens,
-            "messages": anthropic_messages,
-        }
-
-        # Add system with caching if present
-        if system_prompt:
-            cached_system = build_system_with_cache(system_prompt)
-            if cached_system:
-                kwargs["system"] = cached_system
-
-        # Add temperature if specified
-        if self._config.temperature is not None:
-            kwargs["temperature"] = self._config.temperature
-
+        kwargs = self._build_invoke_kwargs(messages)
         response = await client.messages.create(**kwargs)
 
         # Extract text content
@@ -309,6 +289,131 @@ class ClaudeToolLLMAdapter:
 
         except RuntimeError:
             return asyncio.run(self.ainvoke(messages))
+
+    def _build_invoke_kwargs(self, messages: list[Message]) -> dict[str, Any]:
+        """Build kwargs for messages.create / messages.stream.
+
+        Shared between _ainvoke_text and astream to avoid duplication.
+        """
+        anthropic_messages = convert_to_anthropic(messages)
+        system_prompt = extract_system_prompt(messages)
+
+        if not self._config.model_name:
+            raise AdapterUnavailableError("model_name is required in ModelConfig", reason="missing_model_name")
+
+        kwargs: dict[str, Any] = {
+            "model": self._config.model_name,
+            "max_tokens": self._config.max_tokens,
+            "messages": anthropic_messages,
+        }
+
+        if system_prompt:
+            cached_system = build_system_with_cache(system_prompt)
+            if cached_system:
+                kwargs["system"] = cached_system
+
+        if self._config.temperature is not None:
+            kwargs["temperature"] = self._config.temperature
+
+        return kwargs
+
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+        """Stream LLM response, accumulating tokens as they arrive.
+
+        Uses Anthropic SDK's ``client.messages.stream()`` for native streaming.
+        On timeout, the StreamingLLMResponse contains whatever content
+        was received before the interruption.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Yields:
+            StreamingLLMResponse that can be iterated for text chunks.
+        """
+        client = self._get_async_client()
+        kwargs = self._build_invoke_kwargs(messages)
+        response = StreamingLLMResponse()
+
+        async with client.messages.stream(**kwargs) as stream:
+            response._set_chunk_source(stream.text_stream)
+            try:
+                yield response
+            finally:
+                # Best-effort usage extraction from the stream's final message
+                try:
+                    final_message = await stream.get_final_message()
+                    response.usage = extract_usage_from_response(final_message, model=self._config.model_name)
+                except Exception:
+                    logger.warning("Could not extract usage from stream", exc_info=True)
+        response.is_complete = True
+
+    async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content and is_partial flag.
+        """
+        is_partial = False
+        async with self.astream(messages) as sr:
+            try:
+                async with asyncio.timeout(timeout):
+                    async for _chunk in sr:
+                        pass
+            except TimeoutError:
+                is_partial = True
+                logger.warning(
+                    "Streaming timeout after %ss: captured %d chars of partial response",
+                    timeout,
+                    len(sr.accumulated_content),
+                )
+
+        return LLMResponse(
+            content=sr.accumulated_content,
+            usage=sr.usage,
+            raw=None,
+            is_partial=is_partial,
+            usage_unavailable=is_partial,
+        )
+
+    @with_llm_semaphore
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content synchronously.
+
+        Uses streaming internally so that partial content can be captured on
+        timeout. Returns the same LLMResponse type as invoke().
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content. ``is_partial`` is True if
+            the stream was interrupted by timeout.
+        """
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        portal = get_async_portal()
+
+        if portal is not None:
+            return portal.call(self._astream_with_timeout, messages, timeout)
+
+        try:
+            asyncio.get_running_loop()
+
+            def run_in_thread() -> LLMResponse:
+                return asyncio.run(self._astream_with_timeout(messages, timeout))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result(timeout=(timeout or 300) + 30)
+
+        except RuntimeError:
+            return asyncio.run(self._astream_with_timeout(messages, timeout))
 
     def with_structured_output(
         self, schema: type[BaseModel], *, max_retries: int | None = None

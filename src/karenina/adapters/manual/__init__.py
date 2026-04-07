@@ -247,6 +247,14 @@ class ManualLLMAdapter:
         """Raises ManualInterfaceError - manual interface cannot invoke LLM."""
         raise ManualInterfaceError("llm.with_structured_output()")
 
+    def astream(self, messages: list[Message]) -> Any:  # noqa: ARG002
+        """Raises ManualInterfaceError - manual interface cannot stream."""
+        raise ManualInterfaceError("llm.astream()")
+
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:  # noqa: ARG002
+        """Raises ManualInterfaceError - manual interface cannot stream."""
+        raise ManualInterfaceError("llm.stream_invoke()")
+
     async def aclose(self) -> None:
         """Close underlying resources (no-op for manual adapter)."""
 

@@ -51,7 +51,10 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
     if model_config.temperature is not None:
         model_kwargs["temperature"] = model_config.temperature
     if model_config.request_timeout is not None:
-        model_kwargs["request_timeout"] = model_config.request_timeout
+        if model_config.model_provider == "anthropic":
+            model_kwargs["default_request_timeout"] = model_config.request_timeout
+        else:
+            model_kwargs["request_timeout"] = model_config.request_timeout
 
     model_kwargs.update(kwargs)
 

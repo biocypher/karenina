@@ -18,13 +18,16 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import StreamingLLMResponse
 
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
@@ -32,9 +35,57 @@ from .usage import extract_sdk_usage
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
 
     from karenina.schemas.config import ModelConfig
+
+_T = TypeVar("_T")
+
+
+def _run_in_fresh_loop(
+    coro_func: Callable[..., Coroutine[Any, Any, _T]],
+    *args: Any,
+    timeout: float = 300,
+) -> _T:
+    """Run an async function in a dedicated thread with a fresh event loop.
+
+    The Claude Agent SDK (query(), ClaudeSDKClient) uses anyio cancel scopes
+    internally. When run via BlockingPortal.call(), those cancel scopes conflict
+    with the portal's own cancel scope hierarchy, producing:
+
+        RuntimeError: Attempted to exit a cancel scope that isn't the
+        current task's current cancel scope
+
+    This helper always spawns a new thread with asyncio.run(), giving the SDK
+    a completely isolated event loop and task context. This avoids the cancel
+    scope mismatch regardless of whether a BlockingPortal is active.
+
+    Other adapters (claude_tool, langchain) do not need this because their
+    underlying async calls (httpx, LangChain ainvoke) do not create anyio
+    cancel scopes.
+
+    Args:
+        coro_func: Async function to call.
+        *args: Positional arguments forwarded to coro_func.
+        timeout: Thread-level timeout in seconds (default: 300).
+
+    Returns:
+        The return value of the coroutine.
+
+    Raises:
+        concurrent.futures.TimeoutError: If the thread does not finish
+            within the timeout.
+        Exception: Any exception raised by the coroutine is re-raised.
+    """
+
+    def _target() -> _T:
+        return asyncio.run(coro_func(*args))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future: concurrent.futures.Future[_T] = executor.submit(_target)
+        return future.result(timeout=timeout)
 
 
 class ClaudeSDKLLMAdapter:
@@ -154,11 +205,12 @@ class ClaudeSDKLLMAdapter:
         """Declare what prompt features this adapter supports.
 
         Returns:
-            PortCapabilities with system prompt support and structured output support.
+            PortCapabilities with system prompt, structured output, and streaming support.
         """
         return PortCapabilities(
             supports_system_prompt=True,
             supports_structured_output=True,
+            supports_streaming=True,
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
@@ -225,8 +277,9 @@ class ClaudeSDKLLMAdapter:
         """Invoke the LLM synchronously.
 
         This is a convenience wrapper around ainvoke() for sync code.
-        Uses the shared async portal if available, otherwise falls back
-        to asyncio.run() with proper event loop handling.
+        Always uses a dedicated thread with asyncio.run() to give the
+        Claude Agent SDK a fresh event loop, avoiding cancel scope
+        conflicts with BlockingPortal.
 
         Args:
             messages: List of unified Message objects.
@@ -237,30 +290,7 @@ class ClaudeSDKLLMAdapter:
         Raises:
             PortError: If the invocation fails.
         """
-        from karenina.benchmark.verification.executor import get_async_portal
-
-        portal = get_async_portal()
-
-        if portal is not None:
-            # Use the shared BlockingPortal for proper event loop management
-            return portal.call(self.ainvoke, messages)
-
-        # No portal available - check if we're already in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context - use ThreadPoolExecutor to avoid
-            # nested event loop issues
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self.ainvoke(messages))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=300)  # 5 minute timeout
-
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.ainvoke(messages))
+        return _run_in_fresh_loop(self.ainvoke, messages, timeout=300)
 
     def with_structured_output(
         self,
@@ -308,6 +338,107 @@ class ClaudeSDKLLMAdapter:
             model_config=self._config,
             _structured_schema=schema,
             _max_turns=max_turns,
+        )
+
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+        """Stream LLM response via Claude Agent SDK.
+
+        Uses query() with include_partial_messages=True to receive
+        AssistantMessage objects as the response is built. Text deltas
+        are computed by tracking previously seen content.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Yields:
+            StreamingLLMResponse that can be iterated for text chunks.
+        """
+        from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, query
+
+        prompt_string = self._converter.to_prompt_string(messages)
+        system_prompt = self._converter.extract_system_prompt(messages)
+
+        options = self._build_options(system_prompt)
+        options.include_partial_messages = True
+
+        response = StreamingLLMResponse()
+
+        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
+            """Yield text deltas from SDK partial AssistantMessages."""
+            emitted_length = 0
+            async for message in query(prompt=prompt_string, options=options):
+                if isinstance(message, AssistantMessage):
+                    # Extract full text from content blocks
+                    full_text = "".join(
+                        block.text for block in getattr(message, "content", []) if isinstance(block, TextBlock)
+                    )
+                    # Yield only the new portion
+                    if len(full_text) > emitted_length:
+                        delta = full_text[emitted_length:]
+                        emitted_length = len(full_text)
+                        yield delta
+                elif isinstance(message, ResultMessage):
+                    # Final message carries usage data
+                    response.usage = extract_sdk_usage(message, model=self._config.model_name)
+
+        response._set_chunk_source(_chunk_generator())
+        yield response
+        response.is_complete = True
+
+    async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content and is_partial flag.
+        """
+        is_partial = False
+        async with self.astream(messages) as sr:
+            try:
+                async with asyncio.timeout(timeout):
+                    async for _chunk in sr:
+                        pass
+            except TimeoutError:
+                is_partial = True
+                logger.warning(
+                    "Streaming timeout after %ss: captured %d chars of partial response",
+                    timeout,
+                    len(sr.accumulated_content),
+                )
+
+        return LLMResponse(
+            content=sr.accumulated_content,
+            usage=sr.usage,
+            raw=None,
+            is_partial=is_partial,
+            usage_unavailable=is_partial,
+        )
+
+    @with_llm_semaphore
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Stream with wall-clock timeout synchronously.
+
+        Always uses a dedicated thread with asyncio.run() to give the
+        Claude Agent SDK a fresh event loop, avoiding cancel scope
+        conflicts with BlockingPortal.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content. is_partial is True if
+            the stream was interrupted by timeout.
+        """
+        return _run_in_fresh_loop(
+            self._astream_with_timeout,
+            messages,
+            timeout,
+            timeout=(timeout or 300) + 30,
         )
 
     async def aclose(self) -> None:

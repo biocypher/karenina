@@ -23,6 +23,8 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
@@ -30,6 +32,7 @@ from pydantic import BaseModel, ValidationError
 from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import StreamingLLMResponse
 from karenina.utils.errors import is_retryable_error
 from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
@@ -37,7 +40,7 @@ from karenina.utils.retry import TRANSIENT_RETRY
 
 from .messages import LangChainMessageConverter
 from .prompts import FORMAT_INSTRUCTIONS
-from .usage import extract_langchain_usage, extract_usage_from_response
+from .usage import extract_langchain_usage, extract_usage_from_chunk, extract_usage_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +129,12 @@ class LangChainLLMAdapter:
             kwargs["temperature"] = self._config.temperature
 
         if self._config.request_timeout is not None:
-            kwargs["request_timeout"] = self._config.request_timeout
+            # LangChain's ChatAnthropic uses 'default_request_timeout', not 'request_timeout'.
+            # Other providers (OpenAI, Google) accept 'request_timeout' as-is.
+            if self._config.model_provider == "anthropic":
+                kwargs["default_request_timeout"] = self._config.request_timeout
+            else:
+                kwargs["request_timeout"] = self._config.request_timeout
 
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
@@ -155,11 +163,12 @@ class LangChainLLMAdapter:
         """Declare what prompt features this adapter supports.
 
         Returns:
-            PortCapabilities with system prompt support and structured output support.
+            PortCapabilities with system prompt, structured output, and streaming support.
         """
         return PortCapabilities(
             supports_system_prompt=True,
             supports_structured_output=True,
+            supports_streaming=True,
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
@@ -231,6 +240,103 @@ class LangChainLLMAdapter:
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.ainvoke(messages))
+
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+        """Stream LLM response, accumulating tokens as they arrive.
+
+        Uses LangChain's cross-provider ``.astream()`` method which yields
+        ``AIMessageChunk`` objects uniformly across providers.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Yields:
+            StreamingLLMResponse that can be iterated for text chunks.
+        """
+        lc_messages = self._converter.to_provider(messages)
+        response = StreamingLLMResponse()
+
+        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
+            """Yield text chunks from LangChain's astream, extracting usage from final chunk."""
+            async for chunk in self._model.astream(lc_messages):
+                text = chunk.content if isinstance(chunk.content, str) else ""
+                if text:
+                    yield text
+                # Usage metadata typically arrives on the final chunk
+                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                    response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+
+        response._set_chunk_source(_chunk_generator())
+        yield response
+        response.is_complete = True
+
+    async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content and is_partial flag.
+        """
+        is_partial = False
+        async with self.astream(messages) as sr:
+            try:
+                async with asyncio.timeout(timeout):
+                    async for _chunk in sr:
+                        pass
+            except TimeoutError:
+                is_partial = True
+                logger.warning(
+                    "Streaming timeout after %ss: captured %d chars of partial response",
+                    timeout,
+                    len(sr.accumulated_content),
+                )
+
+        return LLMResponse(
+            content=sr.accumulated_content,
+            usage=sr.usage,
+            raw=None,
+            is_partial=is_partial,
+            usage_unavailable=is_partial,
+        )
+
+    @with_llm_semaphore
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content synchronously.
+
+        Uses streaming internally so that partial content can be captured on
+        timeout. Returns the same LLMResponse type as invoke().
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content. ``is_partial`` is True if
+            the stream was interrupted by timeout.
+        """
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        portal = get_async_portal()
+
+        if portal is not None:
+            return portal.call(self._astream_with_timeout, messages, timeout)
+
+        try:
+            asyncio.get_running_loop()
+
+            def run_in_thread() -> LLMResponse:
+                return asyncio.run(self._astream_with_timeout(messages, timeout))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result(timeout=(timeout or 300) + 30)
+
+        except RuntimeError:
+            return asyncio.run(self._astream_with_timeout(messages, timeout))
 
     def with_structured_output(self, schema: type[BaseModel], *, max_retries: int | None = None) -> LangChainLLMAdapter:
         """Return a new adapter configured for structured output.

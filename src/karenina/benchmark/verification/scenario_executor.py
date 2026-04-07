@@ -239,6 +239,8 @@ class ScenarioExecutor:
         # Thread-safe storage for results (indexed by original position)
         results_lock = threading.Lock()
         results_by_index: dict[int, ScenarioExecutionResult] = {}
+        # Partial progress for in-flight combos (turn tracking via callback)
+        partial_progress: dict[int, dict[str, Any]] = {}
 
         # Thread-safe error tracking
         failed_tasks: list[tuple[str, BaseException]] = []
@@ -277,6 +279,22 @@ class ScenarioExecutor:
 
                     try:
                         manager = ScenarioManager()
+
+                        def make_turn_callback(idx: int, scenario_name: str) -> Callable[..., None]:
+                            """Create a per-turn callback that tracks progress."""
+
+                            def _on_turn(**kwargs: Any) -> None:
+                                turn_num = kwargs.get("scenario_turn", 0)
+                                node_id = kwargs.get("scenario_node", "")
+                                with results_lock:
+                                    partial_progress[idx] = {
+                                        "scenario_id": scenario_name,
+                                        "turn": turn_num,
+                                        "node": node_id,
+                                    }
+
+                            return _on_turn
+
                         exec_result = manager.run(
                             scenario=scenario_def,
                             config=config,
@@ -285,6 +303,7 @@ class ScenarioExecutor:
                             run_name=run_name,
                             global_rubric=global_rubric,
                             answer_cache=answer_cache,
+                            progress_callback=make_turn_callback(original_index, scenario_def.name),
                         )
 
                         with results_lock:
@@ -339,12 +358,25 @@ class ScenarioExecutor:
         for idx in sorted(results_by_index.keys()):
             results.append(results_by_index[idx])
 
-        # Handle timeout: add a timeout error entry
         if not completed:
+            # Log partial progress for in-flight combos
+            in_flight_info: list[str] = []
+            for idx in range(total):
+                if idx not in results_by_index and idx in partial_progress:
+                    info = partial_progress[idx]
+                    in_flight_info.append(
+                        f"  combo {idx}: {info['scenario_id']} reached turn {info['turn']} at node {info['node']}"
+                    )
+
+            completed_count_final = len(results_by_index)
+            partial_count = len(in_flight_info)
             timeout_msg = (
                 f"Parallel scenario batch timed out after {self.config.timeout_seconds:.0f}s "
-                f"({len(results)} of {total} combos completed)"
+                f"({completed_count_final} completed, {partial_count} in-flight, "
+                f"{total - completed_count_final - partial_count} not started of {total} combos)"
             )
+            if in_flight_info:
+                timeout_msg += "\nIn-flight combo progress:\n" + "\n".join(in_flight_info)
             logger.error("%s", timeout_msg)
             failed_tasks.append((timeout_msg, TimeoutError(timeout_msg)))
 

@@ -21,3 +21,4 @@ class PortCapabilities:
 
     supports_system_prompt: bool = True
     supports_structured_output: bool = False
+    supports_streaming: bool = False

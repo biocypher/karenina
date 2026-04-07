@@ -71,6 +71,7 @@ class GenerateAnswerStage(BaseVerificationStage):
             ArtifactKeys.RECURSION_LIMIT_REACHED,
             ArtifactKeys.ANSWERING_MODEL_STR,
             ArtifactKeys.ANSWERING_MCP_SERVERS,
+            ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -323,6 +324,24 @@ class GenerateAnswerStage(BaseVerificationStage):
                 raw_llm_response = result.raw_trace
                 recursion_limit_reached = result.limit_reached
 
+                # Handle agent timeout with partial trace
+                if result.timeout_reached:
+                    if result.raw_trace:
+                        self.set_artifact_and_result(context, "response_timeout_partial", True)
+                        self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
+                        logger.warning(
+                            "Question %s: agent timed out with partial trace (%d chars, %d turns)",
+                            context.question_id,
+                            len(result.raw_trace),
+                            result.turns,
+                        )
+                    else:
+                        error_msg = "Agent timed out with no trace messages"
+                        context.mark_error(error_msg)
+                        context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
+                        context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
+                        return
+
                 # Track usage metadata from adapter
                 if result.usage:
                     inner_usage: dict[str, int | float] = {
@@ -359,11 +378,32 @@ class GenerateAnswerStage(BaseVerificationStage):
                 # LLMPort path: Use for simple LLM calls without tools
                 assert answering_llm is not None
 
-                # Invoke LLM directly
-                llm_response = answering_llm.invoke(adapter_messages)
+                # Use streaming when available to capture partial output on timeout
+                if answering_llm.capabilities.supports_streaming:
+                    llm_response = answering_llm.stream_invoke(
+                        adapter_messages,
+                        timeout=context.answering_model.request_timeout,
+                    )
+                else:
+                    llm_response = answering_llm.invoke(adapter_messages)
 
                 # Format response as trace (AI message only, question is not part of the trace)
                 raw_llm_response = f"--- AI Message ---\n{llm_response.content}"
+
+                # Mark partial response if streaming timed out
+                if llm_response.is_partial:
+                    self.set_artifact_and_result(context, "response_timeout_partial", True)
+                    if not llm_response.content:
+                        raise TimeoutError("LLM request timed out with no content received")
+                    logger.warning(
+                        "Question %s: response truncated by streaming timeout (%d chars captured)",
+                        context.question_id,
+                        len(llm_response.content),
+                    )
+
+                # Propagate usage_unavailable flag if present
+                if llm_response.usage_unavailable:
+                    self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
 
                 # Build trace_messages for the LLM path too
                 llm_trace_messages = [

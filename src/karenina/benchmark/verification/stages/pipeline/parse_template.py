@@ -115,6 +115,9 @@ class ParseTemplateStage(BaseVerificationStage):
         # Skip parsing if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
+        # Skip parsing if response was truncated by streaming timeout
+        if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
+            return False
         # Skip parsing if trace validation failed (trace doesn't end with AI message)
         if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False

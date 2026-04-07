@@ -401,18 +401,32 @@ class ClaudeToolAgentAdapter:
                     break
 
         # Execute with optional timeout
+        timeout_reached = False
         if config.timeout:
-            await asyncio.wait_for(execute_loop(), timeout=config.timeout)
+            try:
+                await asyncio.wait_for(execute_loop(), timeout=config.timeout)
+            except TimeoutError:
+                timeout_reached = True
+                logger.warning(
+                    "Agent timed out after %ss (%d turns, %d trace messages accumulated)",
+                    config.timeout,
+                    turns,
+                    len(trace_messages),
+                )
         else:
             await execute_loop()
 
         if not trace_messages:
+            if timeout_reached:
+                raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s with no messages")
             raise AgentResponseError("No messages received from tool_runner")
 
         # Build outputs
         raw_trace = claude_tool_messages_to_raw_trace(trace_messages)
         if limit_reached:
             raw_trace += "\n\n[Note: Turn limit reached - partial response shown]"
+        if timeout_reached:
+            raw_trace += "\n\n[Note: Agent timed out - partial response shown]"
 
         final_response = self._extract_final_response(trace_messages)
 
@@ -430,8 +444,9 @@ class ClaudeToolAgentAdapter:
             usage=total_usage,
             turns=turns,
             limit_reached=limit_reached,
-            session_id=None,  # tool_runner doesn't provide session IDs
+            session_id=None,
             actual_model=actual_model,
+            timeout_reached=timeout_reached,
         )
 
     def run(

@@ -181,6 +181,9 @@ class AgentResult:
         actual_model: The actual model that generated the response, which may
             differ from the requested model due to fallback or routing. Extracted
             from SDK AssistantMessage.model field.
+        timeout_reached: True if the agent stopped due to a wall-clock timeout
+            rather than completing naturally. Partial trace may be available.
+            Distinct from limit_reached (turn/recursion limit vs wall-clock).
 
     Example:
         >>> result = AgentResult(
@@ -208,6 +211,7 @@ class AgentResult:
     limit_reached: bool
     session_id: str | None = None
     actual_model: str | None = None
+    timeout_reached: bool = False
 
 
 @runtime_checkable

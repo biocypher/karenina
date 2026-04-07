@@ -68,6 +68,9 @@ class AbstentionCheckStage(BaseCheckStage):
         # Skip if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
+        # Skip if response was truncated by streaming timeout
+        if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
+            return False
         return context.abstention_enabled
 
     def _should_trigger_override(self, detected: bool | None, check_performed: bool) -> bool:

@@ -12,13 +12,17 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import with_llm_semaphore
+from karenina.adapters.langchain.usage import extract_usage_from_chunk
 from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import StreamingLLMResponse
 from karenina.ports.usage import UsageMetadata
 
 from .initialization import create_chat_model
@@ -69,11 +73,12 @@ class DeepAgentsLLMAdapter:
         """Declare adapter capabilities.
 
         Returns:
-            PortCapabilities with system_prompt=True and structured_output=True.
+            PortCapabilities with system_prompt, structured_output, and streaming support.
         """
         return PortCapabilities(
             supports_system_prompt=True,
             supports_structured_output=True,
+            supports_streaming=True,
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
@@ -196,6 +201,107 @@ class DeepAgentsLLMAdapter:
             self._config,
             _structured_schema=schema,
         )
+
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+        """Stream LLM response using LangChain's cross-provider astream.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Yields:
+            StreamingLLMResponse that can be iterated for text chunks.
+        """
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+        lc_messages: list[Any] = []
+        for msg in messages:
+            text = msg.text or ""
+            if msg.role.value == "system":
+                lc_messages.append(SystemMessage(content=text))
+            elif msg.role.value == "user":
+                lc_messages.append(HumanMessage(content=text))
+            elif msg.role.value == "assistant":
+                lc_messages.append(AIMessage(content=text))
+
+        chat_model = create_chat_model(self._config)
+        response = StreamingLLMResponse()
+
+        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
+            """Yield text chunks from LangChain's astream, extracting usage from final chunk."""
+            async for chunk in chat_model.astream(lc_messages):
+                text = chunk.content if isinstance(chunk.content, str) else ""
+                if text:
+                    yield text
+                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                    response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+
+        response._set_chunk_source(_chunk_generator())
+        yield response
+        response.is_complete = True
+
+    async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content and is_partial flag.
+        """
+        is_partial = False
+        async with self.astream(messages) as sr:
+            try:
+                async with asyncio.timeout(timeout):
+                    async for _chunk in sr:
+                        pass
+            except TimeoutError:
+                is_partial = True
+                logger.warning(
+                    "Streaming timeout after %ss: captured %d chars of partial response",
+                    timeout,
+                    len(sr.accumulated_content),
+                )
+
+        return LLMResponse(
+            content=sr.accumulated_content,
+            usage=sr.usage,
+            raw=None,
+            is_partial=is_partial,
+            usage_unavailable=is_partial,
+        )
+
+    @with_llm_semaphore
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Stream with wall-clock timeout synchronously.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content. is_partial is True if timeout fired.
+        """
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        portal = get_async_portal()
+
+        if portal is not None:
+            return portal.call(self._astream_with_timeout, messages, timeout)
+
+        try:
+            asyncio.get_running_loop()
+
+            def run_in_thread() -> LLMResponse:
+                return asyncio.run(self._astream_with_timeout(messages, timeout))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result(timeout=(timeout or 300) + 30)
+
+        except RuntimeError:
+            return asyncio.run(self._astream_with_timeout(messages, timeout))
 
     async def aclose(self) -> None:
         """Close underlying resources.

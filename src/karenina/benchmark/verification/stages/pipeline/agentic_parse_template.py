@@ -73,6 +73,8 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             return False
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
+        if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
+            return False
         if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False
         if context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED, False):

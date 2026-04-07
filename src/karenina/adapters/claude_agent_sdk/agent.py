@@ -19,7 +19,6 @@ Key differences from LangChain:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -446,6 +445,11 @@ class ClaudeSDKAgentAdapter:
     ) -> AgentResult:
         """Synchronous wrapper for arun().
 
+        Always uses a dedicated thread with asyncio.run() to give the
+        Claude Agent SDK a fresh event loop, avoiding cancel scope
+        conflicts with BlockingPortal. See _run_in_fresh_loop in
+        the llm module for the full rationale.
+
         Args:
             messages: Initial conversation messages.
             tools: Optional list of Tool definitions.
@@ -460,29 +464,17 @@ class ClaudeSDKAgentAdapter:
             AgentTimeoutError: If execution exceeds the timeout.
             AgentResponseError: If the response is malformed or invalid.
         """
-        from karenina.benchmark.verification.executor import get_async_portal
+        from .llm import _run_in_fresh_loop
 
-        portal = get_async_portal()
-
-        if portal is not None:
-            return portal.call(self.arun, messages, tools, mcp_servers, config)
-
-        # No portal - check if we're in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context - use ThreadPoolExecutor
-
-            def run_in_thread() -> AgentResult:
-                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
-
-            timeout = config.timeout if config and config.timeout else 600
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=timeout)
-
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
+        timeout = config.timeout if config and config.timeout else 600
+        return _run_in_fresh_loop(
+            self.arun,
+            messages,
+            tools,
+            mcp_servers,
+            config,
+            timeout=timeout,
+        )
 
     async def aclose(self) -> None:
         """Close underlying resources.

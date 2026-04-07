@@ -79,6 +79,9 @@ class VerifyTemplateStage(BaseVerificationStage):
         # Skip verification if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
+        # Skip verification if response was truncated by streaming timeout
+        if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
+            return False
         # Skip verification if abstention was detected (model refused to answer)
         if context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED, False):
             return False
