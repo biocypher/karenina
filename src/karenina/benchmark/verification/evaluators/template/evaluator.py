@@ -175,6 +175,7 @@ class TemplateEvaluator:
                 )
         except Exception as e:
             result.error = f"Parsing failed: {e}"
+            result.error_exception = e
             logger.error(result.error)
 
         return result
@@ -324,6 +325,7 @@ class TemplateEvaluator:
 
         except Exception as e:
             result.error = f"Parsing failed: {e}"
+            result.error_exception = e
             logger.debug(f"ParserPort parsing failed: {e}")
 
         return result
@@ -472,6 +474,7 @@ class TemplateEvaluator:
 
         except Exception as e:
             result.error = f"Deep judgment parsing failed: {e}"
+            result.error_exception = e
             logger.error(result.error)
 
         return result

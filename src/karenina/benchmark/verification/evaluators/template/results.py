@@ -21,6 +21,14 @@ class ParseResult:
     error: str | None = None
     """Error message if parsing failed."""
 
+    error_exception: BaseException | None = None
+    """Original exception that caused the failure, preserved for classification.
+
+    Stored so callers can run it through ErrorRegistry.classify() instead of
+    re-parsing the message string. None when parsing succeeded or when the
+    failure has no underlying exception (e.g. trace extraction errors).
+    """
+
     # Deep judgment metadata
     deep_judgment_performed: bool = False
     """Whether deep judgment was used for parsing."""
