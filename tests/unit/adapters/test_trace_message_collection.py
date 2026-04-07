@@ -381,17 +381,17 @@ class TestLangchainTraceCollection:
 # ======================================================================
 
 
-try:
-    import claude_agent_sdk  # noqa: F401
-
-    _has_claude_sdk = True
-except ImportError:
-    _has_claude_sdk = False
-
-
-@pytest.mark.skipif(not _has_claude_sdk, reason="claude_agent_sdk not installed")
 class TestClaudeSDKTraceCollection:
-    """Tests for trace message collection via the claude_agent_sdk adapter."""
+    """Tests for trace message collection via the claude_agent_sdk adapter.
+
+    The claude_agent_sdk package is not a declared dependency of karenina;
+    it must be installed separately. Each test uses ``pytest.importorskip``
+    on ``claude_agent_sdk.types`` to skip when the real package is not
+    available. We probe the ``.types`` submodule because another test
+    module installs a stub for ``claude_agent_sdk`` in ``sys.modules`` and
+    that stub does not provide ``.types``; checking for the submodule
+    reliably distinguishes the real package from the stub.
+    """
 
     def _to_trace(self, messages) -> list[dict]:
         from karenina.adapters.claude_agent_sdk.trace import sdk_messages_to_trace_messages
@@ -399,6 +399,7 @@ class TestClaudeSDKTraceCollection:
         return sdk_messages_to_trace_messages(messages)
 
     def test_simple_response_no_tools(self) -> None:
+        pytest.importorskip("claude_agent_sdk.types")
         from claude_agent_sdk import AssistantMessage
         from claude_agent_sdk.types import TextBlock
 
@@ -410,6 +411,7 @@ class TestClaudeSDKTraceCollection:
         assert trace[0]["content"] == "The answer is 42."
 
     def test_single_tool_call_round_trip(self) -> None:
+        pytest.importorskip("claude_agent_sdk.types")
         from claude_agent_sdk import AssistantMessage
         from claude_agent_sdk.types import TextBlock, ToolResultBlock, ToolUseBlock
 
@@ -433,6 +435,7 @@ class TestClaudeSDKTraceCollection:
         assert trace[0]["tool_result"]["tool_use_id"] == "tc_001"
 
     def test_multi_turn_with_tools(self) -> None:
+        pytest.importorskip("claude_agent_sdk.types")
         from claude_agent_sdk import AssistantMessage
         from claude_agent_sdk.types import TextBlock, ToolResultBlock, ToolUseBlock
 

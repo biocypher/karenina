@@ -6,6 +6,7 @@ Tests astream() and _astream_with_timeout() using mocked claude_agent_sdk.query(
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sys
 import types
 from typing import Any
@@ -66,8 +67,16 @@ def _build_fake_sdk() -> types.ModuleType:
 
 
 # Install the stub so that `from claude_agent_sdk import ...` inside the adapter
-# resolves all names. Preserved and restored to avoid polluting other tests.
+# resolves all names. We eagerly try to import the real SDK first so the
+# original module (if installed) is preserved and restored after these tests
+# finish. Without this preflight, the stub would shadow the real package even
+# in environments where it is installed, causing other test files that depend
+# on the real SDK to fail or be incorrectly skipped.
 _SDK = _build_fake_sdk()
+
+with contextlib.suppress(ImportError):
+    import claude_agent_sdk as _real_sdk  # noqa: F401
+
 _ORIGINAL_SDK = sys.modules.get("claude_agent_sdk")
 sys.modules["claude_agent_sdk"] = _SDK
 
