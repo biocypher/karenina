@@ -113,7 +113,10 @@ class ExecutorConfig:
         max_workers: Maximum number of parallel workers (default: 2)
         enable_cache: Whether to enable answer caching (default: True)
         retry_wait_seconds: Seconds to wait for IN_PROGRESS cache entries (default: 5.0)
-        timeout_seconds: Maximum wall-clock seconds for a parallel batch (default: 600.0)
+        timeout_seconds: Maximum wall-clock seconds for a parallel batch.
+            Set to None (the default) to disable the batch-level timeout; the
+            executor then runs until all tasks finish. Set to a positive float
+            to enforce a ceiling.
         max_requeue_count: Maximum times a task can be requeued before forcing a
             fresh generation (default: 5). When exceeded, the cache entry is reset
             and the task restarts with retry_count=0.
@@ -122,7 +125,7 @@ class ExecutorConfig:
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
     enable_cache: bool = True
     retry_wait_seconds: float = 5.0
-    timeout_seconds: float = 600.0
+    timeout_seconds: float | None = None
     max_requeue_count: int = 5
 
 
@@ -392,14 +395,67 @@ class VerificationExecutor:
                 # Sweep futures that completed between last yield and timeout
                 for future, (_idx, question_id) in future_to_meta.items():
                     if future.done() and future not in collected:
+                        collected.add(future)
                         try:
                             result_idx, (result_key, verification_result) = future.result()
                             results_by_index[result_idx] = (result_key, verification_result)
                         except BaseException as e:
                             failed_tasks.append((question_id, e))
         finally:
-            pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
-            # Clean up worker portals (event loops)
+            # Always wait for pool workers to finish before tearing down
+            # worker portals. With wait=False, in-flight workers could
+            # outlive their portals and crash on callback dispatch with
+            # "cannot schedule new futures after shutdown", or set Future
+            # results that are never harvested (silent drop).
+            pool.shutdown(wait=True, cancel_futures=timed_out)
+
+            # Post-shutdown sweep: after wait=True returns, every future is
+            # in a terminal state. Harvest any futures that finished while
+            # the pool was draining, so in-flight tasks are reflected in
+            # partial_results or errors instead of being silently dropped.
+            if timed_out:
+                for future, (_idx, question_id) in future_to_meta.items():
+                    if future in collected:
+                        continue
+                    if future.cancelled():
+                        failed_tasks.append(
+                            (
+                                question_id,
+                                TimeoutError(f"Task cancelled before start: {question_id}"),
+                            )
+                        )
+                        collected.add(future)
+                        continue
+                    try:
+                        result_idx, (result_key, verification_result) = future.result()
+                        results_by_index[result_idx] = (result_key, verification_result)
+                    except BaseException as e:
+                        failed_tasks.append((question_id, e))
+                    collected.add(future)
+
+            # Drop-detection invariant. After pool.shutdown(wait=True) every
+            # future must be in a terminal state, so the sweeps above should
+            # have covered everything. If this fires, the shutdown race has
+            # reopened and tasks were being lost.
+            uncollected = [(future, meta) for future, meta in future_to_meta.items() if future not in collected]
+            if uncollected:
+                logger.error(
+                    "Parallel executor dropped %d tasks after pool.shutdown(wait=True). "
+                    "Emitting synthetic failure entries.",
+                    len(uncollected),
+                )
+                for future, (_idx, question_id) in uncollected:
+                    failed_tasks.append(
+                        (
+                            question_id,
+                            TimeoutError(f"Task left uncollected by parallel executor: {question_id}"),
+                        )
+                    )
+                    collected.add(future)
+
+            # Clean up worker portals (event loops) only after workers have
+            # fully exited, so no worker can still be using a portal when
+            # its context manager exits.
             for cm in _portal_cms:
                 try:
                     cm.__exit__(None, None, None)
@@ -416,11 +472,16 @@ class VerificationExecutor:
         if answer_cache:
             log_cache_stats(answer_cache, mode="parallel mode")
 
-        # Handle timeout
+        # Handle timeout. as_completed only raises TimeoutError when a finite
+        # timeout was passed, so timeout_seconds is guaranteed non-None here.
         if timed_out:
+            timeout_label = (
+                f"{self.config.timeout_seconds:.0f} seconds"
+                if self.config.timeout_seconds is not None
+                else "unknown timeout"
+            )
             raise VerificationBatchError(
-                f"Parallel batch timed out after {self.config.timeout_seconds:.0f} seconds "
-                f"({len(results)} of {total} tasks completed)",
+                f"Parallel batch timed out after {timeout_label} ({len(results)} of {total} tasks completed)",
                 partial_results=results,
                 errors=failed_tasks,
             )

@@ -364,10 +364,10 @@ class TestTimeoutSafetyNet:
         config = ExecutorConfig(timeout_seconds=30.0)
         assert config.timeout_seconds == 30.0
 
-    def test_default_timeout_is_600_seconds(self) -> None:
-        """Default timeout is 600 seconds (10 minutes)."""
+    def test_default_timeout_is_none(self) -> None:
+        """Default timeout is None (no batch-level ceiling)."""
         config = ExecutorConfig()
-        assert config.timeout_seconds == 600.0
+        assert config.timeout_seconds is None
 
 
 # ============================================================================
@@ -616,3 +616,107 @@ class TestPerWorkerPortals:
 
         # 2 portal creations (one per worker, reused across tasks)
         assert portal_count[0] == 2, f"Expected 2 portal creations (one per worker), got {portal_count[0]}"
+
+
+# ============================================================================
+# Shutdown race: in-flight tasks must not be silently dropped on timeout
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestInFlightTasksNotSilentlyDropped:
+    """Parallel batch timeout must not silently drop tasks still in-flight.
+
+    When a parallel batch hits ``timeout_seconds``, the pre-fix implementation
+    called ``pool.shutdown(wait=False, cancel_futures=True)`` and immediately
+    tore down per-worker portals. Tasks still in the RUNNING state at that
+    moment were silently dropped: their eventual result set on the Future
+    object was never harvested into ``partial_results``.
+
+    These tests reproduce that race deterministically and assert that every
+    submitted task shows up in either ``partial_results`` or ``errors`` of
+    the raised ``VerificationBatchError``.
+    """
+
+    def test_slow_tasks_finishing_after_timeout_are_recovered(self, monkeypatch) -> None:
+        """Four tasks: two fast, two slow. Slow tasks finish a short time
+        after the batch timeout fires. All four must be accounted for in
+        the raised VerificationBatchError (partial_results + errors).
+        """
+        import time
+
+        tasks = [_make_task(f"q{i}") for i in range(4)]
+        fast_ids = {"q0", "q1"}
+        slow_delay = 0.8  # slow tasks finish ~0.5s after the batch timeout
+
+        def mock_execute_task(task, answer_cache=None, **kwargs):
+            if task["question_id"] not in fast_ids:
+                time.sleep(slow_delay)
+            return (f"key_{task['question_id']}", _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        executor = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(max_workers=4, enable_cache=False, timeout_seconds=0.3),
+        )
+
+        with pytest.raises(VerificationBatchError) as exc_info:
+            executor.run_batch(tasks)
+
+        err = exc_info.value
+        accounted_for: set[str] = set()
+        for result_key in err.partial_results:
+            # result_key shape is "key_qN" from the mock above
+            for qid in ("q0", "q1", "q2", "q3"):
+                if qid in result_key:
+                    accounted_for.add(qid)
+        for question_id, _exc in err.errors:
+            accounted_for.add(question_id)
+
+        assert accounted_for == {"q0", "q1", "q2", "q3"}, (
+            f"Tasks silently dropped. partial_results={list(err.partial_results)}, "
+            f"errors={[(q, type(e).__name__) for q, e in err.errors]}"
+        )
+
+    def test_slow_task_failing_after_timeout_is_recorded_per_task(self, monkeypatch) -> None:
+        """A slow task that raises after the batch timeout must appear as a
+        per-task entry in ``errors``, not be silently dropped.
+        """
+        import time
+
+        tasks = [_make_task(f"q{i}") for i in range(4)]
+        fast_ids = {"q0", "q1"}
+
+        def mock_execute_task(task, answer_cache=None, **kwargs):
+            qid = task["question_id"]
+            if qid not in fast_ids:
+                time.sleep(0.8)
+                raise RuntimeError(f"task {qid} broke late")
+            return (f"key_{qid}", _make_result(qid))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        executor = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(max_workers=4, enable_cache=False, timeout_seconds=0.3),
+        )
+
+        with pytest.raises(VerificationBatchError) as exc_info:
+            executor.run_batch(tasks)
+
+        err = exc_info.value
+        # Fast tasks land in partial_results
+        fast_keys = {k for k in err.partial_results if any(q in k for q in fast_ids)}
+        assert len(fast_keys) == 2
+
+        # Slow tasks must each appear as a per-task error entry
+        error_qids = {qid for qid, exc in err.errors if isinstance(exc, RuntimeError)}
+        assert "q2" in error_qids
+        assert "q3" in error_qids

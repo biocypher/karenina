@@ -53,14 +53,16 @@ class ScenarioExecutorConfig:
         max_workers: Maximum number of parallel worker threads.
         max_concurrent_requests: Global LLM semaphore permits. None disables the semaphore.
         enable_cache: Whether to enable node-level answer caching.
-        timeout_seconds: Maximum wall-clock seconds for a parallel batch (higher default
-            than VerificationExecutor since scenarios are multi-turn).
+        timeout_seconds: Maximum wall-clock seconds for a parallel batch. Set
+            to None (the default) to disable the batch-level timeout; the
+            executor then runs until all combos finish. Set to a positive float
+            to enforce a ceiling.
     """
 
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
     max_concurrent_requests: int | None = None
     enable_cache: bool = True
-    timeout_seconds: float = 1200.0
+    timeout_seconds: float | None = None
 
 
 # ============================================================================
@@ -299,6 +301,13 @@ class ScenarioExecutor:
                 # Collect results as they complete
                 collected: set[Future[tuple[int, ScenarioExecutionResult]]] = set()
                 timed_out = False
+                # Snapshot of indices still in-flight at the moment the batch
+                # timeout fires, taken before the post-shutdown drain runs.
+                # Used for diagnostic messages so operators can see what was
+                # running at the timeout even if those combos are later
+                # recovered by pool.shutdown(wait=True).
+                in_flight_at_timeout: set[int] = set()
+                completed_at_timeout = 0
                 try:
                     for future in as_completed(future_to_meta, timeout=self.config.timeout_seconds):
                         collected.add(future)
@@ -319,14 +328,71 @@ class ScenarioExecutor:
                     # Sweep futures that completed between last yield and timeout
                     for future, (_idx, combo_desc) in future_to_meta.items():
                         if future.done() and future not in collected:
+                            collected.add(future)
                             try:
                                 result_idx, exec_result = future.result()
                                 results_by_index[result_idx] = exec_result
                             except BaseException as e:
                                 failed_tasks.append((combo_desc, e))
+                    # Snapshot indices that were in-flight (not in
+                    # results_by_index) at this moment, before the post-shutdown
+                    # drain runs. The drain may recover some of these.
+                    completed_at_timeout = len(results_by_index)
+                    in_flight_at_timeout = {idx for idx in range(total) if idx not in results_by_index}
             finally:
-                pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
-                # Clean up worker portals (event loops)
+                # Always wait for pool workers to finish before tearing down
+                # worker portals. With wait=False, in-flight workers could
+                # outlive their portals and crash on callback dispatch with
+                # "cannot schedule new futures after shutdown", or set Future
+                # results that are never harvested (silent drop).
+                pool.shutdown(wait=True, cancel_futures=timed_out)
+
+                # Post-shutdown sweep: after wait=True returns, every future
+                # is in a terminal state. Harvest any futures that finished
+                # (successfully or with an error) while the pool was draining.
+                if timed_out:
+                    for future, (_idx, combo_desc) in future_to_meta.items():
+                        if future in collected:
+                            continue
+                        if future.cancelled():
+                            failed_tasks.append(
+                                (
+                                    combo_desc,
+                                    TimeoutError(f"Combo cancelled before start: {combo_desc}"),
+                                )
+                            )
+                            collected.add(future)
+                            continue
+                        try:
+                            result_idx, exec_result = future.result()
+                            results_by_index[result_idx] = exec_result
+                        except BaseException as e:
+                            failed_tasks.append((combo_desc, e))
+                        collected.add(future)
+
+                # Drop-detection invariant. After pool.shutdown(wait=True)
+                # every future must be in a terminal state, so the sweeps
+                # above should have covered everything. If this fires, the
+                # shutdown race has reopened and combos were being lost.
+                uncollected = [(future, meta) for future, meta in future_to_meta.items() if future not in collected]
+                if uncollected:
+                    logger.error(
+                        "Parallel executor dropped %d combos after pool.shutdown(wait=True). "
+                        "Emitting synthetic failure entries.",
+                        len(uncollected),
+                    )
+                    for future, (_idx, combo_desc) in uncollected:
+                        failed_tasks.append(
+                            (
+                                combo_desc,
+                                TimeoutError(f"Combo left uncollected by parallel executor: {combo_desc}"),
+                            )
+                        )
+                        collected.add(future)
+
+                # Clean up worker portals (event loops) only after workers
+                # have fully exited, so no worker can still be using a portal
+                # when its context manager exits.
                 for cm in _portal_cms:
                     try:
                         cm.__exit__(None, None, None)
@@ -341,24 +407,43 @@ class ScenarioExecutor:
             results.append(results_by_index[idx])
 
         if timed_out:
-            # Log partial progress for in-flight combos
+            # Log partial progress for combos that were in-flight at the
+            # moment the timeout fired. Some of these may have been recovered
+            # by the post-shutdown drain and now appear in results_by_index;
+            # the diagnostic message still reports them so operators can see
+            # what was running at the critical moment.
             in_flight_info: list[str] = []
-            for idx in range(total):
-                if idx not in results_by_index and idx in partial_progress:
+            for idx in sorted(in_flight_at_timeout):
+                if idx in partial_progress:
                     info = partial_progress[idx]
                     in_flight_info.append(
                         f"  combo {idx}: {info['scenario_id']} reached turn {info['turn']} at node {info['node']}"
                     )
 
-            completed_count_final = len(results_by_index)
-            partial_count = len(in_flight_info)
+            in_flight_count = len(in_flight_at_timeout)
+            not_started = total - completed_at_timeout - in_flight_count
+            # as_completed only raises TimeoutError when a finite timeout was
+            # passed, so timeout_seconds is guaranteed non-None here.
+            timeout_label = (
+                f"{self.config.timeout_seconds:.0f}s" if self.config.timeout_seconds is not None else "unknown timeout"
+            )
             timeout_msg = (
-                f"Parallel scenario batch timed out after {self.config.timeout_seconds:.0f}s "
-                f"({completed_count_final} completed, {partial_count} in-flight, "
-                f"{total - completed_count_final - partial_count} not started of {total} combos)"
+                f"Parallel scenario batch timed out after {timeout_label} "
+                f"({completed_at_timeout} completed, {in_flight_count} in-flight, "
+                f"{not_started} not started of {total} combos)"
             )
             if in_flight_info:
                 timeout_msg += "\nIn-flight combo progress:\n" + "\n".join(in_flight_info)
+
+            # Report how many in-flight combos were recovered vs lost after
+            # the drain finished.
+            recovered_from_drain = sum(1 for idx in in_flight_at_timeout if idx in results_by_index)
+            if recovered_from_drain:
+                timeout_msg += (
+                    f"\nRecovered {recovered_from_drain} of {in_flight_count} in-flight "
+                    f"combos during post-shutdown drain."
+                )
+
             logger.error("%s", timeout_msg)
             failed_tasks.append((timeout_msg, TimeoutError(timeout_msg)))
 

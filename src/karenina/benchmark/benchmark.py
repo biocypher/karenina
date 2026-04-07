@@ -872,7 +872,6 @@ class Benchmark:
                 max_workers=config.async_max_workers,
                 max_concurrent_requests=config.max_concurrent_requests,
                 enable_cache=True,
-                timeout_seconds=1200.0,
             ),
         )
 
