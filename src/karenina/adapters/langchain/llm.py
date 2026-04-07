@@ -331,7 +331,9 @@ class LangChainLLMAdapter:
             StreamingTimeoutError: If retries are exhausted and the stream
                 still exceeds the wall-clock timeout.
         """
-        result: LLMResponse = self._retry_executor.execute(self._stream_invoke_once, messages, timeout)
+        result: LLMResponse = self._retry_executor.execute_with_timeout(
+            self._stream_invoke_once, messages, timeout=timeout
+        )
         return result
 
     def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
@@ -411,12 +413,60 @@ class LangChainLLMAdapter:
     async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
         """Invoke LLM for regular text output."""
         lc_messages = self._converter.to_provider(messages)
-        response = await self._retry_executor.aexecute(self._model.ainvoke, lc_messages)
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._ainvoke_with_timeout,
+            self._model,
+            lc_messages,
+            timeout=self._config.request_timeout,
+        )
 
         content = str(response.content) if hasattr(response, "content") else str(response)
         usage = extract_usage_from_response(response, model_name=self._config.model_name)
 
         return LLMResponse(content=content, usage=usage, raw=response)
+
+    async def _ainvoke_with_timeout(
+        self,
+        model: Any,
+        lc_messages: list[Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """Call ``model.ainvoke`` under a wall-clock timeout as a guardrail.
+
+        LangChain's ``ainvoke`` (especially the structured-output and
+        usage-metadata-callback paths) can stall internally without ever
+        raising. The httpx ``request_timeout`` does not catch every such case,
+        so this karenina-layer ``asyncio.wait_for`` enforces a hard
+        per-attempt wall-clock budget.
+
+        A fired timeout raises a stock ``asyncio.TimeoutError``, which
+        ``ErrorRegistry`` classifies as ``TIMEOUT`` via the built-in MRO
+        check. The configured timeout retry budget then applies inside
+        ``RetryExecutor.aexecute_with_timeout``, which can also escalate
+        the per-attempt timeout via ``RetryPolicy.timeout_escalation``.
+
+        When ``timeout`` is None, falls back to ``self._config.request_timeout``.
+        When that is also None, the call is made without any wrapper to
+        preserve the previous behavior.
+
+        Args:
+            model: The LangChain model exposing ``ainvoke``.
+            lc_messages: Provider-formatted messages to send.
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+
+        Returns:
+            The raw model response object.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        if timeout is None:
+            timeout = self._config.request_timeout
+        if timeout is None:
+            return await model.ainvoke(lc_messages)
+        return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
 
     # =========================================================================
     # Structured Output (main flow)
@@ -478,7 +528,12 @@ class LangChainLLMAdapter:
                 # Use callback to capture usage since with_structured_output
                 # may return a BaseModel directly (losing response_metadata)
                 with get_usage_metadata_callback() as cb:
-                    response = await self._retry_executor.aexecute(self._structured_model.ainvoke, lc_messages)
+                    response = await self._retry_executor.aexecute_with_timeout(
+                        self._ainvoke_with_timeout,
+                        self._structured_model,
+                        lc_messages,
+                        timeout=self._config.request_timeout,
+                    )
 
                 if isinstance(response, BaseModel):
                     # Prefer callback usage (reliable), fall back to response extraction
@@ -543,7 +598,12 @@ class LangChainLLMAdapter:
         # Use base model for fallback (not the structured model)
         model_to_use = self._base_model if self._base_model is not None else self._model
         lc_messages = self._converter.to_provider(augmented_messages)
-        response = await self._retry_executor.aexecute(model_to_use.ainvoke, lc_messages)
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._ainvoke_with_timeout,
+            model_to_use,
+            lc_messages,
+            timeout=self._config.request_timeout,
+        )
 
         # Extract and parse response
         text_content = str(response.content) if hasattr(response, "content") else str(response)
