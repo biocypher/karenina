@@ -117,6 +117,7 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 | [Deep Judgment: Rubrics](deep-judgment-rubrics.md) | Per-trait deep judgment configuration and modes |
 | [Prompt Assembly System](prompt-assembly.md) | Tri-section prompt pattern, `PromptAssembler`, `AdapterInstructionRegistry` |
 | [Custom Stages](custom-stages.md) | `BaseVerificationStage` interface, writing and registering new stages |
+| [Error Handling and Retries](../notebooks/advanced/pipeline/error-handling.ipynb) | `ErrorRegistry`, `RetryPolicy`, `RetryExecutor`, timeout escalation, retry observability |
 
 ## Related
 
