@@ -37,7 +37,7 @@ class TestClaudeSDKParserAnthropicRetry:
     """Verify max_retries is passed to the Anthropic client in the parser."""
 
     def test_anthropic_client_receives_default_max_retries(self) -> None:
-        """Default RetryPolicy yields max_retries=3."""
+        """Default RetryPolicy yields max_retries=5."""
         config = _make_config()
         parser = ClaudeSDKParserAdapter(config)
 
@@ -46,7 +46,7 @@ class TestClaudeSDKParserAnthropicRetry:
             parser._get_anthropic_client()
 
             _, kwargs = mock_cls.call_args
-            assert kwargs["max_retries"] == 3
+            assert kwargs["max_retries"] == 5
 
     def test_anthropic_client_custom_policy(self) -> None:
         """Custom policy propagates to Anthropic client."""
@@ -87,7 +87,7 @@ class TestClaudeSDKParserOpenAIRetry:
     """Verify max_retries is passed to the OpenAI client in the parser."""
 
     def test_openai_client_receives_default_max_retries(self) -> None:
-        """Default RetryPolicy yields max_retries=3 for OpenAI client."""
+        """Default RetryPolicy yields max_retries=5 for OpenAI client."""
         config = _make_config(anthropic_base_url="http://localhost:8000/v1")
         parser = ClaudeSDKParserAdapter(config)
 
@@ -96,7 +96,7 @@ class TestClaudeSDKParserOpenAIRetry:
             parser._get_openai_client()
 
             _, kwargs = mock_cls.call_args
-            assert kwargs["max_retries"] == 3
+            assert kwargs["max_retries"] == 5
 
     def test_openai_client_custom_policy(self) -> None:
         """Custom policy propagates to OpenAI client."""

@@ -42,7 +42,7 @@ class TestClaudeToolSDKRetryFromPolicy:
 
             _, kwargs = mock_cls.call_args
             # Default policy: connection=3, timeout=1, rate_limit=3, server=2 -> max=3
-            assert kwargs["max_retries"] == 3
+            assert kwargs["max_retries"] == 5
 
     def test_async_client_receives_default_max_retries(self) -> None:
         """Default RetryPolicy yields max_retries=3 for async client too."""
@@ -54,7 +54,7 @@ class TestClaudeToolSDKRetryFromPolicy:
             adapter._get_async_client()
 
             _, kwargs = mock_cls.call_args
-            assert kwargs["max_retries"] == 3
+            assert kwargs["max_retries"] == 5
 
     def test_custom_policy_max_retries_propagated(self) -> None:
         """Custom RetryPolicy with high connection attempts propagates to SDK."""
@@ -115,4 +115,4 @@ class TestClaudeToolSDKRetryFromPolicy:
 
             _, kwargs = mock_cls.call_args
             # Default: max(connection=3, timeout=1, rate_limit=3, server=2) = 3
-            assert kwargs["max_retries"] == 3
+            assert kwargs["max_retries"] == 5

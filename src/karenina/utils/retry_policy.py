@@ -73,14 +73,14 @@ class RetryPolicy(BaseModel):
     )
     timeout: CategoryRetryConfig = Field(
         default_factory=lambda: CategoryRetryConfig(
-            max_attempts=1,
-            backoff_min=2.0,
-            backoff_max=5.0,
+            max_attempts=3,
+            backoff_min=5.0,
+            backoff_max=30.0,
         ),
     )
     rate_limit: CategoryRetryConfig = Field(
         default_factory=lambda: CategoryRetryConfig(
-            max_attempts=3,
+            max_attempts=5,
             backoff_min=5.0,
             backoff_max=30.0,
         ),

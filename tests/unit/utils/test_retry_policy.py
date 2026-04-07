@@ -89,13 +89,13 @@ class TestRetryPolicy:
 
     def test_default_timeout(self) -> None:
         policy = RetryPolicy()
-        assert policy.timeout.max_attempts == 1
-        assert policy.timeout.backoff_min == 2.0
-        assert policy.timeout.backoff_max == 5.0
+        assert policy.timeout.max_attempts == 3
+        assert policy.timeout.backoff_min == 5.0
+        assert policy.timeout.backoff_max == 30.0
 
     def test_default_rate_limit(self) -> None:
         policy = RetryPolicy()
-        assert policy.rate_limit.max_attempts == 3
+        assert policy.rate_limit.max_attempts == 5
         assert policy.rate_limit.backoff_min == 5.0
         assert policy.rate_limit.backoff_max == 30.0
 
@@ -107,8 +107,8 @@ class TestRetryPolicy:
 
     def test_derive_sdk_max_retries_defaults(self) -> None:
         policy = RetryPolicy()
-        # max of (3, 1, 3, 2) = 3
-        assert policy.derive_sdk_max_retries() == 3
+        # max of (3, 3, 5, 2) = 5
+        assert policy.derive_sdk_max_retries() == 5
 
     def test_derive_sdk_max_retries_custom(self) -> None:
         policy = RetryPolicy(

@@ -255,11 +255,11 @@ class TestErrorRegistryClassification:
         err = StreamingTimeoutError("streaming timed out", partial_content="The answer")
         assert registry.classify(err) == ErrorCategory.TIMEOUT
 
-    def test_streaming_timeout_zero_content_is_rate_limit(self) -> None:
-        """No content = queue congestion = RATE_LIMIT (more retries)."""
+    def test_streaming_timeout_zero_content_is_timeout(self) -> None:
+        """Zero content or not, a timeout is a timeout."""
         registry = ErrorRegistry()
         err = StreamingTimeoutError("streaming timed out", partial_content="")
-        assert registry.classify(err) == ErrorCategory.RATE_LIMIT
+        assert registry.classify(err) == ErrorCategory.TIMEOUT
 
     def test_rate_limit_error_by_type_name(self) -> None:
         """A class named RateLimitError is classified as RATE_LIMIT."""
