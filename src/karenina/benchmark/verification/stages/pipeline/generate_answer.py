@@ -437,6 +437,21 @@ class GenerateAnswerStage(BaseVerificationStage):
                 f"Full traceback:\n{error_details}"
             )
 
+            # StreamingTimeoutError with partial content: salvage what we have
+            # instead of discarding it. The pipeline can continue with truncated
+            # output (downstream stages handle partial responses).
+            from karenina.exceptions import StreamingTimeoutError
+
+            if isinstance(e, StreamingTimeoutError) and e.partial_content:
+                raw_llm_response = f"--- AI Message ---\n{e.partial_content}"
+                self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
+                self.set_artifact_and_result(context, "response_timeout_partial", True)
+                self.set_artifact_and_result(context, "recursion_limit_reached", False)
+                context.add_warning(
+                    f"Response truncated by streaming timeout after retries ({len(e.partial_content)} chars captured)"
+                )
+                return
+
             # Mark error (category classification determines if scenario retries)
             error_msg = f"Adapter call failed: {type(e).__name__}: {e}"
             context.mark_error(error_msg, category=context.error_registry.classify(e))
