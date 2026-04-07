@@ -444,7 +444,9 @@ class ClaudeSDKLLMAdapter:
             StreamingTimeoutError: If retries are exhausted and the stream
                 still exceeds the wall-clock timeout.
         """
-        result: LLMResponse = self._retry_executor.execute(self._stream_invoke_once, messages, timeout)
+        result: LLMResponse = self._retry_executor.execute_with_timeout(
+            self._stream_invoke_once, messages, timeout=timeout
+        )
         return result
 
     def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
