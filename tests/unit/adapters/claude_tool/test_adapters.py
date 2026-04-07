@@ -86,7 +86,7 @@ class TestClaudeToolAdapterInitialization:
 
         assert structured_adapter is not adapter
         assert structured_adapter._structured_schema == TestSchema
-        assert structured_adapter._max_retries == 3  # Default
+        assert structured_adapter._max_retries == 3  # Default (structured output validation retries)
 
     def test_llm_adapter_with_structured_output_custom_retries(self, model_config: Any) -> None:
         """Test with_structured_output respects max_retries parameter."""

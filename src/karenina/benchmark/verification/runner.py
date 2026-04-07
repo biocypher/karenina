@@ -19,10 +19,34 @@ from karenina.schemas.verification.config import (
     DeepJudgmentRubricCustomConfig,
 )
 from karenina.utils.checkpoint import generate_template_id
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
+from karenina.utils.retry_policy import ErrorPatternConfig
 
 from .stages import StageOrchestrator, VerificationContext
 
 logger = logging.getLogger(__name__)
+
+
+def _build_error_registry(patterns: list[ErrorPatternConfig]) -> ErrorRegistry:
+    """Build an ErrorRegistry from declarative error pattern configs.
+
+    Creates a fresh ErrorRegistry with built-in defaults, then registers
+    each user-defined pattern from the config.
+
+    Args:
+        patterns: List of ErrorPatternConfig from VerificationConfig.custom_error_patterns.
+
+    Returns:
+        Configured ErrorRegistry with both built-in and custom patterns.
+    """
+    registry = ErrorRegistry()
+    for pattern_config in patterns:
+        registry.register_pattern(
+            pattern_config.pattern,
+            ErrorCategory(pattern_config.category),
+            match_type=pattern_config.match_type,
+        )
+    return registry
 
 
 def run_single_model_verification(
@@ -82,6 +106,8 @@ def run_single_model_verification(
     embedding_check_threshold: float | None = None,
     # Trait provenance
     trait_provenance: dict[str, str] | None = None,
+    # Error classification
+    custom_error_patterns: list[ErrorPatternConfig] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -198,6 +224,8 @@ def run_single_model_verification(
         embedding_check_threshold=embedding_check_threshold,
         # Trait Provenance
         trait_provenance=trait_provenance,
+        # Error Classification
+        error_registry=_build_error_registry(custom_error_patterns or []),
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)

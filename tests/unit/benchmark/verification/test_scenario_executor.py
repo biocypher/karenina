@@ -349,7 +349,7 @@ class TestScenarioExecutorConfig:
         assert cfg.max_workers == 2  # DEFAULT_ASYNC_MAX_WORKERS
         assert cfg.max_concurrent_requests is None
         assert cfg.enable_cache is True
-        assert cfg.timeout_seconds == 1200.0
+        assert cfg.timeout_seconds is None
 
     def test_custom_values(self) -> None:
         """Custom values override defaults."""

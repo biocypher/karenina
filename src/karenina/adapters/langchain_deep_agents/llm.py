@@ -24,6 +24,8 @@ from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
 from karenina.ports.usage import UsageMetadata
+from karenina.utils.errors import ErrorRegistry
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .initialization import create_chat_model
 from .messages import DeepAgentsMessageConverter
@@ -67,6 +69,9 @@ class DeepAgentsLLMAdapter:
         self._config = model_config
         self._converter = DeepAgentsMessageConverter()
         self._structured_schema = _structured_schema
+
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
 
     @property
     def capabilities(self) -> PortCapabilities:
@@ -248,41 +253,57 @@ class DeepAgentsLLMAdapter:
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content and is_partial flag.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
         """
-        is_partial = False
         async with self.astream(messages) as sr:
             try:
                 async with asyncio.timeout(timeout):
                     async for _chunk in sr:
                         pass
             except TimeoutError:
-                is_partial = True
-                logger.warning(
-                    "Streaming timeout after %ss: captured %d chars of partial response",
-                    timeout,
-                    len(sr.accumulated_content),
-                )
+                from karenina.exceptions import StreamingTimeoutError
+
+                raise StreamingTimeoutError(
+                    f"Streaming timed out after {timeout}s",
+                    partial_content=sr.accumulated_content,
+                ) from None
 
         return LLMResponse(
             content=sr.accumulated_content,
             usage=sr.usage,
             raw=None,
-            is_partial=is_partial,
-            usage_unavailable=is_partial,
         )
 
     @with_llm_semaphore
     def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
         """Stream with wall-clock timeout synchronously.
 
+        Uses streaming internally so that partial content can be captured on
+        timeout. Returns the same LLMResponse type as invoke(). Retries via
+        RetryExecutor on transient errors (including StreamingTimeoutError
+        with zero content, classified as RATE_LIMIT for queue congestion).
+
         Args:
             messages: List of unified Message objects.
             timeout: Wall-clock timeout in seconds. None means no timeout.
 
         Returns:
-            LLMResponse with accumulated content. is_partial is True if timeout fired.
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If retries are exhausted and the stream
+                still exceeds the wall-clock timeout.
         """
+        result: LLMResponse = self._retry_executor.execute_with_timeout(
+            self._stream_invoke_once, messages, timeout=timeout
+        )
+        return result
+
+    def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Single stream_invoke attempt (no retry). Called by RetryExecutor."""
         from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()

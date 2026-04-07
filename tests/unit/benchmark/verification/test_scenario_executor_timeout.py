@@ -74,7 +74,7 @@ class TestSlowCombosWithBatchTimeout:
             if cb:
                 cb(scenario_id="slow_scenario", scenario_turn=5, scenario_node="node_B")
             # Block past both batch timeout (0.5s) and worker join (5s)
-            block_forever.wait(timeout=30.0)
+            block_forever.wait(timeout=2.0)
             return _make_exec_result("slow_scenario")
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -115,7 +115,7 @@ class TestSlowCombosWithBatchTimeout:
             cb = kwargs.get("progress_callback")
             if cb:
                 cb(scenario_id=kwargs["scenario"].name, scenario_turn=1, scenario_node="root")
-            block_forever.wait(timeout=30.0)
+            block_forever.wait(timeout=2.0)
             return _make_exec_result(kwargs["scenario"].name)
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -246,7 +246,7 @@ class TestProgressCallbackWiring:
                 cb(scenario_id="multi_turn", scenario_turn=2, scenario_node="followup")
                 cb(scenario_id="multi_turn", scenario_turn=3, scenario_node="conclusion")
             # Block past batch timeout and worker join
-            block_forever.wait(timeout=30.0)
+            block_forever.wait(timeout=2.0)
             return _make_exec_result("multi_turn")
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -337,7 +337,7 @@ class TestMixedCompletionAndTimeout:
                 if cb:
                     cb(scenario_id="slow", scenario_turn=2, scenario_node="stuck_node")
                 # Block past both batch timeout and worker join
-                block_forever.wait(timeout=30.0)
+                block_forever.wait(timeout=2.0)
                 return _make_exec_result("slow")
             return _make_exec_result("fast")
 

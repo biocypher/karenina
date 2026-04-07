@@ -1,4 +1,9 @@
-"""Tests for ScenarioManager per-turn retry on transient errors."""
+"""Tests for ScenarioManager turn failure behavior (no retry).
+
+The scenario turn retry loop has been removed. The adapter handles retries
+internally. When a turn fails, the scenario terminates immediately with
+status 'error'.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +34,7 @@ def _make_model(name: str = "test-model") -> ModelConfig:
 def _make_vr(
     *,
     completed: bool = True,
-    transient: bool = False,
+    error_category: str | None = None,
     error: str | None = None,
     verify_result: bool | None = True,
 ) -> VerificationResult:
@@ -40,7 +45,7 @@ def _make_vr(
         template_id="tpl1",
         completed_without_errors=completed,
         error=error,
-        is_transient_error=transient,
+        error_category=error_category,
         question_text="What?",
         answering=identity,
         parsing=identity,
@@ -85,11 +90,11 @@ def _make_config(**overrides) -> VerificationConfig:
 
 
 @pytest.mark.unit
-class TestScenarioManagerTurnRetry:
-    """Per-turn retry when _run_turn returns a transient error VR."""
+class TestScenarioManagerNoTurnRetry:
+    """Turn failures terminate the scenario immediately; no retry loop."""
 
     @patch.object(ScenarioManager, "_run_turn")
-    def test_no_retry_on_success(self, mock_run_turn: MagicMock) -> None:
+    def test_successful_turn_calls_run_turn_once(self, mock_run_turn: MagicMock) -> None:
         """Successful turn: _run_turn called once, scenario completes."""
         vr_ok = _make_vr(completed=True)
         mock_run_turn.return_value = (vr_ok, None, None, "answer")
@@ -104,198 +109,79 @@ class TestScenarioManagerTurnRetry:
         assert result.status == "completed"
         assert mock_run_turn.call_count == 1
 
-    @patch("karenina.scenario.manager.time.sleep")
     @patch.object(ScenarioManager, "_run_turn")
-    def test_retry_on_transient_error_then_success(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
-        """Transient error on first attempt, success on second."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
-        vr_ok = _make_vr(completed=True)
-        mock_run_turn.side_effect = [
-            (vr_fail, None, None, ""),
-            (vr_ok, None, None, "answer"),
-        ]
-
-        manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
-        result = manager.run(
-            scenario=_make_scenario(),
-            config=config,
-            base_answering_model=_make_model(),
-            base_parsing_model=_make_model(),
-        )
-        assert result.status == "completed"
-        assert mock_run_turn.call_count == 2
-
-    @patch.object(ScenarioManager, "_run_turn")
-    def test_no_retry_on_permanent_error(self, mock_run_turn: MagicMock) -> None:
-        """Non-transient error: no retry, status is 'error'."""
-        vr_fail = _make_vr(completed=False, transient=False, error="ValueError: bad")
+    def test_transient_error_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
+        """Transient error terminates the scenario; no retry attempted."""
+        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection error")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=3)
         result = manager.run(
             scenario=_make_scenario(),
-            config=config,
+            config=_make_config(),
             base_answering_model=_make_model(),
             base_parsing_model=_make_model(),
         )
         assert result.status == "error"
         assert mock_run_turn.call_count == 1
 
-    @patch("karenina.scenario.manager.time.sleep")
     @patch.object(ScenarioManager, "_run_turn")
-    def test_retries_exhaust_then_error(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
-        """All retry attempts fail with transient errors."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
+    def test_permanent_error_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
+        """Permanent error terminates the scenario; no retry attempted."""
+        vr_fail = _make_vr(completed=False, error_category="permanent", error="ValueError: bad")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=3)
         result = manager.run(
             scenario=_make_scenario(),
-            config=config,
+            config=_make_config(),
             base_answering_model=_make_model(),
             base_parsing_model=_make_model(),
         )
         assert result.status == "error"
-        assert mock_run_turn.call_count == 3
+        assert mock_run_turn.call_count == 1
 
-    @patch("karenina.scenario.manager.time.sleep")
     @patch.object(ScenarioManager, "_run_turn")
-    def test_retry_count_from_config(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
-        """max_scenario_turn_retries controls total attempts."""
-        vr_fail = _make_vr(completed=False, transient=True, error="timeout")
+    def test_error_with_no_category_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
+        """Error with no category terminates the scenario; no retry attempted."""
+        vr_fail = _make_vr(completed=False, error_category=None, error="Unknown error")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=5)
-        manager.run(
+        result = manager.run(
             scenario=_make_scenario(),
-            config=config,
+            config=_make_config(),
             base_answering_model=_make_model(),
             base_parsing_model=_make_model(),
         )
-        assert mock_run_turn.call_count == 5
+        assert result.status == "error"
+        assert mock_run_turn.call_count == 1
 
-    @patch("karenina.scenario.manager.time.sleep")
     @patch.object(ScenarioManager, "_run_turn")
-    def test_retry_sleeps_between_attempts(self, mock_run_turn: MagicMock, mock_sleep: MagicMock) -> None:
-        """time.sleep(1) called between retries but not after the last attempt."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
+    def test_failure_logs_error_with_details(self, mock_run_turn: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        """Turn failure logs error with scenario name, node, error, and category."""
+        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection refused")
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=3)
-        manager.run(
-            scenario=_make_scenario(),
-            config=config,
-            base_answering_model=_make_model(),
-            base_parsing_model=_make_model(),
-        )
-        # 3 attempts = 2 sleeps (between attempt 1-2 and 2-3, not after 3)
-        assert mock_sleep.call_count == 2
-        mock_sleep.assert_called_with(1)
-
-    @patch("karenina.scenario.manager.time.sleep")
-    @patch.object(ScenarioManager, "_run_turn")
-    def test_retry_logs_warning(
-        self, mock_run_turn: MagicMock, _mock_sleep: MagicMock, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Warning logged for each retry with scenario name, node, attempt number."""
-        vr_fail = _make_vr(completed=False, transient=True, error="Connection error")
-        vr_ok = _make_vr(completed=True)
-        mock_run_turn.side_effect = [
-            (vr_fail, None, None, ""),
-            (vr_ok, None, None, "answer"),
-        ]
-
-        manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
-        with caplog.at_level(logging.WARNING, logger="karenina.scenario.manager"):
+        with caplog.at_level(logging.ERROR, logger="karenina.scenario.manager"):
             manager.run(
                 scenario=_make_scenario(),
-                config=config,
+                config=_make_config(),
                 base_answering_model=_make_model(),
                 base_parsing_model=_make_model(),
             )
 
-        retry_warnings = [r for r in caplog.records if "transient" in r.message.lower()]
-        assert len(retry_warnings) == 1
-        assert "test_scenario" in retry_warnings[0].message
-        assert "ask" in retry_warnings[0].message
-        assert "1/2" in retry_warnings[0].message
+        error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(error_records) == 1
+        msg = error_records[0].message
+        assert "test_scenario" in msg
+        assert "ask" in msg
+        assert "Connection refused" in msg
+        assert "connection" in msg
 
-    @patch("karenina.scenario.manager.time.sleep")
-    @patch.object(ScenarioManager, "_run_turn")
-    def test_retry_preserves_conversation_history(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
-        """Same conversation_history passed on each retry attempt."""
-        vr_fail = _make_vr(completed=False, transient=True, error="timeout")
-        vr_ok = _make_vr(completed=True)
-        mock_run_turn.side_effect = [
-            (vr_fail, None, None, ""),
-            (vr_ok, None, None, "answer"),
-        ]
+    def test_time_module_not_imported_in_manager(self) -> None:
+        """The time module is no longer imported; retry sleep logic has been removed."""
+        import karenina.scenario.manager as mgr_module
 
-        manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
-        manager.run(
-            scenario=_make_scenario(),
-            config=config,
-            base_answering_model=_make_model(),
-            base_parsing_model=_make_model(),
-        )
-
-        # Both calls should receive the same conversation_history kwarg
-        call1_kwargs = mock_run_turn.call_args_list[0].kwargs
-        call2_kwargs = mock_run_turn.call_args_list[1].kwargs
-        assert call1_kwargs["conversation_history"] == call2_kwargs["conversation_history"]
-
-    @patch("karenina.scenario.manager.time.sleep")
-    @patch.object(ScenarioManager, "_run_turn")
-    def test_cache_completed_only_after_final_attempt(self, mock_run_turn: MagicMock, _mock_sleep: MagicMock) -> None:
-        """Cache complete() called once after the retry loop, not between attempts."""
-        vr_fail = _make_vr(completed=False, transient=True, error="timeout")
-        vr_ok = _make_vr(completed=True)
-        mock_run_turn.side_effect = [
-            (vr_fail, None, None, ""),
-            (vr_ok, None, None, "answer"),
-        ]
-
-        mock_cache = MagicMock()
-        mock_cache.get_or_reserve.return_value = ("MISS", None)
-        mock_cache.wait_for_completion.return_value = True
-
-        manager = ScenarioManager()
-        config = _make_config(max_scenario_turn_retries=2)
-        manager.run(
-            scenario=_make_scenario(),
-            config=config,
-            base_answering_model=_make_model(),
-            base_parsing_model=_make_model(),
-            answer_cache=mock_cache,
-        )
-
-        # complete() called once (after retry loop), not twice
-        assert mock_cache.complete.call_count == 1
-
-    @patch.object(ScenarioManager, "_run_turn")
-    def test_cache_not_completed_on_hit(self, mock_run_turn: MagicMock) -> None:
-        """When cache returns HIT, complete() should not be called."""
-        vr_ok = _make_vr(completed=True)
-        mock_run_turn.return_value = (vr_ok, None, None, "cached answer")
-
-        mock_cache = MagicMock()
-        mock_cache.get_or_reserve.return_value = ("HIT", {"raw_response": "cached"})
-
-        manager = ScenarioManager()
-        config = _make_config()
-        manager.run(
-            scenario=_make_scenario(),
-            config=config,
-            base_answering_model=_make_model(),
-            base_parsing_model=_make_model(),
-            answer_cache=mock_cache,
-        )
-
-        mock_cache.complete.assert_not_called()
+        assert not hasattr(mgr_module, "time"), "time should not be imported in scenario manager"

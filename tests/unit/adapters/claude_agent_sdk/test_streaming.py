@@ -181,10 +181,11 @@ class TestClaudeSDKStreaming:
         assert result.usage_unavailable is False
 
     @pytest.mark.asyncio
-    async def test_astream_with_timeout_captures_partial(
+    async def test_astream_with_timeout_raises_streaming_timeout_error(
         self, model_config: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """_astream_with_timeout() sets is_partial and usage_unavailable on timeout."""
+        """_astream_with_timeout() raises StreamingTimeoutError on timeout."""
+        from karenina.exceptions import StreamingTimeoutError
 
         async def slow_query(prompt: str, options: Any) -> Any:
             yield _SDK.AssistantMessage(content=[_SDK.TextBlock("First")])
@@ -196,8 +197,7 @@ class TestClaudeSDKStreaming:
         monkeypatch.setattr(_SDK, "query", slow_query)
 
         adapter = ClaudeSDKLLMAdapter(model_config)
-        result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
+        with pytest.raises(StreamingTimeoutError) as exc_info:
+            await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
 
-        assert result.is_partial is True
-        assert result.usage_unavailable is True
-        assert "First" in result.content
+        assert "First" in exc_info.value.partial_content

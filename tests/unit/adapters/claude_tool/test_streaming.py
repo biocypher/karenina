@@ -147,17 +147,20 @@ class TestClaudeToolStreaming:
         assert result.usage_unavailable is False
 
     @pytest.mark.asyncio
-    async def test_astream_with_timeout_captures_partial(self, model_config: Any) -> None:
-        """_astream_with_timeout() sets is_partial and usage_unavailable on timeout."""
+    async def test_astream_with_timeout_raises_streaming_timeout_error(self, model_config: Any) -> None:
+        """_astream_with_timeout() raises StreamingTimeoutError on timeout."""
+        from karenina.exceptions import StreamingTimeoutError
+
         adapter = ClaudeToolLLMAdapter(model_config)
 
         mock_client = AsyncMock()
         mock_client.messages.stream = MagicMock(return_value=_make_slow_stream(["First", "Second", "Third"], delay=5.0))
 
-        with patch.object(adapter, "_get_async_client", return_value=mock_client):
-            result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
+        with (
+            patch.object(adapter, "_get_async_client", return_value=mock_client),
+            pytest.raises(StreamingTimeoutError) as exc_info,
+        ):
+            await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
 
-        assert result.is_partial is True
-        assert result.usage_unavailable is True
-        # Should have captured at least the first chunk
-        assert "First" in result.content
+        # Should have captured at least the first chunk in partial_content
+        assert "First" in exc_info.value.partial_content

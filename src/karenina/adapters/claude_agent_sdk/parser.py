@@ -30,6 +30,7 @@ from pydantic import BaseModel, ValidationError
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.json_extraction import extract_json_from_response
+from karenina.utils.retry_policy import RetryPolicy
 
 if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
@@ -142,6 +143,11 @@ class ClaudeSDKParserAdapter:
                 kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
+
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
             self._anthropic_client = anthropic.AsyncAnthropic(**kwargs)
         return self._anthropic_client
 
@@ -158,6 +164,11 @@ class ClaudeSDKParserAdapter:
             }
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
+
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
             self._openai_client = AsyncOpenAI(**kwargs)
 
             if not self._warned_custom_endpoint:

@@ -345,10 +345,12 @@ class RubricEvaluationStage(BaseVerificationStage):
                 context.question_id,
                 e,
             )
+            context.add_warning(f"Rubric evaluation failed: {e}")
             rubric_result = None  # type: ignore[assignment]
         except Exception as e:
             # Don't fail the entire verification if rubric evaluation fails
             logger.warning("Rubric evaluation failed for question %s: %s", context.question_id, e)
+            context.add_warning(f"Rubric evaluation failed: {e}")
             rubric_result = None  # type: ignore[assignment]
 
         self._store_results(context, rubric_result, llm_trait_labels, metric_confusion_lists, metric_results)

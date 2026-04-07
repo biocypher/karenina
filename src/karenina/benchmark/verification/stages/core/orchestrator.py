@@ -3,13 +3,14 @@
 Manages stage execution, dependencies, and error handling.
 """
 
+import copy
 import logging
 import time
 
 from karenina.schemas.entities import Rubric
 from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import VerificationResult
-from karenina.utils.errors import is_retryable_error
+from karenina.utils.retry_policy import RetryPolicy, track_retries
 
 from ..pipeline.abstention_check import AbstentionCheckStage
 from ..pipeline.agentic_parse_template import AgenticParseTemplateStage
@@ -260,34 +261,60 @@ class StageOrchestrator:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        # Execute stages in order
-        for stage in self.stages:
-            # Check if stage should run
-            if not stage.should_run(context):
-                logger.debug(f"Skipping stage {stage.name} (should_run returned False)")
-                continue
+        # Bind a fresh retry tracker for the duration of this pipeline run.
+        # The tracker is pre-populated with per-category budgets from the
+        # answering model's RetryPolicy (which is the same policy stamped onto
+        # both answering and parsing models in batch_runner.py). Every retry
+        # observed by an adapter's RetryExecutor increments the matching
+        # category's "used" counter. FinalizeResultStage reads the snapshot
+        # below and stores it on VerificationResultMetadata.retry_counts so
+        # callers can see, per result, how many transient failures were
+        # recovered from and what budget was available for each category.
+        active_policy = (
+            context.answering_model.retry_policy
+            if context.answering_model is not None and context.answering_model.retry_policy is not None
+            else RetryPolicy()
+        )
+        with track_retries(active_policy) as retry_counts:
+            # Seed the artifact with the initial budgets (used=0) so even
+            # stages running first observe the snapshot (e.g. when
+            # FinalizeResultStage is the only stage in a minimal pipeline).
+            context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
 
-            # Execute stage
-            error_before = context.error
-            try:
-                logger.debug(f"Executing stage: {stage.name}")
-                stage.execute(context)
+            # Execute stages in order
+            for stage in self.stages:
+                # Check if stage should run
+                if not stage.should_run(context):
+                    logger.debug(f"Skipping stage {stage.name} (should_run returned False)")
+                    continue
 
-                # Log only if this stage introduced or changed the error
-                if context.error and context.error != error_before:
-                    logger.warning(f"Stage {stage.name} set error: {context.error}")
-                    # Don't break - FinalizeResultStage needs to run
+                # Execute stage
+                error_before = context.error
+                try:
+                    logger.debug(f"Executing stage: {stage.name}")
+                    stage.execute(context)
 
-            except Exception as e:
-                # Stage execution failed - mark error and continue to finalize
-                error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
-                logger.error(error_msg, exc_info=True)
-                context.mark_error(error_msg, transient=is_retryable_error(e))
-                # Continue to FinalizeResultStage even on error
+                    # Log only if this stage introduced or changed the error
+                    if context.error and context.error != error_before:
+                        logger.warning(f"Stage {stage.name} set error: {context.error}")
+                        # Don't break - FinalizeResultStage needs to run
 
-            # Update execution time after each stage so FinalizeResultStage has access to it
-            execution_time = time.time() - start_time
-            context.set_result_field(ArtifactKeys.EXECUTION_TIME, execution_time)
+                except Exception as e:
+                    # Stage execution failed - mark error and continue to finalize
+                    error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
+                    logger.error(error_msg, exc_info=True)
+                    context.mark_error(error_msg, category=context.error_registry.classify(e))
+                    # Continue to FinalizeResultStage even on error
+
+                # Update execution time after each stage so FinalizeResultStage
+                # has access to it
+                execution_time = time.time() - start_time
+                context.set_result_field(ArtifactKeys.EXECUTION_TIME, execution_time)
+
+                # Snapshot the retry tracker so FinalizeResultStage (which
+                # runs at the end of this loop) sees the budgets and counts
+                # as a plain nested dict copy, not a live reference.
+                context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
 
         # Extract final result
         final_result = context.get_artifact(ArtifactKeys.FINAL_RESULT)

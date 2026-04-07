@@ -1537,36 +1537,46 @@ class TestRetryConfigMaxRetriesConstraint:
 
 @pytest.mark.unit
 class TestRetryConfigFields:
-    """Tests for max_transient_retries and max_requeue_count fields."""
+    """Tests for retry_policy, custom_error_patterns, and max_requeue_count fields."""
 
     def test_verification_config_defaults(self) -> None:
-        """Test default values for new retry fields."""
+        """Test default values for retry fields."""
+        from karenina.utils.retry_policy import RetryPolicy
+
         config = VerificationConfig(
             parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
             parsing_only=True,
         )
-        assert config.max_transient_retries == 3
+        assert isinstance(config.retry_policy, RetryPolicy)
+        assert config.custom_error_patterns == []
         assert config.max_requeue_count == 5
 
-    def test_verification_config_custom_values(self) -> None:
-        """Test custom values for retry fields."""
+    def test_verification_config_custom_retry_policy(self) -> None:
+        """Test custom RetryPolicy on VerificationConfig."""
+        from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
+
+        policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=5))
         config = VerificationConfig(
             parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
             parsing_only=True,
-            max_transient_retries=1,
+            retry_policy=policy,
             max_requeue_count=10,
         )
-        assert config.max_transient_retries == 1
+        assert config.retry_policy.connection.max_attempts == 5
         assert config.max_requeue_count == 10
 
-    def test_verification_config_rejects_zero_retries(self) -> None:
-        """Test that max_transient_retries must be >= 1."""
-        with pytest.raises(ValidationError):
-            VerificationConfig(
-                parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
-                parsing_only=True,
-                max_transient_retries=0,
-            )
+    def test_verification_config_custom_error_patterns(self) -> None:
+        """Test custom_error_patterns on VerificationConfig."""
+        from karenina.utils.retry_policy import ErrorPatternConfig
+
+        patterns = [ErrorPatternConfig(pattern="MyTimeout", category="timeout", match_type="type_name")]
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            custom_error_patterns=patterns,
+        )
+        assert len(config.custom_error_patterns) == 1
+        assert config.custom_error_patterns[0].pattern == "MyTimeout"
 
     def test_verification_config_rejects_zero_requeue(self) -> None:
         """Test that max_requeue_count must be >= 1."""
@@ -1577,20 +1587,24 @@ class TestRetryConfigFields:
                 max_requeue_count=0,
             )
 
-    def test_model_config_default_max_transient_retries(self) -> None:
-        """Test ModelConfig has max_transient_retries defaulting to None."""
+    def test_model_config_default_retry_policy(self) -> None:
+        """Test ModelConfig has retry_policy defaulting to None."""
         config = ModelConfig(id="test", model_name="test", model_provider="openai")
-        assert config.max_transient_retries is None
+        assert config.retry_policy is None
 
-    def test_model_config_custom_max_transient_retries(self) -> None:
-        """Test ModelConfig accepts max_transient_retries."""
+    def test_model_config_custom_retry_policy(self) -> None:
+        """Test ModelConfig accepts retry_policy."""
+        from karenina.utils.retry_policy import RetryPolicy
+
+        policy = RetryPolicy()
         config = ModelConfig(
             id="test",
             model_name="test",
             model_provider="openai",
-            max_transient_retries=2,
+            retry_policy=policy,
         )
-        assert config.max_transient_retries == 2
+        assert config.retry_policy is not None
+        assert isinstance(config.retry_policy, RetryPolicy)
 
 
 # =============================================================================

@@ -1,4 +1,4 @@
-"""Tests for StageOrchestrator transient error classification."""
+"""Tests for StageOrchestrator error category classification."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from karenina.benchmark.verification.stages.core.base import (
 )
 from karenina.benchmark.verification.stages.core.orchestrator import StageOrchestrator
 from karenina.schemas.config import ModelConfig
+from karenina.utils.errors import ErrorCategory
 
 
 def _make_context() -> VerificationContext:
@@ -67,7 +68,8 @@ class _FinalizeStub(BaseVerificationStage):
             template_id=context.template_id,
             completed_without_errors=context.completed_without_errors,
             error=context.error,
-            is_transient_error=context.is_transient_error,
+            error_category=context.error_category.value if context.error_category else None,
+            warnings=list(context.warnings),
             question_text=context.question_text,
             answering=identity,
             parsing=identity,
@@ -86,21 +88,21 @@ class _FinalizeStub(BaseVerificationStage):
 
 
 @pytest.mark.unit
-class TestOrchestratorTransientErrorClassification:
-    def test_connection_error_marks_transient(self) -> None:
+class TestOrchestratorErrorCategoryClassification:
+    def test_connection_error_marks_connection(self) -> None:
         ctx = _make_context()
         orchestrator = StageOrchestrator(stages=[_RaisingStage(ConnectionError("connection refused")), _FinalizeStub()])
         orchestrator.execute(ctx)
-        assert ctx.is_transient_error is True
+        assert ctx.error_category == ErrorCategory.CONNECTION
 
-    def test_value_error_marks_non_transient(self) -> None:
+    def test_value_error_marks_permanent(self) -> None:
         ctx = _make_context()
         orchestrator = StageOrchestrator(stages=[_RaisingStage(ValueError("bad value")), _FinalizeStub()])
         orchestrator.execute(ctx)
-        assert ctx.is_transient_error is False
+        assert ctx.error_category == ErrorCategory.PERMANENT
 
-    def test_timeout_error_marks_transient(self) -> None:
+    def test_timeout_error_marks_timeout(self) -> None:
         ctx = _make_context()
         orchestrator = StageOrchestrator(stages=[_RaisingStage(TimeoutError("request timed out")), _FinalizeStub()])
         orchestrator.execute(ctx)
-        assert ctx.is_transient_error is True
+        assert ctx.error_category == ErrorCategory.TIMEOUT

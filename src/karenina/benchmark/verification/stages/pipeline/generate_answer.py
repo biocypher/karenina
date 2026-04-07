@@ -16,9 +16,9 @@ from karenina.adapters import get_agent, get_llm
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
-from karenina.ports import AgentConfig, AgentPort, LLMPort, LLMResponse, Message
+from karenina.ports import AgentConfig, AgentPort, LLMPort, Message
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.utils.errors import is_retryable_error
+from karenina.utils.errors import ErrorCategory
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -252,7 +252,7 @@ class GenerateAnswerStage(BaseVerificationStage):
         except Exception as e:
             error_msg = f"Failed to initialize answering model: {type(e).__name__}: {e}"
             logger.error(error_msg)
-            context.mark_error(error_msg, transient=is_retryable_error(e))
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             return
 
         # Step 3: Construct prompt text
@@ -333,11 +333,11 @@ class GenerateAnswerStage(BaseVerificationStage):
                         error_msg = (
                             f"Agent timed out with partial trace ({len(result.raw_trace)} chars, {result.turns} turns)"
                         )
-                        context.mark_error(error_msg, transient=True)
+                        context.mark_error(error_msg, category=ErrorCategory.TIMEOUT)
                         logger.warning("Question %s: %s", context.question_id, error_msg)
                     else:
                         error_msg = "Agent timed out with no trace messages"
-                        context.mark_error(error_msg, transient=True)
+                        context.mark_error(error_msg, category=ErrorCategory.TIMEOUT)
                         context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
                         context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
                         return
@@ -379,38 +379,15 @@ class GenerateAnswerStage(BaseVerificationStage):
                 assert answering_llm is not None
 
                 # Use streaming when available to capture partial output on timeout.
-                # Zero-content streaming timeouts are retried at this level because
-                # stream_invoke handles the timeout internally (returns a partial
-                # response) rather than raising, so TRANSIENT_RETRY never sees it.
-                max_attempts = context.answering_model.max_transient_retries or 3
-                llm_response: LLMResponse | None = None
-                for attempt in range(1, max_attempts + 1):
-                    if answering_llm.capabilities.supports_streaming:
-                        llm_response = answering_llm.stream_invoke(
-                            adapter_messages,
-                            timeout=context.answering_model.request_timeout,
-                        )
-                    else:
-                        llm_response = answering_llm.invoke(adapter_messages)
-
-                    if not llm_response.is_partial or llm_response.content:
-                        break
-
-                    # Zero-content streaming timeout: retry if attempts remain
-                    if attempt < max_attempts:
-                        logger.warning(
-                            "Question %s: zero-content streaming timeout (attempt %d/%d), retrying",
-                            context.question_id,
-                            attempt,
-                            max_attempts,
-                        )
-                        continue
-
-                    # Final attempt also returned zero content
-                    self.set_artifact_and_result(context, "response_timeout_partial", True)
-                    raise TimeoutError("LLM request timed out with no content received")
-
-                assert llm_response is not None  # Loop always breaks or raises
+                # The adapter handles retries internally via RetryExecutor.
+                # StreamingTimeoutError propagates to the outer exception handler.
+                if answering_llm.capabilities.supports_streaming:
+                    llm_response = answering_llm.stream_invoke(
+                        adapter_messages,
+                        timeout=context.answering_model.request_timeout,
+                    )
+                else:
+                    llm_response = answering_llm.invoke(adapter_messages)
 
                 # Format response as trace (AI message only, question is not part of the trace)
                 raw_llm_response = f"--- AI Message ---\n{llm_response.content}"
@@ -419,7 +396,7 @@ class GenerateAnswerStage(BaseVerificationStage):
                 if llm_response.is_partial:
                     self.set_artifact_and_result(context, "response_timeout_partial", True)
                     error_msg = f"Response truncated by streaming timeout ({len(llm_response.content)} chars captured)"
-                    context.mark_error(error_msg, transient=True)
+                    context.mark_error(error_msg, category=ErrorCategory.TIMEOUT)
                     logger.warning("Question %s: %s", context.question_id, error_msg)
 
                 # Propagate usage_unavailable flag if present
@@ -460,9 +437,24 @@ class GenerateAnswerStage(BaseVerificationStage):
                 f"Full traceback:\n{error_details}"
             )
 
-            # Mark error (transient classification determines if scenario retries)
+            # StreamingTimeoutError with partial content: salvage what we have
+            # instead of discarding it. The pipeline can continue with truncated
+            # output (downstream stages handle partial responses).
+            from karenina.exceptions import StreamingTimeoutError
+
+            if isinstance(e, StreamingTimeoutError) and e.partial_content:
+                raw_llm_response = f"--- AI Message ---\n{e.partial_content}"
+                self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
+                self.set_artifact_and_result(context, "response_timeout_partial", True)
+                self.set_artifact_and_result(context, "recursion_limit_reached", False)
+                context.add_warning(
+                    f"Response truncated by streaming timeout after retries ({len(e.partial_content)} chars captured)"
+                )
+                return
+
+            # Mark error (category classification determines if scenario retries)
             error_msg = f"Adapter call failed: {type(e).__name__}: {e}"
-            context.mark_error(error_msg, transient=is_retryable_error(e))
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
             context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
             return

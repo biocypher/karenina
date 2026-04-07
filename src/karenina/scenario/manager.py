@@ -9,7 +9,6 @@ import contextlib
 import copy
 import hashlib
 import logging
-import time
 import warnings
 from collections.abc import Callable
 from typing import Any, Literal
@@ -172,41 +171,31 @@ class ScenarioManager:
                 if cache_status == "HIT":
                     logger.debug("Scenario cache hit for %s/%s", scenario.name, state.current_node)
 
-            # Run the verification pipeline for this turn (with retry on transient errors)
-            max_turn_attempts = config.max_scenario_turn_retries
-            for turn_attempt in range(1, max_turn_attempts + 1):
-                vr, trace_messages, parsed_answer, raw_response = self._run_turn(
-                    node=node,
-                    conversation_history=conversation_history,
-                    answering_model=answering_model,
-                    parsing_model=parsing_model,
-                    config=config,
-                    run_name=run_name,
-                    global_rubric=global_rubric,
-                    turn_index=state.turn,
-                    scenario_id=scenario.name,
-                    scenario_node=state.current_node,
-                    scenario_path=list(path),
-                    question_text_override=question_text_override,
-                    cached_answer_data=cached_answer_data,
+            # Run the verification pipeline for this turn (adapter handles retries internally)
+            vr, trace_messages, parsed_answer, raw_response = self._run_turn(
+                node=node,
+                conversation_history=conversation_history,
+                answering_model=answering_model,
+                parsing_model=parsing_model,
+                config=config,
+                run_name=run_name,
+                global_rubric=global_rubric,
+                turn_index=state.turn,
+                scenario_id=scenario.name,
+                scenario_node=state.current_node,
+                scenario_path=list(path),
+                question_text_override=question_text_override,
+                cached_answer_data=cached_answer_data,
+            )
+
+            if not vr.metadata.completed_without_errors:
+                logger.error(
+                    "Scenario %s: node '%s' failed with error: %s (category: %s)",
+                    scenario.name,
+                    state.current_node,
+                    vr.metadata.error,
+                    vr.metadata.error_category,
                 )
-
-                if vr.metadata.completed_without_errors:
-                    break
-
-                if not vr.metadata.is_transient_error:
-                    break  # permanent error, no retry
-
-                if turn_attempt < max_turn_attempts:
-                    logger.warning(
-                        "Scenario %s, node %s: transient pipeline error on attempt %d/%d, retrying: %s",
-                        scenario.name,
-                        state.current_node,
-                        turn_attempt,
-                        max_turn_attempts,
-                        vr.metadata.error,
-                    )
-                    time.sleep(1)
 
             # Complete cache entry after final attempt
             if answer_cache is not None and cache_key is not None and cached_answer_data is None:
@@ -380,15 +369,25 @@ class ScenarioManager:
         template_code = node.question.answer_template or ""
         template_id = generate_template_id(template_code)
 
-        # Determine rubric: per-question rubric takes precedence, then global
+        # Determine rubric: per-question rubric takes precedence, then global.
+        # The global_rubric arrives already stamped from the benchmark facade,
+        # but per-question rubrics on scenario nodes are deserialized here and
+        # have not yet had pipeline-level retry_policy / request_timeout
+        # propagated onto any AgenticRubricTrait.model_override. Stamp them
+        # via the same helper used by the QA path so that scenario per-question
+        # agentic traits inherit the same defaults as global rubric traits.
         rubric = None
         if node.question.question_rubric:
+            from karenina.benchmark.verification.utils.task_helpers import (
+                stamp_agentic_trait_overrides,
+            )
             from karenina.schemas.entities.rubric import Rubric as RubricCls
 
             if isinstance(node.question.question_rubric, dict):
                 rubric = RubricCls.model_validate(node.question.question_rubric)
             elif isinstance(node.question.question_rubric, RubricCls):
                 rubric = node.question.question_rubric
+            rubric = stamp_agentic_trait_overrides(rubric, config)
         if rubric is None:
             rubric = global_rubric
 
@@ -402,6 +401,11 @@ class ScenarioManager:
             or rubric.agentic_traits
         ):
             evaluation_mode = "template_and_rubric"
+
+        # Build ErrorRegistry from config custom patterns
+        from karenina.benchmark.verification.runner import _build_error_registry
+
+        error_registry = _build_error_registry(config.custom_error_patterns)
 
         # Build VerificationContext
         context = VerificationContext(
@@ -423,6 +427,7 @@ class ScenarioManager:
             scenario_id=scenario_id,
             scenario_node=scenario_node,
             scenario_path=scenario_path,
+            error_registry=error_registry,
         )
 
         # Set conversation history artifact (the key integration point).
@@ -487,8 +492,13 @@ def _resolve_models(
 ) -> tuple[ModelConfig, ModelConfig]:
     """Resolve per-turn models from node override or base config.
 
-    Override models inherit request_timeout from the base model when not set,
-    so the pipeline-level timeout propagates to per-node model overrides.
+    Override models inherit ``request_timeout`` and ``retry_policy`` from the
+    base model when not set, so the pipeline-level timeout and retry policy
+    propagate to per-node model overrides. The benchmark facade also stamps
+    these fields onto overrides up front (see
+    :meth:`Benchmark._run_scenario_verification`); this fallback handles
+    callers that drive the manager directly without going through the
+    facade.
     """
     override = node.model_override
     answering = override.answering_model if override and override.answering_model else base_answering
@@ -499,6 +509,12 @@ def _resolve_models(
         answering = answering.model_copy(update={"request_timeout": base_answering.request_timeout})
     if parsing.request_timeout is None and base_parsing.request_timeout is not None:
         parsing = parsing.model_copy(update={"request_timeout": base_parsing.request_timeout})
+
+    # Propagate retry_policy from base models to overrides that don't set their own
+    if answering.retry_policy is None and base_answering.retry_policy is not None:
+        answering = answering.model_copy(update={"retry_policy": base_answering.retry_policy})
+    if parsing.retry_policy is None and base_parsing.retry_policy is not None:
+        parsing = parsing.model_copy(update={"retry_policy": base_parsing.retry_policy})
 
     return answering, parsing
 

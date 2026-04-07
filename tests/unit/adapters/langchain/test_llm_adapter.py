@@ -36,11 +36,13 @@ class TestSDKRetrySuppression:
 
 
 @pytest.mark.unit
-class TestConfigurableTransientRetry:
-    """Tests for configurable max_transient_retries."""
+class TestRetryExecutorIntegration:
+    """Tests for RetryExecutor replacing tenacity retry."""
 
-    def test_default_uses_singleton(self) -> None:
-        """Test that default config (None) uses the TRANSIENT_RETRY singleton."""
+    def test_adapter_creates_retry_executor(self) -> None:
+        """Test that adapter creates a RetryExecutor on init."""
+        from karenina.utils.retry_policy import RetryExecutor
+
         config = ModelConfig(
             id="test",
             model_name="test-model",
@@ -50,22 +52,106 @@ class TestConfigurableTransientRetry:
         with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             adapter = LangChainLLMAdapter(config)
-            # None means use the default singleton
-            assert adapter._max_transient_retries is None
+            assert isinstance(adapter._retry_executor, RetryExecutor)
 
-    def test_custom_value_stored(self) -> None:
-        """Test that custom max_transient_retries is stored on adapter."""
+    def test_default_policy_creates_executor_with_default_retry_policy(self) -> None:
+        """Test that None retry_policy creates executor with default RetryPolicy."""
+        from karenina.utils.retry_policy import RetryExecutor
+
         config = ModelConfig(
             id="test",
             model_name="test-model",
             model_provider="openai",
             interface="langchain",
-            max_transient_retries=1,
         )
         with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             adapter = LangChainLLMAdapter(config)
-            assert adapter._max_transient_retries == 1
+            assert isinstance(adapter._retry_executor, RetryExecutor)
+
+    def test_custom_policy_used_by_executor(self) -> None:
+        """Test that custom retry_policy is passed to executor."""
+        from karenina.utils.retry_policy import CategoryRetryConfig, RetryExecutor, RetryPolicy
+
+        policy = RetryPolicy(
+            connection=CategoryRetryConfig(max_attempts=5),
+        )
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+            retry_policy=policy,
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+            adapter = LangChainLLMAdapter(config)
+            assert isinstance(adapter._retry_executor, RetryExecutor)
+            assert adapter._retry_executor._policy.connection.max_attempts == 5
+
+    @pytest.mark.asyncio
+    async def test_ainvoke_retries_via_executor(self) -> None:
+        """Test that ainvoke retries transient errors through RetryExecutor."""
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_response = MagicMock()
+            mock_response.content = "Success"
+            mock_response.response_metadata = {"usage": {"input_tokens": 5, "output_tokens": 5}}
+
+            mock_model = AsyncMock()
+            call_count = 0
+
+            async def _fail_then_succeed(*args: Any, **kwargs: Any) -> Any:
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    raise ConnectionError("transient failure")
+                return mock_response
+
+            mock_model.ainvoke = _fail_then_succeed
+            mock_init.return_value = mock_model
+
+            adapter = LangChainLLMAdapter(config)
+            result = await adapter.ainvoke([Message.user("Hello")])
+
+            assert result.content == "Success"
+            assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_ainvoke_raises_permanent_errors(self) -> None:
+        """Test that permanent errors are raised immediately without retry."""
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_model = AsyncMock()
+            mock_model.ainvoke = AsyncMock(side_effect=ValueError("permanent"))
+            mock_init.return_value = mock_model
+
+            adapter = LangChainLLMAdapter(config)
+            with pytest.raises(ValueError, match="permanent"):
+                await adapter.ainvoke([Message.user("Hello")])
+
+    def test_no_invoke_model_with_retry_method(self) -> None:
+        """Test that the old _invoke_model_with_retry method is removed."""
+        config = ModelConfig(
+            id="test",
+            model_name="test-model",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+            adapter = LangChainLLMAdapter(config)
+            assert not hasattr(adapter, "_invoke_model_with_retry")
 
 
 class TestLangChainLLMAdapter:

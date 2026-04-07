@@ -32,6 +32,7 @@ from karenina.schemas.verification.config import (
     DEFAULT_RUBRIC_MAX_EXCERPTS,
     DeepJudgmentRubricCustomConfig,
 )
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
 
 if TYPE_CHECKING:
     from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
@@ -62,6 +63,12 @@ class ArtifactKeys:
     PARSED_ANSWER = "parsed_answer"
     USAGE_TRACKER = "usage_tracker"
     TRACE_MESSAGES = "trace_messages"
+
+    # Per-pipeline retry counts keyed by ErrorCategory.value (e.g.
+    # {"timeout": 2, "connection": 1}). Populated by the orchestrator while
+    # executing a pipeline; consumed by FinalizeResultStage when assembling
+    # VerificationResultMetadata.retry_counts.
+    RETRY_COUNTS = "retry_counts"
 
     # Template Classes (from validate_template stage)
     ANSWER = "Answer"
@@ -261,6 +268,9 @@ class VerificationContext:
             Used to share answers across multiple judges.
         artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.).
         result_builder: Dictionary accumulating result fields.
+        error_registry: Pre-configured ErrorRegistry for classifying exceptions
+            into ErrorCategory values. Built from VerificationConfig.custom_error_patterns
+            by the runner before pipeline execution.
         error: Optional error message if pipeline fails.
         completed_without_errors: Whether pipeline completed successfully.
     """
@@ -363,9 +373,11 @@ class VerificationContext:
     result_builder: dict[str, Any] = field(default_factory=dict)
 
     # Error Tracking
+    error_registry: ErrorRegistry = field(default_factory=ErrorRegistry)
     error: str | None = None
+    error_category: ErrorCategory | None = None
     completed_without_errors: bool = True
-    is_transient_error: bool = False
+    warnings: list[str] = field(default_factory=list)
 
     def set_artifact(self, key: str, value: Any) -> None:
         """Store an artifact produced by a stage."""
@@ -387,18 +399,35 @@ class VerificationContext:
         """Get a field from the result builder."""
         return self.result_builder.get(key, default)
 
-    def mark_error(self, error_message: str, *, transient: bool = False) -> None:
+    def mark_error(
+        self,
+        error_message: str,
+        *,
+        category: ErrorCategory = ErrorCategory.PERMANENT,
+    ) -> None:
         """Mark the context as failed with an error message.
 
         Args:
             error_message: Human-readable error description.
-            transient: Whether the error is transient (retryable). Sticky: once
-                True, subsequent calls with transient=False keep it True.
+            category: Classification of the error for retry decisions.
+                Defaults to PERMANENT (non-retryable).
         """
+        if self.error is not None:
+            self.add_warning(f"Previous error overwritten: {self.error}")
         self.error = error_message
+        self.error_category = category
         self.completed_without_errors = False
-        if transient:
-            self.is_transient_error = True
+
+    def add_warning(self, message: str) -> None:
+        """Add a non-fatal warning. Capped at 50 entries.
+
+        Args:
+            message: Warning text to record.
+        """
+        if len(self.warnings) < 50:
+            self.warnings.append(message)
+        elif len(self.warnings) == 50:
+            self.warnings.append("(additional warnings truncated)")
 
 
 class VerificationStage(Protocol):

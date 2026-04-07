@@ -75,3 +75,27 @@ class TestDeepAgentsLLMAdapter:
         """aclose() should exist and complete without error."""
         adapter = DeepAgentsLLMAdapter(deep_agents_model_config)
         await adapter.aclose()  # Should not raise
+
+
+@pytest.mark.unit
+class TestDeepAgentsSDKRetrySuppression:
+    """Tests for SDK max_retries=0 in deep agents adapter."""
+
+    def test_create_chat_model_passes_max_retries_zero(self, deep_agents_model_config, monkeypatch):
+        """create_chat_model passes max_retries=0 to suppress SDK-level retries."""
+        captured_kwargs: dict = {}
+
+        def _capture_init(*, model, model_provider, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.initialization.init_chat_model",
+            _capture_init,
+        )
+
+        from karenina.adapters.langchain_deep_agents.initialization import create_chat_model
+
+        create_chat_model(deep_agents_model_config)
+
+        assert captured_kwargs.get("max_retries") == 0

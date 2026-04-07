@@ -9,7 +9,6 @@ from typing import Any
 from karenina.benchmark.verification.evaluators import TemplateEvaluator
 from karenina.benchmark.verification.utils.template_parsing_helpers import is_regex_only_template
 from karenina.schemas.entities.answer import BaseAnswer
-from karenina.utils.errors import is_retryable_error
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -197,7 +196,7 @@ class ParseTemplateStage(BaseVerificationStage):
         except Exception as e:
             error_msg = f"Failed to create TemplateEvaluator: {type(e).__name__}: {e}"
             logger.error(error_msg)
-            context.mark_error(error_msg, transient=is_retryable_error(e))
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             return
 
         # Store evaluator for reuse by verify stage
@@ -228,7 +227,16 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Step 3: Handle parse result
         if not parse_result.success:
-            context.mark_error(parse_result.error or "Parsing failed")
+            # Classify the underlying exception when available so that
+            # transient parser failures (timeout, connection, rate limit)
+            # land in the correct retry-policy bucket. Without this, every
+            # parsing failure defaults to PERMANENT and bypasses the
+            # user-configured retry budgets. See issue 191.
+            if parse_result.error_exception is not None:
+                error_category = context.error_registry.classify(parse_result.error_exception)
+                context.mark_error(parse_result.error or "Parsing failed", category=error_category)
+            else:
+                context.mark_error(parse_result.error or "Parsing failed")
             # Store trace extraction error for diagnostics
             context.set_artifact(ArtifactKeys.TRACE_EXTRACTION_ERROR, parse_result.error)
             context.set_result_field(ArtifactKeys.USED_FULL_TRACE, use_full_trace)

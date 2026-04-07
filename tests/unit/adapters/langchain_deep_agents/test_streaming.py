@@ -120,8 +120,12 @@ class TestDeepAgentsStreaming:
         assert result.usage_unavailable is False
 
     @pytest.mark.asyncio
-    async def test_astream_with_timeout_captures_partial(self, deep_agents_model_config: Any, monkeypatch: Any) -> None:
-        """_astream_with_timeout() sets is_partial and usage_unavailable on timeout."""
+    async def test_astream_with_timeout_raises_streaming_timeout_error(
+        self, deep_agents_model_config: Any, monkeypatch: Any
+    ) -> None:
+        """_astream_with_timeout() raises StreamingTimeoutError on timeout."""
+        from karenina.exceptions import StreamingTimeoutError
+
         chunks = [
             _FakeChunk(content="First"),
             _FakeChunk(content="Second"),
@@ -142,8 +146,8 @@ class TestDeepAgentsStreaming:
         )
 
         adapter = DeepAgentsLLMAdapter(deep_agents_model_config)
-        result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
 
-        assert result.is_partial is True
-        assert result.usage_unavailable is True
-        assert "First" in result.content
+        with pytest.raises(StreamingTimeoutError) as exc_info:
+            await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
+
+        assert "First" in exc_info.value.partial_content

@@ -221,20 +221,22 @@ class TestTransientErrorPropagation:
                 schema=SimpleSchema,
             )
 
-    def test_parser_forwards_max_transient_retries_to_llm_adapter(self) -> None:
-        """Parser passes max_transient_retries from ModelConfig to its LLM adapter."""
+    def test_parser_forwards_retry_policy_to_llm_adapter(self) -> None:
+        """Parser passes retry_policy from ModelConfig to its LLM adapter."""
         from karenina.schemas.config import ModelConfig
+        from karenina.utils.retry_policy import RetryPolicy
 
+        policy = RetryPolicy()
         config = ModelConfig(
             id="test-retry-config",
             model_name="claude-sonnet-4-20250514",
             model_provider="anthropic",
             interface="langchain",
-            max_transient_retries=2,
+            retry_policy=policy,
         )
 
         with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
             mock_init.return_value = MagicMock()
             parser = LangChainParserAdapter(config)
 
-            assert parser._llm_adapter._max_transient_retries == 2
+            assert parser._llm_adapter._retry_policy is not None

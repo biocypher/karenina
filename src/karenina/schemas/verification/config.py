@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
+from karenina.utils.retry_policy import ErrorPatternConfig, RetryPolicy
+
 from ..config.models import (
     FewShotConfig,
     ModelConfig,
@@ -290,27 +292,19 @@ class VerificationConfig(BaseModel):
         return v
 
     # Retry settings for transient errors and executor requeue
-    max_transient_retries: int = Field(
-        default=3,
-        ge=1,
-        description="Maximum retry attempts for transient LLM errors (timeouts, "
-        "connection errors, rate limits). Controls TRANSIENT_RETRY behavior.",
+    retry_policy: RetryPolicy = Field(
+        default_factory=RetryPolicy,
+        description="Per-category retry budgets for transient LLM errors.",
+    )
+    custom_error_patterns: list[ErrorPatternConfig] = Field(
+        default_factory=list,
+        description="User-defined error patterns for the ErrorRegistry.",
     )
     max_requeue_count: int = Field(
         default=5,
         ge=1,
         description="Maximum times a task can be requeued in the parallel executor's "
         "IN_PROGRESS cache loop before generating the answer fresh.",
-    )
-
-    max_scenario_turn_retries: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "Maximum attempts for a scenario turn that fails with a transient "
-            "error. Each attempt runs the full verification pipeline. Separate "
-            "from max_transient_retries (which controls per-LLM-call retries)."
-        ),
     )
 
     def __init__(self, **data: Any) -> None:

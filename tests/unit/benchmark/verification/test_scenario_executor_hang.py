@@ -5,6 +5,7 @@ never hangs due to untracked worker deaths. Each test targets a specific
 failure mode that caused hangs with the previous raw-thread design.
 """
 
+import contextlib
 import threading
 from unittest.mock import MagicMock, patch
 
@@ -193,6 +194,11 @@ class TestPortalCreationFailure:
         worker_barrier = threading.Barrier(3, timeout=5.0)
         portal_call_count = [0]
         portal_lock = threading.Lock()
+        # Barrier forces the pool to spawn all 3 worker threads before any
+        # portal call returns. Without this the pool may reuse a single
+        # thread for fast-completing tasks, producing only one portal call
+        # total and making the failure-injection counter unreliable.
+        portal_barrier = threading.Barrier(3, timeout=5.0)
 
         def make_portal(*args, **kwargs):  # noqa: ARG001
             # Block until all three workers have reached portal creation,
@@ -201,6 +207,10 @@ class TestPortalCreationFailure:
             with portal_lock:
                 portal_call_count[0] += 1
                 current = portal_call_count[0]
+            # Wait for all three workers to reach this point so the counter
+            # deterministically covers 1, 2, and 3.
+            with contextlib.suppress(threading.BrokenBarrierError):
+                portal_barrier.wait()
             if current == 2:
                 raise RuntimeError("portal creation failed")
             ctx = MagicMock()
