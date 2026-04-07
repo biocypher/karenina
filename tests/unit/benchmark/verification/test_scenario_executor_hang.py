@@ -162,7 +162,14 @@ class TestBaseExceptionNoHang:
 
 @pytest.mark.unit
 class TestPortalCreationFailure:
-    """Portal creation failure for one combo must not block others."""
+    """Portal creation failure in one worker must not block others.
+
+    Under the per-worker portal lifecycle, each worker thread lazily creates
+    one BlockingPortal on its first task and reuses it. Portal-creation
+    failures are therefore per-worker, not per-combo: the worker whose
+    portal creation raises loses whichever combo it was assigned, while
+    other workers (with healthy portals) continue running their combos.
+    """
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
     @patch("karenina.benchmark.verification.scenario_executor.start_blocking_portal")
@@ -171,15 +178,26 @@ class TestPortalCreationFailure:
         mock_start_portal: MagicMock,
         mock_manager_cls: MagicMock,
     ) -> None:
-        """When start_blocking_portal raises for one combo, the error is
-        captured by the Future and the other combos complete normally.
+        """When one worker's portal creation raises, its combo surfaces as
+        an error while combos on other workers complete normally.
+
+        A threading.Barrier forces all three workers to reach the portal
+        factory simultaneously, guaranteeing each worker calls the factory
+        exactly once. Without this synchronization a single worker could
+        drain every combo before the others start (mocked work is
+        instantaneous), leaving the failure-injection branch unreachable.
         """
         combos = [_make_combo("s1"), _make_combo("s2"), _make_combo("s3")]
 
+        # Force all three workers to create their portal at the same time.
+        worker_barrier = threading.Barrier(3, timeout=5.0)
         portal_call_count = [0]
         portal_lock = threading.Lock()
 
         def make_portal(*args, **kwargs):  # noqa: ARG001
+            # Block until all three workers have reached portal creation,
+            # ensuring each worker calls this factory exactly once.
+            worker_barrier.wait()
             with portal_lock:
                 portal_call_count[0] += 1
                 current = portal_call_count[0]
@@ -200,6 +218,8 @@ class TestPortalCreationFailure:
         )
         results, errors = executor.run_batch(combos, config)
 
+        # Exactly three portal creations (one per worker), the second raising.
+        assert portal_call_count[0] == 3
         assert len(results) == 2
         assert len(errors) == 1
         assert isinstance(errors[0][1], RuntimeError)
