@@ -165,6 +165,12 @@ class FinalizeResultStage(BaseVerificationStage):
             replicate=context.replicate,
         )
 
+        # Read retry counts captured by the orchestrator's track_retries() block.
+        # Shape: {category: {"used": int, "budget": int}} or None when retry
+        # tracking was not active for this run (e.g. legacy code paths that
+        # bypass the orchestrator).
+        retry_counts = context.get_artifact(ArtifactKeys.RETRY_COUNTS)
+
         # Create metadata subclass
         metadata = VerificationResultMetadata(
             question_id=context.question_id,
@@ -174,6 +180,7 @@ class FinalizeResultStage(BaseVerificationStage):
             error_category=context.error_category.value if context.error_category else None,
             warnings=list(context.warnings),
             failed_stage=context.get_result_field(ArtifactKeys.FAILED_STAGE),
+            retry_counts=retry_counts,
             keywords=context.keywords,
             question_text=context.question_text,
             raw_answer=context.raw_answer,

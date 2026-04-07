@@ -22,6 +22,18 @@ class VerificationResultMetadata(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     partial_content: str | None = None
     failed_stage: str | None = None  # Stage name of the first guard that caused an auto-fail
+    retry_counts: dict[str, dict[str, int]] | None = Field(
+        default=None,
+        description=(
+            "Per-category retry usage and budget observed during pipeline "
+            "execution. Keyed by ErrorCategory.value (e.g. 'timeout', "
+            "'connection'); each entry is {'used': int, 'budget': int} where "
+            "budget reflects the max_attempts of the active RetryPolicy at "
+            "the moment the pipeline started, and used counts how many of "
+            "those retries actually fired. None when retry tracking was not "
+            "active for this pipeline run."
+        ),
+    )
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question

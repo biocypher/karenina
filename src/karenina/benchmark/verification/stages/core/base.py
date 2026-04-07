@@ -64,6 +64,12 @@ class ArtifactKeys:
     USAGE_TRACKER = "usage_tracker"
     TRACE_MESSAGES = "trace_messages"
 
+    # Per-pipeline retry counts keyed by ErrorCategory.value (e.g.
+    # {"timeout": 2, "connection": 1}). Populated by the orchestrator while
+    # executing a pipeline; consumed by FinalizeResultStage when assembling
+    # VerificationResultMetadata.retry_counts.
+    RETRY_COUNTS = "retry_counts"
+
     # Template Classes (from validate_template stage)
     ANSWER = "Answer"
     RAW_ANSWER = "RawAnswer"
