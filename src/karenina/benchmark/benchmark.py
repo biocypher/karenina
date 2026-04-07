@@ -826,8 +826,17 @@ class Benchmark:
             VerificationResultSet containing all per-turn results.
         """
         from ..benchmark.verification.scenario_executor import ScenarioExecutor, ScenarioExecutorConfig
+        from ..benchmark.verification.utils.task_helpers import stamp_agentic_trait_overrides
+        from ..schemas.scenario.types import ModelOverride, ScenarioNode
 
         global_rubric = self._rubric_manager.get_global_rubric()
+        # Stamp pipeline-level retry policy and request timeout onto any
+        # agentic rubric trait model_override so that AgenticTraitEvaluator
+        # picks up the same defaults the top-level answering and parsing
+        # models receive. Returns the original instance unchanged when no
+        # stamping is needed (no agentic traits, no overrides, or all
+        # override fields already set).
+        global_rubric = stamp_agentic_trait_overrides(global_rubric, config)
 
         def _apply_timeout(model: Any) -> Any:
             if config.request_timeout is not None and model.request_timeout is None:
@@ -842,8 +851,58 @@ class Benchmark:
         def _prepare_model(model: Any) -> Any:
             return _apply_retry(_apply_timeout(model))
 
+        def _prepare_override(override: ModelOverride | None) -> ModelOverride | None:
+            """Stamp pipeline-level timeout and retry policy onto a node override.
+
+            Mirrors :func:`_prepare_model` for ``ModelOverride.answering_model``
+            and ``ModelOverride.parsing_model`` so that per-node overrides
+            inherit the same defaults the top-level answering and parsing
+            models receive. Fields that are already set on the override are
+            preserved (matching the ``is None`` guard in ``_prepare_model``).
+
+            Returns the original instance unchanged when no stamping is needed
+            so frozen scenario definitions are not rebuilt unnecessarily.
+            """
+            if override is None:
+                return None
+            updates: dict[str, Any] = {}
+            if override.answering_model is not None:
+                stamped_ans = _prepare_model(override.answering_model)
+                if stamped_ans is not override.answering_model:
+                    updates["answering_model"] = stamped_ans
+            if override.parsing_model is not None:
+                stamped_parse = _prepare_model(override.parsing_model)
+                if stamped_parse is not override.parsing_model:
+                    updates["parsing_model"] = stamped_parse
+            if not updates:
+                return override
+            return override.model_copy(update=updates)
+
+        def _prepare_scenario(scenario_def: ScenarioDefinition) -> ScenarioDefinition:
+            """Return a scenario definition with stamped per-node overrides.
+
+            Walks each node in ``scenario_def.nodes`` and replaces any
+            ``ModelOverride`` whose answering or parsing model is missing the
+            pipeline-level ``request_timeout`` or ``retry_policy``. The
+            scenario definition is frozen, so a new instance is constructed
+            via ``model_copy``. The original definition is returned unchanged
+            when no nodes need stamping, avoiding rebuild costs in the common
+            case where no per-node overrides are configured.
+            """
+            new_nodes: dict[str, ScenarioNode] | None = None
+            for node_id, node in scenario_def.nodes.items():
+                prepared_override = _prepare_override(node.model_override)
+                if prepared_override is node.model_override:
+                    continue
+                if new_nodes is None:
+                    new_nodes = dict(scenario_def.nodes)
+                new_nodes[node_id] = node.model_copy(update={"model_override": prepared_override})
+            if new_nodes is None:
+                return scenario_def
+            return scenario_def.model_copy(update={"nodes": new_nodes})
+
         combos = [
-            (scenario_def, _prepare_model(ans_model), _prepare_model(parse_model))
+            (_prepare_scenario(scenario_def), _prepare_model(ans_model), _prepare_model(parse_model))
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models

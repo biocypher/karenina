@@ -369,15 +369,25 @@ class ScenarioManager:
         template_code = node.question.answer_template or ""
         template_id = generate_template_id(template_code)
 
-        # Determine rubric: per-question rubric takes precedence, then global
+        # Determine rubric: per-question rubric takes precedence, then global.
+        # The global_rubric arrives already stamped from the benchmark facade,
+        # but per-question rubrics on scenario nodes are deserialized here and
+        # have not yet had pipeline-level retry_policy / request_timeout
+        # propagated onto any AgenticRubricTrait.model_override. Stamp them
+        # via the same helper used by the QA path so that scenario per-question
+        # agentic traits inherit the same defaults as global rubric traits.
         rubric = None
         if node.question.question_rubric:
+            from karenina.benchmark.verification.utils.task_helpers import (
+                stamp_agentic_trait_overrides,
+            )
             from karenina.schemas.entities.rubric import Rubric as RubricCls
 
             if isinstance(node.question.question_rubric, dict):
                 rubric = RubricCls.model_validate(node.question.question_rubric)
             elif isinstance(node.question.question_rubric, RubricCls):
                 rubric = node.question.question_rubric
+            rubric = stamp_agentic_trait_overrides(rubric, config)
         if rubric is None:
             rubric = global_rubric
 
@@ -482,8 +492,13 @@ def _resolve_models(
 ) -> tuple[ModelConfig, ModelConfig]:
     """Resolve per-turn models from node override or base config.
 
-    Override models inherit request_timeout from the base model when not set,
-    so the pipeline-level timeout propagates to per-node model overrides.
+    Override models inherit ``request_timeout`` and ``retry_policy`` from the
+    base model when not set, so the pipeline-level timeout and retry policy
+    propagate to per-node model overrides. The benchmark facade also stamps
+    these fields onto overrides up front (see
+    :meth:`Benchmark._run_scenario_verification`); this fallback handles
+    callers that drive the manager directly without going through the
+    facade.
     """
     override = node.model_override
     answering = override.answering_model if override and override.answering_model else base_answering
@@ -494,6 +509,12 @@ def _resolve_models(
         answering = answering.model_copy(update={"request_timeout": base_answering.request_timeout})
     if parsing.request_timeout is None and base_parsing.request_timeout is not None:
         parsing = parsing.model_copy(update={"request_timeout": base_parsing.request_timeout})
+
+    # Propagate retry_policy from base models to overrides that don't set their own
+    if answering.retry_policy is None and base_answering.retry_policy is not None:
+        answering = answering.model_copy(update={"retry_policy": base_answering.retry_policy})
+    if parsing.retry_policy is None and base_parsing.retry_policy is not None:
+        parsing = parsing.model_copy(update={"retry_policy": base_parsing.retry_policy})
 
     return answering, parsing
 

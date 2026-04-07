@@ -35,6 +35,62 @@ def model_sort_key(model: Any) -> str:
     return getattr(model, "id", None) or getattr(model, "model_name", None) or ""
 
 
+def stamp_agentic_trait_overrides(
+    rubric: Rubric | None,
+    config: VerificationConfig,
+) -> Rubric | None:
+    """Stamp pipeline-level retry policy and request timeout onto agentic trait overrides.
+
+    Walks ``rubric.agentic_traits`` and, for any trait whose ``model_override``
+    is set, returns a copy with ``request_timeout`` and ``retry_policy`` filled
+    in from ``config`` (mirroring how the top-level answering and parsing
+    models are stamped). Existing values on the override are preserved: only
+    ``None`` fields are populated, matching the ``is None`` guard used by
+    :func:`_apply_request_timeout` and :func:`_apply_retry_config` in
+    :mod:`karenina.benchmark.verification.batch_runner`.
+
+    The original rubric instance is returned unchanged when no traits need
+    stamping (no agentic traits, none with ``model_override``, or all override
+    fields already populated). This avoids rebuilding frozen rubric and trait
+    instances in the common case.
+
+    Args:
+        rubric: The rubric whose agentic traits should be inspected; ``None``
+            short-circuits to ``None``.
+        config: Verification configuration providing the pipeline-level
+            ``request_timeout`` and ``retry_policy`` defaults.
+
+    Returns:
+        The original rubric (unchanged) when no stamping was required, or a
+        new ``Rubric`` instance with stamped agentic traits.
+    """
+    if rubric is None:
+        return None
+    if not rubric.agentic_traits:
+        return rubric
+
+    new_traits: list[Any] | None = None
+    for idx, trait in enumerate(rubric.agentic_traits):
+        override = trait.model_override
+        if override is None:
+            continue
+        updates: dict[str, Any] = {}
+        if config.request_timeout is not None and override.request_timeout is None:
+            updates["request_timeout"] = config.request_timeout
+        if config.retry_policy is not None and override.retry_policy is None:
+            updates["retry_policy"] = config.retry_policy
+        if not updates:
+            continue
+        stamped_override = override.model_copy(update=updates)
+        if new_traits is None:
+            new_traits = list(rubric.agentic_traits)
+        new_traits[idx] = trait.model_copy(update={"model_override": stamped_override})
+
+    if new_traits is None:
+        return rubric
+    return rubric.model_copy(update={"agentic_traits": new_traits})
+
+
 def merge_rubrics_for_task(
     global_rubric: Rubric | None,
     template: FinishedTemplate,
@@ -44,7 +100,12 @@ def merge_rubrics_for_task(
 
     This is an adapter function that bridges the verification workflow layer
     with the schema layer's pure rubric operations, handling config checking
-    and error logging.
+    and error logging. After the merge, any agentic traits whose
+    ``model_override`` lacks ``request_timeout`` or ``retry_policy`` are
+    stamped from the pipeline-level configuration via
+    :func:`stamp_agentic_trait_overrides`, mirroring the behavior applied to
+    the top-level answering and parsing models in
+    :mod:`karenina.benchmark.verification.batch_runner`.
 
     Args:
         global_rubric: Optional global rubric applied to all questions
@@ -68,7 +129,9 @@ def merge_rubrics_for_task(
 
     from karenina.schemas import merge_rubrics
 
-    return merge_rubrics(global_rubric, question_rubric)
+    merged, provenance = merge_rubrics(global_rubric, question_rubric)
+    stamped = stamp_agentic_trait_overrides(merged, config)
+    return stamped, provenance
 
 
 def merge_dynamic_rubrics_for_task(

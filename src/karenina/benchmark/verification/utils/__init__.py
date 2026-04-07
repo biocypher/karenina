@@ -21,6 +21,7 @@ from .task_helpers import (
     extract_feature_flags,
     merge_rubrics_for_task,
     resolve_few_shot_for_task,
+    stamp_agentic_trait_overrides,
 )
 from .template_parsing_helpers import (
     _extract_attribute_descriptions,
@@ -52,6 +53,7 @@ __all__ = [
     "resolve_few_shot_for_task",
     "create_preview_result",
     "extract_feature_flags",
+    "stamp_agentic_trait_overrides",
     # Storage helpers
     "auto_save_results",
     # Resource helpers
