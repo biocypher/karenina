@@ -9,6 +9,7 @@ code paths.
 from __future__ import annotations
 
 import asyncio
+import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -185,7 +186,15 @@ class TestLangChainAgentTimeoutWithoutCallback:
 
     @pytest.mark.asyncio
     async def test_timeout_without_callback_returns_partial(self, model_config: Any) -> None:
-        """Verify timeout handling in the non-callback branch."""
+        """Verify timeout handling in the non-callback branch.
+
+        Forces the non-callback branch by making the local import of
+        ``langchain_core.callbacks`` fail. The slow ``ainvoke`` is then
+        actually awaited by the real ``asyncio.wait_for``, which raises
+        ``TimeoutError`` after the configured timeout. This properly
+        exercises the timeout-recovery path without leaking an unawaited
+        coroutine.
+        """
         with _standard_patches() as ctx:
             mock_agent = AsyncMock()
 
@@ -196,11 +205,12 @@ class TestLangChainAgentTimeoutWithoutCallback:
             mock_agent.checkpointer = None
             ctx.mocks["create_agent"].return_value = mock_agent
 
-            # Force the non-callback path by making the import fail
-            with patch(
-                "karenina.adapters.langchain.agent.asyncio.wait_for",
-                side_effect=TimeoutError("timed out"),
-            ):
+            # Force the non-callback path by making the local import fail.
+            # Setting the module to None in sys.modules causes the
+            # ``from langchain_core.callbacks import ...`` statement inside
+            # ``arun`` to raise ImportError, which the adapter catches and
+            # falls through to the non-callback branch.
+            with patch.dict(sys.modules, {"langchain_core.callbacks": None}):
                 adapter = LangChainAgentAdapter(model_config)
                 result = await adapter.arun(
                     [Message.user("Test question")],
