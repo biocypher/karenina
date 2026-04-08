@@ -60,6 +60,12 @@ def _model_dir_name(model: ModelConfig) -> str:
 class ScenarioManager:
     """Executes scenario graphs turn by turn through the verification pipeline."""
 
+    # Active ScenarioState for the current run(); set inside run() and
+    # cleared in its finally block. Read by _peek_visit_index so the
+    # per-turn VerificationContext can carry scenario_node_visit_index
+    # without threading the state through _run_turn's signature.
+    _current_state: ScenarioState | None = None
+
     def run(
         self,
         scenario: ScenarioDefinition,
@@ -147,236 +153,247 @@ class ScenarioManager:
             scenario_dir.mkdir(parents=True, exist_ok=True)
             logger.info("Created scenario workspace: %s", scenario_dir)
 
-        while True:
-            node = scenario.nodes[state.current_node]
-            path.append(state.current_node)
-            agent_id = node.agent_identity or base_identity
+        # Expose the current ScenarioState to _run_turn via an instance
+        # attribute so _peek_visit_index can read node_visits without
+        # threading state through the _run_turn signature. Cleared in the
+        # finally block below so the attribute does not leak between runs.
+        self._current_state = state
 
-            # Resolve models for this turn
-            answering_model, parsing_model = _resolve_models(
-                node,
-                base_answering_model,
-                base_parsing_model,
-            )
+        try:
+            while True:
+                node = scenario.nodes[state.current_node]
+                path.append(state.current_node)
+                agent_id = node.agent_identity or base_identity
 
-            # Create per-turn workspace directory before handover so traces
-            # land inside the turn folder instead of a shared flat directory.
-            turn_dir: Path | None = None
-            if scenario_dir is not None:
-                turn_dir = scenario_dir / f"turn_{state.turn}"
-                turn_dir.mkdir(parents=True, exist_ok=True)
-
-            # Build conversation_history for this turn
-            question_text = node.question.question
-            if pending_handover_edge is not None:
-                handover_result = apply_handover(
-                    pending_handover_edge,
-                    tagged_messages,
-                    state,
-                    question_text,
-                    turn_dir=turn_dir,
+                # Resolve models for this turn
+                answering_model, parsing_model = _resolve_models(
+                    node,
+                    base_answering_model,
+                    base_parsing_model,
                 )
-                if handover_result is not None:
-                    question_text, conversation_history = handover_result
+
+                # Create per-turn workspace directory before handover so traces
+                # land inside the turn folder instead of a shared flat directory.
+                turn_dir: Path | None = None
+                if scenario_dir is not None:
+                    turn_dir = scenario_dir / f"turn_{state.turn}"
+                    turn_dir.mkdir(parents=True, exist_ok=True)
+
+                # Build conversation_history for this turn
+                question_text = node.question.question
+                if pending_handover_edge is not None:
+                    handover_result = apply_handover(
+                        pending_handover_edge,
+                        tagged_messages,
+                        state,
+                        question_text,
+                        turn_dir=turn_dir,
+                    )
+                    if handover_result is not None:
+                        question_text, conversation_history = handover_result
+                    else:
+                        conversation_history = [tm.message for tm in tagged_messages]
                 else:
                     conversation_history = [tm.message for tm in tagged_messages]
-            else:
-                conversation_history = [tm.message for tm in tagged_messages]
 
-            # Inject system prompt into tagged_messages on agent or prompt change.
-            # This makes the system prompt visible in transcripts for downstream
-            # nodes (e.g. the agentic guardrail judge).
-            agent_changed = (previous_agent_id is None) or (previous_agent_id != agent_id)
-            prompt_changed = answering_model.system_prompt != previous_system_prompt
-            if (agent_changed or prompt_changed) and answering_model.system_prompt:
-                system_msg = Message.system(answering_model.system_prompt)
-                tagged_messages.append(TaggedMessage(system_msg, agent_id=agent_id))
+                # Inject system prompt into tagged_messages on agent or prompt change.
+                # This makes the system prompt visible in transcripts for downstream
+                # nodes (e.g. the agentic guardrail judge).
+                agent_changed = (previous_agent_id is None) or (previous_agent_id != agent_id)
+                prompt_changed = answering_model.system_prompt != previous_system_prompt
+                if (agent_changed or prompt_changed) and answering_model.system_prompt:
+                    system_msg = Message.system(answering_model.system_prompt)
+                    tagged_messages.append(TaggedMessage(system_msg, agent_id=agent_id))
 
-            # Build question message and tag it
-            question_msg = Message.user(question_text)
-            tagged_messages.append(TaggedMessage(question_msg, agent_id="__user__"))
+                # Build question message and tag it
+                question_msg = Message.user(question_text)
+                tagged_messages.append(TaggedMessage(question_msg, agent_id="__user__"))
 
-            # Determine question_text_override (only when handover modified it)
-            question_text_override = question_text if question_text != node.question.question else None
+                # Determine question_text_override (only when handover modified it)
+                question_text_override = question_text if question_text != node.question.question else None
 
-            # Build answer cache key for this turn
-            cached_answer_data = None
-            cache_key = None
-            if answer_cache is not None:
-                answering_model_id = answering_model.id or answering_model.model_name or "unknown"
-                history_strs = [str(m) for m in conversation_history]
-                cache_key = build_scenario_cache_key(
-                    scenario.name,
-                    state.current_node,
-                    answering_model_id,
-                    history_strs,
-                )
-                cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
-                if cache_status == "IN_PROGRESS":
-                    answer_cache.wait_for_completion(cache_key, timeout=config.request_timeout or 120.0)
-                    cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
-                if cache_status == "HIT":
-                    logger.debug("Scenario cache hit for %s/%s", scenario.name, state.current_node)
-
-            # Run the verification pipeline for this turn (adapter handles retries internally)
-            vr, trace_messages, parsed_answer, raw_response = self._run_turn(
-                node=node,
-                conversation_history=conversation_history,
-                answering_model=answering_model,
-                parsing_model=parsing_model,
-                config=config,
-                run_name=run_name,
-                global_rubric=global_rubric,
-                turn_index=state.turn,
-                scenario_id=scenario.name,
-                scenario_node=state.current_node,
-                scenario_path=list(path),
-                question_text_override=question_text_override,
-                cached_answer_data=cached_answer_data,
-                workspace_root=workspace_root,
-                turn_workspace_path=turn_dir,
-                node_results=dict(state.node_results),
-            )
-
-            if not vr.metadata.completed_without_errors:
-                logger.error(
-                    "Scenario %s: node '%s' failed with error: %s (category: %s)",
-                    scenario.name,
-                    state.current_node,
-                    vr.metadata.error,
-                    vr.metadata.error_category,
-                )
-
-            # Complete cache entry after final attempt
-            if answer_cache is not None and cache_key is not None and cached_answer_data is None:
-                from karenina.benchmark.verification.utils.cache_helpers import extract_answer_data_from_result
-
-                try:
-                    answer_data = extract_answer_data_from_result(vr)
-                    answer_cache.complete(cache_key, answer_data)
-                except Exception:
-                    logger.warning(
-                        "Failed to cache answer for %s/%s",
+                # Build answer cache key for this turn
+                cached_answer_data = None
+                cache_key = None
+                if answer_cache is not None:
+                    answering_model_id = answering_model.id or answering_model.model_name or "unknown"
+                    history_strs = [str(m) for m in conversation_history]
+                    cache_key = build_scenario_cache_key(
                         scenario.name,
                         state.current_node,
-                        exc_info=True,
+                        answering_model_id,
+                        history_strs,
                     )
-                    answer_cache.complete(cache_key, None, error=Exception("extraction failed"))
+                    cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                    if cache_status == "IN_PROGRESS":
+                        answer_cache.wait_for_completion(cache_key, timeout=config.request_timeout or 120.0)
+                        cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                    if cache_status == "HIT":
+                        logger.debug("Scenario cache hit for %s/%s", scenario.name, state.current_node)
 
-            # Grow tagged history with trace
-            if trace_messages:
-                for msg in trace_messages:
-                    tagged_messages.append(TaggedMessage(msg, agent_id=agent_id))
+                # Run the verification pipeline for this turn (adapter handles retries internally)
+                vr, trace_messages, parsed_answer, raw_response = self._run_turn(
+                    node=node,
+                    conversation_history=conversation_history,
+                    answering_model=answering_model,
+                    parsing_model=parsing_model,
+                    config=config,
+                    run_name=run_name,
+                    global_rubric=global_rubric,
+                    turn_index=state.turn,
+                    scenario_id=scenario.name,
+                    scenario_node=state.current_node,
+                    scenario_path=list(path),
+                    question_text_override=question_text_override,
+                    cached_answer_data=cached_answer_data,
+                    workspace_root=workspace_root,
+                    turn_workspace_path=turn_dir,
+                    node_results=dict(state.node_results),
+                )
 
-            # Build TurnRecord
-            verify_result = vr.template.verify_result if vr.template is not None else None
-            parsed_fields: dict[str, Any] = {}
-            if parsed_answer is not None:
-                with contextlib.suppress(Exception):
-                    parsed_fields = parsed_answer.model_dump()
-
-            record = TurnRecord(
-                node_id=state.current_node,
-                question_text=node.question.question,
-                question_messages=[Message.user(node.question.question)],
-                trace_messages=trace_messages or [],
-                raw_response=raw_response or "",
-                parsed_answer=parsed_answer,
-                parsed_fields=parsed_fields,
-                verify_result=verify_result,
-                verification_result_id=vr.metadata.result_id,
-            )
-
-            turn_results.append(vr)
-
-            # Extract rubric trait scores
-            rubric_results: dict[str, Any] = {}
-            if vr.rubric is not None and vr.rubric.rubric_evaluation_performed:
-                rubric_results = vr.rubric.get_all_trait_scores()
-
-            # Auto-populate node_results (last-write-wins on revisits)
-            state.node_results[state.current_node] = {
-                "verify_result": verify_result,
-                "parsed": parsed_fields,
-                "rubric": rubric_results,
-            }
-
-            # Run state_update if defined (opt-in custom state)
-            if node.state_update is not None:
-                snapshot = copy.deepcopy(state.accumulated)
-                try:
-                    state.accumulated = node.state_update(
-                        state.accumulated,
-                        parsed_fields,
-                    )
-                except Exception:
-                    logger.warning(
-                        "state_update for node '%s' raised; restoring from snapshot",
+                if not vr.metadata.completed_without_errors:
+                    logger.error(
+                        "Scenario %s: node '%s' failed with error: %s (category: %s)",
+                        scenario.name,
                         state.current_node,
-                        exc_info=True,
+                        vr.metadata.error,
+                        vr.metadata.error_category,
                     )
-                    state.accumulated = snapshot
 
-            # Update state
-            state.turn += 1
-            state.node_visits[state.current_node] = state.node_visits.get(state.current_node, 0) + 1
-            state.history.append(record)
-            state.verify_result = verify_result
-            state.parsed = parsed_fields
+                # Complete cache entry after final attempt
+                if answer_cache is not None and cache_key is not None and cached_answer_data is None:
+                    from karenina.benchmark.verification.utils.cache_helpers import extract_answer_data_from_result
 
-            # Check for pipeline error
-            if not vr.metadata.completed_without_errors:
+                    try:
+                        answer_data = extract_answer_data_from_result(vr)
+                        answer_cache.complete(cache_key, answer_data)
+                    except Exception:
+                        logger.warning(
+                            "Failed to cache answer for %s/%s",
+                            scenario.name,
+                            state.current_node,
+                            exc_info=True,
+                        )
+                        answer_cache.complete(cache_key, None, error=Exception("extraction failed"))
+
+                # Grow tagged history with trace
+                if trace_messages:
+                    for msg in trace_messages:
+                        tagged_messages.append(TaggedMessage(msg, agent_id=agent_id))
+
+                # Build TurnRecord
+                verify_result = vr.template.verify_result if vr.template is not None else None
+                parsed_fields: dict[str, Any] = {}
+                if parsed_answer is not None:
+                    with contextlib.suppress(Exception):
+                        parsed_fields = parsed_answer.model_dump()
+
+                record = TurnRecord(
+                    node_id=state.current_node,
+                    question_text=node.question.question,
+                    question_messages=[Message.user(node.question.question)],
+                    trace_messages=trace_messages or [],
+                    raw_response=raw_response or "",
+                    parsed_answer=parsed_answer,
+                    parsed_fields=parsed_fields,
+                    verify_result=verify_result,
+                    verification_result_id=vr.metadata.result_id,
+                )
+
+                turn_results.append(vr)
+
+                # Extract rubric trait scores
+                rubric_results: dict[str, Any] = {}
+                if vr.rubric is not None and vr.rubric.rubric_evaluation_performed:
+                    rubric_results = vr.rubric.get_all_trait_scores()
+
+                # Auto-populate node_results (last-write-wins on revisits)
+                state.node_results[state.current_node] = {
+                    "verify_result": verify_result,
+                    "parsed": parsed_fields,
+                    "rubric": rubric_results,
+                }
+
+                # Run state_update if defined (opt-in custom state)
+                if node.state_update is not None:
+                    snapshot = copy.deepcopy(state.accumulated)
+                    try:
+                        state.accumulated = node.state_update(
+                            state.accumulated,
+                            parsed_fields,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "state_update for node '%s' raised; restoring from snapshot",
+                            state.current_node,
+                            exc_info=True,
+                        )
+                        state.accumulated = snapshot
+
+                # Update state
+                state.turn += 1
+                state.node_visits[state.current_node] = state.node_visits.get(state.current_node, 0) + 1
+                state.history.append(record)
+                state.verify_result = verify_result
+                state.parsed = parsed_fields
+
+                # Check for pipeline error
+                if not vr.metadata.completed_without_errors:
+                    self._report_progress(
+                        progress_callback,
+                        scenario.name,
+                        state.turn - 1,
+                        record.node_id,
+                        verify_result,
+                        None,
+                    )
+                    status = "error"
+                    break
+
+                # Check global turn limit
+                if state.turn >= config.scenario_turn_limit:
+                    self._report_progress(
+                        progress_callback,
+                        scenario.name,
+                        state.turn - 1,
+                        record.node_id,
+                        verify_result,
+                        None,
+                    )
+                    status = "limit_reached"
+                    break
+
+                # Resolve next node
+                outbound_edges = [e for e in scenario.edges if e.source == state.current_node]
+                next_node, followed_edge = resolve_next_node(outbound_edges, state)
+
+                # Report progress (after edge resolution so next_node is known)
                 self._report_progress(
                     progress_callback,
                     scenario.name,
                     state.turn - 1,
                     record.node_id,
                     verify_result,
-                    None,
+                    next_node,
                 )
-                status = "error"
-                break
 
-            # Check global turn limit
-            if state.turn >= config.scenario_turn_limit:
-                self._report_progress(
-                    progress_callback,
-                    scenario.name,
-                    state.turn - 1,
-                    record.node_id,
-                    verify_result,
-                    None,
-                )
-                status = "limit_reached"
-                break
+                if next_node is None:
+                    # Implicit terminal (no outbound edges)
+                    status = "completed"
+                    break
 
-            # Resolve next node
-            outbound_edges = [e for e in scenario.edges if e.source == state.current_node]
-            next_node, followed_edge = resolve_next_node(outbound_edges, state)
+                if next_node == END:
+                    status = "completed"
+                    break
 
-            # Report progress (after edge resolution so next_node is known)
-            self._report_progress(
-                progress_callback,
-                scenario.name,
-                state.turn - 1,
-                record.node_id,
-                verify_result,
-                next_node,
-            )
-
-            if next_node is None:
-                # Implicit terminal (no outbound edges)
-                status = "completed"
-                break
-
-            if next_node == END:
-                status = "completed"
-                break
-
-            pending_handover_edge = followed_edge
-            state.current_node = next_node
-            previous_agent_id = agent_id
-            previous_system_prompt = answering_model.system_prompt
+                pending_handover_edge = followed_edge
+                state.current_node = next_node
+                previous_agent_id = agent_id
+                previous_system_prompt = answering_model.system_prompt
+        finally:
+            # Clear the per-run state pointer so the attribute does not
+            # leak between runs or mask bugs in _peek_visit_index callers.
+            self._current_state = None
 
         # Evaluate outcome criteria
         result = ScenarioExecutionResult(
@@ -505,6 +522,13 @@ class ScenarioManager:
             workspace_copy=config.workspace_copy,
             workspace_cleanup=config.workspace_cleanup,
             question_workspace_path=getattr(node.question, "workspace_path", None),
+            # Replay fields: copied from config onto the per-turn context.
+            # scenario_node_visit_index is read from the current ScenarioState
+            # BEFORE the post-turn increment in run(), so retry loops that
+            # revisit the same node observe distinct visit counts.
+            replay_store=config.replay_store,
+            replay_parse_on_hydration_mismatch=config.replay_parse_on_hydration_mismatch,
+            scenario_node_visit_index=(self._peek_visit_index(scenario_node) if scenario_node else None),
             error_registry=error_registry,
         )
 
@@ -543,6 +567,25 @@ class ScenarioManager:
         raw_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
         return vr, trace_messages, parsed_answer, raw_response
+
+    def _peek_visit_index(self, node_id: str) -> int:
+        """Return the current visit count for ``node_id`` without mutating state.
+
+        Called from ``_run_turn`` to populate
+        ``VerificationContext.scenario_node_visit_index``. The manager stashes
+        the active ScenarioState on ``self._current_state`` for the duration
+        of ``run()`` (see the try/finally in ``run()``). This method reads
+        ``state.node_visits[node_id]`` before ``run()`` performs its post-turn
+        increment, so the first visit to a node yields 0, the second yields 1,
+        and so on.
+
+        Returns 0 if no active state is bound (e.g. the helper is called
+        outside of a ``run()`` invocation).
+        """
+        state = self._current_state
+        if state is None:
+            return 0
+        return state.node_visits.get(node_id, 0)
 
     @staticmethod
     def _report_progress(
