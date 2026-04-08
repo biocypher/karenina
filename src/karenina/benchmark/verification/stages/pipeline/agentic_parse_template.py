@@ -216,9 +216,38 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                     materialized_trace_path,
                 )
                 user_parts.append(
-                    f"\nThe full answering agent trace is saved to: "
-                    f"{materialized_trace_path}\n"
-                    f"Use file tools (Read, Grep, Glob) to examine it."
+                    "\nThe full answering agent trace has been saved as a "
+                    f"plain-text file at:\n  {materialized_trace_path}\n\n"
+                    "The file starts with a header line reading "
+                    "`# KARENINA RAW ANSWERING AGENT TRACE`. Everything "
+                    "below that header is the VERBATIM conversation the "
+                    "answering agent produced, serialized for file-tool "
+                    "access. It contains raw `--- Thinking ---`, "
+                    "`--- AI Message ---`, and `--- Tool Message ---` "
+                    "blocks. Any reasoning, hedging, or meta-commentary "
+                    "you see inside those blocks is the answering agent's "
+                    "OWN output, not a pre-existing analysis by anyone "
+                    "else. Do NOT dismiss the file as an analysis or "
+                    "summary; treat every block as raw evidence.\n\n"
+                    "Recommended workflow:\n"
+                    "1. First, Read the entire file so you have full "
+                    "context. If the file is large and Read truncates, "
+                    "keep calling Read with increasing offset (and an "
+                    "explicit limit) until you have walked all the way to "
+                    "the end. Verify you reached the last block.\n"
+                    "2. Then use the Grep tool with targeted patterns "
+                    "against the file path to pinpoint salient passages. "
+                    "Useful patterns include:\n"
+                    "   - `Tool Calls` to find where the agent called tools\n"
+                    "   - `Tool Message` to find the tool responses\n"
+                    "   - `AI Message` to find each assistant utterance\n"
+                    "   - free-text patterns tied to the specific question "
+                    "(entity IDs, numeric values, specific claims under "
+                    "review, or any term that might reveal a reversal)\n"
+                    "3. Cross-check the agent's final answer against its "
+                    "earlier answers and against its own tool outputs. "
+                    "Base your judgement on the evidence you find in the "
+                    "file itself, not on prior assumptions."
                 )
             else:
                 user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_trace}\n--- END TRACE ---")
@@ -299,7 +328,30 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)
         filename = f"{safe_id}_turn{scenario_turn}_trace.txt" if scenario_turn is not None else f"{safe_id}_trace.txt"
         trace_path = trace_dir / filename
-        trace_path.write_text(trace, encoding="utf-8")
+
+        # Distinctive header so the investigation agent cannot misread the
+        # file as a pre-existing analysis. The raw --- AI Message --- blocks
+        # (including the agent's own inline reasoning like "let me verify")
+        # have historically been confused for someone else's commentary.
+        header = (
+            "# =============================================================\n"
+            "# KARENINA RAW ANSWERING AGENT TRACE\n"
+            "# -------------------------------------------------------------\n"
+            "# This file is the VERBATIM conversation the answering agent\n"
+            "# produced, serialized for file-tool access. It contains raw\n"
+            "# blocks of the form:\n"
+            "#\n"
+            "#   --- Thinking ---      (the agent's private reasoning)\n"
+            "#   --- AI Message ---    (assistant utterances; may include\n"
+            "#                          Tool Calls: <name> lines with args)\n"
+            "#   --- Tool Message --- (tool responses, JSON or text)\n"
+            "#\n"
+            "# It is NOT an analysis, evaluation, or summary written by\n"
+            "# anyone else. Any reasoning or hedging text you see is the\n"
+            "# answering agent's OWN output. Treat every block as evidence.\n"
+            "# =============================================================\n\n"
+        )
+        trace_path.write_text(header + trace, encoding="utf-8")
         return trace_path
 
     def _run_extraction(
