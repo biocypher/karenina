@@ -17,6 +17,8 @@ from .rubric_judgment import RubricJudgmentResults
 from .template import TemplateResults
 
 if TYPE_CHECKING:
+    from karenina.replay import ReplayStore
+
     from ..verification import VerificationResult
 
 
@@ -1212,3 +1214,13 @@ class VerificationResultSet(BaseModel):
     def __str__(self) -> str:
         """String representation (same as repr for developer-friendly output)."""
         return self.__repr__()
+
+    def to_replay_store(self, **kwargs: Any) -> ReplayStore:
+        """Build a ReplayStore from this result set.
+
+        See :py:func:`karenina.replay.capture.capture_from_result_set`
+        for keyword arguments.
+        """
+        from karenina.replay.capture import capture_from_result_set
+
+        return capture_from_result_set(self, **kwargs)

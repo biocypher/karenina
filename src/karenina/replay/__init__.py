@@ -6,6 +6,10 @@ for the design document.
 
 from __future__ import annotations
 
+from karenina.replay.capture import (
+    capture_from_result_set,
+    capture_from_scenario_result,
+)
 from karenina.replay.exceptions import (
     ReplayError,
     ReplayHydrationError,
@@ -29,6 +33,8 @@ __all__ = [
     "ReplayMissPolicy",
     "ReplayPersistenceError",
     "ReplayStore",
+    "capture_from_result_set",
+    "capture_from_scenario_result",
     "dump",
     "load",
 ]
