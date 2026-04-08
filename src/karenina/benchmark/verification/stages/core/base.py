@@ -64,6 +64,9 @@ class ArtifactKeys:
     USAGE_TRACKER = "usage_tracker"
     TRACE_MESSAGES = "trace_messages"
 
+    # Replay Injection (see karenina/replay)
+    REPLAY_ENTRY = "replay_entry"
+
     # Per-pipeline retry counts keyed by ErrorCategory.value (e.g.
     # {"timeout": 2, "connection": 1}). Populated by the orchestrator while
     # executing a pipeline; consumed by FinalizeResultStage when assembling
@@ -368,6 +371,14 @@ class VerificationContext:
     scenario_id: str | None = None
     scenario_node: str | None = None
     scenario_path: list[str] | None = None
+
+    # Scenario per-node visit count: populated by ScenarioManager before
+    # the post-turn increment, so retry loops get distinct values.
+    scenario_node_visit_index: int | None = None
+
+    # Replay layer (see karenina/replay)
+    replay_store: Any = None
+    replay_parse_on_hydration_mismatch: str = "fall_through"  # "fall_through" or "strict"
 
     # Workspace
     question_workspace_path: str | None = None  # Raw relative path from Question
