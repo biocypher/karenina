@@ -12,10 +12,20 @@ from karenina.replay.exceptions import (
     ReplayMissError,
     ReplayPersistenceError,
 )
+from karenina.replay.store import (
+    ReplayEntry,
+    ReplayKey,
+    ReplayMissPolicy,
+    ReplayStore,
+)
 
 __all__ = [
+    "ReplayEntry",
     "ReplayError",
-    "ReplayMissError",
     "ReplayHydrationError",
+    "ReplayKey",
+    "ReplayMissError",
+    "ReplayMissPolicy",
     "ReplayPersistenceError",
+    "ReplayStore",
 ]
