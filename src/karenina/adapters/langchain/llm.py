@@ -672,13 +672,30 @@ class LangChainLLMAdapter:
     # =========================================================================
 
     async def aclose(self) -> None:
-        """Close underlying resources.
+        """Close the underlying model's httpx clients, best-effort.
 
-        LangChain adapters delegate to LangChain's model management which
-        handles its own HTTP client lifecycle. This is a no-op provided
-        for interface consistency with other adapters.
+        For ChatOpenAI-derived models (openai_endpoint, openrouter), this
+        releases the bounded httpx pool injected by the custom model classes.
+        For provider-native models (anthropic, openai, google via
+        init_chat_model), the http_client/http_async_client attributes are
+        usually not present and the call is a no-op.
+
+        Cleanup never raises: each close is wrapped in try/except so that
+        ``aclose`` can always be called safely from cleanup paths.
         """
-        pass
+        async_client = getattr(self._model, "http_async_client", None)
+        if async_client is not None:
+            try:
+                await async_client.aclose()
+            except Exception as exc:
+                logger.warning("Failed to close async httpx client on adapter aclose: %s", exc)
+
+        sync_client = getattr(self._model, "http_client", None)
+        if sync_client is not None:
+            try:
+                sync_client.close()
+            except Exception as exc:
+                logger.warning("Failed to close sync httpx client on adapter aclose: %s", exc)
 
 
 # Verify protocol compliance at import time

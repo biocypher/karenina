@@ -36,6 +36,38 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _aclose_model_http_clients(model: Any) -> None:
+    """Close a LangChain chat model's underlying httpx clients, best-effort.
+
+    Used as an AsyncExitStack cleanup callback for per-arun() chat models so
+    that the underlying httpx connection pools are released deterministically.
+    Without this, vLLM streaming connections accumulate in CLOSE_WAIT until
+    GC finalizes the model (issue 194).
+
+    The function never raises: cleanup must not mask agent execution errors.
+    Both ChatOpenAI-derived classes (sync .http_client and async
+    .http_async_client) and provider-native classes (which may not expose
+    these attributes) are tolerated.
+
+    Args:
+        model: A LangChain chat model instance, typically returned from
+            init_chat_model_unified().
+    """
+    async_client = getattr(model, "http_async_client", None)
+    if async_client is not None:
+        try:
+            await async_client.aclose()
+        except Exception as exc:
+            logger.warning("Failed to close async httpx client on model cleanup: %s", exc)
+
+    sync_client = getattr(model, "http_client", None)
+    if sync_client is not None:
+        try:
+            sync_client.close()
+        except Exception as exc:
+            logger.warning("Failed to close sync httpx client on model cleanup: %s", exc)
+
+
 def extract_partial_agent_state(
     agent: Any,
     messages: list[Any],
@@ -206,7 +238,7 @@ class LangChainAgentAdapter:
         self,
         tools: list[Any],
         kwargs: dict[str, Any],
-    ) -> Any:
+    ) -> tuple[Any, Any]:
         """Create a LangGraph agent with pre-loaded tools.
 
         This is the canonical agent creation path for the LangChain adapter.
@@ -222,7 +254,9 @@ class LangChainAgentAdapter:
             kwargs: Additional kwargs for model initialization.
 
         Returns:
-            A LangGraph agent ready for invocation.
+            A tuple of (agent, base_model). The base_model is returned so the
+            caller can register its httpx clients for deterministic cleanup
+            (see arun() and issue 194).
         """
         from karenina.adapters.langchain.initialization import init_chat_model_unified
         from karenina.adapters.langchain.middleware import build_agent_middleware
@@ -285,7 +319,7 @@ class LangChainAgentAdapter:
 
         logger.info(f"Created agent with {len(tools)} MCP tools and {len(middleware)} middleware components")
 
-        return agent
+        return agent, base_model
 
     async def arun(
         self,
@@ -385,10 +419,18 @@ class LangChainAgentAdapter:
             if deferred_error is None:
                 # Create agent with persistent tools
                 try:
-                    agent = self._create_agent(persistent_tools, kwargs)
+                    agent, base_model = self._create_agent(persistent_tools, kwargs)
                 except Exception as e:
                     deferred_error = AgentExecutionError(f"Failed to initialize agent: {e}")
                     deferred_error.__cause__ = e
+                else:
+                    # Register the base model's httpx clients for deterministic
+                    # cleanup. The model is created fresh per arun() call, and
+                    # without explicit close its underlying httpx pool stays
+                    # alive until GC finalizes it: this is the leak window
+                    # documented in issue 194 (vLLM CLOSE_WAIT accumulation
+                    # under concurrent MCP-equipped agents).
+                    exit_stack.push_async_callback(_aclose_model_http_clients, base_model)
 
             if deferred_error is None:
                 if use_callback:
@@ -549,13 +591,15 @@ class LangChainAgentAdapter:
             return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
     async def aclose(self) -> None:
-        """Close underlying resources.
+        """Close underlying resources (no-op for the agent adapter).
 
-        LangChain adapters delegate to LangChain's model management which
-        handles its own HTTP client lifecycle. This is a no-op provided
-        for interface consistency with other adapters.
+        Unlike LangChainLLMAdapter, this adapter does not hold a long-lived
+        chat model. A fresh model is constructed inside each ``arun()`` call
+        and its httpx clients are closed deterministically via the
+        AsyncExitStack inside ``arun()`` (see _aclose_model_http_clients).
+        There is therefore nothing to release at adapter scope.
         """
-        pass
+        return None
 
 
 # Verify protocol compliance at import time
