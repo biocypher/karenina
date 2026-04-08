@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from karenina.ports import (
@@ -174,16 +175,30 @@ class ClaudeSDKAgentAdapter:
                 if key not in ("permission_mode", "max_turns", "mcp_servers", "allowed_tools"):
                     options_kwargs[key] = value
 
-        # Build env dict for Anthropic settings (api_key, base_url)
-        # The Claude Agent SDK reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL from env
+        # Build env dict for Anthropic settings (api_key, base_url).
+        # The Claude Agent SDK reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL from env.
         env_vars: dict[str, str] = {}
         if self._config.anthropic_api_key:
             env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
         if self._config.anthropic_base_url:
             env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
+        # Forward CLAUDE_CONFIG_DIR from the parent process so the subprocess does
+        # not load the user's personal MCP servers from ~/.claude/. Combined with
+        # setting_sources=[] below, this mitigates issue 089: 30-40s startup
+        # overhead per spawn and tool-namespace contamination.
+        parent_claude_config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+        if parent_claude_config_dir:
+            env_vars["CLAUDE_CONFIG_DIR"] = parent_claude_config_dir
 
         if env_vars:
             options_kwargs["env"] = env_vars
+
+        # Disable the Claude Code settings chain. Without this, the SDK still
+        # loads personal settings even when CLAUDE_CONFIG_DIR points at an
+        # empty directory. See issue 089.
+        # Use setdefault so a caller passing AgentConfig(extra={"setting_sources": [...]})
+        # can still override this default.
+        options_kwargs.setdefault("setting_sources", [])
 
         # Wire workspace_path to SDK's cwd for filesystem isolation
         if config.workspace_path:

@@ -427,6 +427,23 @@ class ScenarioManager:
             scenario_id=scenario_id,
             scenario_node=scenario_node,
             scenario_path=scenario_path,
+            # Agentic parsing configuration (forwarded from VerificationConfig so
+            # scenario nodes actually reach Stage 7b when agentic_parsing is set).
+            agentic_parsing=config.agentic_parsing,
+            agentic_judge_context=config.agentic_judge_context,
+            agentic_parsing_max_turns=config.agentic_parsing_max_turns,
+            agentic_parsing_timeout=config.agentic_parsing_timeout,
+            agentic_parsing_materialize_trace=config.agentic_parsing_materialize_trace,
+            agentic_parsing_persist_trace=config.agentic_parsing_persist_trace,
+            # Workspace configuration (required by agentic parsing for trace
+            # materialization and investigation-agent cwd wiring). Note:
+            # workspace_root lives on Benchmark (not VerificationConfig) and
+            # the scenario path does not currently plumb it through, so we
+            # rely on question_workspace_path as the per-node workspace root
+            # and let VerificationContext.workspace_root default to None.
+            workspace_copy=config.workspace_copy,
+            workspace_cleanup=config.workspace_cleanup,
+            question_workspace_path=getattr(node.question, "workspace_path", None),
             error_registry=error_registry,
         )
 
@@ -450,6 +467,7 @@ class ScenarioManager:
             sufficiency_enabled=config.sufficiency_enabled,
             deep_judgment_enabled=False,  # Scenarios do not use template deep judgment
             evaluation_mode=evaluation_mode,
+            agentic_parsing=config.agentic_parsing,
         )
 
         vr = orchestrator.execute(context)

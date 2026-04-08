@@ -266,6 +266,8 @@ def execute_task(
             agentic_judge_context=task.get("agentic_judge_context", "workspace_only"),
             agentic_parsing_max_turns=task.get("agentic_parsing_max_turns", 15),
             agentic_parsing_timeout=task.get("agentic_parsing_timeout", 120.0),
+            agentic_parsing_materialize_trace=task.get("agentic_parsing_materialize_trace", False),
+            agentic_parsing_persist_trace=task.get("agentic_parsing_persist_trace", False),
             workspace_root=task.get("workspace_root"),
             workspace_copy=task.get("workspace_copy", True),
             workspace_cleanup=task.get("workspace_cleanup", True),

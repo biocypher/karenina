@@ -7,6 +7,9 @@ data from the investigation findings.
 
 import json
 import logging
+import re
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from karenina.adapters import get_agent, get_parser
@@ -95,50 +98,69 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         # Build schema once for both investigation and extraction
         clean_schema = build_parsing_schema(answer_class)
 
-        # Step 1: Investigation
         try:
-            investigation_trace = self._run_investigation(context, clean_schema)
-        except Exception as e:
-            context.mark_error(f"Agentic investigation failed: {e}")
-            return
+            # Step 1: Investigation
+            try:
+                investigation_trace = self._run_investigation(context, clean_schema)
+            except Exception as e:
+                context.mark_error(f"Agentic investigation failed: {e}")
+                return
 
-        context.set_artifact(ArtifactKeys.INVESTIGATION_TRACE, investigation_trace)
+            context.set_artifact(ArtifactKeys.INVESTIGATION_TRACE, investigation_trace)
 
-        # Step 2: Extraction
-        try:
-            parsed_answer = self._run_extraction(
-                context,
-                answer_class,
+            # Step 2: Extraction
+            try:
+                parsed_answer = self._run_extraction(
+                    context,
+                    answer_class,
+                    investigation_trace,
+                    clean_schema,
+                )
+            except Exception as e:
+                context.mark_error(f"Agentic extraction failed: {e}")
+                return
+
+            # Store results
+            model_str = ModelIdentity.from_model_config(
+                parsing_model,
+                role="parsing",
+            ).display_string
+
+            context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
+            context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, model_str)
+            context.set_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED, True)
+            context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+            context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+
+            # Result builder fields
+            context.set_result_field(
+                ArtifactKeys.INVESTIGATION_TRACE,
                 investigation_trace,
-                clean_schema,
             )
-        except Exception as e:
-            context.mark_error(f"Agentic extraction failed: {e}")
-            return
+            context.set_result_field(
+                ArtifactKeys.AGENTIC_PARSING_PERFORMED,
+                True,
+            )
 
-        # Store results
-        model_str = ModelIdentity.from_model_config(
-            parsing_model,
-            role="parsing",
-        ).display_string
-
-        context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
-        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, model_str)
-        context.set_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED, True)
-        context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
-        context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
-
-        # Result builder fields
-        context.set_result_field(
-            ArtifactKeys.INVESTIGATION_TRACE,
-            investigation_trace,
-        )
-        context.set_result_field(
-            ArtifactKeys.AGENTIC_PARSING_PERFORMED,
-            True,
-        )
-
-        logger.info("Agentic parsing completed successfully")
+            logger.info("Agentic parsing completed successfully")
+        finally:
+            # Read the artifact inside finally so cleanup runs even when
+            # _run_investigation raised after writing the file (see the
+            # set_artifact call inside _run_investigation).
+            materialized_trace_path = context.get_artifact("_materialized_trace_path")
+            if materialized_trace_path is not None and not context.agentic_parsing_persist_trace:
+                try:
+                    materialized_trace_path.unlink(missing_ok=True)
+                    logger.debug(
+                        "Cleaned up materialized trace file: %s",
+                        materialized_trace_path,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Failed to clean up materialized trace file: %s",
+                        materialized_trace_path,
+                        exc_info=True,
+                    )
 
     def _run_investigation(
         self,
@@ -174,12 +196,32 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         # Build user prompt based on judge context mode
         user_parts: list[str] = [f"Question: {context.question_text}"]
 
+        materialized_trace_path: Path | None = None
         if context.agentic_judge_context in (
             "trace_and_workspace",
             "trace_only",
         ):
             raw_trace = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
-            user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_trace}\n--- END TRACE ---")
+            if context.agentic_parsing_materialize_trace and raw_trace:
+                materialized_trace_path = self._write_trace_file(
+                    workspace_path=context.workspace_path,
+                    trace=raw_trace,
+                    question_id=context.question_id,
+                    scenario_turn=context.scenario_turn,
+                )
+                # Stash the path early so execute()'s finally can clean it up
+                # even if agent.run raises before we return from this method.
+                context.set_artifact(
+                    "_materialized_trace_path",
+                    materialized_trace_path,
+                )
+                user_parts.append(
+                    f"\nThe full answering agent trace is saved to: "
+                    f"{materialized_trace_path}\n"
+                    f"Use file tools (Read, Grep, Glob) to examine it."
+                )
+            else:
+                user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_trace}\n--- END TRACE ---")
 
         if context.workspace_path and context.agentic_judge_context != "trace_only":
             user_parts.append(
@@ -219,6 +261,46 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             result.limit_reached,
         )
         return result.raw_trace
+
+    @staticmethod
+    def _write_trace_file(
+        workspace_path: Path | None,
+        trace: str,
+        question_id: str,
+        scenario_turn: int | None = None,
+    ) -> Path:
+        """Write the answering agent trace to a file for filesystem-tool access.
+
+        Mirrors the pattern from
+        karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation
+        so Stage 7b and Stage 11b share trace-materialization semantics. The
+        ``scenario_turn`` suffix prevents multi-turn scenarios (where the same
+        question_id can be reached via different nodes) from overwriting each
+        other's trace file within one workspace.
+
+        When ``workspace_path`` is None, falls back to a tempdir. The file is
+        placed under ``<workspace>/.karenina/traces/<safe_qid>[_turn<N>]_trace.txt``.
+
+        Args:
+            workspace_path: Resolved workspace directory, or None.
+            trace: The full answering agent trace text.
+            question_id: Question identifier (sanitized for filesystem safety).
+            scenario_turn: Optional turn index for multi-turn scenarios.
+
+        Returns:
+            Path to the written trace file.
+        """
+        if workspace_path is None:
+            trace_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_"))
+        else:
+            trace_dir = Path(workspace_path) / ".karenina" / "traces"
+        trace_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)
+        filename = f"{safe_id}_turn{scenario_turn}_trace.txt" if scenario_turn is not None else f"{safe_id}_trace.txt"
+        trace_path = trace_dir / filename
+        trace_path.write_text(trace, encoding="utf-8")
+        return trace_path
 
     def _run_extraction(
         self,

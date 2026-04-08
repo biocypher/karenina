@@ -65,3 +65,70 @@ class TestWorkspacePath:
             config=config,
         )
         assert options.cwd is None
+
+
+@pytest.mark.unit
+class TestBuildOptionsIsolation:
+    """The adapter must build ClaudeAgentOptions that do not load personal MCP servers.
+
+    Regression guard for issue 089 (claude-agent-sdk subprocess loading personal
+    ~/.claude/ MCP servers). The adapter MUST unconditionally set setting_sources=[]
+    and forward CLAUDE_CONFIG_DIR from the parent process environment.
+    """
+
+    def _adapter(self, **overrides) -> ClaudeSDKAgentAdapter:
+        defaults = {
+            "id": "test",
+            "model_name": "qwen3.5-122b-a10b",
+            "interface": "claude_agent_sdk",
+            "anthropic_base_url": "http://codon-gpu-001:8000",
+            "anthropic_api_key": "EMPTY",
+        }
+        defaults.update(overrides)
+        return ClaudeSDKAgentAdapter(ModelConfig(**defaults))
+
+    def test_build_options_sets_empty_setting_sources(self):
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(),
+            tools=None,
+        )
+        assert options.setting_sources == [], (
+            "setting_sources must be [] to suppress loading of personal MCP servers "
+            "(see issues/089-claude-agent-sdk-subprocess-incompatible-with-sglang-vllm-"
+            "anthropic-endpoint.md)"
+        )
+
+    def test_build_options_propagates_claude_config_dir(self, monkeypatch, tmp_path):
+        fake_cfg = tmp_path / "fake-config"
+        fake_cfg.mkdir()
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(fake_cfg))
+
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(),
+            tools=None,
+        )
+        assert options.env is not None
+        assert options.env.get("CLAUDE_CONFIG_DIR") == str(fake_cfg)
+        assert options.setting_sources == [], (
+            "setting_sources must remain [] when CLAUDE_CONFIG_DIR is set; issue 089 requires both simultaneously"
+        )
+
+    def test_build_options_no_claude_config_dir_when_parent_unset(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(),
+            tools=None,
+        )
+        # env may still exist for ANTHROPIC_* keys but should not fabricate CLAUDE_CONFIG_DIR
+        env = getattr(options, "env", None) or {}
+        assert env.get("CLAUDE_CONFIG_DIR") is None
