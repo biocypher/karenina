@@ -11,6 +11,7 @@ import hashlib
 import logging
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Literal
 
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
@@ -57,6 +58,7 @@ class ScenarioManager:
         global_rubric: Rubric | None = None,
         progress_callback: Callable[..., None] | None = None,
         answer_cache: AnswerTraceCache | None = None,
+        workspace_root: Path | None = None,
     ) -> ScenarioExecutionResult:
         """Execute a scenario with a specific model pair.
 
@@ -69,6 +71,10 @@ class ScenarioManager:
             global_rubric: Optional global rubric applied per-turn.
             progress_callback: Optional callback for turn-level progress.
             answer_cache: Optional cache for sharing answers across runs.
+            workspace_root: Optional workspace root directory, required when
+                agentic_parsing is True. Plumbed from Benchmark.workspace_root
+                through ScenarioExecutor.run_batch. See GenerateAnswer stage's
+                _resolve_workspace which hard-requires this when agentic_parsing.
 
         Returns:
             ScenarioExecutionResult with all turn data.
@@ -186,6 +192,7 @@ class ScenarioManager:
                 scenario_path=list(path),
                 question_text_override=question_text_override,
                 cached_answer_data=cached_answer_data,
+                workspace_root=workspace_root,
             )
 
             if not vr.metadata.completed_without_errors:
@@ -360,6 +367,7 @@ class ScenarioManager:
         scenario_path: list[str] | None = None,
         question_text_override: str | None = None,
         cached_answer_data: dict[str, Any] | None = None,
+        workspace_root: Path | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -435,12 +443,12 @@ class ScenarioManager:
             agentic_parsing_timeout=config.agentic_parsing_timeout,
             agentic_parsing_materialize_trace=config.agentic_parsing_materialize_trace,
             agentic_parsing_persist_trace=config.agentic_parsing_persist_trace,
-            # Workspace configuration (required by agentic parsing for trace
-            # materialization and investigation-agent cwd wiring). Note:
-            # workspace_root lives on Benchmark (not VerificationConfig) and
-            # the scenario path does not currently plumb it through, so we
-            # rely on question_workspace_path as the per-node workspace root
-            # and let VerificationContext.workspace_root default to None.
+            # Workspace configuration. workspace_root lives on Benchmark (not
+            # VerificationConfig) and is plumbed down through
+            # ScenarioExecutor.run_batch -> ScenarioManager.run -> _run_turn so
+            # GenerateAnswer._resolve_workspace has a root to hang per-question
+            # workspaces under when agentic_parsing is enabled.
+            workspace_root=workspace_root,
             workspace_copy=config.workspace_copy,
             workspace_cleanup=config.workspace_cleanup,
             question_workspace_path=getattr(node.question, "workspace_path", None),
