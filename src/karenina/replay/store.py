@@ -202,6 +202,57 @@ class ReplayStore(BaseModel):
 
         return _load(path, miss_policy=miss_policy)
 
+    @classmethod
+    def from_manual_traces(
+        cls,
+        manual_traces: Any,  # noqa: ARG003 - kept for API symmetry; lookup goes through the trace manager directly
+        benchmark: Any,
+        *,
+        miss_policy: ReplayMissPolicy = "strict",
+    ) -> ReplayStore:
+        """Build a ReplayStore from a legacy ManualTraces instance.
+
+        Walks ``benchmark._questions_cache`` forward (md5 is a one-way
+        hash of the question text, so we cannot reconstruct text from
+        the hashes stored by ManualTraceManager). For each question,
+        computes ``md5(question_text)`` to look up the registered trace
+        and ``generate_question_id(question_text)`` for the URN, then
+        emits a wildcard entry keyed by ``ReplayKey(question_id=<URN>,
+        answering_model_id=None, visit_index=None)``.
+        """
+        import hashlib
+
+        from karenina.adapters.manual import get_manual_trace_with_metrics
+        from karenina.utils.checkpoint import generate_question_id
+
+        store = cls(miss_policy=miss_policy)
+
+        questions_cache = getattr(benchmark, "_questions_cache", None)
+        if questions_cache is None:
+            base = getattr(benchmark, "_base", None)
+            questions_cache = getattr(base, "_questions_cache", {}) if base is not None else {}
+
+        for question_urn_id in questions_cache:
+            question_data = benchmark.get_question(question_urn_id)
+            question_text = question_data.get("question")
+            if not question_text:
+                continue
+            md5 = hashlib.md5(question_text.encode("utf-8")).hexdigest()
+            trace, metrics = get_manual_trace_with_metrics(md5)
+            if trace is None:
+                continue
+            question_id = generate_question_id(question_text)
+            store.register(
+                ReplayKey(question_id=question_id),
+                ReplayEntry(
+                    raw_trace=trace,
+                    agent_metrics=metrics,
+                    captured_model_id="manual",
+                ),
+            )
+
+        return store
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------

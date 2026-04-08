@@ -32,9 +32,11 @@ def _try_replay_hit(context: VerificationContext) -> Any:
     """Look up a ReplayEntry for the current turn.
 
     Returns the ReplayEntry on hit, None on fall-through miss, and
-    raises ReplayMissError on strict miss.
+    raises ReplayMissError on strict miss. Uses getattr defaults so
+    unit tests with SimpleNamespace context fakes that pre-date the
+    replay fields still work without modification.
     """
-    store = context.replay_store
+    store = getattr(context, "replay_store", None)
     if store is None:
         return None
 
@@ -42,10 +44,10 @@ def _try_replay_hit(context: VerificationContext) -> Any:
 
     return store.lookup(
         question_id=context.question_id,
-        scenario_id=context.scenario_id,
-        scenario_node=context.scenario_node,
+        scenario_id=getattr(context, "scenario_id", None),
+        scenario_node=getattr(context, "scenario_node", None),
         answering_model_id=answering_display,
-        visit_index=context.scenario_node_visit_index,
+        visit_index=getattr(context, "scenario_node_visit_index", None),
     )
 
 

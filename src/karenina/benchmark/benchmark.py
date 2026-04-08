@@ -788,6 +788,35 @@ class Benchmark:
         which iterates over the scenario x model cross-product.
         For standalone question benchmarks, delegates to VerificationManager.
         """
+        # Auto-build replay store from legacy interface="manual" models.
+        # The benchmark is only reachable here (not from VerificationConfig
+        # validators), so this is the right layer for the translation.
+        # The resulting store is strict so existing manual semantics are
+        # preserved bit-identically.
+        if config.replay_store is None:
+            manual_model = next(
+                (m for m in config.answering_models if getattr(m, "interface", None) == "manual"),
+                None,
+            )
+            if manual_model is not None and getattr(manual_model, "manual_traces", None) is not None:
+                from karenina.replay import ReplayStore
+
+                config = config.model_copy(
+                    update={
+                        "replay_store": ReplayStore.from_manual_traces(
+                            manual_model.manual_traces,
+                            benchmark=self,
+                            miss_policy="strict",
+                        ),
+                    }
+                )
+
+        if config.replay_store is not None and config.replicate_count > 1:
+            logger.warning(
+                "Replay is single-replicate; all %d replicates will reuse the same captured entries",
+                config.replicate_count,
+            )
+
         if self.is_scenario_benchmark:
             return self._run_scenario_verification(
                 config=config,
