@@ -34,10 +34,9 @@ class TestReplayExceptionHierarchy:
 
     def test_miss_error_chain_from(self):
         inner = RuntimeError("boom")
-        try:
+        with pytest.raises(ReplayMissError) as info:
             raise ReplayMissError("miss", key=None) from inner
-        except ReplayMissError as exc:
-            assert exc.__cause__ is inner
+        assert info.value.__cause__ is inner
 
     def test_hydration_error_carries_fields_and_validation_error(self):
         inner = ValueError("bad field")
