@@ -140,6 +140,13 @@ def generate_task_queue(
                         # Feature flags (from config)
                         **extract_feature_flags(config),
                     }
+                    # Replay layer (see karenina/replay)
+                    task.update(
+                        {
+                            "replay_store": config.replay_store,
+                            "replay_parse_on_hydration_mismatch": config.replay_parse_on_hydration_mismatch,
+                        }
+                    )
                     # Benchmark-level workspace_root overrides config
                     if workspace_root is not None:
                         task["workspace_root"] = workspace_root
@@ -278,6 +285,9 @@ def execute_task(
             # Trait provenance
             trait_provenance=task.get("trait_provenance"),
             cached_answer_data=cached_answer_data,
+            # Replay layer
+            replay_store=task.get("replay_store"),
+            replay_parse_on_hydration_mismatch=task.get("replay_parse_on_hydration_mismatch", "fall_through"),
         )
 
         # If we generated a new answer, cache it for other tasks

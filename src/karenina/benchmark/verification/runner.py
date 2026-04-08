@@ -110,6 +110,9 @@ def run_single_model_verification(
     trait_provenance: dict[str, str] | None = None,
     # Error classification
     custom_error_patterns: list[ErrorPatternConfig] | None = None,
+    # Replay layer
+    replay_store: Any = None,
+    replay_parse_on_hydration_mismatch: str = "fall_through",
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -230,6 +233,9 @@ def run_single_model_verification(
         trait_provenance=trait_provenance,
         # Error Classification
         error_registry=_build_error_registry(custom_error_patterns or []),
+        # Replay layer
+        replay_store=replay_store,
+        replay_parse_on_hydration_mismatch=replay_parse_on_hydration_mismatch,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
