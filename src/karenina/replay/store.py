@@ -8,6 +8,7 @@ and ReplayStore (specificity-aware lookup).
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -178,6 +179,28 @@ class ReplayStore(BaseModel):
         if scenario_id is not None:
             return (scenario_id, scenario_node or "") in self._scenario_index
         return question_id in self._qa_index
+
+    # ------------------------------------------------------------------
+    # Persistence convenience
+    # ------------------------------------------------------------------
+
+    def save(self, path: str | Path) -> None:
+        """Convenience wrapper around karenina.replay.persistence.dump."""
+        from karenina.replay.persistence import dump as _dump
+
+        _dump(self, path)
+
+    @classmethod
+    def load(
+        cls,
+        path: str | Path,
+        *,
+        miss_policy: ReplayMissPolicy | None = None,
+    ) -> ReplayStore:
+        """Convenience wrapper around karenina.replay.persistence.load."""
+        from karenina.replay.persistence import load as _load
+
+        return _load(path, miss_policy=miss_policy)
 
     # ------------------------------------------------------------------
     # Internal

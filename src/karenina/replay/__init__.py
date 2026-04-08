@@ -12,6 +12,7 @@ from karenina.replay.exceptions import (
     ReplayMissError,
     ReplayPersistenceError,
 )
+from karenina.replay.persistence import dump, load
 from karenina.replay.store import (
     ReplayEntry,
     ReplayKey,
@@ -28,4 +29,6 @@ __all__ = [
     "ReplayMissPolicy",
     "ReplayPersistenceError",
     "ReplayStore",
+    "dump",
+    "load",
 ]
