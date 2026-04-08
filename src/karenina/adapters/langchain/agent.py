@@ -299,12 +299,15 @@ class LangChainAgentAdapter:
         # Build middleware from configuration
         # Pass base_model so summarization uses the same model by default
         # Pass provider to enable provider-specific middleware (e.g., Anthropic prompt caching)
+        # Pass request_timeout so PerCallTimeoutMiddleware can bound each
+        # individual model.ainvoke() inside the agent loop (issue 195).
         middleware = build_agent_middleware(
             config=self._config.agent_middleware,
             max_context_tokens=max_context_tokens,
             interface=self._config.interface or "langchain",
             base_model=base_model,
             provider=self._config.model_provider,
+            request_timeout=self._config.request_timeout,
         )
 
         # Create agent with tools, middleware, and checkpointer
