@@ -71,6 +71,11 @@ class TestGenerateAnswerReplayHit:
         stage.execute(context)
 
         assert context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE) == "canned answer"
+        # Issue 198: replay must also write raw_llm_response and
+        # recursion_limit_reached to result fields, because finalize_result
+        # reads them from result fields rather than artifacts.
+        assert context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE) == "canned answer"
+        assert context.get_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED) is False
         assert context.get_artifact(ArtifactKeys.REPLAY_ENTRY) is not None
         assert context.completed_without_errors is True
 

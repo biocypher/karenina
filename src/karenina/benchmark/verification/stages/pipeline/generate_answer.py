@@ -58,13 +58,17 @@ def _populate_artifacts_from_replay_entry(
     """Populate GenerateAnswer output artifacts from a ReplayEntry.
 
     Mirrors the artifact set a live GenerateAnswer would produce so
-    downstream stages see indistinguishable input.
+    downstream stages see indistinguishable input. Fields that
+    FinalizeResultStage reads from result fields (raw_llm_response,
+    recursion_limit_reached) are written to both the artifact map and
+    the result field map; see issue 198.
     """
     answering_model_str = (
         ModelIdentity.from_model_config(context.answering_model, role="answering").display_string + " (replay)"
     )
 
     context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, entry.raw_trace)
+    context.set_result_field(ArtifactKeys.RAW_LLM_RESPONSE, entry.raw_trace)
 
     if entry.trace_messages:
         try:
@@ -76,10 +80,9 @@ def _populate_artifacts_from_replay_entry(
     else:
         context.set_artifact(ArtifactKeys.TRACE_MESSAGES, None)
 
-    context.set_artifact(
-        ArtifactKeys.RECURSION_LIMIT_REACHED,
-        bool((entry.agent_metrics or {}).get("limit_reached", False)),
-    )
+    recursion_limit_reached = bool((entry.agent_metrics or {}).get("limit_reached", False))
+    context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, recursion_limit_reached)
+    context.set_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED, recursion_limit_reached)
     context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
     context.set_artifact(ArtifactKeys.REPLAY_ENTRY, entry)
 
