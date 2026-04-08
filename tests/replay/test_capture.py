@@ -213,6 +213,27 @@ class TestCaptureFromResultSet:
         store = capture_from_result_set(rs)
         assert store.miss_policy == "fall_through"
 
+    def test_empty_parsed_dict_preserved_not_dropped_to_none(self):
+        """An empty parsed_llm_response {} is a valid captured value
+        (template with no extractable fields) and must not be coerced to None."""
+        rs = _fake_result_set(
+            results=[
+                _build_fake_qa_result(
+                    question_id="q",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    raw="x",
+                    parsed={},
+                    model_display="m",
+                ),
+            ],
+        )
+        store = capture_from_result_set(rs)
+        hit = store.lookup(question_id="q", answering_model_id="m")
+        assert hit is not None
+        assert hit.parsed_answer_fields == {}
+
 
 @pytest.mark.unit
 class TestCaptureFromScenarioResult:

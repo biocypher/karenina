@@ -150,6 +150,10 @@ def capture_from_scenario_result(
     if effective_scenario_id is None:
         raise ValueError("scenario_id is required and not available on the result")
 
+    # Counter is keyed by node_id alone (not (scenario_id, node_id) like
+    # capture_from_result_set) because this function is single-scenario
+    # by construction; cross-scenario counting is the responsibility of
+    # capture_from_result_set on a mixed flat list.
     visit_counts: dict[str, int] = {}
 
     for record in getattr(scenario_result, "history", []):
@@ -166,15 +170,18 @@ def capture_from_scenario_result(
         parsed_fields = getattr(record, "parsed_fields", None) if include_parsed else None
         trace_messages = getattr(record, "trace_messages", None)
         trace_messages_dicts: list[dict[str, Any]] | None
-        if include_agent_traces and trace_messages:
+        if include_agent_traces and trace_messages is not None:
             trace_messages_dicts = [_message_to_dict(m) for m in trace_messages]
         else:
             trace_messages_dicts = None
 
+        # Preserve empty dicts/lists. An empty parsed_fields {} is a valid
+        # captured value (template with no extractable fields) and is
+        # distinct from None (no parsed_fields captured at all).
         entry = ReplayEntry(
             raw_trace=getattr(record, "raw_response", "") or "",
             trace_messages=trace_messages_dicts,
-            parsed_answer_fields=parsed_fields if parsed_fields else None,
+            parsed_answer_fields=parsed_fields if parsed_fields is not None else None,
             captured_model_id=answering_model_id,
             captured_at=datetime.now(UTC).isoformat(),
         )
@@ -220,15 +227,20 @@ def _build_entry_from_vr(
     if not include_parsed:
         parsed_fields = None
 
-    trace_messages = getattr(template, "trace_messages", None) or None
+    trace_messages = getattr(template, "trace_messages", None)
     if not include_agent_traces:
         trace_messages = None
 
     md = vr.metadata
+    # Preserve empty dicts/lists. An empty parsed_fields {} is a valid
+    # captured value (template with no extractable fields) and is
+    # distinct from None (no parsed_fields captured at all). Same for
+    # trace_messages: an empty list means an agent ran with no tool
+    # calls; None means trace messages were never captured.
     return ReplayEntry(
         raw_trace=getattr(template, "raw_llm_response", "") or "",
-        trace_messages=trace_messages if trace_messages else None,
-        parsed_answer_fields=parsed_fields if parsed_fields else None,
+        trace_messages=trace_messages if trace_messages is not None else None,
+        parsed_answer_fields=parsed_fields if parsed_fields is not None else None,
         captured_model_id=_answering_display(md),
         captured_at=getattr(md, "completed_at", None) or datetime.now(UTC).isoformat(),
     )
