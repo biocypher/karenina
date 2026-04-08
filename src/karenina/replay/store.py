@@ -117,18 +117,10 @@ class ReplayStore(BaseModel):
                 key.visit_index,
             )
             # Drop the prior entries-list row so there is exactly one
-            # entry per key in the source of truth.
-            self.entries = [
-                (k, e)
-                for (k, e) in self.entries
-                if not (
-                    k.question_id == key.question_id
-                    and k.scenario_id == key.scenario_id
-                    and k.scenario_node == key.scenario_node
-                    and k.answering_model_id == key.answering_model_id
-                    and k.visit_index == key.visit_index
-                )
-            ]
+            # entry per key in the source of truth. ReplayKey is frozen
+            # and Pydantic v2 gives it value equality across all fields,
+            # so plain `!=` future-proofs this against new identity fields.
+            self.entries = [(k, e) for (k, e) in self.entries if k != key]
         self.entries.append((key, entry))
         self._rebuild_indexes()
 
