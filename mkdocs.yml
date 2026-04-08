@@ -51,6 +51,7 @@ exclude_docs: |
   core_concepts/scenarios/state-and-routing.md
   workflows/scenarios/sycophancy-tutorial.md
   advanced-pipeline/error-handling.md
+  advanced-pipeline/replay-store.md
 
 theme:
   name: material
@@ -272,6 +273,7 @@ nav:
       - Agentic Evaluation: advanced-pipeline/agentic-evaluation.md
       - Agentic Rubric Evaluation: advanced-pipeline/agentic-rubric-evaluation.md
       - Error Handling and Retries: notebooks/advanced/pipeline/error-handling.ipynb
+      - Replay Store: notebooks/advanced/pipeline/replay-store.ipynb
     - Adapters:
       - Overview: advanced-adapters/index.md
       - Ports: advanced-adapters/ports.md
