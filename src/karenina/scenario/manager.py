@@ -212,10 +212,22 @@ class ScenarioManager:
                 # Determine question_text_override (only when handover modified it)
                 question_text_override = question_text if question_text != node.question.question else None
 
-                # Build answer cache key for this turn
+                # Build answer cache key for this turn. Skip the cache
+                # entirely when a replay hit is known for the upcoming
+                # node: GenerateAnswerStage will short-circuit and we
+                # would otherwise leak an orphaned IN_PROGRESS slot.
                 cached_answer_data = None
                 cache_key = None
-                if answer_cache is not None:
+
+                will_replay = False
+                if config.replay_store is not None:
+                    will_replay = config.replay_store.has_any_for(
+                        question_id=generate_question_id(node.question.question),
+                        scenario_id=scenario.name,
+                        scenario_node=state.current_node,
+                    )
+
+                if answer_cache is not None and not will_replay:
                     answering_model_id = answering_model.id or answering_model.model_name or "unknown"
                     history_strs = [str(m) for m in conversation_history]
                     cache_key = build_scenario_cache_key(
