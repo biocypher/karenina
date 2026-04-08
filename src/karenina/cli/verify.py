@@ -299,6 +299,18 @@ def verify(
             help="JSON file with manual traces (question_hash: trace_string mapping). Required when --interface manual.",
         ),
     ] = None,
+    # Replay store
+    replay: Annotated[
+        Path | None,
+        typer.Option(
+            "--replay",
+            help=(
+                "Path to a replay store JSON (built by VerificationResultSet.to_replay_store). "
+                "When set, the pipeline short-circuits to the canned traces on matching keys "
+                "and runs live otherwise."
+            ),
+        ),
+    ] = None,
     # Progressive save and resume support
     progressive_save: Annotated[
         bool,
@@ -438,6 +450,15 @@ def verify(
         # Validate config was built successfully
         if config is None:
             cli_error("Failed to build verification configuration")
+
+        # Attach a ReplayStore if --replay was supplied. Done after the
+        # config is built so the file load happens in one place and is
+        # easy to monkeypatch in tests.
+        if replay is not None:
+            from karenina.replay import ReplayStore
+
+            console.print(f"[dim]Loading replay store from {replay}[/dim]")
+            config = config.model_copy(update={"replay_store": ReplayStore.load(replay)})
 
         # Step 5: Get and filter templates
         ids_filter = None

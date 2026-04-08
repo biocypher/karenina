@@ -249,6 +249,79 @@ class TestVerifyCommandOptions:
 
         assert "unrecognized" not in result.stdout.lower()
 
+    def test_replay_flag_accepted(self, tmp_path: Path) -> None:
+        """Verify --replay option is parsed without error."""
+        checkpoint = create_minimal_checkpoint(tmp_path)
+        replay_path = tmp_path / "replay.json"
+        replay_path.write_text(json.dumps({"version": 1, "miss_policy": "fall_through", "entries": []}))
+
+        result = runner.invoke(
+            app,
+            ["verify", str(checkpoint), "--replay", str(replay_path)],
+        )
+
+        assert "unrecognized" not in result.stdout.lower()
+
+    def test_replay_flag_loads_store_into_config(self, tmp_path: Path, monkeypatch: Any) -> None:
+        """When --replay is supplied, the loaded ReplayStore must be attached
+        to the VerificationConfig before run_verification_with_progress runs."""
+        from karenina.benchmark import Benchmark
+        from karenina.replay import ReplayEntry, ReplayKey, ReplayStore
+
+        # Build a small replay store and persist it.
+        store = ReplayStore()
+        store.register(
+            ReplayKey(question_id="urn:uuid:question-q1-aabbccdd"),
+            ReplayEntry(raw_trace="canned"),
+        )
+        replay_path = tmp_path / "replay.json"
+        store.save(replay_path)
+
+        # Build a real benchmark and save it as a checkpoint so the
+        # JSON-LD loader accepts the format.
+        bm = Benchmark.create(name="cli-replay-test", version="1.0.0")
+        bm.add_question(question="What is X?", raw_answer="X")
+        checkpoint = tmp_path / "checkpoint.jsonld"
+        bm.save(checkpoint)
+
+        monkeypatch.setenv("KARENINA_PRESETS_DIR", str(tmp_path))
+        create_minimal_preset(tmp_path, "replay-preset")
+
+        captured: dict[str, Any] = {}
+
+        def _fake_run(_templates, config, _benchmark, _progressive_manager, _show_progress):
+            captured["replay_store"] = config.replay_store
+            from karenina.schemas.results.verification_result_set import (
+                VerificationResultSet,
+            )
+
+            return VerificationResultSet(results=[])
+
+        # `karenina.cli.verify` resolves to the function (not the
+        # submodule) because the package's __init__ does
+        # `from .verify import verify`. Import the actual module
+        # via importlib to get the namespace we need to patch.
+        import importlib
+
+        verify_mod = importlib.import_module("karenina.cli.verify")
+        monkeypatch.setattr(verify_mod, "run_verification_with_progress", _fake_run)
+
+        result = runner.invoke(
+            app,
+            [
+                "verify",
+                str(checkpoint),
+                "--preset",
+                "replay-preset",
+                "--replay",
+                str(replay_path),
+            ],
+        )
+
+        assert result.exit_code == 0, result.stdout
+        assert captured["replay_store"] is not None
+        assert isinstance(captured["replay_store"], ReplayStore)
+
 
 # =============================================================================
 # Verify Status Command Tests
