@@ -109,6 +109,14 @@ class TestReplayPersistence:
         reloaded = load(path, miss_policy="strict")
         assert reloaded.miss_policy == "strict"
 
+    def test_load_rejects_invalid_miss_policy_string(self, tmp_path):
+        """A garbage miss_policy in the file must surface as ReplayPersistenceError,
+        not as an unwrapped Pydantic ValidationError."""
+        path = tmp_path / "bad_policy.json"
+        path.write_text(json.dumps({"version": 1, "miss_policy": "garbage", "entries": []}))
+        with pytest.raises(ReplayPersistenceError):
+            load(path)
+
     def test_atomic_save_no_partial_file_on_failure(self, tmp_path, monkeypatch):
         store = _mixed_store()
         path = tmp_path / "replay.json"

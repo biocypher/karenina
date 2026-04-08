@@ -110,9 +110,12 @@ def load(
     except Exception as e:  # noqa: BLE001  # Pydantic ValidationError, KeyError, TypeError
         raise ReplayPersistenceError(f"Schema error in {path}: {e}") from e
 
-    file_policy: ReplayMissPolicy = payload.get("miss_policy", "fall_through")
+    file_policy = payload.get("miss_policy", "fall_through")
     effective_policy = miss_policy if miss_policy is not None else file_policy
 
-    store = ReplayStore(miss_policy=effective_policy, entries=entries)
+    try:
+        store = ReplayStore(miss_policy=effective_policy, entries=entries)
+    except Exception as e:  # noqa: BLE001  # Pydantic ValidationError on bad miss_policy
+        raise ReplayPersistenceError(f"Invalid replay store config in {path}: {e}") from e
     logger.info("Loaded replay store: %d entries from %s", len(entries), path)
     return store
