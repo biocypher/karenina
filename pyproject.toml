@@ -135,6 +135,7 @@ markers = [
     "storage: Checkpoint I/O and storage tests",
     "cli: CLI command tests",
     "deep_judgment: marks tests that use deep judgment verification mode",
+    "live: tests that require a reachable live LLM endpoint (opt-in via KARENINA_LIVE_TESTS=1)",
 ]
 
 [tool.coverage.run]
