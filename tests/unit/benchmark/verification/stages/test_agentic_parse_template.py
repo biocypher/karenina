@@ -600,6 +600,33 @@ class TestReformatTranscriptAsXml:
         eval_pos = result.find("You are a safety guardrail.")
         assert last_turn_close < eval_pos
 
+    def test_system_prompt_xml_element(self) -> None:
+        """System messages should produce <system_prompt> XML elements."""
+        transcript = (
+            "[qwen:system:text] You are an expert.\n[__user__] What is BCL2?\n[qwen:assistant:text] BCL2 is a protein."
+        )
+        question_text = transcript + "\n\n---\n\nEvaluate the answer."
+        result = self._reformat(question_text)
+        assert '<system_prompt agent="qwen">' in result
+        assert "You are an expert." in result
+        assert "<user>" in result
+        assert '<assistant agent="qwen">' in result
+        assert "Evaluate the answer." in result
+
+    def test_no_system_prompt_on_second_turn_same_agent(self) -> None:
+        """Second turn with same agent should not have system_prompt."""
+        transcript = (
+            "[qwen:system:text] You are an expert.\n"
+            "[__user__] Q1?\n"
+            "[qwen:assistant:text] A1\n"
+            "[__user__] Q2?\n"
+            "[qwen:assistant:text] A2"
+        )
+        question_text = transcript + "\n\n---\n\nEvaluate."
+        result = self._reformat(question_text)
+        assert result.count("<system_prompt") == 1
+        assert result.count("<turn") == 2
+
 
 @pytest.mark.unit
 class TestTraceContentOffloading:

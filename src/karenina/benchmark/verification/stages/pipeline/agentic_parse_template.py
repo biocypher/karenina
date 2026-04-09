@@ -446,29 +446,38 @@ class AgenticParseTemplateStage(BaseVerificationStage):
     ) -> list[dict[str, Any]]:
         """Group parsed entries into turns.
 
-        Each ``[__user__]`` entry starts a new turn. All subsequent
-        non-user entries become the assistant response blocks for
-        that turn.
+        Each ``[__user__]`` entry starts a new turn. System entries
+        become the ``system_prompt`` of the following turn. All subsequent
+        non-user, non-system entries become the assistant response blocks.
 
         Args:
             entries: Parsed transcript entries.
 
         Returns:
-            List of turn dicts with ``user_content``, ``agent_id``,
-            and ``blocks`` (list of assistant entries).
+            List of turn dicts with ``system_prompt``, ``user_content``,
+            ``agent_id``, and ``blocks`` (list of assistant entries).
         """
         turns: list[dict[str, Any]] = []
         current_turn: dict[str, Any] | None = None
+        pending_system: str | None = None
+        pending_system_agent: str | None = None
 
         for entry in entries:
-            if entry["role"] == "user":
+            if entry["role"] == "system":
+                pending_system = entry["content"]
+                pending_system_agent = entry["agent_id"]
+            elif entry["role"] == "user":
                 if current_turn is not None:
                     turns.append(current_turn)
                 current_turn = {
+                    "system_prompt": pending_system,
+                    "system_agent": pending_system_agent,
                     "user_content": entry["content"],
                     "agent_id": None,
                     "blocks": [],
                 }
+                pending_system = None
+                pending_system_agent = None
             elif current_turn is not None:
                 if current_turn["agent_id"] is None and entry["agent_id"]:
                     current_turn["agent_id"] = entry["agent_id"]
@@ -476,6 +485,18 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
         if current_turn is not None:
             turns.append(current_turn)
+
+        # Handle trailing system entry with no following user entry
+        if pending_system is not None:
+            turns.append(
+                {
+                    "system_prompt": pending_system,
+                    "system_agent": pending_system_agent,
+                    "user_content": None,
+                    "agent_id": None,
+                    "blocks": [],
+                }
+            )
 
         return turns
 
@@ -487,10 +508,11 @@ class AgenticParseTemplateStage(BaseVerificationStage):
     ) -> str:
         """Format grouped turns into XML with nested elements.
 
-        Produces ``<turn>``, ``<user>``, ``<assistant>``, ``<text>``,
-        ``<tool_call>``, and ``<tool_result>`` elements. Tool results
-        carry a ``name`` attribute from the most recent preceding
-        tool call.
+        Produces ``<turn>``, ``<system_prompt>``, ``<user>``,
+        ``<assistant>``, ``<text>``, ``<tool_call>``, and
+        ``<tool_result>`` elements. System prompts appear inside
+        ``<turn>`` before ``<user>``. Tool results carry a ``name``
+        attribute from the most recent preceding tool call.
 
         Content blocks exceeding ``truncation_threshold`` are offloaded
         to numbered files in ``artifacts_dir`` when provided.
@@ -544,10 +566,20 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
         for idx, turn in enumerate(turns, 1):
             parts.append(f'<turn number="{idx}">')
-            parts.append("  <user>")
-            for line in (turn["user_content"] or "").strip().split("\n"):
-                parts.append(f"    {line}")
-            parts.append("  </user>")
+
+            # Emit system prompt if present for this turn
+            if turn.get("system_prompt"):
+                sys_agent = turn.get("system_agent") or turn.get("agent_id") or "unknown"
+                parts.append(f'  <system_prompt agent="{sys_agent}">')
+                for line in (turn["system_prompt"] or "").strip().split("\n"):
+                    parts.append(f"    {line}")
+                parts.append("  </system_prompt>")
+
+            if turn.get("user_content") is not None:
+                parts.append("  <user>")
+                for line in turn["user_content"].strip().split("\n"):
+                    parts.append(f"    {line}")
+                parts.append("  </user>")
 
             if turn["blocks"]:
                 agent_id = turn["agent_id"] or "unknown"
