@@ -32,9 +32,9 @@ class TaggedMessage:
 def format_transcript(tagged_messages: list[TaggedMessage]) -> str:
     """Format tagged messages into a labeled transcript.
 
-    Each content block gets a label: [agent_id:content_type] for agent
-    messages, [__user__] for scenario prompts. ThinkingContent blocks
-    are excluded.
+    Each content block gets a label: [agent_id:role:content_type] for
+    agent messages, [__user__] for scenario prompts. ThinkingContent
+    blocks are excluded.
 
     Args:
         tagged_messages: The full tagged message history.
@@ -51,7 +51,11 @@ def format_transcript(tagged_messages: list[TaggedMessage]) -> str:
             if block.type == ContentType.THINKING:
                 continue
 
-            label = "[__user__]" if tm.agent_id == "__user__" else f"[{tm.agent_id}:{block.type.value}]"
+            label = (
+                "[__user__]"
+                if tm.agent_id == "__user__"
+                else f"[{tm.agent_id}:{tm.message.role.value}:{block.type.value}]"
+            )
 
             if isinstance(block, TextContent):
                 lines.append(f"{label} {block.text}")

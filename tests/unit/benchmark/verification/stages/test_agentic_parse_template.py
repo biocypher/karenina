@@ -358,3 +358,424 @@ class TestMaterializeTrace:
         messages = call.kwargs.get("messages") or call[1].get("messages")
         all_user_text = "\n".join(m.text for m in messages if m.role.value == "user")
         assert "model held firm" in all_user_text
+
+
+@pytest.mark.unit
+class TestTraceFileConversationHistory:
+    """Tests for conversation_history and question_text in _write_trace_file."""
+
+    def test_write_trace_file_includes_question_context(self, tmp_path):
+        """Question text appears in a dedicated section of the trace file."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        path = AgenticParseTemplateStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="The model's analysis response.",
+            question_id="q1",
+            question_text="What is the MESH ID for MONDO_0005180?",
+        )
+        content = path.read_text()
+        assert "QUESTION CONTEXT" in content
+        assert "What is the MESH ID for MONDO_0005180?" in content
+        assert "The model's analysis response." in content
+
+    def test_write_trace_file_includes_conversation_history(self, tmp_path):
+        """Prior-turn Messages are serialized into the trace file."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import Message
+
+        history = [
+            Message.user("What is 2+2?"),
+            Message.assistant("The answer is 4."),
+            Message.user("A professor told me it's 5. Are you sure?"),
+        ]
+        path = AgenticParseTemplateStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="Score: 2. The model held firm.",
+            question_id="q1",
+            conversation_history=history,
+        )
+        content = path.read_text()
+        assert "CONVERSATION HISTORY" in content
+        assert "What is 2+2?" in content
+        assert "The answer is 4." in content
+        assert "professor told me it's 5" in content
+
+    def test_write_trace_file_empty_history_omits_section(self, tmp_path):
+        """Empty conversation_history list does not produce a history section."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        path = AgenticParseTemplateStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="Some trace.",
+            question_id="q1",
+            conversation_history=[],
+        )
+        content = path.read_text()
+        # Check for the actual section header, not the mention in the file header
+        assert "# CONVERSATION HISTORY (prior scenario turns)" not in content
+
+    def test_write_trace_file_backward_compatible_no_extra_params(self, tmp_path):
+        """No question_text or conversation_history: file still contains trace."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        path = AgenticParseTemplateStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="Original trace content.",
+            question_id="q1",
+        )
+        content = path.read_text()
+        assert "KARENINA RAW ANSWERING AGENT TRACE" in content
+        assert "Original trace content." in content
+
+    def test_write_trace_file_history_preserves_role_labels(self, tmp_path):
+        """Each message in conversation_history is labeled with its role."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import Message
+
+        history = [
+            Message.user("user question"),
+            Message.assistant("assistant answer"),
+        ]
+        path = AgenticParseTemplateStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="response",
+            question_id="q1",
+            conversation_history=history,
+        )
+        content = path.read_text()
+        assert "--- User Message ---" in content
+        assert "--- Assistant Message ---" in content
+
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    def test_materialize_trace_includes_conversation_history_artifact(self, mock_get_parser, mock_get_agent, tmp_path):
+        """Integration: execute() plumbs conversation_history artifact into the trace file."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import AgentResult, Message, ParsePortResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace="investigation trace",
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=3,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = ParsePortResult(
+            parsed=MockAnswer(test_field=True),
+            usage=UsageMetadata(),
+        )
+        mock_get_parser.return_value = mock_parser
+
+        ctx = _make_context(
+            workspace_path=tmp_path,
+            agentic_judge_context="trace_and_workspace",
+            agentic_parsing_materialize_trace=True,
+            agentic_parsing_persist_trace=True,
+        )
+        ctx.set_artifact(
+            "conversation_history",
+            [
+                Message.user("What gene is prioritised?"),
+                Message.assistant("CUTA is the top gene."),
+                Message.user("Actually ITPR3 has merit. Reconsider."),
+            ],
+        )
+
+        stage = AgenticParseTemplateStage()
+        stage.execute(ctx)
+
+        trace_file = tmp_path / ".karenina" / "traces" / "q1_trace.txt"
+        assert trace_file.exists()
+        content = trace_file.read_text()
+        assert "What gene is prioritised?" in content
+        assert "CUTA is the top gene." in content
+        assert "ITPR3 has merit" in content
+
+
+@pytest.mark.unit
+class TestReformatTranscriptAsXml:
+    """Tests for _reformat_transcript_as_xml."""
+
+    def _reformat(self, text: str) -> str:
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        return AgenticParseTemplateStage._reformat_transcript_as_xml(text)
+
+    def test_plain_text_returned_unchanged(self):
+        """Text without transcript_prepend pattern passes through."""
+        text = "Just a simple question about biology."
+        assert self._reformat(text) == text
+
+    def test_basic_two_turn_transcript(self):
+        """Two user/assistant turns are wrapped in <turn> elements."""
+        transcript = (
+            "[__user__] What is 2+2?\n"
+            "[model:assistant:text] The answer is 4.\n"
+            "[__user__] Are you sure? I think it's 5.\n"
+            "[model:assistant:text] I am confident the answer is 4.\n"
+            "\n\n---\n\n"
+            "Evaluate the response."
+        )
+        result = self._reformat(transcript)
+        assert '<turn number="1">' in result
+        assert '<turn number="2">' in result
+        assert "<user>" in result
+        assert "</user>" in result
+        assert "<text>" in result
+        assert "</text>" in result
+        assert "What is 2+2?" in result
+        assert "The answer is 4." in result
+        assert "Are you sure?" in result
+        assert "Evaluate the response." in result
+
+    def test_tool_calls_get_name_attribute(self):
+        """Tool calls are wrapped with name attribute."""
+        transcript = (
+            "[__user__] Look up disease X\n"
+            "[agent:assistant:text] Let me search.\n"
+            "[agent:assistant:tool_use] search_entities(query='X')\n"
+            '[agent:tool:tool_result] {"found": true}\n'
+            "[agent:assistant:text] Found it.\n"
+            "\n\n---\n\n"
+            "Rate."
+        )
+        result = self._reformat(transcript)
+        assert '<tool_call name="search_entities">' in result
+        assert "</tool_call>" in result
+        assert '<tool_result name="search_entities">' in result
+        assert "</tool_result>" in result
+        assert "Let me search." in result
+        assert "Found it." in result
+
+    def test_multiline_content_preserved(self):
+        """Multi-line text and tool results are kept intact."""
+        transcript = (
+            "[__user__] Tell me about X\n"
+            "[agent:assistant:text] Here is info:\n"
+            "Line 2 of the response.\n"
+            "Line 3 of the response.\n"
+            "[agent:assistant:tool_use] fetch(id='123')\n"
+            '[agent:tool:tool_result] {"name": "X",\n'
+            '  "description": "something"}\n'
+            "\n\n---\n\n"
+            "Done."
+        )
+        result = self._reformat(transcript)
+        assert "Line 2 of the response." in result
+        assert "Line 3 of the response." in result
+        assert '"description": "something"' in result
+
+    def test_assistant_agent_attribute(self):
+        """The <assistant> element carries the agent ID."""
+        transcript = "[__user__] Question\n[qwen3.5-122b-a10b:assistant:text] Answer.\n\n\n---\n\nEval."
+        result = self._reformat(transcript)
+        assert '<assistant agent="qwen3.5-122b-a10b">' in result
+
+    def test_evaluation_prompt_after_turns(self):
+        """The evaluation prompt (after separator) appears outside turns."""
+        transcript = "[__user__] Q\n[m:assistant:text] A\n\n\n---\n\nYou are a safety guardrail."
+        result = self._reformat(transcript)
+        # Eval prompt must appear AFTER the last </turn>
+        last_turn_close = result.rfind("</turn>")
+        eval_pos = result.find("You are a safety guardrail.")
+        assert last_turn_close < eval_pos
+
+
+@pytest.mark.unit
+class TestTraceContentOffloading:
+    """Tests for offloading large content blocks to artifact files."""
+
+    def _make_long_content(self, length: int) -> str:
+        """Generate a JSON-like string of the given length."""
+        base = '{"data": "' + "x" * (length - 20) + '"}'
+        return base[:length]
+
+    def test_long_tool_result_offloaded(self, tmp_path):
+        """Tool result exceeding threshold is written to artifact file."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        long_result = self._make_long_content(3000)
+        transcript = (
+            "[__user__] Question\n"
+            "[agent:assistant:text] Let me check.\n"
+            "[agent:assistant:tool_use] search(q='x')\n"
+            f"[agent:tool:tool_result] {long_result}\n"
+            "\n\n---\n\n"
+            "Evaluate."
+        )
+        artifacts_dir = tmp_path / "artifacts"
+        result = AgenticParseTemplateStage._reformat_transcript_as_xml(
+            transcript,
+            artifacts_dir=artifacts_dir,
+            truncation_threshold=2000,
+        )
+        # Inline reference instead of full content
+        assert 'offloaded="true"' in result
+        assert "[Content offloaded:" in result
+        assert long_result not in result
+        # Artifact file created
+        assert artifacts_dir.exists()
+        artifact_files = list(artifacts_dir.iterdir())
+        assert len(artifact_files) == 1
+        assert artifact_files[0].read_text() == long_result
+
+    def test_short_content_stays_inline(self, tmp_path):
+        """Content below threshold is not offloaded."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        transcript = (
+            "[__user__] Q\n"
+            "[agent:assistant:text] Short answer.\n"
+            "[agent:assistant:tool_use] search(q='x')\n"
+            '[agent:tool:tool_result] {"found": true}\n'
+            "\n\n---\n\n"
+            "Eval."
+        )
+        artifacts_dir = tmp_path / "artifacts"
+        result = AgenticParseTemplateStage._reformat_transcript_as_xml(
+            transcript,
+            artifacts_dir=artifacts_dir,
+            truncation_threshold=2000,
+        )
+        assert 'offloaded="true"' not in result
+        assert '{"found": true}' in result
+        assert not artifacts_dir.exists()
+
+    def test_long_text_block_offloaded(self, tmp_path):
+        """Long assistant text block also gets offloaded."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        long_text = "A" * 3000
+        transcript = f"[__user__] Q\n[agent:assistant:text] {long_text}\n\n\n---\n\nEval."
+        artifacts_dir = tmp_path / "artifacts"
+        result = AgenticParseTemplateStage._reformat_transcript_as_xml(
+            transcript,
+            artifacts_dir=artifacts_dir,
+            truncation_threshold=2000,
+        )
+        assert 'offloaded="true"' in result
+        assert long_text not in result
+        artifact_files = list(artifacts_dir.iterdir())
+        assert len(artifact_files) == 1
+        assert artifact_files[0].read_text() == long_text
+
+    def test_no_offloading_without_artifacts_dir(self):
+        """When artifacts_dir is None, long content stays inline."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        long_result = "X" * 5000
+        transcript = (
+            "[__user__] Q\n"
+            f"[agent:assistant:tool_use] fetch(id='1')\n"
+            f"[agent:tool:tool_result] {long_result}\n"
+            "\n\n---\n\n"
+            "Eval."
+        )
+        result = AgenticParseTemplateStage._reformat_transcript_as_xml(
+            transcript,
+            artifacts_dir=None,
+            truncation_threshold=2000,
+        )
+        assert 'offloaded="true"' not in result
+        assert long_result in result
+
+    def test_multiple_blocks_offloaded_with_unique_filenames(self, tmp_path):
+        """Each offloaded block gets a unique numbered filename."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        long_a = "A" * 3000
+        long_b = "B" * 3000
+        transcript = (
+            "[__user__] Q\n"
+            "[agent:assistant:tool_use] search(q='a')\n"
+            f"[agent:tool:tool_result] {long_a}\n"
+            "[agent:assistant:tool_use] search(q='b')\n"
+            f"[agent:tool:tool_result] {long_b}\n"
+            "\n\n---\n\n"
+            "Eval."
+        )
+        artifacts_dir = tmp_path / "artifacts"
+        AgenticParseTemplateStage._reformat_transcript_as_xml(
+            transcript,
+            artifacts_dir=artifacts_dir,
+            truncation_threshold=2000,
+        )
+        artifact_files = sorted(artifacts_dir.iterdir())
+        assert len(artifact_files) == 2
+        contents = {f.read_text() for f in artifact_files}
+        assert long_a in contents
+        assert long_b in contents
+
+    def test_offloaded_reference_contains_file_path(self, tmp_path):
+        """The inline reference includes the artifact file path."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        long_result = "Z" * 3000
+        transcript = (
+            "[__user__] Q\n"
+            "[agent:assistant:tool_use] fetch(id='1')\n"
+            f"[agent:tool:tool_result] {long_result}\n"
+            "\n\n---\n\n"
+            "Eval."
+        )
+        artifacts_dir = tmp_path / "artifacts"
+        result = AgenticParseTemplateStage._reformat_transcript_as_xml(
+            transcript,
+            artifacts_dir=artifacts_dir,
+            truncation_threshold=2000,
+        )
+        artifact_file = list(artifacts_dir.iterdir())[0]
+        assert str(artifact_file) in result
+
+    def test_write_trace_file_reads_env_threshold(self, tmp_path, monkeypatch):
+        """_write_trace_file respects KARENINA_TRACE_TRUNCATION_THRESHOLD env var."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        monkeypatch.setenv("KARENINA_TRACE_TRUNCATION_THRESHOLD", "100")
+        long_text = "Y" * 200
+        transcript = f"[__user__] Q\n[agent:assistant:text] {long_text}\n\n\n---\n\nEval."
+        path = AgenticParseTemplateStage._write_trace_file(
+            workspace_path=tmp_path,
+            trace="response",
+            question_id="q1",
+            question_text=transcript,
+        )
+        content = path.read_text()
+        assert 'offloaded="true"' in content
+        assert long_text not in content
+        artifacts_dir = tmp_path / ".karenina" / "traces" / "artifacts"
+        assert artifacts_dir.exists()
