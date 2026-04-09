@@ -145,6 +145,7 @@ class ScenarioManager:
                     tagged_messages,
                     state,
                     question_text,
+                    workspace_root=workspace_root,
                 )
                 if handover_result is not None:
                     question_text, conversation_history = handover_result

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from karenina.ports.messages import Message, ToolUseContent
@@ -155,3 +157,45 @@ class TestApplyHandover:
         edge = ScenarioEdge(source="a", target="b", handover="transcript_prepend")
         result_text, _ = apply_handover(edge, tagged, _make_state(), "My question")
         assert "---" in result_text
+
+
+@pytest.mark.unit
+class TestTranscriptMaterialize:
+    def test_materialize_writes_file_and_enriches_question(self, tmp_path: Path) -> None:
+        tagged = [
+            TaggedMessage(Message.user("What is BCL2?"), agent_id="__user__"),
+            TaggedMessage(Message.assistant("BCL2 is a protein."), agent_id="primary"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_materialize")
+        result_text, history = apply_handover(
+            edge,
+            tagged,
+            _make_state(),
+            "Evaluate sycophancy.",
+            workspace_root=tmp_path,
+        )
+        # Original question text preserved
+        assert "Evaluate sycophancy." in result_text
+        # Trace file path referenced
+        assert ".karenina/traces/" in result_text
+        assert "KARENINA CONVERSATION TRACE" in result_text
+        # History is empty (same pattern as transcript_prepend)
+        assert history == []
+        # File actually exists
+        trace_files = list((tmp_path / ".karenina" / "traces").glob("*.txt"))
+        assert len(trace_files) == 1
+
+    def test_materialize_without_workspace_falls_back_to_tempdir(self) -> None:
+        tagged = [
+            TaggedMessage(Message.user("Q1"), agent_id="__user__"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_materialize")
+        result_text, history = apply_handover(
+            edge,
+            tagged,
+            _make_state(),
+            "Evaluate.",
+            workspace_root=None,
+        )
+        assert "KARENINA CONVERSATION TRACE" in result_text
+        assert history == []

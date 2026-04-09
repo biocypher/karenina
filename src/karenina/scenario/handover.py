@@ -9,6 +9,7 @@ strategies and callable handovers on edge transitions.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from karenina.ports.messages import (
     ContentType,
@@ -17,6 +18,7 @@ from karenina.ports.messages import (
     ToolResultContent,
     ToolUseContent,
 )
+from karenina.scenario.trace_materialization import materialize_trace
 from karenina.schemas.scenario.state import ScenarioState
 from karenina.schemas.scenario.types import ScenarioEdge
 
@@ -76,6 +78,7 @@ def apply_handover(
     tagged_messages: list[TaggedMessage],
     state: ScenarioState,
     question_text: str,
+    workspace_root: Path | None = None,
 ) -> tuple[str, list[Message]] | None:
     """Apply a handover strategy from an edge.
 
@@ -84,6 +87,8 @@ def apply_handover(
         tagged_messages: The full tagged message history.
         state: The current scenario state.
         question_text: The target node's question text.
+        workspace_root: Workspace root for transcript_materialize.
+            Falls back to a temporary directory when None.
 
     Returns:
         None if the edge has no handover.
@@ -109,6 +114,39 @@ def apply_handover(
     if edge.handover == "transcript_append":
         combined = question_text + TRANSCRIPT_SEPARATOR + transcript
         return combined, []
+
+    if edge.handover == "transcript_materialize":
+        # Build a question_id from state for the filename
+        question_id = f"{state.current_node}_handover"
+        trace_path = materialize_trace(
+            question_text=transcript + TRANSCRIPT_SEPARATOR + question_text,
+            conversation_history=None,
+            workspace_root=workspace_root,
+            question_id=question_id,
+            scenario_turn=state.turn,
+        )
+        reference_block = (
+            "\n\nThe full conversation trace from prior turns has been saved "
+            "as a plain-text file at:\n"
+            f"  {trace_path}\n\n"
+            "The file starts with a header line reading "
+            "`# KARENINA CONVERSATION TRACE`. It contains the prior "
+            "conversation structured as XML turns with <turn>, "
+            "<system_prompt>, <user>, and <assistant> elements.\n\n"
+            "Recommended workflow:\n"
+            "1. Read the entire file for full context. If Read truncates, "
+            "keep calling Read with increasing offset until you reach "
+            "the end.\n"
+            "2. Use Grep with targeted patterns to pinpoint salient "
+            "passages.\n"
+            "3. Base your judgment on the evidence in the file.\n\n"
+            "Note: large content blocks may have been offloaded to "
+            "separate files in the artifacts/ subdirectory. When you "
+            'see an XML element with offloaded="true", the element '
+            "body contains the file path."
+        )
+        enriched = question_text + reference_block
+        return enriched, []
 
     msg = f"Unknown handover strategy '{edge.handover}'"
     raise ValueError(msg)
