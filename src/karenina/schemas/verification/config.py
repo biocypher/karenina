@@ -220,11 +220,11 @@ class VerificationConfig(BaseModel):
     agentic_parsing_materialize_trace: bool = Field(
         default=False,
         description=(
-            "When True, the answering agent trace is written to a file "
-            "under <workspace>/.karenina/traces/<question_id>_trace.txt "
-            "and the investigation agent receives the file path in its "
-            "prompt instead of the inlined trace. Allows judges with "
-            "filesystem tools (Read, Grep, Glob) to search the trace."
+            "Write the answering agent trace to a file for Stage 7b's "
+            "investigation agent. This is for the coding-task agentic "
+            "parsing path (Stage 7b). For scenario handover-level trace "
+            "materialization, use the 'transcript_materialize' handover "
+            "strategy on ScenarioEdge instead."
         ),
     )
     agentic_parsing_persist_trace: bool = Field(
