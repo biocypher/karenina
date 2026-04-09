@@ -31,6 +31,7 @@ from karenina.ports import (
     AgentTimeoutError,
     MCPServerConfig,
     Message,
+    Role,
     Tool,
     UsageMetadata,
 )
@@ -412,7 +413,11 @@ class ClaudeSDKAgentAdapter:
             raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
 
         # Build trace_messages (structured format)
-        trace_messages = self._converter.from_provider(collected_messages)
+        # Exclude user and system messages: system prompts are captured
+        # separately via tagged_messages injection.
+        trace_messages = [
+            m for m in self._converter.from_provider(collected_messages) if m.role not in (Role.USER, Role.SYSTEM)
+        ]
 
         # Extract final response
         final_response = self._extract_final_response(collected_messages, result_message)

@@ -516,7 +516,7 @@ class LangChainAgentAdapter:
         # Exclude user messages — the trace should only contain assistant and
         # tool messages, matching the claude_tool adapter behavior.
         all_trace_messages = self._converter.from_provider(response_messages)
-        trace_messages = [m for m in all_trace_messages if m.role != Role.USER]
+        trace_messages = [m for m in all_trace_messages if m.role not in (Role.USER, Role.SYSTEM)]
 
         # Extract final response
         final_response, error = extract_final_ai_message_from_response(agent_response)
