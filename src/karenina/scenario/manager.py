@@ -115,6 +115,8 @@ class ScenarioManager:
         pending_handover_edge: ScenarioEdge | None = None
         turn_results: list[VerificationResult] = []
         path: list[str] = []
+        previous_agent_id: str | None = None
+        previous_system_prompt: str | None = None
         status: Literal["completed", "limit_reached", "error"] = "completed"
 
         # Resolve base identity from entry node
@@ -150,6 +152,15 @@ class ScenarioManager:
                     conversation_history = [tm.message for tm in tagged_messages]
             else:
                 conversation_history = [tm.message for tm in tagged_messages]
+
+            # Inject system prompt into tagged_messages on agent or prompt change.
+            # This makes the system prompt visible in transcripts for downstream
+            # nodes (e.g. the agentic guardrail judge).
+            agent_changed = (previous_agent_id is None) or (previous_agent_id != agent_id)
+            prompt_changed = answering_model.system_prompt != previous_system_prompt
+            if (agent_changed or prompt_changed) and answering_model.system_prompt:
+                system_msg = Message.system(answering_model.system_prompt)
+                tagged_messages.append(TaggedMessage(system_msg, agent_id=agent_id))
 
             # Build question message and tag it
             question_msg = Message.user(question_text)
@@ -332,6 +343,8 @@ class ScenarioManager:
 
             pending_handover_edge = followed_edge
             state.current_node = next_node
+            previous_agent_id = agent_id
+            previous_system_prompt = answering_model.system_prompt
 
         # Evaluate outcome criteria
         result = ScenarioExecutionResult(
