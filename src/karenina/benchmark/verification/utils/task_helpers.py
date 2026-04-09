@@ -283,6 +283,8 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "agentic_judge_context": getattr(config, "agentic_judge_context", "workspace_only"),
         "agentic_parsing_max_turns": getattr(config, "agentic_parsing_max_turns", 15),
         "agentic_parsing_timeout": getattr(config, "agentic_parsing_timeout", 120.0),
+        "agentic_parsing_materialize_trace": getattr(config, "agentic_parsing_materialize_trace", False),
+        "agentic_parsing_persist_trace": getattr(config, "agentic_parsing_persist_trace", False),
         "workspace_copy": getattr(config, "workspace_copy", True),
         "workspace_cleanup": getattr(config, "workspace_cleanup", True),
         # Agentic rubric evaluation configuration

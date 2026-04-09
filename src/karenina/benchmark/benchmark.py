@@ -952,6 +952,7 @@ class Benchmark:
             global_rubric=global_rubric,
             run_name=run_name,
             progress_callback=executor_callback,
+            workspace_root=self._workspace_root,
         )
 
         all_turn_results: list[VerificationResult] = []

@@ -16,6 +16,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from anyio.from_thread import start_blocking_portal
@@ -103,6 +104,7 @@ class ScenarioExecutor:
         global_rubric: Rubric | None = None,
         run_name: str | None = None,
         progress_callback: ProgressCallback | None = None,
+        workspace_root: Path | None = None,
     ) -> tuple[list[ScenarioExecutionResult], list[tuple[str, BaseException]]]:
         """Execute scenario combos and return results with errors.
 
@@ -113,14 +115,17 @@ class ScenarioExecutor:
             run_name: Optional run name for tracking.
             progress_callback: Optional callback(completed, total, result_or_none)
                 called before (with None) and after (with result) each combo.
+            workspace_root: Optional workspace root directory. Plumbed into
+                each ScenarioManager.run(...) call so GenerateAnswer's
+                workspace resolution works when agentic_parsing is enabled.
 
         Returns:
             Tuple of (results_list, errors_list). Results preserve the original
             combo ordering. Errors are (description, exception) tuples.
         """
         if self.parallel:
-            return self._run_parallel(combos, config, global_rubric, run_name, progress_callback)
-        return self._run_sequential(combos, config, global_rubric, run_name, progress_callback)
+            return self._run_parallel(combos, config, global_rubric, run_name, progress_callback, workspace_root)
+        return self._run_sequential(combos, config, global_rubric, run_name, progress_callback, workspace_root)
 
     def _run_sequential(
         self,
@@ -129,6 +134,7 @@ class ScenarioExecutor:
         global_rubric: Rubric | None,
         run_name: str | None,
         progress_callback: ProgressCallback | None,
+        workspace_root: Path | None = None,
     ) -> tuple[list[ScenarioExecutionResult], list[tuple[str, BaseException]]]:
         """Execute combos one at a time with a shared BlockingPortal.
 
@@ -179,6 +185,7 @@ class ScenarioExecutor:
                                 run_name=run_name,
                                 global_rubric=global_rubric,
                                 answer_cache=answer_cache,
+                                workspace_root=workspace_root,
                             )
                             results.append(exec_result)
                         except Exception as e:
@@ -203,6 +210,7 @@ class ScenarioExecutor:
         global_rubric: Rubric | None,
         run_name: str | None,
         progress_callback: ProgressCallback | None,
+        workspace_root: Path | None = None,
     ) -> tuple[list[ScenarioExecutionResult], list[tuple[str, BaseException]]]:
         """Execute combos in parallel using ThreadPoolExecutor.
 
@@ -281,6 +289,7 @@ class ScenarioExecutor:
                 global_rubric=global_rubric,
                 answer_cache=answer_cache,
                 progress_callback=make_turn_callback(idx, scenario_def.name),
+                workspace_root=workspace_root,
             )
             return (idx, result)
 

@@ -217,6 +217,25 @@ class VerificationConfig(BaseModel):
         ge=0.0,
         description="Timeout in seconds for the investigation agent.",
     )
+    agentic_parsing_materialize_trace: bool = Field(
+        default=False,
+        description=(
+            "When True, the answering agent trace is written to a file "
+            "under <workspace>/.karenina/traces/<question_id>_trace.txt "
+            "and the investigation agent receives the file path in its "
+            "prompt instead of the inlined trace. Allows judges with "
+            "filesystem tools (Read, Grep, Glob) to search the trace."
+        ),
+    )
+    agentic_parsing_persist_trace: bool = Field(
+        default=False,
+        description=(
+            "When True, the materialized trace file is kept after "
+            "extraction. When False (default), it is cleaned up in a "
+            "finally block after the stage runs. Ignored when "
+            "agentic_parsing_materialize_trace is False."
+        ),
+    )
 
     # Agentic rubric evaluation
     agentic_rubric_strategy: Literal["individual", "shared"] = Field(
@@ -515,6 +534,14 @@ class VerificationConfig(BaseModel):
                 logger.warning(
                     "agentic_parsing=True with agentic_judge_context='trace_only' "
                     "is equivalent to classical parsing (Stage 7a)."
+                )
+
+            # materialize_trace needs a trace in the context
+            if self.agentic_parsing_materialize_trace and self.agentic_judge_context == "workspace_only":
+                raise ValueError(
+                    "agentic_parsing_materialize_trace=True requires a trace "
+                    "to materialize, but agentic_judge_context='workspace_only' "
+                    "excludes the trace. Use 'trace_only' or 'trace_and_workspace'."
                 )
 
     def __repr__(self) -> str:

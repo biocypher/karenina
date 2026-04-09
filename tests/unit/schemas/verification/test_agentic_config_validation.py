@@ -63,3 +63,19 @@ class TestAgenticParsingValidation:
                 evaluation_mode="rubric_only",
                 agentic_parsing=True,
             )
+
+    def test_materialize_trace_requires_trace_in_context(self):
+        """materialize_trace=True with workspace_only is rejected.
+
+        The trace file is the materialized agent trace, so the judge context
+        must include the trace. workspace_only excludes it.
+        """
+        with pytest.raises(ValueError, match="materialize_trace=True requires"):
+            VerificationConfig(
+                answering_models=[_sdk_model()],
+                parsing_models=[_sdk_model()],
+                evaluation_mode="template_only",
+                agentic_parsing=True,
+                agentic_judge_context="workspace_only",
+                agentic_parsing_materialize_trace=True,
+            )

@@ -16,7 +16,7 @@ from karenina.adapters import get_agent, get_llm
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
-from karenina.ports import AgentConfig, AgentPort, LLMPort, Message
+from karenina.ports import AgentConfig, AgentPort, LLMPort, Message, Role
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.errors import ErrorCategory
 
@@ -270,8 +270,18 @@ class GenerateAnswerStage(BaseVerificationStage):
         try:
             # Construct messages in unified Message format
             adapter_messages: list[Message] = []
+
+            # Inject conversation history from prior scenario turns (if present)
+            conversation_history = context.get_artifact("conversation_history")
+
+            # Build system prompt. Skip the model's system_prompt if
+            # conversation_history already carries a system message (same-agent
+            # continuation). But ALWAYS apply prompt_config generation
+            # instructions, since those are pipeline-level and not part of
+            # the conversation history.
+            has_system_in_history = conversation_history and any(m.role == Role.SYSTEM for m in conversation_history)
             system_parts: list[str] = []
-            if answering_model.system_prompt:
+            if answering_model.system_prompt and not has_system_in_history:
                 system_parts.append(answering_model.system_prompt)
             if context.prompt_config:
                 gen_instructions = context.prompt_config.get_for_task("generation")
@@ -280,8 +290,6 @@ class GenerateAnswerStage(BaseVerificationStage):
             if system_parts:
                 adapter_messages.append(Message.system("\n\n".join(system_parts)))
 
-            # Inject conversation history from prior scenario turns (if present)
-            conversation_history = context.get_artifact("conversation_history")
             if conversation_history:
                 adapter_messages.extend(conversation_history)
 

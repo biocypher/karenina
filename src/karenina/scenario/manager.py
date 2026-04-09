@@ -11,6 +11,7 @@ import hashlib
 import logging
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Literal
 
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
@@ -57,6 +58,7 @@ class ScenarioManager:
         global_rubric: Rubric | None = None,
         progress_callback: Callable[..., None] | None = None,
         answer_cache: AnswerTraceCache | None = None,
+        workspace_root: Path | None = None,
     ) -> ScenarioExecutionResult:
         """Execute a scenario with a specific model pair.
 
@@ -69,6 +71,10 @@ class ScenarioManager:
             global_rubric: Optional global rubric applied per-turn.
             progress_callback: Optional callback for turn-level progress.
             answer_cache: Optional cache for sharing answers across runs.
+            workspace_root: Optional workspace root directory, required when
+                agentic_parsing is True. Plumbed from Benchmark.workspace_root
+                through ScenarioExecutor.run_batch. See GenerateAnswer stage's
+                _resolve_workspace which hard-requires this when agentic_parsing.
 
         Returns:
             ScenarioExecutionResult with all turn data.
@@ -109,6 +115,8 @@ class ScenarioManager:
         pending_handover_edge: ScenarioEdge | None = None
         turn_results: list[VerificationResult] = []
         path: list[str] = []
+        previous_agent_id: str | None = None
+        previous_system_prompt: str | None = None
         status: Literal["completed", "limit_reached", "error"] = "completed"
 
         # Resolve base identity from entry node
@@ -144,6 +152,15 @@ class ScenarioManager:
                     conversation_history = [tm.message for tm in tagged_messages]
             else:
                 conversation_history = [tm.message for tm in tagged_messages]
+
+            # Inject system prompt into tagged_messages on agent or prompt change.
+            # This makes the system prompt visible in transcripts for downstream
+            # nodes (e.g. the agentic guardrail judge).
+            agent_changed = (previous_agent_id is None) or (previous_agent_id != agent_id)
+            prompt_changed = answering_model.system_prompt != previous_system_prompt
+            if (agent_changed or prompt_changed) and answering_model.system_prompt:
+                system_msg = Message.system(answering_model.system_prompt)
+                tagged_messages.append(TaggedMessage(system_msg, agent_id=agent_id))
 
             # Build question message and tag it
             question_msg = Message.user(question_text)
@@ -186,6 +203,7 @@ class ScenarioManager:
                 scenario_path=list(path),
                 question_text_override=question_text_override,
                 cached_answer_data=cached_answer_data,
+                workspace_root=workspace_root,
             )
 
             if not vr.metadata.completed_without_errors:
@@ -325,6 +343,8 @@ class ScenarioManager:
 
             pending_handover_edge = followed_edge
             state.current_node = next_node
+            previous_agent_id = agent_id
+            previous_system_prompt = answering_model.system_prompt
 
         # Evaluate outcome criteria
         result = ScenarioExecutionResult(
@@ -360,6 +380,7 @@ class ScenarioManager:
         scenario_path: list[str] | None = None,
         question_text_override: str | None = None,
         cached_answer_data: dict[str, Any] | None = None,
+        workspace_root: Path | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -427,6 +448,23 @@ class ScenarioManager:
             scenario_id=scenario_id,
             scenario_node=scenario_node,
             scenario_path=scenario_path,
+            # Agentic parsing configuration (forwarded from VerificationConfig so
+            # scenario nodes actually reach Stage 7b when agentic_parsing is set).
+            agentic_parsing=config.agentic_parsing,
+            agentic_judge_context=config.agentic_judge_context,
+            agentic_parsing_max_turns=config.agentic_parsing_max_turns,
+            agentic_parsing_timeout=config.agentic_parsing_timeout,
+            agentic_parsing_materialize_trace=config.agentic_parsing_materialize_trace,
+            agentic_parsing_persist_trace=config.agentic_parsing_persist_trace,
+            # Workspace configuration. workspace_root lives on Benchmark (not
+            # VerificationConfig) and is plumbed down through
+            # ScenarioExecutor.run_batch -> ScenarioManager.run -> _run_turn so
+            # GenerateAnswer._resolve_workspace has a root to hang per-question
+            # workspaces under when agentic_parsing is enabled.
+            workspace_root=workspace_root,
+            workspace_copy=config.workspace_copy,
+            workspace_cleanup=config.workspace_cleanup,
+            question_workspace_path=getattr(node.question, "workspace_path", None),
             error_registry=error_registry,
         )
 
@@ -450,6 +488,7 @@ class ScenarioManager:
             sufficiency_enabled=config.sufficiency_enabled,
             deep_judgment_enabled=False,  # Scenarios do not use template deep judgment
             evaluation_mode=evaluation_mode,
+            agentic_parsing=config.agentic_parsing,
         )
 
         vr = orchestrator.execute(context)

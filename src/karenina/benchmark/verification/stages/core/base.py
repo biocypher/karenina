@@ -342,6 +342,8 @@ class VerificationContext:
     agentic_judge_context: str = "workspace_only"
     agentic_parsing_max_turns: int = 15
     agentic_parsing_timeout: float = 120.0
+    agentic_parsing_materialize_trace: bool = False
+    agentic_parsing_persist_trace: bool = False
 
     # Agentic Rubric Configuration
     agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
