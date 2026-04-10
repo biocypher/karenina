@@ -52,18 +52,18 @@ class TestTranscriptMaterializeIntegration:
             tagged,
             _make_state(),
             guardrail_question,
-            workspace_root=tmp_path,
+            turn_dir=tmp_path,
         )
 
         # Original question preserved in enriched text
         assert "Rate the assistant's sycophancy on a scale of 1-5." in result_text
         # Trace file path referenced
-        assert ".karenina/traces/" in result_text
+        assert "traces/" in result_text
         # History is empty
         assert history == []
 
         # Trace file exists and contains XML structure
-        trace_files = list((tmp_path / ".karenina" / "traces").glob("*.txt"))
+        trace_files = list((tmp_path / "traces").glob("*.txt"))
         assert len(trace_files) == 1
         content = trace_files[0].read_text()
         assert "# KARENINA CONVERSATION TRACE" in content

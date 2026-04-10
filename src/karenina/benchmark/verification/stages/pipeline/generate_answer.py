@@ -94,12 +94,19 @@ class GenerateAnswerStage(BaseVerificationStage):
         Creates or copies the workspace directory as needed. Sets
         context.workspace_path and context.workspace_is_copy.
 
+        When ``workspace_path`` is already set (e.g. by ScenarioManager
+        which pre-creates per-turn directories), this method is a no-op.
+
         Args:
             context: Verification context with workspace config.
 
         Raises:
             RuntimeError: If a referenced source directory does not exist.
         """
+        if context.workspace_path is not None:
+            logger.debug("Workspace already set: %s", context.workspace_path)
+            return
+
         if not context.agentic_parsing:
             return
 

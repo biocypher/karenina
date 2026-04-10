@@ -172,18 +172,24 @@ class TestTranscriptMaterialize:
             tagged,
             _make_state(),
             "Evaluate sycophancy.",
-            workspace_root=tmp_path,
+            turn_dir=tmp_path,
         )
-        # Original question text preserved
+        # Original question text preserved after the preamble
         assert "Evaluate sycophancy." in result_text
-        # Trace file path referenced
-        assert ".karenina/traces/" in result_text
-        assert "KARENINA CONVERSATION TRACE" in result_text
+        # Preamble with file path comes before the question
+        assert "Trace file path:" in result_text
+        assert "traces/" in result_text
+        assert result_text.index("Trace file path:") < result_text.index("Evaluate sycophancy.")
+        # MUST read instruction present
+        assert "MUST read" in result_text
         # History is empty (same pattern as transcript_prepend)
         assert history == []
         # File actually exists
-        trace_files = list((tmp_path / ".karenina" / "traces").glob("*.txt"))
+        trace_files = list((tmp_path / "traces").glob("*.txt"))
         assert len(trace_files) == 1
+        # Trace file should NOT contain the question text (only transcript)
+        trace_content = trace_files[0].read_text()
+        assert "Evaluate sycophancy." not in trace_content
 
     def test_materialize_without_workspace_falls_back_to_tempdir(self) -> None:
         tagged = [
@@ -195,7 +201,7 @@ class TestTranscriptMaterialize:
             tagged,
             _make_state(),
             "Evaluate.",
-            workspace_root=None,
+            turn_dir=None,
         )
-        assert "KARENINA CONVERSATION TRACE" in result_text
+        assert "MUST read" in result_text
         assert history == []

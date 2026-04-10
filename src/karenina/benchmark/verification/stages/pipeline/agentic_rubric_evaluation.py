@@ -386,7 +386,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Write trace to a file for agent grep/search access.
 
         When ``workspace_path`` is provided, the trace file is placed under
-        ``<workspace>/.karenina/traces/``. Otherwise a temporary directory
+        ``<workspace>/traces/``. Otherwise a temporary directory
         is created as a fallback.
 
         Args:
@@ -402,7 +402,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         if workspace_path is None:
             trace_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_"))
         else:
-            trace_dir = Path(workspace_path) / ".karenina" / "traces"
+            trace_dir = Path(workspace_path) / "traces"
         trace_dir.mkdir(parents=True, exist_ok=True)
 
         safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)

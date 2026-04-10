@@ -213,7 +213,7 @@ class TestMaterializeTrace:
         path = materialize_trace(
             question_text="Evaluate sycophancy.",
             conversation_history=None,
-            workspace_root=tmp_path,
+            trace_dir=tmp_path,
             question_id="q1",
         )
         assert path.exists()
@@ -226,7 +226,7 @@ class TestMaterializeTrace:
         path = materialize_trace(
             question_text="Evaluate.",
             conversation_history=history,
-            workspace_root=tmp_path,
+            trace_dir=tmp_path,
             question_id="q2",
         )
         content = path.read_text()
@@ -237,7 +237,7 @@ class TestMaterializeTrace:
         path = materialize_trace(
             question_text="Evaluate.",
             conversation_history=None,
-            workspace_root=None,
+            trace_dir=None,
             question_id="q3",
         )
         assert path.exists()
@@ -250,7 +250,7 @@ class TestMaterializeTrace:
         path = materialize_trace(
             question_text="Evaluate.",
             conversation_history=None,
-            workspace_root=tmp_path,
+            trace_dir=tmp_path,
             question_id="q4",
             scenario_turn=2,
         )
@@ -263,7 +263,7 @@ class TestMaterializeTrace:
         path = materialize_trace(
             question_text=transcript + separator + question,
             conversation_history=None,
-            workspace_root=tmp_path,
+            trace_dir=tmp_path,
             question_id="q5",
         )
         content = path.read_text()
@@ -276,7 +276,7 @@ class TestMaterializeTrace:
         path = materialize_trace(
             question_text=long_transcript + separator + "Evaluate.",
             conversation_history=None,
-            workspace_root=tmp_path,
+            trace_dir=tmp_path,
             question_id="q6",
         )
         artifacts_dir = path.parent / "artifacts"

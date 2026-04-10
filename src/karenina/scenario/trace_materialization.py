@@ -324,36 +324,35 @@ def reformat_transcript_as_xml(
 def materialize_trace(
     question_text: str,
     conversation_history: list[Message] | None,
-    workspace_root: Path | None,
+    trace_dir: Path | None,
     question_id: str,
     scenario_turn: int | None = None,
 ) -> Path:
     """Write conversation context to a file for agent filesystem-tool access.
 
-    Creates a trace file at ``<workspace_root>/.karenina/traces/`` with
-    a KARENINA CONVERSATION TRACE header, XML-reformatted transcript,
-    and optional conversation history.
+    Creates a trace file at ``<trace_dir>/traces/`` with a KARENINA
+    CONVERSATION TRACE header, XML-reformatted transcript, and optional
+    conversation history.
 
     Args:
         question_text: The question (potentially with transcript_prepend).
         conversation_history: Prior-turn Message objects.
-        workspace_root: Root workspace directory. Falls back to a
-            temporary directory when None.
+        trace_dir: Parent directory for traces. A ``traces/`` subdirectory
+            is created under it. Falls back to a temporary directory when
+            None.
         question_id: Question identifier (sanitized for filesystem).
         scenario_turn: Optional turn index for multi-turn scenarios.
 
     Returns:
         Path to the written trace file.
     """
-    if workspace_root is None:
-        trace_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_"))
-    else:
-        trace_dir = Path(workspace_root) / ".karenina" / "traces"
-    trace_dir.mkdir(parents=True, exist_ok=True)
+    is_tempdir = trace_dir is None
+    resolved_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_")) if trace_dir is None else trace_dir / "traces"
+    resolved_dir.mkdir(parents=True, exist_ok=True)
 
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)
     filename = f"{safe_id}_turn{scenario_turn}_trace.txt" if scenario_turn is not None else f"{safe_id}_trace.txt"
-    trace_path = trace_dir / filename
+    trace_path = resolved_dir / filename
 
     header = (
         "# =============================================================\n"
@@ -386,7 +385,7 @@ def materialize_trace(
             threshold = DEFAULT_TRACE_TRUNCATION_THRESHOLD
     else:
         threshold = DEFAULT_TRACE_TRUNCATION_THRESHOLD
-    artifacts_dir = trace_dir / "artifacts" if workspace_root else None
+    artifacts_dir = resolved_dir / "artifacts" if not is_tempdir else None
 
     sections: list[str] = [header]
 
