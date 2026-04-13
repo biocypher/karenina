@@ -7,10 +7,13 @@ from pydantic import BaseModel, Field
 
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.composition import AllOf, AnyOf, FieldCheck
+from karenina.schemas.entities.conditional import ConditionalGroundTruth, GroundTruthCase
 from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedField
 from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
+    NumericMaximum,
+    NumericMinimum,
     NumericRange,
     NumericTolerance,
     TraceRegex,
@@ -473,3 +476,71 @@ class TestVerifiedFieldGroundTruthMismatchWarning:
                 verify_with=ExactMatch(),
             )
         assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+
+# --- ConditionalGroundTruth serialization in VerifiedField ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldConditionalGroundTruth:
+    """Test VerifiedField with ConditionalGroundTruth."""
+
+    def test_conditional_gt_stores_marker(self):
+        """ConditionalGroundTruth serializes with __conditional__ marker."""
+
+        class MyAnswer(BaseAnswer):
+            score: int = VerifiedField(
+                description="score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.prior.parsed.category",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        meta = VerificationMeta.model_validate(MyAnswer.model_fields["score"].json_schema_extra["__verification__"])
+        assert isinstance(meta.ground_truth, dict)
+        assert meta.ground_truth["__conditional__"] is True
+        assert meta.ground_truth["source"] == "node_results.prior.parsed.category"
+
+    def test_conditional_gt_case_primitives_serialized(self):
+        """Case verify_with primitives are serialized with type key."""
+
+        class MyAnswer(BaseAnswer):
+            score: int = VerifiedField(
+                description="score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={
+                        "a": GroundTruthCase(value=4, verify_with=NumericMinimum()),
+                        "b": GroundTruthCase(value=2, verify_with=NumericMaximum()),
+                    },
+                    default=GroundTruthCase(value=3, verify_with=NumericRange(min=3, max=3)),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        meta = VerificationMeta.model_validate(MyAnswer.model_fields["score"].json_schema_extra["__verification__"])
+        gt = meta.ground_truth
+        assert gt["cases"]["a"]["verify_with"]["type"] == "NumericMinimum"
+        assert gt["cases"]["b"]["verify_with"]["type"] == "NumericMaximum"
+        assert gt["default"]["verify_with"]["type"] == "NumericRange"
+
+    def test_conditional_gt_skips_type_mismatch_warning(self, caplog):
+        """No type-mismatch warning for ConditionalGroundTruth (it is not a scalar)."""
+
+        with caplog.at_level(logging.WARNING):
+
+            class MyAnswer(BaseAnswer):
+                score: int = VerifiedField(
+                    description="score",
+                    ground_truth=ConditionalGroundTruth(
+                        source="node_results.x.parsed.y",
+                        cases={"a": GroundTruthCase(value=4)},
+                        default=GroundTruthCase(value=4),
+                    ),
+                    verify_with=NumericMinimum(),
+                )
+
+        assert "may not match" not in caplog.text

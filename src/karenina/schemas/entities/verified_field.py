@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from karenina.schemas.entities.conditional import ConditionalGroundTruth
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,11 +133,16 @@ def VerifiedField(
     primitive_data = verify_with.model_dump(mode="json")
     primitive_data["type"] = type(verify_with).__name__
 
-    # Issue 010: warn on obvious ground_truth type mismatches
-    _warn_ground_truth_mismatch(ground_truth, verify_with)
+    # Serialize conditional ground truth, or warn on type mismatches
+    if isinstance(ground_truth, ConditionalGroundTruth):
+        ground_truth_serialized = ground_truth.serialize()
+    else:
+        ground_truth_serialized = ground_truth
+        # Issue 010: warn on obvious ground_truth type mismatches
+        _warn_ground_truth_mismatch(ground_truth, verify_with)
 
     meta = VerificationMeta(
-        ground_truth=ground_truth,
+        ground_truth=ground_truth_serialized,
         verify_with=primitive_data,
         weight=weight,
         extraction_hint=extraction_hint,
