@@ -106,6 +106,13 @@ class FinalizeResultStage(BaseVerificationStage):
                     computed = parsed_answer._compute_field_results()
                     if computed:
                         field_results_dict = computed
+                    # Merge resolved ground truths (including conditional) into
+                    # parsed_gt_response so downstream consumers see all fields
+                    resolved_gts = parsed_answer._get_resolved_ground_truths()
+                    if resolved_gts and parsed_gt_response is not None:
+                        parsed_gt_response.update(resolved_gts)
+                    elif resolved_gts and parsed_gt_response is None:
+                        parsed_gt_response = dict(resolved_gts)
                 except Exception as e:
                     logger.warning("Failed to compute field results: %s", e)
 
@@ -212,6 +219,15 @@ class FinalizeResultStage(BaseVerificationStage):
                 d["block_index"] = block_index
                 trace_messages_dicts.append(d)
 
+        # Build conversation_context (full LLM input: system + prior turns + current question)
+        conversation_context_dicts: list[dict[str, Any]] = []
+        conversation_context_raw = context.get_artifact(ArtifactKeys.CONVERSATION_CONTEXT)
+        if conversation_context_raw:
+            for block_index, msg in enumerate(conversation_context_raw):
+                d = msg.to_dict()
+                d["block_index"] = block_index
+                conversation_context_dicts.append(d)
+
         # Compute raw_llm_response from trace_messages if available,
         # otherwise fall back to the string stored by generate_answer
         raw_llm_response = context.get_result_field(ArtifactKeys.RAW_LLM_RESPONSE, "")
@@ -226,6 +242,7 @@ class FinalizeResultStage(BaseVerificationStage):
         template = VerificationResultTemplate(
             raw_llm_response=raw_llm_response,
             trace_messages=trace_messages_dicts,
+            conversation_context=conversation_context_dicts,
             parsed_gt_response=parsed_gt_response,
             parsed_llm_response=parsed_llm_response,
             template_verification_performed=template_verification_performed,

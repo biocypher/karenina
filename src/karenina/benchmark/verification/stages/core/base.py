@@ -153,6 +153,8 @@ class ArtifactKeys:
 
     # Dict of node_results from ScenarioState, for conditional ground truth
     SCENARIO_NODE_RESULTS = "scenario_node_results"
+    # Full conversation input sent to the LLM (system + prior turns + current question)
+    CONVERSATION_CONTEXT = "conversation_context"
 
     # ==========================================================================
     # Deep Judgment (Template)

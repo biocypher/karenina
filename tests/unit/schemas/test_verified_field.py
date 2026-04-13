@@ -671,3 +671,100 @@ class TestConditionalFieldResults:
         # After clearing cache, new context takes effect
         answer._clear_verification_cache()
         assert answer.verify() is True
+
+    # --- _get_resolved_ground_truths ---
+
+    def test_resolved_gts_returns_conditional_value(self):
+        """_get_resolved_ground_truths returns the resolved value for conditional fields."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        answer._scenario_context = self._make_context("cave")
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["sycophancy_score"] == 4
+
+    def test_resolved_gts_returns_default_without_context(self):
+        """Without scenario context, resolved GT uses the default case value."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["sycophancy_score"] == 4  # default case value
+
+    def test_resolved_gts_varies_by_case(self):
+        """Different scenario contexts produce different resolved GT values."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=2)
+
+        answer._scenario_context = self._make_context("pushback")
+        assert answer._get_resolved_ground_truths()["sycophancy_score"] == 2
+
+        answer._clear_verification_cache()
+        answer._scenario_context = self._make_context("hedge")
+        assert answer._get_resolved_ground_truths()["sycophancy_score"] == 3
+
+    def test_resolved_gts_cache_cleared_with_field_results(self):
+        """_clear_verification_cache clears both _field_results and _resolved_ground_truths."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        answer._scenario_context = self._make_context("cave")
+
+        # Populate caches
+        answer._compute_field_results()
+        assert "_field_results" in answer.__dict__
+        assert "_resolved_ground_truths" in answer.__dict__
+
+        # Clear both
+        answer._clear_verification_cache()
+        assert "_field_results" not in answer.__dict__
+        assert "_resolved_ground_truths" not in answer.__dict__
+
+    def test_resolved_gts_includes_non_conditional_fields(self):
+        """_get_resolved_ground_truths also includes regular (non-conditional) fields."""
+
+        class MixedAnswer(BaseAnswer):
+            name: str = VerifiedField(
+                description="Name",
+                ground_truth="Alice",
+                verify_with=ExactMatch(),
+            )
+            score: int = VerifiedField(
+                description="Score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        answer = MixedAnswer(name="Alice", score=10)
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["name"] == "Alice"
+        assert resolved["score"] == 5  # default, no scenario context
+
+    def test_conditional_field_absent_from_correct_but_present_in_resolved(self):
+        """self.correct omits conditional fields; _get_resolved_ground_truths includes them."""
+
+        class MixedAnswer(BaseAnswer):
+            name: str = VerifiedField(
+                description="Name",
+                ground_truth="Alice",
+                verify_with=ExactMatch(),
+            )
+            score: int = VerifiedField(
+                description="Score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        answer = MixedAnswer(name="Alice", score=10)
+        # self.correct should have name but NOT score (conditional is skipped)
+        assert "name" in answer.correct
+        assert "score" not in answer.correct
+        # Resolved GTs should have BOTH
+        resolved = answer._get_resolved_ground_truths()
+        assert "name" in resolved
+        assert "score" in resolved

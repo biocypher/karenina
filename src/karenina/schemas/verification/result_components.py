@@ -121,6 +121,7 @@ class VerificationResultTemplate(BaseModel):
 
     raw_llm_response: str = ""
     trace_messages: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_context: list[dict[str, Any]] = Field(default_factory=list)
     parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
     parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
 

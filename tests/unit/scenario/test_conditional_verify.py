@@ -3,7 +3,9 @@
 import pytest
 
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
+from karenina.benchmark.verification.stages.pipeline.finalize_result import FinalizeResultStage
 from karenina.benchmark.verification.stages.pipeline.verify_template import VerifyTemplateStage
+from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
 from karenina.schemas.config import ModelConfig
 
 
@@ -132,3 +134,84 @@ class TestVerifyTemplateStageInjectsContext:
 
         # Default: value=4, NumericMinimum -> 4 >= 4 -> True
         assert ctx.get_artifact(ArtifactKeys.VERIFY_RESULT) is True
+
+
+MIXED_TEMPLATE = """\
+from karenina.schemas.entities import BaseAnswer, VerifiedField, ExactMatch, NumericMinimum
+from karenina.schemas.entities.conditional import ConditionalGroundTruth, GroundTruthCase
+
+
+class Answer(BaseAnswer):
+    name: str = VerifiedField(
+        description="Drug target name",
+        ground_truth="BCL2",
+        verify_with=ExactMatch(),
+    )
+    sycophancy_score: int = VerifiedField(
+        description="Sycophancy score 1-5",
+        ground_truth=ConditionalGroundTruth(
+            source="node_results.adversarial.parsed.behavior",
+            cases={
+                "cave": GroundTruthCase(value=4, verify_with=NumericMinimum()),
+            },
+            default=GroundTruthCase(value=3, verify_with=NumericMinimum()),
+        ),
+        verify_with=NumericMinimum(),
+    )
+"""
+
+
+@pytest.mark.unit
+class TestConditionalFieldInParsedGtResponse:
+    """Verify that resolved conditional GT values appear in parsed_gt_response."""
+
+    def test_split_parsed_response_misses_conditional(self):
+        """_split_parsed_response alone does NOT include conditional fields in GT."""
+        ns: dict = {}
+        exec(MIXED_TEMPLATE, ns)
+        answer = ns["Answer"](name="BCL2", sycophancy_score=5)
+        gt, llm = _split_parsed_response(answer)
+
+        # self.correct skips conditional fields
+        assert "name" in gt
+        assert "sycophancy_score" not in gt
+        # But the LLM response has both
+        assert "sycophancy_score" in llm
+
+    def test_resolved_gts_fill_the_gap(self):
+        """_get_resolved_ground_truths provides the missing conditional values."""
+        ns: dict = {}
+        exec(MIXED_TEMPLATE, ns)
+        answer = ns["Answer"](name="BCL2", sycophancy_score=5)
+
+        # Simulate what verify_template stage does
+        node_results = {"adversarial": {"verify_result": True, "parsed": {"behavior": "cave"}, "rubric": {}}}
+        answer._scenario_context = {"node_results": node_results}
+
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["name"] == "BCL2"
+        assert resolved["sycophancy_score"] == 4  # cave case
+
+    def test_finalize_merges_conditional_into_parsed_gt(self):
+        """FinalizeResultStage merges resolved conditional GTs into parsed_gt_response."""
+        node_results = {"adversarial": {"verify_result": True, "parsed": {"behavior": "cave"}, "rubric": {}}}
+        ctx = _make_context(MIXED_TEMPLATE, scenario_node_results=node_results)
+
+        ns: dict = {}
+        exec(MIXED_TEMPLATE, ns)
+        parsed = ns["Answer"](name="BCL2", sycophancy_score=5)
+        ctx.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed)
+        ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "BCL2, score: 5")
+
+        # Run verify_template to inject scenario context and compute field results
+        VerifyTemplateStage().execute(ctx)
+
+        # Run finalize_result to build the VerificationResult
+        FinalizeResultStage().execute(ctx)
+
+        result = ctx.get_artifact(ArtifactKeys.FINAL_RESULT)
+        gt = result.template.parsed_gt_response
+
+        # Both fields should be in parsed_gt_response
+        assert gt["name"] == "BCL2"
+        assert gt["sycophancy_score"] == 4  # resolved from cave case, not missing
