@@ -148,6 +148,13 @@ class ArtifactKeys:
     EMBEDDING_MODEL_USED = "embedding_model_used"
 
     # ==========================================================================
+    # Scenario Context
+    # ==========================================================================
+
+    # Dict of node_results from ScenarioState, for conditional ground truth
+    SCENARIO_NODE_RESULTS = "scenario_node_results"
+
+    # ==========================================================================
     # Deep Judgment (Template)
     # ==========================================================================
 

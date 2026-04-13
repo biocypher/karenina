@@ -110,6 +110,13 @@ class VerifyTemplateStage(BaseVerificationStage):
         if not hasattr(parsed_answer, "_raw_trace") or parsed_answer._raw_trace is None:
             parsed_answer._raw_trace = raw_llm_response
 
+        # Inject scenario context for ConditionalGroundTruth resolution.
+        # _scenario_context is consumed by _compute_field_results() when
+        # a field's ground_truth carries the __conditional__ marker.
+        scenario_node_results = context.get_artifact(ArtifactKeys.SCENARIO_NODE_RESULTS)
+        if scenario_node_results is not None:
+            parsed_answer._scenario_context = {"node_results": scenario_node_results}
+
         # Get evaluator from context (created by ParseTemplateStage, or None for regex-only)
         evaluator = context.get_artifact(ArtifactKeys.TEMPLATE_EVALUATOR)
 
