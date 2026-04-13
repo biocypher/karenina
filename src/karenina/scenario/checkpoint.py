@@ -148,7 +148,17 @@ def scenario_to_schema_org(defn: ScenarioDefinition) -> SchemaOrgScenario:
         nodes[node_id] = SchemaOrgScenarioNode(
             nodeId=node_id,
             question=_question_to_schema_org(node),
-            modelOverride=(node.model_override.model_dump() if node.model_override else None),
+            modelOverride=(
+                node.model_override.model_dump(
+                    exclude={
+                        "answering_model": {"endpoint_api_key", "anthropic_api_key"},
+                        "parsing_model": {"endpoint_api_key", "anthropic_api_key"},
+                    },
+                    exclude_none=True,
+                )
+                if node.model_override
+                else None
+            ),
             toolFilter=(node.tool_filter.model_dump() if node.tool_filter else None),
             stateUpdateSource=node.state_update_source,
             questionData=node.question.model_dump(),
