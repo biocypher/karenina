@@ -653,3 +653,21 @@ class TestConditionalFieldResults:
         answer = MyAnswer(sycophancy_score=3)
         answer._scenario_context = self._make_context("cave")
         assert answer.verify_granular() == 0.0
+
+    def test_cache_invalidation_with_context_change(self):
+        """Changing _scenario_context requires _clear_verification_cache() to take effect."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+
+        # First: cave context, score 3 fails (needs >= 4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is False
+
+        # Change context to hedge (score 3 passes with NumericRange(3,3))
+        answer._scenario_context = self._make_context("hedge")
+        # Without cache clear, still returns cached False
+        assert answer.verify() is False  # stale cache
+
+        # After clearing cache, new context takes effect
+        answer._clear_verification_cache()
+        assert answer.verify() is True
