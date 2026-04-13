@@ -69,6 +69,20 @@ class TestConditionalGroundTruth:
         assert data["source"] == "node_results.x.parsed.y"
         assert "a" in data["cases"]
 
+    def test_serialize_preserves_primitive_types(self):
+        cgt = ConditionalGroundTruth(
+            source="node_results.x.parsed.y",
+            cases={
+                "a": GroundTruthCase(value=4, verify_with=NumericMinimum()),
+                "b": GroundTruthCase(value=2, verify_with=NumericMaximum()),
+            },
+            default=GroundTruthCase(value=3, verify_with=NumericRange(min=3, max=3)),
+        )
+        data = cgt.serialize()
+        assert data["cases"]["a"]["verify_with"]["type"] == "NumericMinimum"
+        assert data["cases"]["b"]["verify_with"]["type"] == "NumericMaximum"
+        assert data["default"]["verify_with"]["type"] == "NumericRange"
+
 
 @pytest.mark.unit
 class TestResolveConditional:

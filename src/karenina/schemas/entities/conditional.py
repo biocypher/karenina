@@ -8,7 +8,7 @@ the "correct" threshold depends on what a preceding node detected.
 import logging
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,8 @@ class GroundTruthCase(BaseModel):
             primitive instance at authoring time; serialized to dict with
             ``type`` key for storage.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     value: Any
     verify_with: Any = None
@@ -44,6 +46,8 @@ class ConditionalGroundTruth(BaseModel):
             or when running outside a scenario context.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     source: str
     cases: dict[str, GroundTruthCase]
     default: GroundTruthCase
@@ -62,10 +66,10 @@ class ConditionalGroundTruth(BaseModel):
         data = self.model_dump(mode="json")
         data["__conditional__"] = True
 
-        # Serialize primitive instances in cases
-        for case_data in data["cases"].values():
-            case_data["verify_with"] = _serialize_primitive(case_data.get("verify_with"))
-        data["default"]["verify_with"] = _serialize_primitive(data["default"].get("verify_with"))
+        # Serialize primitive instances from LIVE model (not from model_dump output)
+        for case_key, case_obj in self.cases.items():
+            data["cases"][case_key]["verify_with"] = _serialize_primitive(case_obj.verify_with)
+        data["default"]["verify_with"] = _serialize_primitive(self.default.verify_with)
 
         return data
 
