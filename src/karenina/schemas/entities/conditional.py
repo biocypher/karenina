@@ -91,6 +91,10 @@ def _serialize_primitive(prim: Any) -> dict[str, Any] | None:
         result: dict[str, Any] = prim
         return result if "type" in result else None
     # Live primitive instance: serialize like VerifiedField does
+    if not hasattr(prim, "model_dump"):
+        raise TypeError(
+            f"verify_with must be a VerificationPrimitive instance, dict, or None; got {type(prim).__name__}"
+        )
     prim_data: dict[str, Any] = prim.model_dump(mode="json")
     prim_data["type"] = type(prim).__name__
     return prim_data
@@ -117,7 +121,7 @@ def _resolve_dot_path(path: str, context: dict[str, Any]) -> Any:
     return current
 
 
-def resolve_conditional(
+def _resolve_conditional(
     cgt_data: dict[str, Any],
     context: dict[str, Any] | None,
 ) -> tuple[Any, dict[str, Any] | None]:

@@ -5,7 +5,7 @@ import pytest
 from karenina.schemas.entities.conditional import (
     ConditionalGroundTruth,
     GroundTruthCase,
-    resolve_conditional,
+    _resolve_conditional,
 )
 from karenina.schemas.primitives import NumericMaximum, NumericMinimum, NumericRange
 
@@ -108,7 +108,7 @@ class TestResolveConditional:
             "default": {"value": 4, "verify_with": None},
         }
         context = self._make_context("cave")
-        gt, prim_data = resolve_conditional(cgt_data, context)
+        gt, prim_data = _resolve_conditional(cgt_data, context)
         assert gt == 4
         assert prim_data is None
 
@@ -122,7 +122,7 @@ class TestResolveConditional:
             "default": {"value": 99, "verify_with": None},
         }
         context = self._make_context("hedge")
-        gt, prim_data = resolve_conditional(cgt_data, context)
+        gt, prim_data = _resolve_conditional(cgt_data, context)
         assert gt == 99
 
     def test_resolves_default_when_no_context(self):
@@ -132,7 +132,7 @@ class TestResolveConditional:
             "cases": {"cave": {"value": 4, "verify_with": None}},
             "default": {"value": 99, "verify_with": None},
         }
-        gt, prim_data = resolve_conditional(cgt_data, None)
+        gt, prim_data = _resolve_conditional(cgt_data, None)
         assert gt == 99
 
     def test_returns_verify_with_data(self):
@@ -148,7 +148,7 @@ class TestResolveConditional:
             "default": {"value": 4, "verify_with": None},
         }
         context = self._make_context("cave")
-        gt, prim_data = resolve_conditional(cgt_data, context)
+        gt, prim_data = _resolve_conditional(cgt_data, context)
         assert gt == 4
         assert prim_data == {"type": "NumericMinimum", "exclusive": False}
 
@@ -160,7 +160,7 @@ class TestResolveConditional:
             "default": {"value": 0, "verify_with": None},
         }
         context = {"node_results": {"step1": {"verify_result": True, "parsed": {"category": "high"}, "rubric": {}}}}
-        gt, prim_data = resolve_conditional(cgt_data, context)
+        gt, prim_data = _resolve_conditional(cgt_data, context)
         assert gt == 10
 
     def test_resolves_missing_node_to_default(self):
@@ -171,5 +171,5 @@ class TestResolveConditional:
             "default": {"value": 0, "verify_with": None},
         }
         context = {"node_results": {}}
-        gt, prim_data = resolve_conditional(cgt_data, context)
+        gt, prim_data = _resolve_conditional(cgt_data, context)
         assert gt == 0

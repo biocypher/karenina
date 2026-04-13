@@ -270,7 +270,7 @@ class BaseAnswer(BaseModel):
         if cached is not None:
             return cast(dict[str, bool], cached)
 
-        from karenina.schemas.entities.conditional import resolve_conditional
+        from karenina.schemas.entities.conditional import _resolve_conditional
         from karenina.schemas.primitives import TracePrimitive
         from karenina.schemas.primitives.registry import _reconstruct_primitive
 
@@ -284,7 +284,7 @@ class BaseAnswer(BaseModel):
             # Resolve conditional ground truth from scenario context
             if isinstance(ground_truth, dict) and ground_truth.get("__conditional__"):
                 scenario_ctx = getattr(self, "_scenario_context", None)
-                resolved_gt, resolved_prim_data = resolve_conditional(ground_truth, scenario_ctx)
+                resolved_gt, resolved_prim_data = _resolve_conditional(ground_truth, scenario_ctx)
                 ground_truth = resolved_gt
                 if resolved_prim_data is not None:
                     primitive = _reconstruct_primitive(resolved_prim_data)
