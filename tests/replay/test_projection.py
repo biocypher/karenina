@@ -951,3 +951,92 @@ class TestBuildRoundTrip:
         original_keys = {(k.scenario_id, k.scenario_node) for (k, _e) in store.entries}
         reloaded_keys = {(k.scenario_id, k.scenario_node) for (k, _e) in reloaded.entries}
         assert original_keys == reloaded_keys
+
+
+@pytest.mark.integration
+class TestProjectionIntegration:
+    def test_projected_entry_serves_every_replicate_via_ladder(self):
+        """A single projected wildcard (replicate=None) must serve
+        every scenario-replicate under R2's executor."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+        store = builder.build(strict=True)
+
+        qid = generate_question_id("What is X?")
+        hits = [
+            store.lookup(
+                question_id=qid,
+                scenario_id="s1",
+                scenario_node="ask",
+                answering_model_id=display,
+                replicate=r,
+            )
+            for r in (None, 1, 2, 3, 42)
+        ]
+        # All 5 probes must hit the same single projected wildcard entry.
+        assert all(h is not None for h in hits)
+        assert all(h.raw_trace == hits[0].raw_trace for h in hits)
+
+    def test_adversarial_style_two_configs_disjoint_scenarios(self):
+        """Two add_qa calls with different configs populate disjoint
+        (scenario, node) pairs without cross-contamination."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        no_mcp_cfg = VerificationConfig(
+            answering_models=[
+                ModelConfig(id="ans-no-mcp", model_name="gpt-5", model_provider="openai"),
+            ],
+            parsing_models=[ModelConfig(id="p", model_name="p", model_provider="anthropic")],
+        )
+        mcp_cfg = VerificationConfig(
+            answering_models=[
+                ModelConfig(id="ans-mcp", model_name="gpt-5", model_provider="openai"),
+            ],
+            parsing_models=[ModelConfig(id="p", model_name="p", model_provider="anthropic")],
+        )
+        no_mcp_display = _answering_display(no_mcp_cfg)
+        mcp_display = _answering_display(mcp_cfg)
+
+        bench = _minimal_benchmark()
+        no_mcp_qa = _qa_store([_qa_entry_for("What is X?", no_mcp_display)])
+        mcp_qa = _qa_store([_qa_entry_for("What is Y?", mcp_display)])
+
+        # fall_through miss policy so the cross-lookup miss returns None
+        # instead of raising, which is the shape of the assertion below.
+        builder = ScenarioReplayBuilder(bench, config=no_mcp_cfg, miss_policy="fall_through")
+        builder.add_qa(no_mcp_qa, target_nodes=["ask"], scenarios=["s1"])
+        builder.add_qa(mcp_qa, target_nodes=["ask"], scenarios=["s2"], config=mcp_cfg)
+        store = builder.build(strict=True)
+
+        hit_s1 = store.lookup(
+            question_id=generate_question_id("What is X?"),
+            scenario_id="s1",
+            scenario_node="ask",
+            answering_model_id=no_mcp_display,
+        )
+        hit_s2 = store.lookup(
+            question_id=generate_question_id("What is Y?"),
+            scenario_id="s2",
+            scenario_node="ask",
+            answering_model_id=mcp_display,
+        )
+        assert hit_s1 is not None and hit_s1.raw_trace == "canned:What is X?"
+        assert hit_s2 is not None and hit_s2.raw_trace == "canned:What is Y?"
+
+        # And cross-lookups must miss (wrong model or wrong scenario).
+        assert (
+            store.lookup(
+                question_id=generate_question_id("What is X?"),
+                scenario_id="s2",
+                scenario_node="ask",
+                answering_model_id=no_mcp_display,
+            )
+            is None
+        )
