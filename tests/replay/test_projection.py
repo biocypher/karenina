@@ -4,7 +4,48 @@ from __future__ import annotations
 
 import pytest
 
+from karenina.benchmark import Benchmark
 from karenina.replay import ReplayKey
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities.question import Question
+from karenina.schemas.scenario.definition import ScenarioDefinition
+from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
+from karenina.schemas.verification.config import VerificationConfig
+
+
+def _minimal_benchmark() -> Benchmark:
+    """Two-scenario benchmark, single node each, for builder tests."""
+    q1 = Question(question="What is X?", raw_answer="X", keywords=[])
+    q2 = Question(question="What is Y?", raw_answer="Y", keywords=[])
+    defn1 = ScenarioDefinition(
+        name="s1",
+        entry_node="ask",
+        nodes={"ask": ScenarioNode(node_id="ask", question=q1)},
+        edges=[ScenarioEdge(source="ask", target=END)],
+        outcome_criteria=[],
+    )
+    defn2 = ScenarioDefinition(
+        name="s2",
+        entry_node="ask",
+        nodes={"ask": ScenarioNode(node_id="ask", question=q2)},
+        edges=[ScenarioEdge(source="ask", target=END)],
+        outcome_criteria=[],
+    )
+    bm = Benchmark.create(name="proj-test", version="1.0.0")
+    bm.add_scenario(defn1)
+    bm.add_scenario(defn2)
+    return bm
+
+
+def _default_config() -> VerificationConfig:
+    return VerificationConfig(
+        answering_models=[
+            ModelConfig(id="gpt-5", model_name="gpt-5", model_provider="openai"),
+        ],
+        parsing_models=[
+            ModelConfig(id="sonnet", model_name="claude", model_provider="anthropic"),
+        ],
+    )
 
 
 @pytest.mark.unit
@@ -84,3 +125,54 @@ class TestProjectionDataTypes:
             duplicate_targets=[],
         )
         assert report.matched == 0
+
+
+@pytest.mark.unit
+class TestScenarioReplayBuilderCtor:
+    def test_ctor_accepts_benchmark_and_config(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        assert builder is not None
+
+    def test_ctor_rejects_none_benchmark(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        with pytest.raises(TypeError, match="benchmark"):
+            ScenarioReplayBuilder(None, config=_default_config())
+
+    def test_ctor_rejects_none_config(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        with pytest.raises(TypeError, match="config"):
+            ScenarioReplayBuilder(_minimal_benchmark(), config=None)
+
+    def test_ctor_rejects_empty_answering_models(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        # parsing_only=True lets VerificationConfig accept an empty
+        # answering_models list, so the builder's own guard is the one
+        # under test here.
+        bad = VerificationConfig(
+            answering_models=[],
+            parsing_models=[ModelConfig(id="p", model_name="p", model_provider="anthropic")],
+            parsing_only=True,
+        )
+        with pytest.raises(ValueError, match="answering_models"):
+            ScenarioReplayBuilder(_minimal_benchmark(), config=bad)
+
+    def test_ctor_default_miss_policy_is_strict(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        assert builder.miss_policy == "strict"
+
+    def test_ctor_accepts_custom_miss_policy(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(
+            _minimal_benchmark(),
+            config=_default_config(),
+            miss_policy="fall_through",
+        )
+        assert builder.miss_policy == "fall_through"

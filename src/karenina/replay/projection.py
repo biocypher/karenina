@@ -11,12 +11,15 @@ for the design rationale.
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from karenina.replay.store import ReplayKey, ReplayStore
+from karenina.replay.store import ReplayKey, ReplayMissPolicy, ReplayStore
 from karenina.schemas.verification.config import VerificationConfig
+
+if TYPE_CHECKING:
+    from karenina.benchmark.benchmark import Benchmark
 
 logger = logging.getLogger(__name__)
 
@@ -90,3 +93,40 @@ class _StagedProjection(BaseModel):
     target_nodes: list[str]
     scenarios: list[str] | None
     config: VerificationConfig
+
+
+class ScenarioReplayBuilder:
+    """Project QA-mode ReplayStores onto scenario targets in a benchmark.
+
+    Three-phase flow::
+
+        builder = ScenarioReplayBuilder(benchmark, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1", "s2"])
+        report = builder.validate()
+        store = builder.build(strict=True)
+
+    Attributes:
+        benchmark: The benchmark whose scenarios are projected onto.
+        config: Default VerificationConfig used when a node has no
+            ``ModelOverride.answering_model``.
+        miss_policy: Miss policy written onto the produced ReplayStore.
+    """
+
+    def __init__(
+        self,
+        benchmark: Benchmark,
+        *,
+        config: VerificationConfig,
+        miss_policy: ReplayMissPolicy = "strict",
+    ) -> None:
+        if benchmark is None:
+            raise TypeError("benchmark must not be None")
+        if config is None:
+            raise TypeError("config must not be None")
+        if not config.answering_models:
+            raise ValueError("config.answering_models must be non-empty")
+
+        self.benchmark = benchmark
+        self.config = config
+        self.miss_policy: ReplayMissPolicy = miss_policy
+        self._staged: list[_StagedProjection] = []
