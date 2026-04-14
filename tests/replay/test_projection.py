@@ -9,8 +9,9 @@ from karenina.replay import ReplayEntry, ReplayKey, ReplayStore
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities.question import Question
 from karenina.schemas.scenario.definition import ScenarioDefinition
-from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
+from karenina.schemas.scenario.types import END, ModelOverride, ScenarioEdge, ScenarioNode
 from karenina.schemas.verification.config import VerificationConfig
+from karenina.utils.checkpoint import generate_question_id
 
 
 def _minimal_benchmark() -> Benchmark:
@@ -331,3 +332,143 @@ class TestAddQaValidation:
         staged = builder._staged  # noqa: SLF001
         assert len(staged[0].config.answering_models) == 1
         assert staged[0].config.answering_models[0].id == "m1"
+
+
+def _qa_entry_for(question_text: str, model_display: str) -> tuple[ReplayKey, ReplayEntry]:
+    return (
+        ReplayKey(
+            question_id=generate_question_id(question_text),
+            answering_model_id=model_display,
+        ),
+        ReplayEntry(raw_trace=f"canned:{question_text}"),
+    )
+
+
+def _answering_display(cfg: VerificationConfig) -> str:
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    return ModelIdentity.from_model_config(
+        cfg.answering_models[0],
+        role="answering",
+    ).display_string
+
+
+@pytest.mark.unit
+class TestValidateCore:
+    def test_matches_single_target(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        model_display = _answering_display(cfg)
+        qa_store = _qa_store([_qa_entry_for("What is X?", model_display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert report.matched == 1
+        assert report.projected_keys[0].scenario_id == "s1"
+        assert report.projected_keys[0].scenario_node == "ask"
+        assert report.projected_keys[0].answering_model_id == model_display
+        assert report.projected_keys[0].visit_index is None
+        assert report.projected_keys[0].replicate is None
+
+    def test_reports_missing_scenario(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        qa_store = _qa_store([_qa_entry_for("What is X?", _answering_display(cfg))])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["nonexistent"])
+
+        report = builder.validate()
+        assert any(t.reason == "missing_scenario" and t.scenario_id == "nonexistent" for t in report.unmatched_targets)
+
+    def test_reports_missing_node(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        qa_store = _qa_store([_qa_entry_for("What is X?", _answering_display(cfg))])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["nope"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert any(t.reason == "missing_node" and t.node_id == "nope" for t in report.unmatched_targets)
+
+    def test_reports_no_qa_entry(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        # qa_store has the WRONG question
+        qa_store = _qa_store([_qa_entry_for("Unrelated?", _answering_display(cfg))])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert any(t.reason == "no_qa_entry" and t.scenario_id == "s1" for t in report.unmatched_targets)
+
+    def test_uses_node_override_model_when_set(self):
+        """When a ScenarioNode has model_override.answering_model, projection resolves to that model, not config default."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+        from karenina.schemas.verification.model_identity import ModelIdentity
+
+        override_model = ModelConfig(
+            id="override-m",
+            model_name="override-m",
+            model_provider="anthropic",
+        )
+        q = Question(question="What is X?", raw_answer="X", keywords=[])
+        defn = ScenarioDefinition(
+            name="s_override",
+            entry_node="ask",
+            nodes={
+                "ask": ScenarioNode(
+                    node_id="ask",
+                    question=q,
+                    model_override=ModelOverride(answering_model=override_model),
+                )
+            },
+            edges=[ScenarioEdge(source="ask", target=END)],
+            outcome_criteria=[],
+        )
+        bench = Benchmark.create(name="proj-override", version="1.0.0")
+        bench.add_scenario(defn)
+
+        cfg = _default_config()
+        override_display = ModelIdentity.from_model_config(override_model, role="answering").display_string
+        qa_store = _qa_store([_qa_entry_for("What is X?", override_display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s_override"])
+
+        report = builder.validate()
+        assert report.matched == 1
+        assert report.projected_keys[0].answering_model_id == override_display
+
+    def test_expands_scenarios_none_at_validate_time(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        model_display = _answering_display(cfg)
+        qa_store = _qa_store(
+            [
+                _qa_entry_for("What is X?", model_display),
+                _qa_entry_for("What is Y?", model_display),
+            ]
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=None)
+
+        report = builder.validate()
+        assert report.matched == 2
+        scenario_ids = {k.scenario_id for k in report.projected_keys}
+        assert scenario_ids == {"s1", "s2"}

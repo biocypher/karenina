@@ -15,11 +15,13 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from karenina.replay.store import ReplayKey, ReplayMissPolicy, ReplayStore
+from karenina.replay.exceptions import ProjectionError  # noqa: F401  # re-exported for Task 9's build()
+from karenina.replay.store import ReplayEntry, ReplayKey, ReplayMissPolicy, ReplayStore
 from karenina.schemas.verification.config import VerificationConfig
 
 if TYPE_CHECKING:
     from karenina.benchmark.benchmark import Benchmark
+    from karenina.schemas.scenario.types import ScenarioNode
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +112,28 @@ def _dedupe_with_warning(values: list[str], *, kind: str) -> list[str]:
             kind,
         )
     return out
+
+
+def _probe_qa(
+    qa_store: ReplayStore,
+    *,
+    question_id: str,
+    answering_model_id: str,
+) -> ReplayEntry | None:
+    """Probe a QA store with fall-through semantics regardless of its miss_policy.
+
+    Saves and restores the original policy so the caller's store is
+    unchanged on exit. Returns the ReplayEntry or None.
+    """
+    saved = qa_store.miss_policy
+    try:
+        qa_store.miss_policy = "fall_through"
+        return qa_store.lookup(
+            question_id=question_id,
+            answering_model_id=answering_model_id,
+        )
+    finally:
+        qa_store.miss_policy = saved
 
 
 class ScenarioReplayBuilder:
@@ -216,3 +240,131 @@ class ScenarioReplayBuilder:
             )
         )
         return self
+
+    def validate(self) -> ProjectionReport:
+        """Walk every staged projection and build a ProjectionReport.
+
+        Does not mutate builder state. For each staged projection,
+        expands ``scenarios=None`` to all benchmark scenarios, then
+        iterates the cartesian product of scenarios x target_nodes.
+
+        Orphan/duplicate detection uses ``self._projection_consumed_ids``
+        which is populated in this method. Orphan classification lands
+        in Task 7; duplicate classification lands in Task 6.
+
+        Returns:
+            ProjectionReport with projected_keys, unmatched_targets,
+            orphan_qa_entries, duplicate_targets.
+        """
+        projected_keys: list[ReplayKey] = []
+        unmatched_targets: list[UnmatchedTarget] = []
+
+        # One set per staged projection; each set holds ``id(entry)`` for
+        # every ReplayEntry the projection consumed via _probe_qa. Using
+        # object identity correctly handles wildcard QA entries
+        # (``answering_model_id=None``) that the ladder matches from a
+        # concrete probe; those entries are consumed even though their
+        # abstract key differs from the projected key.
+        self._projection_consumed_ids: list[set[int]] = []
+
+        for projection in self._staged:
+            consumed_ids: set[int] = set()
+            self._projection_consumed_ids.append(consumed_ids)
+
+            scenarios = (
+                projection.scenarios
+                if projection.scenarios is not None
+                else [sc.name for sc in self.benchmark.get_scenarios()]
+            )
+
+            for scenario_id in scenarios:
+                try:
+                    scenario_def = self.benchmark.get_scenario(scenario_id)
+                except KeyError:
+                    for node_id in projection.target_nodes:
+                        unmatched_targets.append(
+                            UnmatchedTarget(
+                                scenario_id=scenario_id,
+                                node_id=node_id,
+                                question_id=None,
+                                answering_model_id=None,
+                                reason="missing_scenario",
+                            )
+                        )
+                    continue
+
+                for node_id in projection.target_nodes:
+                    node = scenario_def.nodes.get(node_id)
+                    if node is None:
+                        unmatched_targets.append(
+                            UnmatchedTarget(
+                                scenario_id=scenario_id,
+                                node_id=node_id,
+                                question_id=None,
+                                answering_model_id=None,
+                                reason="missing_node",
+                            )
+                        )
+                        continue
+
+                    question_id, model_display = self._resolve_node_identity(
+                        node,
+                        projection.config,
+                    )
+
+                    hit = _probe_qa(
+                        projection.qa_store,
+                        question_id=question_id,
+                        answering_model_id=model_display,
+                    )
+                    if hit is None:
+                        unmatched_targets.append(
+                            UnmatchedTarget(
+                                scenario_id=scenario_id,
+                                node_id=node_id,
+                                question_id=question_id,
+                                answering_model_id=model_display,
+                                reason="no_qa_entry",
+                            )
+                        )
+                        continue
+
+                    consumed_ids.add(id(hit))
+                    projected_keys.append(
+                        ReplayKey(
+                            question_id=question_id,
+                            scenario_id=scenario_id,
+                            scenario_node=node_id,
+                            answering_model_id=model_display,
+                            visit_index=None,
+                            replicate=None,
+                        )
+                    )
+
+        # Duplicate and orphan detection land in Task 6/7.
+        duplicate_targets: list[tuple[str, str]] = []
+        orphan_qa_entries: list[OrphanEntry] = []
+
+        return ProjectionReport(
+            projected_keys=projected_keys,
+            unmatched_targets=unmatched_targets,
+            orphan_qa_entries=orphan_qa_entries,
+            duplicate_targets=duplicate_targets,
+        )
+
+    def _resolve_node_identity(
+        self,
+        node: ScenarioNode,
+        config: VerificationConfig,
+    ) -> tuple[str, str]:
+        """Compute (question_id, answering_model_display_string) for a node."""
+        from karenina.schemas.verification.model_identity import ModelIdentity
+        from karenina.utils.checkpoint import generate_question_id
+
+        question_id = generate_question_id(node.question.question)
+        if node.model_override is not None and node.model_override.answering_model is not None:
+            model = node.model_override.answering_model
+        else:
+            model = config.answering_models[0]
+        model_display = ModelIdentity.from_model_config(model, role="answering").display_string
+        return question_id, model_display
