@@ -287,11 +287,15 @@ class ResultsStore:
 
         Returns:
             Dict with a ``runs`` key mapping run names to lists of
-            serialized result dicts.
+            serialized result dicts. If any scenario execution results
+            carry ``outcome_results``, a ``scenario_outcomes`` key is
+            added at the top level mapping run name to a dict of
+            ``scenario_id -> outcome_results``.
         """
         runs_to_export = {run_name: self._runs[run_name]} if run_name and run_name in self._runs else dict(self._runs)
 
         exported_runs: dict[str, list[dict[str, Any]]] = {}
+        scenario_outcomes: dict[str, dict[str, dict[str, bool | int | float]]] = {}
         for rn, result_set in runs_to_export.items():
             results_list = []
             for result in result_set.results:
@@ -301,7 +305,19 @@ class ResultsStore:
             if results_list:
                 exported_runs[rn] = results_list
 
-        return {"runs": exported_runs}
+            if result_set.scenario_results:
+                per_scenario: dict[str, dict[str, bool | int | float]] = {}
+                for er in result_set.scenario_results:
+                    outcomes = getattr(er, "outcome_results", None)
+                    if outcomes:
+                        per_scenario[er.scenario_id] = dict(outcomes)
+                if per_scenario:
+                    scenario_outcomes[rn] = per_scenario
+
+        output: dict[str, Any] = {"runs": exported_runs}
+        if scenario_outcomes:
+            output["scenario_outcomes"] = scenario_outcomes
+        return output
 
     def export_to_file(
         self,

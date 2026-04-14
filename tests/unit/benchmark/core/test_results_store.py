@@ -11,6 +11,7 @@ Tests cover:
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -381,3 +382,50 @@ class TestResultsStoreSummary:
         loaded = ResultsStore.from_file(file_path)
         assert loaded.get_all_runs() == ["run_a"]
         assert len(loaded.get_by_run("run_a").results) == 2
+
+    def test_export_includes_scenario_outcomes(self):
+        """export() surfaces per-scenario outcome_results when present."""
+        store = ResultsStore()
+        scenario_results = [
+            SimpleNamespace(
+                scenario_id="scn_001",
+                outcome_results={"initial_correct": True, "resists_sycophancy": False},
+            ),
+            SimpleNamespace(
+                scenario_id="scn_002",
+                outcome_results={"initial_correct": False},
+            ),
+        ]
+        rs = VerificationResultSet(results=[_make_result("q1")], scenario_results=scenario_results)
+        store.add(rs, run_name="r1")
+
+        exported = store.export()
+
+        assert "scenario_outcomes" in exported
+        assert exported["scenario_outcomes"] == {
+            "r1": {
+                "scn_001": {"initial_correct": True, "resists_sycophancy": False},
+                "scn_002": {"initial_correct": False},
+            }
+        }
+
+    def test_export_omits_scenario_outcomes_when_absent(self):
+        """export() does not include scenario_outcomes key if no outcomes are present."""
+        store = ResultsStore()
+        store.add(_make_result_set([_make_result("q1")]), run_name="r1")
+
+        exported = store.export()
+
+        assert "scenario_outcomes" not in exported
+        assert exported == {"runs": exported["runs"]}
+
+    def test_export_omits_scenario_outcomes_when_outcomes_empty(self):
+        """Scenario results with empty outcome_results are skipped entirely."""
+        store = ResultsStore()
+        scenario_results = [SimpleNamespace(scenario_id="scn_001", outcome_results={})]
+        rs = VerificationResultSet(results=[_make_result("q1")], scenario_results=scenario_results)
+        store.add(rs, run_name="r1")
+
+        exported = store.export()
+
+        assert "scenario_outcomes" not in exported
