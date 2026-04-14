@@ -897,3 +897,28 @@ class TestBuild:
         assert projected_entry.parsed_answer_fields == original_entry.parsed_answer_fields
         assert projected_entry.captured_model_id == original_entry.captured_model_id
         assert projected_entry.captured_at == original_entry.captured_at
+
+
+@pytest.mark.unit
+class TestPublicAPIReExports:
+    def test_builder_available_from_replay(self):
+        from karenina.replay import ScenarioReplayBuilder as A
+        from karenina.replay.projection import ScenarioReplayBuilder as B
+
+        assert A is B
+
+    def test_report_types_available_from_replay(self):
+        from karenina.replay import OrphanEntry, ProjectionReport, UnmatchedTarget
+        from karenina.replay.projection import (
+            OrphanEntry as _OE,
+        )
+        from karenina.replay.projection import (
+            ProjectionReport as _PR,
+        )
+        from karenina.replay.projection import (
+            UnmatchedTarget as _UT,
+        )
+
+        assert OrphanEntry is _OE
+        assert ProjectionReport is _PR
+        assert UnmatchedTarget is _UT
