@@ -84,6 +84,7 @@ class ScenarioManager:
         progress_callback: Callable[..., None] | None = None,
         answer_cache: AnswerTraceCache | None = None,
         workspace_root: Path | None = None,
+        replicate: int | None = None,
     ) -> ScenarioExecutionResult:
         """Execute a scenario with a specific model pair.
 
@@ -100,6 +101,11 @@ class ScenarioManager:
                 agentic_parsing is True. Plumbed from Benchmark.workspace_root
                 through ScenarioExecutor.run_batch. See GenerateAnswer stage's
                 _resolve_workspace which hard-requires this when agentic_parsing.
+            replicate: Run-level replicate index, shared across all turns
+                in this scenario execution. None for single-replicate runs
+                (matches the QA convention). Stamped onto the returned
+                ``ScenarioExecutionResult`` and threaded into every
+                ``VerificationContext.replicate``.
 
         Returns:
             ScenarioExecutionResult with all turn data.
@@ -242,6 +248,7 @@ class ScenarioManager:
                         state.current_node,
                         answering_model_id,
                         history_strs,
+                        replicate=replicate,
                     )
                     cache_status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
                     if cache_status == "IN_PROGRESS":
@@ -263,6 +270,7 @@ class ScenarioManager:
                     scenario_id=scenario.name,
                     scenario_node=state.current_node,
                     scenario_path=list(path),
+                    replicate=replicate,
                     question_text_override=question_text_override,
                     cached_answer_data=cached_answer_data,
                     workspace_root=workspace_root,
@@ -424,6 +432,7 @@ class ScenarioManager:
             turn_results=turn_results,
             final_state=state,
             outcome_results={},
+            replicate=replicate,
         )
 
         result.outcome_results = _evaluate_outcome_criteria(
@@ -446,6 +455,7 @@ class ScenarioManager:
         scenario_id: str | None = None,
         scenario_node: str | None = None,
         scenario_path: list[str] | None = None,
+        replicate: int | None = None,
         question_text_override: str | None = None,
         cached_answer_data: dict[str, Any] | None = None,
         workspace_root: Path | None = None,
@@ -523,6 +533,7 @@ class ScenarioManager:
             scenario_id=scenario_id,
             scenario_node=scenario_node,
             scenario_path=scenario_path,
+            replicate=replicate,
             # Agentic parsing configuration (forwarded from VerificationConfig so
             # scenario nodes actually reach Stage 7b when agentic_parsing is set).
             agentic_parsing=config.agentic_parsing,
