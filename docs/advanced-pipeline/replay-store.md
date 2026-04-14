@@ -553,7 +553,7 @@ The default fall-through behaviour is the most user-friendly: it lets you iterat
 
 Before the replay store existed, the only way to inject a hand-written response was to use `ModelConfig(interface="manual", manual_traces=...)`. That path is preserved bit-for-bit. When `Benchmark.run_verification` sees a `VerificationConfig` with no `replay_store` set and a manual answering model, it auto-builds a strict `ReplayStore` from the `ManualTraces` instance and threads it through the pipeline. From the user's perspective, nothing changes; from the pipeline's perspective, the manual interface becomes a thin shim over the unified replay path.
 
-The auto-build is skipped if `config.replay_store is not None`, so passing your own store always wins. There is also a warning when `replicate_count > 1`: replay is single-replicate, so all replicates would reuse the same captured entries.
+The auto-build is skipped if `config.replay_store is not None`, so passing your own store always wins. Replay honors per-replicate entries via the 3-axis specificity ladder (model, visit, replicate); canonicalize across replicates at capture time via `replicate_selector="first"` or `"last"` on `capture_from_result_set` when you want one answer to serve every replicate.
 
 ```python
 from karenina.adapters.manual import ManualTraces
