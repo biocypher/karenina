@@ -6,7 +6,7 @@ for the design document.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from karenina.replay.capture import (
     capture_from_result_set,
@@ -69,7 +69,7 @@ _LAZY_PROJECTION_EXPORTS = {
 }
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     if name in _LAZY_PROJECTION_EXPORTS:
         from karenina.replay import projection
 
