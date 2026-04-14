@@ -11,6 +11,7 @@ from karenina.replay.capture import (
     capture_from_scenario_result,
 )
 from karenina.replay.exceptions import (
+    ProjectionError,
     ReplayError,
     ReplayHydrationError,
     ReplayMissError,
@@ -25,6 +26,7 @@ from karenina.replay.store import (
 )
 
 __all__ = [
+    "ProjectionError",
     "ReplayEntry",
     "ReplayError",
     "ReplayHydrationError",

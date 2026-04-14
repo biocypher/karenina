@@ -67,3 +67,31 @@ class TestReplayExceptionHierarchy:
         assert ReExportedMissError is ReplayMissError
         assert ReExportedHydrationError is ReplayHydrationError
         assert ReExportedPersistenceError is ReplayPersistenceError
+
+
+@pytest.mark.unit
+class TestProjectionError:
+    def test_projection_error_is_replay_error(self):
+        from karenina.exceptions import ProjectionError, ReplayError
+
+        assert issubclass(ProjectionError, ReplayError)
+
+    def test_projection_error_stores_report_attribute(self):
+        from karenina.exceptions import ProjectionError
+
+        err = ProjectionError("bad projection", report="sentinel")
+        assert err.message == "bad projection"
+        assert err.report == "sentinel"
+
+    def test_projection_error_report_defaults_to_none(self):
+        from karenina.exceptions import ProjectionError
+
+        err = ProjectionError("bad projection")
+        assert err.report is None
+
+    def test_projection_error_available_from_replay_namespace(self):
+        from karenina.exceptions import ProjectionError as C
+        from karenina.replay import ProjectionError as A
+        from karenina.replay.exceptions import ProjectionError as B
+
+        assert A is B is C

@@ -47,3 +47,20 @@ class ReplayHydrationError(ReplayError):
 
 class ReplayPersistenceError(ReplayError):
     """Raised on version mismatch, schema failure, or malformed replay JSON."""
+
+
+class ProjectionError(ReplayError):
+    """Raised by ScenarioReplayBuilder.build(strict=True) when the
+    projection report contains unmatched targets or duplicate targets.
+
+    Attributes:
+        report: The full ProjectionReport attached to the error for
+            post-mortem inspection. Typed ``Any`` to avoid a circular
+            import with ``karenina.replay.projection`` (same treatment
+            as ``ReplayMissError.key``). May be None when the caller
+            did not supply one.
+    """
+
+    def __init__(self, message: str, *, report: Any = None) -> None:
+        super().__init__(message)
+        self.report = report

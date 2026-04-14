@@ -26,7 +26,8 @@ Exception hierarchy::
     └── ReplayError                  # Replay layer errors (see replay/exceptions.py)
         ├── ReplayMissError
         ├── ReplayHydrationError
-        └── ReplayPersistenceError
+        ├── ReplayPersistenceError
+        └── ProjectionError
 
 Domain-specific modules (ports/errors.py, adapters/manual/exceptions.py, etc.)
 remain the canonical definition sites for their respective exceptions. This module
@@ -136,6 +137,7 @@ class VerificationBatchError(KareninaError):
 # Re-export replay layer exceptions for convenience. The canonical
 # definition lives in karenina.replay.exceptions.
 from karenina.replay.exceptions import (  # noqa: E402, F401
+    ProjectionError,
     ReplayError,
     ReplayHydrationError,
     ReplayMissError,
