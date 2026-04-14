@@ -30,9 +30,10 @@ class ReplayKey(BaseModel):
         (scenario_id, scenario_node). question_id is still stored for
         informational purposes but is not used for lookup.
 
-    answering_model_id and visit_index are optional refinements. A
-    registered entry with answering_model_id=None matches any answering
-    model; an entry with visit_index=None matches any visit.
+    answering_model_id, visit_index, and replicate are optional
+    refinements. A registered entry with answering_model_id=None matches
+    any answering model; an entry with visit_index=None matches any
+    visit; an entry with replicate=None matches any replicate.
 
     Lookup specificity (see ReplayStore.lookup for details) falls back
     from most-specific to least-specific; first hit wins.
@@ -45,6 +46,7 @@ class ReplayKey(BaseModel):
     scenario_node: str | None = None
     answering_model_id: str | None = None
     visit_index: int | None = None
+    replicate: int | None = None
 
 
 class ReplayEntry(BaseModel):

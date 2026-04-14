@@ -79,3 +79,51 @@ class TestReplayEntry:
     def test_extra_fields_rejected(self):
         with pytest.raises(ValidationError):
             ReplayEntry(raw_trace="x", bogus="nope")
+
+
+@pytest.mark.unit
+class TestReplayKeyReplicateField:
+    def test_replicate_defaults_to_none(self):
+        key = ReplayKey(question_id="q1")
+        assert key.replicate is None
+
+    def test_replicate_accepts_int(self):
+        key = ReplayKey(question_id="q1", replicate=3)
+        assert key.replicate == 3
+
+    def test_keys_differing_only_in_replicate_are_not_equal(self):
+        a = ReplayKey(question_id="q1", replicate=1)
+        b = ReplayKey(question_id="q1", replicate=2)
+        assert a != b
+        assert hash(a) != hash(b)
+
+    def test_keys_identical_in_all_fields_including_replicate_are_equal(self):
+        a = ReplayKey(question_id="q1", replicate=1)
+        b = ReplayKey(question_id="q1", replicate=1)
+        assert a == b
+        assert hash(a) == hash(b)
+
+    def test_replicate_round_trip(self):
+        original = ReplayKey(
+            question_id="q1",
+            scenario_id="s1",
+            scenario_node="n1",
+            answering_model_id="m1",
+            visit_index=2,
+            replicate=4,
+        )
+        dumped = original.model_dump()
+        assert dumped["replicate"] == 4
+        restored = ReplayKey.model_validate(dumped)
+        assert restored == original
+
+    def test_legacy_payload_without_replicate_loads_as_none(self):
+        legacy = {
+            "question_id": "q1",
+            "scenario_id": None,
+            "scenario_node": None,
+            "answering_model_id": None,
+            "visit_index": None,
+        }
+        key = ReplayKey.model_validate(legacy)
+        assert key.replicate is None
