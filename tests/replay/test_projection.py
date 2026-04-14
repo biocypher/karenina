@@ -922,3 +922,32 @@ class TestPublicAPIReExports:
         assert OrphanEntry is _OE
         assert ProjectionReport is _PR
         assert UnmatchedTarget is _UT
+
+
+@pytest.mark.unit
+class TestBuildRoundTrip:
+    def test_build_then_save_load_preserves_entries(self, tmp_path):
+        from karenina.replay import ReplayStore
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store(
+            [
+                _qa_entry_for("What is X?", display),
+                _qa_entry_for("What is Y?", display),
+            ]
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=None)
+        store = builder.build(strict=True)
+
+        path = tmp_path / "projection.json"
+        store.save(path)
+        reloaded = ReplayStore.load(path)
+        assert len(reloaded.entries) == len(store.entries)
+        original_keys = {(k.scenario_id, k.scenario_node) for (k, _e) in store.entries}
+        reloaded_keys = {(k.scenario_id, k.scenario_node) for (k, _e) in reloaded.entries}
+        assert original_keys == reloaded_keys
