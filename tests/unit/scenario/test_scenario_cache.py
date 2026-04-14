@@ -49,6 +49,23 @@ class TestBuildScenarioCacheKey:
         assert isinstance(key, str)
         assert len(key) > 0
 
+    def test_replicate_none_matches_legacy(self):
+        key_without = build_scenario_cache_key("s", "n", "claude", ["hi"])
+        key_with_none = build_scenario_cache_key("s", "n", "claude", ["hi"], replicate=None)
+        assert key_without == key_with_none
+
+    def test_differs_by_replicate(self):
+        k1 = build_scenario_cache_key("s", "n", "claude", ["hi"], replicate=1)
+        k2 = build_scenario_cache_key("s", "n", "claude", ["hi"], replicate=2)
+        k_none = build_scenario_cache_key("s", "n", "claude", ["hi"], replicate=None)
+        assert k1 != k2
+        assert k1 != k_none
+        assert k2 != k_none
+
+    def test_replicate_suffix_format(self):
+        key = build_scenario_cache_key("s", "n", "claude", ["hi"], replicate=3)
+        assert key.endswith("_rep3")
+
 
 @pytest.mark.unit
 class TestScenarioManagerSignature:

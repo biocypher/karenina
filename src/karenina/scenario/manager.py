@@ -39,11 +39,18 @@ def build_scenario_cache_key(
     node_id: str,
     answering_model_id: str,
     conversation_history_strs: list[str],
+    replicate: int | None = None,
 ) -> str:
-    """Build a cache key for node-level answer caching in scenarios."""
+    """Build a cache key for node-level answer caching in scenarios.
+
+    When ``replicate`` is not None, the key carries a ``_rep{N}`` suffix so
+    distinct replicates of the same scenario node do not share cached answers.
+    ``replicate=None`` preserves the pre-R2 key shape byte-for-byte.
+    """
     history_str = "|".join(conversation_history_strs)
     history_hash = hashlib.sha256(history_str.encode()).hexdigest()[:16]
-    return f"{scenario_id}_{node_id}_{answering_model_id}_{history_hash}"
+    base = f"{scenario_id}_{node_id}_{answering_model_id}_{history_hash}"
+    return base if replicate is None else f"{base}_rep{replicate}"
 
 
 def _sanitize_for_filesystem(name: str) -> str:
