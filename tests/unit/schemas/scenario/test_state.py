@@ -137,55 +137,49 @@ class TestScenarioExecutionResult:
             )
             assert result.status == status
 
+    def test_replicate_default_none(self):
+        state = ScenarioState(
+            turn=0,
+            current_node="n",
+            verify_result=None,
+            parsed={},
+            node_visits={},
+            history=[],
+            accumulated={},
+            node_results={},
+        )
+        result = ScenarioExecutionResult(
+            scenario_id="s",
+            status="completed",
+            path=["n"],
+            turn_count=1,
+            history=[],
+            turn_results=[],
+            final_state=state,
+            outcome_results={},
+        )
+        assert result.replicate is None
 
-def test_scenario_execution_result_replicate_default_none():
-    from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState
-
-    state = ScenarioState(
-        turn=0,
-        current_node="n",
-        verify_result=None,
-        parsed={},
-        node_visits={},
-        history=[],
-        accumulated={},
-        node_results={},
-    )
-    result = ScenarioExecutionResult(
-        scenario_id="s",
-        status="completed",
-        path=["n"],
-        turn_count=1,
-        history=[],
-        turn_results=[],
-        final_state=state,
-        outcome_results={},
-    )
-    assert result.replicate is None
-
-
-def test_scenario_execution_result_replicate_set():
-    from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState
-
-    state = ScenarioState(
-        turn=0,
-        current_node="n",
-        verify_result=None,
-        parsed={},
-        node_visits={},
-        history=[],
-        accumulated={},
-        node_results={},
-    )
-    result = ScenarioExecutionResult(
-        scenario_id="s",
-        status="completed",
-        path=["n"],
-        turn_count=1,
-        history=[],
-        turn_results=[],
-        final_state=state,
-        outcome_results={},
-        replicate=3,
-    )
-    assert result.replicate == 3
+    def test_replicate_set(self):
+        state = ScenarioState(
+            turn=0,
+            current_node="n",
+            verify_result=None,
+            parsed={},
+            node_visits={},
+            history=[],
+            accumulated={},
+            node_results={},
+        )
+        result = ScenarioExecutionResult(
+            scenario_id="s",
+            status="completed",
+            path=["n"],
+            turn_count=1,
+            history=[],
+            turn_results=[],
+            final_state=state,
+            outcome_results={},
+            replicate=3,
+        )
+        assert result.replicate == 3
