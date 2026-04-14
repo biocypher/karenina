@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -92,6 +92,157 @@ class TestScenarioExecutorForwardsReplicate:
         assert not errors
         assert captured == [None, 1, 2]
         assert [r.replicate for r in results] == [None, 1, 2]
+
+    @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
+    def test_parallel_forwards_replicate_kwarg(self, mock_manager_cls: MagicMock) -> None:
+        """The parallel executor branch forwards replicate into ScenarioManager.run.
+
+        Patches the module-level ScenarioManager reference in scenario_executor
+        so the fake applies across worker threads (monkeypatch on the class has
+        the same global effect, but @patch matches the convention already used
+        in test_scenario_executor_parallel.py).
+        """
+        import threading
+
+        from karenina.benchmark.verification import scenario_executor as se
+        from karenina.schemas.scenario.state import ScenarioExecutionResult
+
+        captured: list[int | None] = []
+        capture_lock = threading.Lock()
+
+        def fake_run(**kwargs):
+            replicate = kwargs.get("replicate")
+            with capture_lock:
+                captured.append(replicate)
+            return ScenarioExecutionResult(
+                scenario_id=kwargs["scenario"].name,
+                status="completed",
+                path=[],
+                turn_count=0,
+                history=[],
+                turn_results=[],
+                final_state=MagicMock(),
+                outcome_results={},
+                replicate=replicate,
+            )
+
+        mock_manager_cls.return_value.run.side_effect = fake_run
+
+        scenario = MagicMock()
+        scenario.name = "foo"
+        ans = MagicMock()
+        ans.model_name = "a"
+        ans.id = "a-id"
+        parse = MagicMock()
+        parse.model_name = "p"
+        parse.id = "p-id"
+
+        combos = [
+            (scenario, ans, parse, None),
+            (scenario, ans, parse, 1),
+            (scenario, ans, parse, 2),
+        ]
+        executor = se.ScenarioExecutor(
+            parallel=True,
+            config=se.ScenarioExecutorConfig(max_workers=3, enable_cache=False),
+        )
+        results, errors = executor.run_batch(combos=combos, config=MagicMock())
+
+        assert not errors
+        # Parallel completion may reorder; compare as sets so the test is
+        # insensitive to scheduling order.
+        assert set(captured) == {None, 1, 2}
+        assert {r.replicate for r in results} == {None, 1, 2}
+
+
+@pytest.mark.unit
+class TestEndToEndReplicatePropagation:
+    """End-to-end checks: replicate reaches VerificationContext and ScenarioExecutionResult."""
+
+    def test_turn_contexts_share_run_replicate(self, monkeypatch):
+        """Every turn in one scenario execution sees the same replicate.
+
+        Drives ScenarioManager.run through two turns (a two-node scenario) and
+        intercepts _run_turn to capture the replicate kwarg per turn. Asserts
+        that every captured value matches the run-level replicate and that the
+        returned ScenarioExecutionResult.replicate mirrors it.
+        """
+        from karenina.scenario import manager as mgr_mod
+        from karenina.schemas.entities import Question
+        from karenina.schemas.scenario.definition import ScenarioDefinition
+        from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
+
+        observed_replicates: list[int | None] = []
+
+        def fake_run_turn(self, **kwargs):
+            observed_replicates.append(kwargs.get("replicate"))
+            vr = MagicMock()
+            vr.metadata.completed_without_errors = True
+            vr.metadata.replicate = kwargs.get("replicate")
+            vr.metadata.result_id = f"rid_{len(observed_replicates)}"
+            vr.template.verify_result = True
+            vr.rubric = None
+            return (vr, [], None, None)
+
+        monkeypatch.setattr(mgr_mod.ScenarioManager, "_run_turn", fake_run_turn, raising=True)
+
+        # Build a minimal two-node scenario inline. The fake _run_turn returns
+        # a stub VerificationResult shaped just enough for the surrounding loop.
+        q1 = Question(question="first?", raw_answer="y", answer_template="class Answer: pass")
+        q2 = Question(question="second?", raw_answer="y", answer_template="class Answer: pass")
+        scenario = ScenarioDefinition(
+            name="two_turn_scenario",
+            nodes={
+                "n1": ScenarioNode(node_id="n1", question=q1),
+                "n2": ScenarioNode(node_id="n2", question=q2),
+            },
+            edges=[
+                ScenarioEdge(source="n1", target="n2"),
+                ScenarioEdge(source="n2", target=END),
+            ],
+            entry_node="n1",
+        )
+
+        manager = mgr_mod.ScenarioManager()
+        config = MagicMock()
+        config.replay_store = None
+        config.replicate_count = 3
+        config.request_timeout = None
+        config.evaluation_mode = "template_only"
+        config.scenario_turn_limit = 5
+        config.custom_error_patterns = None
+        config.use_full_trace_for_template = False
+        config.use_full_trace_for_rubric = False
+
+        result = manager.run(
+            scenario=scenario,
+            config=config,
+            base_answering_model=MagicMock(
+                id="m",
+                model_name="m",
+                system_prompt="",
+                request_timeout=None,
+            ),
+            base_parsing_model=MagicMock(
+                id="p",
+                model_name="p",
+                system_prompt="",
+                request_timeout=None,
+            ),
+            replicate=2,
+        )
+
+        assert result.replicate == 2
+        assert len(observed_replicates) == 2  # two turns in this scenario
+        assert all(r == 2 for r in observed_replicates)
+
+    def test_cache_key_replicate_isolation(self):
+        """Two replicates of the same scenario node produce distinct cache keys."""
+        from karenina.scenario.manager import build_scenario_cache_key
+
+        k_rep1 = build_scenario_cache_key("s", "n", "m", ["hi"], replicate=1)
+        k_rep2 = build_scenario_cache_key("s", "n", "m", ["hi"], replicate=2)
+        assert k_rep1 != k_rep2
 
 
 @pytest.mark.unit
