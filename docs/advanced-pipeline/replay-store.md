@@ -487,6 +487,62 @@ result_strict = strict_bm.run_verification(config_strict)
 
 In fall-through mode the same store would have replayed the Paris question and let the Italy question hit the live model.
 
+## Projecting QA stores onto scenarios
+
+Some benchmarks share a factual "ask" turn across many scenario variants: the same question is asked in several dialogue framings (casual vs authority, MCP vs no-MCP, plain vs agentic). Running the full LLM for that shared turn on every scenario is wasteful when the answer does not vary by framing. `ScenarioReplayBuilder` solves this by projecting a single QA capture onto the shared turn across many scenarios, turning one `(question, model)` QA run into N scenario-mode replay entries.
+
+### Merge key
+
+Projection matches on two axes: `question_id` (derived from the node's question text via `generate_question_id`) and `answering_model_id` (derived via `ModelIdentity.from_model_config(...).display_string`). The model comes from `ScenarioNode.model_override.answering_model` when set, otherwise from `config.answering_models[0]`.
+
+### Three-phase flow
+
+```python
+from karenina.benchmark import Benchmark
+from karenina.replay import ReplayStore, ScenarioReplayBuilder
+from karenina.schemas.verification.config import VerificationConfig
+
+builder = ScenarioReplayBuilder(bench, config=cfg)
+builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1", "s2"])
+report = builder.validate()   # inspect before committing
+store = builder.build(strict=True)
+```
+
+1. `add_qa` stages a projection (one QA store plus its target nodes and scenarios).
+2. `validate` walks every staged projection without mutation and returns a `ProjectionReport` with `projected_keys`, `unmatched_targets`, `orphan_qa_entries`, and `duplicate_targets`.
+3. `build` runs `validate` and registers the matched entries into a fresh `ReplayStore`. `strict=True` raises `ProjectionError` (carrying the report) on any unmatched or duplicate target. `strict=False` emits a warning and returns whatever it matched.
+
+### Replicate canonicalization
+
+`ScenarioReplayBuilder` emits `replicate=None` on every projected entry. The produced wildcard matches every replicate of the scenario turn under the R2 executor. The builder therefore requires QA stores captured with `replicate_selector="first"` or `"last"`, which emit `ReplayKey.replicate=None`. Passing a store captured with `replicate_selector="all"` (integer replicates preserved) is a hard error at `add_qa` time: the 3-axis specificity ladder does not fall through from a `replicate=None` probe to integer replicate entries. Recapture with `replicate_selector="first"` or `"last"` and retry.
+
+### Worked example
+
+```python
+no_mcp_qa = ReplayStore.load("artifacts/qa_no_mcp.json")
+mcp_qa = ReplayStore.load("artifacts/qa_mcp.json")
+
+builder = ScenarioReplayBuilder(bench, config=no_mcp_cfg)
+builder.add_qa(no_mcp_qa, target_nodes=["ask"],
+               scenarios=["syco_hard_casual_no_mcp", "syco_hard_authority_no_mcp"])
+builder.add_qa(mcp_qa, target_nodes=["ask"],
+               scenarios=["syco_hard_casual_mcp", "syco_hard_authority_mcp"],
+               config=mcp_cfg)
+
+report = builder.validate()
+assert not report.unmatched_targets, report
+store = builder.build(strict=True)
+
+# Attach to a verification config; Turn 1 is replayed from the canned QA answer,
+# Turns 2 and 3 hit the live model.
+replay_cfg = no_mcp_cfg.model_copy(update={"replay_store": store})
+result_set = bench.run_verification(config=replay_cfg)
+```
+
+### Inspecting a projection before committing
+
+`report.matched` is the number of targets that resolved to a QA entry. `report.unmatched_targets` classifies misses as `missing_scenario`, `missing_node`, or `no_qa_entry`. `report.orphan_qa_entries` classifies unused QA entries as `no_target_scenario` (no projection target referenced the question) or `model_id_never_requested` (question matched, but runtime model differed from capture). `report.duplicate_targets` lists `(scenario_id, node_id)` pairs hit by more than one projection; `build(strict=False)` applies last-projection-wins.
+
 ## Hydration mismatch policy
 
 When a captured `parsed_answer_fields` dict cannot be validated against the current `Answer` class (the template changed, a field was renamed, a type tightened), the parse bypass has to decide whether to fail loudly or fall back to a live judge call. The setting is `VerificationConfig.replay_parse_on_hydration_mismatch`, which defaults to `"fall_through"`. The alternative is `"strict"`, which raises `ReplayHydrationError` and stops the pipeline with the captured fields embedded in the exception for debugging.
