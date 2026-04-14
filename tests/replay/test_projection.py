@@ -626,3 +626,56 @@ class TestValidateOrphans:
         report = builder.validate()
         assert report.matched == 1, report
         assert report.orphan_qa_entries == [], report.orphan_qa_entries
+
+
+@pytest.mark.unit
+class TestValidatePurity:
+    def test_multiple_calls_produce_equal_reports(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+
+        a = builder.validate()
+        b = builder.validate()
+        assert a.projected_keys == b.projected_keys
+        assert a.unmatched_targets == b.unmatched_targets
+        assert a.orphan_qa_entries == b.orphan_qa_entries
+        assert a.duplicate_targets == b.duplicate_targets
+
+    def test_does_not_mutate_staged_state(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+
+        before_staged = len(builder._staged)  # noqa: SLF001
+        before_qa_entries = len(qa.entries)
+        builder.validate()
+        assert len(builder._staged) == before_staged  # noqa: SLF001
+        assert len(qa.entries) == before_qa_entries
+
+    def test_does_not_mutate_qa_store_miss_policy(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+        qa.miss_policy = "strict"
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+
+        builder.validate()
+        assert qa.miss_policy == "strict"
