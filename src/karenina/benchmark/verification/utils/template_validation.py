@@ -26,6 +26,7 @@ def _build_exec_namespace() -> dict[str, Any]:
         AnyOf,
         AtLeastN,
         BooleanMatch,
+        ConditionalGroundTruth,
         ContainsAll,
         ContainsAny,
         DateMatch,
@@ -33,6 +34,7 @@ def _build_exec_namespace() -> dict[str, Any]:
         DateTolerance,
         ExactMatch,
         FieldCheck,
+        GroundTruthCase,
         LiteralMatch,
         NumericExact,
         NumericMaximum,
@@ -92,6 +94,9 @@ def _build_exec_namespace() -> dict[str, Any]:
         "FieldCheck": FieldCheck,
         # Normalizers
         "SynonymMap": SynonymMap,
+        # Conditional ground truth
+        "ConditionalGroundTruth": ConditionalGroundTruth,
+        "GroundTruthCase": GroundTruthCase,
     }
 
 

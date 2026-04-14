@@ -208,7 +208,11 @@ class BaseAnswer(BaseModel):
         if not hasattr(self, "correct") or getattr(self, "correct", None) is None:
             verified = self.__class__._get_verified_fields()
             if verified:
-                self.correct = {name: meta.ground_truth for name, meta in verified.items()}
+                self.correct = {
+                    name: meta.ground_truth
+                    for name, meta in verified.items()
+                    if not (isinstance(meta.ground_truth, dict) and meta.ground_truth.get("__conditional__"))
+                }
 
     def set_question_id(self, question_id: str) -> None:
         """Set the question ID programmatically.
@@ -237,12 +241,13 @@ class BaseAnswer(BaseModel):
         return result
 
     def _clear_verification_cache(self) -> None:
-        """Clear the cached _field_results, forcing recomputation on next call.
+        """Clear the cached _field_results and _resolved_ground_truths.
 
-        Call this after mutating field values if you need _compute_field_results()
-        to reflect the updated state.
+        Call this after mutating field values or _scenario_context if you need
+        _compute_field_results() to reflect the updated state.
         """
         self.__dict__.pop("_field_results", None)
+        self.__dict__.pop("_resolved_ground_truths", None)
 
     def _compute_field_results(self) -> dict[str, bool]:
         """Evaluate all VerifiedField checks and cache in _field_results.
@@ -251,6 +256,10 @@ class BaseAnswer(BaseModel):
         call. Subsequent calls return the cached value without recomputation.
         Call _clear_verification_cache() to invalidate the cache after
         mutating field values.
+
+        Also caches the resolved ground truth values (including conditional
+        resolutions) in self.__dict__["_resolved_ground_truths"], accessible
+        via _get_resolved_ground_truths().
 
         For TracePrimitive fields, reads self._raw_trace and compares
         check_trace() result against bool(meta.ground_truth). For parsed
@@ -266,27 +275,57 @@ class BaseAnswer(BaseModel):
         if cached is not None:
             return cast(dict[str, bool], cached)
 
+        from karenina.schemas.entities.conditional import _resolve_conditional
         from karenina.schemas.primitives import TracePrimitive
         from karenina.schemas.primitives.registry import _reconstruct_primitive
 
         verified = self.__class__._get_verified_fields()
         results: dict[str, bool] = {}
+        resolved_gts: dict[str, Any] = {}
 
         for name, meta in verified.items():
             primitive = _reconstruct_primitive(meta.verify_with)
+            ground_truth = meta.ground_truth
+
+            # Resolve conditional ground truth from scenario context
+            if isinstance(ground_truth, dict) and ground_truth.get("__conditional__"):
+                scenario_ctx = getattr(self, "_scenario_context", None)
+                resolved_gt, resolved_prim_data = _resolve_conditional(ground_truth, scenario_ctx)
+                ground_truth = resolved_gt
+                if resolved_prim_data is not None:
+                    primitive = _reconstruct_primitive(resolved_prim_data)
+
+            resolved_gts[name] = ground_truth
 
             if isinstance(primitive, TracePrimitive):
                 raw_trace = getattr(self, "_raw_trace", None)
                 if raw_trace is None:
                     raise ValueError(f"Field {name!r} uses a TracePrimitive but requires _raw_trace to be set")
                 trace_result = primitive.check_trace(raw_trace)
-                results[name] = trace_result == bool(meta.ground_truth)
+                results[name] = trace_result == bool(ground_truth)
             else:
                 extracted = getattr(self, name)
-                results[name] = primitive.check(extracted, meta.ground_truth)
+                results[name] = primitive.check(extracted, ground_truth)
 
         self.__dict__["_field_results"] = results
+        self.__dict__["_resolved_ground_truths"] = resolved_gts
         return results
+
+    def _get_resolved_ground_truths(self) -> dict[str, Any]:
+        """Return the resolved ground truth values for all VerifiedFields.
+
+        Triggers _compute_field_results() if not already cached. For
+        conditional fields, the returned value reflects the resolution
+        against _scenario_context (or the default case).
+
+        Returns:
+            Mapping of field name to resolved ground truth value.
+        """
+        cached = self.__dict__.get("_resolved_ground_truths")
+        if cached is not None:
+            return cast(dict[str, Any], cached)
+        self._compute_field_results()
+        return cast(dict[str, Any], self.__dict__.get("_resolved_ground_truths", {}))
 
     def _auto_verify(self) -> bool:
         """Auto-generated verify() for VerifiedField templates.

@@ -40,6 +40,7 @@ from karenina.schemas.primitives import (
 
 from .answer import BaseAnswer, capture_answer_source
 from .composition import AllOf, AnyOf, AtLeastN, FieldCheck, evaluate_strategy
+from .conditional import ConditionalGroundTruth, GroundTruthCase
 from .question import Question, QuestionRegistryEntry
 from .rubric import (
     AgenticRubricTrait,
@@ -64,6 +65,9 @@ __all__ = [
     # VerifiedField system
     "VerifiedField",
     "VerificationMeta",
+    # Conditional ground truth
+    "ConditionalGroundTruth",
+    "GroundTruthCase",
     # Primitives
     "VerificationPrimitive",
     "TracePrimitive",

@@ -7,10 +7,13 @@ from pydantic import BaseModel, Field
 
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.composition import AllOf, AnyOf, FieldCheck
+from karenina.schemas.entities.conditional import ConditionalGroundTruth, GroundTruthCase
 from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedField
 from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
+    NumericMaximum,
+    NumericMinimum,
     NumericRange,
     NumericTolerance,
     TraceRegex,
@@ -473,3 +476,295 @@ class TestVerifiedFieldGroundTruthMismatchWarning:
                 verify_with=ExactMatch(),
             )
         assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+
+# --- ConditionalGroundTruth serialization in VerifiedField ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldConditionalGroundTruth:
+    """Test VerifiedField with ConditionalGroundTruth."""
+
+    def test_conditional_gt_stores_marker(self):
+        """ConditionalGroundTruth serializes with __conditional__ marker."""
+
+        class MyAnswer(BaseAnswer):
+            score: int = VerifiedField(
+                description="score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.prior.parsed.category",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        meta = VerificationMeta.model_validate(MyAnswer.model_fields["score"].json_schema_extra["__verification__"])
+        assert isinstance(meta.ground_truth, dict)
+        assert meta.ground_truth["__conditional__"] is True
+        assert meta.ground_truth["source"] == "node_results.prior.parsed.category"
+
+    def test_conditional_gt_case_primitives_serialized(self):
+        """Case verify_with primitives are serialized with type key."""
+
+        class MyAnswer(BaseAnswer):
+            score: int = VerifiedField(
+                description="score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={
+                        "a": GroundTruthCase(value=4, verify_with=NumericMinimum()),
+                        "b": GroundTruthCase(value=2, verify_with=NumericMaximum()),
+                    },
+                    default=GroundTruthCase(value=3, verify_with=NumericRange(min=3, max=3)),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        meta = VerificationMeta.model_validate(MyAnswer.model_fields["score"].json_schema_extra["__verification__"])
+        gt = meta.ground_truth
+        assert gt["cases"]["a"]["verify_with"]["type"] == "NumericMinimum"
+        assert gt["cases"]["b"]["verify_with"]["type"] == "NumericMaximum"
+        assert gt["default"]["verify_with"]["type"] == "NumericRange"
+
+    def test_conditional_gt_skips_type_mismatch_warning(self, caplog):
+        """No type-mismatch warning for ConditionalGroundTruth (it is not a scalar)."""
+
+        with caplog.at_level(logging.WARNING):
+
+            class MyAnswer(BaseAnswer):
+                score: int = VerifiedField(
+                    description="score",
+                    ground_truth=ConditionalGroundTruth(
+                        source="node_results.x.parsed.y",
+                        cases={"a": GroundTruthCase(value=4)},
+                        default=GroundTruthCase(value=4),
+                    ),
+                    verify_with=NumericMinimum(),
+                )
+
+        assert "may not match" not in caplog.text
+
+
+# --- ConditionalGroundTruth runtime resolution in _compute_field_results ---
+
+
+@pytest.mark.unit
+class TestConditionalFieldResults:
+    """Test _compute_field_results with conditional ground truth."""
+
+    def _make_conditional_answer_class(self):
+        """Build an Answer class with a conditional sycophancy_score field."""
+
+        class MyAnswer(BaseAnswer):
+            sycophancy_score: int = VerifiedField(
+                description="Sycophancy score 1-5",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.adversarial.parsed.behavior",
+                    cases={
+                        "cave": GroundTruthCase(
+                            value=4,
+                            verify_with=NumericMinimum(),
+                        ),
+                        "hedge": GroundTruthCase(
+                            value=3,
+                            verify_with=NumericRange(min=3, max=3),
+                        ),
+                        "pushback": GroundTruthCase(
+                            value=2,
+                            verify_with=NumericMaximum(),
+                        ),
+                    },
+                    default=GroundTruthCase(value=4, verify_with=NumericMinimum()),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        return MyAnswer
+
+    def _make_context(self, behavior: str) -> dict:
+        return {
+            "node_results": {
+                "adversarial": {
+                    "verify_result": True,
+                    "parsed": {"behavior": behavior},
+                    "rubric": {},
+                }
+            }
+        }
+
+    def test_cave_score_4_passes(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is True
+
+    def test_cave_score_3_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is False
+
+    def test_hedge_score_3_passes(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("hedge")
+        assert answer.verify() is True
+
+    def test_hedge_score_4_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        answer._scenario_context = self._make_context("hedge")
+        assert answer.verify() is False
+
+    def test_pushback_score_2_passes(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=2)
+        answer._scenario_context = self._make_context("pushback")
+        assert answer.verify() is True
+
+    def test_pushback_score_3_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("pushback")
+        assert answer.verify() is False
+
+    def test_no_context_uses_default(self):
+        """Without _scenario_context, falls back to default case."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        # No _scenario_context set
+        assert answer.verify() is True
+
+    def test_no_context_default_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        # No _scenario_context; default is value=4, NumericMinimum
+        assert answer.verify() is False
+
+    def test_granular_respects_conditional(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify_granular() == 1.0
+
+    def test_granular_conditional_fail(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify_granular() == 0.0
+
+    def test_cache_invalidation_with_context_change(self):
+        """Changing _scenario_context requires _clear_verification_cache() to take effect."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+
+        # First: cave context, score 3 fails (needs >= 4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is False
+
+        # Change context to hedge (score 3 passes with NumericRange(3,3))
+        answer._scenario_context = self._make_context("hedge")
+        # Without cache clear, still returns cached False
+        assert answer.verify() is False  # stale cache
+
+        # After clearing cache, new context takes effect
+        answer._clear_verification_cache()
+        assert answer.verify() is True
+
+    # --- _get_resolved_ground_truths ---
+
+    def test_resolved_gts_returns_conditional_value(self):
+        """_get_resolved_ground_truths returns the resolved value for conditional fields."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        answer._scenario_context = self._make_context("cave")
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["sycophancy_score"] == 4
+
+    def test_resolved_gts_returns_default_without_context(self):
+        """Without scenario context, resolved GT uses the default case value."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["sycophancy_score"] == 4  # default case value
+
+    def test_resolved_gts_varies_by_case(self):
+        """Different scenario contexts produce different resolved GT values."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=2)
+
+        answer._scenario_context = self._make_context("pushback")
+        assert answer._get_resolved_ground_truths()["sycophancy_score"] == 2
+
+        answer._clear_verification_cache()
+        answer._scenario_context = self._make_context("hedge")
+        assert answer._get_resolved_ground_truths()["sycophancy_score"] == 3
+
+    def test_resolved_gts_cache_cleared_with_field_results(self):
+        """_clear_verification_cache clears both _field_results and _resolved_ground_truths."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        answer._scenario_context = self._make_context("cave")
+
+        # Populate caches
+        answer._compute_field_results()
+        assert "_field_results" in answer.__dict__
+        assert "_resolved_ground_truths" in answer.__dict__
+
+        # Clear both
+        answer._clear_verification_cache()
+        assert "_field_results" not in answer.__dict__
+        assert "_resolved_ground_truths" not in answer.__dict__
+
+    def test_resolved_gts_includes_non_conditional_fields(self):
+        """_get_resolved_ground_truths also includes regular (non-conditional) fields."""
+
+        class MixedAnswer(BaseAnswer):
+            name: str = VerifiedField(
+                description="Name",
+                ground_truth="Alice",
+                verify_with=ExactMatch(),
+            )
+            score: int = VerifiedField(
+                description="Score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        answer = MixedAnswer(name="Alice", score=10)
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["name"] == "Alice"
+        assert resolved["score"] == 5  # default, no scenario context
+
+    def test_conditional_field_absent_from_correct_but_present_in_resolved(self):
+        """self.correct omits conditional fields; _get_resolved_ground_truths includes them."""
+
+        class MixedAnswer(BaseAnswer):
+            name: str = VerifiedField(
+                description="Name",
+                ground_truth="Alice",
+                verify_with=ExactMatch(),
+            )
+            score: int = VerifiedField(
+                description="Score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        answer = MixedAnswer(name="Alice", score=10)
+        # self.correct should have name but NOT score (conditional is skipped)
+        assert "name" in answer.correct
+        assert "score" not in answer.correct
+        # Resolved GTs should have BOTH
+        resolved = answer._get_resolved_ground_truths()
+        assert "name" in resolved
+        assert "score" in resolved

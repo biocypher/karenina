@@ -235,6 +235,7 @@ class ScenarioManager:
                 cached_answer_data=cached_answer_data,
                 workspace_root=workspace_root,
                 turn_workspace_path=turn_dir,
+                node_results=dict(state.node_results),
             )
 
             if not vr.metadata.completed_without_errors:
@@ -413,6 +414,7 @@ class ScenarioManager:
         cached_answer_data: dict[str, Any] | None = None,
         workspace_root: Path | None = None,
         turn_workspace_path: Path | None = None,
+        node_results: dict[str, dict[str, Any]] | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
 
@@ -509,6 +511,10 @@ class ScenarioManager:
         # Set conversation history artifact (the key integration point).
         # Pass a copy so the pipeline does not mutate our accumulator.
         context.set_artifact("conversation_history", list(conversation_history))
+
+        # Pass node_results for ConditionalGroundTruth resolution in VerifyTemplateStage.
+        if node_results is not None:
+            context.set_artifact(ArtifactKeys.SCENARIO_NODE_RESULTS, dict(node_results))
 
         # Set model identity artifacts
         answering_identity = ModelIdentity.from_model_config(answering_model, role="answering")
