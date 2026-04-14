@@ -9,6 +9,7 @@ import contextlib
 import copy
 import hashlib
 import logging
+import re
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -43,6 +44,17 @@ def build_scenario_cache_key(
     history_str = "|".join(conversation_history_strs)
     history_hash = hashlib.sha256(history_str.encode()).hexdigest()[:16]
     return f"{scenario_id}_{node_id}_{answering_model_id}_{history_hash}"
+
+
+def _sanitize_for_filesystem(name: str) -> str:
+    """Replace non-alphanumeric characters with underscores for filesystem safety."""
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+
+
+def _model_dir_name(model: ModelConfig) -> str:
+    """Derive a filesystem-safe directory name from a ModelConfig."""
+    raw = model.id or model.model_name or "unknown"
+    return _sanitize_for_filesystem(raw)
 
 
 class ScenarioManager:
@@ -125,6 +137,16 @@ class ScenarioManager:
             entry_node_obj.agent_identity or base_answering_model.id or base_answering_model.model_name or "unknown"
         )
 
+        # Create scenario-level workspace directory when workspace_root is set.
+        # Structure: workspace_root / scenario_name / model_id /
+        scenario_dir: Path | None = None
+        if workspace_root is not None:
+            scenario_dir = (
+                workspace_root / _sanitize_for_filesystem(scenario.name) / _model_dir_name(base_answering_model)
+            )
+            scenario_dir.mkdir(parents=True, exist_ok=True)
+            logger.info("Created scenario workspace: %s", scenario_dir)
+
         while True:
             node = scenario.nodes[state.current_node]
             path.append(state.current_node)
@@ -137,6 +159,13 @@ class ScenarioManager:
                 base_parsing_model,
             )
 
+            # Create per-turn workspace directory before handover so traces
+            # land inside the turn folder instead of a shared flat directory.
+            turn_dir: Path | None = None
+            if scenario_dir is not None:
+                turn_dir = scenario_dir / f"turn_{state.turn}"
+                turn_dir.mkdir(parents=True, exist_ok=True)
+
             # Build conversation_history for this turn
             question_text = node.question.question
             if pending_handover_edge is not None:
@@ -145,6 +174,7 @@ class ScenarioManager:
                     tagged_messages,
                     state,
                     question_text,
+                    turn_dir=turn_dir,
                 )
                 if handover_result is not None:
                     question_text, conversation_history = handover_result
@@ -204,6 +234,7 @@ class ScenarioManager:
                 question_text_override=question_text_override,
                 cached_answer_data=cached_answer_data,
                 workspace_root=workspace_root,
+                turn_workspace_path=turn_dir,
             )
 
             if not vr.metadata.completed_without_errors:
@@ -381,8 +412,14 @@ class ScenarioManager:
         question_text_override: str | None = None,
         cached_answer_data: dict[str, Any] | None = None,
         workspace_root: Path | None = None,
+        turn_workspace_path: Path | None = None,
     ) -> tuple[VerificationResult, list[Message] | None, Any, str | None]:
         """Execute one turn of the verification pipeline.
+
+        Args:
+            turn_workspace_path: Pre-created per-turn workspace directory.
+                When set, GenerateAnswerStage skips its own workspace creation
+                and uses this path directly.
 
         Returns:
             Tuple of (VerificationResult, trace_messages, parsed_answer, raw_response).
@@ -456,12 +493,13 @@ class ScenarioManager:
             agentic_parsing_timeout=config.agentic_parsing_timeout,
             agentic_parsing_materialize_trace=config.agentic_parsing_materialize_trace,
             agentic_parsing_persist_trace=config.agentic_parsing_persist_trace,
-            # Workspace configuration. workspace_root lives on Benchmark (not
-            # VerificationConfig) and is plumbed down through
-            # ScenarioExecutor.run_batch -> ScenarioManager.run -> _run_turn so
-            # GenerateAnswer._resolve_workspace has a root to hang per-question
-            # workspaces under when agentic_parsing is enabled.
+            # Workspace configuration. When turn_workspace_path is set (scenario
+            # path), pre-populate workspace_path so GenerateAnswerStage skips
+            # its own directory creation. Otherwise fall back to workspace_root
+            # for the QA path.
             workspace_root=workspace_root,
+            workspace_path=turn_workspace_path,
+            workspace_is_copy=turn_workspace_path is not None,
             workspace_copy=config.workspace_copy,
             workspace_cleanup=config.workspace_cleanup,
             question_workspace_path=getattr(node.question, "workspace_path", None),

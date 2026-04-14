@@ -270,7 +270,7 @@ class Scenario:
 
         if handover is not None:
             if isinstance(handover, str):
-                _KNOWN_STRATEGIES = {"transcript_prepend", "transcript_append"}
+                _KNOWN_STRATEGIES = {"transcript_prepend", "transcript_append", "transcript_materialize"}
                 if handover not in _KNOWN_STRATEGIES:
                     raise ValueError(
                         f"Unknown handover strategy '{handover}'. Known strategies: {sorted(_KNOWN_STRATEGIES)}"

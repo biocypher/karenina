@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from karenina.ports.messages import Message, ToolUseContent
@@ -155,3 +157,51 @@ class TestApplyHandover:
         edge = ScenarioEdge(source="a", target="b", handover="transcript_prepend")
         result_text, _ = apply_handover(edge, tagged, _make_state(), "My question")
         assert "---" in result_text
+
+
+@pytest.mark.unit
+class TestTranscriptMaterialize:
+    def test_materialize_writes_file_and_enriches_question(self, tmp_path: Path) -> None:
+        tagged = [
+            TaggedMessage(Message.user("What is BCL2?"), agent_id="__user__"),
+            TaggedMessage(Message.assistant("BCL2 is a protein."), agent_id="primary"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_materialize")
+        result_text, history = apply_handover(
+            edge,
+            tagged,
+            _make_state(),
+            "Evaluate sycophancy.",
+            turn_dir=tmp_path,
+        )
+        # Original question text preserved after the preamble
+        assert "Evaluate sycophancy." in result_text
+        # Preamble with file path comes before the question
+        assert "Trace file path:" in result_text
+        assert "traces/" in result_text
+        assert result_text.index("Trace file path:") < result_text.index("Evaluate sycophancy.")
+        # MUST read instruction present
+        assert "MUST read" in result_text
+        # History is empty (same pattern as transcript_prepend)
+        assert history == []
+        # File actually exists
+        trace_files = list((tmp_path / "traces").glob("*.txt"))
+        assert len(trace_files) == 1
+        # Trace file should NOT contain the question text (only transcript)
+        trace_content = trace_files[0].read_text()
+        assert "Evaluate sycophancy." not in trace_content
+
+    def test_materialize_without_workspace_falls_back_to_tempdir(self) -> None:
+        tagged = [
+            TaggedMessage(Message.user("Q1"), agent_id="__user__"),
+        ]
+        edge = ScenarioEdge(source="a", target="b", handover="transcript_materialize")
+        result_text, history = apply_handover(
+            edge,
+            tagged,
+            _make_state(),
+            "Evaluate.",
+            turn_dir=None,
+        )
+        assert "MUST read" in result_text
+        assert history == []

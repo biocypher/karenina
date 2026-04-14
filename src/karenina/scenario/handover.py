@@ -8,7 +8,9 @@ strategies and callable handovers on edge transitions.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from karenina.ports.messages import (
     ContentType,
@@ -17,6 +19,7 @@ from karenina.ports.messages import (
     ToolResultContent,
     ToolUseContent,
 )
+from karenina.scenario.trace_materialization import materialize_trace
 from karenina.schemas.scenario.state import ScenarioState
 from karenina.schemas.scenario.types import ScenarioEdge
 
@@ -76,6 +79,7 @@ def apply_handover(
     tagged_messages: list[TaggedMessage],
     state: ScenarioState,
     question_text: str,
+    turn_dir: Path | None = None,
 ) -> tuple[str, list[Message]] | None:
     """Apply a handover strategy from an edge.
 
@@ -84,6 +88,10 @@ def apply_handover(
         tagged_messages: The full tagged message history.
         state: The current scenario state.
         question_text: The target node's question text.
+        turn_dir: Pre-created per-turn workspace directory for
+            transcript_materialize. Traces are written to
+            ``turn_dir/traces/``. Falls back to a temporary directory
+            when None.
 
     Returns:
         None if the edge has no handover.
@@ -109,6 +117,42 @@ def apply_handover(
     if edge.handover == "transcript_append":
         combined = question_text + TRANSCRIPT_SEPARATOR + transcript
         return combined, []
+
+    if edge.handover == "transcript_materialize":
+        # Build a unique question_id for the filename. Include a content
+        # hash so concurrent scenarios don't overwrite each other's traces.
+        content_hash = hashlib.sha256(transcript.encode()).hexdigest()[:10]
+        question_id = f"{state.current_node}_{content_hash}_handover"
+        # Materialize only the transcript; the question text is given to
+        # the agent separately as its prompt, so including it in the file
+        # would create confusing duplication. The trailing separator
+        # triggers XML reformatting of tagged-message lines.
+        trace_path = materialize_trace(
+            question_text=transcript + TRANSCRIPT_SEPARATOR,
+            conversation_history=None,
+            trace_dir=turn_dir,
+            question_id=question_id,
+            scenario_turn=state.turn,
+        )
+        # Place the file-reading instruction BEFORE the question so the
+        # agent reads the conversation context before seeing the task.
+        preamble = (
+            "A conversation trace from prior turns has been saved to a "
+            "file. You MUST read this file before responding.\n\n"
+            f"Trace file path: {trace_path}\n\n"
+            "Read the file now using the Read tool. The file contains "
+            "the prior conversation structured as XML turns with <turn>, "
+            "<system_prompt>, <user>, and <assistant> elements. "
+            "If Read truncates, keep calling Read with increasing offset "
+            "until you reach the end. Large content blocks may have been "
+            "offloaded to separate files in the artifacts/ subdirectory; "
+            'when you see an XML element with offloaded="true", the '
+            "element body contains the file path.\n\n"
+            "After reading the full trace, carry out the task below.\n\n"
+            "---\n\n"
+        )
+        enriched = preamble + question_text
+        return enriched, []
 
     msg = f"Unknown handover strategy '{edge.handover}'"
     raise ValueError(msg)

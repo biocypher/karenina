@@ -29,6 +29,7 @@ from karenina.scenario.sugar import (
     turn_count_eq,
     turn_count_gte,
 )
+from karenina.scenario.trace_materialization import materialize_trace
 from karenina.schemas.scenario.definition import ScenarioDefinition
 from karenina.schemas.scenario.types import (
     END,
@@ -52,6 +53,7 @@ __all__ = [
     "ScenarioOutcomeCriterion",
     # Handover
     "TaggedMessage",
+    "materialize_trace",
     # Edge resolution
     "evaluate_state_check",
     "resolve_next_node",

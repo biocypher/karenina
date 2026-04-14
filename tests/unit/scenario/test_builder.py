@@ -441,3 +441,9 @@ class TestAddEdgeHandover:
         edge = s._edges[0]
         assert edge.condition is not None
         assert edge.handover == "transcript_prepend"
+
+    def test_transcript_materialize_accepted(self) -> None:
+        """transcript_materialize is a known strategy."""
+        s = self._scenario_with_nodes()
+        s.add_edge("a", "b", handover="transcript_materialize")
+        assert s._edges[0].handover == "transcript_materialize"

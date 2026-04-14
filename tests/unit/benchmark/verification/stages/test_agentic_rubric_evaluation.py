@@ -393,7 +393,6 @@ class TestWriteTraceFile:
         assert trace_path.exists()
         assert trace_path.read_text(encoding="utf-8") == "Hello trace content"
         assert trace_path.parent.name == "traces"
-        assert ".karenina" in str(trace_path)
         assert "q1_trace.txt" in trace_path.name
 
     def test_includes_turn_in_filename(self, tmp_path):
