@@ -105,6 +105,14 @@ class EmbeddingCheckStage(BaseVerificationStage):
         # Extract ground truth and LLM response for embedding check
         parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
 
+        # Merge resolved conditional ground truths so the comparison is symmetric
+        if hasattr(parsed_answer, "_get_resolved_ground_truths"):
+            resolved_gts = parsed_answer._get_resolved_ground_truths()
+            if resolved_gts and parsed_gt_response is not None:
+                parsed_gt_response = {**parsed_gt_response, **resolved_gts}
+            elif resolved_gts and parsed_gt_response is None:
+                parsed_gt_response = dict(resolved_gts)
+
         # Perform embedding check, passing config from context
         (should_override, similarity_score, model_name, check_performed) = perform_embedding_check(
             parsed_gt_response,

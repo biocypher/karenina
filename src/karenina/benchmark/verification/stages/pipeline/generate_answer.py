@@ -208,6 +208,13 @@ class GenerateAnswerStage(BaseVerificationStage):
                 usage_tracker.set_agent_metrics(agent_metrics)
             context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
+            # Reconstruct conversation context for cached results (scenario turns)
+            conversation_history = context.get_artifact("conversation_history")
+            if conversation_history:
+                context_messages = list(conversation_history)
+                context_messages.append(Message.user(context.question_text))
+                context.set_artifact(ArtifactKeys.CONVERSATION_CONTEXT, context_messages)
+
             return  # Skip LLM invocation
 
         # No cached answer - proceed with normal answer generation
@@ -310,6 +317,12 @@ class GenerateAnswerStage(BaseVerificationStage):
                     "Save any output files here as well."
                 )
             adapter_messages.append(Message.user(user_prompt))
+
+            # Store the full conversation input for curation trace display
+            context.set_artifact(
+                ArtifactKeys.CONVERSATION_CONTEXT,
+                list(adapter_messages),
+            )
 
             if use_agent and answering_agent is not None:
                 # AgentPort path: Use for MCP-enabled models with tool calling
