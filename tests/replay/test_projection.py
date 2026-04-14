@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.replay import ReplayKey
+from karenina.replay import ReplayEntry, ReplayKey, ReplayStore
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities.question import Question
 from karenina.schemas.scenario.definition import ScenarioDefinition
@@ -176,3 +176,158 @@ class TestScenarioReplayBuilderCtor:
             miss_policy="fall_through",
         )
         assert builder.miss_policy == "fall_through"
+
+
+def _qa_store(entries: list[tuple[ReplayKey, ReplayEntry]] | None = None) -> ReplayStore:
+    store = ReplayStore(miss_policy="fall_through")
+    for key, entry in entries or []:
+        store.register(key, entry)
+    return store
+
+
+def _valid_qa_store() -> ReplayStore:
+    """Single QA entry, wildcard replicate."""
+    return _qa_store(
+        [
+            (
+                ReplayKey(question_id="q", answering_model_id="openai:gpt-5"),
+                ReplayEntry(raw_trace="canned"),
+            )
+        ]
+    )
+
+
+@pytest.mark.unit
+class TestAddQaValidation:
+    def test_rejects_none_qa_store(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with pytest.raises(TypeError, match="qa_store"):
+            builder.add_qa(None, target_nodes=["ask"])
+
+    def test_rejects_empty_target_nodes(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with pytest.raises(ValueError, match="target_nodes"):
+            builder.add_qa(_valid_qa_store(), target_nodes=[])
+
+    def test_rejects_empty_scenarios_list(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with pytest.raises(ValueError, match="scenarios"):
+            builder.add_qa(_valid_qa_store(), target_nodes=["ask"], scenarios=[])
+
+    def test_accepts_none_scenarios_as_all(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        out = builder.add_qa(_valid_qa_store(), target_nodes=["ask"], scenarios=None)
+        assert out is builder
+
+    def test_rejects_scenario_mode_qa_store(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        scenario_mode = _qa_store(
+            [
+                (
+                    ReplayKey(
+                        question_id="q",
+                        scenario_id="s1",
+                        scenario_node="ask",
+                        answering_model_id="openai:gpt-5",
+                    ),
+                    ReplayEntry(raw_trace="canned"),
+                )
+            ]
+        )
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with pytest.raises(ValueError, match="scenario-mode"):
+            builder.add_qa(scenario_mode, target_nodes=["ask"])
+
+    def test_rejects_per_replicate_qa_store(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        per_replicate = _qa_store(
+            [
+                (
+                    ReplayKey(
+                        question_id="q",
+                        answering_model_id="openai:gpt-5",
+                        replicate=1,
+                    ),
+                    ReplayEntry(raw_trace="canned"),
+                )
+            ]
+        )
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with pytest.raises(ValueError, match="per-replicate"):
+            builder.add_qa(per_replicate, target_nodes=["ask"])
+
+    def test_rejects_config_override_with_empty_answering_models(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        # parsing_only=True lets VerificationConfig accept an empty
+        # answering_models list, so the builder's own guard is the one
+        # under test here.
+        bad = VerificationConfig(
+            answering_models=[],
+            parsing_models=[ModelConfig(id="p", model_name="p", model_provider="anthropic")],
+            parsing_only=True,
+        )
+        with pytest.raises(ValueError, match="answering_models"):
+            builder.add_qa(_valid_qa_store(), target_nodes=["ask"], config=bad)
+
+    def test_is_chainable(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        chained = builder.add_qa(_valid_qa_store(), target_nodes=["ask"], scenarios=["s1"])
+        assert chained is builder
+
+    def test_dedupes_duplicate_nodes_with_warning(self, caplog):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with caplog.at_level("WARNING"):
+            builder.add_qa(
+                _valid_qa_store(),
+                target_nodes=["ask", "ask"],
+                scenarios=["s1"],
+            )
+        assert any("duplicate" in rec.message.lower() for rec in caplog.records)
+
+    def test_dedupes_duplicate_scenarios_with_warning(self, caplog):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        with caplog.at_level("WARNING"):
+            builder.add_qa(
+                _valid_qa_store(),
+                target_nodes=["ask"],
+                scenarios=["s1", "s1"],
+            )
+        assert any("duplicate" in rec.message.lower() for rec in caplog.records)
+
+    def test_snapshots_config_override(self):
+        """Mutating the caller's config after add_qa must not leak into staged state."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        override = VerificationConfig(
+            answering_models=[
+                ModelConfig(id="m1", model_name="m1", model_provider="openai"),
+            ],
+            parsing_models=[ModelConfig(id="p", model_name="p", model_provider="anthropic")],
+        )
+        builder = ScenarioReplayBuilder(_minimal_benchmark(), config=_default_config())
+        builder.add_qa(_valid_qa_store(), target_nodes=["ask"], config=override)
+
+        # Mutate caller's config after staging
+        override.answering_models.clear()
+
+        staged = builder._staged  # noqa: SLF001
+        assert len(staged[0].config.answering_models) == 1
+        assert staged[0].config.answering_models[0].id == "m1"

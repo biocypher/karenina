@@ -95,6 +95,23 @@ class _StagedProjection(BaseModel):
     config: VerificationConfig
 
 
+def _dedupe_with_warning(values: list[str], *, kind: str) -> list[str]:
+    """Dedupe preserving input order; emit a warning if duplicates were dropped."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in values:
+        if v in seen:
+            continue
+        seen.add(v)
+        out.append(v)
+    if len(out) != len(values):
+        logger.warning(
+            "ScenarioReplayBuilder: duplicate values deduped in %s",
+            kind,
+        )
+    return out
+
+
 class ScenarioReplayBuilder:
     """Project QA-mode ReplayStores onto scenario targets in a benchmark.
 
@@ -130,3 +147,72 @@ class ScenarioReplayBuilder:
         self.config = config
         self.miss_policy: ReplayMissPolicy = miss_policy
         self._staged: list[_StagedProjection] = []
+
+    def add_qa(
+        self,
+        qa_store: ReplayStore,
+        *,
+        target_nodes: list[str],
+        scenarios: list[str] | None = None,
+        config: VerificationConfig | None = None,
+    ) -> ScenarioReplayBuilder:
+        """Stage a QA store for projection onto the given scenario targets.
+
+        Args:
+            qa_store: A QA-mode, replicate-canonicalized ReplayStore.
+                Every entry's ReplayKey must have scenario_id is None
+                and replicate is None.
+            target_nodes: Non-empty list of node_ids to project onto.
+            scenarios: Either a non-empty list of scenario ids, or None
+                to mean "all scenarios in the benchmark". Empty list is
+                a hard error (caller explicitly said no scenarios).
+            config: Optional override for the builder's default
+                VerificationConfig. Snapshotted via model_copy(deep=True)
+                at staging time so later caller mutations do not leak.
+
+        Returns:
+            self, to support chaining.
+
+        Raises:
+            TypeError: If qa_store is None.
+            ValueError: If target_nodes is empty, scenarios is an empty
+                list, qa_store contains scenario-mode entries or
+                per-replicate entries, or a config override has an
+                empty answering_models list.
+        """
+        if qa_store is None:
+            raise TypeError("qa_store must not be None")
+        if not target_nodes:
+            raise ValueError("target_nodes must be a non-empty list")
+        if scenarios is not None and len(scenarios) == 0:
+            raise ValueError("scenarios must be None (meaning all) or a non-empty list")
+
+        for key, _entry in qa_store.entries:
+            if key.scenario_id is not None:
+                raise ValueError("qa_store contains scenario-mode entries; expected a QA-captured store")
+            if key.replicate is not None:
+                raise ValueError(
+                    "qa_store contains per-replicate entries; re-capture with "
+                    "replicate_selector='first' or 'last' to canonicalize"
+                )
+
+        effective_config: VerificationConfig
+        if config is None:
+            effective_config = self.config
+        else:
+            if not config.answering_models:
+                raise ValueError("config override answering_models must be non-empty")
+            effective_config = config.model_copy(deep=True)
+
+        deduped_nodes = _dedupe_with_warning(target_nodes, kind="target_nodes")
+        deduped_scenarios = _dedupe_with_warning(scenarios, kind="scenarios") if scenarios is not None else None
+
+        self._staged.append(
+            _StagedProjection(
+                qa_store=qa_store,
+                target_nodes=deduped_nodes,
+                scenarios=deduped_scenarios,
+                config=effective_config,
+            )
+        )
+        return self
