@@ -246,6 +246,116 @@ class TestEndToEndReplicatePropagation:
 
 
 @pytest.mark.unit
+class TestScenarioWorkspaceReplicateIsolation:
+    """Verify per-replicate workspace directories do not collide.
+
+    R2 I-1 regression: without a replicate segment in the scenario workspace
+    path, two replicates of the same scenario collide under
+    ``{workspace_root}/{scenario}/{model}/turn_{N}`` and either interleave
+    writes (parallel) or overwrite each other (sequential). The fix inserts
+    ``rep_{N}`` between the model segment and the turn segment when
+    ``replicate is not None`` and preserves the pre-R2 path shape exactly
+    when ``replicate is None``.
+    """
+
+    def _build_two_turn_scenario(self):
+        """Build a minimal two-turn scenario; mirrors TestEndToEndReplicatePropagation."""
+        from karenina.schemas.entities import Question
+        from karenina.schemas.scenario.definition import ScenarioDefinition
+        from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
+
+        q1 = Question(question="first?", raw_answer="y", answer_template="class Answer: pass")
+        q2 = Question(question="second?", raw_answer="y", answer_template="class Answer: pass")
+        return ScenarioDefinition(
+            name="ws_iso_scenario",
+            nodes={
+                "n1": ScenarioNode(node_id="n1", question=q1),
+                "n2": ScenarioNode(node_id="n2", question=q2),
+            },
+            edges=[
+                ScenarioEdge(source="n1", target="n2"),
+                ScenarioEdge(source="n2", target=END),
+            ],
+            entry_node="n1",
+        )
+
+    def _make_config(self):
+        config = MagicMock()
+        config.replay_store = None
+        config.replicate_count = 3
+        config.request_timeout = None
+        config.evaluation_mode = "template_only"
+        config.scenario_turn_limit = 5
+        config.custom_error_patterns = None
+        config.use_full_trace_for_template = False
+        config.use_full_trace_for_rubric = False
+        return config
+
+    def _run_and_capture(self, tmp_path, replicate, monkeypatch):
+        from karenina.scenario import manager as mgr_mod
+
+        captured: list = []
+
+        def fake_run_turn(self, **kwargs):
+            captured.append(kwargs.get("turn_workspace_path"))
+            vr = MagicMock()
+            vr.metadata.completed_without_errors = True
+            vr.metadata.replicate = kwargs.get("replicate")
+            vr.metadata.result_id = f"rid_{len(captured)}"
+            vr.template.verify_result = True
+            vr.rubric = None
+            return (vr, [], None, None)
+
+        monkeypatch.setattr(mgr_mod.ScenarioManager, "_run_turn", fake_run_turn, raising=True)
+
+        manager = mgr_mod.ScenarioManager()
+        manager.run(
+            scenario=self._build_two_turn_scenario(),
+            config=self._make_config(),
+            base_answering_model=MagicMock(id="m", model_name="m", system_prompt="", request_timeout=None),
+            base_parsing_model=MagicMock(id="p", model_name="p", system_prompt="", request_timeout=None),
+            workspace_root=tmp_path,
+            replicate=replicate,
+        )
+        return captured
+
+    def test_replicates_get_distinct_workspace_paths(self, tmp_path, monkeypatch):
+        """replicate=1 and replicate=2 must emit turn workspaces under rep_1/ and rep_2/."""
+        paths_rep1 = self._run_and_capture(tmp_path, replicate=1, monkeypatch=monkeypatch)
+        paths_rep2 = self._run_and_capture(tmp_path, replicate=2, monkeypatch=monkeypatch)
+
+        # Each run produces two turns.
+        assert len(paths_rep1) == 2
+        assert len(paths_rep2) == 2
+
+        # Replicate isolation: the full captured paths must differ pairwise.
+        assert set(paths_rep1).isdisjoint(paths_rep2), (
+            f"Replicate 1 and 2 share workspace paths: {paths_rep1} vs {paths_rep2}"
+        )
+
+        # Each path carries the rep_{N} segment.
+        for p in paths_rep1:
+            assert p is not None
+            assert "rep_1" in p.parts, f"Expected 'rep_1' in {p.parts}"
+        for p in paths_rep2:
+            assert p is not None
+            assert "rep_2" in p.parts, f"Expected 'rep_2' in {p.parts}"
+
+    def test_replicate_none_preserves_pre_r2_path_shape(self, tmp_path, monkeypatch):
+        """replicate=None must produce paths WITHOUT any rep_ segment (byte-for-byte)."""
+        paths_none = self._run_and_capture(tmp_path, replicate=None, monkeypatch=monkeypatch)
+
+        assert len(paths_none) == 2
+        for p in paths_none:
+            assert p is not None
+            # No rep_N segment should appear anywhere in the path.
+            assert not any(part.startswith("rep_") for part in p.parts), f"Expected no 'rep_*' segment in {p.parts}"
+            # Pre-R2 shape: {workspace_root}/{scenario}/{model}/turn_{M}
+            assert p.parts[-2] == "ws_iso_scenario" or "ws_iso_scenario" in p.parts
+            assert p.parts[-1].startswith("turn_"), f"Expected final segment to be 'turn_*', got {p.parts[-1]}"
+
+
+@pytest.mark.unit
 class TestFacadeComboExpansion:
     """Verify Benchmark._run_scenario_verification expands the replicate axis."""
 

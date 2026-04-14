@@ -157,12 +157,18 @@ class ScenarioManager:
         )
 
         # Create scenario-level workspace directory when workspace_root is set.
-        # Structure: workspace_root / scenario_name / model_id /
+        # Structure: workspace_root / scenario_name / model_id / [rep_{N} /]
+        # The optional rep_{N} segment isolates replicate workspaces so
+        # parallel runs do not interleave writes and sequential runs do not
+        # overwrite each other. replicate=None preserves the pre-R2 shape
+        # (no rep_ segment) byte-for-byte.
         scenario_dir: Path | None = None
         if workspace_root is not None:
             scenario_dir = (
                 workspace_root / _sanitize_for_filesystem(scenario.name) / _model_dir_name(base_answering_model)
             )
+            if replicate is not None:
+                scenario_dir = scenario_dir / f"rep_{replicate}"
             scenario_dir.mkdir(parents=True, exist_ok=True)
             logger.info("Created scenario workspace: %s", scenario_dir)
 
