@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from karenina.replay.store import ReplayEntry, ReplayKey, ReplayStore
 
@@ -19,6 +19,7 @@ def capture_from_result_set(
     only_successful: bool = True,
     answering_model_ids: set[str] | None = None,
     scenario_ids: set[str] | None = None,
+    replicate_selector: Literal["all", "first", "last"] = "all",
 ) -> ReplayStore:
     """Walk a VerificationResultSet and build a ReplayStore.
 
@@ -48,16 +49,42 @@ def capture_from_result_set(
             set are skipped.
         scenario_ids: Optional allow-list of scenario ids; scenario
             turns outside the set are skipped (QA turns are unaffected).
+        replicate_selector: Canonicalization knob across the replicate
+            axis. ``"all"`` (default) preserves every replicate as a
+            distinct entry with its integer replicate on the key.
+            ``"first"`` keeps rows matching the minimum integer
+            replicate (ignoring None rows if any integer replicate is
+            present), and ``"last"`` keeps the maximum. For ``"first"``
+            and ``"last"``, the emitted ``ReplayKey.replicate`` is set to
+            None so the resulting entries act as wildcards on the
+            replicate axis (model and visit axes stay concrete).
 
     Returns:
         A ReplayStore with ``miss_policy="fall_through"``.
     """
     store = ReplayStore(miss_policy="fall_through")
 
+    if replicate_selector not in ("all", "first", "last"):
+        raise ValueError(f"replicate_selector must be 'all', 'first', or 'last'; got {replicate_selector!r}")
+
+    # Narrow the input per replicate_selector before sorting. 'first'
+    # keeps rows matching min(metadata.replicate) (ignoring None rows if
+    # any integer replicate is present), 'last' keeps max. Selected
+    # rows later have their ReplayKey.replicate emitted as None so the
+    # resulting entries act as wildcards on the replicate axis.
+    results_iter = list(getattr(result_set, "results", None) or [])
+    if replicate_selector != "all":
+        replicate_values = [getattr(vr.metadata, "replicate", None) for vr in results_iter]
+        non_none = [r for r in replicate_values if r is not None]
+        if non_none:
+            target = min(non_none) if replicate_selector == "first" else max(non_none)
+            results_iter = [vr for vr in results_iter if getattr(vr.metadata, "replicate", None) == target]
+        # If every row has replicate=None, keep them all; there is
+        # nothing to select across.
+
     # Sort scenario turns into a predictable order before applying the
     # per-replicate visit counter. QA turns are emitted in iteration order.
-    results = list(getattr(result_set, "results", None) or [])
-    results.sort(
+    results_iter.sort(
         key=lambda vr: (
             _none_last(getattr(vr.metadata, "scenario_id", None)),
             _none_last(getattr(vr.metadata, "scenario_node", None)),
@@ -68,7 +95,7 @@ def capture_from_result_set(
 
     visit_counts: dict[tuple[str, str, int | None], int] = {}
 
-    for vr in results:
+    for vr in results_iter:
         md = vr.metadata
 
         if only_successful and not getattr(md, "completed_without_errors", True):
@@ -80,14 +107,20 @@ def capture_from_result_set(
 
         scenario_id = getattr(md, "scenario_id", None)
         scenario_node = getattr(md, "scenario_node", None)
-        replicate = getattr(md, "replicate", None)
+        replicate_value = getattr(md, "replicate", None)
 
         if scenario_ids is not None and scenario_id is not None and scenario_id not in scenario_ids:
             continue
 
+        emitted_replicate = None if replicate_selector != "all" else replicate_value
+
         visit_index: int | None
         if scenario_id is not None:
-            cell_key: tuple[str, str, int | None] = (scenario_id, scenario_node or "", replicate)
+            cell_key: tuple[str, str, int | None] = (
+                scenario_id,
+                scenario_node or "",
+                emitted_replicate,
+            )
             visit_index = visit_counts.get(cell_key, 0)
             visit_counts[cell_key] = visit_index + 1
         else:
@@ -99,7 +132,7 @@ def capture_from_result_set(
             scenario_node=scenario_node,
             answering_model_id=answering_display,
             visit_index=visit_index,
-            replicate=replicate,
+            replicate=emitted_replicate,
         )
 
         entry = _build_entry_from_vr(

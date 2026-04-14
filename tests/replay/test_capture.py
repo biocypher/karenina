@@ -462,3 +462,58 @@ class TestCaptureFromResultSetWithReplicate:
         by_rep = {k.replicate: (k.visit_index, e.raw_trace) for k, e in store.entries}
         assert by_rep[None] == (0, "raw-none")
         assert by_rep[1] == (0, "raw-rep1")
+
+
+@pytest.mark.unit
+class TestCaptureFromResultSetReplicateSelector:
+    def _three_replicate_rs(self):
+        return _fake_result_set(
+            results=[
+                _build_fake_qa_result_with_replicate(
+                    question_id="q1",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    replicate=rep,
+                    raw=f"raw-{rep}",
+                    parsed=None,
+                    model_display="gpt-5",
+                )
+                for rep in (1, 2, 3)
+            ]
+        )
+
+    def test_all_is_default(self):
+        store = capture_from_result_set(self._three_replicate_rs())
+        reps = sorted(k.replicate for k, _ in store.entries)
+        assert reps == [1, 2, 3]
+
+    def test_first_keeps_min_with_replicate_none(self):
+        store = capture_from_result_set(
+            self._three_replicate_rs(),
+            replicate_selector="first",
+        )
+        assert len(store.entries) == 1
+        key, entry = store.entries[0]
+        assert key.replicate is None
+        # Model and visit axes remain concrete.
+        assert key.answering_model_id == "gpt-5"
+        assert key.visit_index is None
+        assert entry.raw_trace == "raw-1"
+
+    def test_last_keeps_max_with_replicate_none(self):
+        store = capture_from_result_set(
+            self._three_replicate_rs(),
+            replicate_selector="last",
+        )
+        assert len(store.entries) == 1
+        key, entry = store.entries[0]
+        assert key.replicate is None
+        assert entry.raw_trace == "raw-3"
+
+    def test_invalid_selector_raises(self):
+        with pytest.raises(ValueError, match="replicate_selector"):
+            capture_from_result_set(
+                self._three_replicate_rs(),
+                replicate_selector="bogus",
+            )
