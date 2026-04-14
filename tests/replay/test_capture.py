@@ -346,3 +346,119 @@ def _question_id_for(text: str) -> str:
     from karenina.utils.checkpoint import generate_question_id
 
     return generate_question_id(text)
+
+
+def _build_fake_qa_result_with_replicate(
+    *,
+    question_id: str,
+    scenario_id: str | None,
+    scenario_node: str | None,
+    scenario_turn: int | None,
+    replicate: int | None,
+    raw: str,
+    parsed: dict | None,
+    model_display: str,
+    ok: bool = True,
+):
+    """Same as _build_fake_qa_result but attaches metadata.replicate."""
+    from types import SimpleNamespace
+
+    metadata = SimpleNamespace(
+        question_id=question_id,
+        scenario_id=scenario_id,
+        scenario_node=scenario_node,
+        scenario_turn=scenario_turn,
+        replicate=replicate,
+        completed_without_errors=ok,
+        answering=SimpleNamespace(display_string=model_display),
+        completed_at="2026-04-08T12:00:00Z",
+    )
+    template = SimpleNamespace(
+        raw_llm_response=raw,
+        parsed_llm_response=parsed,
+        trace_messages=[],
+    )
+    return SimpleNamespace(metadata=metadata, template=template)
+
+
+@pytest.mark.unit
+class TestCaptureFromResultSetWithReplicate:
+    def test_qa_three_replicates_produce_three_entries(self):
+        rs = _fake_result_set(
+            results=[
+                _build_fake_qa_result_with_replicate(
+                    question_id="urn:uuid:q-rep",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    replicate=rep,
+                    raw=f"raw-{rep}",
+                    parsed={"value": rep},
+                    model_display="gpt-5",
+                )
+                for rep in (1, 2, 3)
+            ]
+        )
+        store = capture_from_result_set(rs)
+        assert len(store.entries) == 3
+        replicates = {k.replicate for k, _ in store.entries}
+        assert replicates == {1, 2, 3}
+        for key, entry in store.entries:
+            assert key.visit_index is None
+            assert entry.raw_trace == f"raw-{key.replicate}"
+
+    def test_scenario_two_visits_two_replicates_produce_four_entries(self):
+        # Two replicates, each visits node "n1" twice (scenario_turn 0
+        # and 1). The visit counter must reset per replicate.
+        results = []
+        for rep in (1, 2):
+            for turn in (0, 1):
+                results.append(
+                    _build_fake_qa_result_with_replicate(
+                        question_id="q1",
+                        scenario_id="s1",
+                        scenario_node="n1",
+                        scenario_turn=turn,
+                        replicate=rep,
+                        raw=f"raw-r{rep}-t{turn}",
+                        parsed=None,
+                        model_display="gpt-5",
+                    )
+                )
+        store = capture_from_result_set(_fake_result_set(results))
+        assert len(store.entries) == 4
+        seen = {(k.replicate, k.visit_index) for k, _ in store.entries}
+        assert seen == {(1, 0), (1, 1), (2, 0), (2, 1)}
+
+    def test_mixed_replicate_none_and_int_sort_stability(self):
+        # Same (scenario_id, scenario_node) but one row has
+        # replicate=None and the other has replicate=1. They form
+        # distinct counter blocks; visit_index=0 appears in each block
+        # independently.
+        results = [
+            _build_fake_qa_result_with_replicate(
+                question_id="q1",
+                scenario_id="s1",
+                scenario_node="n1",
+                scenario_turn=0,
+                replicate=None,
+                raw="raw-none",
+                parsed=None,
+                model_display="gpt-5",
+            ),
+            _build_fake_qa_result_with_replicate(
+                question_id="q1",
+                scenario_id="s1",
+                scenario_node="n1",
+                scenario_turn=0,
+                replicate=1,
+                raw="raw-rep1",
+                parsed=None,
+                model_display="gpt-5",
+            ),
+        ]
+        store = capture_from_result_set(_fake_result_set(results))
+        assert len(store.entries) == 2
+        by_rep = {k.replicate: (k.visit_index, e.raw_trace) for k, e in store.entries}
+        assert by_rep[None] == (0, "raw-none")
+        assert by_rep[1] == (0, "raw-rep1")

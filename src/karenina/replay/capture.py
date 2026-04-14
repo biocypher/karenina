@@ -24,8 +24,11 @@ def capture_from_result_set(
 
     Iterates ``result_set.results`` (the flat per-turn VerificationResult
     list). Scenario turns are distinguished from QA turns by the presence
-    of ``metadata.scenario_id``. A per-node visit counter keyed by
-    (scenario_id, scenario_node) is used for ``ReplayKey.visit_index``.
+    of ``metadata.scenario_id``. A per-replicate visit counter keyed by
+    (scenario_id, scenario_node, replicate) is used for
+    ``ReplayKey.visit_index``. ``ReplayKey.replicate`` is taken from
+    ``metadata.replicate`` (which may be None for single-replicate runs
+    or pre-R1 data).
 
     ``result_set.scenario_results`` is not required for the happy path
     because every scenario turn also produces a VerificationResult with
@@ -52,17 +55,18 @@ def capture_from_result_set(
     store = ReplayStore(miss_policy="fall_through")
 
     # Sort scenario turns into a predictable order before applying the
-    # per-node visit counter. QA turns are emitted in iteration order.
+    # per-replicate visit counter. QA turns are emitted in iteration order.
     results = list(getattr(result_set, "results", None) or [])
     results.sort(
         key=lambda vr: (
             _none_last(getattr(vr.metadata, "scenario_id", None)),
             _none_last(getattr(vr.metadata, "scenario_node", None)),
+            _none_last(getattr(vr.metadata, "replicate", None)),
             _none_last(getattr(vr.metadata, "scenario_turn", None)),
         )
     )
 
-    visit_counts: dict[tuple[str, str], int] = {}
+    visit_counts: dict[tuple[str, str, int | None], int] = {}
 
     for vr in results:
         md = vr.metadata
@@ -76,13 +80,14 @@ def capture_from_result_set(
 
         scenario_id = getattr(md, "scenario_id", None)
         scenario_node = getattr(md, "scenario_node", None)
+        replicate = getattr(md, "replicate", None)
 
         if scenario_ids is not None and scenario_id is not None and scenario_id not in scenario_ids:
             continue
 
         visit_index: int | None
         if scenario_id is not None:
-            cell_key: tuple[str, str] = (scenario_id, scenario_node or "")
+            cell_key: tuple[str, str, int | None] = (scenario_id, scenario_node or "", replicate)
             visit_index = visit_counts.get(cell_key, 0)
             visit_counts[cell_key] = visit_index + 1
         else:
@@ -94,6 +99,7 @@ def capture_from_result_set(
             scenario_node=scenario_node,
             answering_model_id=answering_display,
             visit_index=visit_index,
+            replicate=replicate,
         )
 
         entry = _build_entry_from_vr(
