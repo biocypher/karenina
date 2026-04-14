@@ -34,8 +34,9 @@ from .executor import get_async_portal, set_async_portal, set_global_llm_semapho
 
 logger = logging.getLogger(__name__)
 
-# Type alias for a scenario combo: (scenario_def, answering_model, parsing_model)
-ScenarioCombo = tuple[Any, Any, Any]
+# Type alias for a scenario combo: (scenario_def, answering_model, parsing_model, replicate).
+# The fourth element is None for single-replicate runs, mirroring the QA convention.
+ScenarioCombo = tuple[Any, Any, Any, int | None]
 
 # Type alias for progress callback: (completed, total, result_or_none)
 ProgressCallback = Callable[[int, int, ScenarioExecutionResult | None], None]
@@ -109,7 +110,8 @@ class ScenarioExecutor:
         """Execute scenario combos and return results with errors.
 
         Args:
-            combos: List of (scenario_def, answering_model, parsing_model) tuples.
+            combos: List of (scenario_def, answering_model, parsing_model, replicate)
+                tuples. The fourth element is None for single-replicate runs.
             config: Verification configuration (non-model settings).
             global_rubric: Optional global rubric applied per-turn.
             run_name: Optional run name for tracking.
@@ -166,9 +168,11 @@ class ScenarioExecutor:
             with start_blocking_portal(backend="asyncio") as portal:
                 set_async_portal(portal)
                 try:
-                    for idx, (scenario_def, ans_model, parse_model) in enumerate(combos, 1):
+                    for idx, (scenario_def, ans_model, parse_model, replicate) in enumerate(combos, 1):
                         combo_desc = (
-                            f"Scenario '{scenario_def.name}' with {ans_model.model_name}/{parse_model.model_name}"
+                            f"Scenario '{scenario_def.name}' with "
+                            f"{ans_model.model_name}/{parse_model.model_name}"
+                            + (f" rep={replicate}" if replicate is not None else "")
                         )
 
                         # Progress callback before starting (result=None)
@@ -186,6 +190,7 @@ class ScenarioExecutor:
                                 global_rubric=global_rubric,
                                 answer_cache=answer_cache,
                                 workspace_root=workspace_root,
+                                replicate=replicate,
                             )
                             results.append(exec_result)
                         except Exception as e:
@@ -278,7 +283,7 @@ class ScenarioExecutor:
         def execute_combo(idx: int, combo: ScenarioCombo) -> tuple[int, ScenarioExecutionResult]:
             """Execute a single scenario combo using the worker's portal."""
             _ensure_worker_portal()
-            scenario_def, ans_model, parse_model = combo
+            scenario_def, ans_model, parse_model, replicate = combo
             manager = ScenarioManager()
             result = manager.run(
                 scenario=scenario_def,
@@ -290,6 +295,7 @@ class ScenarioExecutor:
                 answer_cache=answer_cache,
                 progress_callback=make_turn_callback(idx, scenario_def.name),
                 workspace_root=workspace_root,
+                replicate=replicate,
             )
             return (idx, result)
 
@@ -302,9 +308,13 @@ class ScenarioExecutor:
             try:
                 # Submit all combos
                 future_to_meta: dict[Future[tuple[int, ScenarioExecutionResult]], tuple[int, str]] = {}
-                for idx, (scenario_def, ans_model, parse_model) in enumerate(combos):
-                    combo_desc = f"Scenario '{scenario_def.name}' with {ans_model.model_name}/{parse_model.model_name}"
-                    future = pool.submit(execute_combo, idx, (scenario_def, ans_model, parse_model))
+                for idx, (scenario_def, ans_model, parse_model, replicate) in enumerate(combos):
+                    combo_desc = (
+                        f"Scenario '{scenario_def.name}' with "
+                        f"{ans_model.model_name}/{parse_model.model_name}"
+                        + (f" rep={replicate}" if replicate is not None else "")
+                    )
+                    future = pool.submit(execute_combo, idx, (scenario_def, ans_model, parse_model, replicate))
                     future_to_meta[future] = (idx, combo_desc)
 
                 # Collect results as they complete

@@ -43,7 +43,7 @@ class TestScenarioComboOrdering:
 
         # Build combos the same way benchmark.py does
         combos = [
-            (scenario_def, ans_model, parse_model)
+            (scenario_def, ans_model, parse_model, None)
             for scenario_def in scenarios
             for ans_model in config.answering_models
             for parse_model in config.parsing_models
@@ -85,7 +85,7 @@ class TestScenarioComboOrdering:
             scenarios.append(s)
 
         combos = [
-            (scenario_def, ans_model, parse_model)
+            (scenario_def, ans_model, parse_model, None)
             for scenario_def in scenarios
             for ans_model in config.answering_models
             for parse_model in config.parsing_models
@@ -120,7 +120,7 @@ class TestScenarioComboOrdering:
             scenarios.append(s)
 
         combos = [
-            (scenario_def, ans_model, parse_model)
+            (scenario_def, ans_model, parse_model, None)
             for scenario_def in scenarios
             for ans_model in config.answering_models
             for parse_model in config.parsing_models

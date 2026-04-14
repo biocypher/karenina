@@ -22,7 +22,10 @@ from karenina.benchmark.verification.scenario_executor import (
 
 
 def _make_combo(scenario_name: str, model_name: str = "test-model") -> tuple:
-    """Create a mock (scenario_def, answering_model, parsing_model) combo."""
+    """Create a mock (scenario_def, answering_model, parsing_model, replicate) combo.
+
+    Replicate is None for single-replicate runs (the backward-compat default).
+    """
     scenario_def = MagicMock()
     scenario_def.name = scenario_name
 
@@ -34,7 +37,7 @@ def _make_combo(scenario_name: str, model_name: str = "test-model") -> tuple:
     parse_model.model_name = model_name
     parse_model.id = f"{model_name}-parse"
 
-    return (scenario_def, ans_model, parse_model)
+    return (scenario_def, ans_model, parse_model, None)
 
 
 def _make_exec_result(scenario_id: str = "s1") -> MagicMock:

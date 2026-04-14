@@ -848,7 +848,7 @@ class Benchmark:
         Returns:
             VerificationResultSet containing all per-turn results.
         """
-        from ..benchmark.verification.scenario_executor import ScenarioExecutor, ScenarioExecutorConfig
+        from ..benchmark.verification.scenario_executor import ScenarioCombo, ScenarioExecutor, ScenarioExecutorConfig
         from ..benchmark.verification.utils.task_helpers import stamp_agentic_trait_overrides
         from ..schemas.scenario.types import ModelOverride, ScenarioNode
 
@@ -924,8 +924,11 @@ class Benchmark:
                 return scenario_def
             return scenario_def.model_copy(update={"nodes": new_nodes})
 
-        combos = [
-            (_prepare_scenario(scenario_def), _prepare_model(ans_model), _prepare_model(parse_model))
+        # The fourth element (replicate) is None for single-replicate runs.
+        # Task 5 (R2) will expand this with the per-replicate axis when
+        # config.replicate_count > 1.
+        combos: list[ScenarioCombo] = [
+            (_prepare_scenario(scenario_def), _prepare_model(ans_model), _prepare_model(parse_model), None)
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models

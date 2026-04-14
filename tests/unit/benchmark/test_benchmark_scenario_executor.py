@@ -265,7 +265,7 @@ class TestScenarioOverrideStamping:
         call_kwargs = MockExecutor.return_value.run_batch.call_args
         combos = call_kwargs.kwargs.get("combos") or call_kwargs[1].get("combos")
         assert len(combos) == 1
-        prepared_scenario, _ans, _parse = combos[0]
+        prepared_scenario, _ans, _parse, _rep = combos[0]
 
         prepared_node = prepared_scenario.nodes["guardrail"]
         assert prepared_node.model_override is not None
@@ -334,7 +334,7 @@ class TestScenarioOverrideStamping:
 
         call_kwargs = MockExecutor.return_value.run_batch.call_args
         combos = call_kwargs.kwargs.get("combos") or call_kwargs[1].get("combos")
-        prepared_scenario, _ans, _parse = combos[0]
+        prepared_scenario, _ans, _parse, _rep = combos[0]
         prepared_override = prepared_scenario.nodes["guardrail"].model_override
         assert prepared_override is not None
 
@@ -386,7 +386,7 @@ class TestScenarioOverrideStamping:
 
         call_kwargs = MockExecutor.return_value.run_batch.call_args
         combos = call_kwargs.kwargs.get("combos") or call_kwargs[1].get("combos")
-        prepared_scenario, _ans, _parse = combos[0]
+        prepared_scenario, _ans, _parse, _rep = combos[0]
         # When no node has an override, _prepare_scenario returns the original
         assert prepared_scenario is original
 
