@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -147,3 +148,48 @@ class TestReplayPersistence:
         dump(store, path)
         reloaded = load(path)
         assert reloaded.entries == []
+
+
+@pytest.mark.unit
+class TestPersistenceReplicateField:
+    def test_round_trip_with_replicate(self, tmp_path: Path):
+        store = ReplayStore()
+        key = ReplayKey(
+            question_id="q1",
+            answering_model_id="m1",
+            visit_index=0,
+            replicate=2,
+        )
+        store.register(key, ReplayEntry(raw_trace="hello"))
+        store.save(tmp_path / "store.json")
+        loaded = ReplayStore.load(tmp_path / "store.json")
+        assert len(loaded.entries) == 1
+        loaded_key, loaded_entry = loaded.entries[0]
+        assert loaded_key == key
+        assert loaded_key.replicate == 2
+        assert loaded_entry.raw_trace == "hello"
+
+    def test_load_legacy_fixture_without_replicate(self):
+        """A version=1 file whose keys predate the replicate field must
+        load, treat every key's replicate as None, and resolve lookups
+        with a non-None replicate via the all-wildcard rung.
+        """
+        fixture = Path(__file__).parent / "fixtures" / "legacy_replay_v1.json"
+        store = ReplayStore.load(fixture)
+        assert len(store.entries) == 1
+        key, _ = store.entries[0]
+        assert key.replicate is None
+
+        # A request with a non-None replicate should walk to the
+        # (None, None, None) rung, but this legacy key has
+        # answering_model_id="gpt-5" and visit_index=None, so the matching
+        # rung is (model, None, None). Lookup with model=gpt-5 and any
+        # replicate must hit it.
+        hit = store.lookup(
+            question_id="q-legacy-1",
+            answering_model_id="gpt-5",
+            visit_index=None,
+            replicate=7,
+        )
+        assert hit is not None
+        assert hit.raw_trace == "legacy-trace"

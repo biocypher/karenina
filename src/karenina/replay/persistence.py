@@ -24,6 +24,9 @@ from karenina.replay.store import (
 
 logger = logging.getLogger(__name__)
 
+# R1 (2026-04-14) added a backward-compatible ``replicate`` field on
+# ReplayKey. Files written before R1 omit the field and load with
+# replicate=None via Pydantic defaults; no version bump was required.
 CURRENT_VERSION = 1
 
 
