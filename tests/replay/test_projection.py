@@ -472,3 +472,39 @@ class TestValidateCore:
         assert report.matched == 2
         scenario_ids = {k.scenario_id for k in report.projected_keys}
         assert scenario_ids == {"s1", "s2"}
+
+
+@pytest.mark.unit
+class TestValidateDuplicates:
+    def test_reports_duplicate_targets_across_projections(self):
+        """Two projections staging the same (scenario, node) must report a duplicate."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        model_display = _answering_display(cfg)
+        qa_a = _qa_store([_qa_entry_for("What is X?", model_display)])
+        qa_b = _qa_store([_qa_entry_for("What is X?", model_display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_a, target_nodes=["ask"], scenarios=["s1"])
+        builder.add_qa(qa_b, target_nodes=["ask"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert ("s1", "ask") in report.duplicate_targets
+
+    def test_no_duplicate_when_disjoint_scenarios(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        model_display = _answering_display(cfg)
+        qa_a = _qa_store([_qa_entry_for("What is X?", model_display)])
+        qa_b = _qa_store([_qa_entry_for("What is Y?", model_display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_a, target_nodes=["ask"], scenarios=["s1"])
+        builder.add_qa(qa_b, target_nodes=["ask"], scenarios=["s2"])
+
+        report = builder.validate()
+        assert report.duplicate_targets == []

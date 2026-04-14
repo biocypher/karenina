@@ -342,7 +342,11 @@ class ScenarioReplayBuilder:
                     )
 
         # Duplicate and orphan detection land in Task 6/7.
-        duplicate_targets: list[tuple[str, str]] = []
+        seen_pairs: dict[tuple[str, str], int] = {}
+        for key in projected_keys:
+            pair = (key.scenario_id or "", key.scenario_node or "")
+            seen_pairs[pair] = seen_pairs.get(pair, 0) + 1
+        duplicate_targets: list[tuple[str, str]] = [pair for pair, count in seen_pairs.items() if count > 1]
         orphan_qa_entries: list[OrphanEntry] = []
 
         return ProjectionReport(
