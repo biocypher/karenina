@@ -64,6 +64,10 @@ class ScenarioExecutionResult:
     turn_results: list[VerificationResult]
     final_state: ScenarioState
     outcome_results: dict[str, bool | int | float]
+    # Run-level replicate index for multi-replicate scenario runs.
+    # None when the scenario was executed with replicate_count=1
+    # (matches the QA convention in batch_runner.py).
+    replicate: int | None = None
 
     def to_replay_store(self, *, answering_model_id: str, **kwargs: Any) -> ReplayStore:
         """Build a ReplayStore from this single scenario execution.
