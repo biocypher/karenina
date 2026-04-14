@@ -70,8 +70,8 @@ class ReplayEntry(BaseModel):
     captured_at: str | None = None
 
 
-# Inner-index cell layout: dict[(model_id, visit_index)] -> ReplayEntry
-_InnerCell = dict[tuple[str | None, int | None], ReplayEntry]
+# Inner-index cell layout: dict[(model_id, visit_index, replicate)] -> ReplayEntry
+_InnerCell = dict[tuple[str | None, int | None, int | None], ReplayEntry]
 
 
 class ReplayStore(BaseModel):
@@ -108,16 +108,17 @@ class ReplayStore(BaseModel):
         Overwrites emit a WARNING log. Rebuilds the indexes after
         mutation.
         """
-        inner_key = (key.answering_model_id, key.visit_index)
+        inner_key = (key.answering_model_id, key.visit_index, key.replicate)
         existing = self._lookup_cell(key)
         if existing is not None and inner_key in existing:
             logger.warning(
-                "Replay register: duplicate key overwritten (question_id=%s scenario=%s node=%s model=%s visit=%s)",
+                "Replay register: duplicate key overwritten (question_id=%s scenario=%s node=%s model=%s visit=%s replicate=%s)",
                 key.question_id,
                 key.scenario_id,
                 key.scenario_node,
                 key.answering_model_id,
                 key.visit_index,
+                key.replicate,
             )
             # Drop the prior entries-list row so there is exactly one
             # entry per key in the source of truth. ReplayKey is frozen
@@ -263,7 +264,7 @@ class ReplayStore(BaseModel):
         scen: dict[tuple[str, str], _InnerCell] = {}
         qa: dict[str, _InnerCell] = {}
         for key, entry in self.entries:
-            inner_key = (key.answering_model_id, key.visit_index)
+            inner_key = (key.answering_model_id, key.visit_index, key.replicate)
             if key.scenario_id is not None:
                 outer = (key.scenario_id, key.scenario_node or "")
                 scen.setdefault(outer, {})[inner_key] = entry
@@ -285,26 +286,25 @@ class ReplayStore(BaseModel):
     ) -> ReplayEntry | None:
         """Walk the (model, visit) specificity ladder. Most-specific wins.
 
-        The ladder step is skipped when its cell would duplicate a prior
-        step (if ``model`` is None, steps that widen the model do nothing
-        new; same for ``visit``).
+        Temporary 2D bridge: queries the wildcard-replicate cell
+        (replicate=None). Task 3 replaces this with a 3D ladder.
         """
         if model is not None and visit is not None:
-            hit = inner.get((model, visit))
+            hit = inner.get((model, visit, None))
             if hit is not None:
                 return hit
-            hit = inner.get((model, None))
+            hit = inner.get((model, None, None))
             if hit is not None:
                 return hit
-            hit = inner.get((None, visit))
+            hit = inner.get((None, visit, None))
             if hit is not None:
                 return hit
         elif model is not None:
-            hit = inner.get((model, None))
+            hit = inner.get((model, None, None))
             if hit is not None:
                 return hit
         elif visit is not None:
-            hit = inner.get((None, visit))
+            hit = inner.get((None, visit, None))
             if hit is not None:
                 return hit
-        return inner.get((None, None))
+        return inner.get((None, None, None))

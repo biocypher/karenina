@@ -205,3 +205,41 @@ class TestReplayStoreRegisterAndLookup:
             t.join()
         assert not errors
         assert all(r is not None for r in results)
+
+
+@pytest.mark.unit
+class TestReplayStoreRegisterWithReplicate:
+    def test_register_preserves_distinct_replicates(self):
+        """Registering three keys that differ only in replicate must
+        keep three entries, not collapse to one."""
+        store = ReplayStore()
+        base = {
+            "question_id": "q1",
+            "scenario_id": "s1",
+            "scenario_node": "n1",
+            "answering_model_id": "m1",
+            "visit_index": 0,
+        }
+        for rep in (1, 2, 3):
+            store.register(
+                ReplayKey(**base, replicate=rep),
+                _entry(f"rep{rep}"),
+            )
+        assert len(store.entries) == 3
+        raw_traces = {e.raw_trace for _, e in store.entries}
+        assert raw_traces == {"trace-rep1", "trace-rep2", "trace-rep3"}
+
+    def test_register_overwrite_with_replicate(self):
+        """Duplicate (outer + model + visit + replicate) overwrites,
+        with a warning, exactly like the 2D case."""
+        store = ReplayStore()
+        base = {
+            "question_id": "q1",
+            "answering_model_id": "m1",
+            "visit_index": None,
+            "replicate": 7,
+        }
+        store.register(ReplayKey(**base), _entry("first"))
+        store.register(ReplayKey(**base), _entry("second"))
+        assert len(store.entries) == 1
+        assert store.entries[0][1].raw_trace == "trace-second"
