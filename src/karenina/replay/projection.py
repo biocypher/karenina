@@ -248,9 +248,9 @@ class ScenarioReplayBuilder:
         expands ``scenarios=None`` to all benchmark scenarios, then
         iterates the cartesian product of scenarios x target_nodes.
 
-        Orphan/duplicate detection uses ``self._projection_consumed_ids``
-        which is populated in this method. Orphan classification lands
-        in Task 7; duplicate classification lands in Task 6.
+        Orphan and duplicate detection run over the projected keys and
+        staged QA entries after the main resolution pass; both are
+        populated on the returned report.
 
         Returns:
             ProjectionReport with projected_keys, unmatched_targets,
@@ -341,15 +341,16 @@ class ScenarioReplayBuilder:
                         )
                     )
 
-        # Duplicate detection across projected_keys (Task 6).
+        # Duplicate detection: flag any (scenario_id, scenario_node) pair that
+        # was produced by more than one projected key.
         seen_pairs: dict[tuple[str, str], int] = {}
         for key in projected_keys:
             pair = (key.scenario_id or "", key.scenario_node or "")
             seen_pairs[pair] = seen_pairs.get(pair, 0) + 1
         duplicate_targets: list[tuple[str, str]] = [pair for pair, count in seen_pairs.items() if count > 1]
 
-        # Orphan detection (Task 7): any staged QA entry whose object
-        # identity is NOT in the projection's consumed_ids is orphan.
+        # Orphan detection: any staged QA entry whose object identity
+        # is NOT in the projection's consumed_ids is orphan.
         # Classification: if the entry's question_id was never requested
         # by that projection's targets, it is "no_target_scenario";
         # otherwise the question was asked but under a different model
