@@ -73,10 +73,13 @@ class ScenarioExecutionResult:
         """Build a ReplayStore from this single scenario execution.
 
         ``answering_model_id`` is required because this result does not
-        carry per-turn model identity. See
-        :py:func:`karenina.replay.capture.capture_from_scenario_result`
+        carry per-turn model identity. The ``replicate`` kwarg defaults
+        to ``self.replicate`` so callers do not need to re-supply it;
+        an explicit ``replicate=...`` argument still overrides the default.
+        See :py:func:`karenina.replay.capture.capture_from_scenario_result`
         for additional keyword arguments.
         """
         from karenina.replay.capture import capture_from_scenario_result
 
+        kwargs.setdefault("replicate", self.replicate)
         return capture_from_scenario_result(self, answering_model_id=answering_model_id, **kwargs)
