@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -72,6 +72,59 @@ class ReplayEntry(BaseModel):
 
 # Inner-index cell layout: dict[(model_id, visit_index, replicate)] -> ReplayEntry
 _InnerCell = dict[tuple[str | None, int | None, int | None], ReplayEntry]
+
+
+def _axis_options(axis_value: str | int | None) -> tuple[str | int | None, ...]:
+    """Return the values to try for one axis in specificity order.
+
+    If the request axis is set, try the concrete value then None. If
+    the request axis is None, try only None (there is no more-specific
+    value to widen from).
+    """
+    if axis_value is None:
+        return (None,)
+    return (axis_value, None)
+
+
+def _ladder_rungs(
+    model: str | None,
+    visit: int | None,
+    replicate: int | None,
+) -> list[tuple[str | None, int | None, int | None]]:
+    """Return the specificity-ordered list of rungs to probe.
+
+    Rungs are generated in most-to-least specific order over the three
+    axes (model, visit, replicate). A rung is emitted only when it is
+    not already a duplicate of an earlier rung under the current
+    request. Duplicates occur when an input axis is already None at a
+    higher-specificity rung.
+
+    The concrete sequence for a request with all three axes set:
+        (M, V, R)
+        (M, V, None)
+        (M, None, R)
+        (M, None, None)
+        (None, V, R)
+        (None, V, None)
+        (None, None, R)
+        (None, None, None)
+
+    When ``replicate`` is None, the odd rungs collapse into their
+    even neighbors and are omitted (so only four rungs remain,
+    matching the pre-R1 2D ladder).
+    """
+    rungs: list[tuple[str | None, int | None, int | None]] = []
+    for m in _axis_options(model):
+        for v in _axis_options(visit):
+            for r in _axis_options(replicate):
+                rungs.append(cast(tuple[str | None, int | None, int | None], (m, v, r)))
+    seen: set[tuple[str | None, int | None, int | None]] = set()
+    deduped: list[tuple[str | None, int | None, int | None]] = []
+    for rung in rungs:
+        if rung not in seen:
+            seen.add(rung)
+            deduped.append(rung)
+    return deduped
 
 
 class ReplayStore(BaseModel):
@@ -140,6 +193,7 @@ class ReplayStore(BaseModel):
         scenario_node: str | None = None,
         answering_model_id: str | None = None,
         visit_index: int | None = None,
+        replicate: int | None = None,
     ) -> ReplayEntry | None:
         """Look up an entry by position.
 
@@ -151,7 +205,7 @@ class ReplayStore(BaseModel):
         else:
             inner = self._qa_index.get(question_id)
 
-        entry = self._walk_inner(inner, answering_model_id, visit_index) if inner else None
+        entry = self._walk_inner(inner, answering_model_id, visit_index, replicate) if inner else None
 
         if entry is None and self.miss_policy == "strict":
             key = ReplayKey(
@@ -160,6 +214,7 @@ class ReplayStore(BaseModel):
                 scenario_node=scenario_node,
                 answering_model_id=answering_model_id,
                 visit_index=visit_index,
+                replicate=replicate,
             )
             raise ReplayMissError(
                 f"No replay entry for {key}",
@@ -283,28 +338,18 @@ class ReplayStore(BaseModel):
         inner: _InnerCell,
         model: str | None,
         visit: int | None,
+        replicate: int | None,
     ) -> ReplayEntry | None:
-        """Walk the (model, visit) specificity ladder. Most-specific wins.
+        """Walk the (model, visit, replicate) specificity ladder. Most-specific wins.
 
-        Temporary 2D bridge: queries the wildcard-replicate cell
-        (replicate=None). Task 3 replaces this with a 3D ladder.
+        The ladder yields rungs in specificity order (model > visit >
+        replicate). A rung is skipped when it would duplicate an earlier
+        rung because one of the request axes is None. The duplicate-skip
+        rule is a function of REQUEST axes only; store contents never
+        influence which rungs are walked.
         """
-        if model is not None and visit is not None:
-            hit = inner.get((model, visit, None))
+        for rung in _ladder_rungs(model, visit, replicate):
+            hit = inner.get(rung)
             if hit is not None:
                 return hit
-            hit = inner.get((model, None, None))
-            if hit is not None:
-                return hit
-            hit = inner.get((None, visit, None))
-            if hit is not None:
-                return hit
-        elif model is not None:
-            hit = inner.get((model, None, None))
-            if hit is not None:
-                return hit
-        elif visit is not None:
-            hit = inner.get((None, visit, None))
-            if hit is not None:
-                return hit
-        return inner.get((None, None, None))
+        return None

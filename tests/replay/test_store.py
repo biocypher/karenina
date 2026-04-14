@@ -243,3 +243,111 @@ class TestReplayStoreRegisterWithReplicate:
         store.register(ReplayKey(**base), _entry("second"))
         assert len(store.entries) == 1
         assert store.entries[0][1].raw_trace == "trace-second"
+
+
+@pytest.mark.unit
+class TestReplayStoreSpecificityLadder3D:
+    """Parametrized coverage of every rung in the 8-rung 3D ladder.
+
+    Each test registers one entry at one rung and asserts that a
+    fully-specific request (model=M, visit=V, replicate=R) resolves to
+    it when no higher-specificity rung is populated.
+    """
+
+    @pytest.mark.parametrize(
+        "stored_inner, description",
+        [
+            (("M", 0, 1), "most-specific"),
+            (("M", 0, None), "drop-replicate"),
+            (("M", None, 1), "drop-visit"),
+            (("M", None, None), "drop-visit-and-replicate"),
+            ((None, 0, 1), "drop-model"),
+            ((None, 0, None), "drop-model-and-replicate"),
+            ((None, None, 1), "drop-model-and-visit"),
+            ((None, None, None), "all-wildcard"),
+        ],
+    )
+    def test_every_rung_resolvable(self, stored_inner, description):  # noqa: ARG002
+        store = ReplayStore()
+        model, visit, replicate = stored_inner
+        key = ReplayKey(
+            question_id="q1",
+            answering_model_id=model,
+            visit_index=visit,
+            replicate=replicate,
+        )
+        store.register(key, _entry(description))
+        hit = store.lookup(
+            question_id="q1",
+            answering_model_id="M",
+            visit_index=0,
+            replicate=1,
+        )
+        assert hit is not None
+        assert hit.raw_trace == f"trace-{description}"
+
+    def test_exact_beats_all_wildcards(self):
+        """With every rung populated, the most-specific one wins."""
+        store = ReplayStore()
+        base = {"question_id": "q1"}
+        rungs = [
+            ("M", 0, 1, "exact"),
+            ("M", 0, None, "drop-r"),
+            ("M", None, 1, "drop-v"),
+            ("M", None, None, "drop-vr"),
+            (None, 0, 1, "drop-m"),
+            (None, 0, None, "drop-mr"),
+            (None, None, 1, "drop-mv"),
+            (None, None, None, "all-wild"),
+        ]
+        for m, v, r, tag in rungs:
+            store.register(
+                ReplayKey(**base, answering_model_id=m, visit_index=v, replicate=r),
+                _entry(tag),
+            )
+        hit = store.lookup(
+            question_id="q1",
+            answering_model_id="M",
+            visit_index=0,
+            replicate=1,
+        )
+        assert hit is not None
+        assert hit.raw_trace == "trace-exact"
+
+    def test_request_replicate_none_does_not_fall_through_to_replicate_bearing(self):
+        """Mixed-store edge case: a store containing both (M, V, 1) and
+        (M, V, None), queried with replicate=None, must resolve to the
+        wildcard entry (M, V, None). The replicate-bearing entry is not
+        returned. Locks in the rule that the walker filters rungs by
+        request axes, never by store contents.
+        """
+        store = ReplayStore()
+        base = {"question_id": "q1", "answering_model_id": "M", "visit_index": 0}
+        store.register(ReplayKey(**base, replicate=1), _entry("rep1"))
+        store.register(ReplayKey(**base, replicate=None), _entry("wild"))
+        hit = store.lookup(
+            question_id="q1",
+            answering_model_id="M",
+            visit_index=0,
+            replicate=None,
+        )
+        assert hit is not None
+        assert hit.raw_trace == "trace-wild"
+
+    def test_legacy_request_no_replicate_matches_legacy_store(self):
+        """Regression: when every stored key has replicate=None and the
+        request has replicate=None, behavior is exactly the pre-R1 2D
+        ladder.
+        """
+        store = ReplayStore()
+        store.register(
+            ReplayKey(question_id="q1", answering_model_id=None, visit_index=None),
+            _entry("legacy"),
+        )
+        hit = store.lookup(
+            question_id="q1",
+            answering_model_id="gpt-5",
+            visit_index=0,
+        )
+        assert hit is not None
+        assert hit.raw_trace == "trace-legacy"
