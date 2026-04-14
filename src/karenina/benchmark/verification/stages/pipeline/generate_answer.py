@@ -48,6 +48,7 @@ def _try_replay_hit(context: VerificationContext) -> Any:
         scenario_node=getattr(context, "scenario_node", None),
         answering_model_id=answering_display,
         visit_index=getattr(context, "scenario_node_visit_index", None),
+        replicate=getattr(context, "replicate", None),
     )
 
 

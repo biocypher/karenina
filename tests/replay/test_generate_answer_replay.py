@@ -123,3 +123,82 @@ class TestGenerateAnswerReplayHit:
 
         assert context.completed_without_errors is False
         assert "replay" in (context.error or "").lower()
+
+
+@pytest.mark.unit
+class TestTryReplayHitReplicateThreading:
+    def test_context_replicate_reaches_lookup(self):
+        """A context with replicate=2 resolves to the replicate=2 entry
+        when the store contains separate entries for replicates 1, 2,
+        and 3 under the same (question, model)."""
+        from types import SimpleNamespace
+
+        from karenina.benchmark.verification.stages.pipeline.generate_answer import (
+            _try_replay_hit,
+        )
+        from karenina.replay import ReplayEntry, ReplayKey, ReplayStore
+        from karenina.schemas.verification.model_identity import ModelIdentity
+
+        model_config = ModelConfig(id="gpt-5", model_name="gpt-5", model_provider="openai")
+
+        display = ModelIdentity.from_model_config(model_config, role="answering").display_string
+
+        store = ReplayStore()
+        for rep in (1, 2, 3):
+            store.register(
+                ReplayKey(
+                    question_id="q1",
+                    answering_model_id=display,
+                    replicate=rep,
+                ),
+                ReplayEntry(raw_trace=f"raw-rep-{rep}"),
+            )
+
+        context = SimpleNamespace(
+            question_id="q1",
+            answering_model=model_config,
+            scenario_id=None,
+            scenario_node=None,
+            scenario_node_visit_index=None,
+            replicate=2,
+            replay_store=store,
+        )
+
+        hit = _try_replay_hit(context)
+        assert hit is not None
+        assert hit.raw_trace == "raw-rep-2"
+
+    def test_context_without_replicate_attr_still_works(self):
+        """Backwards-compat with test fakes that predate the replicate
+        field: a SimpleNamespace context without a .replicate attribute
+        should lookup with replicate=None and resolve via the wildcard
+        rung.
+        """
+        from types import SimpleNamespace
+
+        from karenina.benchmark.verification.stages.pipeline.generate_answer import (
+            _try_replay_hit,
+        )
+        from karenina.replay import ReplayEntry, ReplayKey, ReplayStore
+
+        model_config = ModelConfig(id="gpt-5", model_name="gpt-5", model_provider="openai")
+
+        store = ReplayStore()
+        store.register(
+            ReplayKey(question_id="q1", answering_model_id=None),
+            ReplayEntry(raw_trace="legacy"),
+        )
+
+        context = SimpleNamespace(
+            question_id="q1",
+            answering_model=model_config,
+            scenario_id=None,
+            scenario_node=None,
+            scenario_node_visit_index=None,
+            replay_store=store,
+            # deliberately no `replicate` attribute
+        )
+
+        hit = _try_replay_hit(context)
+        assert hit is not None
+        assert hit.raw_trace == "legacy"
