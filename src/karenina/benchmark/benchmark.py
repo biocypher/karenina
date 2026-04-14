@@ -811,12 +811,6 @@ class Benchmark:
                     }
                 )
 
-        if config.replay_store is not None and config.replicate_count > 1:
-            logger.warning(
-                "Replay is single-replicate; all %d replicates will reuse the same captured entries",
-                config.replicate_count,
-            )
-
         if self.is_scenario_benchmark:
             return self._run_scenario_verification(
                 config=config,

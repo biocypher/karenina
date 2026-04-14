@@ -202,3 +202,19 @@ class TestTryReplayHitReplicateThreading:
         hit = _try_replay_hit(context)
         assert hit is not None
         assert hit.raw_trace == "legacy"
+
+
+@pytest.mark.unit
+class TestBenchmarkSingleReplicateWarningRemoved:
+    def test_warning_string_removed_from_source(self):
+        """Regression: after R1, the 'Replay is single-replicate'
+        warning must no longer exist in benchmark.py. The store now
+        supports per-replicate entries natively, so the warning is
+        obsolete.
+        """
+        import inspect
+
+        from karenina.benchmark import benchmark as benchmark_mod
+
+        src = inspect.getsource(benchmark_mod)
+        assert "Replay is single-replicate" not in src
