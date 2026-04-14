@@ -153,6 +153,7 @@ def capture_from_scenario_result(
     nodes: set[str] | None = None,
     include_parsed: bool = True,
     include_agent_traces: bool = True,
+    replicate: int | None = None,
 ) -> ReplayStore:
     """Build a ReplayStore from one ScenarioExecutionResult.
 
@@ -160,6 +161,11 @@ def capture_from_scenario_result(
     does not carry per-turn model identity. The caller should pass
     ``ModelIdentity.from_model_config(m, role="answering").display_string``
     for consistency with ``capture_from_result_set``.
+
+    ``replicate`` is threaded into every emitted ReplayKey. This
+    helper is single-scenario by construction and does not inspect
+    any replicate metadata on the scenario result itself; the caller
+    owns the value.
 
     Args:
         scenario_result: A ScenarioExecutionResult-like object with
@@ -174,6 +180,8 @@ def capture_from_scenario_result(
             the replay entry's ``parsed_answer_fields``.
         include_agent_traces: Whether to copy ``record.trace_messages``
             into the replay entry's ``trace_messages``.
+        replicate: Optional replicate index threaded into every emitted
+            ReplayKey. Defaults to None, matching pre-R1 behavior.
 
     Returns:
         A ReplayStore with ``miss_policy="fall_through"``.
@@ -231,6 +239,7 @@ def capture_from_scenario_result(
             scenario_node=node_id,
             answering_model_id=answering_model_id,
             visit_index=visit_index,
+            replicate=replicate,
         )
         store.register(key, entry)
 

@@ -517,3 +517,61 @@ class TestCaptureFromResultSetReplicateSelector:
                 self._three_replicate_rs(),
                 replicate_selector="bogus",
             )
+
+
+@pytest.mark.unit
+class TestCaptureFromScenarioResultWithReplicate:
+    def test_replicate_threaded_into_keys(self):
+        from types import SimpleNamespace
+
+        record_a = SimpleNamespace(
+            node_id="n1",
+            question_text="What?",
+            raw_response="raw-a",
+            parsed_fields=None,
+            trace_messages=None,
+        )
+        record_b = SimpleNamespace(
+            node_id="n1",
+            question_text="What?",
+            raw_response="raw-b",
+            parsed_fields=None,
+            trace_messages=None,
+        )
+        scenario_result = SimpleNamespace(
+            scenario_id="s1",
+            history=[record_a, record_b],
+        )
+        store = capture_from_scenario_result(
+            scenario_result,
+            answering_model_id="gpt-5",
+            replicate=5,
+        )
+        assert len(store.entries) == 2
+        for key, _ in store.entries:
+            assert key.replicate == 5
+            assert key.scenario_id == "s1"
+            assert key.answering_model_id == "gpt-5"
+        assert {k.visit_index for k, _ in store.entries} == {0, 1}
+
+    def test_default_replicate_is_none(self):
+        from types import SimpleNamespace
+
+        record = SimpleNamespace(
+            node_id="n1",
+            question_text="What?",
+            raw_response="raw",
+            parsed_fields=None,
+            trace_messages=None,
+        )
+        scenario_result = SimpleNamespace(
+            scenario_id="s1",
+            history=[record],
+        )
+        store = capture_from_scenario_result(
+            scenario_result,
+            answering_model_id="gpt-5",
+        )
+        assert len(store.entries) == 1
+        key, _ = store.entries[0]
+        assert key.replicate is None
