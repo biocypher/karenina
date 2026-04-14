@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from karenina.replay.exceptions import ProjectionError  # noqa: F401  # re-exported for Task 9's build()
+from karenina.replay.exceptions import ProjectionError
 from karenina.replay.store import ReplayEntry, ReplayKey, ReplayMissPolicy, ReplayStore
 from karenina.schemas.verification.config import VerificationConfig
 
@@ -430,3 +430,100 @@ class ScenarioReplayBuilder:
             model = config.answering_models[0]
         model_display = ModelIdentity.from_model_config(model, role="answering").display_string
         return question_id, model_display
+
+    def build(self, *, strict: bool = False) -> ReplayStore:
+        """Produce the projected scenario-mode ReplayStore.
+
+        1. Runs ``validate()`` to build the report.
+        2. If ``strict`` and the report contains unmatched or duplicate
+           targets, raises ProjectionError with the report attached.
+        3. Otherwise emits a log warning summarizing any gaps.
+        4. Dedupes projected_keys by (scenario_id, scenario_node) keeping
+           the last occurrence (last-projection-wins); this avoids
+           triggering ReplayStore.register's own overwrite warning on
+           every duplicate target.
+        5. Registers each surviving projected key into a fresh
+           ReplayStore with the ReplayEntry looked up from the owning
+           qa_store (preserved verbatim).
+
+        Args:
+            strict: If True, raise ProjectionError on unmatched or
+                duplicate targets.
+
+        Returns:
+            A fresh ReplayStore with the builder's miss_policy.
+
+        Raises:
+            ProjectionError: When strict and the report is not clean.
+        """
+        report = self.validate()
+
+        if strict and (report.unmatched_targets or report.duplicate_targets):
+            raise ProjectionError(
+                _summarize_report(report),
+                report=report,
+            )
+        if report.unmatched_targets or report.duplicate_targets or report.orphan_qa_entries:
+            logger.warning(
+                "ScenarioReplayBuilder: projection report has %d unmatched, %d duplicates, %d orphans; call validate() for detail",
+                len(report.unmatched_targets),
+                len(report.duplicate_targets),
+                len(report.orphan_qa_entries),
+            )
+
+        store = ReplayStore(miss_policy=self.miss_policy)
+        if not self._staged:
+            logger.warning("ScenarioReplayBuilder: build() called on empty builder; returning empty store")
+            return store
+
+        # Dedupe projected_keys by (scenario, node) keeping LAST occurrence.
+        # This avoids firing ReplayStore.register's own overwrite warning on
+        # every duplicate target; the single duplicate-tracking surface is
+        # the ProjectionReport.
+        dedup_map: dict[tuple[str, str], ReplayKey] = {}
+        for key in report.projected_keys:
+            pair = (key.scenario_id or "", key.scenario_node or "")
+            dedup_map[pair] = key
+
+        for key in dedup_map.values():
+            entry = self._lookup_entry_for_projected_key(key)
+            if entry is None:
+                # Should not happen: every projected_key came from a _probe_qa
+                # hit inside validate(). Skip defensively rather than crash.
+                continue
+            store.register(key, entry)
+
+        logger.info(
+            "ScenarioReplayBuilder: projected %d entries across %d unique (scenario, node) pairs",
+            len(store.entries),
+            len({(k.scenario_id, k.scenario_node) for (k, _e) in store.entries}),
+        )
+        return store
+
+    def _lookup_entry_for_projected_key(self, key: ReplayKey) -> ReplayEntry | None:
+        """Find the underlying QA ReplayEntry for a projected key.
+
+        Walks staged projections in REVERSE order (last-projection wins)
+        and stops at the first hit.
+        """
+        assert key.question_id is not None
+        assert key.answering_model_id is not None
+        for projection in reversed(self._staged):
+            entry = _probe_qa(
+                projection.qa_store,
+                question_id=key.question_id,
+                answering_model_id=key.answering_model_id,
+            )
+            if entry is not None:
+                return entry
+        return None
+
+
+def _summarize_report(report: ProjectionReport) -> str:
+    """One-line human-readable summary used as ProjectionError.message."""
+    return (
+        f"ScenarioReplayBuilder: projection failed with "
+        f"{len(report.unmatched_targets)} unmatched, "
+        f"{len(report.duplicate_targets)} duplicate, "
+        f"{report.matched} matched targets"
+    )

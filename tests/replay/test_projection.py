@@ -679,3 +679,221 @@ class TestValidatePurity:
 
         builder.validate()
         assert qa.miss_policy == "strict"
+
+
+@pytest.mark.unit
+class TestBuild:
+    def test_produces_scenario_mode_entries_only(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+
+        store = builder.build()
+        for key, _entry in store.entries:
+            assert key.scenario_id is not None
+            assert key.scenario_node is not None
+
+    def test_wildcards_visit_index_and_replicate(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+
+        store = builder.build()
+        for key, _entry in store.entries:
+            assert key.visit_index is None
+            assert key.replicate is None
+
+    def test_miss_policy_passed_through_default_strict(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)  # default strict
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+        assert builder.build().miss_policy == "strict"
+
+    def test_miss_policy_passed_through_fall_through(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg, miss_policy="fall_through")
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+        assert builder.build().miss_policy == "fall_through"
+
+    def test_strict_raises_on_unmatched_targets(self):
+        from karenina.exceptions import ProjectionError
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        # WRONG question
+        qa = _qa_store([_qa_entry_for("Unrelated?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+        with pytest.raises(ProjectionError) as exc_info:
+            builder.build(strict=True)
+        assert exc_info.value.report is not None
+        assert any(t.reason == "no_qa_entry" for t in exc_info.value.report.unmatched_targets)
+
+    def test_strict_raises_on_duplicate_targets(self):
+        from karenina.exceptions import ProjectionError
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa_a = _qa_store([_qa_entry_for("What is X?", display)])
+        qa_b = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_a, target_nodes=["ask"], scenarios=["s1"])
+        builder.add_qa(qa_b, target_nodes=["ask"], scenarios=["s1"])
+
+        with pytest.raises(ProjectionError) as exc_info:
+            builder.build(strict=True)
+        assert ("s1", "ask") in exc_info.value.report.duplicate_targets
+
+    def test_non_strict_warns_and_returns_store(self, caplog):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        # WRONG question
+        qa = _qa_store([_qa_entry_for("Unrelated?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+        with caplog.at_level("WARNING"):
+            store = builder.build(strict=False)
+        assert store is not None
+        assert any(
+            "unmatched" in rec.message.lower() or "projection report" in rec.message.lower() for rec in caplog.records
+        )
+
+    def test_non_strict_last_projection_wins_on_duplicate(self):
+        """When two projections target (s1, ask), the LAST staged wins."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+
+        first_qa = _qa_store(
+            [
+                (
+                    ReplayKey(
+                        question_id=generate_question_id("What is X?"),
+                        answering_model_id=display,
+                    ),
+                    ReplayEntry(raw_trace="FIRST"),
+                )
+            ]
+        )
+        last_qa = _qa_store(
+            [
+                (
+                    ReplayKey(
+                        question_id=generate_question_id("What is X?"),
+                        answering_model_id=display,
+                    ),
+                    ReplayEntry(raw_trace="LAST"),
+                )
+            ]
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(first_qa, target_nodes=["ask"], scenarios=["s1"])
+        builder.add_qa(last_qa, target_nodes=["ask"], scenarios=["s1"])
+        store = builder.build(strict=False)
+
+        hit = store.lookup(
+            question_id=generate_question_id("What is X?"),
+            scenario_id="s1",
+            scenario_node="ask",
+            answering_model_id=display,
+        )
+        assert hit is not None
+        assert hit.raw_trace == "LAST"
+
+    def test_empty_builder_returns_empty_store_with_warning(self, caplog):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        with caplog.at_level("WARNING"):
+            store = builder.build()
+        assert list(store.entries) == []
+        assert any("empty builder" in rec.message.lower() for rec in caplog.records)
+
+    def test_build_is_idempotent(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = _qa_store([_qa_entry_for("What is X?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+
+        s1 = builder.build()
+        s2 = builder.build()
+        assert len(s1.entries) == len(s2.entries)
+        assert s1 is not s2
+
+    def test_projected_entries_preserve_replay_entry_verbatim(self):
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa = ReplayStore(miss_policy="fall_through")
+        original_entry = ReplayEntry(
+            raw_trace="original",
+            trace_messages=[{"role": "assistant", "content": "x"}],
+            parsed_answer_fields={"v": 1},
+            captured_model_id="openai:gpt-5",
+            captured_at="2026-04-14T00:00:00Z",
+        )
+        qa.register(
+            ReplayKey(
+                question_id=generate_question_id("What is X?"),
+                answering_model_id=display,
+            ),
+            original_entry,
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa, target_nodes=["ask"], scenarios=["s1"])
+        store = builder.build()
+
+        # Exactly one entry matches the projected (scenario, node, model)
+        projected_entry = store.entries[0][1]
+        assert projected_entry.raw_trace == original_entry.raw_trace
+        assert projected_entry.trace_messages == original_entry.trace_messages
+        assert projected_entry.parsed_answer_fields == original_entry.parsed_answer_fields
+        assert projected_entry.captured_model_id == original_entry.captured_model_id
+        assert projected_entry.captured_at == original_entry.captured_at
