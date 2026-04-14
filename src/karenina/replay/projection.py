@@ -341,13 +341,41 @@ class ScenarioReplayBuilder:
                         )
                     )
 
-        # Duplicate and orphan detection land in Task 6/7.
+        # Duplicate detection across projected_keys (Task 6).
         seen_pairs: dict[tuple[str, str], int] = {}
         for key in projected_keys:
             pair = (key.scenario_id or "", key.scenario_node or "")
             seen_pairs[pair] = seen_pairs.get(pair, 0) + 1
         duplicate_targets: list[tuple[str, str]] = [pair for pair, count in seen_pairs.items() if count > 1]
+
+        # Orphan detection (Task 7): any staged QA entry whose object
+        # identity is NOT in the projection's consumed_ids is orphan.
+        # Classification: if the entry's question_id was never requested
+        # by that projection's targets, it is "no_target_scenario";
+        # otherwise the question was asked but under a different model
+        # id, so it is "model_id_never_requested".
         orphan_qa_entries: list[OrphanEntry] = []
+        for projection, consumed_ids in zip(self._staged, self._projection_consumed_ids, strict=True):
+            requested_questions = self._compute_requested_questions(projection)
+            for key, entry in projection.qa_store.entries:
+                if id(entry) in consumed_ids:
+                    continue
+                if key.question_id not in requested_questions:
+                    orphan_qa_entries.append(
+                        OrphanEntry(
+                            question_id=key.question_id,
+                            answering_model_id=key.answering_model_id,
+                            reason="no_target_scenario",
+                        )
+                    )
+                    continue
+                orphan_qa_entries.append(
+                    OrphanEntry(
+                        question_id=key.question_id,
+                        answering_model_id=key.answering_model_id,
+                        reason="model_id_never_requested",
+                    )
+                )
 
         return ProjectionReport(
             projected_keys=projected_keys,
@@ -355,6 +383,36 @@ class ScenarioReplayBuilder:
             orphan_qa_entries=orphan_qa_entries,
             duplicate_targets=duplicate_targets,
         )
+
+    def _compute_requested_questions(
+        self,
+        projection: _StagedProjection,
+    ) -> set[str]:
+        """Question_ids the projection's declared targets would ask for.
+
+        Used by orphan classification to distinguish ``no_target_scenario``
+        (question never requested) from ``model_id_never_requested`` (question
+        requested but under a different runtime model). A missing scenario or
+        missing node contributes nothing; only resolved targets show up here.
+        """
+        questions: set[str] = set()
+        scenarios = (
+            projection.scenarios
+            if projection.scenarios is not None
+            else [sc.name for sc in self.benchmark.get_scenarios()]
+        )
+        for scenario_id in scenarios:
+            try:
+                scenario_def = self.benchmark.get_scenario(scenario_id)
+            except KeyError:
+                continue
+            for node_id in projection.target_nodes:
+                node = scenario_def.nodes.get(node_id)
+                if node is None:
+                    continue
+                question_id, _model_display = self._resolve_node_identity(node, projection.config)
+                questions.add(question_id)
+        return questions
 
     def _resolve_node_identity(
         self,

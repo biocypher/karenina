@@ -508,3 +508,121 @@ class TestValidateDuplicates:
 
         report = builder.validate()
         assert report.duplicate_targets == []
+
+
+@pytest.mark.unit
+class TestValidateOrphans:
+    def test_reports_orphan_no_target_scenario(self):
+        """An entry whose question does not appear on any declared scenario's targeted nodes is orphan."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        model_display = _answering_display(cfg)
+        # QA entry for "Unused" question which is not a node question
+        qa_store = _qa_store(
+            [
+                _qa_entry_for("What is X?", model_display),
+                _qa_entry_for("Unused question?", model_display),
+            ]
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert any(
+            o.reason == "no_target_scenario" and o.question_id == generate_question_id("Unused question?")
+            for o in report.orphan_qa_entries
+        )
+
+    def test_reports_orphan_model_id_never_requested(self):
+        """An entry whose question matches a node but whose model id never matches is orphan (wrong model)."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        wrong_model_display = "anthropic:wrong-model"
+        correct_display = _answering_display(cfg)
+        # Two entries for same question: one wrong model, one correct.
+        qa_store = _qa_store(
+            [
+                (
+                    ReplayKey(
+                        question_id=generate_question_id("What is X?"),
+                        answering_model_id=wrong_model_display,
+                    ),
+                    ReplayEntry(raw_trace="wrong model"),
+                ),
+                (
+                    ReplayKey(
+                        question_id=generate_question_id("What is X?"),
+                        answering_model_id=correct_display,
+                    ),
+                    ReplayEntry(raw_trace="right model"),
+                ),
+            ]
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert any(
+            o.reason == "model_id_never_requested" and o.answering_model_id == wrong_model_display
+            for o in report.orphan_qa_entries
+        )
+        # The correct-model entry is consumed, so it must NOT be orphan.
+        assert not any(o.answering_model_id == correct_display for o in report.orphan_qa_entries)
+
+    def test_disjoint_projections_do_not_cross_orphan(self):
+        """An entry in store A can only be orphan wrt projection A's declared targets."""
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+        display = _answering_display(cfg)
+        qa_a = _qa_store([_qa_entry_for("What is X?", display)])
+        qa_b = _qa_store([_qa_entry_for("What is Y?", display)])
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(qa_a, target_nodes=["ask"], scenarios=["s1"])
+        builder.add_qa(qa_b, target_nodes=["ask"], scenarios=["s2"])
+
+        report = builder.validate()
+        # Both entries consumed: no orphans.
+        assert report.orphan_qa_entries == []
+
+    def test_wildcard_answering_model_qa_entry_is_consumed_not_orphan(self):
+        """A QA entry with ``answering_model_id=None`` is consumed by a
+        concrete-model probe via the specificity ladder; orphan detection
+        must treat it as consumed (not flag it as model_id_never_requested).
+
+        Regression test: earlier pair-based orphan tracking would miss this
+        because the consumed set stored concrete (qid, model) pairs while
+        the QA entry's key held None. We now track consumed entries by
+        object identity.
+        """
+        from karenina.replay.projection import ScenarioReplayBuilder
+
+        bench = _minimal_benchmark()
+        cfg = _default_config()
+
+        wildcard_qa = _qa_store(
+            [
+                (
+                    ReplayKey(
+                        question_id=generate_question_id("What is X?"),
+                        answering_model_id=None,  # wildcard
+                    ),
+                    ReplayEntry(raw_trace="wildcard"),
+                )
+            ]
+        )
+
+        builder = ScenarioReplayBuilder(bench, config=cfg)
+        builder.add_qa(wildcard_qa, target_nodes=["ask"], scenarios=["s1"])
+
+        report = builder.validate()
+        assert report.matched == 1, report
+        assert report.orphan_qa_entries == [], report.orphan_qa_entries
