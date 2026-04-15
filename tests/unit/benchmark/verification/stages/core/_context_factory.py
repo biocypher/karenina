@@ -16,12 +16,14 @@ from typing import Any
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
 from karenina.schemas.config import ModelConfig
 
-# Kwargs routed to ``context.set_result_field`` after construction.
+# Kwargs routed to ``context.set_result_field`` after construction. Each entry
+# here corresponds to an ArtifactKeys member that the production pipeline
+# writes via ``set_result_field`` (directly or via the ``set_artifact_and_result``
+# helper on BaseVerificationStage), so the classifier/caveat reads stay honest.
 _RESULT_FIELD_KWARGS: dict[str, str] = {
     "verify_result": ArtifactKeys.VERIFY_RESULT,
     "failed_stage": ArtifactKeys.FAILED_STAGE,
     "template_verification_performed": ArtifactKeys.TEMPLATE_VERIFICATION_PERFORMED,
-    "retry_counts": ArtifactKeys.RETRY_COUNTS,
     "response_timeout_partial": ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL,
     "recursion_limit_reached": ArtifactKeys.RECURSION_LIMIT_REACHED,
     "embedding_override_applied": ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED,
@@ -31,9 +33,13 @@ _RESULT_FIELD_KWARGS: dict[str, str] = {
     "sufficiency_reasoning": ArtifactKeys.SUFFICIENCY_REASONING,
 }
 
-# Kwargs routed to ``context.set_artifact`` after construction.
+# Kwargs routed to ``context.set_artifact`` after construction. Each entry
+# here corresponds to an ArtifactKeys member that the production pipeline
+# writes exclusively via ``set_artifact`` (orchestrator retry snapshot,
+# validate_template error artifact, etc.).
 _ARTIFACT_KWARGS: dict[str, str] = {
     "template_validation_error": ArtifactKeys.TEMPLATE_VALIDATION_ERROR,
+    "retry_counts": ArtifactKeys.RETRY_COUNTS,
 }
 
 

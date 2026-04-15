@@ -82,6 +82,27 @@ class StageOrchestrator:
         Args:
             stages: Ordered list of stages to execute
         """
+        # Validate finalize placement before registering stages so layout
+        # errors surface as ValueError (not as a downstream "already
+        # registered" duplicate when two FinalizeResultStage instances share
+        # the same stage name). Reject any layout that would cause the
+        # synthesized trailing finalize to run alongside a duplicate or
+        # mid-list one.
+        finalize_positions = [
+            index for index, candidate in enumerate(stages) if isinstance(candidate, FinalizeResultStage)
+        ]
+        if len(finalize_positions) > 1:
+            raise ValueError(
+                "FinalizeResultStage must appear at most once in the pipeline; "
+                f"found {len(finalize_positions)} occurrences at indices "
+                f"{finalize_positions}"
+            )
+        if finalize_positions and finalize_positions[0] != len(stages) - 1:
+            raise ValueError(
+                "FinalizeResultStage must be the last stage in the pipeline; "
+                f"found at index {finalize_positions[0]} of {len(stages)}"
+            )
+
         self.stages = stages
         self.registry = StageRegistry()
 
@@ -90,12 +111,12 @@ class StageOrchestrator:
             self.registry.register(stage)
 
         # Partition the stage list so finalize runs exactly once after the
-        # main loop, regardless of exceptions in earlier stages. We accept any
-        # trailing FinalizeResultStage; when absent we synthesize one below so
-        # tests that pass a minimal stage list still receive a finalized
+        # main loop, regardless of exceptions in earlier stages. When no
+        # FinalizeResultStage is present at all, synthesise a fresh one so
+        # minimal stage lists (e.g. unit tests) still produce a finalized
         # VerificationResult.
         main_stages: StageList = list(stages)
-        if main_stages and isinstance(main_stages[-1], FinalizeResultStage):
+        if finalize_positions:
             popped = main_stages.pop()
             assert isinstance(popped, FinalizeResultStage)  # noqa: S101 - narrow type for mypy
             self._finalize_stage: FinalizeResultStage = popped

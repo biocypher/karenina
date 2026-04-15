@@ -13,6 +13,10 @@ Covers Task 7 of the failure-state harmonization plan:
    ``ValidateTemplate``) raises an exception, ``FinalizeResultStage`` still
    runs exactly once and the raised error is reflected as a
    ``TEMPLATE_VALIDATION`` failure on the returned result.
+6. A retry-exhausted scenario orchestrated end-to-end surfaces the correct
+   ``FailureCategory`` plus ``Caveat.RETRIES_USED`` (C1 regression guard).
+7. The orchestrator rejects mid-list ``FinalizeResultStage`` at construction
+   time (I1 regression guard).
 """
 
 from __future__ import annotations
@@ -36,6 +40,8 @@ from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
+from karenina.utils.retry_policy import CategoryRetryConfig, RetryExecutor, RetryPolicy
 from tests.unit.benchmark.verification.stages.core._context_factory import make_context
 
 
@@ -181,3 +187,204 @@ class TestOrchestratorPropagatesContextToClassifier:
         result = orchestrator.execute(ctx)
         assert result.metadata.failure is not None
         assert result.metadata.failure.category is FailureCategory.UNEXPECTED_ERROR
+
+
+class _TimeoutExhaustingStage(BaseVerificationStage):
+    """Stage that drives a RetryExecutor until its timeout budget is spent.
+
+    Uses the real retry machinery so the orchestrator's ``track_retries``
+    contextvar sees each increment; this is how the ``RETRY_COUNTS``
+    artifact ends up reflecting exhausted state at finalize time. Mirrors
+    the production shape where adapter retries are mediated by
+    ``RetryExecutor`` and bubble out as ``TimeoutError`` after exhaustion.
+    """
+
+    def __init__(self, policy: RetryPolicy) -> None:
+        self._policy = policy
+
+    @property
+    def name(self) -> str:
+        return "timeout_exhausting_stage"
+
+    def execute(self, context: VerificationContext) -> None:
+        executor = RetryExecutor(self._policy, ErrorRegistry())
+
+        def _always_timeout() -> None:
+            raise TimeoutError("simulated request timed out")
+
+        try:
+            executor.execute(_always_timeout)
+        except TimeoutError as exc:
+            context.mark_error(
+                str(exc),
+                category=ErrorCategory.TIMEOUT,
+                stage=self.name,
+            )
+
+
+def _retry_policy_with_timeout_budget(budget: int) -> RetryPolicy:
+    """Build a RetryPolicy whose timeout budget matches ``budget``.
+
+    Other categories keep defaults; only the timeout slot is customised so
+    the exhaustion math in classify_failure is unambiguous.
+    """
+    return RetryPolicy(
+        timeout=CategoryRetryConfig(max_attempts=budget, backoff_min=0, backoff_max=0),
+    )
+
+
+@pytest.mark.unit
+class TestOrchestratorRetryExhaustionEndToEnd:
+    """C1 regression: retry exhaustion must classify correctly end-to-end.
+
+    The orchestrator writes ``RETRY_COUNTS`` via ``set_artifact``; the
+    classifier must read via ``get_artifact`` too. A prior implementation
+    read via ``get_result_field`` and silently fell through to
+    ``UNEXPECTED_ERROR``. These tests guard against that regression by
+    running the orchestrator with a real retry policy and asserting the
+    classified failure matches the simulated retry-exhausted state.
+    """
+
+    def test_timeout_exhaustion_classifies_as_timeout(self) -> None:
+        policy = _retry_policy_with_timeout_budget(budget=2)
+        model = ModelConfig(
+            id="test",
+            model_name="test-model",
+            retry_policy=policy,
+        )
+        ctx = VerificationContext(
+            question_id="q1",
+            template_id="tpl1",
+            question_text="What?",
+            raw_answer="Y",
+            template_code="class Answer: pass",
+            answering_model=model,
+            parsing_model=model,
+        )
+        _seed_identities(ctx)
+        orchestrator = StageOrchestrator(stages=[_TimeoutExhaustingStage(policy), FinalizeResultStage()])
+        result = orchestrator.execute(ctx)
+
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.category is FailureCategory.TIMEOUT
+        assert Caveat.RETRIES_USED in result.metadata.caveats
+        assert result.metadata.retry_counts is not None
+        timeout_entry = result.metadata.retry_counts["timeout"]
+        assert timeout_entry["used"] == timeout_entry["budget"]
+
+    def test_retries_used_caveat_fires_when_orchestrator_writes_artifact(self) -> None:
+        """Caveat collector reads the artifact written by the orchestrator.
+
+        Even without exhaustion, any ``used > 0`` observation should produce
+        the ``RETRIES_USED`` caveat on the finalized metadata.
+        """
+        policy = _retry_policy_with_timeout_budget(budget=3)
+        model = ModelConfig(
+            id="test",
+            model_name="test-model",
+            retry_policy=policy,
+        )
+        ctx = VerificationContext(
+            question_id="q1",
+            template_id="tpl1",
+            question_text="What?",
+            raw_answer="Y",
+            template_code="class Answer: pass",
+            answering_model=model,
+            parsing_model=model,
+        )
+        _seed_identities(ctx)
+
+        class _PartialRetryStage(BaseVerificationStage):
+            """Stage that retries once, then succeeds.
+
+            Exercises the ``RETRIES_USED`` caveat without tripping rule 3
+            of the classifier: one retry counted, two remaining.
+            """
+
+            def __init__(self, policy: RetryPolicy) -> None:
+                self._policy = policy
+                self._attempts = 0
+
+            @property
+            def name(self) -> str:
+                return "partial_retry_stage"
+
+            def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
+                executor = RetryExecutor(self._policy, ErrorRegistry())
+
+                def _succeed_after_one_timeout() -> str:
+                    self._attempts += 1
+                    if self._attempts == 1:
+                        raise TimeoutError("transient")
+                    return "ok"
+
+                executor.execute(_succeed_after_one_timeout)
+
+        orchestrator = StageOrchestrator(stages=[_PartialRetryStage(policy), FinalizeResultStage()])
+        result = orchestrator.execute(ctx)
+
+        assert result.metadata.failure is None
+        assert Caveat.RETRIES_USED in result.metadata.caveats
+
+
+@pytest.mark.unit
+class TestOrchestratorRejectsMidListFinalize:
+    """I1 regression: the orchestrator must reject invalid finalize placement.
+
+    A stage list like ``[A(), FinalizeResultStage(), B()]`` previously
+    slipped past the LAST-only check, leaving finalize in the main loop AND
+    synthesising a trailing one so finalize ran twice. The constructor now
+    rejects such layouts at build time with a ValueError.
+    """
+
+    def test_mid_list_finalize_raises(self) -> None:
+        class _NoopStage(BaseVerificationStage):
+            @property
+            def name(self) -> str:
+                return "noop_stage"
+
+            def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
+                return None
+
+        class _OtherStage(BaseVerificationStage):
+            @property
+            def name(self) -> str:
+                return "other_stage"
+
+            def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
+                return None
+
+        with pytest.raises(ValueError, match="FinalizeResultStage"):
+            StageOrchestrator(stages=[_NoopStage(), FinalizeResultStage(), _OtherStage()])
+
+    def test_multiple_finalize_stages_raises(self) -> None:
+        with pytest.raises(ValueError, match="FinalizeResultStage"):
+            StageOrchestrator(stages=[FinalizeResultStage(), FinalizeResultStage()])
+
+    def test_empty_stage_list_accepted(self) -> None:
+        # An empty list is unusual but legal: execute() will simply invoke
+        # the synthesized finalize stage once and return. No ValueError.
+        StageOrchestrator(stages=[])
+
+    def test_trailing_finalize_accepted(self) -> None:
+        class _NoopStage(BaseVerificationStage):
+            @property
+            def name(self) -> str:
+                return "noop_stage"
+
+            def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
+                return None
+
+        StageOrchestrator(stages=[_NoopStage(), FinalizeResultStage()])
+
+    def test_no_finalize_accepted_and_synthesized(self) -> None:
+        class _NoopStage(BaseVerificationStage):
+            @property
+            def name(self) -> str:
+                return "noop_stage"
+
+            def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
+                return None
+
+        StageOrchestrator(stages=[_NoopStage()])

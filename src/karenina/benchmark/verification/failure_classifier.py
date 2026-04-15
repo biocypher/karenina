@@ -40,13 +40,19 @@ _ERROR_CATEGORY_TO_FAILURE: dict[ErrorCategory, FailureCategory] = {
 def _retry_exhausted(ctx: VerificationContext) -> bool:
     """Return True when the retry budget for the current error category is spent.
 
+    The ``RETRY_COUNTS`` snapshot is written to ``ctx.artifacts`` by the
+    orchestrator (inside ``track_retries``); reads here must use
+    ``get_artifact`` to hit the same dict. Reading via ``get_result_field``
+    silently returns ``None`` because artifacts and result_builder are
+    separate dicts on VerificationContext.
+
     Args:
         ctx: The finalized verification context.
 
     Returns:
         True if ``used >= budget`` for the context's error category, else False.
     """
-    rc: dict[str, dict[str, int]] = ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) or {}
+    rc: dict[str, dict[str, int]] = ctx.get_artifact(ArtifactKeys.RETRY_COUNTS) or {}
     cat = ctx.error_category
     if cat is None:
         return False
@@ -100,7 +106,10 @@ def classify_failure(ctx: VerificationContext) -> Failure | None:
             reason="verify_template returned False",
         )
 
-    # Rule 3: retry exhausted (only when verify_template did not complete)
+    # Rule 3: retry exhausted (only when verify_template did not complete).
+    # RETRY_COUNTS is stored in ``ctx.artifacts`` by the orchestrator; use
+    # ``get_artifact`` so the details payload matches what ``_retry_exhausted``
+    # read a moment earlier.
     if ctx.error_category in _ERROR_CATEGORY_TO_FAILURE and _retry_exhausted(ctx):
         cat = _ERROR_CATEGORY_TO_FAILURE[ctx.error_category]
         return Failure(
@@ -109,7 +118,7 @@ def classify_failure(ctx: VerificationContext) -> Failure | None:
             reason=f"{cat.value} retries exhausted",
             details={
                 "error_message": ctx.error,
-                "retry_counts": ctx.get_result_field(ArtifactKeys.RETRY_COUNTS),
+                "retry_counts": ctx.get_artifact(ArtifactKeys.RETRY_COUNTS),
             },
         )
 
@@ -175,7 +184,10 @@ def collect_caveats(ctx: VerificationContext) -> list[Caveat]:
         caveats.append(Caveat.PARTIAL_CONTENT)
     if ctx.get_result_field(ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED):
         caveats.append(Caveat.EMBEDDING_OVERRIDE)
-    rc: dict[str, dict[str, int]] = ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) or {}
+    # RETRY_COUNTS lives in ``ctx.artifacts`` (orchestrator.set_artifact), not
+    # in ``ctx.result_builder``. Reading via ``get_result_field`` returns None
+    # silently and suppresses this caveat in production.
+    rc: dict[str, dict[str, int]] = ctx.get_artifact(ArtifactKeys.RETRY_COUNTS) or {}
     if any(int(entry.get("used") or 0) > 0 for entry in rc.values()):
         caveats.append(Caveat.RETRIES_USED)
     return caveats

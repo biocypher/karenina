@@ -37,11 +37,26 @@ class TestStageContextErrorStage:
         assert ctx.last_run_stage == "generate_answer"
 
     def test_factory_routes_result_field_kwargs(self) -> None:
+        """``verify_result`` routes through ``set_result_field``.
+
+        Mirrors the production pipeline, where verify stages write to the
+        result builder.
+        """
         from karenina.benchmark.verification.stages.core.base import ArtifactKeys
 
-        ctx = make_context(
-            verify_result=True,
-            retry_counts={"timeout": {"used": 1, "budget": 3}},
-        )
+        ctx = make_context(verify_result=True)
         assert ctx.get_result_field(ArtifactKeys.VERIFY_RESULT) is True
-        assert ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) == {"timeout": {"used": 1, "budget": 3}}
+
+    def test_factory_routes_retry_counts_through_artifact(self) -> None:
+        """``retry_counts`` routes through ``set_artifact``.
+
+        The orchestrator writes ``RETRY_COUNTS`` via ``set_artifact`` inside
+        its ``track_retries`` block; the classifier and caveat collector
+        read the same dict via ``get_artifact``. The test factory must
+        honour that boundary so unit tests exercise the correct path.
+        """
+        from karenina.benchmark.verification.stages.core.base import ArtifactKeys
+
+        ctx = make_context(retry_counts={"timeout": {"used": 1, "budget": 3}})
+        assert ctx.get_artifact(ArtifactKeys.RETRY_COUNTS) == {"timeout": {"used": 1, "budget": 3}}
+        assert ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) is None
