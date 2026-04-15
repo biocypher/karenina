@@ -1212,7 +1212,7 @@ The embedding check result is stored alongside the template result. When semanti
 
 | Scenario | What happens | Result |
 |----------|-------------|--------|
-| `verify()` raises an exception | Pipeline catches it; error string stored in `field_verification_error` | `verify_result=False`, `verify_granular_result=None`, `completed_without_errors=True` (non-fatal) |
+| `verify()` raises an exception | Pipeline catches it; error string stored in `field_verification_error` | `verify_result=False`, `verify_granular_result=None`, `metadata.failure` remains `None` (non-fatal) |
 | Judge returns `None` for a `str` field | Pydantic validation fails at parse time | Parsing failure; `verify()` never runs |
 | `verify_granular()` raises | Caught and logged as warning | Does NOT fail verification; granular score is absent |
 | Template validation fails (missing `verify()`, bad `self.correct`) | Stage 1 error; all subsequent stages skip | Error before any LLM calls |

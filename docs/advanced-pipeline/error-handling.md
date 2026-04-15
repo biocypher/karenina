@@ -467,7 +467,7 @@ The `generate_answer` stage salvages this partial content when present, so a str
 The harmonization deletes several previously-supported retry surfaces.
 
 - **`max_transient_retries` on `VerificationConfig` and `ModelConfig`.** Replaced by `RetryPolicy`. Configuration files written against the old field must be updated.
-- **`transient: bool` on context and result metadata.** Replaced by `error_category: str | None` on `VerificationResultMetadata` (the string value of an `ErrorCategory`).
+- **`transient: bool` on context and result metadata.** Replaced by a structured `failure: Failure | None` on `VerificationResultMetadata`. The `failure` holds a `FailureCategory`, a derived `FailureGroup`, the originating stage, and a reason.
 - **`tenacity` retry decorators on LangChain LLM and parser, deep agents, and the streaming-timeout retry decorator.** All replaced by `RetryExecutor`.
 - **Evaluator retry decorators (abstention, sufficiency).** Removed entirely; the executor is the only retry surface.
 - **Scenario turn retry.** A failing turn now terminates the scenario instead of retrying. Per-call retry still happens inside the executor.

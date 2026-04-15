@@ -120,7 +120,8 @@ _mock_result = VerificationResult(
     metadata=VerificationResultMetadata(
         question_id=_question_id,
         template_id="tmpl_bix51",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=(
             "Using the patient data in data.xlsx, perform logistic regression analysis "
             "to determine which demographics (age, BMI, gender) predict treatment "
@@ -149,7 +150,8 @@ _mock_result_template_only = VerificationResult(
     metadata=VerificationResultMetadata(
         question_id=_question_id,
         template_id="tmpl_bix51",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=_mock_result.metadata.question_text,
         raw_answer=_mock_result.metadata.raw_answer,
         answering=_answering,
@@ -184,7 +186,8 @@ _mock_trace_only_result = VerificationResult(
     metadata=VerificationResultMetadata(
         question_id=_question_id,
         template_id="tmpl_bix51",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=_mock_result.metadata.question_text,
         raw_answer=_mock_result.metadata.raw_answer,
         answering=_answering,
@@ -421,7 +424,7 @@ results = benchmark.run_verification(config=config, run_name="agentic_eval")
 result = results.results[0]
 
 # Inspect results
-print(f"Completed: {result.metadata.completed_without_errors}")
+print(f"Completed: {(result.metadata.failure is None)}")
 print(f"Verify: {result.template.verify_result}")
 print(f"Agentic: {result.template.agentic_parsing_performed}")
 

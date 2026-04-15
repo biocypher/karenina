@@ -108,7 +108,8 @@ def _make(qid, q_text, raw_ans, scenario):
         metadata=VerificationResultMetadata(
             question_id=qid,
             template_id="tmpl_" + qid[:8],
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text=q_text,
             raw_answer=raw_ans,
             answering=_answering,

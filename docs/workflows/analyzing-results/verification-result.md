@@ -40,7 +40,7 @@ VerificationResult
 │   ├── question_id, template_id, result_id
 │   ├── answering (ModelIdentity), parsing (ModelIdentity)
 │   ├── execution_time, timestamp
-│   └── completed_without_errors, error
+│   └── failure (Failure | None), caveats
 ├── template                    # Present when template evaluation ran
 │   ├── raw_llm_response, trace_messages
 │   ├── parsed_llm_response, parsed_gt_response
@@ -132,7 +132,8 @@ Convenience properties:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `completed_without_errors` | `bool` | Whether verification completed successfully |
+| `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success |
+| `caveats` | `list[Caveat]` | Informational flags on the run |
 | `error` | `str \| None` | Error message if verification failed |
 | `execution_time` | `float` | Execution time in seconds |
 | `timestamp` | `str` | ISO timestamp of when verification was run |
