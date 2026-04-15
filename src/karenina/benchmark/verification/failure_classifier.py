@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
+from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.utils.errors import ErrorCategory
 
@@ -157,4 +158,27 @@ def classify_failure(ctx: VerificationContext) -> Failure | None:
     return None
 
 
-__all__ = ["classify_failure"]
+def collect_caveats(ctx: VerificationContext) -> list[Caveat]:
+    """Collect informational caveats from a finalized VerificationContext.
+
+    Caveats are orthogonal to the pass/fail verdict: they report conditions
+    worth flagging regardless of whether the run succeeded.
+
+    Args:
+        ctx: Finalized VerificationContext produced by the pipeline.
+
+    Returns:
+        A list of Caveat values in emission order. Empty when nothing fires.
+    """
+    caveats: list[Caveat] = []
+    if ctx.get_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL):
+        caveats.append(Caveat.PARTIAL_CONTENT)
+    if ctx.get_result_field(ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED):
+        caveats.append(Caveat.EMBEDDING_OVERRIDE)
+    rc: dict[str, dict[str, int]] = ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) or {}
+    if any(int(entry.get("used") or 0) > 0 for entry in rc.values()):
+        caveats.append(Caveat.RETRIES_USED)
+    return caveats
+
+
+__all__ = ["classify_failure", "collect_caveats"]
