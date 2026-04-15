@@ -732,3 +732,164 @@ class TestInFlightTasksNotSilentlyDropped:
         error_qids = {qid for qid, exc in err.errors if isinstance(exc, RuntimeError)}
         assert "q2" in error_qids
         assert "q3" in error_qids
+
+
+# ============================================================================
+# Pre-teardown aclose: httpx client must close on the portal's own loop
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestPreTeardownAclose:
+    """Adapters registered during a parallel batch must have aclose() called
+    on the worker portal's own event loop BEFORE the portal is torn down.
+
+    Without this, httpx.AsyncClient.aclose() runs on a brand-new loop (via
+    the downstream cleanup_resources call) and raises "Event loop is closed"
+    because its transports are pinned to the now-closed portal loop.
+    """
+
+    def test_parallel_pre_teardown_aclose_runs_on_portal_loop(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """aclose() runs on the portal's event-loop thread, not the main
+        thread and not a fresh cleanup loop."""
+        import asyncio
+
+        from karenina.adapters.registry import (
+            _active_adapters,
+            _adapter_portal_lock,
+            _adapter_portal_refs,
+            _adapters_lock,
+            register_adapter,
+        )
+
+        # Ensure the registry starts clean so stray adapters from prior tests
+        # do not pollute the portal tracking.
+        with _adapters_lock:
+            _active_adapters.clear()
+        with _adapter_portal_lock:
+            _adapter_portal_refs.clear()
+
+        main_thread_id = threading.get_ident()
+        aclose_thread_ids: list[int] = []
+        aclose_lock = threading.Lock()
+
+        class PortalAwareAdapter:
+            """Adapter whose aclose() records the thread id it ran on."""
+
+            async def aclose(self) -> None:
+                # Give the test a positive signal that we're actually on an
+                # asyncio loop, not just a synchronous call.
+                await asyncio.sleep(0)
+                with aclose_lock:
+                    aclose_thread_ids.append(threading.get_ident())
+
+        def mock_execute_task(task, answer_cache=None, **kwargs):
+            # Run inside the worker thread: register an adapter so the
+            # registry tracks it against this worker's portal.
+            register_adapter(PortalAwareAdapter())
+            return (f"key_{task['question_id']}", _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task(f"q{i}") for i in range(4)]
+        executor = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(max_workers=2, enable_cache=False),
+        )
+        results = executor.run_batch(tasks)
+        assert len(results) == 4
+
+        # Every registered adapter got aclose()'d exactly once, on a thread
+        # that is neither the main thread (which issued run_batch) nor a
+        # freshly-minted cleanup thread. It should match a worker portal's
+        # event-loop thread.
+        assert len(aclose_thread_ids) == 4
+        for tid in aclose_thread_ids:
+            assert tid != main_thread_id, (
+                "aclose ran on the main thread, which means it went through "
+                "the downstream cleanup_resources path rather than the "
+                "pre-teardown portal loop."
+            )
+
+        # Cleanup: remove any lingering entries so later tests see a clean map.
+        with _adapters_lock:
+            _active_adapters.clear()
+        with _adapter_portal_lock:
+            _adapter_portal_refs.clear()
+
+    def test_parallel_pre_teardown_aclose_is_timeout_bounded(self, monkeypatch: pytest.MonkeyPatch, caplog) -> None:
+        """A stuck aclose() must not wedge the finally block: the bounded
+        ``portal.start_task_soon`` + ``future.result(timeout=...)`` pattern
+        must time out and proceed with portal teardown."""
+        import asyncio
+        import logging
+        import time
+
+        from karenina.adapters.registry import (
+            _active_adapters,
+            _adapter_portal_lock,
+            _adapter_portal_refs,
+            _adapters_lock,
+            register_adapter,
+        )
+
+        with _adapters_lock:
+            _active_adapters.clear()
+        with _adapter_portal_lock:
+            _adapter_portal_refs.clear()
+
+        # Shorten the bound so the test does not wait 5s per stuck adapter.
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.executor.PRE_TEARDOWN_ACLOSE_TIMEOUT",
+            0.2,
+        )
+
+        class StuckAdapter:
+            async def aclose(self) -> None:
+                # Exceed the short timeout so the finally block must give up.
+                await asyncio.sleep(10.0)
+
+        def mock_execute_task(task, answer_cache=None, **kwargs):
+            register_adapter(StuckAdapter())
+            return (f"key_{task['question_id']}", _make_result(task["question_id"]))
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.batch_runner.execute_task",
+            mock_execute_task,
+        )
+
+        tasks = [_make_task(f"q{i}") for i in range(2)]
+        executor = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(max_workers=2, enable_cache=False),
+        )
+
+        caplog.set_level(logging.WARNING, logger="karenina.benchmark.verification.executor")
+        start = time.monotonic()
+        results = executor.run_batch(tasks)
+        elapsed = time.monotonic() - start
+
+        # Batch completed, not wedged. The bound is 0.2s per adapter times
+        # at most 2 portals; leave generous headroom for CI jitter.
+        assert len(results) == 2
+        assert elapsed < 5.0, (
+            f"Finally block took {elapsed:.2f}s; expected well under the "
+            f"5s default timeout. The per-adapter bound was monkey-patched "
+            f"to 0.2s, so the whole drain should finish in well under a "
+            f"second even with scheduling jitter."
+        )
+
+        # A warning mentioning the timeout was emitted.
+        timeout_warnings = [rec for rec in caplog.records if "Pre-teardown aclose timed out" in rec.getMessage()]
+        assert timeout_warnings, (
+            "Expected at least one 'Pre-teardown aclose timed out' warning; "
+            f"got records: {[rec.getMessage() for rec in caplog.records]}"
+        )
+
+        with _adapters_lock:
+            _active_adapters.clear()
+        with _adapter_portal_lock:
+            _adapter_portal_refs.clear()

@@ -82,3 +82,27 @@ def test_cleanup_clears_adapter_list():
 
     with _adapters_lock:
         assert len(_active_adapters) == 0
+
+
+def test_cleanup_resources_noop_after_pre_teardown_aclose():
+    """cleanup_resources() is safe to call after an adapter has already been
+    aclose()'d by the executor's pre-teardown path.
+
+    The parallel executor now closes httpx-owning adapters on the worker
+    portal's loop BEFORE tearing down the portal. The downstream
+    cleanup_resources() still iterates registered adapters and awaits their
+    aclose() again. This second call must be safe (httpx documents aclose
+    as idempotent; adapters that wrap it must not raise).
+    """
+    already_closed = FakeAdapter()
+    register_adapter(already_closed)
+
+    # Simulate the pre-teardown aclose having already run.
+    asyncio.run(already_closed.aclose())
+    already_closed.aclose.reset_mock()
+
+    # cleanup_resources() must not raise, and must still call aclose()
+    # exactly once. The adapter's aclose is expected to be idempotent.
+    cleanup_resources()
+
+    already_closed.aclose.assert_awaited_once()

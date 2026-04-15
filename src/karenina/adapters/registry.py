@@ -24,12 +24,15 @@ from __future__ import annotations
 
 import logging
 import threading
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from anyio.from_thread import BlockingPortal
+
     from karenina.ports import AgentPort, LLMPort, ParserPort
     from karenina.schemas.config import ModelConfig
 
@@ -48,6 +51,15 @@ _adapters_lock = threading.Lock()
 # Lock for thread-safe lazy initialization of the AdapterRegistry
 _registry_lock = threading.RLock()
 
+# Per-portal adapter tracking for loop-affine teardown. When an adapter is
+# created inside a worker thread that has an active BlockingPortal, we record
+# a (weakref, portal) pair here so the executor can call adapter.aclose() on
+# the portal's own event loop before the portal is torn down. This prevents
+# "Event loop is closed" errors from httpx.AsyncClient.aclose() running on a
+# different loop than the one that opened its transports.
+_adapter_portal_refs: list[tuple[weakref.ref[Any], BlockingPortal]] = []
+_adapter_portal_lock = threading.Lock()
+
 
 def register_adapter(adapter: Any) -> None:
     """Register an adapter instance for cleanup tracking.
@@ -60,6 +72,56 @@ def register_adapter(adapter: Any) -> None:
     """
     with _adapters_lock:
         _active_adapters.append(adapter)
+
+    # Record loop affinity when the creating thread has an active portal.
+    # Late import avoids a circular import with benchmark.verification.executor.
+    try:
+        from karenina.benchmark.verification.executor import get_async_portal
+    except ImportError:
+        return
+
+    portal = get_async_portal()
+    if portal is None:
+        return
+    with _adapter_portal_lock:
+        _adapter_portal_refs.append((weakref.ref(adapter), portal))
+
+
+def snapshot_adapters_for_portal(portal: BlockingPortal) -> list[Any]:
+    """Return live adapters registered while this portal was active.
+
+    The copy is taken under the portal-adapter lock, but the lock is released
+    before the caller invokes aclose. This prevents a stray register_adapter
+    call on another thread from deadlocking against a stuck portal aclose.
+
+    Args:
+        portal: The BlockingPortal to look up.
+
+    Returns:
+        List of adapter instances (may be empty) that are still alive.
+    """
+    result: list[Any] = []
+    with _adapter_portal_lock:
+        for adapter_ref, portal_ref in _adapter_portal_refs:
+            if portal_ref is portal:
+                adapter = adapter_ref()
+                if adapter is not None:
+                    result.append(adapter)
+    return result
+
+
+def clear_portal_adapter_refs(portal: BlockingPortal) -> None:
+    """Drop all tracked (adapter, portal) pairs for the given portal.
+
+    Call this after a portal has been torn down, or on a sequential-mode
+    finally, to prevent the module-global tracking list from leaking entries
+    across runs.
+
+    Args:
+        portal: The BlockingPortal whose entries should be removed.
+    """
+    with _adapter_portal_lock:
+        _adapter_portal_refs[:] = [pair for pair in _adapter_portal_refs if pair[1] is not portal]
 
 
 def unregister_adapter(adapter: Any) -> None:
