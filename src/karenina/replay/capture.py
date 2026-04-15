@@ -43,7 +43,8 @@ def capture_from_result_set(
         include_agent_traces: Whether to copy ``template.trace_messages``
             into the replay entry's ``trace_messages``.
         only_successful: If True, drop turns where
-            ``metadata.completed_without_errors`` is False.
+            ``metadata.failure`` is not None (i.e., the turn recorded a
+            non-null failure envelope).
         answering_model_ids: Optional allow-list of answering model
             display strings; turns whose answering model is not in the
             set are skipped.
@@ -98,7 +99,7 @@ def capture_from_result_set(
     for vr in results_iter:
         md = vr.metadata
 
-        if only_successful and not getattr(md, "completed_without_errors", True):
+        if only_successful and getattr(md, "failure", None) is not None:
             continue
 
         answering_display = _answering_display(md)

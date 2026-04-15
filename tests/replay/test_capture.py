@@ -29,7 +29,7 @@ def _build_fake_qa_result(
         scenario_id=scenario_id,
         scenario_node=scenario_node,
         scenario_turn=scenario_turn,
-        completed_without_errors=ok,
+        failure=None if ok else SimpleNamespace(reason="stub failure"),
         answering=SimpleNamespace(display_string=model_display),
         completed_at="2026-04-08T12:00:00Z",
     )
@@ -369,7 +369,7 @@ def _build_fake_qa_result_with_replicate(
         scenario_node=scenario_node,
         scenario_turn=scenario_turn,
         replicate=replicate,
-        completed_without_errors=ok,
+        failure=None if ok else SimpleNamespace(reason="stub failure"),
         answering=SimpleNamespace(display_string=model_display),
         completed_at="2026-04-08T12:00:00Z",
     )
