@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 
 _SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
 
+# Bound (seconds) on each adapter.aclose() call issued via the worker portal
+# before the portal is torn down. A stuck aclose must not wedge the finally
+# block. Mirrors the pattern in langchain/parser.py:297-312. Tests can
+# monkey-patch this to a shorter value to exercise the timeout branch.
+PRE_TEARDOWN_ACLOSE_TIMEOUT = 5.0
+
 # ============================================================================
 # Thread-Local Portal Storage
 # ============================================================================
@@ -235,6 +241,16 @@ class VerificationExecutor:
                     if progress_callback:
                         progress_callback(idx, total, result)
             finally:
+                # Drop per-portal adapter tracking so a sequential run does
+                # not leak entries into the module-global map across batches.
+                # The shared portal is about to be torn down by the enclosing
+                # `with` statement, and downstream cleanup_resources() will
+                # still close the adapters (on its own fresh loop). Sequential
+                # mode was never affected by the parallel teardown ordering
+                # bug, so there is no need to pre-close here.
+                from karenina.adapters.registry import clear_portal_adapter_refs
+
+                clear_portal_adapter_refs(portal)
                 set_async_portal(None)
 
         # Log cache statistics
@@ -293,7 +309,12 @@ class VerificationExecutor:
         # that is reused across all tasks on that thread. This preserves httpx
         # connection pools and avoids "Event loop is closed" errors from rapid
         # portal churn.
-        _portal_cms: list[Any] = []
+        #
+        # Each entry is (context_manager, portal). The portal reference is
+        # kept separately so the finally block can look up adapters tracked
+        # against that portal in the registry and call their aclose() on the
+        # portal's own event loop BEFORE the portal is torn down.
+        _portal_resources: list[tuple[Any, BlockingPortal]] = []
         _portal_init_lock = threading.Lock()
 
         def _ensure_worker_portal() -> None:
@@ -304,7 +325,7 @@ class VerificationExecutor:
             portal = cm.__enter__()
             set_async_portal(portal)
             with _portal_init_lock:
-                _portal_cms.append(cm)
+                _portal_resources.append((cm, portal))
 
         def execute_task_with_retry(idx: int, task: dict[str, Any]) -> tuple[int, tuple[str, VerificationResult]]:
             """Execute a single verification task with cache retry."""
@@ -453,10 +474,49 @@ class VerificationExecutor:
                     )
                     collected.add(future)
 
+            # Pre-teardown aclose: close adapter-owned httpx clients on the
+            # portal loop that opened them, BEFORE the portal is torn down.
+            # Without this, the downstream cleanup_resources() call in
+            # batch_runner runs on a fresh loop and httpx raises
+            # "Event loop is closed" because its transports are pinned to
+            # the dead portal loop. Bounded timeout mirrors the
+            # start_task_soon + future.result pattern in
+            # langchain/parser.py:297-312 to avoid wedging the finally
+            # block on a stuck aclose.
+            from karenina.adapters.registry import (
+                clear_portal_adapter_refs,
+                snapshot_adapters_for_portal,
+            )
+
+            for _cm, portal in _portal_resources:
+                for adapter in snapshot_adapters_for_portal(portal):
+                    if not hasattr(adapter, "aclose"):
+                        continue
+                    future = portal.start_task_soon(adapter.aclose)
+                    try:
+                        future.result(timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
+                    except TimeoutError:
+                        # Cancel the abandoned coroutine so the portal's loop
+                        # does not block the context manager's __exit__
+                        # waiting for it to finish.
+                        future.cancel()
+                        logger.warning(
+                            "Pre-teardown aclose timed out on %s (>%ss); proceeding with portal teardown",
+                            type(adapter).__name__,
+                            PRE_TEARDOWN_ACLOSE_TIMEOUT,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Pre-teardown aclose failed on %s: %s",
+                            type(adapter).__name__,
+                            exc,
+                        )
+                clear_portal_adapter_refs(portal)
+
             # Clean up worker portals (event loops) only after workers have
             # fully exited, so no worker can still be using a portal when
             # its context manager exits.
-            for cm in _portal_cms:
+            for cm, _portal in _portal_resources:
                 try:
                     cm.__exit__(None, None, None)
                 except Exception:
