@@ -3,17 +3,14 @@
 Builds the final VerificationResult from accumulated context.
 """
 
-# mypy: disable-error-code="call-arg"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata kwargs (completed_without_errors,
-# error, error_category, failed_stage) in its constructor calls. Tracked in
-# the 2026-04-15 failure-state-harmonization plan; expected removal by
-# consumer migration Tasks 7/9/10/11.
-
 import logging
 import shutil
 from typing import Any
 
+from karenina.benchmark.verification.failure_classifier import (
+    classify_failure,
+    collect_caveats,
+)
 from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
 from karenina.schemas.verification import VerificationResult
 
@@ -131,8 +128,14 @@ class FinalizeResultStage(BaseVerificationStage):
                     composition_strategy_str = self._format_strategy(strategy)
 
         # Determine which verification types were performed
-        # Template verification was performed if VerifyTemplateStage ran and set field_verification_result
+        # Template verification was performed if VerifyTemplateStage ran and set field_verification_result.
+        # This is the single derivation site for TEMPLATE_VERIFICATION_PERFORMED; the result field
+        # is written so the failure classifier (classify_failure) can read it via get_result_field.
         template_verification_performed = context.get_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT) is not None
+        context.set_result_field(
+            ArtifactKeys.TEMPLATE_VERIFICATION_PERFORMED,
+            template_verification_performed,
+        )
 
         # Rubric evaluation was performed if RubricEvaluationStage ran and set verify_rubric
         rubric_evaluation_performed = context.get_result_field(ArtifactKeys.VERIFY_RUBRIC) is not None
@@ -185,15 +188,16 @@ class FinalizeResultStage(BaseVerificationStage):
         # bypass the orchestrator).
         retry_counts = context.get_artifact(ArtifactKeys.RETRY_COUNTS)
 
-        # Create metadata subclass
+        # Create metadata subclass.
+        # Failure / caveat attribution is delegated to the central classifier
+        # so the pipeline has a single source of truth for how a finalized
+        # context maps to a Failure or list of Caveats.
         metadata = VerificationResultMetadata(
             question_id=context.question_id,
             template_id=context.template_id,
-            completed_without_errors=context.completed_without_errors,
-            error=context.error,
-            error_category=context.error_category.value if context.error_category else None,
+            failure=classify_failure(context),
+            caveats=collect_caveats(context),
             warnings=list(context.warnings),
-            failed_stage=context.get_result_field(ArtifactKeys.FAILED_STAGE),
             retry_counts=retry_counts,
             keywords=context.keywords,
             question_text=context.question_text,

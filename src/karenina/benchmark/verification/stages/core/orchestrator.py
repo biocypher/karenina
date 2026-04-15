@@ -71,6 +71,14 @@ class StageOrchestrator:
         """
         Initialize orchestrator with stage list.
 
+        The ``stages`` list is kept intact on ``self.stages`` so external
+        callers and tests can inspect the full configured pipeline (including
+        the trailing ``FinalizeResultStage``). Internally, ``execute`` runs
+        the non-finalize stages in its main try/except loop and then invokes
+        the finalize stage exactly once, unconditionally, so a raise in any
+        earlier stage (including stage 1) still produces a populated
+        ``VerificationResult``.
+
         Args:
             stages: Ordered list of stages to execute
         """
@@ -80,6 +88,20 @@ class StageOrchestrator:
         # Register all stages
         for stage in stages:
             self.registry.register(stage)
+
+        # Partition the stage list so finalize runs exactly once after the
+        # main loop, regardless of exceptions in earlier stages. We accept any
+        # trailing FinalizeResultStage; when absent we synthesize one below so
+        # tests that pass a minimal stage list still receive a finalized
+        # VerificationResult.
+        main_stages: StageList = list(stages)
+        if main_stages and isinstance(main_stages[-1], FinalizeResultStage):
+            popped = main_stages.pop()
+            assert isinstance(popped, FinalizeResultStage)  # noqa: S101 - narrow type for mypy
+            self._finalize_stage: FinalizeResultStage = popped
+        else:
+            self._finalize_stage = FinalizeResultStage()
+        self._main_stages: StageList = main_stages
 
     @classmethod
     def from_config(
@@ -236,8 +258,16 @@ class StageOrchestrator:
         """
         Execute the verification pipeline.
 
-        Runs each stage in sequence, respecting should_run() conditions
-        and handling errors gracefully.
+        Runs each non-finalize stage in sequence, respecting should_run()
+        conditions and catching any exceptions so that the final
+        ``FinalizeResultStage`` is invoked exactly once at the end of the
+        run. Exceptions raised by stage ``execute()`` implementations are
+        logged at ERROR level (with ``exc_info=True``), attributed to the
+        raising stage via ``context.mark_error(..., stage=stage.name)``, and
+        then swallowed so finalization can proceed. When the raising stage is
+        ``ValidateTemplateStage``, the raised exception message is also
+        mirrored into the ``TEMPLATE_VALIDATION_ERROR`` artifact so the
+        failure classifier can attribute the failure to template validation.
 
         Args:
             context: Verification context (modified in-place)
@@ -275,44 +305,57 @@ class StageOrchestrator:
             if context.answering_model is not None and context.answering_model.retry_policy is not None
             else RetryPolicy()
         )
+        execution_time = 0.0
         with track_retries(active_policy) as retry_counts:
             # Seed the artifact with the initial budgets (used=0) so even
             # stages running first observe the snapshot (e.g. when
             # FinalizeResultStage is the only stage in a minimal pipeline).
             context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
 
-            # Execute stages in order
-            for stage in self.stages:
+            # Execute main (non-finalize) stages in order. Exceptions are
+            # caught so the guaranteed finalize call below still runs.
+            for stage in self._main_stages:
                 # Record the originating stage so mark_error() can attribute
                 # failures even when callers omit the stage kwarg.
                 context.begin_stage(stage.name)
 
                 # Check if stage should run
                 if not stage.should_run(context):
-                    logger.debug(f"Skipping stage {stage.name} (should_run returned False)")
+                    logger.debug("Skipping stage %s (should_run returned False)", stage.name)
                     continue
 
                 # Execute stage
                 error_before = context.error
                 try:
-                    logger.debug(f"Executing stage: {stage.name}")
+                    logger.debug("Executing stage: %s", stage.name)
                     stage.execute(context)
 
                     # Log only if this stage introduced or changed the error
                     if context.error and context.error != error_before:
-                        logger.warning(f"Stage {stage.name} set error: {context.error}")
+                        logger.warning("Stage %s set error: %s", stage.name, context.error)
                         # Don't break - FinalizeResultStage needs to run
 
                 except Exception as e:
-                    # Stage execution failed - mark error and continue to finalize
+                    # Stage execution failed: log at ERROR, mark the error on
+                    # the context, and let the guaranteed finalize call below
+                    # produce a populated result.
                     error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
-                    logger.error(error_msg, exc_info=True)
+                    logger.error("Stage %s raised exception", stage.name, exc_info=True)
                     context.mark_error(
                         error_msg,
                         category=context.error_registry.classify(e),
                         stage=stage.name,
                     )
-                    # Continue to FinalizeResultStage even on error
+                    # Mirror the raised message into TEMPLATE_VALIDATION_ERROR
+                    # so classify_failure attributes the failure to template
+                    # validation (rule 5). ValidateTemplateStage catches its
+                    # own known-bad templates and sets this artifact itself;
+                    # this path handles the raise-from-inside-execute case.
+                    if isinstance(stage, ValidateTemplateStage):
+                        context.set_artifact(
+                            ArtifactKeys.TEMPLATE_VALIDATION_ERROR,
+                            str(e),
+                        )
 
                 # Update execution time after each stage so FinalizeResultStage
                 # has access to it
@@ -323,6 +366,20 @@ class StageOrchestrator:
                 # runs at the end of this loop) sees the budgets and counts
                 # as a plain nested dict copy, not a live reference.
                 context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
+
+            # Guaranteed finalize: runs exactly once regardless of whether any
+            # earlier stage raised. Kept inside the track_retries context so
+            # the snapshot visible to FinalizeResultStage reflects all retries
+            # observed during the run.
+            context.begin_stage(self._finalize_stage.name)
+            execution_time = time.time() - start_time
+            context.set_result_field(ArtifactKeys.EXECUTION_TIME, execution_time)
+            context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
+            try:
+                self._finalize_stage.execute(context)
+            except Exception:
+                logger.error("FinalizeResultStage raised exception", exc_info=True)
+                raise
 
         # Extract final result
         final_result = context.get_artifact(ArtifactKeys.FINAL_RESULT)
@@ -340,8 +397,10 @@ class StageOrchestrator:
             raise RuntimeError(error_msg)
 
         logger.info(
-            f"Verification pipeline complete for question {context.question_id} "
-            f"(execution_time: {execution_time:.2f}s, success: {context.completed_without_errors})"
+            "Verification pipeline complete for question %s (execution_time: %.2fs, success: %s)",
+            context.question_id,
+            execution_time,
+            context.completed_without_errors,
         )
 
         return final_result

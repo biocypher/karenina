@@ -4,13 +4,6 @@ This module provides helpers for task queue generation, rubric merging,
 few-shot resolution, and preview result creation.
 """
 
-# mypy: disable-error-code="call-arg"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata kwargs (completed_without_errors,
-# error, error_category, failed_stage) in its constructor calls. Tracked in
-# the 2026-04-15 failure-state-harmonization plan; expected removal by
-# consumer migration Tasks 7/9/10/11.
-
 import logging
 from typing import Any
 
@@ -229,11 +222,15 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
         timestamp="",  # Empty timestamp indicates "starting" event
         replicate=replicate,
     )
+    # Preview results represent "task starting" events; they have not yet run
+    # the verification pipeline, so no classified failure exists. Downstream
+    # consumers treat an empty timestamp as the preview sentinel.
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=task["question_id"],
             template_id="no_template",
-            completed_without_errors=False,
+            failure=None,
+            caveats=[],
             question_text=task["question_text"],
             answering=answering_identity,
             parsing=parsing_identity,
