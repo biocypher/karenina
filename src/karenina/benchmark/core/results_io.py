@@ -1,14 +1,5 @@
 """Results I/O manager for verification result export and import."""
 
-# mypy: disable-error-code="attr-defined, call-arg"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
-# error, error_category, failed_stage). Tracked in the 2026-04-15
-# failure-state-harmonization plan; expected removal by consumer migration
-# Tasks 7/9/10/11. The "call-arg" silence covers VerificationResultMetadata
-# constructor calls passing the removed legacy kwargs; those call sites are
-# also migrated by the consumer tasks.
-
 import csv
 import json
 import logging
@@ -19,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from karenina.schemas.entities import Rubric
 
+from karenina.schemas.results.caveat import Caveat
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
@@ -70,7 +63,13 @@ class ResultsIOManager:
             CSV string in frontend format
         """
         if not results:
-            return "row_index,question_id,question_text,success,error,execution_time,timestamp,embedding_check_performed,embedding_similarity_score,embedding_override_applied,embedding_model_used\n"
+            return (
+                "row_index,question_id,question_text,success,"
+                "failure_category,failure_group,failure_stage,failure_reason,failure_details_json,"
+                "caveats,execution_time,timestamp,"
+                "embedding_check_performed,embedding_similarity_score,embedding_override_applied,"
+                "embedding_model_used\n"
+            )
 
         # Extract all unique rubric trait names from results
         all_rubric_trait_names: set[str] = set()
@@ -113,7 +112,12 @@ class ResultsIOManager:
             "answering_system_prompt",
             "parsing_system_prompt",
             "success",
-            "error",
+            "failure_category",
+            "failure_group",
+            "failure_stage",
+            "failure_reason",
+            "failure_details_json",
+            "caveats",
             "execution_time",
             "timestamp",
             "run_name",
@@ -175,6 +179,13 @@ class ResultsIOManager:
             )
             rubric_summary = f"{passed_traits}/{len(traits)}"
 
+        failure = result.metadata.failure
+        success_value: str | bool
+        if result.template and result.template.abstention_detected and result.template.abstention_override_applied:
+            success_value = "abstained"
+        else:
+            success_value = failure is None
+
         return [
             index,  # row_index
             result.metadata.question_id,
@@ -208,14 +219,13 @@ class ResultsIOManager:
             result.metadata.replicate or "",
             result.metadata.answering_system_prompt or "",
             result.metadata.parsing_system_prompt or "",
-            (
-                "abstained"
-                if result.template
-                and result.template.abstention_detected
-                and result.template.abstention_override_applied
-                else result.metadata.completed_without_errors
-            ),
-            result.metadata.error or "",
+            success_value,
+            failure.category.value if failure else "",
+            failure.group.value if failure else "",
+            failure.stage if failure else "",
+            failure.reason if failure else "",
+            json.dumps(failure.details) if (failure and failure.details) else "",
+            ",".join(c.value for c in result.metadata.caveats),
             result.metadata.execution_time,
             result.metadata.timestamp,
             result.metadata.run_name or "",
@@ -472,13 +482,6 @@ class ResultsIOManager:
             except ValueError:
                 logger.debug("Could not parse execution_time '%s', defaulting to 0.0", row.get("execution_time"))
 
-        # Parse success/completed_without_errors
-        success_raw = row.get("success", "")
-        if success_raw:
-            completed = True if success_raw.lower() == "abstained" else success_raw.lower() in ("true", "1", "yes")
-        else:
-            completed = True
-
         # Parse replicate
         replicate: int | None = None
         if row.get("replicate"):
@@ -499,12 +502,28 @@ class ResultsIOManager:
             replicate=replicate,
         )
 
+        # Reconstruct failure + caveats from dedicated CSV columns.
+        failure: Failure | None = None
+        failure_category_raw = row.get("failure_category") or ""
+        if failure_category_raw:
+            details_raw = row.get("failure_details_json") or ""
+            details = json.loads(details_raw) if details_raw else None
+            failure = Failure(
+                category=FailureCategory(failure_category_raw),
+                stage=row.get("failure_stage") or "",
+                reason=row.get("failure_reason") or "",
+                details=details,
+            )
+
+        caveats_raw = row.get("caveats") or ""
+        caveats: list[Caveat] = [Caveat(c) for c in caveats_raw.split(",") if c]
+
         # Build metadata sub-object
         metadata = VerificationResultMetadata(
             question_id=question_id,
             template_id="no_template",
-            completed_without_errors=completed,
-            error=row.get("error") or None,
+            failure=failure,
+            caveats=caveats,
             question_text=row.get("question_text", ""),
             answering=answering,
             parsing=parsing,
