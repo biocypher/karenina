@@ -37,7 +37,7 @@ dependencies = [
     "mcp>=1.25.0,<2",  # MCP client for HTTP/SSE transport
     "langchain>=1.1.0",
     "langchain-openai>=0.3.25",
-    "langchain-core>=0.3.66",
+    "langchain-core>=1.2.28",
     "langchain-google-genai>=2.1.6",
     "langchain-anthropic>=0.3.15",
     "langgraph>=0.5.4",
@@ -51,14 +51,14 @@ dependencies = [
     "cloudpickle>=3.0.0", # For CallableTrait serialization
     "json-repair>=0.30.0", # For fixing malformed JSON in LLM responses
     "gepa>=0.0.24",
-    "litellm>=1.80.11",
+    "litellm>=1.83.0",
     "python-dateutil>=2.8.0",
     "claude-agent-sdk>=0.1.48",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
@@ -88,7 +88,7 @@ examples = [
 #     "karenina-server>=0.1.0",  # Webapp server with bundled GUI
 # ]
 embeddings = [
-    "sentence-transformers>=5.1.0",  # For embedding similarity checks
+    "sentence-transformers>=5.4.1",  # For embedding similarity checks
 ]
 gepa = [
     "gepa>=0.0.24",  # For GEPA prompt optimization integration
