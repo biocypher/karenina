@@ -37,7 +37,8 @@ def _make_metadata(
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="tmpl_abc",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text="What is 2+2?",
         answering=answering,
         parsing=parsing,

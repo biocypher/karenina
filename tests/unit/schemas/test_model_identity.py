@@ -301,7 +301,8 @@ class TestBackwardCompatProperties:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="t1",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="test",
             answering=answering or ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=parsing or ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),

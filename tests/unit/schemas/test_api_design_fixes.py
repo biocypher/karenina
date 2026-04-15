@@ -33,7 +33,8 @@ def _make_result(
     metadata = VerificationResultMetadata(
         question_id=question_id,
         template_id="tmpl_test",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text="Test question?",
         answering=_make_model_identity(model_name=answering_model),
         parsing=_make_model_identity(model_name=parsing_model),
