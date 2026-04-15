@@ -89,19 +89,15 @@ def create_minimal_result(context: VerificationContext) -> VerificationResult:
     return VerificationResult(metadata=metadata, template=template)
 
 
-class MockFinalizeStage(BaseVerificationStage):
-    """Mock FinalizeResultStage that produces valid VerificationResult."""
+class MockFinalizeStage(FinalizeResultStage):
+    """Mock FinalizeResultStage that produces a minimal VerificationResult.
+
+    Inherits from FinalizeResultStage so the orchestrator's isinstance
+    check accepts it as a genuine finalizer (issue 203 guard).
+    """
 
     def __init__(self):
         self.executed = False
-
-    @property
-    def name(self) -> str:
-        return "FinalizeResult"
-
-    @property
-    def produces(self) -> list[str]:
-        return ["final_result"]
 
     def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
         """Always run - this is the final stage (must not skip on errors)."""
@@ -698,8 +694,8 @@ class TestErrorHandling:
 
         assert finalizer.executed is True
 
-    def test_missing_final_result_raises(self, minimal_context: VerificationContext):
-        """Verify missing final_result artifact raises RuntimeError."""
+    def test_missing_final_result_raises(self, minimal_context: VerificationContext):  # noqa: ARG002
+        """Reject impostor stages that borrow the FinalizeResult name without inheriting."""
 
         class NoOutputFinalize(BaseVerificationStage):
             @property
@@ -714,10 +710,8 @@ class TestErrorHandling:
                 # Intentionally don't set final_result
                 pass
 
-        orchestrator = StageOrchestrator([NoOutputFinalize()])
-
-        with pytest.raises(RuntimeError, match="did not produce a final_result"):
-            orchestrator.execute(minimal_context)
+        with pytest.raises(ValueError, match="must inherit from FinalizeResultStage"):
+            StageOrchestrator([NoOutputFinalize()])
 
 
 # =============================================================================
@@ -735,15 +729,7 @@ class TestDependencyValidation:
         producer = MockProducerStage("Producer", "data", "value")
         consumer = MockConsumerStage("Consumer", "data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -758,15 +744,7 @@ class TestDependencyValidation:
         # Consumer requires 'missing_data' which no stage produces
         consumer = MockConsumerStage("Consumer", "missing_data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -781,15 +759,7 @@ class TestDependencyValidation:
         """Verify execute raises ValueError for invalid dependencies."""
         consumer = MockConsumerStage("Consumer", "missing_data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 

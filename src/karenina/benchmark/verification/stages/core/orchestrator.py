@@ -103,6 +103,21 @@ class StageOrchestrator:
                 f"found at index {finalize_positions[0]} of {len(stages)}"
             )
 
+        # Reject stages that claim the "FinalizeResult" name without inheriting
+        # from FinalizeResultStage. Such stages would be partitioned into
+        # _main_stages, silently coexisting with a synthesized trailing
+        # finalize and bypassing the final_result contract (issue 203).
+        impostors = [
+            index
+            for index, candidate in enumerate(stages)
+            if candidate.name == "FinalizeResult" and not isinstance(candidate, FinalizeResultStage)
+        ]
+        if impostors:
+            raise ValueError(
+                "Stages named 'FinalizeResult' must inherit from FinalizeResultStage; "
+                f"found non-FinalizeResultStage impostor(s) at index/indices {impostors}"
+            )
+
         self.stages = stages
         self.registry = StageRegistry()
 
