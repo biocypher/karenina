@@ -7,6 +7,15 @@ This module contains models for verification workflow:
 """
 
 # Re-export configuration and constants
+# Re-export result components
+from karenina.schemas.results.caveat import Caveat
+from karenina.schemas.results.failure import (
+    CATEGORY_TO_GROUP,
+    Failure,
+    FailureCategory,
+    FailureGroup,
+)
+
 from .api_models import (
     FinishedTemplate,
     VerificationRequest,
@@ -42,8 +51,6 @@ from .config_presets import (
 
 # Re-export job
 from .job import VerificationJob
-
-# Re-export result components
 from .model_identity import ModelIdentity
 from .prompt_config import PromptConfig
 
@@ -61,6 +68,7 @@ from .result_components import (
 
 __all__ = [
     # Constants
+    "CATEGORY_TO_GROUP",
     "DEFAULT_ANSWERING_SYSTEM_PROMPT",
     "DEFAULT_ASYNC_ENABLED",
     "DEFAULT_ASYNC_MAX_WORKERS",
@@ -86,6 +94,11 @@ __all__ = [
     "create_preset_structure",
     "save_preset",
     "load_preset",
+    # Failure taxonomy + caveats
+    "Caveat",
+    "Failure",
+    "FailureCategory",
+    "FailureGroup",
     # Model identity
     "ModelIdentity",
     # Result components

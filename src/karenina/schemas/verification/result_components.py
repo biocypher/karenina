@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from karenina.schemas.results.caveat import Caveat
+from karenina.schemas.results.failure import Failure
 
 from .model_identity import ModelIdentity
 
@@ -12,16 +15,16 @@ from .model_identity import ModelIdentity
 class VerificationResultMetadata(BaseModel):
     """Core metadata and identification fields for a verification result."""
 
+    model_config = ConfigDict(extra="forbid")
+
     question_id: str = Field(..., json_schema_extra={"index": True, "max_length": 32})
     template_id: str = Field(
         ..., json_schema_extra={"index": True, "max_length": 32}
     )  # MD5 of template or "no_template" (composite key component)
-    completed_without_errors: bool = Field(default=..., json_schema_extra={"index": True})
-    error: str | None = None
-    error_category: str | None = None
+    failure: Failure | None = Field(default=None, json_schema_extra={"index": True})
+    caveats: list[Caveat] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     partial_content: str | None = None
-    failed_stage: str | None = None  # Stage name of the first guard that caused an auto-fail
     retry_counts: dict[str, dict[str, int]] | None = Field(
         default=None,
         description=(

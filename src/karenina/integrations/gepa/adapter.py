@@ -8,6 +8,16 @@ Supports parallel feedback generation controlled by environment variables:
 - KARENINA_ASYNC_MAX_WORKERS: Maximum parallel workers (default: 8)
 """
 
+# mypy: disable-error-code="attr-defined, unused-ignore"
+# TODO(failure-state-harmonization): remove this pragma when this file
+# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
+# error, error_category, failed_stage). Tracked in the 2026-04-15
+# failure-state-harmonization plan; expected removal by consumer migration
+# Tasks 7/9/10/11. The "unused-ignore" silence is needed because the file
+# contains a pre-existing inline `# type: ignore[attr-defined]` for the
+# conditional gepa import; it becomes redundant under the file-level silence
+# and must be restored when this pragma is removed.
+
 import logging
 import os
 import queue

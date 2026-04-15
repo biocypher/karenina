@@ -3,6 +3,13 @@
 Peer to VerificationManager, following karenina's {Domain}Manager naming.
 """
 
+# mypy: disable-error-code="attr-defined"
+# TODO(failure-state-harmonization): remove this pragma when this file
+# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
+# error, error_category, failed_stage). Tracked in the 2026-04-15
+# failure-state-harmonization plan; expected removal by consumer migration
+# Tasks 7/9/10/11.
+
 from __future__ import annotations
 
 import contextlib

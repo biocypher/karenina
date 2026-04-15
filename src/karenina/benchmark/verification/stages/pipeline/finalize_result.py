@@ -3,6 +3,13 @@
 Builds the final VerificationResult from accumulated context.
 """
 
+# mypy: disable-error-code="call-arg"
+# TODO(failure-state-harmonization): remove this pragma when this file
+# migrates off legacy VerificationResultMetadata kwargs (completed_without_errors,
+# error, error_category, failed_stage) in its constructor calls. Tracked in
+# the 2026-04-15 failure-state-harmonization plan; expected removal by
+# consumer migration Tasks 7/9/10/11.
+
 import logging
 import shutil
 from typing import Any

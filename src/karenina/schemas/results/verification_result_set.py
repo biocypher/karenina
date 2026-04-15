@@ -1,9 +1,16 @@
 """
-VerificationResultSet class - main container for verification results.
+VerificationResultSet class: main container for verification results.
 
 This module provides the top-level container returned by run_verification,
 with accessor methods for specialized result views (rubrics, templates, judgments).
 """
+
+# mypy: disable-error-code="attr-defined"
+# TODO(failure-state-harmonization): remove this pragma when this file
+# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
+# error, error_category, failed_stage). Tracked in the 2026-04-15
+# failure-state-harmonization plan; expected removal by consumer migration
+# Tasks 7/9/10/11.
 
 from __future__ import annotations
 

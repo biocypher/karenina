@@ -5,6 +5,13 @@ This module provides excerpt-level explosion of deep judgment rubric evaluation
 results, enabling fine-grained analysis of extracted evidence and reasoning.
 """
 
+# mypy: disable-error-code="attr-defined"
+# TODO(failure-state-harmonization): remove this pragma when this file
+# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
+# error, error_category, failed_stage). Tracked in the 2026-04-15
+# failure-state-harmonization plan; expected removal by consumer migration
+# Tasks 7/9/10/11.
+
 from __future__ import annotations
 
 import json

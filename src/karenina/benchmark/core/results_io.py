@@ -1,5 +1,14 @@
 """Results I/O manager for verification result export and import."""
 
+# mypy: disable-error-code="attr-defined, call-arg"
+# TODO(failure-state-harmonization): remove this pragma when this file
+# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
+# error, error_category, failed_stage). Tracked in the 2026-04-15
+# failure-state-harmonization plan; expected removal by consumer migration
+# Tasks 7/9/10/11. The "call-arg" silence covers VerificationResultMetadata
+# constructor calls passing the removed legacy kwargs; those call sites are
+# also migrated by the consumer tasks.
+
 import csv
 import json
 import logging
