@@ -93,3 +93,11 @@ class TestClassifyFailure:
         assert f.category is FailureCategory.UNEXPECTED_ERROR
         assert f.details is not None
         assert f.details["error_message"] == "surprise"
+
+    def test_retry_counts_tolerates_none_values(self) -> None:
+        ctx = make_context(
+            error_category=ErrorCategory.TIMEOUT,
+            retry_counts={"timeout": {"used": None, "budget": 3}},
+        )
+        # Must not raise. Either None-used => not exhausted => falls through to catchall (no error set => None).
+        assert classify_failure(ctx) is None

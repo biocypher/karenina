@@ -14,7 +14,6 @@ through to a catchall so no verdict is ever silently dropped.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
 from karenina.schemas.results.failure import Failure, FailureCategory
@@ -46,14 +45,14 @@ def _retry_exhausted(ctx: VerificationContext) -> bool:
     Returns:
         True if ``used >= budget`` for the context's error category, else False.
     """
-    rc: dict[str, Any] = ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) or {}
+    rc: dict[str, dict[str, int]] = ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) or {}
     cat = ctx.error_category
     if cat is None:
         return False
     entry = rc.get(cat.value)
     if not entry:
         return False
-    return int(entry.get("used", 0)) >= int(entry.get("budget", 0))
+    return int(entry.get("used") or 0) >= int(entry.get("budget") or 0)
 
 
 def _trim(s: str | None) -> str:
