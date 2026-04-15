@@ -422,7 +422,8 @@ class TestPerQuestionRubricAgenticStamping:
                 metadata=VerificationResultMetadata(
                     question_id=context.question_id,
                     template_id=context.template_id,
-                    completed_without_errors=True,
+                    failure=None,
+                    caveats=[],
                     question_text=context.question_text,
                     answering=ans_id,
                     parsing=parse_id,
@@ -514,7 +515,8 @@ class TestPerQuestionRubricAgenticStamping:
                 metadata=VerificationResultMetadata(
                     question_id=context.question_id,
                     template_id=context.template_id,
-                    completed_without_errors=True,
+                    failure=None,
+                    caveats=[],
                     question_text=context.question_text,
                     answering=ans_id,
                     parsing=parse_id,
@@ -581,7 +583,8 @@ class TestPerQuestionRubricAgenticStamping:
                 metadata=VerificationResultMetadata(
                     question_id=context.question_id,
                     template_id=context.template_id,
-                    completed_without_errors=True,
+                    failure=None,
+                    caveats=[],
                     question_text=context.question_text,
                     answering=ans_id,
                     parsing=parse_id,
