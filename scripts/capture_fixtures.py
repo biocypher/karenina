@@ -24,6 +24,11 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from dotenv import find_dotenv, load_dotenv
+
+# Load credentials from .env (repo root) so live-capture runs have API keys.
+load_dotenv(find_dotenv())
+
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -1012,8 +1017,9 @@ def _run_claude_tool_trace_scenario(model: str, provider: str, output_dir: Path,
                 "raw_trace": raw_trace,
                 "verify_result": verify_result,
                 "result_metadata": {
-                    "completed_without_errors": result.metadata.completed_without_errors,
-                    "error": result.metadata.error,
+                    "success": result.metadata.failure is None,
+                    "failure": result.metadata.failure.model_dump() if result.metadata.failure else None,
+                    "caveats": [c.value for c in result.metadata.caveats],
                     "answering_model": result.metadata.answering_model,
                     "parsing_model": result.metadata.parsing_model,
                     "execution_time": result.metadata.execution_time,
