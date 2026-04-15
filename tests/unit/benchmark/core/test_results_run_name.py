@@ -38,7 +38,8 @@ def _make_minimal_result(question_id: str, run_name: str | None) -> dict:
             execution_time=0.1,
             timestamp=timestamp,
             result_id=result_id,
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
         ),
     )
     return result.model_dump(mode="json")

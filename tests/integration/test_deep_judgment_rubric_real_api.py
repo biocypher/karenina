@@ -38,14 +38,23 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
+    from karenina.schemas.results.failure import Failure, FailureCategory
+
     timestamp = datetime.now(UTC).isoformat()
     _answering = ModelIdentity(interface="langchain", model_name=answering_model)
     _parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5")
+    failure = None
+    if not completed:
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="unknown",
+            reason=error or "unexpected error",
+        )
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
-        completed_without_errors=completed,
-        error=error,
+        failure=failure,
+        caveats=[],
         question_text=f"Question text for {question_id}",
         raw_answer="Expected answer",
         answering=_answering,
