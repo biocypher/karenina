@@ -5,15 +5,6 @@ query, filter, summary, and export capabilities independent of the
 Benchmark facade.
 """
 
-# mypy: disable-error-code="attr-defined, misc"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
-# error, error_category, failed_stage). Tracked in the 2026-04-15
-# failure-state-harmonization plan; expected removal by consumer migration
-# Tasks 7/9/10/11. The "misc" silence covers Generator item-type inference
-# collapsing to Any once attr-defined is blanket-silenced; restored narrowly
-# when the consumer migration lands.
-
 import json
 import logging
 from datetime import UTC, datetime
@@ -256,7 +247,7 @@ class ResultsStore:
 
         all_results = [r for rs in runs.values() for r in rs.results]
         total = len(all_results)
-        completed = sum(1 for r in all_results if r.metadata.completed_without_errors)
+        completed = sum(1 for r in all_results if r.metadata.failure is None)
         failed = total - completed
         question_ids = {r.metadata.question_id for r in all_results}
 

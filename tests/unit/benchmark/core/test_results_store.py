@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from karenina.benchmark.core.results_store import ResultsStore
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.results.verification_result_set import VerificationResultSet
 from karenina.schemas.verification import (
     VerificationResult,
@@ -40,12 +41,16 @@ def _make_result(
         parsing=parsing,
         timestamp=timestamp,
     )
+    failure = (
+        None
+        if passed
+        else Failure(category=FailureCategory.UNEXPECTED_ERROR, stage="generate_answer", reason="Test error")
+    )
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=question_id,
             template_id="tpl_hash",
-            completed_without_errors=passed,
-            error=None if passed else "Test error",
+            failure=failure,
             question_text="Test question",
             answering=answering,
             parsing=parsing,
@@ -429,3 +434,30 @@ class TestResultsStoreSummary:
         exported = store.export()
 
         assert "scenario_outcomes" not in exported
+
+
+@pytest.mark.unit
+class TestResultsStoreFailureSummary:
+    """Tests for ResultsStore summary computed via Failure objects (no legacy fields)."""
+
+    def test_summary_counts_pass_when_failure_is_none(self) -> None:
+        """Store summary treats ``failure is None`` as a pass."""
+        store = ResultsStore()
+        rs = _make_result_set([_make_result("q1", passed=True), _make_result("q2", passed=True)])
+        store.add(rs, run_name="pass_run")
+
+        summary = store.get_summary()
+        assert summary["completed_count"] == 2
+        assert summary["failed_count"] == 0
+        assert summary["success_rate"] == 100.0
+
+    def test_summary_counts_fail_when_failure_is_present(self) -> None:
+        """Store summary treats presence of a ``Failure`` as a failure."""
+        store = ResultsStore()
+        rs = _make_result_set([_make_result("q1", passed=True), _make_result("q2", passed=False)])
+        store.add(rs, run_name="mixed_run")
+
+        summary = store.get_summary()
+        assert summary["completed_count"] == 1
+        assert summary["failed_count"] == 1
+        assert summary["success_rate"] == 50.0

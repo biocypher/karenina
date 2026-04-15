@@ -66,7 +66,7 @@ def _make_metadata(question_id: str = "test_q") -> VerificationResultMetadata:
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test_t",
-        completed_without_errors=True,
+        failure=None,
         question_text="test question",
         answering=ModelIdentity(interface="mock", model_name="mock"),
         parsing=ModelIdentity(interface="mock", model_name="mock"),
@@ -494,3 +494,68 @@ class Answer(BaseAnswer):
         unix = "class A:\n    pass\n"
         windows = "class A:\r\n    pass\r\n"
         assert generate_template_id(unix) == generate_template_id(windows)
+
+
+def _make_metadata_with_failure(question_id: str = "test_q") -> VerificationResultMetadata:
+    """Helper to create test metadata that carries a Failure object."""
+    from karenina.schemas.results.failure import Failure, FailureCategory
+
+    return VerificationResultMetadata(
+        question_id=question_id,
+        template_id="test_t",
+        failure=Failure(category=FailureCategory.TIMEOUT, stage="generate_answer", reason="timeout"),
+        question_text="test question",
+        answering=ModelIdentity(interface="mock", model_name="mock"),
+        parsing=ModelIdentity(interface="mock", model_name="mock"),
+        execution_time=0.1,
+        timestamp="2026-01-01T00:00:00",
+        result_id="abcd1234abcd1234",
+    )
+
+
+@pytest.mark.unit
+class TestStepEvalAggregationByFailure:
+    """StepEval aggregation filters replicates via ``metadata.failure is None``."""
+
+    def test_aggregate_excludes_failed_replicates(self):
+        """A replicate with a non-None Failure is excluded from aggregation."""
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            llm_trait_scores={"clarity": 4},
+        )
+        template = VerificationResultTemplate(
+            template_verification_performed=True,
+            verify_result=True,
+        )
+        passing = VerificationResult(metadata=_make_metadata("q1"), template=template, rubric=rubric)
+        failing = VerificationResult(
+            metadata=_make_metadata_with_failure("q1"),
+            template=VerificationResultTemplate(template_verification_performed=False),
+            rubric=None,
+        )
+
+        step = StepEval(verification_results={"q1": [passing, failing]})
+        aggregated = step.aggregate_rubric_results()
+
+        assert "q1" in aggregated
+        assert aggregated["q1"].get("failed_replicate_count") == 1
+        # clarity survived from the passing replicate
+        assert aggregated["q1"]["llm"]["clarity"] == 4
+
+    def test_aggregate_all_failed_returns_failed_count(self):
+        """If all replicates fail, aggregation returns only the failed count."""
+        failing_a = VerificationResult(
+            metadata=_make_metadata_with_failure("q2"),
+            template=VerificationResultTemplate(template_verification_performed=False),
+            rubric=None,
+        )
+        failing_b = VerificationResult(
+            metadata=_make_metadata_with_failure("q2"),
+            template=VerificationResultTemplate(template_verification_performed=False),
+            rubric=None,
+        )
+
+        step = StepEval(verification_results={"q2": [failing_a, failing_b]})
+        aggregated = step.aggregate_rubric_results()
+
+        assert aggregated["q2"] == {"failed_replicate_count": 2}
