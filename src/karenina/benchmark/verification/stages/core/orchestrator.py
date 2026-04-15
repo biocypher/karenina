@@ -283,6 +283,10 @@ class StageOrchestrator:
 
             # Execute stages in order
             for stage in self.stages:
+                # Record the originating stage so mark_error() can attribute
+                # failures even when callers omit the stage kwarg.
+                context.begin_stage(stage.name)
+
                 # Check if stage should run
                 if not stage.should_run(context):
                     logger.debug(f"Skipping stage {stage.name} (should_run returned False)")
@@ -303,7 +307,11 @@ class StageOrchestrator:
                     # Stage execution failed - mark error and continue to finalize
                     error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
                     logger.error(error_msg, exc_info=True)
-                    context.mark_error(error_msg, category=context.error_registry.classify(e))
+                    context.mark_error(
+                        error_msg,
+                        category=context.error_registry.classify(e),
+                        stage=stage.name,
+                    )
                     # Continue to FinalizeResultStage even on error
 
                 # Update execution time after each stage so FinalizeResultStage

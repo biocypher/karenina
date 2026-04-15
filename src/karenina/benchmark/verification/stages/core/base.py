@@ -398,6 +398,8 @@ class VerificationContext:
     error_registry: ErrorRegistry = field(default_factory=ErrorRegistry)
     error: str | None = None
     error_category: ErrorCategory | None = None
+    error_stage: str | None = None
+    last_run_stage: str | None = None
     completed_without_errors: bool = True
     warnings: list[str] = field(default_factory=list)
 
@@ -426,6 +428,7 @@ class VerificationContext:
         error_message: str,
         *,
         category: ErrorCategory = ErrorCategory.PERMANENT,
+        stage: str | None = None,
     ) -> None:
         """Mark the context as failed with an error message.
 
@@ -433,12 +436,31 @@ class VerificationContext:
             error_message: Human-readable error description.
             category: Classification of the error for retry decisions.
                 Defaults to PERMANENT (non-retryable).
+            stage: Optional identifier of the stage that originated the error.
+                When omitted, falls back to ``last_run_stage`` which the
+                orchestrator updates via ``begin_stage`` before each stage
+                executes. Used by the failure classifier to attribute a
+                failure to its source stage.
         """
         if self.error is not None:
             self.add_warning(f"Previous error overwritten: {self.error}")
         self.error = error_message
         self.error_category = category
+        self.error_stage = stage if stage is not None else self.last_run_stage
         self.completed_without_errors = False
+
+    def begin_stage(self, name: str) -> None:
+        """Record the stage currently about to execute.
+
+        The orchestrator calls this once per stage iteration, before invoking
+        ``should_run`` / ``execute``. ``mark_error`` subsequently uses
+        ``last_run_stage`` as a fallback attribution when callers don't pass
+        an explicit ``stage`` kwarg.
+
+        Args:
+            name: Identifier of the stage about to run.
+        """
+        self.last_run_stage = name
 
     def add_warning(self, message: str) -> None:
         """Add a non-fatal warning. Capped at 50 entries.
