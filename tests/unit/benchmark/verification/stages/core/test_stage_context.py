@@ -35,3 +35,13 @@ class TestStageContextErrorStage:
         assert ctx.last_run_stage == "validate_template"
         ctx.begin_stage("generate_answer")
         assert ctx.last_run_stage == "generate_answer"
+
+    def test_factory_routes_result_field_kwargs(self) -> None:
+        from karenina.benchmark.verification.stages.core.base import ArtifactKeys
+
+        ctx = make_context(
+            verify_result=True,
+            retry_counts={"timeout": {"used": 1, "budget": 3}},
+        )
+        assert ctx.get_result_field(ArtifactKeys.VERIFY_RESULT) is True
+        assert ctx.get_result_field(ArtifactKeys.RETRY_COUNTS) == {"timeout": {"used": 1, "budget": 3}}

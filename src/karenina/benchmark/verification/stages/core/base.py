@@ -93,6 +93,7 @@ class ArtifactKeys:
 
     # Core Verification
     VERIFY_RESULT = "verify_result"
+    TEMPLATE_VERIFICATION_PERFORMED = "template_verification_performed"
     VERIFY_GRANULAR_RESULT = "verify_granular_result"
     FIELD_VERIFICATION_RESULT = "field_verification_result"
     FIELD_VERIFICATION_ERROR = "field_verification_error"
