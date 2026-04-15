@@ -155,7 +155,7 @@ class TestTemplateResultsIntegration:
 
         # Check core columns exist
         core_columns = [
-            "completed_without_errors",
+            "success",
             "question_id",
             "answering_model",
             "parsing_model",
@@ -165,7 +165,7 @@ class TestTemplateResultsIntegration:
             assert col in df.columns, f"Missing core column: {col}"
 
         # Validate data types
-        assert df["completed_without_errors"].dtype == bool
+        assert df["success"].dtype == bool
 
     def test_aggregate_pass_rate_with_results(self, verification_results_list: list[VerificationResult]):
         """Test aggregate_pass_rate() with verification results."""
@@ -243,7 +243,7 @@ class TestRubricResultsIntegration:
 
         # Check core columns
         core_columns = [
-            "completed_without_errors",
+            "success",
             "question_id",
         ]
 
@@ -291,7 +291,7 @@ class TestJudgmentResultsIntegration:
 
         # Check core columns
         core_columns = [
-            "completed_without_errors",
+            "success",
             "question_id",
         ]
 

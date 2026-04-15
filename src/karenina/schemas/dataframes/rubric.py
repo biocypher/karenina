@@ -5,13 +5,6 @@ This module provides functionality to convert rubric evaluation results
 to pandas DataFrames for analysis.
 """
 
-# mypy: disable-error-code="attr-defined"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
-# error, error_category, failed_stage). Tracked in the 2026-04-15
-# failure-state-harmonization plan; expected removal by consumer migration
-# Tasks 7/9/10/11.
-
 from __future__ import annotations
 
 import json
@@ -19,6 +12,29 @@ from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from ..verification import VerificationResult, VerificationResultDeepJudgmentRubric
+    from ..verification.result_components import VerificationResultMetadata
+
+
+def _failure_columns(metadata: VerificationResultMetadata) -> dict[str, Any]:
+    """Return the unified ``success``/``failure_*``/``caveats`` columns.
+
+    Args:
+        metadata: The verification result metadata to translate.
+
+    Returns:
+        Mapping with six keys: ``success`` (bool), ``failure_category``,
+        ``failure_group``, ``failure_stage``, ``failure_reason`` (each a
+        ``str | None``), and ``caveats`` (comma-joined, possibly empty).
+    """
+    failure = metadata.failure
+    return {
+        "success": failure is None,
+        "failure_category": failure.category.value if failure else None,
+        "failure_group": failure.group.value if failure else None,
+        "failure_stage": failure.stage if failure else None,
+        "failure_reason": failure.reason if failure else None,
+        "caveats": ",".join(c.value for c in metadata.caveats),
+    }
 
 
 class RubricDataFrameBuilder:
@@ -70,7 +86,8 @@ class RubricDataFrameBuilder:
                 - "all": All trait types combined (default)
 
         Column ordering:
-            1. Status: completed_without_errors, error, failed_stage
+            1. Status: success, failure_category, failure_group, failure_stage,
+               failure_reason, caveats
             2. Identification: question_id, template_id, question_text, keywords, replicate,
                scenario_id, scenario_node, scenario_turn, scenario_path
             3. Model Config: answering_model, parsing_model, system_prompts
@@ -274,9 +291,12 @@ class RubricDataFrameBuilder:
         # Define desired column order
         desired_order = [
             # Status
-            "completed_without_errors",
-            "error",
-            "failed_stage",
+            "success",
+            "failure_category",
+            "failure_group",
+            "failure_stage",
+            "failure_reason",
+            "caveats",
             # Identification
             "question_id",
             "template_id",
@@ -354,9 +374,7 @@ class RubricDataFrameBuilder:
 
         row: dict[str, Any] = {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
@@ -410,9 +428,7 @@ class RubricDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
@@ -459,9 +475,7 @@ class RubricDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
@@ -527,9 +541,7 @@ class RubricDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,
@@ -588,9 +600,7 @@ class RubricDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             # === Identification Metadata ===
             "question_id": metadata.question_id,
             "template_id": metadata.template_id,

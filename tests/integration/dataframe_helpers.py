@@ -6,7 +6,7 @@ This module consolidates common code used across DataFrame integration tests:
 - test_dataframe_integration_rubrics.py
 
 It provides:
-- _create_metadata(): Helper to create VerificationResultMetadata objects
+- create_metadata(): Helper to create VerificationResultMetadata objects
 - CommonColumnTestMixin: Mixin class with shared DataFrame consistency tests
 - PandasOperationsTestMixin: Mixin class with shared pandas operations tests
 
@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 import pandas as pd
 
 from karenina.schemas.results import JudgmentResults, RubricResults, TemplateResults
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultMetadata,
@@ -41,8 +42,11 @@ def create_metadata(
     Args:
         question_id: Unique identifier for the question
         answering_model: Model used for answering (default: claude-haiku-4-5)
-        completed: Whether the verification completed without errors
-        error: Optional error message if verification failed
+        completed: Whether the verification completed without errors. When
+            False (or when ``error`` is provided), a synthetic ``Failure``
+            is attached under the ``UNEXPECTED_ERROR`` category.
+        error: Optional error reason. When provided, it becomes the
+            ``Failure.reason`` and implies ``completed=False``.
 
     Returns:
         VerificationResultMetadata instance with computed result_id
@@ -50,11 +54,18 @@ def create_metadata(
     timestamp = datetime.now(UTC).isoformat()
     _answering = ModelIdentity(interface="langchain", model_name=answering_model)
     _parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5")
+    failure: Failure | None = None
+    if not completed or error is not None:
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="generate_answer",
+            reason=error or "unspecified test failure",
+        )
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
-        completed_without_errors=completed,
-        error=error,
+        failure=failure,
+        caveats=[],
         question_text=f"Question text for {question_id}",
         raw_answer="Expected answer",
         answering=_answering,
@@ -94,7 +105,7 @@ class CommonColumnTestMixin:
         """Test that common columns are consistent across all DataFrame types."""
         # Common columns that should exist in all DataFrames
         common_columns = [
-            "completed_without_errors",
+            "success",
             "question_id",
             "answering_model",
         ]
@@ -128,21 +139,21 @@ class CommonColumnTestMixin:
         if self.test_template:
             template_results = TemplateResults(results=verification_results_list)
             template_df = template_results.to_dataframe()
-            assert template_df.columns[0] == "completed_without_errors"
+            assert template_df.columns[0] == "success"
 
         if self.test_rubric:
             has_rubric = any(r.rubric is not None for r in verification_results_list)
             if has_rubric:
                 rubric_results = RubricResults(results=verification_results_list)
                 rubric_df = rubric_results.to_dataframe(trait_type="all")
-                assert rubric_df.columns[0] == "completed_without_errors"
+                assert rubric_df.columns[0] == "success"
 
         if self.test_judgment:
             has_judgment = any(r.deep_judgment is not None for r in verification_results_list)
             if has_judgment:
                 judgment_results = JudgmentResults(results=verification_results_list)
                 judgment_df = judgment_results.to_dataframe()
-                assert judgment_df.columns[0] == "completed_without_errors"
+                assert judgment_df.columns[0] == "success"
 
 
 class PandasOperationsTestMixin:
@@ -175,7 +186,7 @@ class PandasOperationsTestMixin:
         df = self._get_test_dataframe(verification_results_list)
 
         # Filter to successful results only
-        successful = df[df["completed_without_errors"]]
+        successful = df[df["success"]]
         assert len(successful) >= 0  # May be 0 if all failed
 
         # Filter to specific question

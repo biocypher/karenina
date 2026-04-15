@@ -122,7 +122,7 @@ class TestJudgmentResultsDataFrame:
 
         # Check core columns
         core_columns = [
-            "completed_without_errors",
+            "success",
             "question_id",
             "answering_model",
         ]
