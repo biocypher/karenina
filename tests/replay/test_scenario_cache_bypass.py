@@ -77,10 +77,8 @@ def test_scenario_cache_reservation_skipped_on_replay_hit(monkeypatch):
                     "Md",
                     (),
                     {
-                        "completed_without_errors": True,
+                        "failure": None,
                         "result_id": "rid",
-                        "error": None,
-                        "error_category": None,
                     },
                 )(),
                 template=type("Tpl", (), {"verify_result": True})(),

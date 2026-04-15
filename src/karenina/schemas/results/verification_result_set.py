@@ -5,13 +5,6 @@ This module provides the top-level container returned by run_verification,
 with accessor methods for specialized result views (rubrics, templates, judgments).
 """
 
-# mypy: disable-error-code="attr-defined"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
-# error, error_category, failed_stage). Tracked in the 2026-04-15
-# failure-state-harmonization plan; expected removal by consumer migration
-# Tasks 7/9/10/11.
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
@@ -298,7 +291,7 @@ class VerificationResultSet(BaseModel):
             filtered = [r for r in filtered if r.metadata.replicate in replicates]
 
         if completed_only:
-            filtered = [r for r in filtered if r.metadata.completed_without_errors]
+            filtered = [r for r in filtered if r.metadata.failure is None]
 
         if has_template:
             filtered = [r for r in filtered if r.template is not None and r.template.template_verification_performed]
@@ -452,7 +445,7 @@ class VerificationResultSet(BaseModel):
         replicates: set[int] = set()
 
         for result in self.results:
-            if result.metadata.completed_without_errors:
+            if result.metadata.failure is None:
                 num_completed += 1
 
             if result.template and result.template.template_verification_performed:
@@ -735,7 +728,7 @@ class VerificationResultSet(BaseModel):
             combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
 
             combo_stats[combo_key]["total"] += 1
-            if result.metadata.completed_without_errors:
+            if result.metadata.failure is None:
                 combo_stats[combo_key]["completed"] += 1
 
         return {

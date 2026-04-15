@@ -3,13 +3,6 @@
 Peer to VerificationManager, following karenina's {Domain}Manager naming.
 """
 
-# mypy: disable-error-code="attr-defined"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
-# error, error_category, failed_stage). Tracked in the 2026-04-15
-# failure-state-harmonization plan; expected removal by consumer migration
-# Tasks 7/9/10/11.
-
 from __future__ import annotations
 
 import contextlib
@@ -291,13 +284,13 @@ class ScenarioManager:
                     node_results=dict(state.node_results),
                 )
 
-                if not vr.metadata.completed_without_errors:
+                if vr.metadata.failure is not None:
                     logger.error(
                         "Scenario %s: node '%s' failed with error: %s (category: %s)",
                         scenario.name,
                         state.current_node,
-                        vr.metadata.error,
-                        vr.metadata.error_category,
+                        vr.metadata.failure.reason,
+                        vr.metadata.failure.category.value,
                     )
 
                 # Complete cache entry after final attempt
@@ -378,7 +371,7 @@ class ScenarioManager:
                 state.parsed = parsed_fields
 
                 # Check for pipeline error
-                if not vr.metadata.completed_without_errors:
+                if vr.metadata.failure is not None:
                     self._report_progress(
                         progress_callback,
                         scenario.name,

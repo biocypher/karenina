@@ -5,13 +5,6 @@ This module provides excerpt-level explosion of deep judgment rubric evaluation
 results, enabling fine-grained analysis of extracted evidence and reasoning.
 """
 
-# mypy: disable-error-code="attr-defined"
-# TODO(failure-state-harmonization): remove this pragma when this file
-# migrates off legacy VerificationResultMetadata fields (completed_without_errors,
-# error, error_category, failed_stage). Tracked in the 2026-04-15
-# failure-state-harmonization plan; expected removal by consumer migration
-# Tasks 7/9/10/11.
-
 from __future__ import annotations
 
 import json
@@ -79,7 +72,7 @@ class RubricJudgmentResults(BaseModel):
         Traits without excerpts get a single row with excerpt fields set to None.
 
         Column Categories:
-            1. Status: completed_without_errors, error
+            1. Status: success, failure_category, failure_group, failure_stage, failure_reason, caveats
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Trait Identification: trait_name, trait_score, trait_type
@@ -157,10 +150,15 @@ class RubricJudgmentResults(BaseModel):
                     score_type = "llm_binary" if is_binary else "llm_score"
 
                     # Base row data (shared across all excerpts for this trait)
+                    failure = metadata.failure
                     base_row = {
                         # === Status ===
-                        "completed_without_errors": metadata.completed_without_errors,
-                        "error": metadata.error,
+                        "success": failure is None,
+                        "failure_category": failure.category.value if failure else None,
+                        "failure_group": failure.group.value if failure else None,
+                        "failure_stage": failure.stage if failure else None,
+                        "failure_reason": failure.reason if failure else None,
+                        "caveats": ",".join(c.value for c in metadata.caveats),
                         # === Identification Metadata ===
                         "question_id": metadata.question_id,
                         "template_id": metadata.template_id,

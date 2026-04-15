@@ -35,10 +35,8 @@ def test_scenario_manager_copies_replay_fields(monkeypatch):
                 "Md",
                 (),
                 {
-                    "completed_without_errors": True,
+                    "failure": None,
                     "result_id": "rid",
-                    "error": None,
-                    "error_category": None,
                 },
             )()
             template_stub = type("Tpl", (), {"verify_result": True})()
