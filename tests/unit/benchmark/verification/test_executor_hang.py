@@ -5,6 +5,7 @@ never hangs due to untracked worker deaths. Each test targets a specific
 failure mode that caused hangs with the previous raw-thread design.
 """
 
+import contextlib
 import threading
 
 import pytest
@@ -214,10 +215,21 @@ class TestVerificationPortalCreationFailure:
 
         from anyio.from_thread import start_blocking_portal as original_start_blocking_portal
 
+        # Barrier forces all 3 worker threads to reach portal creation before
+        # any one of them proceeds. Without this, a fast worker could handle
+        # every task alone before sibling workers spawn, so only one portal
+        # attempt ever happens and the expected second-attempt failure never
+        # fires. The barrier is released after the third arrival so downstream
+        # operations (portal teardown, retries) are not blocked.
+        portal_barrier = threading.Barrier(3, timeout=5.0)
+
         class FailingPortalTracker:
             """Wraps start_blocking_portal; the second call raises RuntimeError."""
 
             def __init__(self) -> None:
+                with contextlib.suppress(threading.BrokenBarrierError):
+                    portal_barrier.wait()
+
                 with portal_lock:
                     portal_call_count[0] += 1
                     self._should_fail = portal_call_count[0] == 2

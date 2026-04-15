@@ -9,6 +9,7 @@ Tests verify:
 - Per-task portal creation (each submitted task gets its own BlockingPortal)
 """
 
+import contextlib
 import threading
 
 import pytest
@@ -596,7 +597,18 @@ class TestPerWorkerPortals:
             mock_start_blocking_portal,
         )
 
+        # Barrier ensures both worker threads are actively running before any
+        # task completes. Without this, a fast single worker can drain the
+        # queue before the pool spawns its sibling, making the portal count
+        # flaky under CI load.
+        worker_barrier = threading.Barrier(2, timeout=5.0)
+        barrier_released = threading.Event()
+
         def mock_execute_task(task, answer_cache=None, **kwargs):
+            if not barrier_released.is_set():
+                with contextlib.suppress(threading.BrokenBarrierError):
+                    worker_barrier.wait()
+                    barrier_released.set()
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
         monkeypatch.setattr(
