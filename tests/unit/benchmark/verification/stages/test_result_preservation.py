@@ -65,7 +65,8 @@ def _make_metadata(**overrides) -> VerificationResultMetadata:
     defaults = {
         "question_id": "q1",
         "template_id": "t1",
-        "completed_without_errors": True,
+        "failure": None,
+        "caveats": [],
         "question_text": "Test?",
         "answering": ModelIdentity(interface="langchain", model_name="gpt-4"),
         "parsing": ModelIdentity(interface="langchain", model_name="gpt-4"),

@@ -270,7 +270,8 @@ class TestEvaluationLoop:
         metadata = VerificationResultMetadata(
             question_id="test_q",
             template_id="test_t",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="test question",
             answering=ModelIdentity(interface="mock", model_name="mock"),
             parsing=ModelIdentity(interface="mock", model_name="mock"),
@@ -562,7 +563,8 @@ class TestAgenticTraitPlumbing:
         metadata = VerificationResultMetadata(
             question_id="test_q",
             template_id="test_t",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="test question",
             answering=ModelIdentity(interface="mock", model_name="mock"),
             parsing=ModelIdentity(interface="mock", model_name="mock"),
@@ -716,7 +718,8 @@ class TestDynamicRubricPlumbing:
         metadata = VerificationResultMetadata(
             question_id="test_q",
             template_id="test_t",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="test question",
             answering=ModelIdentity(interface="mock", model_name="mock"),
             parsing=ModelIdentity(interface="mock", model_name="mock"),
