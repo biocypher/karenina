@@ -71,8 +71,8 @@ class TemplateResults(BaseModel):
         Each field in the parsed responses gets its own row with field-level matching.
 
         Column ordering:
-            1. Status: completed_without_errors, error, failed_stage,
-               recursion_limit_reached
+            1. Status: failure_category, failure_group, failure_stage,
+               failure_reason, caveats, recursion_limit_reached
             2. Identification: question_id, template_id, question_text, keywords,
                replicate, answering_mcp_servers
             3. Scenario: scenario_id, scenario_node, scenario_turn, scenario_path
@@ -103,7 +103,8 @@ class TemplateResults(BaseModel):
         Provides detailed information about pattern matches, extraction, and positions.
 
         Column ordering:
-            1. Status: completed_without_errors, error
+            1. Status: failure_category, failure_group, failure_stage,
+               failure_reason, caveats
             2. Identification: question_id, template_id, replicate
             3. Model Config: answering_model, parsing_model
             4. Regex Details: pattern_name, pattern_regex, matched, extracted_value, match positions
@@ -131,7 +132,8 @@ class TemplateResults(BaseModel):
         With totals_only=True, creates one row per verification with aggregated totals.
 
         Column ordering:
-            1. Status: completed_without_errors, error
+            1. Status: failure_category, failure_group, failure_stage,
+               failure_reason, caveats
             2. Identification: question_id, template_id, replicate
             3. Model Config: answering_model, parsing_model
             4. Usage Stage: usage_stage (excluded if totals_only=True)
