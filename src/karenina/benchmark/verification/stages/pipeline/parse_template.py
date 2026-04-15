@@ -8,6 +8,7 @@ from typing import Any
 
 from karenina.benchmark.verification.evaluators import TemplateEvaluator
 from karenina.benchmark.verification.utils.template_parsing_helpers import is_regex_only_template
+from karenina.replay.exceptions import ReplayHydrationError
 from karenina.schemas.entities.answer import BaseAnswer
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -173,6 +174,38 @@ class ParseTemplateStage(BaseVerificationStage):
             context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
             context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
             return
+
+        # --- Replay parse bypass ---
+        # Sits after the existing regex-only and trace-only fast paths so
+        # those keep priority. When a ReplayEntry has parsed_answer_fields
+        # we hydrate the current Answer class via model_validate. On a
+        # ValidationError the default fall_through policy logs and falls
+        # back to the live judge; the strict policy raises ReplayHydrationError.
+        entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
+        if entry is not None and getattr(entry, "parsed_answer_fields", None):
+            try:
+                parsed = Answer.model_validate(entry.parsed_answer_fields)
+            except Exception as validation_error:  # noqa: BLE001  # pydantic.ValidationError, ValueError, TypeError
+                policy = context.replay_parse_on_hydration_mismatch
+                if policy == "strict":
+                    raise ReplayHydrationError(
+                        "Replay parsed_answer_fields failed validation",
+                        captured_fields=entry.parsed_answer_fields,
+                        inner=validation_error,
+                    ) from validation_error
+                logger.warning(
+                    "Replay parsed_answer_fields failed validation; falling through to live parse",
+                    exc_info=True,
+                )
+            else:
+                logger.debug("Using injected parsed_answer_fields for template parsing")
+                context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed)
+                context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+                context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "replay (no LLM)")
+                context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+                context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
+                context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
+                return
 
         parsing_model = context.parsing_model
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)

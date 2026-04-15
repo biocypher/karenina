@@ -788,6 +788,29 @@ class Benchmark:
         which iterates over the scenario x model cross-product.
         For standalone question benchmarks, delegates to VerificationManager.
         """
+        # Auto-build replay store from legacy interface="manual" models.
+        # The benchmark is only reachable here (not from VerificationConfig
+        # validators), so this is the right layer for the translation.
+        # The resulting store is strict so existing manual semantics are
+        # preserved bit-identically.
+        if config.replay_store is None:
+            manual_model = next(
+                (m for m in config.answering_models if getattr(m, "interface", None) == "manual"),
+                None,
+            )
+            if manual_model is not None and getattr(manual_model, "manual_traces", None) is not None:
+                from karenina.replay import ReplayStore
+
+                config = config.model_copy(
+                    update={
+                        "replay_store": ReplayStore.from_manual_traces(
+                            manual_model.manual_traces,
+                            benchmark=self,
+                            miss_policy="strict",
+                        ),
+                    }
+                )
+
         if self.is_scenario_benchmark:
             return self._run_scenario_verification(
                 config=config,
@@ -825,7 +848,7 @@ class Benchmark:
         Returns:
             VerificationResultSet containing all per-turn results.
         """
-        from ..benchmark.verification.scenario_executor import ScenarioExecutor, ScenarioExecutorConfig
+        from ..benchmark.verification.scenario_executor import ScenarioCombo, ScenarioExecutor, ScenarioExecutorConfig
         from ..benchmark.verification.utils.task_helpers import stamp_agentic_trait_overrides
         from ..schemas.scenario.types import ModelOverride, ScenarioNode
 
@@ -901,22 +924,41 @@ class Benchmark:
                 return scenario_def
             return scenario_def.model_copy(update={"nodes": new_nodes})
 
-        combos = [
-            (_prepare_scenario(scenario_def), _prepare_model(ans_model), _prepare_model(parse_model))
+        def _replicate_values(count: int) -> list[int | None]:
+            """Expand the replicate axis for scenario combos.
+
+            Returns ``[None]`` for the default single-replicate case (preserves
+            today's metadata and cache-key shape) and ``1..N`` otherwise.
+            Mirrors the QA convention at ``batch_runner.py:117-119``.
+            """
+            return [None] if count == 1 else list(range(1, count + 1))
+
+        combos: list[ScenarioCombo] = [
+            (
+                _prepare_scenario(scenario_def),
+                _prepare_model(ans_model),
+                _prepare_model(parse_model),
+                replicate,
+            )
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models
+            for replicate in _replicate_values(config.replicate_count)
         ]
 
         # Apply task ordering to scenario combos
         from karenina.benchmark.verification.utils.task_helpers import model_sort_key
 
         if config.task_ordering == "prefix_cache":
+            # None-safe replicate sort key: None runs sort before integer
+            # replicates, integers sort numerically. Python 3 cannot compare
+            # int with None directly.
             combos.sort(
                 key=lambda c: (
                     model_sort_key(c[1]),  # answering_model
                     c[0].name,  # scenario name
                     model_sort_key(c[2]),  # parsing_model
+                    (0, 0) if c[3] is None else (1, c[3]),  # replicate tiebreaker
                 )
             )
         elif config.task_ordering == "random":

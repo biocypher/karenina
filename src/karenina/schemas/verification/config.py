@@ -280,6 +280,12 @@ class VerificationConfig(BaseModel):
     # Scenario execution settings
     scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
 
+    # Replay layer (see karenina/replay).
+    # replay_store is not serialized: it can hold large captured traces
+    # and Pydantic cannot natively serialize an arbitrary in-memory store.
+    replay_store: Any = Field(default=None, exclude=True)
+    replay_parse_on_hydration_mismatch: Literal["fall_through", "strict"] = "fall_through"
+
     @model_validator(mode="after")
     def _validate_custom_mode_has_config(self) -> "VerificationConfig":
         """Validate that custom mode has the required config.

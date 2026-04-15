@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
+    from karenina.replay import ReplayStore
     from karenina.schemas.entities.answer import BaseAnswer
     from karenina.schemas.verification import VerificationResult
 
@@ -63,3 +64,22 @@ class ScenarioExecutionResult:
     turn_results: list[VerificationResult]
     final_state: ScenarioState
     outcome_results: dict[str, bool | int | float]
+    # Run-level replicate index for multi-replicate scenario runs.
+    # None when the scenario was executed with replicate_count=1
+    # (matches the QA convention in batch_runner.py).
+    replicate: int | None = None
+
+    def to_replay_store(self, *, answering_model_id: str, **kwargs: Any) -> ReplayStore:
+        """Build a ReplayStore from this single scenario execution.
+
+        ``answering_model_id`` is required because this result does not
+        carry per-turn model identity. The ``replicate`` kwarg defaults
+        to ``self.replicate`` so callers do not need to re-supply it;
+        an explicit ``replicate=...`` argument still overrides the default.
+        See :py:func:`karenina.replay.capture.capture_from_scenario_result`
+        for additional keyword arguments.
+        """
+        from karenina.replay.capture import capture_from_scenario_result
+
+        kwargs.setdefault("replicate", self.replicate)
+        return capture_from_scenario_result(self, answering_model_id=answering_model_id, **kwargs)

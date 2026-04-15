@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "miss_policy": "fall_through",
+  "entries": [
+    {
+      "key": {
+        "answering_model_id": "gpt-5",
+        "question_id": "q-legacy-1",
+        "scenario_id": null,
+        "scenario_node": null,
+        "visit_index": null
+      },
+      "entry": {
+        "agent_metrics": null,
+        "captured_at": "2026-04-08T12:00:00Z",
+        "captured_model_id": "gpt-5",
+        "parsed_answer_fields": null,
+        "raw_trace": "legacy-trace",
+        "trace_messages": null
+      }
+    }
+  ]
+}

@@ -17,6 +17,8 @@ from karenina.benchmark.verification.utils.llm_invocation import _construct_few_
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 from karenina.ports import AgentConfig, AgentPort, LLMPort, Message, Role
+from karenina.replay.exceptions import ReplayMissError
+from karenina.replay.ports_message_hydration import hydrate_trace_messages
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.errors import ErrorCategory
 
@@ -24,6 +26,66 @@ from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def _try_replay_hit(context: VerificationContext) -> Any:
+    """Look up a ReplayEntry for the current turn.
+
+    Returns the ReplayEntry on hit, None on fall-through miss, and
+    raises ReplayMissError on strict miss. Uses getattr defaults so
+    unit tests with SimpleNamespace context fakes that pre-date the
+    replay fields still work without modification.
+    """
+    store = getattr(context, "replay_store", None)
+    if store is None:
+        return None
+
+    answering_display = ModelIdentity.from_model_config(context.answering_model, role="answering").display_string
+
+    return store.lookup(
+        question_id=context.question_id,
+        scenario_id=getattr(context, "scenario_id", None),
+        scenario_node=getattr(context, "scenario_node", None),
+        answering_model_id=answering_display,
+        visit_index=getattr(context, "scenario_node_visit_index", None),
+        replicate=getattr(context, "replicate", None),
+    )
+
+
+def _populate_artifacts_from_replay_entry(
+    context: VerificationContext,
+    entry: Any,
+) -> None:
+    """Populate GenerateAnswer output artifacts from a ReplayEntry.
+
+    Mirrors the artifact set a live GenerateAnswer would produce so
+    downstream stages see indistinguishable input. Fields that
+    FinalizeResultStage reads from result fields (raw_llm_response,
+    recursion_limit_reached) are written to both the artifact map and
+    the result field map; see issue 198.
+    """
+    answering_model_str = (
+        ModelIdentity.from_model_config(context.answering_model, role="answering").display_string + " (replay)"
+    )
+
+    context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, entry.raw_trace)
+    context.set_result_field(ArtifactKeys.RAW_LLM_RESPONSE, entry.raw_trace)
+
+    if entry.trace_messages:
+        try:
+            hydrated = hydrate_trace_messages(entry.trace_messages)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Replay trace_messages hydration failed: %s", e, exc_info=True)
+            hydrated = None
+        context.set_artifact(ArtifactKeys.TRACE_MESSAGES, hydrated)
+    else:
+        context.set_artifact(ArtifactKeys.TRACE_MESSAGES, None)
+
+    recursion_limit_reached = bool((entry.agent_metrics or {}).get("limit_reached", False))
+    context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, recursion_limit_reached)
+    context.set_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED, recursion_limit_reached)
+    context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
+    context.set_artifact(ArtifactKeys.REPLAY_ENTRY, entry)
 
 
 class GenerateAnswerStage(BaseVerificationStage):
@@ -165,6 +227,32 @@ class GenerateAnswerStage(BaseVerificationStage):
             - Sets context.artifacts["answering_mcp_servers"]
             - Sets context.error if LLM call fails fatally
         """
+        # --- Replay short-circuit ---
+        # Runs ahead of workspace resolution, cached_answer_data, and adapter
+        # selection. On a hit we populate the same artifacts a live run would
+        # and return early. On a fall-through miss we continue to the cache
+        # path. On a strict miss we mark_error and return.
+        try:
+            replay_entry = _try_replay_hit(context)
+        except ReplayMissError as exc:
+            logger.info("Replay miss: %s (strict)", exc)
+            context.mark_error(
+                f"Replay strict miss: {exc}",
+                category=ErrorCategory.PERMANENT,
+            )
+            return
+
+        if replay_entry is not None:
+            logger.info(
+                "Replay hit: scenario=%s node=%s model=%s visit=%s",
+                context.scenario_id,
+                context.scenario_node,
+                context.answering_model.id or context.answering_model.model_name,
+                context.scenario_node_visit_index,
+            )
+            _populate_artifacts_from_replay_entry(context, replay_entry)
+            return
+
         # Resolve workspace for agentic parsing (before any LLM calls)
         self._resolve_workspace(context)
 

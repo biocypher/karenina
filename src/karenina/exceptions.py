@@ -22,7 +22,12 @@ Exception hierarchy::
     │   └── McpConfigValidationError
     ├── StreamingTimeoutError        # LLM streaming timeout (also inherits TimeoutError)
     ├── VerificationBatchError       # Partial-failure batch verification errors
-    └── BenchmarkConversionError     # Benchmark conversion errors
+    ├── BenchmarkConversionError     # Benchmark conversion errors
+    └── ReplayError                  # Replay layer errors (see replay/exceptions.py)
+        ├── ReplayMissError
+        ├── ReplayHydrationError
+        ├── ReplayPersistenceError
+        └── ProjectionError
 
 Domain-specific modules (ports/errors.py, adapters/manual/exceptions.py, etc.)
 remain the canonical definition sites for their respective exceptions. This module
@@ -127,3 +132,14 @@ class VerificationBatchError(KareninaError):
         super().__init__(message)
         self.partial_results = partial_results
         self.errors = errors
+
+
+# Re-export replay layer exceptions for convenience. The canonical
+# definition lives in karenina.replay.exceptions.
+from karenina.replay.exceptions import (  # noqa: E402, F401
+    ProjectionError,
+    ReplayError,
+    ReplayHydrationError,
+    ReplayMissError,
+    ReplayPersistenceError,
+)
