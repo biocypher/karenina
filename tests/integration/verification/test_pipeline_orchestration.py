@@ -51,6 +51,8 @@ from karenina.schemas.verification.model_identity import ModelIdentity
 
 def create_minimal_result(context: VerificationContext) -> VerificationResult:
     """Create a minimal valid VerificationResult from context."""
+    from karenina.schemas.results.failure import Failure, FailureCategory
+
     _answering = ModelIdentity(interface="langchain", model_name="test/model")
     _parsing = ModelIdentity(interface="langchain", model_name="test/model")
     result_id = VerificationResultMetadata.compute_result_id(
@@ -60,11 +62,22 @@ def create_minimal_result(context: VerificationContext) -> VerificationResult:
         timestamp="2024-01-01 12:00:00",
     )
 
+    # Derive a Failure from legacy context state only when there is a real error.
+    # This mock does not invoke the classifier, but preserves the pass/fail signal
+    # that tests assert on (metadata.failure is None vs not None).
+    failure: Failure | None = None
+    if context.error is not None:
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage=context.error_stage or context.last_run_stage or "unknown",
+            reason=context.error,
+            details={"error_message": context.error},
+        )
     metadata = VerificationResultMetadata(
         question_id=context.question_id,
         template_id=context.template_id,
-        completed_without_errors=context.completed_without_errors,
-        error=context.error,
+        failure=failure,
+        caveats=[],
         question_text=context.question_text,
         answering=_answering,
         parsing=_parsing,
@@ -76,19 +89,15 @@ def create_minimal_result(context: VerificationContext) -> VerificationResult:
     return VerificationResult(metadata=metadata, template=template)
 
 
-class MockFinalizeStage(BaseVerificationStage):
-    """Mock FinalizeResultStage that produces valid VerificationResult."""
+class MockFinalizeStage(FinalizeResultStage):
+    """Mock FinalizeResultStage that produces a minimal VerificationResult.
+
+    Inherits from FinalizeResultStage so the orchestrator's isinstance
+    check accepts it as a genuine finalizer (issue 203 guard).
+    """
 
     def __init__(self):
         self.executed = False
-
-    @property
-    def name(self) -> str:
-        return "FinalizeResult"
-
-    @property
-    def produces(self) -> list[str]:
-        return ["final_result"]
 
     def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
         """Always run - this is the final stage (must not skip on errors)."""
@@ -662,7 +671,7 @@ class TestErrorHandling:
 
         assert minimal_context.completed_without_errors is False
         assert "Test error" in minimal_context.error
-        assert result.metadata.completed_without_errors is False
+        assert result.metadata.failure is not None
 
     def test_exception_caught_and_marked(self, minimal_context: VerificationContext):
         """Verify stage exception is caught and marked on context."""
@@ -673,7 +682,8 @@ class TestErrorHandling:
         assert minimal_context.completed_without_errors is False
         assert "RuntimeError" in minimal_context.error
         assert "Test exception" in minimal_context.error
-        assert result.metadata.error is not None
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.reason
 
     def test_finalize_always_runs_after_error(self, minimal_context: VerificationContext):
         """Verify FinalizeResultStage runs even after stage error."""
@@ -684,8 +694,8 @@ class TestErrorHandling:
 
         assert finalizer.executed is True
 
-    def test_missing_final_result_raises(self, minimal_context: VerificationContext):
-        """Verify missing final_result artifact raises RuntimeError."""
+    def test_missing_final_result_raises(self, minimal_context: VerificationContext):  # noqa: ARG002
+        """Reject impostor stages that borrow the FinalizeResult name without inheriting."""
 
         class NoOutputFinalize(BaseVerificationStage):
             @property
@@ -700,10 +710,8 @@ class TestErrorHandling:
                 # Intentionally don't set final_result
                 pass
 
-        orchestrator = StageOrchestrator([NoOutputFinalize()])
-
-        with pytest.raises(RuntimeError, match="did not produce a final_result"):
-            orchestrator.execute(minimal_context)
+        with pytest.raises(ValueError, match="must inherit from FinalizeResultStage"):
+            StageOrchestrator([NoOutputFinalize()])
 
 
 # =============================================================================
@@ -721,15 +729,7 @@ class TestDependencyValidation:
         producer = MockProducerStage("Producer", "data", "value")
         consumer = MockConsumerStage("Consumer", "data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -744,15 +744,7 @@ class TestDependencyValidation:
         # Consumer requires 'missing_data' which no stage produces
         consumer = MockConsumerStage("Consumer", "missing_data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -767,15 +759,7 @@ class TestDependencyValidation:
         """Verify execute raises ValueError for invalid dependencies."""
         consumer = MockConsumerStage("Consumer", "missing_data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -970,7 +954,7 @@ class TestPipelineResults:
 
         assert result.metadata.question_id == "test-question-1"
         assert result.metadata.template_id == "template-hash-123"
-        assert result.metadata.completed_without_errors is True
+        assert result.metadata.failure is None
 
     def test_result_captures_error(self, minimal_context: VerificationContext):
         """Verify result captures error state."""
@@ -982,8 +966,8 @@ class TestPipelineResults:
 
         result = minimal_context.get_artifact("final_result")
 
-        assert result.metadata.completed_without_errors is False
-        assert result.metadata.error == "Test pipeline error"
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.reason == "Test pipeline error"
 
     def test_result_includes_execution_time(self, minimal_context: VerificationContext):
         """Verify result includes execution time."""

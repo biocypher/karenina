@@ -95,6 +95,7 @@ async def convert_mcp_to_tools(
 
     from langchain_mcp_adapters.client import MultiServerMCPClient
 
-    client = MultiServerMCPClient(server_params)  # type: ignore[arg-type]
-    await exit_stack.enter_async_context(client)  # type: ignore[arg-type]
-    return await client.get_tools()
+    client = MultiServerMCPClient(server_params)
+    await exit_stack.enter_async_context(client)
+    tools: list[Any] = await client.get_tools()
+    return tools

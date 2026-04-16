@@ -46,6 +46,7 @@ from karenina.schemas.verification.result_components import (
     VerificationResultMetadata,
     VerificationResultTemplate,
 )
+from karenina.schemas.results.failure import Failure, FailureCategory
 
 # Create a small benchmark for documentation
 _benchmark = Benchmark.create(
@@ -89,8 +90,8 @@ def _make(qid, q_text, raw_ans, verified, error=False):
         metadata=VerificationResultMetadata(
             question_id=qid,
             template_id="tmpl_" + qid[:8],
-            completed_without_errors=not error,
-            error="Template class not found" if error else None,
+            failure=Failure(category=FailureCategory.UNEXPECTED_ERROR, stage="unknown", reason="Template class not found") if error else None,
+            caveats=[],
             question_text=q_text,
             raw_answer=raw_ans,
             answering=_answering,
@@ -370,8 +371,8 @@ When all questions succeed, `run_verification` returns normally. You can also in
 
 ```python
 for result in results:
-    if not result.metadata.completed_without_errors:
-        print(f"Error in {result.metadata.question_id}: {result.metadata.error}")
+    if result.metadata.failure is not None:
+        print(f"Error in {result.metadata.question_id}: {result.metadata.failure.reason if result.metadata.failure else None}")
 ```
 
 In parallel mode, `VerificationBatchError` is also raised if the batch exceeds the configured timeout (`ExecutorConfig.timeout_seconds`, default 600 seconds). The `partial_results` attribute contains whichever questions completed before the timeout.
@@ -387,7 +388,7 @@ In parallel mode, `VerificationBatchError` is also raised if the batch exceeds t
 | `AgentTimeoutError` | MCP agent exceeded time limit |
 | `McpError` | MCP server connection or tool failure |
 
-Use `results.completed_without_errors` to check overall run health.
+Use `metadata.failure` on each result to inspect run health: `failure` is `None` on success, or a structured `Failure` otherwise.
 
 ---
 

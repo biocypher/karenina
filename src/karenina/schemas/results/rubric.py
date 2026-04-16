@@ -95,7 +95,8 @@ class RubricResults(BaseModel):
                 - "all": All trait types combined (default)
 
         Column ordering:
-            1. Status: completed_without_errors, error
+            1. Status: failure_category, failure_group, failure_stage,
+               failure_reason, caveats
             2. Identification: question_id, template_id, question_text, keywords, replicate
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Rubric Data: trait_name, trait_score, trait_label, trait_type, evaluation_method, metric_name

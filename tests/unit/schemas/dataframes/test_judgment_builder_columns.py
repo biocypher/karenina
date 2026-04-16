@@ -7,6 +7,7 @@ and _create_empty_judgment_row, plus renaming self.results to self._results.
 import pytest
 
 from karenina.schemas.dataframes.judgment import JudgmentDataFrameBuilder
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultDeepJudgment,
@@ -62,7 +63,12 @@ def _make_result(
 ) -> VerificationResult:
     """Build a VerificationResult with optional metadata overrides."""
     metadata = create_metadata(question_id)
-    metadata.failed_stage = failed_stage
+    if failed_stage is not None:
+        metadata.failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage=failed_stage,
+            reason="test failure",
+        )
     metadata.scenario_id = scenario_id
     metadata.scenario_node = scenario_node
     metadata.scenario_turn = scenario_turn
@@ -98,8 +104,8 @@ class TestFailedStageColumn:
         )
         df = _build_df([result])
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "abstention_check"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "abstention_check"
 
     def test_judgment_row_failed_stage_none_when_not_set(self):
         """failed_stage is None when no stage failed."""
@@ -109,8 +115,8 @@ class TestFailedStageColumn:
         )
         df = _build_df([result])
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] is None
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] is None
 
     def test_empty_row_contains_failed_stage(self):
         """The empty row (no deep judgment) must also include failed_stage."""
@@ -120,8 +126,8 @@ class TestFailedStageColumn:
         )
         df = _build_df([result])
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "generate_answer"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "generate_answer"
 
 
 # =============================================================================

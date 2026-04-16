@@ -127,7 +127,7 @@ Auto-fails verification if the answering agent exceeded its maximum recursion (t
 
 1. Checks if `recursion_limit_reached` is True
 2. If true: sets `verify_result = False` and `field_verification_result = False`
-3. Does **not** set `completed_without_errors=False` — the trace and tokens are preserved for analysis
+3. Does **not** populate `metadata.failure`: the run remains a non-error auto-fail; the trace and tokens are preserved for analysis
 
 ### Result Fields
 
@@ -364,7 +364,7 @@ Runs the template's programmatic verification: compares parsed data against grou
 2. **Regex verification**: Calls `evaluator.verify_regex(parsed_answer, raw_llm_response)` which runs any regex traits defined on the template
 3. **Combination**: `verify_result = field_success AND regex_success`
 4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0). Skipped when `verify()` raised an exception (sets `verify_granular_result=None` to avoid contradictory signals). Granular scoring is composition-aware: AnyOf uses max passing field weight, AtLeastN uses top-N weights.
-5. **Error capture**: If `verify()` raises, the error string is stored in `field_verification_error` (non-fatal; `completed_without_errors` remains `True`)
+5. **Error capture**: If `verify()` raises, the error string is stored in `field_verification_error` (non-fatal; `metadata.failure` remains `None`)
 
 ### Result Fields
 
@@ -599,7 +599,7 @@ Constructs the final `VerificationResult` object from all accumulated context ar
 
 ### Error Behavior
 
-Always succeeds — handles both success and error cases. If previous stages failed, the result still contains whatever data was collected, with `completed_without_errors=False` and the error message.
+Always succeeds: handles both success and error cases. If previous stages failed, the result still contains whatever data was collected, with `metadata.failure` populated as a structured `Failure`.
 
 ### Configuration
 

@@ -76,7 +76,8 @@ class JudgmentResults(BaseModel):
         Attributes with no excerpts get one row with excerpt data as None.
 
         Column ordering:
-            1. Status: completed_without_errors, error, recursion_limit_reached
+            1. Status: failure_category, failure_group, failure_stage,
+               failure_reason, caveats, recursion_limit_reached
             2. Identification: question_id, template_id, question_text, keywords, replicate, answering_mcp_servers
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Response Data: raw_llm_response, parsed_gt_response, parsed_llm_response

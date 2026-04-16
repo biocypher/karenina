@@ -20,8 +20,14 @@ def _build_fake_qa_result(
     parsed: dict | None,
     model_display: str,
     ok: bool = True,
+    failure_category=None,
 ):
-    """Build a minimal object that quacks like a VerificationResult for capture."""
+    """Build a minimal object that quacks like a VerificationResult for capture.
+
+    When ``ok`` is False, ``failure_category`` is attached to the stubbed
+    failure namespace so tests can exercise category-sensitive logic.
+    Default is None (i.e. a generic non-CONTENT failure).
+    """
     from types import SimpleNamespace
 
     metadata = SimpleNamespace(
@@ -29,7 +35,7 @@ def _build_fake_qa_result(
         scenario_id=scenario_id,
         scenario_node=scenario_node,
         scenario_turn=scenario_turn,
-        completed_without_errors=ok,
+        failure=None if ok else SimpleNamespace(reason="stub failure", category=failure_category),
         answering=SimpleNamespace(display_string=model_display),
         completed_at="2026-04-08T12:00:00Z",
     )
@@ -133,7 +139,7 @@ class TestCaptureFromResultSet:
         assert hit1.raw_trace == "second"
         assert hit2.raw_trace == "third"
 
-    def test_only_successful_filters_failures(self):
+    def test_only_successful_filters_pipeline_failures(self):
         rs = _fake_result_set(
             results=[
                 _build_fake_qa_result(
@@ -161,6 +167,64 @@ class TestCaptureFromResultSet:
         store = capture_from_result_set(rs, only_successful=True)
         assert store.lookup(question_id="q1", answering_model_id="m") is not None
         assert store.lookup(question_id="q2", answering_model_id="m") is None
+
+    def test_only_successful_keeps_content_failures(self):
+        from karenina.schemas.results.failure import FailureCategory
+
+        rs = _fake_result_set(
+            results=[
+                _build_fake_qa_result(
+                    question_id="q_content",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    raw="wrong but complete",
+                    parsed={"answer": "wrong"},
+                    model_display="m",
+                    ok=False,
+                    failure_category=FailureCategory.CONTENT,
+                ),
+                _build_fake_qa_result(
+                    question_id="q_timeout",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    raw="",
+                    parsed=None,
+                    model_display="m",
+                    ok=False,
+                    failure_category=FailureCategory.TIMEOUT,
+                ),
+            ],
+        )
+        store = capture_from_result_set(rs, only_successful=True)
+        content_hit = store.lookup(question_id="q_content", answering_model_id="m")
+        timeout_hit = store.lookup(question_id="q_timeout", answering_model_id="m")
+        assert content_hit is not None
+        assert content_hit.raw_trace == "wrong but complete"
+        assert content_hit.parsed_answer_fields == {"answer": "wrong"}
+        assert timeout_hit is None
+
+    def test_only_successful_false_keeps_all_failures(self):
+        from karenina.schemas.results.failure import FailureCategory
+
+        rs = _fake_result_set(
+            results=[
+                _build_fake_qa_result(
+                    question_id="q_timeout",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    raw="partial",
+                    parsed=None,
+                    model_display="m",
+                    ok=False,
+                    failure_category=FailureCategory.TIMEOUT,
+                ),
+            ],
+        )
+        store = capture_from_result_set(rs, only_successful=False)
+        assert store.lookup(question_id="q_timeout", answering_model_id="m") is not None
 
     def test_answering_model_filter(self):
         rs = _fake_result_set(
@@ -369,7 +433,7 @@ def _build_fake_qa_result_with_replicate(
         scenario_node=scenario_node,
         scenario_turn=scenario_turn,
         replicate=replicate,
-        completed_without_errors=ok,
+        failure=None if ok else SimpleNamespace(reason="stub failure"),
         answering=SimpleNamespace(display_string=model_display),
         completed_at="2026-04-08T12:00:00Z",
     )

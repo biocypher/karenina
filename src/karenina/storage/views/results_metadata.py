@@ -1,8 +1,8 @@
 """results_metadata_view
 
-Execution metadata per result - tokens, timing, agent metrics, abstention, and
-status flags. One row per verification result. Use for performance analysis,
-debugging agent behavior, and filtering by execution characteristics.
+Execution metadata per result: tokens, timing, agent metrics, abstention, and
+failure taxonomy. One row per verification result. Use for performance
+analysis, debugging agent behavior, and filtering by failure mode.
 
 Columns:
     result_id (TEXT): Unique identifier for the verification result
@@ -22,7 +22,11 @@ Columns:
     abstention_reasoning (TEXT): Explanation text if abstention detected (NULL otherwise)
     embedding_check_performed (INTEGER): 1 if embedding check ran, 0 otherwise
     recursion_limit_reached (INTEGER): 1 if agent hit recursion limit, 0 otherwise
-    completed_without_errors (INTEGER): 1 if no errors during verification, 0 otherwise
+    metadata_failure_category (TEXT): Failure leaf category (e.g. 'content', 'timeout'); NULL on pass.
+    metadata_failure_group (TEXT): Failure group (e.g. 'content', 'autofail', 'retry'); NULL on pass.
+    metadata_failure_stage (TEXT): Pipeline stage that raised the failure; NULL on pass.
+    metadata_failure_reason (TEXT): Short human-readable reason; NULL on pass.
+    metadata_caveats (JSON): JSON array of pipeline caveats; always present, may be empty.
 
 Keys:
     Primary: result_id
@@ -64,7 +68,27 @@ _SQLITE_SQL = """
         vr.template_abstention_reasoning as abstention_reasoning,
         COALESCE(vr.template_embedding_check_performed, 0) as embedding_check_performed,
         COALESCE(vr.template_recursion_limit_reached, 0) as recursion_limit_reached,
-        vr.metadata_completed_without_errors as completed_without_errors
+        json_extract(vr.metadata_failure_category, '$') as metadata_failure_category,
+        CASE json_extract(vr.metadata_failure_category, '$')
+            WHEN 'content' THEN 'content'
+            WHEN 'recursion_limit' THEN 'autofail'
+            WHEN 'trace_validation' THEN 'autofail'
+            WHEN 'deep_judgment' THEN 'autofail'
+            WHEN 'deep_judgment_rubric' THEN 'autofail'
+            WHEN 'timeout' THEN 'retry'
+            WHEN 'connection' THEN 'retry'
+            WHEN 'rate_limit' THEN 'retry'
+            WHEN 'server_error' THEN 'retry'
+            WHEN 'abstention' THEN 'abstained'
+            WHEN 'sufficiency' THEN 'abstained'
+            WHEN 'template_validation' THEN 'system'
+            WHEN 'parsing' THEN 'system'
+            WHEN 'unexpected_error' THEN 'system'
+            ELSE NULL
+        END as metadata_failure_group,
+        vr.metadata_failure_stage as metadata_failure_stage,
+        vr.metadata_failure_reason as metadata_failure_reason,
+        vr.metadata_caveats as metadata_caveats
     FROM verification_results vr
 """
 
@@ -93,7 +117,27 @@ _POSTGRES_SQL = """
         vr.template_abstention_reasoning as abstention_reasoning,
         COALESCE(vr.template_embedding_check_performed::INTEGER, 0) as embedding_check_performed,
         COALESCE(vr.template_recursion_limit_reached::INTEGER, 0) as recursion_limit_reached,
-        vr.metadata_completed_without_errors as completed_without_errors
+        (vr.metadata_failure_category::jsonb #>> '{}') as metadata_failure_category,
+        CASE (vr.metadata_failure_category::jsonb #>> '{}')
+            WHEN 'content' THEN 'content'
+            WHEN 'recursion_limit' THEN 'autofail'
+            WHEN 'trace_validation' THEN 'autofail'
+            WHEN 'deep_judgment' THEN 'autofail'
+            WHEN 'deep_judgment_rubric' THEN 'autofail'
+            WHEN 'timeout' THEN 'retry'
+            WHEN 'connection' THEN 'retry'
+            WHEN 'rate_limit' THEN 'retry'
+            WHEN 'server_error' THEN 'retry'
+            WHEN 'abstention' THEN 'abstained'
+            WHEN 'sufficiency' THEN 'abstained'
+            WHEN 'template_validation' THEN 'system'
+            WHEN 'parsing' THEN 'system'
+            WHEN 'unexpected_error' THEN 'system'
+            ELSE NULL
+        END as metadata_failure_group,
+        vr.metadata_failure_stage as metadata_failure_stage,
+        vr.metadata_failure_reason as metadata_failure_reason,
+        vr.metadata_caveats as metadata_caveats
     FROM verification_results vr
 """
 

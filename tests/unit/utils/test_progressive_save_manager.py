@@ -65,7 +65,8 @@ def _make_result(question_id: str = "q1", replicate: int | None = 1) -> Verifica
     metadata = VerificationResultMetadata(
         question_id=question_id,
         template_id="tmpl_abc123",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text="What is 2+2?",
         answering=answering,
         parsing=parsing,

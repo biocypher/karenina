@@ -48,7 +48,8 @@ def _make_result(
     metadata = VerificationResultMetadata(
         question_id=question_id,
         template_id="no_template",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=question_text,
         answering=answering,
         parsing=parsing,
@@ -93,7 +94,7 @@ class TestCsvRoundTrip:
         # Core metadata fields
         assert loaded_result.metadata.question_id == "q1"
         assert loaded_result.metadata.question_text == "What is 2+2?"
-        assert loaded_result.metadata.completed_without_errors is True
+        assert loaded_result.metadata.failure is None
         assert loaded_result.metadata.execution_time == 1.5
         assert loaded_result.metadata.timestamp == "2026-01-01T00:00:00"
         assert loaded_result.metadata.run_name == "test_run"

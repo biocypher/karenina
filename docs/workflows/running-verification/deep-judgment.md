@@ -118,7 +118,7 @@ def _make(qid, q_text, raw_ans, dj):
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=qid, template_id="tmpl_" + qid[:8],
-            completed_without_errors=True, question_text=q_text,
+            failure=None, caveats=[], question_text=q_text,
             raw_answer=raw_ans, answering=_answering, parsing=_parsing,
             execution_time=4.5, timestamp=_ts, result_id=rid,
         ),
@@ -148,7 +148,7 @@ for i, (qid, (q, a)) in enumerate(zip(_qids[:3], _questions[:3])):
     _rubric_dj_results.append(VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=qid, template_id="tmpl_" + qid[:8],
-            completed_without_errors=True, question_text=q, raw_answer=a,
+            failure=None, caveats=[], question_text=q, raw_answer=a,
             answering=_answering, parsing=_parsing, execution_time=6.0,
             timestamp=_ts, result_id=rid,
         ),

@@ -7,6 +7,7 @@ and _create_empty_row, plus _compare_values both-None semantics.
 import pytest
 
 from karenina.schemas.dataframes.template import TemplateDataFrameBuilder
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultTemplate,
@@ -29,7 +30,12 @@ def _make_result(
 ) -> VerificationResult:
     """Build a VerificationResult with optional metadata overrides."""
     metadata = create_metadata(question_id)
-    metadata.failed_stage = failed_stage
+    if failed_stage is not None:
+        metadata.failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage=failed_stage,
+            reason="test failure",
+        )
     metadata.scenario_id = scenario_id
     metadata.scenario_node = scenario_node
     metadata.scenario_turn = scenario_turn
@@ -49,16 +55,16 @@ def _build_field_df(result: VerificationResult):
 
 
 # =============================================================================
-# Issue 147: failed_stage column
+# Issue 147: failure_stage column (post failure-state-harmonization)
 # =============================================================================
 
 
 @pytest.mark.unit
-class TestFailedStageColumn:
-    """Issue 147: _create_field_row and _create_empty_row must include failed_stage."""
+class TestFailureStageColumn:
+    """Issue 147 + failure-state-harmonization: row creators must expose failure_stage."""
 
-    def test_field_row_contains_failed_stage(self):
-        """The field DataFrame must contain a failed_stage column when template data exists."""
+    def test_field_row_contains_failure_stage(self):
+        """The field DataFrame must contain a failure_stage column when template data exists."""
         template = VerificationResultTemplate(
             raw_llm_response="test",
             parsed_gt_response={"answer": "Paris"},
@@ -68,11 +74,11 @@ class TestFailedStageColumn:
         result = _make_result(template=template, failed_stage="abstention_check")
         df = _build_field_df(result)
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "abstention_check"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "abstention_check"
 
-    def test_field_row_failed_stage_none_when_not_set(self):
-        """failed_stage is None when no stage failed."""
+    def test_field_row_failure_stage_none_when_not_set(self):
+        """failure_stage is None when no stage failed."""
         template = VerificationResultTemplate(
             raw_llm_response="test",
             parsed_gt_response={"answer": "Paris"},
@@ -82,16 +88,16 @@ class TestFailedStageColumn:
         result = _make_result(template=template, failed_stage=None)
         df = _build_field_df(result)
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] is None
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] is None
 
-    def test_empty_row_contains_failed_stage(self):
-        """The empty row (no template) must also include failed_stage."""
+    def test_empty_row_contains_failure_stage(self):
+        """The empty row (no template) must also include failure_stage."""
         result = _make_result(template=None, failed_stage="generate_answer")
         df = _build_field_df(result)
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "generate_answer"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "generate_answer"
 
 
 # =============================================================================

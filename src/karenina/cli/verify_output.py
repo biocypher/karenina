@@ -197,7 +197,7 @@ def display_summary(
     """
     total = len(final_results)
     passed = sum(1 for r in final_results if r.template and r.template.verify_result)
-    execution_errors = sum(1 for r in final_results if not r.metadata.completed_without_errors)
+    execution_errors = sum(1 for r in final_results if r.metadata.failure is not None)
     failures = total - passed
     not_passed = failures - execution_errors
 

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from karenina.replay.store import ReplayEntry, ReplayKey, ReplayStore
+from karenina.schemas.results.failure import FailureCategory
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,15 @@ def capture_from_result_set(
             into the replay entry's ``parsed_answer_fields``.
         include_agent_traces: Whether to copy ``template.trace_messages``
             into the replay entry's ``trace_messages``.
-        only_successful: If True, drop turns where
-            ``metadata.completed_without_errors`` is False.
+        only_successful: If True, drop turns whose pipeline did not
+            produce a verifiable output (retry exhaustion, autofail,
+            abstention/sufficiency, parsing/system errors). Turns with
+            a :class:`FailureCategory.CONTENT` failure (the pipeline
+            ran cleanly and the answer simply did not pass
+            ``verify()``) are retained, because the captured trace
+            and parsed fields faithfully describe what the model
+            produced. If False, every turn is captured regardless of
+            failure state.
         answering_model_ids: Optional allow-list of answering model
             display strings; turns whose answering model is not in the
             set are skipped.
@@ -98,8 +106,10 @@ def capture_from_result_set(
     for vr in results_iter:
         md = vr.metadata
 
-        if only_successful and not getattr(md, "completed_without_errors", True):
-            continue
+        if only_successful:
+            failure = getattr(md, "failure", None)
+            if failure is not None and getattr(failure, "category", None) != FailureCategory.CONTENT:
+                continue
 
         answering_display = _answering_display(md)
         if answering_model_ids is not None and answering_display not in answering_model_ids:

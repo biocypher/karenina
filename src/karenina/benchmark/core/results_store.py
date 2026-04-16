@@ -247,7 +247,7 @@ class ResultsStore:
 
         all_results = [r for rs in runs.values() for r in rs.results]
         total = len(all_results)
-        completed = sum(1 for r in all_results if r.metadata.completed_without_errors)
+        completed = sum(1 for r in all_results if r.metadata.failure is None)
         failed = total - completed
         question_ids = {r.metadata.question_id for r in all_results}
 

@@ -16,7 +16,8 @@ class TestScenarioMetadataFields:
         m = VerificationResultMetadata(
             question_id="q1",
             template_id="t1",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What?",
             answering=identity,
             parsing=identity,
@@ -37,7 +38,8 @@ class TestScenarioMetadataFields:
         m = VerificationResultMetadata(
             question_id="q1",
             template_id="t1",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What?",
             answering=identity,
             parsing=identity,
@@ -62,7 +64,8 @@ class TestScenarioMetadataFields:
         m = VerificationResultMetadata(
             question_id="q1",
             template_id="t1",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What?",
             answering=identity,
             parsing=identity,

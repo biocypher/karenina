@@ -1,5 +1,5 @@
 """
-VerificationResultSet class - main container for verification results.
+VerificationResultSet class: main container for verification results.
 
 This module provides the top-level container returned by run_verification,
 with accessor methods for specialized result views (rubrics, templates, judgments).
@@ -291,7 +291,7 @@ class VerificationResultSet(BaseModel):
             filtered = [r for r in filtered if r.metadata.replicate in replicates]
 
         if completed_only:
-            filtered = [r for r in filtered if r.metadata.completed_without_errors]
+            filtered = [r for r in filtered if r.metadata.failure is None]
 
         if has_template:
             filtered = [r for r in filtered if r.template is not None and r.template.template_verification_performed]
@@ -445,7 +445,7 @@ class VerificationResultSet(BaseModel):
         replicates: set[int] = set()
 
         for result in self.results:
-            if result.metadata.completed_without_errors:
+            if result.metadata.failure is None:
                 num_completed += 1
 
             if result.template and result.template.template_verification_performed:
@@ -728,7 +728,7 @@ class VerificationResultSet(BaseModel):
             combo_key = (result.metadata.answering_model, result.metadata.parsing_model, mcp_key)
 
             combo_stats[combo_key]["total"] += 1
-            if result.metadata.completed_without_errors:
+            if result.metadata.failure is None:
                 combo_stats[combo_key]["completed"] += 1
 
         return {

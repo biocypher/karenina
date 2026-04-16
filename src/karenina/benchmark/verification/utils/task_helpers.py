@@ -222,11 +222,15 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
         timestamp="",  # Empty timestamp indicates "starting" event
         replicate=replicate,
     )
+    # Preview results represent "task starting" events; they have not yet run
+    # the verification pipeline, so no classified failure exists. Downstream
+    # consumers treat an empty timestamp as the preview sentinel.
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=task["question_id"],
             template_id="no_template",
-            completed_without_errors=False,
+            failure=None,
+            caveats=[],
             question_text=task["question_text"],
             answering=answering_identity,
             parsing=parsing_identity,

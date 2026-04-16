@@ -29,7 +29,8 @@ def _make_result(
     metadata = VerificationResultMetadata(
         question_id=question_id,
         template_id="tmpl_abc",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=question_text,
         answering=answering,
         parsing=parsing,

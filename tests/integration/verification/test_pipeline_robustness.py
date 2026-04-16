@@ -481,8 +481,8 @@ class TestErrorPropagation:
 
         result = minimal_context.get_artifact("final_result")
         assert result is not None
-        assert result.metadata.completed_without_errors is False
-        assert result.metadata.error == "Something went wrong"
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.reason == "Something went wrong"
 
     def test_recursion_limit_preserves_trace(self, minimal_context: VerificationContext):
         """RecursionLimitAutoFail should fail verification but preserve trace."""
@@ -664,7 +664,7 @@ class TestPipelineIntegration:
             result = orchestrator.execute(minimal_context)
 
         assert result is not None
-        assert result.metadata.completed_without_errors is True
+        assert result.metadata.failure is None
         assert result.template is not None
 
     def test_pipeline_with_abstention_early_exit(self, minimal_context: VerificationContext):

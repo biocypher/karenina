@@ -59,7 +59,7 @@ def _make_result(qid, q_text, raw_ans):
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=qid, template_id="tmpl",
-            completed_without_errors=True, question_text=q_text,
+            failure=None, caveats=[], question_text=q_text,
             raw_answer=raw_ans, answering=_answering_id, parsing=_parsing_id,
             execution_time=0.3, timestamp=_ts, result_id=rid,
         ),

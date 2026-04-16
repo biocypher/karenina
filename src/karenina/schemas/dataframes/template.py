@@ -11,6 +11,31 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..verification import VerificationResult
+    from ..verification.result_components import VerificationResultMetadata
+
+
+def _failure_columns(metadata: VerificationResultMetadata) -> dict[str, Any]:
+    """Return the unified ``success``/``failure_*``/``caveats`` columns.
+
+    Args:
+        metadata: The verification result metadata to translate.
+
+    Returns:
+        Mapping with six keys: ``success`` (bool), ``failure_category``,
+        ``failure_group``, ``failure_stage``, ``failure_reason`` (each a
+        ``str | None``), and ``caveats`` (a comma-joined string, possibly
+        empty). Values are ``None`` on the failure-specific keys when the
+        result is a pass.
+    """
+    failure = metadata.failure
+    return {
+        "success": failure is None,
+        "failure_category": failure.category.value if failure else None,
+        "failure_group": failure.group.value if failure else None,
+        "failure_stage": failure.stage if failure else None,
+        "failure_reason": failure.reason if failure else None,
+        "caveats": ",".join(c.value for c in metadata.caveats),
+    }
 
 
 class TemplateDataFrameBuilder:
@@ -44,8 +69,8 @@ class TemplateDataFrameBuilder:
         Each field in the parsed responses gets its own row with field-level matching.
 
         Column ordering:
-            1. Status: completed_without_errors, error, failed_stage,
-               recursion_limit_reached
+            1. Status: success, failure_category, failure_group, failure_stage,
+               failure_reason, caveats, recursion_limit_reached
             2. Identification: question_id, template_id, question_text, keywords,
                replicate, answering_mcp_servers
             3. Scenario: scenario_id, scenario_node, scenario_turn, scenario_path
@@ -154,9 +179,7 @@ class TemplateDataFrameBuilder:
 
         row = {
             # === Status (FIRST COLUMN) ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             "recursion_limit_reached": template.recursion_limit_reached if template else False,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
@@ -222,9 +245,7 @@ class TemplateDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
-            "failed_stage": metadata.failed_stage,
+            **_failure_columns(metadata),
             "recursion_limit_reached": False,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
@@ -312,7 +333,8 @@ class TemplateDataFrameBuilder:
         Provides detailed information about pattern matches, extraction, and positions.
 
         Column ordering:
-            1. Status: completed_without_errors, error
+            1. Status: success, failure_category, failure_group, failure_stage,
+               failure_reason, caveats
             2. Identification: question_id, template_id, replicate
             3. Model Config: answering_model, parsing_model
             4. Regex Details: pattern_name, pattern_regex, matched, extracted_value, match positions
@@ -366,8 +388,7 @@ class TemplateDataFrameBuilder:
                 rows.append(
                     {
                         # === Status ===
-                        "completed_without_errors": metadata.completed_without_errors,
-                        "error": metadata.error,
+                        **_failure_columns(metadata),
                         # === Identification ===
                         "question_id": metadata.question_id,
                         "template_id": metadata.template_id,
@@ -401,7 +422,8 @@ class TemplateDataFrameBuilder:
         With totals_only=True, creates one row per verification with aggregated totals.
 
         Column ordering:
-            1. Status: completed_without_errors, error
+            1. Status: success, failure_category, failure_group, failure_stage,
+               failure_reason, caveats
             2. Identification: question_id, template_id, replicate
             3. Model Config: answering_model, parsing_model
             4. Usage Stage: usage_stage (excluded if totals_only=True)
@@ -476,8 +498,7 @@ class TemplateDataFrameBuilder:
                 rows.append(
                     {
                         # === Status ===
-                        "completed_without_errors": metadata.completed_without_errors,
-                        "error": metadata.error,
+                        **_failure_columns(metadata),
                         # === Identification ===
                         "question_id": metadata.question_id,
                         "template_id": metadata.template_id,

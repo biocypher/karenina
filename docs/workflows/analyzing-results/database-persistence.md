@@ -78,7 +78,7 @@ def _make_result(qid, verified, response):
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=qid, template_id="tmpl_mock",
-            completed_without_errors=True, question_text="mock",
+            failure=None, caveats=[], question_text="mock",
             answering=_answering, parsing=_parsing,
             execution_time=1.2, timestamp=_ts, result_id=rid,
         ),
@@ -251,7 +251,8 @@ mock_json_export = {
             "metadata": {
                 "question_id": _q1_id,
                 "template_id": "tmpl_import",
-                "completed_without_errors": True,
+                "failure": None,
+                "caveats": [],
                 "question_text": "What is the primary target of venetoclax?",
                 "answering": {"model_name": "claude-sonnet-4-20250514", "interface": "langchain"},
                 "parsing": {"model_name": "claude-haiku-4-5", "interface": "langchain"},

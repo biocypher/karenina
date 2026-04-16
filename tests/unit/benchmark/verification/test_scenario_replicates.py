@@ -218,7 +218,7 @@ class TestEndToEndReplicatePropagation:
         def fake_run_turn(self, **kwargs):
             observed_replicates.append(kwargs.get("replicate"))
             vr = MagicMock()
-            vr.metadata.completed_without_errors = True
+            vr.metadata.failure = None
             vr.metadata.replicate = kwargs.get("replicate")
             vr.metadata.result_id = f"rid_{len(observed_replicates)}"
             vr.template.verify_result = True
@@ -274,7 +274,7 @@ class TestEndToEndReplicatePropagation:
         def fake_execute(self, context):
             observed_contexts.append(context)
             vr = MagicMock()
-            vr.metadata.completed_without_errors = True
+            vr.metadata.failure = None
             vr.metadata.replicate = context.replicate
             vr.metadata.result_id = f"rid_{len(observed_contexts)}"
             vr.template.verify_result = True
@@ -380,7 +380,7 @@ class TestScenarioWorkspaceReplicateIsolation:
         def fake_run_turn(self, **kwargs):
             captured.append(kwargs.get("turn_workspace_path"))
             vr = MagicMock()
-            vr.metadata.completed_without_errors = True
+            vr.metadata.failure = None
             vr.metadata.replicate = kwargs.get("replicate")
             vr.metadata.result_id = f"rid_{len(captured)}"
             vr.template.verify_result = True

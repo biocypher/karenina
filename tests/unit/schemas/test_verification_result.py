@@ -6,11 +6,12 @@ Tests cover:
 - VerificationResultRubric fields and get_all_trait_scores()
 - VerificationResultDeepJudgment fields
 - VerificationResult construction
-- Pass/fail determination via completed_without_errors
+- Pass/fail determination via failure state
 """
 
 import pytest
 
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultDeepJudgment,
@@ -32,7 +33,8 @@ def test_metadata_construction() -> None:
     metadata = VerificationResultMetadata(
         question_id="q-123",
         template_id="t-456",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text="What is 2+2?",
         answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
         parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -43,8 +45,8 @@ def test_metadata_construction() -> None:
 
     assert metadata.question_id == "q-123"
     assert metadata.template_id == "t-456"
-    assert metadata.completed_without_errors is True
-    assert metadata.error is None
+    assert metadata.failure is None
+    assert metadata.caveats == []
     assert metadata.question_text == "What is 2+2?"
     assert metadata.answering_model == "langchain:gpt-4"
     assert metadata.parsing_model == "langchain:claude-haiku-4-5"
@@ -59,8 +61,12 @@ def test_metadata_with_error() -> None:
     metadata = VerificationResultMetadata(
         question_id="q-123",
         template_id="t-456",
-        completed_without_errors=False,
-        error="API timeout",
+        failure=Failure(
+            category=FailureCategory.TIMEOUT,
+            stage="generate_answer",
+            reason="API timeout",
+        ),
+        caveats=[],
         question_text="What is 2+2?",
         answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
         parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -69,8 +75,9 @@ def test_metadata_with_error() -> None:
         result_id="abc123",
     )
 
-    assert metadata.completed_without_errors is False
-    assert metadata.error == "API timeout"
+    assert metadata.failure is not None
+    assert metadata.failure.category is FailureCategory.TIMEOUT
+    assert metadata.failure.reason == "API timeout"
 
 
 @pytest.mark.unit
@@ -552,7 +559,8 @@ def test_verification_result_construction_minimal() -> None:
         metadata=VerificationResultMetadata(
             question_id="q-123",
             template_id="t-456",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What is 2+2?",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -581,7 +589,8 @@ def test_verification_result_with_all_components() -> None:
         metadata=VerificationResultMetadata(
             question_id="q-123",
             template_id="t-456",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What is 2+2?",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -622,7 +631,8 @@ def test_verification_result_with_trace_filtering() -> None:
         metadata=VerificationResultMetadata(
             question_id="q-123",
             template_id="t-456",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What is 2+2?",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -651,8 +661,12 @@ def test_verification_result_with_trace_extraction_error() -> None:
         metadata=VerificationResultMetadata(
             question_id="q-123",
             template_id="t-456",
-            completed_without_errors=False,
-            error="Could not extract final AI message",
+            failure=Failure(
+                category=FailureCategory.TRACE_VALIDATION,
+                stage="TraceValidationAutoFail",
+                reason="Could not extract final AI message",
+            ),
+            caveats=[],
             question_text="What is 2+2?",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -665,7 +679,7 @@ def test_verification_result_with_trace_extraction_error() -> None:
     )
 
     assert result.trace_extraction_error == "No AI message found at end of trace"
-    assert result.metadata.completed_without_errors is False
+    assert result.metadata.failure is not None
 
 
 # =============================================================================
@@ -675,12 +689,13 @@ def test_verification_result_with_trace_extraction_error() -> None:
 
 @pytest.mark.unit
 def test_pass_determination_completed_without_errors() -> None:
-    """Test pass determination via completed_without_errors=True."""
+    """Test pass determination via failure=None."""
     result = VerificationResult(
         metadata=VerificationResultMetadata(
             question_id="q-123",
             template_id="t-456",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="What is 2+2?",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -696,18 +711,22 @@ def test_pass_determination_completed_without_errors() -> None:
         ),
     )
 
-    assert result.metadata.completed_without_errors is True
+    assert result.metadata.failure is None
 
 
 @pytest.mark.unit
 def test_fail_determination_completed_with_errors() -> None:
-    """Test fail determination via completed_without_errors=False."""
+    """Test fail determination via populated failure field."""
     result = VerificationResult(
         metadata=VerificationResultMetadata(
             question_id="q-123",
             template_id="t-456",
-            completed_without_errors=False,
-            error="API timeout",
+            failure=Failure(
+                category=FailureCategory.TIMEOUT,
+                stage="generate_answer",
+                reason="API timeout",
+            ),
+            caveats=[],
             question_text="What is 2+2?",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="claude-haiku-4-5"),
@@ -721,7 +740,8 @@ def test_fail_determination_completed_with_errors() -> None:
         ),
     )
 
-    assert result.metadata.completed_without_errors is False
+    assert result.metadata.failure is not None
+    assert result.metadata.failure.category is FailureCategory.TIMEOUT
 
 
 # =============================================================================

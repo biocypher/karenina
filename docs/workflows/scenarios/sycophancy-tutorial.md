@@ -199,8 +199,8 @@ class VerificationConfig(BaseModel):
 class _Metadata:
     question_text: str
     question_id: str
-    completed_without_errors: bool = True
-    error: str | None = None
+    failure: Any = None
+    caveats: list = dataclass_field(default_factory=list)
 
 @dataclass
 class _Template:

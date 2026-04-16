@@ -169,7 +169,7 @@ All stages share a single mutable `VerificationContext` object. It holds:
 | **Configuration** | `answering_model`, `parsing_model`, `rubric`, feature flags | Set by the runner |
 | **Artifacts** | Stage outputs keyed by name: `raw_llm_response`, `parsed_answer`, `verify_result`, etc. | Grows as stages execute |
 | **Result builder** | Fields that will become the final `VerificationResult` | Accumulated by stages, consumed by `FinalizeResult` |
-| **Error state** | `error` (message or `None`), `completed_without_errors` (bool) | Set by `mark_error()` |
+| **Error state** | `failure` (structured `Failure` or `None`), `caveats` (list of informational flags) | Set by `mark_error()` |
 
 Artifacts are the primary mechanism for inter-stage communication. A stage writes an artifact; a later stage reads it. The dependency validation system ensures this contract is satisfied before execution begins.
 
@@ -364,13 +364,13 @@ The full matrix:
 
 The pipeline distinguishes three kinds of non-success:
 
-| Kind | Set by | Effect on remaining stages | `completed_without_errors` |
+| Kind | Set by | Effect on remaining stages | `metadata.failure` |
 |------|--------|---------------------------|:------------------------:|
-| **Auto-fail** | Guard stages (3, 4, 10, 12) | Sets `verify_result=False`; other stages continue normally | `True` |
-| **Override skip** | Pre-parse checks (5, 6) | Sets `verify_result=False`; downstream stages skip via `should_run()` conditions | `True` |
-| **Error** | Any stage setting `context.error` or raising an exception | All subsequent stages except `FinalizeResult` skip via `should_run()` | `False` |
+| **Auto-fail** | Guard stages (3, 4, 10, 12) | Sets `verify_result=False`; other stages continue normally | populated (group `autofail`) |
+| **Override skip** | Pre-parse checks (5, 6) | Sets `verify_result=False`; downstream stages skip via `should_run()` conditions | populated (group `abstained`) |
+| **Error** | Any stage setting `context.failure` or raising an exception | All subsequent stages except `FinalizeResult` skip via `should_run()` | populated (group varies) |
 
-The critical distinction: **auto-fails are expected outcomes** (the model behaved in a detectable bad way), while **errors are infrastructure failures** (a stage threw an exception or encountered an unrecoverable state). Both produce a valid `VerificationResult`; the `completed_without_errors` field tells you which case applies.
+The critical distinction: **auto-fails are expected outcomes** (the model behaved in a detectable bad way), while **errors are infrastructure failures** (a stage threw an exception or encountered an unrecoverable state). Both produce a valid `VerificationResult`; inspecting `metadata.failure.group` tells you which case applies (`autofail`, `content`, `abstained`, `retry`, or `system`).
 
 ### How `should_run()` Works
 

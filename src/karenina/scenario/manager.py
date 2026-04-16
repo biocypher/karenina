@@ -284,13 +284,13 @@ class ScenarioManager:
                     node_results=dict(state.node_results),
                 )
 
-                if not vr.metadata.completed_without_errors:
+                if vr.metadata.failure is not None:
                     logger.error(
                         "Scenario %s: node '%s' failed with error: %s (category: %s)",
                         scenario.name,
                         state.current_node,
-                        vr.metadata.error,
-                        vr.metadata.error_category,
+                        vr.metadata.failure.reason,
+                        vr.metadata.failure.category.value,
                     )
 
                 # Complete cache entry after final attempt
@@ -371,7 +371,7 @@ class ScenarioManager:
                 state.parsed = parsed_fields
 
                 # Check for pipeline error
-                if not vr.metadata.completed_without_errors:
+                if vr.metadata.failure is not None:
                     self._report_progress(
                         progress_callback,
                         scenario.name,

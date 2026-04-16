@@ -32,6 +32,7 @@ from karenina.cli.utils import (
     validate_output_path,
 )
 from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
@@ -54,11 +55,20 @@ def _make_template(question_id: str) -> FinishedTemplate:
 
 # Helper function to create minimal VerificationResult
 def _make_result(question_id: str, completed: bool = True) -> VerificationResult:
+    failure = (
+        None
+        if completed
+        else Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="generate_answer",
+            reason="test failure",
+        )
+    )
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=question_id,
             template_id="test-template",
-            completed_without_errors=completed,
+            failure=failure,
             question_text=f"Question {question_id}",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="gpt-4"),

@@ -14,6 +14,7 @@ import pytest
 
 from karenina.scenario.manager import ScenarioManager
 from karenina.schemas.config import ModelConfig
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.scenario.definition import ScenarioDefinition
 from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
 from karenina.schemas.verification import VerificationConfig, VerificationResult
@@ -33,19 +34,16 @@ def _make_model(name: str = "test-model") -> ModelConfig:
 
 def _make_vr(
     *,
-    completed: bool = True,
-    error_category: str | None = None,
-    error: str | None = None,
+    failure: Failure | None = None,
     verify_result: bool | None = True,
 ) -> VerificationResult:
-    """Create a minimal VerificationResult with controllable error state."""
+    """Create a minimal VerificationResult with controllable failure state."""
     identity = ModelIdentity(model_name="test", interface="openai")
     metadata = VerificationResultMetadata(
         question_id="q1",
         template_id="tpl1",
-        completed_without_errors=completed,
-        error=error,
-        error_category=error_category,
+        failure=failure,
+        caveats=[],
         question_text="What?",
         answering=identity,
         parsing=identity,
@@ -96,7 +94,7 @@ class TestScenarioManagerNoTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_successful_turn_calls_run_turn_once(self, mock_run_turn: MagicMock) -> None:
         """Successful turn: _run_turn called once, scenario completes."""
-        vr_ok = _make_vr(completed=True)
+        vr_ok = _make_vr(failure=None)
         mock_run_turn.return_value = (vr_ok, None, None, "answer")
 
         manager = ScenarioManager()
@@ -112,7 +110,12 @@ class TestScenarioManagerNoTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_transient_error_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
         """Transient error terminates the scenario; no retry attempted."""
-        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection error")
+        failure = Failure(
+            category=FailureCategory.CONNECTION,
+            stage="generate_answer",
+            reason="Connection error",
+        )
+        vr_fail = _make_vr(failure=failure)
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -128,7 +131,12 @@ class TestScenarioManagerNoTurnRetry:
     @patch.object(ScenarioManager, "_run_turn")
     def test_permanent_error_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
         """Permanent error terminates the scenario; no retry attempted."""
-        vr_fail = _make_vr(completed=False, error_category="permanent", error="ValueError: bad")
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="generate_answer",
+            reason="ValueError: bad",
+        )
+        vr_fail = _make_vr(failure=failure)
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -142,9 +150,14 @@ class TestScenarioManagerNoTurnRetry:
         assert mock_run_turn.call_count == 1
 
     @patch.object(ScenarioManager, "_run_turn")
-    def test_error_with_no_category_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
-        """Error with no category terminates the scenario; no retry attempted."""
-        vr_fail = _make_vr(completed=False, error_category=None, error="Unknown error")
+    def test_error_with_catchall_category_terminates_immediately(self, mock_run_turn: MagicMock) -> None:
+        """Error classified as UNEXPECTED_ERROR terminates the scenario."""
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="unknown",
+            reason="Unknown error",
+        )
+        vr_fail = _make_vr(failure=failure)
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()
@@ -159,8 +172,13 @@ class TestScenarioManagerNoTurnRetry:
 
     @patch.object(ScenarioManager, "_run_turn")
     def test_failure_logs_error_with_details(self, mock_run_turn: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
-        """Turn failure logs error with scenario name, node, error, and category."""
-        vr_fail = _make_vr(completed=False, error_category="connection", error="Connection refused")
+        """Turn failure logs error with scenario name, node, reason, and category."""
+        failure = Failure(
+            category=FailureCategory.CONNECTION,
+            stage="generate_answer",
+            reason="Connection refused",
+        )
+        vr_fail = _make_vr(failure=failure)
         mock_run_turn.return_value = (vr_fail, None, None, "")
 
         manager = ScenarioManager()

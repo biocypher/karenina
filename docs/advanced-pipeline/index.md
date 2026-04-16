@@ -98,7 +98,7 @@ The `StageOrchestrator` executes stages sequentially:
 
 ### Error Containment
 
-Errors are contained per-question. If one question's pipeline fails, other questions continue independently. The `FinalizeResult` stage always executes, ensuring every question produces a `VerificationResult` — even if it records `completed_without_errors=False`.
+Errors are contained per-question. If one question's pipeline fails, other questions continue independently. The `FinalizeResult` stage always executes, ensuring every question produces a `VerificationResult`, even if it records a non-`None` `metadata.failure`.
 
 ### Conditional Execution
 

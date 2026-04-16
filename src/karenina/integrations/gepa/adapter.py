@@ -275,7 +275,7 @@ class KareninaAdapter(GEPAAdapter):  # type: ignore[type-arg]
                             optimized_components=candidate,
                             verification_result=result,
                             raw_llm_response=(result.template.raw_llm_response if result.template else None),
-                            parsing_error=result.metadata.error,
+                            parsing_error=(result.metadata.failure.reason if result.metadata.failure else None),
                             failed_fields=extract_failed_fields(result),
                             rubric_scores=self._extract_rubric_scores(result),
                         )

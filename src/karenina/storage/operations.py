@@ -430,8 +430,8 @@ def save_verification_results(
                 config=config or {},
                 total_questions=len({r.metadata.question_id for r in results.values()}),
                 processed_count=len(results),
-                successful_count=sum(1 for r in results.values() if r.metadata.completed_without_errors),
-                failed_count=sum(1 for r in results.values() if not r.metadata.completed_without_errors),
+                successful_count=sum(1 for r in results.values() if r.metadata.failure is None),
+                failed_count=sum(1 for r in results.values() if r.metadata.failure is not None),
                 start_time=None,  # These would come from config
                 end_time=None,
             )
@@ -441,8 +441,8 @@ def save_verification_results(
         else:
             # Update existing run
             existing_run.processed_count = len(results)
-            existing_run.successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
-            existing_run.failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
+            existing_run.successful_count = sum(1 for r in results.values() if r.metadata.failure is None)
+            existing_run.failed_count = sum(1 for r in results.values() if r.metadata.failure is not None)
             # Commit the updated run
             session.commit()
 
@@ -744,7 +744,7 @@ def import_verification_results(
                 session.add(result_model)
 
                 imported_count += 1
-                if result.metadata.completed_without_errors:
+                if result.metadata.failure is None:
                     successful_count += 1
                 else:
                     failed_count += 1

@@ -65,7 +65,8 @@ def _make_result(
         metadata=VerificationResultMetadata(
             question_id=qid,
             template_id="tmpl_" + qid[:8],
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text=question_text,
             answering=answering,
             parsing=_parsing,

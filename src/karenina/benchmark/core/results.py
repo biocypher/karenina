@@ -203,8 +203,8 @@ class ResultsManager:
                 "model_combinations": 0,
             }
 
-        successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
-        failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
+        successful_count = sum(1 for r in results.values() if r.metadata.failure is None)
+        failed_count = sum(1 for r in results.values() if r.metadata.failure is not None)
         unique_questions = len({r.metadata.question_id for r in results.values()})
         total_execution_time = sum(r.metadata.execution_time for r in results.values() if r.metadata.execution_time)
         total_result_count = len(results)

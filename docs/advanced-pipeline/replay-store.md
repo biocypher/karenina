@@ -278,7 +278,7 @@ hand = capture_from_result_set(result_set, include_parsed=True, only_successful=
 len(captured.entries), len(hand.entries)
 ```
 
-The `capture_from_result_set` function takes several filters: `include_parsed` controls whether the parsed Pydantic instance is captured, `include_agent_traces` controls whether the structured trace messages are captured, `only_successful` drops failed turns, and `answering_model_ids` / `scenario_ids` are allow-lists by canonical model display string and scenario id respectively. The scenario filter only applies to scenario turns, so QA turns pass through unaffected when the filter is set.
+The `capture_from_result_set` function takes several filters: `include_parsed` controls whether the parsed Pydantic instance is captured, `include_agent_traces` controls whether the structured trace messages are captured, `only_successful` drops turns whose pipeline did not produce a verifiable output (retry exhaustion, autofail, abstention, parsing or system errors), and `answering_model_ids` / `scenario_ids` are allow-lists by canonical model display string and scenario id respectively. Content failures (pipeline ran cleanly, answer did not pass `verify()`) are retained under `only_successful=True` because the captured trace and parsed fields faithfully describe what the model produced; pass `only_successful=False` to keep every turn regardless of failure state. The scenario filter only applies to scenario turns, so QA turns pass through unaffected when the filter is set.
 
 ```python
 from karenina.replay.capture import capture_from_scenario_result  # noqa: F401  # imported to show the alternative entry point for single scenarios
@@ -444,7 +444,7 @@ If you only register a single entry with `visit_index=None`, the same trace repl
 
 ## Strict miss in the pipeline
 
-When `miss_policy="strict"` is in effect and the pipeline asks for a turn that has no matching entry, `GenerateAnswerStage` catches the `ReplayMissError` and marks the turn as a permanent error. The result still flows through `FinalizeResultStage`, but `completed_without_errors` is `False` and the error message identifies the missing key.
+When `miss_policy="strict"` is in effect and the pipeline asks for a turn that has no matching entry, `GenerateAnswerStage` catches the `ReplayMissError` and marks the turn as a permanent error. The result still flows through `FinalizeResultStage`, but `metadata.failure` is populated (non-`None`) with the originating stage and a reason identifying the missing key.
 
 ```python
 strict_bm = Benchmark.create(name="strict-demo", version="1.0.0")
@@ -477,9 +477,9 @@ config_strict = VerificationConfig(
 result_strict = strict_bm.run_verification(config_strict)
 {
     "results": len(result_strict.results),
-    "ok_count": sum(1 for r in result_strict.results if r.metadata.completed_without_errors),
+    "ok_count": sum(1 for r in result_strict.results if (r.metadata.failure is None)),
     "errors": [
-        (r.metadata.completed_without_errors, (r.metadata.error or "")[:60])
+        ((r.metadata.failure is None), (r.metadata.failure.reason if r.metadata.failure else "")[:60])
         for r in result_strict.results
     ],
 }

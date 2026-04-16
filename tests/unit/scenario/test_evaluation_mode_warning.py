@@ -7,6 +7,7 @@ import pytest
 from karenina.scenario.builder import Scenario
 from karenina.scenario.manager import ScenarioManager
 from karenina.schemas.config import ModelConfig
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.scenario.types import END
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.result_components import VerificationResultMetadata, VerificationResultTemplate
@@ -30,7 +31,12 @@ def _make_mock_vr() -> VerificationResult:
     metadata = VerificationResultMetadata(
         question_id="q1",
         template_id="t1",
-        completed_without_errors=False,  # causes loop exit
+        failure=Failure(  # causes loop exit
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="unknown",
+            reason="mock failure to halt loop",
+        ),
+        caveats=[],
         question_text="What?",
         answering=identity,
         parsing=identity,

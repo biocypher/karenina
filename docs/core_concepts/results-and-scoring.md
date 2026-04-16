@@ -74,7 +74,7 @@ def _make_result(
         question_id=qid, template_id="abc123", question_text=qtxt,
         raw_answer=raw_ans, answering=answering_model, parsing=parsing,
         execution_time=exec_time, timestamp=ts, result_id=result_id,
-        completed_without_errors=True, replicate=1,
+        failure=None, caveats=[], replicate=1,
     )
     tmpl = VerificationResultTemplate(
         raw_llm_response="The target is BCL2, also known as B-cell lymphoma 2.",
@@ -196,8 +196,8 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `run_name` | `str \| None` | Organizing label for verification runs |
 | `replicate` | `int \| None` | Replicate number (1, 2, 3, ...) for repeated runs |
 | `keywords` | `list[str] \| None` | Keywords associated with the question |
-| `completed_without_errors` | `bool` | Whether the pipeline ran without errors |
-| `error` | `str \| None` | Error message if something went wrong |
+| `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason` |
+| `caveats` | `list[Caveat]` | Informational flags attached to the run (e.g. `partial_content`, `embedding_override`, `retries_used`) |
 | `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
 | `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
 | `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |
@@ -210,7 +210,7 @@ print(f"Judge:     {meta.parsing.display_string}")
 print(f"Time:      {meta.execution_time}s")
 print(f"Result ID: {meta.result_id}")
 print(f"Replicate: {meta.replicate}")
-print(f"Success:   {meta.completed_without_errors}")
+print(f"Success:   {(meta.failure is None)}")
 ```
 
 ### 2.1. ModelIdentity
@@ -645,7 +645,7 @@ The [FinalizeResult stage](../verification-pipeline/) (stage 13) always runs as 
 6. Assembles the nested sub-objects (`metadata`, `template`, `rubric`, `deep_judgment`, `deep_judgment_rubric`)
 7. Handles partial failure: whatever artifacts are available get populated; missing data remains `None`
 
-This stage handles both success and error cases. If the pipeline errors at stage 5, the finalize stage still runs and captures whatever was collected up to that point, with `completed_without_errors=False` and the error message in `metadata.error`.
+This stage handles both success and error cases. If the pipeline errors at stage 5, the finalize stage still runs and captures whatever was collected up to that point, and populates `metadata.failure` with a structured `Failure` (category, group, stage, reason) instead of leaving it `None`.
 
 ## 12. Next Steps
 

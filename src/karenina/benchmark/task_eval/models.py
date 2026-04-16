@@ -106,8 +106,8 @@ class StepEval(BaseModel):
                     )
 
                 # Show error if present
-                if result.metadata.error:
-                    lines.append(f"{indent}  {result_num} Error: {result.metadata.error}")
+                if result.metadata.failure is not None:
+                    lines.append(f"{indent}  {result_num} Error: {result.metadata.failure.reason}")
 
                 if i < len(results) - 1:
                     lines.append("")  # Separator between multiple results
@@ -269,7 +269,7 @@ class StepEval(BaseModel):
             dict: Aggregated rubric results with failed replicate count
         """
         # Filter out failed replicates
-        successful_results = [r for r in results if r.metadata.completed_without_errors]
+        successful_results = [r for r in results if r.metadata.failure is None]
         failed_count = len(results) - len(successful_results)
 
         if not successful_results:

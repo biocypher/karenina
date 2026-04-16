@@ -12,6 +12,7 @@ Covers issues 147, 156, 164, 186, 122, and 155:
 import pytest
 
 from karenina.schemas.dataframes.rubric import RubricDataFrameBuilder
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationResult,
     VerificationResultRubric,
@@ -57,7 +58,12 @@ def _make_result(
 ) -> VerificationResult:
     """Build a VerificationResult with optional metadata and rubric overrides."""
     metadata = create_metadata(question_id)
-    metadata.failed_stage = failed_stage
+    if failed_stage is not None:
+        metadata.failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage=failed_stage,
+            reason="test failure",
+        )
     metadata.scenario_id = scenario_id
     metadata.scenario_node = scenario_node
     metadata.scenario_turn = scenario_turn
@@ -89,8 +95,8 @@ class TestFailedStageColumn:
         result = _make_result(rubric=_make_rubric(), failed_stage="abstention_check")
         df = _build_df([result], trait_type="llm")
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "abstention_check"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "abstention_check"
 
     def test_regex_trait_row_has_failed_stage(self):
         """Regex trait rows must contain failed_stage."""
@@ -98,8 +104,8 @@ class TestFailedStageColumn:
         result = _make_result(rubric=rubric, failed_stage="parse_template")
         df = _build_df([result], trait_type="regex")
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "parse_template"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "parse_template"
 
     def test_callable_trait_row_has_failed_stage(self):
         """Callable trait rows must contain failed_stage."""
@@ -107,8 +113,8 @@ class TestFailedStageColumn:
         result = _make_result(rubric=rubric, failed_stage="verify_template")
         df = _build_df([result], trait_type="callable")
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "verify_template"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "verify_template"
 
     def test_metric_trait_row_has_failed_stage(self):
         """Metric trait rows must contain failed_stage."""
@@ -118,8 +124,8 @@ class TestFailedStageColumn:
         result = _make_result(rubric=rubric, failed_stage="embedding_check")
         df = _build_df([result], trait_type="metric")
 
-        assert "failed_stage" in df.columns
-        assert (df["failed_stage"] == "embedding_check").all()
+        assert "failure_stage" in df.columns
+        assert (df["failure_stage"] == "embedding_check").all()
 
     def test_agentic_trait_row_has_failed_stage(self):
         """Agentic trait rows must contain failed_stage."""
@@ -127,16 +133,16 @@ class TestFailedStageColumn:
         result = _make_result(rubric=rubric, failed_stage="generate_answer")
         df = _build_df([result], trait_type="agentic")
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] == "generate_answer"
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] == "generate_answer"
 
     def test_failed_stage_none_when_not_set(self):
         """failed_stage is None when no stage failed."""
         result = _make_result(rubric=_make_rubric(), failed_stage=None)
         df = _build_df([result], trait_type="llm")
 
-        assert "failed_stage" in df.columns
-        assert df["failed_stage"].iloc[0] is None
+        assert "failure_stage" in df.columns
+        assert df["failure_stage"].iloc[0] is None
 
 
 # =============================================================================
@@ -353,15 +359,17 @@ class TestGhostRowFix:
 class TestColumnOrdering:
     """New columns must appear in the correct positions in _get_column_order."""
 
-    def test_failed_stage_after_error(self):
-        """failed_stage must come after error in column order."""
+    def test_failure_stage_after_category(self):
+        """failure_stage must come after failure_category/group in column order."""
         result = _make_result(rubric=_make_rubric(), failed_stage="abstention_check")
         df = _build_df([result])
 
         cols = list(df.columns)
-        error_idx = cols.index("error")
-        failed_idx = cols.index("failed_stage")
-        assert failed_idx == error_idx + 1, f"failed_stage at {failed_idx} should be right after error at {error_idx}"
+        group_idx = cols.index("failure_group")
+        stage_idx = cols.index("failure_stage")
+        assert stage_idx == group_idx + 1, (
+            f"failure_stage at {stage_idx} should be right after failure_group at {group_idx}"
+        )
 
     def test_rubric_eval_columns_after_system_prompts(self):
         """rubric_evaluation_performed/strategy must come after parsing_system_prompt."""
@@ -410,8 +418,11 @@ class TestColumnOrdering:
         cols = list(df.columns)
 
         # Status section order
-        assert cols.index("completed_without_errors") < cols.index("error")
-        assert cols.index("error") < cols.index("failed_stage")
+        assert cols.index("success") < cols.index("failure_category")
+        assert cols.index("failure_category") < cols.index("failure_group")
+        assert cols.index("failure_group") < cols.index("failure_stage")
+        assert cols.index("failure_stage") < cols.index("failure_reason")
+        assert cols.index("failure_reason") < cols.index("caveats")
 
         # Identification section: replicate before scenario columns
         assert cols.index("replicate") < cols.index("scenario_id")

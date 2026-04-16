@@ -414,8 +414,8 @@ def export_verification_results_csv(
         row = {
             # Metadata fields
             "question_id": metadata.question_id,
-            "success": metadata.completed_without_errors,  # Header uses 'success', not 'completed_without_errors'
-            "error": metadata.error or "",
+            "success": metadata.failure is None,  # Header uses 'success'; derived from Failure presence
+            "error": metadata.failure.reason if metadata.failure else "",
             "question_text": metadata.question_text,
             "keywords": _safe_json_serialize(metadata.keywords, metadata.question_id, "keywords"),
             "answering_model": metadata.answering_model,

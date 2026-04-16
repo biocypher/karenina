@@ -24,13 +24,24 @@ def _make_model(name: str = "claude", provider: str = "anthropic") -> ModelConfi
 
 def _make_mock_vr(completed: bool = True) -> VerificationResult:
     """Create a mock VerificationResult."""
+    from karenina.schemas.results.failure import Failure, FailureCategory
     from karenina.schemas.verification.model_identity import ModelIdentity
 
     identity = ModelIdentity.from_model_config(_make_model(), role="answering")
+    failure = (
+        None
+        if completed
+        else Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="unknown",
+            reason="mock failure",
+        )
+    )
     metadata = VerificationResultMetadata(
         question_id="q1",
         template_id="t1",
-        completed_without_errors=completed,
+        failure=failure,
+        caveats=[],
         question_text="What?",
         answering=identity,
         parsing=identity,
