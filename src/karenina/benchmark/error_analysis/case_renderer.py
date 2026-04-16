@@ -10,12 +10,22 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from karenina.replay.ports_message_hydration import hydrate_trace_messages
+from karenina.scenario.handover import TaggedMessage, format_transcript
+from karenina.scenario.trace_materialization import (
+    DEFAULT_TRACE_TRUNCATION_THRESHOLD,
+    format_turns_as_xml,
+    group_entries_into_turns,
+    parse_transcript_entries,
+)
 from karenina.schemas.verification.result import VerificationResult
+from karenina.schemas.verification.result_components import VerificationResultMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +139,77 @@ def _render_section(title: str, body: str) -> str:
     return f"# {title}\n\n{body}\n"
 
 
+def _resolve_truncation_threshold(override: int | None) -> int:
+    """Pick the effective truncation threshold for trace rendering.
+
+    Args:
+        override: Caller-supplied max_trace_chars; takes precedence over env.
+
+    Returns:
+        The chosen threshold, falling back to the env var and then to
+        DEFAULT_TRACE_TRUNCATION_THRESHOLD when the env var is missing or
+        invalid.
+    """
+    if override is not None:
+        return override
+    raw = os.environ.get("KARENINA_TRACE_TRUNCATION_THRESHOLD")
+    if raw is None:
+        return DEFAULT_TRACE_TRUNCATION_THRESHOLD
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid KARENINA_TRACE_TRUNCATION_THRESHOLD=%s, using default %d",
+            raw,
+            DEFAULT_TRACE_TRUNCATION_THRESHOLD,
+        )
+        return DEFAULT_TRACE_TRUNCATION_THRESHOLD
+
+
+def _render_trace(
+    trace_messages: list[dict[str, Any]],
+    metadata: VerificationResultMetadata,
+    artifacts_dir: Path | None,
+    max_trace_chars: int | None,
+) -> str:
+    """Convert stored trace_messages into the XML turn body.
+
+    Args:
+        trace_messages: Stored raw message dicts from the template record.
+        metadata: Case metadata; supplies the answering agent identity.
+        artifacts_dir: Directory for offloaded long-message artifacts.
+        max_trace_chars: Optional threshold override.
+
+    Returns:
+        An XML-formatted transcript string, or a stub when no messages
+        are available.
+    """
+    if not trace_messages:
+        return "_No trace captured for this case._"
+
+    messages = hydrate_trace_messages(trace_messages)
+    agent_id = metadata.answering.display_string
+    tagged = [
+        TaggedMessage(
+            message=msg,
+            agent_id="__user__" if msg.role.value == "user" else agent_id,
+        )
+        for msg in messages
+    ]
+    transcript = format_transcript(tagged)
+    if not transcript:
+        return "_No trace captured for this case._"
+    entries = parse_transcript_entries(transcript)
+    turns = group_entries_into_turns(entries)
+    threshold = _resolve_truncation_threshold(max_trace_chars)
+    xml = format_turns_as_xml(
+        turns,
+        artifacts_dir=artifacts_dir,
+        truncation_threshold=threshold,
+    )
+    return xml
+
+
 def _render_failure(result: VerificationResult) -> str:
     """Render the Failure section for cases that carry a Failure.
 
@@ -157,12 +238,10 @@ def render_qa_case(
     *,
     template_source: str | None,
     template_link: str | None = None,
-    artifacts_dir: Path | None,  # noqa: ARG001  # threaded for Task 3 trace rendering
+    artifacts_dir: Path | None,
+    max_trace_chars: int | None = None,
 ) -> str:
     """Render a QA-style VerificationResult as markdown with YAML frontmatter.
-
-    The ``artifacts_dir`` parameter is threaded to the trace-rendering code
-    (added in Task 3). Pass None to disable trace offloading.
 
     Args:
         result: The VerificationResult to render.
@@ -170,6 +249,10 @@ def render_qa_case(
         template_link: Relative path to the template file, or None.
         artifacts_dir: Directory where artifacts (traces, attachments) may
             be written. None disables offloading.
+        max_trace_chars: Optional override of the trace truncation
+            threshold. When None, the env var
+            ``KARENINA_TRACE_TRUNCATION_THRESHOLD`` is consulted, falling
+            back to the module default.
 
     Returns:
         The full markdown body, ready to be written to a ``.md`` file.
@@ -203,9 +286,14 @@ def render_qa_case(
     if tmpl is not None and tmpl.raw_llm_response:
         parts.append(_render_section("LLM Response", tmpl.raw_llm_response))
 
-    # Trace section is added in Task 3. For now emit a stub so existing
-    # body-layout assertions remain stable.
-    parts.append(_render_section("Trace", "_No trace captured for this case._"))
+    trace_messages = tmpl.trace_messages if tmpl is not None else []
+    trace_body = _render_trace(
+        trace_messages,
+        md,
+        artifacts_dir,
+        max_trace_chars,
+    )
+    parts.append(_render_section("Trace", trace_body))
 
     if tmpl is not None and tmpl.parsed_llm_response is not None:
         parts.append(
