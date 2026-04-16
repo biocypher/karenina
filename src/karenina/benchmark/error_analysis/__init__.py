@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from karenina.benchmark.error_analysis import launchers  # noqa: F401
 from karenina.benchmark.error_analysis.exceptions import (
     ErrorAnalysisError,
     LauncherExecutionError,
@@ -27,6 +28,12 @@ from karenina.benchmark.error_analysis.exceptions import (
     LauncherUnavailableError,
     MaterializationError,
 )
+from karenina.benchmark.error_analysis.launcher import (
+    ErrorAnalystLauncher,
+    get_launcher,
+    list_launchers,
+    register_launcher,
+)
 
 if TYPE_CHECKING:
     from karenina.benchmark.error_analysis.materializer import ErrorAnalysisMaterializer
@@ -34,11 +41,15 @@ if TYPE_CHECKING:
 __all__ = [
     "ErrorAnalysisError",
     "ErrorAnalysisMaterializer",
+    "ErrorAnalystLauncher",
     "LauncherExecutionError",
     "LauncherNoOutputError",
     "LauncherNotFoundError",
     "LauncherUnavailableError",
     "MaterializationError",
+    "get_launcher",
+    "list_launchers",
+    "register_launcher",
 ]
 
 
