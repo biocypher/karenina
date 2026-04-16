@@ -68,13 +68,18 @@ def case_filename(
     Returns:
         The filename (basename only, no directory component).
     """
+    if scenario is None and metadata is None:
+        raise ValueError("case_filename requires either metadata or scenario")
     existing = existing or set()
     if scenario is not None:
         raw_id = sanitize_id(scenario.scenario_id)
         n = scenario.replicate if scenario.replicate is not None else monotonic_n
         base = f"scenario_{raw_id}__run_{n}.md"
     else:
-        assert metadata is not None, "case_filename requires metadata or scenario"
+        # metadata is guaranteed non-None here by the guard at the top;
+        # the `assert` is for the type checker only (runtime safety is
+        # provided by the ValueError above, which survives python -O).
+        assert metadata is not None
         raw_id = sanitize_id(metadata.question_id)
         base = f"q_{raw_id}"
         if metadata.replicate is not None:
@@ -91,7 +96,13 @@ def case_filename(
         assert scenario is not None
         suffix = _hash_suffix(f"{scenario.scenario_id}:{monotonic_n}")
     stem, _, _ = base.rpartition(".md")
-    return f"{stem}__h{suffix}.md"
+    hashed = f"{stem}__h{suffix}.md"
+    if hashed in existing:
+        raise MaterializationError(
+            "Filename collision after SHA-1 disambiguation.",
+            details={"base": base, "hashed": hashed},
+        )
+    return hashed
 
 
 def partition_results(

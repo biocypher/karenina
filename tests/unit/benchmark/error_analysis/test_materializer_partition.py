@@ -86,6 +86,33 @@ class TestCaseFilename:
 
 
 @pytest.mark.unit
+class TestCaseFilenameEdge:
+    def test_raises_when_neither_metadata_nor_scenario_given(self):
+        with pytest.raises(ValueError, match="metadata or scenario"):
+            case_filename()
+
+    def test_double_collision_raises_materialization_error(self):
+        from karenina.benchmark.error_analysis.exceptions import MaterializationError
+
+        md = make_metadata(question_id="q.001")
+        # Collide on both base and hashed names.
+        # First call: compute the actual hashed filename, then pre-populate `existing`.
+        existing_base_only = {"q_q_001.md"}
+        hashed_name = case_filename(metadata=md, existing=existing_base_only)
+        # Now include both in `existing` and expect a raise.
+        existing_both = {"q_q_001.md", hashed_name}
+        with pytest.raises(MaterializationError):
+            case_filename(metadata=md, existing=existing_both)
+
+    def test_hash_is_deterministic_for_same_metadata(self):
+        md = make_metadata(question_id="q.001")
+        existing = {"q_q_001.md"}
+        name1 = case_filename(metadata=md, existing=existing)
+        name2 = case_filename(metadata=md, existing=existing)
+        assert name1 == name2
+
+
+@pytest.mark.unit
 class TestPartition:
     def test_classical_qa_skips_scenario_turns(self):
         qa = make_pass(question_id="q_qa")
