@@ -478,3 +478,5 @@ The harmonization deletes several previously-supported retry surfaces.
 - [Stages in Detail](stages.md): which stages call the executor and which guards record streaming-timeout partial content.
 - [Adapters Overview](../advanced-adapters/index.md): where individual adapters install their `RetryExecutor`.
 - [Writing Adapters](../advanced-adapters/writing-adapters.md): how to wire `RetryExecutor` into a new adapter.
+
+For end-to-end analysis of a finished run, see [Error Analysis](../workflows/analyzing-results/error-analysis.md).
