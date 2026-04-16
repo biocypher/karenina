@@ -195,9 +195,16 @@ class ErrorAnalysisMaterializer:
 
         Returns:
             The resolved ``out_dir`` path.
+
+        Raises:
+            MaterializationError: If ``out_dir`` is non-empty and
+                ``force`` is False (refusing to overwrite), or if the
+                result set carries scenario turns without the aggregated
+                ``scenario_results`` view (raised by
+                ``partition_results``), or if filename collisions cannot
+                be disambiguated even with an 8-char SHA-1 suffix.
         """
         self._prepare_out_dir(out_dir, force=force)
-        self._checkpoint_name = checkpoint.name
         classical, scenarios = partition_results(result_set)
         self._write_benchmark_artifacts(checkpoint, result_set, out_dir)
 
@@ -220,7 +227,7 @@ class ErrorAnalysisMaterializer:
                 )
             )
 
-        self._write_index(result_set, out_dir, entries)
+        self._write_index(result_set, out_dir, entries, benchmark_name=checkpoint.name)
         # PROMPT.md is written by the facade (Task 10), not the
         # materializer, so it can accept a user-supplied prompt_path.
         return out_dir
@@ -228,9 +235,31 @@ class ErrorAnalysisMaterializer:
     def _prepare_out_dir(self, out_dir: Path, *, force: bool) -> None:
         """Clear ``out_dir`` per the overwrite rules.
 
-        If ``out_dir`` is non-empty and ``force`` is False, raises
-        MaterializationError. Otherwise preserves any prior REPORT.md as
-        REPORT.previous.md and removes everything else.
+        The contract has three steps when ``out_dir`` exists and is
+        non-empty:
+
+        1. Refuse: if ``force`` is False, raise ``MaterializationError``
+           without modifying the directory.
+        2. Preserve the prior report: if ``force`` is True and a
+           ``REPORT.md`` exists at the top level, rename it to
+           ``REPORT.previous.md``, overwriting any prior
+           ``REPORT.previous.md`` already present.
+        3. Wipe the rest: remove every other top-level entry
+           (files and subdirectories), keeping only the renamed
+           ``REPORT.previous.md``.
+
+        When ``out_dir`` does not exist or is empty, the function simply
+        ensures the directory exists (``mkdir(parents=True,
+        exist_ok=True)``) and returns.
+
+        Args:
+            out_dir: Destination directory to prepare.
+            force: If True, permit overwriting a non-empty directory
+                following the preserve-and-wipe contract above.
+
+        Raises:
+            MaterializationError: If ``out_dir`` is non-empty and
+                ``force`` is False.
         """
         if out_dir.exists() and any(out_dir.iterdir()):
             if not force:
@@ -427,12 +456,13 @@ class ErrorAnalysisMaterializer:
         result_set: VerificationResultSet,
         out_dir: Path,
         entries: list[IndexEntry],
+        *,
+        benchmark_name: str,
     ) -> None:
         """Compose and write INDEX.md from the entries collected during build."""
         answering = sorted({r.metadata.answering.display_string for r in result_set.results})
         answering_model = ", ".join(answering) if answering else "-"
         timestamp = sorted({r.metadata.timestamp for r in result_set.results})[-1] if result_set.results else ""
-        benchmark_name = getattr(self, "_checkpoint_name", "(unknown)")
         index_md = build_index_markdown(
             benchmark_name=benchmark_name,
             answering_model=answering_model,
