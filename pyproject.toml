@@ -110,9 +110,10 @@ Documentation = "https://karenina.readthedocs.io"
 [tool.hatch.build.targets.wheel]
 packages = ["src/karenina"]
 
-# Include ADeLe rubric data files in the wheel
+# Include ADeLe rubric data files and error-analysis packaged prompts in the wheel
 [tool.hatch.build.targets.wheel.force-include]
 "src/karenina/integrations/adele/data" = "karenina/integrations/adele/data"
+"src/karenina/benchmark/error_analysis/prompts" = "karenina/benchmark/error_analysis/prompts"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
