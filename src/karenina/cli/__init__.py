@@ -100,6 +100,13 @@ except ImportError as e:
     # GEPA not installed
     logger.debug("optimize-compare command unavailable: %s", e)
 
+try:
+    from .analyze_errors import analyze_errors as _analyze_errors_cmd
+
+    app.command(name="analyze-errors")(_analyze_errors_cmd)
+except ImportError as e:  # pragma: no cover - optional dependency guard
+    logger.warning("analyze-errors command unavailable: %s", e)
+
 
 def main() -> None:
     """Main entry point for the CLI."""
