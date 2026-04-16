@@ -81,16 +81,16 @@ def analyze_errors(
 def _load_results(results: Any) -> Any:
     from karenina.schemas.results.verification_result_set import VerificationResultSet
 
-    if isinstance(results, Path):
-        return VerificationResultSet.model_validate_json(results.read_text(encoding="utf-8"))
+    if isinstance(results, str | Path):
+        return VerificationResultSet.model_validate_json(Path(results).read_text(encoding="utf-8"))
     return results
 
 
 def _load_checkpoint(checkpoint: Any) -> Any:
     from karenina.benchmark.benchmark import Benchmark
 
-    if isinstance(checkpoint, Path):
-        return Benchmark.load(checkpoint)
+    if isinstance(checkpoint, str | Path):
+        return Benchmark.load(Path(checkpoint))
     return checkpoint
 
 

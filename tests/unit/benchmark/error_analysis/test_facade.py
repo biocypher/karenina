@@ -112,3 +112,71 @@ class TestFacade:
         prompt = (out / "PROMPT.md").read_text()
         assert "sample" in prompt  # benchmark name
         assert "anthropic:claude-opus-4-6" in prompt
+
+    def test_launcher_kwargs_forwarded(
+        self,
+        tmp_path,
+        tiny_benchmark,
+        tiny_result_set,
+    ):
+        """launcher_kwargs is passed verbatim to launcher.run()."""
+        captured: dict[str, object] = {}
+
+        class _CapturingLauncher:
+            def run(self, analysis_dir: Path, **kwargs: object) -> Path:
+                captured.update(kwargs)
+                (analysis_dir / "REPORT.md").write_text("ok")
+                return analysis_dir / "REPORT.md"
+
+        out = tmp_path / "analysis"
+        analyze_errors(
+            results=tiny_result_set,
+            checkpoint=tiny_benchmark,
+            out_dir=out,
+            launcher=_CapturingLauncher(),
+            launcher_kwargs={"extra": "payload", "count": 42},
+        )
+        assert captured == {"extra": "payload", "count": 42}
+
+    def test_custom_prompt_path_is_respected(
+        self,
+        tmp_path,
+        tiny_benchmark,
+        tiny_result_set,
+    ):
+        """A user-supplied prompt_path overrides the packaged default."""
+        custom_prompt = tmp_path / "my_prompt.md"
+        custom_prompt.write_text("CUSTOM ANALYST for $BENCHMARK_NAME")
+
+        out = tmp_path / "analysis"
+        analyze_errors(
+            results=tiny_result_set,
+            checkpoint=tiny_benchmark,
+            out_dir=out,
+            prompt_path=custom_prompt,
+            launcher=_RecordingLauncher(),
+        )
+        prompt = (out / "PROMPT.md").read_text()
+        assert prompt.startswith("CUSTOM ANALYST for")
+        assert "sample" in prompt  # benchmark_name placeholder substituted
+
+    def test_force_permits_non_empty_out_dir(
+        self,
+        tmp_path,
+        tiny_benchmark,
+        tiny_result_set,
+    ):
+        """force=True allows writing into a pre-populated out_dir."""
+        out = tmp_path / "analysis"
+        out.mkdir()
+        (out / "stale.txt").write_text("leftover")
+
+        analyze_errors(
+            results=tiny_result_set,
+            checkpoint=tiny_benchmark,
+            out_dir=out,
+            launcher=_RecordingLauncher(),
+            force=True,
+        )
+        assert (out / "REPORT.md").exists()
+        assert not (out / "stale.txt").exists()  # wiped by materializer
