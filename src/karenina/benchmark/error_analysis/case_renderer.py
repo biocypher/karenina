@@ -312,3 +312,131 @@ def render_qa_case(
         parts.append(failure_section)
 
     return "\n".join(p for p in parts if p)
+
+
+def _first_failing_turn(turn_results: list[VerificationResult]) -> VerificationResult | None:
+    """Return the first turn result with a failure, or None when all passed.
+
+    Args:
+        turn_results: The per-turn VerificationResults from a scenario run.
+
+    Returns:
+        The first failing VerificationResult, or None if none failed.
+    """
+    for r in turn_results:
+        if r.metadata.failure is not None:
+            return r
+    return None
+
+
+def _scenario_case_id(execution: Any, monotonic_n: int) -> str:
+    """Compute the frontmatter id for a scenario case.
+
+    Args:
+        execution: The ScenarioExecutionResult being rendered.
+        monotonic_n: Fallback run number when ``execution.replicate`` is None.
+
+    Returns:
+        A string like ``scenario_<scenario_id>__run_<n>``.
+    """
+    n = execution.replicate if execution.replicate is not None else monotonic_n
+    return f"scenario_{execution.scenario_id}__run_{n}"
+
+
+def render_scenario_case(
+    execution: Any,  # ScenarioExecutionResult; Any to avoid circular import at module load.
+    *,
+    template_sources: dict[str, str | None],
+    template_links: dict[str, str],
+    artifacts_dir: Path | None,
+    max_trace_chars: int | None = None,
+    monotonic_n: int = 1,
+) -> str:
+    """Render one ScenarioExecutionResult as a single markdown file.
+
+    The output has scenario-level YAML frontmatter, a scenario heading with
+    the path breadcrumb, one ``## Turn N <node>`` section per turn that
+    embeds :func:`render_qa_case` (frontmatter stripped), and a final
+    ``# Outcomes`` section enumerating ``outcome_results``.
+
+    Args:
+        execution: The ScenarioExecutionResult to render.
+        template_sources: Mapping from question_id to raw template source,
+            or None when no source is available.
+        template_links: Mapping from question_id to a relative link path
+            for the template file.
+        artifacts_dir: Directory for offloaded trace artifacts; None
+            disables offloading.
+        max_trace_chars: Optional override of the trace truncation
+            threshold, forwarded to each per-turn render.
+        monotonic_n: Fallback run number when ``execution.replicate`` is
+            None; used to build the case ID.
+
+    Returns:
+        The full markdown body, ready to be written to a ``.md`` file.
+    """
+    failing = _first_failing_turn(execution.turn_results)
+    failure = failing.metadata.failure if failing else None
+
+    first_turn_md = execution.turn_results[0].metadata if execution.turn_results else None
+    model_display = first_turn_md.answering.display_string if first_turn_md else ""
+    parsing_display = first_turn_md.parsing.display_string if first_turn_md else ""
+
+    fm: dict[str, Any] = {
+        "id": _scenario_case_id(execution, monotonic_n),
+        "outcome": "failure" if failure else "pass",
+        "scenario_id": execution.scenario_id,
+        "replicate": execution.replicate,
+        "model": model_display,
+        "parsing_model": parsing_display,
+        "category": failure.category.value if failure else None,
+        "group": failure.group.value if failure else None,
+        "stage": failure.stage if failure else None,
+        "path": list(execution.path or []),
+        "turn_count": execution.turn_count,
+        "failed_turn": failing.metadata.scenario_turn if failing else None,
+        "outcome_results": dict(execution.outcome_results or {}),
+    }
+
+    parts: list[str] = [
+        "---",
+        yaml.safe_dump(fm, sort_keys=True).rstrip(),
+        "---",
+        "",
+        f"# Scenario: {execution.scenario_id} (run {fm['id'].rsplit('__run_', 1)[-1]})",
+        "",
+        "Path: " + " -> ".join(execution.path or []),
+    ]
+    if failing is not None:
+        parts.append(f"Failed at turn {failing.metadata.scenario_turn} (`{failing.metadata.scenario_node}`).")
+    parts.append("")
+
+    for turn_result in execution.turn_results:
+        turn_num = turn_result.metadata.scenario_turn
+        node_id = turn_result.metadata.scenario_node or ""
+        marker = " (FAILED)" if turn_result.metadata.failure else ""
+        parts.append(f"## Turn {turn_num} {node_id}{marker}".rstrip())
+        parts.append("")
+        # Embed the per-turn QA body without its frontmatter.
+        qa_body = render_qa_case(
+            turn_result,
+            template_source=template_sources.get(turn_result.metadata.question_id),
+            template_link=template_links.get(turn_result.metadata.question_id),
+            artifacts_dir=artifacts_dir,
+            max_trace_chars=max_trace_chars,
+        )
+        # Strip frontmatter from the nested rendering.
+        if qa_body.startswith("---\n"):
+            _, _fm, rest = qa_body.split("---\n", 2)
+            parts.append(rest.strip())
+        else:
+            parts.append(qa_body.strip())
+        parts.append("")
+
+    parts.append("# Outcomes")
+    parts.append("")
+    for key, value in (execution.outcome_results or {}).items():
+        parts.append(f"- `{key}`: {value}")
+    parts.append("")
+
+    return "\n".join(parts)
