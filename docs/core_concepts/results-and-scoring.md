@@ -653,3 +653,4 @@ This stage handles both success and error cases. If the pipeline errors at stage
 - [Evaluation Modes](../evaluation-modes/): How modes affect which result sub-objects are populated
 - [Rubrics](../../../core_concepts/rubrics/): Defining the traits that populate rubric results
 - [Answer Templates](../answer-templates/): Writing the `verify()` logic that produces `verify_result`
+- [Error Analysis](../../../workflows/analyzing-results/error-analysis/): Downstream consumer of `VerificationResultSet` that renders passes and failures as navigable markdown files for agent-assisted review

@@ -23,11 +23,17 @@ Exception hierarchy::
     ├── StreamingTimeoutError        # LLM streaming timeout (also inherits TimeoutError)
     ├── VerificationBatchError       # Partial-failure batch verification errors
     ├── BenchmarkConversionError     # Benchmark conversion errors
-    └── ReplayError                  # Replay layer errors (see replay/exceptions.py)
-        ├── ReplayMissError
-        ├── ReplayHydrationError
-        ├── ReplayPersistenceError
-        └── ProjectionError
+    ├── ReplayError                  # Replay layer errors (see replay/exceptions.py)
+    │   ├── ReplayMissError
+    │   ├── ReplayHydrationError
+    │   ├── ReplayPersistenceError
+    │   └── ProjectionError
+    └── ErrorAnalysisError           # Error-analysis errors (see benchmark/error_analysis/exceptions.py)
+        ├── MaterializationError
+        ├── LauncherNotFoundError
+        ├── LauncherUnavailableError
+        ├── LauncherExecutionError
+        └── LauncherNoOutputError
 
 Domain-specific modules (ports/errors.py, adapters/manual/exceptions.py, etc.)
 remain the canonical definition sites for their respective exceptions. This module
@@ -133,6 +139,17 @@ class VerificationBatchError(KareninaError):
         self.partial_results = partial_results
         self.errors = errors
 
+
+# Re-export error-analysis exceptions for convenience. The canonical
+# definition lives in karenina.benchmark.error_analysis.exceptions.
+from karenina.benchmark.error_analysis.exceptions import (  # noqa: E402, F401
+    ErrorAnalysisError,
+    LauncherExecutionError,
+    LauncherNoOutputError,
+    LauncherNotFoundError,
+    LauncherUnavailableError,
+    MaterializationError,
+)
 
 # Re-export replay layer exceptions for convenience. The canonical
 # definition lives in karenina.replay.exceptions.

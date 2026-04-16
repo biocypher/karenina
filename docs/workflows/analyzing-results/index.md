@@ -106,6 +106,8 @@ df_rubric.groupby("question_id")["trait_score"].mean()
 
 [Analyze results with DataFrames →](../../notebooks/analyzing-results/dataframe-analysis.ipynb)
 
+For qualitative, per-case inspection (passes and failures rendered as markdown files, bucketed by failure category, ready to hand to a coding agent), see [Error Analysis](error-analysis.md).
+
 ### 4. Persist to Database
 
 Save benchmarks and verification results to a database for long-term storage, querying, and cross-run comparison:

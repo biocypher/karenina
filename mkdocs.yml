@@ -239,6 +239,7 @@ nav:
       - Overview: workflows/analyzing-results/index.md
       - Verification Result: workflows/analyzing-results/verification-result.md
       - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
+      - Error Analysis: workflows/analyzing-results/error-analysis.md
       - Exporting: workflows/analyzing-results/exporting.md
       - Iterating: workflows/analyzing-results/iterating.md
     - Scenarios:
