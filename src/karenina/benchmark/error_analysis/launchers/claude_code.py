@@ -45,9 +45,18 @@ class ClaudeCodeLauncher:
         ]
         logger.info("Invoking claude-code launcher in %s", analysis_dir)
         try:
-            subprocess.run(cmd, cwd=analysis_dir, check=True, timeout=timeout)
+            subprocess.run(cmd, cwd=analysis_dir, check=True, timeout=timeout, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as exc:
             raise LauncherExecutionError("claude-code", exc) from exc
+        except subprocess.TimeoutExpired as exc:
+            # Synthesize a CalledProcessError so LauncherExecutionError can stash returncode + stderr.
+            stderr_bytes = exc.stderr if isinstance(exc.stderr, bytes) else b""
+            synthetic = subprocess.CalledProcessError(
+                returncode=-1,
+                cmd=cmd,
+                stderr=stderr_bytes or f"timeout after {timeout}s".encode(),
+            )
+            raise LauncherExecutionError("claude-code", synthetic) from exc
         return analysis_dir / "REPORT.md"
 
 

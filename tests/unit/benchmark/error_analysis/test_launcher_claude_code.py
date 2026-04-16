@@ -71,3 +71,35 @@ class TestClaudeCodeLauncher:
             claude_code.ClaudeCodeLauncher().run(tmp_path)
         assert exc.value.returncode == 2
         assert "permission denied" in exc.value.stderr_tail
+
+    def test_subprocess_run_captures_stderr(self, tmp_path, monkeypatch):
+        """stderr must be piped so LauncherExecutionError.stderr_tail is populated."""
+        from karenina.benchmark.error_analysis.launchers import claude_code
+
+        monkeypatch.setattr(claude_code.shutil, "which", lambda _name: "/usr/local/bin/claude")
+        calls: list[dict] = []
+
+        def _run(cmd, **kwargs):
+            calls.append({"cmd": cmd, "kwargs": kwargs})
+            (tmp_path / "REPORT.md").write_text("ok")
+            return subprocess.CompletedProcess(cmd, 0)
+
+        monkeypatch.setattr(claude_code.subprocess, "run", _run)
+        claude_code.ClaudeCodeLauncher().run(tmp_path)
+        assert calls[0]["kwargs"]["stderr"] == subprocess.PIPE
+
+    def test_subprocess_timeout_wraps_in_launcher_execution_error(self, tmp_path, monkeypatch):
+        """TimeoutExpired is wrapped into LauncherExecutionError with negative returncode."""
+        from karenina.benchmark.error_analysis.exceptions import LauncherExecutionError
+        from karenina.benchmark.error_analysis.launchers import claude_code
+
+        monkeypatch.setattr(claude_code.shutil, "which", lambda _name: "/usr/local/bin/claude")
+
+        def _run(cmd, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=1)
+
+        monkeypatch.setattr(claude_code.subprocess, "run", _run)
+        with pytest.raises(LauncherExecutionError) as exc:
+            claude_code.ClaudeCodeLauncher().run(tmp_path, timeout=1)
+        assert exc.value.returncode == -1
+        assert "timeout" in exc.value.stderr_tail.lower()
