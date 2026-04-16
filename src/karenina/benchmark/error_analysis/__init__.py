@@ -36,6 +36,7 @@ from karenina.benchmark.error_analysis.launcher import (
 )
 
 if TYPE_CHECKING:
+    from karenina.benchmark.error_analysis.facade import analyze_errors
     from karenina.benchmark.error_analysis.materializer import ErrorAnalysisMaterializer
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     "LauncherNotFoundError",
     "LauncherUnavailableError",
     "MaterializationError",
+    "analyze_errors",
     "get_launcher",
     "list_launchers",
     "register_launcher",
@@ -60,4 +62,10 @@ def __getattr__(name: str) -> Any:
         )
 
         return _ErrorAnalysisMaterializer
+    if name == "analyze_errors":
+        from karenina.benchmark.error_analysis.facade import (
+            analyze_errors as _analyze_errors,
+        )
+
+        return _analyze_errors
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
