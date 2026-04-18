@@ -50,7 +50,13 @@ class LLMRubricTrait(BaseModel):
     name: str = Field(..., min_length=1, description="Human readable identifier for the trait")
     description: str | None = Field(None, description="Detailed description shown to user/LLM")
     summary: str | None = Field(None, description="Short concept label for dynamic rubric presence check")
-    kind: TraitKind = Field(..., description="Type of trait: 'boolean', 'score', or 'literal'")
+    kind: TraitKind | type[BaseModel] = Field(
+        ...,
+        description=(
+            "Trait kind: scalar literal ('boolean', 'score', 'literal') or a Pydantic "
+            "BaseModel subclass (template kind) that defines the structured output schema."
+        ),
+    )
     min_score: int | None = Field(1, description="Lower bound for score traits (default: 1). Auto-derived for literal.")
     max_score: int | None = Field(5, description="Upper bound for score traits (default: 5). Auto-derived for literal.")
 
@@ -97,7 +103,30 @@ class LLMRubricTrait(BaseModel):
         "None means directionality does not apply.",
     )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def validate_kind(cls, v: Any) -> Any:
+        """Accept string literals, BaseModel subclasses, or serialized template dicts."""
+        if isinstance(v, str):
+            return v
+        if isinstance(v, type) and issubclass(v, BaseModel):
+            _validate_template_fields(v)
+            return v
+        if isinstance(v, dict) and v.get("type") == "template":
+            schema = v.get("schema")
+            if schema is None:
+                raise ValueError("Template kind dict must include a 'schema' key")
+            return _reconstruct_model_from_schema(schema)
+        raise ValueError(f"kind must be a string literal, BaseModel subclass, or template dict, got {type(v)}")
+
+    @field_serializer("kind")
+    def serialize_kind(self, value: Any, _info: Any) -> Any:
+        """Serialize BaseModel subclass to a template dict with JSON Schema."""
+        if isinstance(value, type) and issubclass(value, BaseModel):
+            return {"type": "template", "schema": value.model_json_schema()}
+        return value
 
     @field_validator("classes")
     @classmethod
@@ -125,20 +154,54 @@ class LLMRubricTrait(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def set_legacy_defaults(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Set default for higher_is_better when loading legacy data."""
-        if isinstance(values, dict) and "higher_is_better" not in values:
+        """Set default for higher_is_better when loading legacy data.
+
+        Skips the legacy default (True) when kind is a template, because
+        template kinds require higher_is_better=None.
+        """
+        if not isinstance(values, dict):
+            return values
+        kind = values.get("kind")
+        # Template kind: do not inject legacy default
+        if not isinstance(kind, str):
+            return values
+        if "higher_is_better" not in values:
             values["higher_is_better"] = True
         return values
+
+    @field_validator("higher_is_better", mode="after")
+    @classmethod
+    def enforce_higher_is_better_for_template(cls, v: bool | None, info: Any) -> bool | None:
+        """Enforce higher_is_better=None for template kind."""
+        kind = info.data.get("kind")
+        if isinstance(kind, type) and issubclass(kind, BaseModel) and v is not None:
+            raise ValueError("higher_is_better must be None for template kind")
+        return v
 
     @model_validator(mode="after")
     def validate_kind_fields(self) -> "LLMRubricTrait":
         """Validate and set kind-specific fields."""
+        # Template kind: no classes/min/max derivation
+        if not isinstance(self.kind, str):
+            return self
         if self.kind == "literal":
             if self.classes is None:
                 raise ValueError("classes field is required when kind='literal'")
             # Automatically derive min_score and max_score from classes
             object.__setattr__(self, "min_score", 0)
             object.__setattr__(self, "max_score", len(self.classes) - 1)
+        return self
+
+    @model_validator(mode="after")
+    def validate_deep_judgment_template(self) -> "LLMRubricTrait":
+        """Deep judgment is incompatible with template kind.
+
+        Deep judgment assumes scalar outputs with excerpts and reasoning;
+        structured output from a template kind has no scalar score to reason
+        about.
+        """
+        if self.is_template_kind and self.deep_judgment_enabled:
+            raise ValueError("deep_judgment_enabled must be False for template kind")
         return self
 
     def get_class_names(self) -> list[str]:
@@ -157,6 +220,10 @@ class LLMRubricTrait(BaseModel):
 
     def validate_score(self, value: int | bool) -> bool:
         """Validate that a given score is valid for this trait."""
+        if self.is_template_kind:
+            # Template kinds return structured dicts, not scalar scores.
+            # Field-level validation is handled by Pydantic on the BaseModel.
+            return True
         if self.kind == "boolean":
             return isinstance(value, bool)
         else:  # kind == "score" or kind == "literal"
@@ -173,6 +240,11 @@ class LLMRubricTrait(BaseModel):
             if self.kind == "literal" and value == -1:
                 return True
             return min_val <= value <= max_val
+
+    @property
+    def is_template_kind(self) -> bool:
+        """Return True if kind is a BaseModel subclass (template kind)."""
+        return isinstance(self.kind, type) and issubclass(self.kind, BaseModel)
 
 
 class RegexRubricTrait(BaseModel):
@@ -928,13 +1000,25 @@ class Rubric(BaseModel):
                 )
             seen_all.add(name)
 
-        for trait in self.agentic_traits:
-            if "." in trait.name:
-                raise ValueError(
-                    f"Agentic trait name '{trait.name}' contains '.', "
-                    f"which would collide with dot-notation keys from "
-                    f"template-kind traits."
-                )
+        # Reject dots in trait names across all trait types: dotted keys
+        # are reserved for template-kind fields ("trait.field"), and a
+        # scalar trait named "a.b" alongside a template trait named "a"
+        # would cause silent misattribution in the result splitter
+        # (see ``finalize_result.py``).
+        for trait_list, trait_type in (
+            (self.llm_traits, "LLM"),
+            (self.regex_traits, "Regex"),
+            (self.callable_traits, "Callable"),
+            (self.metric_traits, "Metric"),
+            (self.agentic_traits, "Agentic"),
+        ):
+            for trait in trait_list:
+                if "." in trait.name:
+                    raise ValueError(
+                        f"{trait_type} trait name '{trait.name}' contains '.', "
+                        f"which would collide with dot-notation keys from "
+                        f"template-kind traits."
+                    )
         return self
 
     def get_trait_names(self) -> list[str]:

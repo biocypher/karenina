@@ -242,6 +242,25 @@ def _convert_llm_trait_to_rating(trait: LLMRubricTrait, rubric_type: str) -> Sch
     if trait.max_score is not None:
         additional_props.append(SchemaOrgPropertyValue(name="max_score", value=trait.max_score))
 
+    if trait.is_template_kind:
+        # Template kind: store kind as {"type": "template", "schema": json_schema}
+        template_cls = cast(type[BaseModel], trait.kind)
+        additional_props.append(
+            SchemaOrgPropertyValue(
+                name="kind",
+                value={"type": "template", "schema": template_cls.model_json_schema()},
+            )
+        )
+        return SchemaOrgRating(
+            name=trait.name,
+            description=trait.description,
+            bestRating=0.0,
+            worstRating=0.0,
+            additionalType="karenina:GlobalLLMRubricTrait"
+            if rubric_type == "global"
+            else "karenina:QuestionSpecificLLMRubricTrait",
+            additionalProperty=additional_props,
+        )
     if trait.kind == "boolean":
         return SchemaOrgRating(
             name=trait.name,
@@ -470,8 +489,8 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
     deep_judgment_max_excerpts = None
     deep_judgment_fuzzy_match_threshold = None
     deep_judgment_excerpt_retry_attempts = None
-    higher_is_better = True  # Legacy default
-    kind: TraitKind | None = None  # Explicit kind from property (for literal)
+    higher_is_better: bool | None = True  # Legacy default; forced to None for template kind
+    kind: TraitKind | dict[str, Any] | None = None  # Literal string or template dict
     classes: dict[str, str] | None = None  # Classes for literal kind
     summary: str | None = None
     min_score = None
@@ -494,7 +513,8 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
             elif prop.name == "higher_is_better":
                 higher_is_better = prop.value
             elif prop.name == "kind":
-                kind = cast(TraitKind, prop.value)
+                # Accept string literals (boolean/score/literal) or template dict
+                kind = prop.value if isinstance(prop.value, dict) else cast(TraitKind, prop.value)
             elif prop.name == "classes":
                 # Classes can be stored as dict directly or as JSON string
                 if isinstance(prop.value, dict):
@@ -511,6 +531,19 @@ def _convert_rating_to_llm_trait(rating: SchemaOrgRating) -> LLMRubricTrait:
                 min_score = prop.value
             elif prop.name == "max_score":
                 max_score = prop.value
+
+    # Template kind: reconstruct directly and force higher_is_better=None
+    if isinstance(kind, dict):
+        template_kwargs: dict[str, Any] = {
+            "name": rating.name,
+            "description": rating.description,
+            "summary": summary,
+            "kind": kind,  # validate_kind "before" reconstructs the BaseModel
+            "higher_is_better": None,
+            # Template traits are incompatible with deep judgment (validator-enforced).
+            "deep_judgment_enabled": False,
+        }
+        return LLMRubricTrait(**template_kwargs)
 
     # Determine kind: explicit kind takes precedence, then infer from rating range
     if kind is None:

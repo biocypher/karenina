@@ -35,6 +35,7 @@ def _claude_sdk_rubric_factory(**kwargs: object) -> _ClaudeSDKRubricInstruction:
 _RUBRIC_TASKS = [
     "rubric_llm_trait_batch",
     "rubric_llm_trait_single",
+    "rubric_llm_trait_template",
     "rubric_literal_trait_batch",
     "rubric_literal_trait_single",
     "rubric_metric_trait",

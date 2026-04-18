@@ -19,7 +19,9 @@ or ClaudeSDKLLMAdapter) based on the model interface configuration.
 
 import logging
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+from pydantic import BaseModel
 
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.rubric.literal_trait import LiteralTraitPromptBuilder
@@ -324,6 +326,132 @@ class LLMTraitEvaluator:
             # Clamp score to valid range
             clamped_score = max(min_score, min(max_score, int(score)))
             return clamped_score
+
+    # ========== Template Trait Evaluation Methods ==========
+
+    def evaluate_template(
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Evaluate template-kind LLM traits and return flattened dotted results.
+
+        Each template trait has a unique Pydantic schema, so traits cannot be
+        batched into a single output model; they are always evaluated one
+        per call (in parallel when ``async_enabled=True``).
+
+        Returned keys use dotted notation (``trait_name.field_name``) to match
+        the convention used by agentic template rubrics. Failed traits map to
+        ``None`` under the bare trait name (no flattening possible).
+
+        Args:
+            question: The original question asked
+            answer: The LLM's response to evaluate
+            traits: Template-kind LLM traits (``trait.is_template_kind`` True).
+
+        Returns:
+            Tuple of (flattened_results, usage_metadata_list).
+        """
+        if not traits:
+            return {}, []
+
+        tasks: list[tuple[list[Message], type]] = []
+        for trait in traits:
+            if not trait.is_template_kind:
+                raise ValueError(
+                    f"evaluate_template requires template-kind traits; trait '{trait.name}' has kind={trait.kind!r}"
+                )
+            kind_class = cast(type[BaseModel], trait.kind)  # already a BaseModel subclass
+            system_prompt = self._llm_prompt_builder.build_template_system_prompt(trait)
+            user_prompt = self._llm_prompt_builder.build_template_user_prompt(question, answer, trait)
+
+            instruction_context: dict[str, object] = {
+                "json_schema": kind_class.model_json_schema(),
+                "output_format_hint": "Fill in every field of the provided schema as JSON.",
+            }
+
+            messages = self._assemble_messages(
+                PromptTask.RUBRIC_LLM_TRAIT_TEMPLATE, system_prompt, user_prompt, instruction_context
+            )
+            tasks.append((messages, kind_class))
+
+        if self._async_enabled:
+            return self._execute_concurrent_template(tasks, traits)
+        return self._execute_serial_template(tasks, traits)
+
+    @staticmethod
+    def _flatten_template_result(
+        trait_name: str,
+        parsed_dump: dict[str, Any] | None,
+        target: dict[str, Any],
+    ) -> None:
+        """Write a template trait's structured result to ``target`` as dotted keys.
+
+        On success, expands ``{field: value}`` into ``{trait_name.field: value}``.
+        On failure (``parsed_dump`` is None), stores ``target[trait_name] = None``.
+        """
+        if parsed_dump is None:
+            target[trait_name] = None
+            return
+        for field_name, value in parsed_dump.items():
+            target[f"{trait_name}.{field_name}"] = value
+
+    def _execute_concurrent_template(
+        self,
+        tasks: list[tuple[list[Message], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Execute template evaluation tasks concurrently via LLMParallelInvoker."""
+        from karenina.adapters import LLMParallelInvoker
+
+        logger.debug(
+            "LLMParallelInvoker: Executing %d template tasks with max_workers=%d",
+            len(tasks),
+            self._async_max_workers,
+        )
+        invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch_structured(tasks)
+
+        results: dict[str, Any] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (parsed_result, usage, error) in enumerate(raw_results):
+            trait = traits[i]
+            if error:
+                logger.warning("Failed to evaluate template trait '%s': %s", trait.name, error)
+                self._flatten_template_result(trait.name, None, results)
+                usage_metadata_list.append({})
+            else:
+                assert parsed_result is not None
+                self._flatten_template_result(trait.name, parsed_result.model_dump(), results)
+                usage_metadata_list.append(usage or {})
+
+        return results, usage_metadata_list
+
+    def _execute_serial_template(
+        self,
+        tasks: list[tuple[list[Message], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Execute template evaluation tasks serially (one at a time)."""
+        results: dict[str, Any] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
+            try:
+                structured_llm = self.llm.with_structured_output(model_class)
+                response = structured_llm.invoke(messages)
+                usage_metadata = asdict(response.usage) if response.usage else {}
+                self._flatten_template_result(trait.name, response.raw.model_dump(), results)
+                usage_metadata_list.append(usage_metadata)
+            except Exception as e:
+                logger.warning("Failed to evaluate template trait '%s': %s", trait.name, e)
+                self._flatten_template_result(trait.name, None, results)
+                usage_metadata_list.append({})
+
+        return results, usage_metadata_list
 
     # ========== Literal Trait Evaluation Methods ==========
 

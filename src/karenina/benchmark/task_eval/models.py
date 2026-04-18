@@ -183,7 +183,13 @@ class StepEval(BaseModel):
                     # Count LLM and manual rubric traits
                     all_trait_scores = rubric.get_all_trait_scores()
                     if all_trait_scores:
-                        for score in all_trait_scores.values():
+                        for trait_name, score in all_trait_scores.items():
+                            # Template-kind LLM traits expose dotted keys
+                            # ("trait.field") with free-form values (strings,
+                            # lists, etc.). They have no pass/fail semantics,
+                            # so they are not counted here.
+                            if "." in trait_name:
+                                continue
                             rubric_traits_total += 1
                             if score is True or (isinstance(score, int) and score > 0):
                                 rubric_traits_passed += 1
@@ -330,17 +336,28 @@ class StepEval(BaseModel):
         """
         Average LLM trait scores across replicates.
 
+        Template-kind LLM traits contribute dotted keys ("trait.field") with
+        free-form values (strings, lists, etc.) that cannot be averaged. They
+        are skipped here; downstream consumers inspect them directly on each
+        replicate's ``llm_trait_scores``.
+
         Args:
             results: List of successful VerificationResult objects
 
         Returns:
-            dict: Trait names mapped to averaged scores
+            dict: Trait names mapped to averaged scores (numeric/bool only).
         """
-        trait_scores: dict[str, list[int]] = {}
+        trait_scores: dict[str, list[int | float | bool]] = {}
 
         for result in results:
             if result.rubric and result.rubric.llm_trait_scores:
                 for trait_name, score in result.rubric.llm_trait_scores.items():
+                    # Skip template-kind entries (dotted keys) and any
+                    # non-numeric values so they cannot be averaged.
+                    if "." in trait_name:
+                        continue
+                    if not isinstance(score, int | float | bool):
+                        continue
                     if trait_name not in trait_scores:
                         trait_scores[trait_name] = []
                     trait_scores[trait_name].append(score)

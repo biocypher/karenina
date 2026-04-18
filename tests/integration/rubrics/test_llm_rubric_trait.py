@@ -20,6 +20,7 @@ Fixtures used:
 """
 
 import pytest
+from pydantic import BaseModel, Field
 
 from karenina.schemas.entities import LLMRubricTrait, Rubric
 
@@ -487,3 +488,137 @@ class TestLLMRubricTraitEdgeCases:
 
         assert directionalities["good"] is True
         assert directionalities["bad"] is False
+
+
+# =============================================================================
+# Template kind end-to-end (cold: mocked structured output)
+# =============================================================================
+
+
+class _CitationEvidence(BaseModel):
+    has_citations: bool = Field(description="Whether any citations appear")
+    citation_count: int = Field(description="Number of citations in the response")
+
+
+@pytest.mark.integration
+@pytest.mark.rubric
+class TestTemplateKindRubricEvaluator:
+    """End-to-end flow through RubricEvaluator with a mocked structured LLM."""
+
+    def _build_evaluator_with_mock(self, parsed_instance):
+        from dataclasses import dataclass
+        from unittest.mock import MagicMock, patch
+
+        from karenina.benchmark.verification.evaluators.rubric.evaluator import RubricEvaluator
+        from karenina.schemas.config.models import ModelConfig
+
+        @dataclass
+        class _FakeUsage:
+            input_tokens: int = 10
+            output_tokens: int = 5
+
+        @dataclass
+        class _FakeResponse:
+            raw: object
+            usage: object
+
+        structured_llm = MagicMock()
+        structured_llm.invoke.return_value = _FakeResponse(raw=parsed_instance, usage=_FakeUsage())
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = structured_llm
+
+        model_config = ModelConfig(
+            id="mock",
+            model_name="mock",
+            model_provider="anthropic",
+            interface="claude_agent_sdk",
+        )
+        with patch(
+            "karenina.benchmark.verification.evaluators.rubric.evaluator.get_llm",
+            return_value=mock_llm,
+        ):
+            evaluator = RubricEvaluator(model_config, evaluation_strategy="sequential")
+        # Force serial execution so the mocked .invoke (not .ainvoke) is used.
+        evaluator.llm_trait_evaluator._async_enabled = False
+        return evaluator
+
+    def test_template_trait_produces_dotted_keys(self):
+        parsed = _CitationEvidence(has_citations=True, citation_count=4)
+        evaluator = self._build_evaluator_with_mock(parsed)
+
+        trait = LLMRubricTrait(
+            name="citations",
+            description="Assess citation usage.",
+            kind=_CitationEvidence,
+            higher_is_better=None,
+        )
+        rubric = Rubric(llm_traits=[trait])
+
+        results, labels, usage_list = evaluator.evaluate_rubric("Who wrote it?", "Alice wrote it.", rubric)
+
+        assert results == {
+            "citations.has_citations": True,
+            "citations.citation_count": 4,
+        }
+        assert labels is None
+        assert len(usage_list) == 1
+
+    def test_template_and_scalar_traits_coexist(self):
+        parsed = _CitationEvidence(has_citations=False, citation_count=0)
+        evaluator = self._build_evaluator_with_mock(parsed)
+
+        # When the mocked LLM's structured output is called for the scalar trait,
+        # it returns the same _CitationEvidence parsed instance. Force scalar
+        # evaluation to go through a path the mock can still answer by using
+        # sequential strategy with a boolean trait that will also invoke
+        # with_structured_output. To keep the test focused on template handling,
+        # we rebuild the mock per-call via side_effect.
+        from dataclasses import dataclass
+        from unittest.mock import MagicMock
+
+        from karenina.schemas.outputs.rubric import SingleBooleanScore
+
+        @dataclass
+        class _FakeUsage:
+            input_tokens: int = 10
+            output_tokens: int = 5
+
+        @dataclass
+        class _FakeResponse:
+            raw: object
+            usage: object
+
+        call_count = {"n": 0}
+
+        def structured_output_factory(model_class):
+            fake = MagicMock()
+            if model_class is _CitationEvidence:
+                fake.invoke.return_value = _FakeResponse(raw=parsed, usage=_FakeUsage())
+            else:
+                fake.invoke.return_value = _FakeResponse(raw=SingleBooleanScore(result=True), usage=_FakeUsage())
+            call_count["n"] += 1
+            return fake
+
+        evaluator.llm_trait_evaluator.llm.with_structured_output.side_effect = structured_output_factory
+
+        template_trait = LLMRubricTrait(
+            name="citations",
+            description="Assess citation usage.",
+            kind=_CitationEvidence,
+            higher_is_better=None,
+        )
+        scalar_trait = LLMRubricTrait(
+            name="clarity",
+            description="Is the response clear?",
+            kind="boolean",
+            higher_is_better=True,
+        )
+        rubric = Rubric(llm_traits=[template_trait, scalar_trait])
+
+        results, _labels, _usage = evaluator.evaluate_rubric("Q", "A", rubric)
+
+        # Template trait should be flattened
+        assert "citations.has_citations" in results
+        assert "citations.citation_count" in results
+        # Scalar trait should use its plain name
+        assert results["clarity"] is True

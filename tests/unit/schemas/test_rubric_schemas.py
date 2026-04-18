@@ -1004,6 +1004,111 @@ class TestAgenticRubricTraitTemplateKind:
 
 
 # =============================================================================
+# LLMRubricTrait Template Kind Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestLLMRubricTraitTemplateKind:
+    def test_accepts_pydantic_class_as_kind(self):
+        trait = LLMRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.is_template_kind is True
+        assert trait.kind is _SampleFindings
+
+    def test_forces_higher_is_better_none(self):
+        trait = LLMRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.higher_is_better is None
+
+    def test_rejects_higher_is_better_true_for_template(self):
+        with pytest.raises(ValidationError, match="must be None"):
+            LLMRubricTrait(
+                name="test",
+                description="Check stuff.",
+                kind=_SampleFindings,
+                higher_is_better=True,
+            )
+
+    def test_rejects_deep_judgment_enabled_for_template(self):
+        with pytest.raises(ValidationError, match="deep_judgment_enabled"):
+            LLMRubricTrait(
+                name="test",
+                description="Check stuff.",
+                kind=_SampleFindings,
+                higher_is_better=None,
+                deep_judgment_enabled=True,
+            )
+
+    def test_validate_score_noop_for_template(self):
+        trait = LLMRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        assert trait.validate_score(42) is True
+        assert trait.validate_score(True) is True
+
+    def test_is_template_kind_false_for_string(self):
+        trait = LLMRubricTrait(name="test", description="d", kind="boolean")
+        assert trait.is_template_kind is False
+
+    def test_model_dump_serializes_kind_as_schema(self):
+        trait = LLMRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        d = trait.model_dump()
+        assert d["kind"]["type"] == "template"
+        assert "schema" in d["kind"]
+        assert d["kind"]["schema"]["title"] == "_SampleFindings"
+
+    def test_model_validate_roundtrip(self):
+        trait = LLMRubricTrait(
+            name="test",
+            description="Check stuff.",
+            kind=_SampleFindings,
+            higher_is_better=None,
+        )
+        d = trait.model_dump()
+        rebuilt = LLMRubricTrait.model_validate(d)
+        assert rebuilt.is_template_kind is True
+        assert rebuilt.higher_is_better is None
+        assert set(rebuilt.kind.model_fields.keys()) == {"count", "items", "found"}
+
+    def test_existing_string_kinds_unchanged(self):
+        """Ensure backward compatibility."""
+        for kind in ("boolean", "score"):
+            trait = LLMRubricTrait(name="t", description="d", kind=kind)
+            assert trait.is_template_kind is False
+            d = trait.model_dump()
+            assert d["kind"] == kind
+
+    def test_rejects_nested_basemodel_template(self):
+        """Template validation should reject fields that are themselves BaseModel subclasses."""
+
+        class _Inner(BaseModel):
+            x: int
+
+        class _Bad(BaseModel):
+            nested: _Inner
+
+        with pytest.raises(ValidationError, match="not allowed in template kind"):
+            LLMRubricTrait(name="test", description="d", kind=_Bad, higher_is_better=None)
+
+
+# =============================================================================
 # Trace Materialization Tests
 # =============================================================================
 

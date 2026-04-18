@@ -301,7 +301,7 @@ class FinalizeResultStage(BaseVerificationStage):
             # Note: evaluation_rubric is no longer stored per-result, it goes in shared_data at export
             evaluation_rubric = context.rubric
 
-            llm_trait_scores: dict[str, int] | None = None
+            llm_trait_scores: dict[str, Any] | None = None
             regex_trait_scores: dict[str, bool] | None = None
             callable_trait_scores: dict[str, bool | int] | None = None
             metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
@@ -312,8 +312,10 @@ class FinalizeResultStage(BaseVerificationStage):
                 regex_trait_names = {trait.name for trait in (evaluation_rubric.regex_traits or [])}
                 callable_trait_names = {trait.name for trait in (evaluation_rubric.callable_traits or [])}
 
-                # Split verify_rubric by trait type
-                llm_results: dict[str, int] = {}
+                # Split verify_rubric by trait type. Template-kind LLM traits
+                # contribute multiple entries with dotted keys, so llm_results
+                # carries Any to accept strings, lists, bools, and numerics.
+                llm_results: dict[str, Any] = {}
                 regex_results: dict[str, bool] = {}
                 callable_results: dict[str, bool | int] = {}
 
@@ -321,11 +323,15 @@ class FinalizeResultStage(BaseVerificationStage):
                     # Skip failed trait evaluations (None values)
                     if trait_value is None:
                         continue
-                    if trait_name in llm_trait_names:
+                    # Template-kind traits produce dotted keys ("trait.field");
+                    # match the prefix before the first dot against the trait
+                    # name so template results are attributed to the right type.
+                    base_name = trait_name.split(".", 1)[0]
+                    if base_name in llm_trait_names:
                         llm_results[trait_name] = trait_value
-                    elif trait_name in regex_trait_names:
+                    elif base_name in regex_trait_names:
                         regex_results[trait_name] = trait_value
-                    elif trait_name in callable_trait_names:
+                    elif base_name in callable_trait_names:
                         callable_results[trait_name] = trait_value
                     # Note: metric traits are stored separately in metric_trait_metrics
 
