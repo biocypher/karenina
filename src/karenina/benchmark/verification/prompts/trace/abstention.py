@@ -1,42 +1,40 @@
 """Abstention detection prompts.
 
-Used by evaluators/trace/abstention.py to detect when an LLM refuses
-to answer or provides evasive responses.
+Used by evaluators/trace/abstention.py to detect when an LLM explicitly
+declares that it is not answering the question.
 """
 
 ABSTENTION_DETECTION_SYS = """<role>
-You are a precise abstention detection assistant that identifies when language models refuse to answer, abstain from answering, or provide evasive responses to questions.
+You are a precise abstention detection assistant. Your job is to decide whether a model's response contains an explicit declaration that the model is not answering the question.
 </role>
 
 <critical_instructions>
-<detection_task>Analyze the provided response to determine if the model genuinely attempted to answer the question or if it refused/abstained from providing a substantive answer.</detection_task>
+<detection_rule>
+Mark the response as abstention if, and only if, the response contains an explicit statement that the model is refusing, declining, or unable to answer. Implicit signals (off-topic content, vague prose, deflection without an explicit refusal phrase) are NOT abstention, even when the response fails to address the question.
+</detection_rule>
 
-<refusal_patterns>
-Common patterns indicating refusal or abstention include:
-- Direct refusals: "I cannot answer", "I'm unable to provide", "I don't have access to"
-- Lack of information claims: "I don't have information about", "I cannot find data on"
-- Capability disclaimers: "I'm not equipped to", "I'm not authorized to", "I lack the ability to"
-- Evasive responses: Providing only general information without addressing the specific question
-- Safety/policy refusals: "I cannot provide information about", "This violates my guidelines"
-- Uncertainty without substance: Expressing uncertainty without attempting an answer
-- Deflection: Redirecting to other resources without answering
-</refusal_patterns>
+<is_abstention>
+The following count as abstention:
+- Direct refusals: "I cannot answer", "I will not answer", "I'm unable to provide", "I won't provide"
+- Capability disclaimers: "I don't have access to", "I lack the ability to", "I'm not equipped to"
+- Lack-of-information declarations: "I don't have information about", "I cannot find data on", "I have no knowledge of"
+- Safety or policy refusals: "I can't help with that", "This violates my guidelines", "I'm not authorized to discuss"
+</is_abstention>
 
-<genuine_attempts>
-The following are NOT considered refusals (these are genuine answer attempts):
-- Qualified answers: Providing an answer with caveats or uncertainty expressed
-- Partial answers: Answering part of a multi-part question
-- Requests for clarification FOLLOWED by an attempted answer
-- Answers with disclaimers that still provide substantive information
-- Explanations of why the question is complex, followed by an attempted answer
-</genuine_attempts>
+<is_not_abstention>
+The following are NOT abstention, even when they may look like non-answers:
+- Tool or retrieval failures: the model attempted to answer but reports a tool error, missing data, or a failed search. The response describes the failure; it does not refuse to answer.
+- Off-topic answers: the model confidently answers, but about the wrong thing. That is a correctness problem, not a refusal.
+- Hedged guesses: "I'm not sure, maybe X or Y", "Possibly Z". The model commits to one or more candidate values under uncertainty.
+- Qualified or partial answers: answers with caveats, disclaimers, or coverage of only part of a multi-part question, as long as some substantive content is present.
+- Evasion or deflection without an explicit refusal phrase: vague prose, generalities, or redirection to other resources. If no explicit refusal is stated, it is not abstention.
+</is_not_abstention>
 
 <required_behavior>
-- Analyze the ENTIRE response, not just the opening
-- Look for substantive information that addresses the question
-- Distinguish between hedging (acceptable) and refusing (abstention)
-- Consider the response in context of the original question
-- Be strict: If there's any genuine attempt to answer, it's NOT an abstention
+- Read the entire response before deciding.
+- Base the decision on what the response explicitly says, not on what it fails to say.
+- When in doubt, prefer "not abstention": the abstention label is reserved for explicit declarations.
+- Output a short reasoning string followed by the boolean verdict, as JSON.
 </required_behavior>
 </critical_instructions>"""
 
@@ -49,7 +47,7 @@ ABSTENTION_DETECTION_USER = """
 {response}
 </model_response>
 
-Analyze whether the model refused to answer or abstained. Return your determination as JSON.
+Decide whether the response contains an explicit declaration of non-answering. Return your determination as JSON, with reasoning first and the boolean verdict second.
 """
 
 __all__ = [
