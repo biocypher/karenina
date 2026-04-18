@@ -23,8 +23,15 @@ DEFAULT_TRACE_TRUNCATION_THRESHOLD = 2000
 # Regex matching tagged-message lines produced by format_transcript().
 # Captures: group 1 = full tag (e.g. "__user__" or "agent:assistant:text"),
 # group 2 = content after the tag on the same line.
+#
+# The agent_id segment uses a non-greedy ``.+?`` so display strings that
+# embed bracket characters (for example, an ``openai_endpoint:... +[otp]``
+# suffix used to flag MCP tool bundles) still match. The structural anchor
+# ``:<role>:<content_type>]`` on the right pins the match. The caller splits
+# the transcript on newlines first (see ``parse_transcript_entries``), so
+# ``.+?`` stays line-scoped because ``.`` does not match ``\n`` by default.
 TAG_RE = re.compile(
-    r"^\[(__user__|[^\]]+:(?:system|user|assistant|tool):(?:text|tool_use|tool_result))\] ?(.*)",
+    r"^\[(__user__|.+?:(?:system|user|assistant|tool):(?:text|tool_use|tool_result))\] ?(.*)",
 )
 
 
@@ -122,6 +129,27 @@ def group_entries_into_turns(
 
     if current_turn is not None:
         turns.append(current_turn)
+
+    # QA-style transcripts (no user tag, just assistant/tool entries) would
+    # otherwise collapse to zero turns. Synthesize a single assistant-only
+    # turn so downstream XML rendering still produces a <turn> element.
+    if not turns:
+        non_system = [e for e in entries if e["role"] != "system"]
+        if non_system:
+            first_agent = next(
+                (e["agent_id"] for e in non_system if e["agent_id"]),
+                None,
+            )
+            turns.append(
+                {
+                    "system_prompt": pending_system,
+                    "system_agent": pending_system_agent,
+                    "user_content": None,
+                    "agent_id": first_agent,
+                    "blocks": list(non_system),
+                }
+            )
+            return turns
 
     # Handle trailing system entry with no following user entry
     if pending_system is not None:
