@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from karenina.replay.ports_message_hydration import hydrate_trace_messages
 from karenina.scenario.handover import TaggedMessage, format_transcript
@@ -283,10 +283,15 @@ def render_qa_case(
     if template_section:
         parts.append(template_section)
 
-    if tmpl is not None and tmpl.raw_llm_response:
+    trace_messages = tmpl.trace_messages if tmpl is not None else []
+
+    # When trace_messages is populated, the structured # Trace section is
+    # the canonical rendering; emitting raw_llm_response verbatim duplicates
+    # it (and for large agentic runs, bloats the case file past any
+    # offloading threshold). Drop # LLM Response in that case.
+    if tmpl is not None and tmpl.raw_llm_response and not trace_messages:
         parts.append(_render_section("LLM Response", tmpl.raw_llm_response))
 
-    trace_messages = tmpl.trace_messages if tmpl is not None else []
     trace_body = _render_trace(
         trace_messages,
         md,
