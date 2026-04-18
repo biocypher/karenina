@@ -317,6 +317,8 @@ print(f"Fields: {list(CodeQualityFindings.model_fields.keys())}")
 
 Because the output has multiple fields with potentially different meanings, `higher_is_better` is set to `None`. Results are stored as flat dot-notation keys in `agentic_trait_scores` (`code_quality.has_type_hints`, `code_quality.test_count`, `code_quality.external_dependencies`), making them easy to access in DataFrames and downstream analysis.
 
+`LLMRubricTrait` accepts the same template kind for text-only evaluations that do not require tool access; the result is stored under `llm_trait_scores` with the same dotted-key convention. See the [LLM-trait template section](../llm-traits/#7-template-kind) for when to prefer it over the agentic variant.
+
 ### 5.5 Trace Materialization
 
 Agent traces from multi-turn agentic workflows can be very large. Rather than embedding the entire trace in the investigation prompt, `materialize_trace=True` writes it to a file and gives the investigation agent the file path. The agent can then use file tools (grep, search, read) to examine the trace selectively, which is both more efficient and more effective for targeted analysis.

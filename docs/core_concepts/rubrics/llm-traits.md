@@ -55,21 +55,23 @@ If you write "Is the response good?", the evaluator has to guess your standard. 
 
 ## 2. Overview
 
-Three kinds are available:
+Four kinds are available: three scalar kinds that return a single value per trait, and one template kind that returns a structured multi-field finding.
 
 | Kind | Returns | Best For |
 |------|---------|----------|
 | **boolean** | `True` / `False` | Binary judgments with explicit pass/fail boundaries |
 | **score** | `int` in a configurable range | Gradable qualities on a scale |
 | **literal** | `int` (class index) | Categorical classification with named classes |
+| **template** (Pydantic `BaseModel` subclass) | `dict` of typed fields (flattened under dotted keys) | Multi-field findings that are naturally evaluated together |
 
-In all three cases, the evaluator LLM reads the question, the raw response trace, and the trait definition, then returns a structured result for Karenina to store in `VerificationResult.rubric`.
+In the scalar cases, the evaluator LLM reads the question, the raw response trace, and the trait definition, then returns a structured result for Karenina to store in `VerificationResult.rubric`. The template case uses the same single parsing call but fills in every field of a user-defined Pydantic schema at once.
 
 Choose the kind based on the shape of the judgment:
 
 - Use **boolean** when the answer either meets the criterion or does not.
 - Use **score** when the quality varies along a continuum.
 - Use **literal** when you can define distinct named categories.
+- Use **[template](#7-template-kind)** when one evaluation naturally produces several related fields that you would otherwise split across multiple scalar traits.
 
 ## 3. Why the `description` Field Matters
 
@@ -101,7 +103,7 @@ DeepJudgmentRubric auto-fail check (if configured)
 FinalizeResult
 ```
 
-This chart shows the standard LLM-trait evaluation flow. If deep judgment is enabled, the LLM-trait work inside the RubricEvaluation stage becomes a multi-step evidence-based path; that variant is shown in [Deep Judgment](#8-deep-judgment-optional) below.
+This chart shows the standard LLM-trait evaluation flow. If deep judgment is enabled, the LLM-trait work inside the RubricEvaluation stage becomes a multi-step evidence-based path; that variant is shown in [Deep Judgment](#9-deep-judgment-optional) below.
 
 For **boolean** and **score** traits, the `description` field is the main channel through which you tell the evaluator LLM what to evaluate and how. In practice, the more concrete the criteria, boundary cases, and domain context, the more reliable the judgment tends to be.
 
@@ -466,9 +468,84 @@ print(f"Is 4 valid? {quality_trait.validate_score(4)}")    # Out of range
 print(f"Is True valid? {quality_trait.validate_score(True)}")  # Boolean rejected
 ```
 
-Literal traits are evaluated through the standard classification path. The [deep judgment](#8-deep-judgment-optional) guidance below is intended for boolean and score traits.
+Literal traits are evaluated through the standard classification path. The [deep judgment](#9-deep-judgment-optional) guidance below is intended for boolean and score traits.
 
-## 7. The `higher_is_better` Field
+## 7. Template Kind
+
+The scalar kinds ([boolean](#4-boolean-kind), [score](#5-score-kind), [literal](#6-literal-kind)) each return a single value per trait. Template kind lets you pass a Pydantic `BaseModel` subclass as `kind`, and the judge LLM populates the entire schema in one structured-output call, producing a multi-field evaluation finding from a single trait instead of several scalar traits that share the same underlying investigation.
+
+Unlike the [agentic template kind](../agentic-traits/#54-template-kind-agentic-evaluation-with-structured-output), which launches an agent with tool access, the LLM-trait template kind uses the same single parsing call as scalar LLM traits. The parsing model reads the question and the response trace, then fills in every field of the schema at once. There is no agent, no tool use, and no workspace access. Use this variant when the evaluation can be judged from the response text alone but naturally produces several related findings that are awkward to split across individual boolean/score/literal traits (for example, a compliance audit with multiple criteria, a structured summary of rhetorical moves, or a tagged list of cited sources). If you need to inspect files, run code, or explore workspace state, use the [agentic template kind](../agentic-traits/#54-template-kind-agentic-evaluation-with-structured-output) instead.
+
+### 7.1 Constraints
+
+Template kind imposes several constraints to keep the structured output serializable and unambiguous:
+
+- **Field types.** Each field must be a primitive (`bool`, `int`, `float`, `str`) or a `list` of primitives (`list[str]`, `list[int]`, ...). Nested `BaseModel`s, dictionaries, tuples, and non-primitive lists are rejected at trait construction time.
+- **Optional fields need explicit defaults.** An `Optional[T]` or `T | None` field must declare a default (commonly `None`), so the JSON Schema round-trips faithfully when the rubric is serialized to a checkpoint.
+- **`higher_is_better` must be `None`.** A structured multi-field result has no single direction; analysis tools cannot aggregate it into a "better/worse" score the way they can for scalar kinds. The validator rejects any other value.
+- **`deep_judgment_enabled` must be `False`.** [Deep judgment](#9-deep-judgment-optional) produces excerpts and reasoning for a single scalar score; it is mutually exclusive with template kind, which has no scalar score to reason about.
+- **`classes`, `min_score`, and `max_score` are ignored.** Those fields apply only to scalar kinds; template kind derives its output shape entirely from the Pydantic schema.
+
+### 7.2 Minimal Example
+
+```python
+from pydantic import BaseModel, Field
+from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
+
+
+class CitationFindings(BaseModel):
+    """The judge reads the response and fills this in."""
+
+    cites_named_trial: bool = Field(
+        description="True if the response names at least one specific clinical trial."
+    )
+    citation_count: int = Field(
+        description="Number of distinct named sources (trials, authors, guidelines) cited."
+    )
+    cited_sources: list[str] = Field(
+        description="Short labels for each named source (e.g., 'KEYNOTE-189', 'NCCN 2024')."
+    )
+
+
+citation_trait = LLMRubricTrait(
+    name="citation_audit",
+    description=(
+        "Inspect the response for citations of clinical evidence. Record whether any "
+        "specific trial is named, count the distinct named sources, and list their labels. "
+        "Do not infer sources that are not explicitly named in the response."
+    ),
+    kind=CitationFindings,
+    higher_is_better=None,  # required: no single direction for multi-field output
+)
+
+rubric = Rubric(llm_traits=[citation_trait])
+
+print(f"Trait: {citation_trait.name}")
+print(f"Template kind: {citation_trait.is_template_kind}")
+print(f"Fields: {list(CitationFindings.model_fields.keys())}")
+```
+
+### 7.3 Result Shape
+
+Template traits flatten their structured output into `VerificationResultRubric.llm_trait_scores` using dotted keys. Each field of the Pydantic schema becomes an entry `"trait_name.field_name"`, mirroring the convention used for [agentic template traits](../agentic-traits/#54-template-kind-agentic-evaluation-with-structured-output) under `agentic_trait_scores`.
+
+For the example above, a successful evaluation stores:
+
+```python
+result.rubric.llm_trait_scores == {
+    "citation_audit.cites_named_trial": True,
+    "citation_audit.citation_count": 2,
+    "citation_audit.cited_sources": ["KEYNOTE-189", "NCCN 2024"],
+}
+```
+
+The bare trait name (`"citation_audit"`) does **not** appear in the successful case. It is reserved for the failure path: if the parsing call fails or the model returns output that cannot be validated against the schema, the pipeline stores `llm_trait_scores["citation_audit"] = None` instead of the dotted keys. Analysis code should therefore check for the bare key when deciding whether the trait evaluated successfully.
+
+### 7.4 Evaluation Strategy Interaction
+
+Template traits are always evaluated **one call per trait** because each trait contributes a distinct Pydantic schema that cannot share a batched output model with other traits. When a rubric mixes template and scalar traits and `VerificationConfig.rubric_evaluation_strategy="batch"`, template traits still run one at a time (in parallel when async is enabled), while the scalar traits in the same rubric continue to share a single batched call. Setting `rubric_evaluation_strategy="sequential"` affects only the scalar traits; it does not change template-trait behavior.
+
+## 8. The `higher_is_better` Field
 
 This field (type `bool | None`, default `True`) tells analysis tools how to interpret results:
 
@@ -477,18 +554,21 @@ This field (type `bool | None`, default `True`) tells analysis tools how to inte
 | boolean | `True` = positive outcome | `True` = negative outcome | Directionality does not apply |
 | score | Higher scores = better | Higher scores = worse | Directionality does not apply |
 | literal | Higher class indices are interpreted as better | Higher class indices are interpreted as worse | Directionality does not apply |
+| template | Not allowed (validation error) | Not allowed (validation error) | Required |
 
 Most traits use `higher_is_better=True` (the default). Use `False` for traits where a positive detection is bad (for example, scope drift detected or prohibited content present). Use `None` when the trait has no meaningful directionality.
 
 For literal traits, `higher_is_better` does **not** affect classification itself. It only affects how downstream tooling interprets the numeric indices. If your classes are distinct categories rather than a quality ladder, choose a stable convention and rely on the class labels for human interpretation.
 
-## 8. Deep Judgment (Optional)
+For [template kind](#7-template-kind), `higher_is_better` must be `None`; the validator rejects any other value because a multi-field structured result has no single direction to aggregate.
+
+## 9. Deep Judgment (Optional)
 
 Without deep judgment, each LLM trait is evaluated in a single parsing call: the model reads the question, the response trace, and the trait definition, then returns a score or boolean directly. Deep judgment replaces that single call with a multi-step evidence-based evaluation that produces both a judgment and the textual evidence behind it.
 
 Deep judgment is currently best suited to **boolean** and **score** traits. The pipeline extracts booleans or numeric scores and does not consume literal class definitions during scoring. In practice, use standard evaluation for literal traits.
 
-### 8.1 What Happens When Deep Judgment Is On
+### 9.1 What Happens When Deep Judgment Is On
 
 Deep-judgment traits are evaluated **one at a time** (never batched) during the RubricEvaluation pipeline stage. Any traits on the same rubric that do not have deep judgment enabled are evaluated separately through the standard path. The sequence for each deep-judgment trait depends on whether excerpt extraction is enabled.
 
@@ -521,7 +601,7 @@ This path is faster (2 LLM calls per trait instead of 3+) but provides less veri
 - Speed is more important than transparency
 - Responses are very short (1-2 sentences)
 
-### 8.2 Enabling Deep Judgment on a Trait
+### 9.2 Enabling Deep Judgment on a Trait
 
 ```python
 evidence_trait = LLMRubricTrait(
@@ -547,7 +627,7 @@ print(f"Excerpt extraction: {evidence_trait.deep_judgment_excerpt_enabled}")
 print(f"Max excerpts: {evidence_trait.deep_judgment_max_excerpts}")
 ```
 
-### 8.3 Deep Judgment Configuration Fields
+### 9.3 Deep Judgment Configuration Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -560,7 +640,7 @@ print(f"Max excerpts: {evidence_trait.deep_judgment_max_excerpts}")
 
 Per-trait fields set to `None` fall back to the global defaults on `VerificationConfig`.
 
-### 8.4 Controlling Deep Judgment at Runtime
+### 9.4 Controlling Deep Judgment at Runtime
 
 You can control rubric deep judgment at runtime through `VerificationConfig`:
 
@@ -592,7 +672,7 @@ config = VerificationConfig(
 
 For detailed configuration (four modes, per-trait overrides, result fields, cost considerations), see [deep judgment rubrics](../../../../advanced-pipeline/deep-judgment-rubrics/).
 
-## 9. Next Steps
+## 10. Next Steps
 
 - [Regex traits](../regex-traits/): deterministic pattern matching
 - [Callable traits](../callable-traits/): custom Python functions
