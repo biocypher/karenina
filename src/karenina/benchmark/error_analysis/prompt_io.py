@@ -32,6 +32,7 @@ class PromptContext:
         passed: Number of passing results.
         failed: Number of failing results.
         failure_categories: Ordered list of failure categories observed.
+        run_timestamp: Latest verification timestamp in the result set.
     """
 
     benchmark_name: str
@@ -40,6 +41,7 @@ class PromptContext:
     passed: int
     failed: int
     failure_categories: list[str]
+    run_timestamp: str = ""
 
     def as_mapping(self) -> dict[str, str]:
         """Return the string mapping used by string.Template.safe_substitute."""
@@ -50,6 +52,7 @@ class PromptContext:
             "PASSED": str(self.passed),
             "FAILED": str(self.failed),
             "FAILURE_CATEGORIES": ", ".join(self.failure_categories),
+            "RUN_TIMESTAMP": self.run_timestamp,
         }
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -180,3 +182,76 @@ class TestFacade:
         )
         assert (out / "REPORT.md").exists()
         assert not (out / "stale.txt").exists()  # wiped by materializer
+
+    def test_accepts_runs_dict_json_shape(
+        self,
+        tmp_path,
+        tiny_benchmark,
+        tiny_result_set,
+    ):
+        """A JSON file shaped like {"runs": {name: [...]}} is loadable.
+
+        This is the shape produced by experiment helpers that dump
+        ``{"runs": {run_name: [r.model_dump() for r in result_set.results]}}``
+        (single-run), and must be accepted transparently.
+        """
+        runs_path = tmp_path / "qa_results.json"
+        runs_path.write_text(
+            json.dumps(
+                {
+                    "runs": {
+                        "qa_only": [r.model_dump() for r in tiny_result_set.results],
+                    }
+                },
+                default=str,
+            )
+        )
+
+        launcher = _RecordingLauncher()
+        out = tmp_path / "analysis"
+        analyze_errors(
+            results=runs_path,
+            checkpoint=tiny_benchmark,
+            out_dir=out,
+            launcher=launcher,
+        )
+        assert (out / "REPORT.md").exists()
+        # Both the passing and failing result must have been materialized.
+        assert any(out.glob("passes/*.md"))
+        assert any(out.rglob("failures/**/*.md"))
+
+    def test_runs_dict_with_multiple_runs_is_flattened_and_warns(
+        self,
+        tmp_path,
+        tiny_benchmark,
+        tiny_result_set,
+        caplog,
+    ):
+        """Two runs collapse into a single VerificationResultSet with a warning."""
+        runs_path = tmp_path / "qa_results.json"
+        runs_path.write_text(
+            json.dumps(
+                {
+                    "runs": {
+                        "run_a": [tiny_result_set.results[0].model_dump()],
+                        "run_b": [tiny_result_set.results[1].model_dump()],
+                    }
+                },
+                default=str,
+            )
+        )
+
+        launcher = _RecordingLauncher()
+        out = tmp_path / "analysis"
+        with caplog.at_level(logging.WARNING, logger="karenina.benchmark.error_analysis.facade"):
+            analyze_errors(
+                results=runs_path,
+                checkpoint=tiny_benchmark,
+                out_dir=out,
+                launcher=launcher,
+            )
+        # Both pass and failure cases should be present.
+        assert any(out.glob("passes/*.md"))
+        assert any(out.rglob("failures/**/*.md"))
+        # A warning must name the multi-run condition.
+        assert any("runs" in rec.message.lower() and "flatten" in rec.message.lower() for rec in caplog.records)

@@ -20,6 +20,7 @@ class TestPromptIO:
             passed=7,
             failed=3,
             failure_categories=["content", "parsing"],
+            run_timestamp="2026-04-18T12:34:56Z",
         )
         path = resolve_and_write_prompt(prompt_path=None, out_dir=tmp_path, context=context)
         assert path == tmp_path / "PROMPT.md"
@@ -28,6 +29,7 @@ class TestPromptIO:
         assert "anthropic/claude-opus-4-6" in text
         assert "10" in text
         assert "content, parsing" in text
+        assert "2026-04-18T12:34:56Z" in text
 
     def test_user_prompt_copied_verbatim_when_no_placeholders(self, tmp_path):
         source = tmp_path / "custom.md"
