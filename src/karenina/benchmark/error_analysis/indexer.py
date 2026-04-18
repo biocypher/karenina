@@ -33,6 +33,7 @@ def _directory_map() -> list[str]:
         "- `failures/<category>/`: one file per failure, bucketed by category.",
         "- `case_assets/`: offloaded trace content referenced from case files.",
         "- `PROMPT.md`: the prompt the analyst agent is asked to follow.",
+        "- `RUBRIC_GUIDE.md`: reference for writing rubric-trait proposals.",
         "- `REPORT.md`: the agent's output; absent until a launcher runs.",
     ]
 
