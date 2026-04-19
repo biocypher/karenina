@@ -436,3 +436,111 @@ class TestStampAgenticTraitOverrides:
         assert global_rubric.agentic_traits[0].model_override is override
         assert override.request_timeout is None
         assert override.retry_policy is None
+
+
+# =============================================================================
+# interleave_by_answerer
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestInterleaveByAnswerer:
+    """Tests for the interleave_by_answerer helper."""
+
+    def _task(self, ans_id: str, question_id: str, parser_id: str, replicate: int | None) -> dict:
+        return {
+            "answering_model": _make_model(ans_id),
+            "parsing_model": _make_model(parser_id),
+            "question_id": question_id,
+            "replicate": replicate,
+        }
+
+    def test_first_n_tasks_cover_all_answerers(self) -> None:
+        from karenina.benchmark.verification.utils.task_helpers import (
+            interleave_by_answerer,
+        )
+
+        tasks = []
+        for ans in ("a", "b", "c"):
+            for q in ("q1", "q2", "q3"):
+                for p in ("p1", "p2"):
+                    for rep in (1,):
+                        tasks.append(self._task(ans, q, p, rep))
+
+        out = interleave_by_answerer(tasks)
+        assert len(out) == len(tasks)
+
+        first_three_answerers = {t["answering_model"].id for t in out[:3]}
+        assert first_three_answerers == {"a", "b", "c"}
+
+    def test_within_group_sort_is_prefix_cache_friendly(self) -> None:
+        from karenina.benchmark.verification.utils.task_helpers import (
+            interleave_by_answerer,
+        )
+
+        tasks = [
+            self._task("a", "q2", "p2", 1),
+            self._task("a", "q1", "p1", 2),
+            self._task("a", "q1", "p1", 1),
+            self._task("b", "q1", "p1", 1),
+        ]
+        out = interleave_by_answerer(tasks)
+
+        group_a = [t for t in out if t["answering_model"].id == "a"]
+        # Mirror the helper's key exactly: None -> 0 coercion so the sort
+        # assertion does not rely on None vs int ordering.
+        keys = [(t["question_id"], t["parsing_model"].id, t.get("replicate") or 0) for t in group_a]
+        assert keys == sorted(keys)
+
+    def test_unequal_group_sizes_no_drops_no_duplicates(self) -> None:
+        from karenina.benchmark.verification.utils.task_helpers import (
+            interleave_by_answerer,
+        )
+
+        tasks = [
+            self._task("a", "q1", "p1", 1),
+            self._task("a", "q2", "p1", 1),
+            self._task("a", "q3", "p1", 1),
+            self._task("b", "q1", "p1", 1),
+        ]
+        out = interleave_by_answerer(tasks)
+
+        assert len(out) == 4
+        ids = sorted((t["answering_model"].id, t["question_id"]) for t in out)
+        expected = sorted((t["answering_model"].id, t["question_id"]) for t in tasks)
+        assert ids == expected
+
+    def test_single_answerer_passthrough(self) -> None:
+        from karenina.benchmark.verification.utils.task_helpers import (
+            interleave_by_answerer,
+        )
+
+        tasks = [
+            self._task("only", "q2", "p1", 1),
+            self._task("only", "q1", "p2", 1),
+            self._task("only", "q1", "p1", 1),
+        ]
+        out = interleave_by_answerer(tasks)
+
+        keys = [(t["question_id"], t["parsing_model"].id, t["replicate"]) for t in out]
+        assert keys == sorted(keys)
+
+    def test_empty_input(self) -> None:
+        from karenina.benchmark.verification.utils.task_helpers import (
+            interleave_by_answerer,
+        )
+
+        assert interleave_by_answerer([]) == []
+
+    def test_deterministic(self) -> None:
+        from karenina.benchmark.verification.utils.task_helpers import (
+            interleave_by_answerer,
+        )
+
+        tasks = [
+            self._task("a", "q1", "p1", 1),
+            self._task("b", "q1", "p1", 1),
+            self._task("a", "q2", "p1", 1),
+            self._task("b", "q2", "p1", 1),
+        ]
+        assert interleave_by_answerer(tasks) == interleave_by_answerer(list(tasks))

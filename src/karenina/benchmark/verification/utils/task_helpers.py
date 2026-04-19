@@ -5,6 +5,7 @@ few-shot resolution, and preview result creation.
 """
 
 import logging
+from itertools import zip_longest
 from typing import Any
 
 from karenina.schemas.entities import Rubric
@@ -33,6 +34,46 @@ def model_sort_key(model: Any) -> str:
         A string suitable for use as a sort key.
     """
     return getattr(model, "id", None) or getattr(model, "model_name", None) or ""
+
+
+def interleave_by_answerer(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Round-robin tasks by answerer identity, prefix-cache-friendly within each group.
+
+    Groups the input tasks by the answerer's ``ModelIdentity.canonical_key``,
+    sorts each group using the prefix-cache-friendly key
+    ``(question_id, parse_key, replicate)``, then round-robins across groups
+    so consecutive tasks target different answerer identities when possible.
+
+    Group iteration order follows the insertion order of the input (first
+    appearance of each canonical key) to keep the output deterministic.
+
+    Args:
+        tasks: Task queue as produced by ``generate_task_queue``.
+
+    Returns:
+        A new list containing the same tasks in a re-ordered sequence. The
+        input is not mutated.
+    """
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    if not tasks:
+        return []
+
+    groups: dict[str, list[dict[str, Any]]] = {}  # insertion-ordered (Python 3.7+)
+    for task in tasks:
+        key = ModelIdentity.from_model_config(task["answering_model"], role="answering").canonical_key
+        groups.setdefault(key, []).append(task)
+
+    for group in groups.values():
+        group.sort(
+            key=lambda t: (
+                t["question_id"],
+                model_sort_key(t["parsing_model"]),
+                t.get("replicate") or 0,
+            )
+        )
+
+    return [t for row in zip_longest(*groups.values()) for t in row if t is not None]
 
 
 def stamp_agentic_trait_overrides(
