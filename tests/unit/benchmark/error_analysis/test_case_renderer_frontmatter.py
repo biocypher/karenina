@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from karenina.benchmark.error_analysis.case_renderer import render_qa_case
 from karenina.schemas.results.failure import FailureCategory

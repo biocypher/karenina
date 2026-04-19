@@ -12,7 +12,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from dateutil import parser as dateutil_parser  # type: ignore[import-untyped]
+from dateutil import parser as dateutil_parser
 from pydantic import BaseModel
 
 from karenina.schemas.primitives.normalizers import (
