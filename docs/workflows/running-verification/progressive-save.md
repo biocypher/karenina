@@ -83,6 +83,8 @@ On successful completion, `on_finalize(all_complete=True)` assembles the final e
 
 **Resume is triple-level.** The unit of work is a `(question_id, answering_canonical_key, parsing_canonical_key, replicate)` tuple, not a question. If you have 10 questions × 2 answering models × 3 replicates, the state tracks 60 triples. Resuming after a crash that completed 35 triples runs only the remaining 25, even when those 25 cover questions that already had *some* triples completed.
 
+**Scenarios are combo-atomic.** Scenario benchmarks use the same machinery with one adjustment: slot 0 of the triple holds `scenario_id` instead of `question_id`. Each scenario combo `(scenario_id, ans, parse, replicate)` is persisted as a single unit once all its turns complete; an interrupted combo re-runs from turn 1 on resume (no turn-level checkpointing). `Benchmark.resume_verification()` auto-detects QA vs scenario.
+
 ---
 
 ## Python API: Fresh Run with a Sink

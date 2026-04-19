@@ -279,19 +279,24 @@ class ProgressiveFileSink:
             self.jsonl_path.touch()
 
     def on_result(self, result: VerificationResult) -> None:
-        """Append a completed result to the JSONL and refresh the state."""
+        """Append a completed result to the JSONL and refresh the state.
+
+        The JSONL line is always written. The ``_completed`` set is
+        idempotent: scenario runs emit one ``on_result`` per turn, all
+        sharing the same combo-level task key (scenario_id-keyed), and the
+        combo is only marked complete once even though N turn lines are
+        appended. QA runs emit exactly one result per task so the guard
+        is a no-op.
+        """
         if not is_completed_result(result):
             return
 
         task_id = TaskIdentifier.from_result(result).to_key()
-        if task_id in self._completed:
-            logger.debug("Task %s already recorded; skipping duplicate append", task_id)
-            return
-
         _append_jsonl_line(self.jsonl_path, result.model_dump_json())
         self._results.append(result)
-        self._completed.add(task_id)
-        self._failed.discard(task_id)
+        if task_id not in self._completed:
+            self._completed.add(task_id)
+            self._failed.discard(task_id)
         self._save_state()
 
     def mark_failed(self, task_id: str) -> None:

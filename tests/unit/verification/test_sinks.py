@@ -198,14 +198,22 @@ class TestProgressiveFileSink:
         state = json.loads(sink.state_path.read_text())
         assert state["completed_count"] == 0
 
-    def test_on_result_deduplicates(self, tmp_path: Path):
+    def test_on_result_append_is_unconditional_but_completed_is_idempotent(self, tmp_path: Path):
+        """JSONL always appends; ``_completed`` tracks combo-level state.
+
+        Scenario runs emit one ``on_result`` per turn, all sharing the same
+        combo-level task key. We must append every turn to the JSONL but
+        mark the combo complete only once. QA runs never emit true
+        duplicates (one result per task), so the same invariant holds there
+        trivially.
+        """
         sink = self._fresh(tmp_path)
         r = _result("q1")
         sink.on_start([TaskIdentifier.from_result(r).to_key()], sink.config)
         sink.on_result(r)
         sink.on_result(r)
 
-        assert len(sink.jsonl_path.read_text().splitlines()) == 1
+        assert len(sink.jsonl_path.read_text().splitlines()) == 2
         assert sink.completed_count == 1
 
     def test_completed_triples_round_trip(self, tmp_path: Path):

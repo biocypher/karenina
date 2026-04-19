@@ -826,16 +826,12 @@ class Benchmark:
                 )
 
         if self.is_scenario_benchmark:
-            if sink is not None:
-                raise NotImplementedError(
-                    "sink is not yet supported for scenario benchmarks; "
-                    "progressive save currently applies to standalone question benchmarks only"
-                )
             return self._run_scenario_verification(
                 config=config,
                 run_name=run_name,
                 async_enabled=async_enabled,
                 progress_callback=progress_callback,
+                sink=sink,
             )
         return self._verification_manager.run_verification(
             config,
@@ -900,6 +896,7 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
     ) -> VerificationResultSet:
         """Run verification for scenario benchmarks.
 
@@ -911,6 +908,11 @@ class Benchmark:
             run_name: Optional run name for tracking.
             async_enabled: If True, run combinations in parallel.
             progress_callback: Optional callback for progress updates.
+            sink: Optional :class:`ResultSink` for progressive save / resume.
+                Combo-atomic: each scenario combo (scenario_id, ans, parse,
+                replicate) is persisted as a single completed task once its
+                turn_results are emitted. Interrupted combos re-run from
+                turn 1 on resume.
 
         Returns:
             VerificationResultSet containing all per-turn results.
@@ -1034,6 +1036,41 @@ class Benchmark:
             random.shuffle(combos)
         # "generation_order": no-op, preserve original list comprehension order
 
+        # Sink wiring: build the full combo manifest (before filtering) and
+        # drop combos whose triple is already complete. The slot-0 of a
+        # scenario TaskIdentifier holds the scenario_id (not question_id),
+        # matching metadata.scenario_id on the turn_results that
+        # ProgressiveFileSink stores. See TaskIdentifier.from_result.
+        if sink is not None:
+            from karenina.schemas.verification.model_identity import ModelIdentity
+            from karenina.utils.progressive_save import TaskIdentifier
+
+            def _combo_key(combo: ScenarioCombo) -> tuple[str, str, str, int | None]:
+                scen, ans, parse, rep = combo
+                ans_key = ModelIdentity.from_model_config(ans, role="answering").canonical_key
+                parse_key = ModelIdentity.from_model_config(parse, role="parsing").canonical_key
+                return (scen.name, ans_key, parse_key, rep)
+
+            full_manifest: list[str] = [
+                TaskIdentifier(
+                    question_id=k[0],
+                    answering_canonical_key=k[1],
+                    parsing_canonical_key=k[2],
+                    replicate=k[3],
+                ).to_key()
+                for k in (_combo_key(c) for c in combos)
+            ]
+
+            sink_triples = sink.completed_triples()
+            if sink_triples:
+                combos = [c for c in combos if _combo_key(c) not in sink_triples]
+                logger.info(
+                    "Scenario sink reports %d already-completed combos; %d remain",
+                    len(sink_triples),
+                    len(combos),
+                )
+            sink.on_start(full_manifest, config)
+
         executor = ScenarioExecutor(
             parallel=bool(async_enabled) and len(combos) > 1,
             config=ScenarioExecutorConfig(
@@ -1044,16 +1081,23 @@ class Benchmark:
         )
 
         # Adapt the facade callback (float, str) to the executor callback
-        # (completed: int, total: int, result_or_none)
-        executor_callback = None
-        if progress_callback is not None:
-            total = len(combos)
+        # (completed: int, total: int, result_or_none). Also fan out each
+        # completed combo's turn_results to the sink so it can persist them
+        # incrementally.
+        total = len(combos)
 
-            def _adapter(completed: int, _total: int, _result: Any) -> None:
+        def _adapter(completed: int, _total: int, exec_result: Any) -> None:
+            if sink is not None and exec_result is not None:
+                for tr in getattr(exec_result, "turn_results", []) or []:
+                    try:
+                        sink.on_result(tr)
+                    except Exception:  # noqa: BLE001
+                        logger.warning("Scenario sink on_result raised; continuing", exc_info=True)
+            if progress_callback is not None and total > 0:
                 pct = completed / total if total > 0 else 1.0
                 progress_callback(pct, f"Scenario {completed}/{total}")
 
-            executor_callback = _adapter
+        executor_callback = _adapter if (progress_callback is not None or sink is not None) else None
 
         exec_results, errors = executor.run_batch(
             combos=combos,
@@ -1063,6 +1107,13 @@ class Benchmark:
             progress_callback=executor_callback,
             workspace_root=self._workspace_root,
         )
+
+        if sink is not None:
+            all_complete = not errors and len(exec_results) == len(combos)
+            try:
+                sink.on_finalize(all_complete=all_complete)
+            except Exception:  # noqa: BLE001
+                logger.warning("Scenario sink on_finalize raised; continuing", exc_info=True)
 
         all_turn_results: list[VerificationResult] = []
         for er in exec_results:

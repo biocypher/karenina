@@ -100,9 +100,16 @@ class TaskIdentifier:
 
     @classmethod
     def from_result(cls, result: VerificationResult) -> "TaskIdentifier":
-        """Create TaskIdentifier from a VerificationResult."""
+        """Create TaskIdentifier from a VerificationResult.
+
+        For scenario turn results (``metadata.scenario_id`` non-None), slot 0
+        holds the scenario_id so every turn in the same combo produces the
+        same task key. For QA results it holds ``metadata.question_id``.
+        """
+        scenario_id = getattr(result.metadata, "scenario_id", None)
+        unit_id = scenario_id if scenario_id else result.metadata.question_id
         return cls(
-            question_id=result.metadata.question_id,
+            question_id=unit_id,
             answering_canonical_key=result.metadata.answering.canonical_key,
             parsing_canonical_key=result.metadata.parsing.canonical_key,
             replicate=result.metadata.replicate,
