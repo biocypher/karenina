@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def extend_verification_run(
+def extend_template_run(
     benchmark: Benchmark,
     prior_results: VerificationResultSet,
     config: VerificationConfig,
@@ -121,7 +121,7 @@ def extend_verification_run(
         replicate_selector="all",
     )
     logger.info(
-        "extend_judgment: captured replay store with %d entries from %d prior results",
+        "extend_template: captured replay store with %d entries from %d prior results",
         len(replay_store.entries),
         len(prior_results.results),
     )
@@ -144,7 +144,7 @@ def extend_verification_run(
     )
     added_replicates = config.replicate_count - observed_replicates
     logger.info(
-        "extend_judgment: new answerers=%s, added replicates=%d, skip_triples=%d",
+        "extend_template: new answerers=%s, added replicates=%d, skip_triples=%d",
         new_answering_keys or "[]",
         added_replicates,
         len(skip_triples),
@@ -162,7 +162,7 @@ def extend_verification_run(
 
     merged = _merge(prior_results, new_results, effective_run_name)
     logger.info(
-        "extend_judgment: merged %d prior + %d new = %d total results under run_name=%r",
+        "extend_template: merged %d prior + %d new = %d total results under run_name=%r",
         len(prior_results.results),
         len(new_results.results),
         len(merged.results),
@@ -192,7 +192,7 @@ def _validate(
 
     if config.replay_store is not None:
         raise ValueError(
-            "config.replay_store must be None; extend_judgment builds the replay store internally from prior_results"
+            "config.replay_store must be None; extend_template builds the replay store internally from prior_results"
         )
 
     _validate_answering_identity(prior_results, config)
@@ -247,7 +247,7 @@ def _validate_replicate_count(
         raise ValueError(
             f"config.replicate_count={config.replicate_count} is lower than the "
             f"replicate fan-out observed in prior_results (={observed}). Replicate "
-            "reduction is not supported by extend_judgment; pass "
+            "reduction is not supported by extend_template; pass "
             f"replicate_count>={observed}."
         )
 
@@ -255,11 +255,11 @@ def _validate_replicate_count(
 def _infer_run_name(prior_results: VerificationResultSet) -> str:
     names: set[str] = {r.metadata.run_name for r in prior_results.results if r.metadata.run_name is not None}
     if len(names) == 0:
-        raise ValueError("prior_results rows have no run_name; pass run_name= explicitly to extend_judgment")
+        raise ValueError("prior_results rows have no run_name; pass run_name= explicitly to extend_template")
     if len(names) > 1:
         raise ValueError(
             f"prior_results rows carry inconsistent run_names ({sorted(names)}); "
-            "pass run_name= explicitly to extend_judgment"
+            "pass run_name= explicitly to extend_template"
         )
     return next(iter(names))
 

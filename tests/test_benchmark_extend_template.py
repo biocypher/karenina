@@ -1,4 +1,4 @@
-"""Unit tests for Benchmark.extend_judgment and extend_verification_run."""
+"""Unit tests for Benchmark.extend_template and extend_template_run."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from karenina.benchmark import Benchmark
-from karenina.benchmark.verification.extension import extend_verification_run
+from karenina.benchmark.verification.extension import extend_template_run
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import VerificationConfig, VerificationResult
@@ -180,7 +180,7 @@ def recorder(monkeypatch: pytest.MonkeyPatch) -> _FakeVerifyRecorder:
 
 
 @pytest.mark.unit
-class TestExtendJudgmentHappyPath:
+class TestExtendTemplateHappyPath:
     def test_single_replicate_merges_and_stamps(self, recorder: _FakeVerifyRecorder) -> None:
         bench = _make_bench()
         prior = _make_prior_set(run_name="first", question_ids=["q1", "q2", "q3"])
@@ -191,7 +191,7 @@ class TestExtendJudgmentHappyPath:
             evaluation_mode="template_only",
         )
 
-        merged = bench.extend_judgment(prior, config, store=False)
+        merged = bench.extend_template(prior, config, store=False)
 
         assert len(merged.results) == 6, "3 prior + 3 new = 6"
         run_names = {r.metadata.run_name for r in merged.results}
@@ -220,7 +220,7 @@ class TestExtendJudgmentHappyPath:
             replicate_count=3,
         )
 
-        merged = bench.extend_judgment(prior, config, store=False)
+        merged = bench.extend_template(prior, config, store=False)
 
         assert len(merged.results) == 2 * 2 * 3, "2 questions x 2 judges x 3 replicates"
         pairs: dict[tuple[str, int | None], int] = {}
@@ -232,7 +232,7 @@ class TestExtendJudgmentHappyPath:
 
 
 @pytest.mark.unit
-class TestExtendJudgmentMultipleAnsweringModels:
+class TestExtendTemplateMultipleAnsweringModels:
     def test_two_answerers_one_prior_judge_extended_with_one_new_judge(self, recorder: _FakeVerifyRecorder) -> None:
         bench = _make_bench()
         # Prior run: 2 questions x 2 answerers x 1 judge => 4 rows.
@@ -255,7 +255,7 @@ class TestExtendJudgmentMultipleAnsweringModels:
             evaluation_mode="template_only",
         )
 
-        merged = bench.extend_judgment(prior, config, store=False)
+        merged = bench.extend_template(prior, config, store=False)
 
         assert len(merged.results) == 2 * 2 * 2, "2 questions x 2 answerers x 2 judges"
 
@@ -276,7 +276,7 @@ class TestExtendJudgmentMultipleAnsweringModels:
 
 
 @pytest.mark.unit
-class TestExtendJudgmentAddAnsweringModel:
+class TestExtendTemplateAddAnsweringModel:
     def test_new_answerer_rows_added_prior_rows_kept(self, recorder: _FakeVerifyRecorder) -> None:
         bench = _make_bench()
         prior = _make_prior_set(run_name="add-ans", question_ids=["q1", "q2"])
@@ -287,7 +287,7 @@ class TestExtendJudgmentAddAnsweringModel:
             evaluation_mode="template_only",
         )
 
-        merged = bench.extend_judgment(prior, config, store=False)
+        merged = bench.extend_template(prior, config, store=False)
 
         assert len(merged.results) == 4, "2 prior (A1 x JA) + 2 new (A2 x JA) = 4"
 
@@ -309,7 +309,7 @@ class TestExtendJudgmentAddAnsweringModel:
 
 
 @pytest.mark.unit
-class TestExtendJudgmentAddReplicate:
+class TestExtendTemplateAddReplicate:
     def test_added_replicate_runs_live_prior_replicates_kept(self, recorder: _FakeVerifyRecorder) -> None:  # noqa: ARG002
         bench = _make_bench()
         prior = _make_prior_set(
@@ -325,7 +325,7 @@ class TestExtendJudgmentAddReplicate:
             replicate_count=4,
         )
 
-        merged = bench.extend_judgment(prior, config, store=False)
+        merged = bench.extend_template(prior, config, store=False)
 
         assert len(merged.results) == 8, "6 prior (reps 1..3) + 2 new (rep 4) = 8"
 
@@ -336,7 +336,7 @@ class TestExtendJudgmentAddReplicate:
 
 
 @pytest.mark.unit
-class TestExtendJudgmentAddAllAxes:
+class TestExtendTemplateAddAllAxes:
     def test_full_symmetric_matrix(self, recorder: _FakeVerifyRecorder) -> None:
         bench = _make_bench()
         prior = _make_prior_set(
@@ -352,7 +352,7 @@ class TestExtendJudgmentAddAllAxes:
             replicate_count=4,
         )
 
-        merged = bench.extend_judgment(prior, config, store=False)
+        merged = bench.extend_template(prior, config, store=False)
 
         # Full joint matrix: 2 questions x 2 answerers x 2 judges x 4 replicates = 32
         assert len(merged.results) == 32
@@ -375,19 +375,19 @@ class TestExtendJudgmentAddAllAxes:
 
 
 @pytest.mark.unit
-class TestExtendJudgmentValidation:
+class TestExtendTemplateValidation:
     def test_empty_prior_raises(self) -> None:
         bench = _make_bench()
         config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
         with pytest.raises(ValueError, match="at least one VerificationResult"):
-            extend_verification_run(bench, VerificationResultSet(results=[]), config)
+            extend_template_run(bench, VerificationResultSet(results=[]), config)
 
     def test_answering_mismatch_raises(self) -> None:
         bench = _make_bench()
         prior = _make_prior_set(run_name="r", question_ids=["q1"])
         config = VerificationConfig(answering_models=[OTHER_ANSWERING_MODEL], parsing_models=[JUDGE_B])
         with pytest.raises(ValueError, match="answering_models does not cover"):
-            extend_verification_run(bench, prior, config)
+            extend_template_run(bench, prior, config)
 
     def test_replicate_count_reduction_raises(self) -> None:
         bench = _make_bench()
@@ -398,7 +398,7 @@ class TestExtendJudgmentValidation:
             replicate_count=1,
         )
         with pytest.raises(ValueError, match="Replicate reduction is not supported"):
-            extend_verification_run(bench, prior, config)
+            extend_template_run(bench, prior, config)
 
     def test_replay_store_already_set_raises(self) -> None:
         from karenina.replay import ReplayStore
@@ -411,7 +411,7 @@ class TestExtendJudgmentValidation:
             replay_store=ReplayStore(),
         )
         with pytest.raises(ValueError, match="replay_store must be None"):
-            extend_verification_run(bench, prior, config)
+            extend_template_run(bench, prior, config)
 
     def test_inconsistent_run_names_raises(self) -> None:
         bench = _make_bench()
@@ -420,28 +420,28 @@ class TestExtendJudgmentValidation:
         merged_prior = VerificationResultSet(results=list(prior_a.results) + list(prior_b.results))
         config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
         with pytest.raises(ValueError, match="inconsistent run_names"):
-            extend_verification_run(bench, merged_prior, config)
+            extend_template_run(bench, merged_prior, config)
 
 
 @pytest.mark.unit
-class TestExtendJudgmentRunNameOverride:
+class TestExtendTemplateRunNameOverride:
     def test_override_stamps_all_rows(self, recorder: _FakeVerifyRecorder) -> None:  # noqa: ARG002
         bench = _make_bench()
         prior = _make_prior_set(run_name="original", question_ids=["q1"])
         config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
-        merged = bench.extend_judgment(prior, config, run_name="custom", store=False)
+        merged = bench.extend_template(prior, config, run_name="custom", store=False)
 
         run_names = {r.metadata.run_name for r in merged.results}
         assert run_names == {"custom"}
 
 
 @pytest.mark.unit
-class TestExtendJudgmentStoreFlag:
+class TestExtendTemplateStoreFlag:
     def test_store_true_populates_results_manager(self, recorder: _FakeVerifyRecorder) -> None:  # noqa: ARG002
         bench = _make_bench()
         prior = _make_prior_set(run_name="stored", question_ids=["q1", "q2"])
         config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
-        bench.extend_judgment(prior, config, store=True)
+        bench.extend_template(prior, config, store=True)
 
         fetched = bench.get_verification_results(run_name="stored")
         assert len(fetched) == 4
@@ -450,6 +450,6 @@ class TestExtendJudgmentStoreFlag:
         bench = _make_bench()
         prior = _make_prior_set(run_name="not-stored", question_ids=["q1"])
         config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
-        bench.extend_judgment(prior, config, store=False)
+        bench.extend_template(prior, config, store=False)
 
         assert "not-stored" not in bench._results_manager._in_memory_results

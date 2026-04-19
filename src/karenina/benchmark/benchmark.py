@@ -1007,7 +1007,7 @@ class Benchmark:
             errors=[(d, e) for d, e in errors] if errors else None,
         )
 
-    def extend_judgment(
+    def extend_template(
         self,
         prior_results: VerificationResultSet,
         config: VerificationConfig,
@@ -1058,9 +1058,9 @@ class Benchmark:
             Merged ``VerificationResultSet`` with the prior rows plus the
             newly-produced rows, all stamped with the effective ``run_name``.
         """
-        from .verification.extension import extend_verification_run
+        from .verification.extension import extend_template_run
 
-        merged = extend_verification_run(
+        merged = extend_template_run(
             self,
             prior_results,
             config,
