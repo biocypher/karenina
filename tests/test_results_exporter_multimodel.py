@@ -85,3 +85,19 @@ class TestExportHeaderMultiModel:
         assert summary["start_time"] == 1000.0
         assert summary["end_time"] == 1250.5
         assert summary["total_duration"] == pytest.approx(250.5)
+
+    def test_format_version_reflects_schema_bump(self) -> None:
+        """format_version bumped to 2.2 because answering_model/parsing_model
+        keys became plural arrays (breaking change for v2.1 readers)."""
+        job = _job_with([_model("qwen-a")], [_model("qwen-a")])
+        out = json.loads(export_verification_results_json(job, VerificationResultSet(results=[])))
+
+        assert out["format_version"] == "2.2"
+
+    def test_is_complete_defaults_false(self) -> None:
+        """Callers must opt in to is_complete=True. Default is False so that
+        a future intermediate-snapshot caller is not silently mislabeled."""
+        job = _job_with([_model("qwen-a")], [_model("qwen-a")])
+        out = json.loads(export_verification_results_json(job, VerificationResultSet(results=[])))
+
+        assert out["metadata"]["job_summary"]["is_complete"] is False

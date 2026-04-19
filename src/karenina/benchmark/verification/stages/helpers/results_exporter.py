@@ -114,7 +114,7 @@ def export_verification_results_json(
     results: VerificationResultSet,
     global_rubric: HasTraitNames | None = None,
     *,
-    is_complete: bool = True,
+    is_complete: bool = False,
 ) -> str:
     """
     Export verification results to JSON format with metadata (v2.0 format).
@@ -129,9 +129,10 @@ def export_verification_results_json(
         job: The verification job
         results: VerificationResultSet containing all verification results
         global_rubric: Optional global rubric to include in shared_data for rubric definition
-        is_complete: True when this export is the final write for the job.
-            ProgressiveFileSink passes True from write_final_export; intermediate
-            flushes (future extension) would pass False. Emitted into
+        is_complete: True when this export is the final write for the job. Defaults to False
+            so intermediate snapshots (future extensions writing partial JSON)
+            are not silently mislabeled as final. ProgressiveFileSink.write_final_export
+            passes True explicitly for its end-of-run write. Emitted into
             job_summary.is_complete so downstream readers can distinguish
             final exports from in-progress snapshots.
 
@@ -151,7 +152,7 @@ def export_verification_results_json(
             rubric_definition = {"trait_names": global_rubric.get_trait_names()}
 
     export_data: dict[str, Any] = {
-        "format_version": "2.1",
+        "format_version": "2.2",
         "metadata": {
             "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
             "karenina_version": get_karenina_version(),
@@ -182,7 +183,9 @@ def export_verification_results_json(
                 "failed_count": job.failed_count,
                 "start_time": job.start_time,
                 "end_time": job.end_time,
-                "total_duration": job.end_time - job.start_time if job.end_time and job.start_time else None,
+                "total_duration": (
+                    job.end_time - job.start_time if job.end_time is not None and job.start_time is not None else None
+                ),
                 "is_complete": is_complete,
             },
         },

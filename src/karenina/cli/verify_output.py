@@ -169,7 +169,7 @@ def export_results(
 
     global_rubric = benchmark.get_global_rubric()
     if output_format == "json":
-        export_data = export_verification_results_json(job, final_results, global_rubric)
+        export_data = export_verification_results_json(job, final_results, global_rubric, is_complete=True)
     else:  # csv
         export_data = export_verification_results_csv(job, final_results, global_rubric)
 
