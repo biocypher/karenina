@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from karenina.benchmark.error_analysis.exceptions import MaterializationError
 from karenina.benchmark.error_analysis.materializer import ErrorAnalysisMaterializer

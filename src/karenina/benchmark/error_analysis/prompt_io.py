@@ -5,6 +5,10 @@ Resolution order:
   2. Packaged default_prompt.md loaded via importlib.resources.
 
 Placeholders are substituted via string.Template before writing.
+
+A companion RUBRIC_GUIDE.md is copied alongside PROMPT.md from the
+packaged resources every time this function runs, so the analyst
+agent has a self-contained reference for karenina's rubric schema.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_PROMPT_PACKAGE = "karenina.benchmark.error_analysis.prompts"
 _DEFAULT_PROMPT_FILENAME = "default_prompt.md"
+_RUBRIC_GUIDE_FILENAME = "rubric_guide.md"
+_RUBRIC_GUIDE_TARGET = "RUBRIC_GUIDE.md"
 
 
 @dataclass(frozen=True)
@@ -32,6 +38,7 @@ class PromptContext:
         passed: Number of passing results.
         failed: Number of failing results.
         failure_categories: Ordered list of failure categories observed.
+        run_timestamp: Latest verification timestamp in the result set.
     """
 
     benchmark_name: str
@@ -40,6 +47,7 @@ class PromptContext:
     passed: int
     failed: int
     failure_categories: list[str]
+    run_timestamp: str = ""
 
     def as_mapping(self) -> dict[str, str]:
         """Return the string mapping used by string.Template.safe_substitute."""
@@ -50,11 +58,24 @@ class PromptContext:
             "PASSED": str(self.passed),
             "FAILED": str(self.failed),
             "FAILURE_CATEGORIES": ", ".join(self.failure_categories),
+            "RUN_TIMESTAMP": self.run_timestamp,
         }
 
 
 def _load_default_prompt() -> str:
     return resources.files(_DEFAULT_PROMPT_PACKAGE).joinpath(_DEFAULT_PROMPT_FILENAME).read_text(encoding="utf-8")
+
+
+def _load_rubric_guide() -> str:
+    return resources.files(_DEFAULT_PROMPT_PACKAGE).joinpath(_RUBRIC_GUIDE_FILENAME).read_text(encoding="utf-8")
+
+
+def _write_rubric_guide(out_dir: Path) -> Path:
+    """Copy the packaged rubric guide into out_dir."""
+    target = out_dir / _RUBRIC_GUIDE_TARGET
+    target.write_text(_load_rubric_guide(), encoding="utf-8")
+    logger.debug("Wrote %s to %s", _RUBRIC_GUIDE_TARGET, target)
+    return target
 
 
 def resolve_and_write_prompt(
@@ -63,16 +84,19 @@ def resolve_and_write_prompt(
     out_dir: Path,
     context: PromptContext,
 ) -> Path:
-    """Write PROMPT.md under out_dir and return its path.
+    """Write PROMPT.md and RUBRIC_GUIDE.md under out_dir and return PROMPT.md path.
 
-    Substitutes placeholders via string.Template. If the source prompt
-    contains no placeholders, the substitute call is still safe (Template
-    leaves non-identifier $-sequences alone thanks to safe_substitute).
+    Substitutes placeholders in the prompt via string.Template. If the
+    source prompt contains no placeholders, the substitute call is still
+    safe (Template leaves non-identifier $-sequences alone thanks to
+    safe_substitute). The rubric guide is copied verbatim from the
+    packaged resource regardless of which prompt is used.
 
     Args:
         prompt_path: Optional user-supplied prompt file. If None, the
             packaged default is used.
-        out_dir: Directory into which PROMPT.md is written.
+        out_dir: Directory into which PROMPT.md and RUBRIC_GUIDE.md are
+            written.
         context: Values substituted into the prompt.
 
     Returns:
@@ -83,4 +107,5 @@ def resolve_and_write_prompt(
     target = out_dir / "PROMPT.md"
     target.write_text(rendered, encoding="utf-8")
     logger.debug("Wrote PROMPT.md to %s", target)
+    _write_rubric_guide(out_dir)
     return target

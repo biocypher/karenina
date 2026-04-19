@@ -238,7 +238,7 @@ class LangChainAgentAdapter:
         self,
         tools: list[Any],
         kwargs: dict[str, Any],
-    ) -> tuple[Any, Any]:
+    ) -> tuple[Any, Any, list[Any]]:
         """Create a LangGraph agent with pre-loaded tools.
 
         This is the canonical agent creation path for the LangChain adapter.
@@ -254,9 +254,11 @@ class LangChainAgentAdapter:
             kwargs: Additional kwargs for model initialization.
 
         Returns:
-            A tuple of (agent, base_model). The base_model is returned so the
-            caller can register its httpx clients for deterministic cleanup
-            (see arun() and issue 194).
+            A tuple of (agent, base_model, middleware). The base_model is
+            returned so the caller can register its httpx clients for
+            deterministic cleanup. The middleware list is returned so the
+            caller can size the LangGraph recursion_limit to account for
+            middleware-added supersteps.
         """
         from karenina.adapters.langchain.initialization import init_chat_model_unified
         from karenina.adapters.langchain.middleware import build_agent_middleware
@@ -322,7 +324,7 @@ class LangChainAgentAdapter:
 
         logger.info(f"Created agent with {len(tools)} MCP tools and {len(middleware)} middleware components")
 
-        return agent, base_model
+        return agent, base_model, middleware
 
     async def arun(
         self,
@@ -378,12 +380,12 @@ class LangChainAgentAdapter:
         timeout_reached = False
         agent_response: dict[str, Any] = {"messages": []}
 
-        # Use session-based thread_id for checkpointing
+        # Use session-based thread_id for checkpointing. The recursion_limit
+        # field is filled in after _create_agent() runs, once we know the
+        # middleware count (see below).
         thread_id = str(uuid.uuid4())
         agent_config: dict[str, Any] = {
             "configurable": {"thread_id": thread_id},
-            # Each tool call + response = 2 LangGraph steps, so double max_turns
-            "recursion_limit": config.max_turns * 2,
         }
 
         # LangGraph agent expects dict with "messages" key
@@ -422,7 +424,7 @@ class LangChainAgentAdapter:
             if deferred_error is None:
                 # Create agent with persistent tools
                 try:
-                    agent, base_model = self._create_agent(persistent_tools, kwargs)
+                    agent, base_model, middleware = self._create_agent(persistent_tools, kwargs)
                 except Exception as e:
                     deferred_error = AgentExecutionError(f"Failed to initialize agent: {e}")
                     deferred_error.__cause__ = e
@@ -434,6 +436,15 @@ class LangChainAgentAdapter:
                     # documented in issue 194 (vLLM CLOSE_WAIT accumulation
                     # under concurrent MCP-equipped agents).
                     exit_stack.push_async_callback(_aclose_model_http_clients, base_model)
+
+                    # Size the LangGraph recursion_limit for the actual graph
+                    # topology. A bare ReAct turn costs 2 supersteps (model
+                    # node + tool node), and each middleware that installs a
+                    # before_*/after_* hook adds up to 1 superstep per turn.
+                    # Budgeting max_turns * (2 + len(middleware)) upper-bounds
+                    # the per-turn cost so LangGraph's safety limit never
+                    # trips before karenina's own ModelCallLimitMiddleware.
+                    agent_config["recursion_limit"] = config.max_turns * (2 + len(middleware))
 
             if deferred_error is None:
                 if use_callback:

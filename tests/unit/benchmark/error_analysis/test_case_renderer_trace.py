@@ -6,7 +6,7 @@ import pytest
 
 from karenina.benchmark.error_analysis.case_renderer import render_qa_case
 
-from .fixtures import make_pass
+from .fixtures import make_pass, make_template
 
 
 def _minimal_trace_message(role: str, text: str) -> dict:
@@ -64,3 +64,60 @@ class TestCaseRendererTrace:
         artifacts = list((tmp_path / "artifacts").glob("text_*.txt"))
         assert artifacts, "expected at least one offloaded artifact"
         assert artifacts[0].read_text() == long_text
+
+    def test_qa_trace_without_user_role_renders_xml_turn(self, tmp_path):
+        """QA trace_messages with only assistant/tool roles still materialize a turn."""
+        result = make_pass()
+        result.template.trace_messages = [
+            _minimal_trace_message("assistant", "I will search."),
+            _minimal_trace_message("assistant", "lookup(q='slc5a1')"),
+            _minimal_trace_message("tool", "no hits"),
+            _minimal_trace_message("assistant", "final answer"),
+        ]
+        body = render_qa_case(
+            result,
+            template_source=None,
+            artifacts_dir=tmp_path / "artifacts",
+        )
+        assert "# Trace" in body
+        assert '<turn number="1">' in body
+        assert "<assistant" in body
+        assert "I will search." in body
+        assert "final answer" in body
+        assert "_No trace captured" not in body
+
+
+@pytest.mark.unit
+class TestLLMResponseSectionPolicy:
+    """When trace_messages is populated, # LLM Response must be dropped."""
+
+    def test_drops_llm_response_when_trace_messages_present(self, tmp_path):
+        result = make_pass()
+        # Attach a populated trace and a separate raw_llm_response.
+        result.template.trace_messages = [
+            _minimal_trace_message("assistant", "structured trace body"),
+        ]
+        result.template.raw_llm_response = "RAW DUMP THAT SHOULD NOT APPEAR"
+        body = render_qa_case(
+            result,
+            template_source=None,
+            artifacts_dir=tmp_path / "artifacts",
+        )
+        assert "# Trace" in body
+        assert "# LLM Response" not in body
+        assert "RAW DUMP THAT SHOULD NOT APPEAR" not in body
+
+    def test_keeps_llm_response_when_trace_messages_empty(self, tmp_path):
+        result = make_pass()
+        result.template = make_template(
+            raw_response="raw-only response",
+            trace_messages=[],
+            verify_result=True,
+        )
+        body = render_qa_case(
+            result,
+            template_source=None,
+            artifacts_dir=tmp_path / "artifacts",
+        )
+        assert "# LLM Response" in body
+        assert "raw-only response" in body

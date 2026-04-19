@@ -58,6 +58,38 @@ class TestParseTranscriptEntries:
         entries = parse_transcript_entries(text)
         assert len(entries) == 3
 
+    def test_bracketed_agent_id_suffix(self) -> None:
+        """Agent display strings like ``name +[otp]`` must parse intact."""
+        tag = "[openai_endpoint:qwen3.5-122b-a10b +[otp]:assistant:tool_use] search(q='x')"
+        entries = parse_transcript_entries(tag)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["agent_id"] == "openai_endpoint:qwen3.5-122b-a10b +[otp]"
+        assert entry["role"] == "assistant"
+        assert entry["content_type"] == "tool_use"
+        assert entry["content"] == "search(q='x')"
+
+    def test_nested_brackets_in_agent_id(self) -> None:
+        """Multiple bracket groups inside the agent_id still parse."""
+        tag = "[foo[a]bar[b]:user:text] hi"
+        entries = parse_transcript_entries(tag)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["agent_id"] == "foo[a]bar[b]"
+        assert entry["role"] == "user"
+        assert entry["content_type"] == "text"
+        assert entry["content"] == "hi"
+
+    def test_plain_agent_id_regression_guard(self) -> None:
+        """Original bracket-free agent_id parsing must keep working."""
+        entries = parse_transcript_entries("[agent:assistant:text] hello")
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry["agent_id"] == "agent"
+        assert entry["role"] == "assistant"
+        assert entry["content_type"] == "text"
+        assert entry["content"] == "hello"
+
 
 @pytest.mark.unit
 class TestGroupEntriesIntoTurns:
@@ -93,6 +125,35 @@ class TestGroupEntriesIntoTurns:
         assert len(turns) == 2
         assert turns[0]["agent_id"] == "a"
         assert turns[1]["agent_id"] == "b"
+
+    def test_assistant_only_entries_produce_single_turn(self) -> None:
+        """QA traces lack a user tag; callers still expect one turn."""
+        entries = [
+            {"role": "assistant", "agent_id": "primary", "content_type": "text", "content": "reasoning"},
+            {"role": "assistant", "agent_id": "primary", "content_type": "tool_use", "content": "search(q='x')"},
+            {"role": "tool", "agent_id": "primary", "content_type": "tool_result", "content": "hit"},
+            {"role": "assistant", "agent_id": "primary", "content_type": "text", "content": "done"},
+        ]
+        turns = group_entries_into_turns(entries)
+        assert len(turns) == 1
+        turn = turns[0]
+        assert turn["user_content"] is None
+        assert turn["agent_id"] == "primary"
+        assert turn["system_prompt"] is None
+        assert len(turn["blocks"]) == 4
+
+    def test_assistant_only_with_leading_system(self) -> None:
+        """Leading system entry still populates system_prompt on the synthesized turn."""
+        entries = [
+            {"role": "system", "agent_id": "primary", "content_type": "text", "content": "Be helpful."},
+            {"role": "assistant", "agent_id": "primary", "content_type": "text", "content": "ok"},
+        ]
+        turns = group_entries_into_turns(entries)
+        assert len(turns) == 1
+        assert turns[0]["system_prompt"] == "Be helpful."
+        assert turns[0]["system_agent"] == "primary"
+        assert turns[0]["user_content"] is None
+        assert len(turns[0]["blocks"]) == 1
 
 
 @pytest.mark.unit

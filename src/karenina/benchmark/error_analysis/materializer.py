@@ -42,6 +42,94 @@ RUBRIC_FILENAME = "rubric.json"
 BENCHMARK_METADATA_FILENAME = "metadata.md"
 
 
+def _iter_questions(checkpoint: Any) -> list[tuple[str, Any]]:
+    """Return ``(benchmark_qid, Question)`` pairs for a checkpoint.
+
+    Prefers the real ``Benchmark`` API (``get_question_ids`` paired with
+    ``get_question_as_object``), which keeps the benchmark-level qid
+    aligned with the identifier emitted in verification-result
+    metadata. Falls back to the stub ``checkpoint.questions`` attribute
+    where the id space is unified on ``Question.id``.
+
+    Args:
+        checkpoint: A real ``Benchmark`` or a duck-typed stub.
+
+    Returns:
+        A list of ``(qid, question)`` pairs. ``qid`` is the benchmark
+        lookup key (urn for real benchmarks, MD5 for stubs). ``question``
+        exposes ``id``, ``question``, ``keywords`` and ``raw_answer``.
+    """
+    if hasattr(checkpoint, "get_question_ids") and hasattr(checkpoint, "get_question_as_object"):
+        return [(qid, checkpoint.get_question_as_object(qid)) for qid in checkpoint.get_question_ids()]
+    return [(q.id, q) for q in checkpoint.questions]
+
+
+def _get_question(checkpoint: Any, question_id: str) -> Any | None:
+    """Return the Question-like object for ``question_id`` or None.
+
+    Prefers the real ``Benchmark.get_question_as_object`` API (raises on
+    missing) and normalizes the miss into ``None``. Falls back to the stub
+    ``checkpoint.get_question`` that already returns ``None`` on miss.
+
+    Args:
+        checkpoint: A real ``Benchmark`` or a duck-typed stub.
+        question_id: The question identifier to look up.
+
+    Returns:
+        The question-like object, or ``None`` when the checkpoint has no
+        entry for ``question_id``.
+    """
+    if hasattr(checkpoint, "get_question_as_object"):
+        try:
+            return checkpoint.get_question_as_object(question_id)
+        except (KeyError, ValueError):
+            return None
+    return checkpoint.get_question(question_id)
+
+
+def _get_template_source(checkpoint: Any, question_id: str) -> str | None:
+    """Return the template source code for ``question_id`` or None.
+
+    On the real ``Benchmark``, the per-question template source is
+    carried as ``Question.answer_template`` (the same value returned by
+    ``Benchmark.get_template`` but without raising on missing entries).
+    Falls back to the stub's ``get_template_source`` method.
+
+    Args:
+        checkpoint: A real ``Benchmark`` or a duck-typed stub.
+        question_id: The question identifier to look up.
+
+    Returns:
+        The template source as a string, or ``None`` when the question
+        has no template or does not exist.
+    """
+    if hasattr(checkpoint, "get_template_source"):
+        result: str | None = checkpoint.get_template_source(question_id)
+        return result
+    question = _get_question(checkpoint, question_id)
+    if question is None:
+        return None
+    return getattr(question, "answer_template", None)
+
+
+def _get_rubric(checkpoint: Any) -> Any | None:
+    """Return a rubric-like object with ``model_dump`` or None.
+
+    Prefers the real ``Benchmark.get_global_rubric()`` API (returns
+    ``Rubric | None``) and falls back to the stub's ``rubric`` attribute.
+
+    Args:
+        checkpoint: A real ``Benchmark`` or a duck-typed stub.
+
+    Returns:
+        A rubric-like object exposing ``model_dump()``, or ``None`` when
+        no global rubric is attached.
+    """
+    if hasattr(checkpoint, "get_global_rubric"):
+        return checkpoint.get_global_rubric()
+    return getattr(checkpoint, "rubric", None)
+
+
 def sanitize_id(raw: str) -> str:
     """Replace any character that is not alphanumeric, underscore, or dash with an underscore.
 
@@ -185,9 +273,13 @@ class ErrorAnalysisMaterializer:
 
         Args:
             result_set: The aggregated results to render.
-            checkpoint: Benchmark-like object exposing ``name``,
-                ``questions``, ``get_question``, ``get_template_source``,
-                and ``rubric``.
+            checkpoint: Benchmark-like object. The materializer first
+                tries the real ``Benchmark`` API
+                (``get_all_questions_as_objects``,
+                ``get_question_as_object``, ``get_global_rubric``) and
+                falls back to the legacy stub attributes
+                (``questions``, ``get_question``,
+                ``get_template_source``, ``rubric``) for test fixtures.
             out_dir: Destination directory. Created if missing. See
                 ``_prepare_out_dir`` for the force/overwrite rules.
             force: If True, overwrite the existing directory, preserving
@@ -296,21 +388,21 @@ class ErrorAnalysisMaterializer:
 
         # questions.jsonl
         with (bench_dir / QUESTIONS_FILENAME).open("w", encoding="utf-8") as handle:
-            for question in checkpoint.questions:
+            for qid, question in _iter_questions(checkpoint):
                 record = {
-                    "id": question.id,
+                    "id": qid,
                     "text": question.question,
                     "keywords": list(question.keywords or []),
                     "raw_answer": question.raw_answer,
                 }
                 handle.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
                 # Copy the template source for this question.
-                source = checkpoint.get_template_source(question.id)
+                source = _get_template_source(checkpoint, qid)
                 if source is not None:
-                    (templates_dir / f"q_{sanitize_id(question.id)}.py").write_text(source, encoding="utf-8")
+                    (templates_dir / f"q_{sanitize_id(qid)}.py").write_text(source, encoding="utf-8")
 
         # rubric.json
-        rubric = checkpoint.rubric
+        rubric = _get_rubric(checkpoint)
         rubric_dump = rubric.model_dump() if rubric is not None else {}
         (bench_dir / RUBRIC_FILENAME).write_text(
             json.dumps(rubric_dump, sort_keys=True, ensure_ascii=False, indent=2) + "\n",
@@ -346,11 +438,12 @@ class ErrorAnalysisMaterializer:
         used_by_bucket[bucket].add(filename)
         case_path = bucket / filename
 
-        question = checkpoint.get_question(result.metadata.question_id)
-        template_source = checkpoint.get_template_source(result.metadata.question_id)
+        qid = result.metadata.question_id
+        question = _get_question(checkpoint, qid)
+        template_source = _get_template_source(checkpoint, qid)
         template_link: str | None = None
         if question is not None:
-            template_link = f"../../{BENCHMARK_DIRNAME}/{TEMPLATES_DIRNAME}/q_{sanitize_id(question.id)}.py"
+            template_link = f"../../{BENCHMARK_DIRNAME}/{TEMPLATES_DIRNAME}/q_{sanitize_id(qid)}.py"
 
         assets_dir = out_dir / CASE_ASSETS_DIRNAME / case_path.stem / "traces" / "artifacts"
         body = render_qa_case(
@@ -427,7 +520,7 @@ class ErrorAnalysisMaterializer:
         template_links: dict[str, str] = {}
         for turn in scenario.turn_results:
             qid = turn.metadata.question_id
-            template_sources[qid] = checkpoint.get_template_source(qid)
+            template_sources[qid] = _get_template_source(checkpoint, qid)
             template_links[qid] = f"../../{BENCHMARK_DIRNAME}/{TEMPLATES_DIRNAME}/q_{sanitize_id(qid)}.py"
 
         assets_dir = out_dir / CASE_ASSETS_DIRNAME / case_path.stem / "traces" / "artifacts"

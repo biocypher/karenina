@@ -20,6 +20,7 @@ class TestPromptIO:
             passed=7,
             failed=3,
             failure_categories=["content", "parsing"],
+            run_timestamp="2026-04-18T12:34:56Z",
         )
         path = resolve_and_write_prompt(prompt_path=None, out_dir=tmp_path, context=context)
         assert path == tmp_path / "PROMPT.md"
@@ -28,6 +29,7 @@ class TestPromptIO:
         assert "anthropic/claude-opus-4-6" in text
         assert "10" in text
         assert "content, parsing" in text
+        assert "2026-04-18T12:34:56Z" in text
 
     def test_user_prompt_copied_verbatim_when_no_placeholders(self, tmp_path):
         source = tmp_path / "custom.md"
@@ -42,6 +44,37 @@ class TestPromptIO:
         )
         path = resolve_and_write_prompt(prompt_path=source, out_dir=tmp_path, context=context)
         assert path.read_text() == "# Custom\nJust do the thing.\n"
+
+    def test_rubric_guide_is_written_alongside_prompt(self, tmp_path):
+        context = PromptContext(
+            benchmark_name="x",
+            answering_model="m",
+            total=0,
+            passed=0,
+            failed=0,
+            failure_categories=[],
+        )
+        resolve_and_write_prompt(prompt_path=None, out_dir=tmp_path, context=context)
+        guide = tmp_path / "RUBRIC_GUIDE.md"
+        assert guide.exists()
+        text = guide.read_text()
+        assert "LLMRubricTrait" in text
+        assert "RegexRubricTrait" in text
+        assert "failure_mode_classifier" in text
+
+    def test_rubric_guide_written_even_with_custom_prompt(self, tmp_path):
+        source = tmp_path / "custom.md"
+        source.write_text("custom")
+        context = PromptContext(
+            benchmark_name="x",
+            answering_model="m",
+            total=0,
+            passed=0,
+            failed=0,
+            failure_categories=[],
+        )
+        resolve_and_write_prompt(prompt_path=source, out_dir=tmp_path, context=context)
+        assert (tmp_path / "RUBRIC_GUIDE.md").exists()
 
     def test_user_prompt_with_placeholders_substituted(self, tmp_path):
         source = tmp_path / "custom.md"
