@@ -335,6 +335,7 @@ def run_verification_batch(
     benchmark_name: str | None = None,
     progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
     workspace_root: Path | None = None,
+    sink: Any = None,
 ) -> VerificationResultSet:
     """
     Run batch verification with combinatorial expansion.
@@ -354,6 +355,14 @@ def run_verification_batch(
         progress_callback: Optional callback(current, total, result | None) for progress updates
                           Called before starting each task with preview result
         workspace_root: Root directory for task workspaces (from Benchmark).
+        sink: Optional :class:`ResultSink` for progressive save / crash recovery.
+            When present, its ``completed_triples()`` are merged into
+            ``config.skip_triples`` before task expansion, ``on_result`` is
+            called for each completed task, and ``on_finalize`` is called
+            exactly once before returning. A :class:`VerificationBatchError`
+            raised by the executor is caught and converted into a partial
+            ``VerificationResultSet`` return; without a sink, the exception
+            propagates (back-compat).
 
     Returns:
         VerificationResultSet containing all verification results
@@ -382,6 +391,15 @@ def run_verification_batch(
     if max_workers is None:
         max_workers = config.async_max_workers  # Uses env var fallback internally
 
+    # Merge sink-completed triples into skip_triples so resume does not
+    # re-execute work a ProgressiveFileSink / DBSink already persisted.
+    if sink is not None:
+        sink_triples = sink.completed_triples()
+        if sink_triples:
+            existing = config.skip_triples or frozenset()
+            config = config.model_copy(update={"skip_triples": frozenset(existing | sink_triples)})
+            logger.info("Sink reports %d already-completed triples; merged into skip_triples", len(sink_triples))
+
     # Generate task queue
     logger.info(f"Generating task queue for {len(templates)} templates...")
     task_queue = generate_task_queue(
@@ -392,6 +410,28 @@ def run_verification_batch(
         run_name=run_name,
         workspace_root=workspace_root,
     )
+
+    # Inform the sink of the planned manifest and build a result-dispatch
+    # callback that wraps the caller's progress_callback so the sink sees
+    # every completed result without the caller having to wire it manually.
+    if sink is not None:
+        from karenina.utils.progressive_save import TaskIdentifier
+
+        full_manifest = [TaskIdentifier.from_task_dict(task).to_key() for task in task_queue]
+        sink.on_start(full_manifest, config)
+
+        caller_progress = progress_callback
+
+        def _sink_progress_adapter(current: int, total: int, result: VerificationResult | None) -> None:
+            if result is not None:
+                try:
+                    sink.on_result(result)
+                except Exception:  # noqa: BLE001
+                    logger.warning("Sink on_result raised; continuing", exc_info=True)
+            if caller_progress is not None:
+                caller_progress(current, total, result)
+
+        progress_callback = _sink_progress_adapter
 
     # Apply task ordering strategy
     from .utils.task_helpers import model_sort_key
@@ -424,7 +464,25 @@ def run_verification_batch(
             max_requeue_count=config.max_requeue_count,
         ),
     )
-    results = executor.run_batch(task_queue, progress_callback)
+
+    from karenina.exceptions import VerificationBatchError
+
+    all_complete = True
+    try:
+        results = executor.run_batch(task_queue, progress_callback)
+    except VerificationBatchError as exc:
+        # Preserve partial results so the sink-enabled path can still write
+        # a partial export and keep resume state. Without a sink, re-raise
+        # to preserve back-compat for existing callers.
+        if sink is None:
+            raise
+        results = exc.partial_results or {}
+        all_complete = False
+        logger.warning(
+            "Batch completed with %d partial result(s) after failures: %s",
+            len(results),
+            exc,
+        )
 
     # Auto-save if configured
     autosave_enabled = os.getenv("AUTOSAVE_DATABASE", "true").lower() in ("true", "1", "yes")
@@ -440,6 +498,16 @@ def run_verification_batch(
             config_dict=config_dict,
             run_id=run_name,
         )
+
+    # Finalize sink. On partial runs the sink keeps its sidecars so a later
+    # `--resume` can continue. On full completion it writes the canonical
+    # export and deletes sidecars.
+    if sink is not None:
+        all_complete = all_complete and len(results) == len(task_queue)
+        try:
+            sink.on_finalize(all_complete=all_complete)
+        except Exception:  # noqa: BLE001
+            logger.warning("Sink on_finalize raised; continuing", exc_info=True)
 
     # Convert dict to VerificationResultSet
     result_list = list(results.values())

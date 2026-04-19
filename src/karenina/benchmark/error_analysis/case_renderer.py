@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from karenina.replay.ports_message_hydration import hydrate_trace_messages
 from karenina.scenario.handover import TaggedMessage, format_transcript

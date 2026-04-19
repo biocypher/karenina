@@ -471,13 +471,13 @@ def inspect_state_file(state_path: Path) -> ProgressiveJobStatus:
     with open(state_path) as f:
         state_data = json.load(f)
 
-    # Validate format version
+    # Accept both legacy 1.0 (ProgressiveSaveManager) and 2.0
+    # (ProgressiveFileSink with JSONL sidecar) formats. Only the on-disk
+    # results file naming differs for display purposes.
     format_version = state_data.get("format_version")
-    if format_version != ProgressiveSaveManager.STATE_FORMAT_VERSION:
-        raise ValueError(
-            f"Incompatible state format version: {format_version} "
-            f"(expected {ProgressiveSaveManager.STATE_FORMAT_VERSION})"
-        )
+    supported = {ProgressiveSaveManager.STATE_FORMAT_VERSION, "2.0"}
+    if format_version not in supported:
+        raise ValueError(f"Incompatible state format version: {format_version} (supported: {sorted(supported)})")
 
     # Extract config info
     config = state_data.get("config", {})
@@ -504,11 +504,15 @@ def inspect_state_file(state_path: Path) -> ProgressiveJobStatus:
     completed_task_ids = state_data.get("completed_task_ids", [])
     pending_task_ids = list(set(task_manifest) - set(completed_task_ids))
 
-    # Check tmp file
+    # Check results sidecar. Legacy layout uses .tmp (full JSON rewrite);
+    # v2 layout uses .results.jsonl (append-only).
     output_path = Path(state_data.get("output_path", ""))
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp_file_exists = tmp_path.exists()
-    tmp_file_size = tmp_path.stat().st_size if tmp_file_exists else None
+    if format_version == "2.0":
+        results_path = output_path.with_suffix(output_path.suffix + ".results.jsonl")
+    else:
+        results_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    tmp_file_exists = results_path.exists()
+    tmp_file_size = results_path.stat().st_size if tmp_file_exists else None
 
     return ProgressiveJobStatus(
         state_file_path=state_path,

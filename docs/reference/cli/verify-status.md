@@ -36,7 +36,7 @@ Without any flags, the command displays a Rich-formatted summary with five secti
 2. **Progress bar** — Visual completion indicator with percentage and counts
 3. **Summary table** — State file path, output path, benchmark path, completed/pending/total counts, timing
 4. **Configuration table** — Answering models, parsing models, replicate count
-5. **Files table** — Whether `.tmp` and `.state` sidecar files exist, with file sizes
+5. **Files table** — Whether `.results.jsonl` and `.state` sidecar files exist, with file sizes (v1-format runs report a `.tmp` file instead)
 
 If the job is incomplete, a resume hint is shown:
 
@@ -104,7 +104,7 @@ The `.state` file is a JSON file created by `karenina verify --progressive-save`
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `format_version` | `string` | State file format version (`"1.0"`) |
+| `format_version` | `string` | State file format version (`"2.0"` for the JSONL-sidecar layout; `"1.0"` for legacy `.tmp` layout, still readable by `verify-status`) |
 | `created_at` | `string` | ISO 8601 timestamp when the job started |
 | `last_updated_at` | `string` | ISO 8601 timestamp of the last completed task |
 | `benchmark_path` | `string` | Path to the benchmark checkpoint |

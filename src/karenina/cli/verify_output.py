@@ -25,8 +25,8 @@ from karenina.benchmark.verification import (
     export_verification_results_json,
 )
 from karenina.benchmark.verification.batch_runner import run_verification_batch
+from karenina.benchmark.verification.sinks import ProgressiveFileSink
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResult, VerificationResultSet
-from karenina.utils.progressive_save import ProgressiveSaveManager
 
 from .utils import cli_error, create_export_job, validate_output_path
 
@@ -98,14 +98,13 @@ def run_verification_with_progress(
     templates: list[FinishedTemplate],
     config: VerificationConfig,
     benchmark: Benchmark,
-    progressive_manager: ProgressiveSaveManager | None,
+    progressive_sink: ProgressiveFileSink | None,
     show_progress: bool,
 ) -> VerificationResultSet:
-    """
-    Run verification with optional progress bar display.
+    """Run verification with optional progress bar display.
 
-    Returns:
-        VerificationResultSet containing all results
+    Incremental persistence is handled by the sink; the progress callback
+    here is UI-only.
     """
     if show_progress:
         total_verifications = (
@@ -123,14 +122,10 @@ def run_verification_with_progress(
             progress_task: TaskID = progress.add_task("Verifying questions...", total=total_verifications)
 
             def progress_callback(current: int, _total: int, result: VerificationResult | None = None) -> None:
-                """Update progress bar on each verification completion."""
                 progress.update(progress_task, completed=current)
                 if result and result.template and result.template.verify_result is not None:
                     status = "\u2713" if result.template.verify_result else "\u2717"
                     progress.update(progress_task, description=f"Verifying questions... {status}")
-
-                if progressive_manager and result and result.metadata.timestamp:
-                    progressive_manager.add_result(result)
 
             results = run_verification_batch(
                 templates=templates,
@@ -138,20 +133,15 @@ def run_verification_with_progress(
                 run_name="cli-verification",
                 global_rubric=benchmark.get_global_rubric(),
                 progress_callback=progress_callback,
+                sink=progressive_sink,
             )
     else:
-
-        def simple_progress_callback(_current: int, _total: int, result: VerificationResult | None = None) -> None:
-            """Save result incrementally (no progress bar display)."""
-            if progressive_manager and result and result.metadata.timestamp:
-                progressive_manager.add_result(result)
-
         results = run_verification_batch(
             templates=templates,
             config=config,
             run_name="cli-verification",
             global_rubric=benchmark.get_global_rubric(),
-            progress_callback=simple_progress_callback if progressive_manager else None,
+            sink=progressive_sink,
         )
 
     return results
@@ -165,10 +155,13 @@ def export_results(
     benchmark: Benchmark,
     start_time: float,
     end_time: float,
-    progressive_manager: ProgressiveSaveManager | None,
 ) -> None:
-    """
-    Export verification results to file.
+    """Export verification results to file.
+
+    When a :class:`ProgressiveFileSink` is in use its ``on_finalize`` has
+    already written the JSON export; calling this function re-serializes
+    with fresh job metadata so CSV output and the non-progressive path are
+    handled uniformly.
     """
     console.print(f"\n[cyan]Exporting results to {output}...[/cyan]")
 
@@ -182,10 +175,6 @@ def export_results(
 
     output.write_text(export_data)
     console.print(f"[green]✓ Results exported to {output}[/green]")
-
-    if progressive_manager:
-        progressive_manager.finalize()
-        console.print("[dim]Progressive save files cleaned up[/dim]")
 
 
 def display_summary(

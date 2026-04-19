@@ -15,80 +15,28 @@ jupyter:
 
 # Progressive Save and Resume
 
-This tutorial shows how to checkpoint verification progress so you can resume interrupted runs. For long verification runs (many questions, expensive models, multiple replicates), progressive save writes results incrementally. If the run stops for any reason, you resume from the last checkpoint instead of re-evaluating everything.
+This tutorial shows how to checkpoint verification progress so you can resume interrupted runs. For long verification runs (many questions, expensive models, multiple replicates), progressive save writes results incrementally. If the run stops for any reason (crash, Ctrl+C, a subset of tasks failing), you resume from the last checkpoint instead of re-evaluating everything.
+
+Progressive save is available both from the CLI (`--progressive-save` / `--resume`) and from the Python API (via the `ResultSink` protocol). Both paths share the same on-disk layout, so a run started on the CLI can be resumed from Python and vice versa.
 
 **What you'll learn:**
 
 - Enable progressive save with `--progressive-save` (CLI)
-- Resume an interrupted run with `--resume`
+- Resume an interrupted run with `--resume` (CLI) or `Benchmark.resume_verification()` (Python)
+- Pass a `ProgressiveFileSink` to `Benchmark.run_verification(sink=...)` from Python
 - Check run status with `karenina verify-status`
-- Use `ProgressiveSaveManager` directly in Python
-- Understand the `.tmp` and `.state` file pair
-- Verify configuration compatibility before resuming
-- Read intermediate results from `.tmp` files during a run
+- Understand the `.results.jsonl` and `.state` file pair
+- Compose sinks with `CompositeSink` (file + database)
+- Resume is **triple-level**: completed (question, answering-model, parsing-model, replicate) tuples are skipped
 
 ```python tags=["hide-cell"]
 # Setup cell: creates mock objects for progressive save demonstration.
 # This cell is hidden in the rendered documentation.
-import datetime
-import json
 import tempfile
 from pathlib import Path
 
-from karenina.schemas.verification.config import VerificationConfig
-from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.verification import VerificationResult
-from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.verification.result_components import (
-    VerificationResultMetadata,
-    VerificationResultTemplate,
-)
-from karenina.utils.progressive_save import (
-    ProgressiveSaveManager,
-    inspect_state_file,
-    ProgressiveJobStatus,
-    TaskIdentifier,
-)
-
 _tmp_dir = Path(tempfile.mkdtemp())
 _output_path = _tmp_dir / "results.json"
-_benchmark_path = str(_tmp_dir / "benchmark.jsonld")
-
-_answering = ModelIdentity(model_name="claude-haiku-4-5", interface="langchain")
-_parsing = ModelIdentity(model_name="claude-haiku-4-5", interface="langchain")
-_ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
-
-_questions = [
-    ("q1", "What is the primary target of venetoclax?", "BCL2"),
-    ("q2", "How many chromosome pairs do humans have?", "23"),
-    ("q3", "What organ produces insulin?", "Pancreas"),
-]
-
-
-def _make_result(qid, q_text, raw_ans, verified):
-    rid = VerificationResultMetadata.compute_result_id(qid, _answering, _parsing, _ts)
-    return VerificationResult(
-        metadata=VerificationResultMetadata(
-            question_id=qid,
-            template_id="tmpl_" + qid,
-            failure=None,
-            caveats=[],
-            question_text=q_text,
-            raw_answer=raw_ans,
-            answering=_answering,
-            parsing=_parsing,
-            execution_time=1.5,
-            timestamp=_ts,
-            result_id=rid,
-        ),
-        template=VerificationResultTemplate(
-            raw_llm_response=f"The answer is {raw_ans}.",
-            verify_result=verified,
-            template_verification_performed=True,
-            parsed_gt_response={"answer": raw_ans},
-            parsed_llm_response={"answer": raw_ans if verified else "unknown"},
-        ),
-    )
 ```
 
 ---
@@ -111,7 +59,7 @@ Three commands cover the full progressive save lifecycle:
 print("CLI commands shown in comments above")
 ```
 
-The `--progressive-save` flag tells the runner to write results incrementally to a `.tmp` file and track progress in a `.state` file. If the process is interrupted, `--resume` picks up from the last completed task. The `verify-status` command reads the `.state` file and reports how many tasks are pending.
+The `--progressive-save` flag tells the runner to write each completed result to a `.results.jsonl` sidecar and track the task manifest in a `.state` file. If the process is interrupted, `--resume` picks up exactly where it stopped. The `verify-status` command reads the `.state` file and reports how many triples are pending.
 
 ---
 
@@ -122,186 +70,125 @@ Progressive save maintains two sidecar files alongside your output path:
 ```
 verify --progressive-save
     │
-    ├── results.json.tmp   (accumulated results)
-    ├── results.json.state (progress tracking)
+    ├── results.json.results.jsonl   (append-only, one result per line)
+    ├── results.json.state           (manifest + config + completion set)
     │
-    ▼ (on completion)
-    results.json           (final output)
+    ▼ (on full completion)
+    results.json                     (final export)
 ```
 
-The `.tmp` file stores results in standard export format, so you can read intermediate results at any time. The `.state` file tracks the task manifest (every task that needs to run), the set of completed task IDs, and a config hash for compatibility checks. Both files use atomic writes to prevent corruption if the process terminates mid-write.
+The `.results.jsonl` file is append-only, so each completed result is an O(1) write. The `.state` file tracks the task manifest (every triple that needs to run), the set of completed triple keys, a config snapshot, and a config hash. Both files use atomic writes to prevent corruption if the process terminates mid-write.
 
-On successful completion, `finalize()` removes the `.tmp` and `.state` files and writes the final output.
+On successful completion, `on_finalize(all_complete=True)` assembles the final export from the JSONL, writes it to the output path, and removes the sidecars. If a run finishes with some tasks still failed, `on_finalize(all_complete=False)` retains the sidecars so `--resume` works next time.
+
+**Resume is triple-level.** The unit of work is a `(question_id, answering_canonical_key, parsing_canonical_key, replicate)` tuple, not a question. If you have 10 questions × 2 answering models × 3 replicates, the state tracks 60 triples. Resuming after a crash that completed 35 triples runs only the remaining 25, even when those 25 cover questions that already had *some* triples completed.
 
 ---
 
-## Python API: Initialize
+## Python API: Fresh Run with a Sink
 
-Create a `ProgressiveSaveManager`, define the task manifest, and call `initialize()`:
-
-```python
-config = VerificationConfig.from_overrides(
-    answering_id="claude-haiku-4-5",
-    answering_model="claude-haiku-4-5",
-    parsing_id="claude-haiku-4-5",
-    parsing_model="claude-haiku-4-5",
-)
-
-manager = ProgressiveSaveManager(
-    output_path=_output_path,
-    config=config,
-    benchmark_path=_benchmark_path,
-)
-
-# Build task manifest from TaskIdentifier objects
-task_ids = []
-for qid, _, _ in _questions:
-    tid = TaskIdentifier(
-        question_id=qid,
-        answering_canonical_key="claude-haiku-4-5",
-        parsing_canonical_key="claude-haiku-4-5",
-        replicate=0,
-    )
-    task_ids.append(tid.to_key())
-
-manager.initialize(task_ids)
-print(f"Initialized with {manager.total_tasks} tasks")
-print(f"Completed so far: {manager.completed_count}")
-print(f"State file: {manager.state_path.name}")
-print(f"Tmp file:   {manager.tmp_path.name}")
-```
-
-The task manifest is a list of string keys. Each key uniquely identifies one verification task by question ID, answering model, parsing model, and replicate number.
-
----
-
-## Python API: Add Results
-
-As verification completes each task, call `add_result()` to persist it:
+Pass a `ProgressiveFileSink` to `Benchmark.run_verification(sink=...)`. The sink is threaded through the batch runner, which writes one JSONL line per completed result and drops completed triples from the task queue.
 
 ```python
-# Simulate completing the first two questions
-result_1 = _make_result("q1", "What is the primary target of venetoclax?", "BCL2", True)
-result_2 = _make_result("q2", "How many chromosome pairs do humans have?", "23", True)
-
-manager.add_result(result_1)
-manager.add_result(result_2)
-
-print(f"Completed: {manager.completed_count}/{manager.total_tasks}")
-print(f"Pending:   {len(manager.get_pending_task_ids())} tasks remain")
+# Real usage (not executed in this doc):
+#
+# from karenina.benchmark import Benchmark
+# from karenina.benchmark.verification.sinks import ProgressiveFileSink
+# from karenina.schemas.verification import VerificationConfig
+#
+# benchmark = Benchmark.load("checkpoint.jsonld")
+# config = VerificationConfig(...)
+#
+# sink = ProgressiveFileSink(
+#     output_path=Path("results.json"),
+#     config=config,
+#     benchmark_path="checkpoint.jsonld",
+# )
+#
+# result_set = benchmark.run_verification(config=config, sink=sink)
+# # On clean completion: results.json exists; sidecars are gone.
+# # On partial failure: sidecars remain so resume_verification() works.
+print("Fresh-run pattern shown in comments above")
 ```
 
-Each `add_result()` call atomically updates both the `.tmp` and `.state` files. If the process crashes after this call, the completed results are safely on disk.
-
----
-
-## Python API: Inspect State
-
-Use `inspect_state_file()` to check progress without loading the full manager:
-
-```python
-status = inspect_state_file(manager.state_path)
-
-print(f"Total tasks:    {status.total_tasks}")
-print(f"Completed:      {status.completed_count}")
-print(f"Pending:        {status.pending_count}")
-print(f"Progress:       {status.progress_percent:.1f}%")
-print(f"Tmp file exists:{status.tmp_file_exists}")
-print(f"Tmp file size:  {status.tmp_file_size} bytes")
-```
-
-`ProgressiveJobStatus` is a lightweight dataclass. It reads only the `.state` JSON file, so it works even while another process is writing results.
+The sink owns the full progressive-save lifecycle: it emits `on_start` (writing the manifest), `on_result` (appending JSONL lines), and `on_finalize` (clean export on success, retain sidecars on failure).
 
 ---
 
 ## Python API: Resume
 
-To resume an interrupted run, load the manager from the `.state` file:
+Use `Benchmark.resume_verification(state_path)` to pick up where a prior run stopped. It reconstructs a `ProgressiveFileSink` from the `.state` file, populates `skip_triples` from the set of already-completed triples, and delegates to `run_verification`. The config stored in the state is used by default; pass `config=` to override (useful for bumping `request_timeout` or switching async workers on retry).
 
 ```python
-resumed = ProgressiveSaveManager.load_for_resume(manager.state_path)
-
-print(f"Resumed with {resumed.completed_count}/{resumed.total_tasks} already done")
-
-pending = resumed.get_pending_task_ids()
-print(f"Pending task IDs: {len(pending)}")
-
-# Complete the remaining task
-result_3 = _make_result("q3", "What organ produces insulin?", "Pancreas", True)
-resumed.add_result(result_3)
-
-print(f"After adding q3: {resumed.completed_count}/{resumed.total_tasks}")
+# Real usage (not executed in this doc):
+#
+# benchmark = Benchmark.load("checkpoint.jsonld")
+# result_set = benchmark.resume_verification("results.json.state")
+#
+# # To override config (e.g. raise request_timeout for flaky endpoints):
+# tweaked = sink_config.model_copy(update={"request_timeout": 300.0})
+# result_set = benchmark.resume_verification(
+#     "results.json.state",
+#     config=tweaked,
+# )
+print("Resume pattern shown in comments above")
 ```
 
-`load_for_resume()` reconstructs the full manager state: it reloads the config, task manifest, completed set, and all previously saved results from the `.tmp` file.
+Previously-completed results remain in the sink's buffer; the returned `VerificationResultSet` reflects whatever the executor produced during the resume pass. After a clean full completion, the `.state` and `.results.jsonl` sidecars are deleted and only the final export remains.
 
 ---
 
-## Python API: Finalize
+## Python API: Inspect State
 
-Once all tasks are complete, call `finalize()` to clean up the sidecar files:
+Use `inspect_state_file()` to check progress without loading the full sink:
 
 ```python
-state_path = resumed.state_path
-tmp_path = resumed.tmp_path
-
-print(f"Before finalize: .state exists = {state_path.exists()}")
-print(f"Before finalize: .tmp exists   = {tmp_path.exists()}")
-
-resumed.finalize()
-
-print(f"After finalize:  .state exists = {state_path.exists()}")
-print(f"After finalize:  .tmp exists   = {tmp_path.exists()}")
+# from karenina.utils.progressive_save import inspect_state_file
+#
+# status = inspect_state_file(Path("results.json.state"))
+# print(f"{status.completed_count}/{status.total_tasks} done "
+#       f"({status.progress_percent:.1f}%)")
+print("Inspection pattern shown in comments above")
 ```
 
-After `finalize()`, only the final output file remains. The runner writes the complete results to the output path before calling `finalize()`, so the `.tmp` and `.state` files are no longer needed.
+`inspect_state_file` handles both the v1 (`.tmp`) and v2 (`.results.jsonl`) layouts, so it works on runs started with older karenina versions too.
 
 ---
 
-## Configuration Compatibility
+## Composing Sinks: File + Database
 
-When resuming, the manager checks that the config and benchmark path match the original run. This prevents accidental result mixing:
+`CompositeSink` fans `on_start` / `on_result` / `on_finalize` across children and returns the union of their `completed_triples()`. Pair a `ProgressiveFileSink` with a `DBSink` to write to both the filesystem and a SQLite database incrementally:
 
 ```python
-# Create a fresh manager to test compatibility
-fresh_manager = ProgressiveSaveManager(
-    output_path=_output_path,
-    config=config,
-    benchmark_path=_benchmark_path,
-)
-fresh_manager.initialize(task_ids)
-
-# Same config and benchmark: compatible
-compatible, reason = fresh_manager.is_compatible(config, _benchmark_path)
-print(f"Same config:      compatible={compatible}")
-
-# Different config: incompatible
-different_config = VerificationConfig.from_overrides(
-    answering_id="claude-sonnet-4-20250514",
-    answering_model="claude-sonnet-4-20250514",
-    parsing_id="claude-haiku-4-5",
-    parsing_model="claude-haiku-4-5",
-)
-compatible, reason = fresh_manager.is_compatible(different_config, _benchmark_path)
-print(f"Different config: compatible={compatible}")
-print(f"Reason: {reason}")
-
-# Different benchmark path: incompatible
-compatible, reason = fresh_manager.is_compatible(config, "/other/benchmark.jsonld")
-print(f"Different path:   compatible={compatible}")
-print(f"Reason: {reason}")
+# from karenina.benchmark.verification.sinks import (
+#     CompositeSink, DBSink, ProgressiveFileSink,
+# )
+#
+# sink = CompositeSink([
+#     ProgressiveFileSink(output_path=Path("results.json"),
+#                         config=config, benchmark_path="checkpoint.jsonld"),
+#     DBSink(db_path="runs.sqlite", run_name="my-run"),
+# ])
+# benchmark.run_verification(config=config, sink=sink)
+print("CompositeSink pattern shown in comments above")
 ```
 
-The config hash is computed from the full `VerificationConfig` JSON (excluding manual traces). Any change to models, evaluation mode, or pipeline settings will be detected.
+`DBSink` writes one row per completed result (replacing the end-of-batch `auto_save_results` pattern). Both children see the same stream of results, so the JSON export and the SQLite rows stay consistent.
+
+---
+
+## Partial Failure: Keep State, Retry Only Failures
+
+When the executor raises `VerificationBatchError` (some tasks failed, others succeeded), the batch runner catches it, flushes partial results through the sink, and calls `on_finalize(all_complete=False)`. The sidecars are kept. A subsequent `resume_verification()` will skip the completed triples and re-run only the failed ones.
+
+Without a sink, `VerificationBatchError` still propagates for back-compat with existing code.
 
 ---
 
 ## Cleanup
 
 ```python tags=["hide-cell"]
-# Cleanup temporary files
 import shutil
-fresh_manager.finalize()
 shutil.rmtree(_tmp_dir, ignore_errors=True)
 ```
 

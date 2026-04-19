@@ -12,6 +12,14 @@ from .executor import (
     set_async_portal,
 )
 from .extension import extend_template_run
+from .sinks import (
+    CompositeSink,
+    DBSink,
+    InMemorySink,
+    ProgressiveFileSink,
+    ResultSink,
+    is_completed_result,
+)
 from .stages import (
     export_verification_results_csv,
     export_verification_results_json,
@@ -38,4 +46,11 @@ __all__ = [
     # Results export
     "export_verification_results_csv",
     "export_verification_results_json",
+    # Sinks
+    "ResultSink",
+    "ProgressiveFileSink",
+    "CompositeSink",
+    "DBSink",
+    "InMemorySink",
+    "is_completed_result",
 ]

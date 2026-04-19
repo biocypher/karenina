@@ -781,12 +781,26 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
     ) -> VerificationResultSet:
         """Run verification on the benchmark using existing execution system.
 
         For scenario benchmarks, dispatches to ``_run_scenario_verification``
         which iterates over the scenario x model cross-product.
         For standalone question benchmarks, delegates to VerificationManager.
+
+        Args:
+            config: Verification configuration.
+            question_ids: Optional filter for which questions to run.
+            run_name: Optional run label.
+            async_enabled: Whether to run in parallel.
+            progress_callback: Optional UI progress callback.
+            sink: Optional :class:`ResultSink` for progressive save and
+                crash recovery. Only supported for standalone benchmarks
+                (not scenario mode). Pass a :class:`ProgressiveFileSink` to
+                get ``--resume``-compatible sidecars written incrementally,
+                or a :class:`CompositeSink` to combine multiple persistence
+                strategies.
         """
         # Auto-build replay store from legacy interface="manual" models.
         # The benchmark is only reachable here (not from VerificationConfig
@@ -812,6 +826,11 @@ class Benchmark:
                 )
 
         if self.is_scenario_benchmark:
+            if sink is not None:
+                raise NotImplementedError(
+                    "sink is not yet supported for scenario benchmarks; "
+                    "progressive save currently applies to standalone question benchmarks only"
+                )
             return self._run_scenario_verification(
                 config=config,
                 run_name=run_name,
@@ -825,6 +844,54 @@ class Benchmark:
             async_enabled,
             progress_callback,
             workspace_root=self._workspace_root,
+            sink=sink,
+        )
+
+    def resume_verification(
+        self,
+        state_path: "str | Path",
+        *,
+        config: VerificationConfig | None = None,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> VerificationResultSet:
+        """Resume a progressive-save run from its ``.state`` file.
+
+        Reconstructs a :class:`ProgressiveFileSink` from ``state_path``,
+        populates ``config.skip_triples`` via the sink, and delegates to
+        :meth:`run_verification`. The config stored in the state file is
+        used unless ``config`` is provided explicitly (useful for tweaking
+        e.g. ``request_timeout`` before the retry pass).
+
+        Args:
+            state_path: Path to the ``.state`` sidecar from a prior run.
+            config: Optional override config; defaults to the one snapshot
+                in the state file.
+            question_ids: Optional subset of questions.
+            run_name: Optional run label (defaults to the state's label).
+            async_enabled: Override for async execution.
+            progress_callback: UI progress callback.
+
+        Returns:
+            The batch's :class:`VerificationResultSet`. Previously-completed
+            results remain in the sink's buffer; the returned set reflects
+            whatever the executor produced in this resume pass.
+        """
+        from karenina.benchmark.verification.sinks import ProgressiveFileSink
+
+        sink = ProgressiveFileSink.load_for_resume(Path(state_path))
+        sink.set_global_rubric(self._rubric_manager.get_global_rubric())
+
+        effective_config = config if config is not None else sink.config
+        return self.run_verification(
+            config=effective_config,
+            question_ids=question_ids,
+            run_name=run_name,
+            async_enabled=async_enabled,
+            progress_callback=progress_callback,
+            sink=sink,
         )
 
     def _run_scenario_verification(

@@ -14,14 +14,13 @@ from pydantic import ValidationError
 from rich.console import Console
 
 from karenina.benchmark import Benchmark
-from karenina.benchmark.verification.batch_runner import generate_task_queue
+from karenina.benchmark.verification.sinks import ProgressiveFileSink
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResultSet
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
 )
-from karenina.utils.progressive_save import ProgressiveSaveManager, TaskIdentifier, generate_task_manifest
 
 from .utils import cli_error, filter_templates_by_indices, parse_question_indices, validate_output_path
 from .verify_config import build_config_non_interactive, validate_cli_config_requirements
@@ -38,38 +37,36 @@ console = Console()
 
 def _handle_resume_mode(
     resume: Path,
-) -> tuple[ProgressiveSaveManager, VerificationConfig, str, Path, str, set[str]]:
+) -> tuple[ProgressiveFileSink, VerificationConfig, str, Path, str]:
     """
-    Handle resume mode - load everything from state file.
+    Handle resume mode: load everything from the state file.
 
     Returns:
-        Tuple of (progressive_manager, config, benchmark_path, output, output_format, pending_task_ids)
+        Tuple of (sink, config, benchmark_path, output, output_format)
 
     Raises:
-        typer.Exit: If state file not found, load error, or all tasks completed
+        typer.Exit: If the state file is missing, invalid, or already complete.
     """
     if not resume.exists():
         cli_error(f"State file not found: {resume}")
 
     console.print(f"[cyan]Loading resume state from {resume}...[/cyan]")
     try:
-        progressive_manager = ProgressiveSaveManager.load_for_resume(resume)
-        config = progressive_manager.config
-        benchmark_path = progressive_manager.benchmark_path
-        output = progressive_manager.output_path
+        sink = ProgressiveFileSink.load_for_resume(resume)
+        config = sink.config
+        benchmark_path = sink.benchmark_path
+        output = sink.output_path
         output_format = validate_output_path(output)
 
         console.print(
-            f"[green]\u2713 Resuming: {progressive_manager.completed_count}/{progressive_manager.total_tasks} "
-            f"tasks already completed[/green]"
+            f"[green]\u2713 Resuming: {sink.completed_count}/{sink.total_tasks} tasks already completed[/green]"
         )
 
-        pending_task_ids = progressive_manager.get_pending_task_ids()
-        if not pending_task_ids:
+        if sink.completed_count >= sink.total_tasks and sink.total_tasks > 0:
             console.print("[yellow]All tasks already completed. Nothing to resume.[/yellow]")
             raise typer.Exit(code=0)
 
-        return progressive_manager, config, benchmark_path, output, output_format, pending_task_ids
+        return sink, config, benchmark_path, output, output_format
 
     except typer.Exit:
         raise
@@ -138,62 +135,22 @@ def _initialize_progressive_save(
     output: Path,
     config: VerificationConfig,
     benchmark_path: str,
-    templates: list[FinishedTemplate],
     benchmark: Benchmark,
-) -> ProgressiveSaveManager:
-    """
-    Initialize progressive save manager.
+) -> ProgressiveFileSink:
+    """Build a fresh :class:`ProgressiveFileSink` for a new run.
 
-    Returns:
-        Initialized ProgressiveSaveManager
+    The batch runner calls ``on_start`` with the task manifest once the
+    executor is about to start, so no explicit manifest seeding is needed
+    here; this keeps the CLI loosely coupled to task-queue details.
     """
-    task_queue = generate_task_queue(
-        templates=templates,
+    sink = ProgressiveFileSink(
+        output_path=output,
         config=config,
+        benchmark_path=benchmark_path,
         global_rubric=benchmark.get_global_rubric(),
-        run_name="cli-verification",
     )
-    task_manifest = generate_task_manifest(task_queue)
-
-    progressive_manager = ProgressiveSaveManager(
-        output, config, benchmark_path, global_rubric=benchmark.get_global_rubric()
-    )
-    progressive_manager.initialize(task_manifest)
-    console.print(f"[green]\u2713 Progressive save enabled: {progressive_manager.tmp_path}[/green]")
-    return progressive_manager
-
-
-def _filter_templates_for_resume(
-    templates: list[FinishedTemplate],
-    config: VerificationConfig,
-    benchmark: Benchmark,
-    pending_task_ids: set[str],
-) -> list[FinishedTemplate]:
-    """
-    Filter templates to only those with pending tasks (for resume mode).
-
-    Returns:
-        Filtered list of templates
-    """
-    task_queue = generate_task_queue(
-        templates=templates,
-        config=config,
-        global_rubric=benchmark.get_global_rubric(),
-        run_name="cli-verification",
-    )
-
-    pending_question_ids = set()
-    for task in task_queue:
-        task_id = TaskIdentifier.from_task_dict(task).to_key()
-        if task_id in pending_task_ids:
-            pending_question_ids.add(task["question_id"])
-
-    original_count = len(templates)
-    templates = [t for t in templates if t.question_id in pending_question_ids]
-    if len(templates) < original_count:
-        console.print(f"[dim]Filtered to {len(templates)} questions with pending tasks[/dim]")
-
-    return templates
+    console.print(f"[green]\u2713 Progressive save enabled: {sink.jsonl_path}[/green]")
+    return sink
 
 
 def verify(
@@ -367,8 +324,7 @@ def verify(
             cli_error("BENCHMARK_PATH is required (unless using --resume)")
 
         # Initialize state variables
-        progressive_manager: ProgressiveSaveManager | None = None
-        pending_task_ids: set[str] | None = None
+        progressive_sink: ProgressiveFileSink | None = None
         config: VerificationConfig | None = None
         selected_question_indices: list[int] | None = None
         show_progress_bar_interactive: bool | None = None
@@ -387,18 +343,16 @@ def verify(
 
         # Step 3: Handle resume mode or build fresh config
         if resume:
-            progressive_manager, config, benchmark_path, output, output_format, pending_task_ids = _handle_resume_mode(
-                resume
-            )
+            progressive_sink, config, benchmark_path, output, output_format = _handle_resume_mode(resume)
 
         # Step 3: Load benchmark
         if benchmark_path is None:
             cli_error("benchmark_path must be set (not resuming or resume should have set it)")
         benchmark = _load_benchmark(benchmark_path)
 
-        # Set global rubric on progressive manager if resuming
-        if resume and progressive_manager:
-            progressive_manager.set_global_rubric(benchmark.get_global_rubric())
+        # Set global rubric on progressive sink if resuming
+        if resume and progressive_sink:
+            progressive_sink.set_global_rubric(benchmark.get_global_rubric())
 
         # Step 4: Build config (skip if resuming - config already loaded)
         if resume:
@@ -477,13 +431,11 @@ def verify(
         if progressive_save and not resume:
             if output is None:
                 cli_error("output path is required for progressive save")
-            progressive_manager = _initialize_progressive_save(output, config, benchmark_path, templates, benchmark)
+            progressive_sink = _initialize_progressive_save(output, config, benchmark_path, benchmark)
 
-        # Step 8: Filter templates for resume (only pending tasks)
-        if resume and pending_task_ids:
-            templates = _filter_templates_for_resume(templates, config, benchmark, pending_task_ids)
-
-        # Step 9: Run verification
+        # Step 8: Run verification. Triple-level skip via skip_triples (honored
+        # inside batch_runner) replaces the old per-question filter, so no
+        # pre-filtering of templates is needed on resume.
         console.print("\n[bold cyan]Starting verification...[/bold cyan]")
         console.print(f"  Questions: {len(templates)}")
         console.print(f"  Answering models: {len(config.answering_models)}")
@@ -492,41 +444,43 @@ def verify(
         console.print(
             f"  Async: {'enabled' if config.async_enabled else 'disabled'} ({config.async_max_workers} workers)"
         )
-        if progressive_manager:
+        if progressive_sink:
             console.print("  Progressive save: enabled")
         console.print()
 
         start_time = time.time()
         show_progress = show_progress_bar_interactive if show_progress_bar_interactive is not None else verbose
 
-        results = run_verification_with_progress(templates, config, benchmark, progressive_manager, show_progress)
+        results = run_verification_with_progress(templates, config, benchmark, progressive_sink, show_progress)
 
         end_time = time.time()
         duration = end_time - start_time
 
-        # Step 10: Get final results
+        # Step 9: Combine with previously-persisted results when resuming.
+        # The sink's buffer is the authoritative post-run superset.
         final_results: VerificationResultSet
-        if progressive_manager:
-            final_results = progressive_manager.get_result_set()
+        if progressive_sink:
+            final_results = progressive_sink.get_result_set()
             console.print(f"[dim]Total results (including resumed): {len(final_results)}[/dim]")
         else:
             final_results = results
 
-        # Step 11: Export results (if output configured)
+        # Step 10: Export results (if output configured). ProgressiveFileSink
+        # already wrote a JSON export at on_finalize(all_complete=True);
+        # re-export here so CSV output and the non-progressive path are
+        # handled uniformly.
         if output and output_format:
-            export_results(
-                output, output_format, final_results, config, benchmark, start_time, end_time, progressive_manager
-            )
+            export_results(output, output_format, final_results, config, benchmark, start_time, end_time)
 
-        # Step 12: Display summary
+        # Step 11: Display summary
         display_summary(final_results, duration)
 
         raise typer.Exit(code=0)
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user.[/yellow]")
-        if progressive_manager is not None and output is not None:
-            console.print(f"[dim]To resume: karenina verify --resume {output}[/dim]")
+        if progressive_sink is not None and output is not None:
+            console.print(f"[dim]To resume: karenina verify --resume {progressive_sink.state_path}[/dim]")
         raise typer.Exit(code=130) from None
     except typer.Exit:
         raise

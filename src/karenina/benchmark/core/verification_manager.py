@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .base import BenchmarkBase
@@ -37,6 +37,7 @@ class VerificationManager:
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
         workspace_root: "Path | None" = None,
+        sink: Any = None,
     ) -> VerificationResultSet:
         """
         Run verification on the benchmark using existing execution system.
@@ -48,6 +49,9 @@ class VerificationManager:
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
             workspace_root: Root directory for task workspaces (from Benchmark).
+            sink: Optional :class:`ResultSink` for progressive save / crash
+                recovery. Forwarded verbatim to
+                :func:`run_verification_batch`.
 
         Returns:
             VerificationResultSet containing all verification results
@@ -174,6 +178,7 @@ class VerificationManager:
             benchmark_name=self.base.name,
             progress_callback=batch_progress_callback,
             workspace_root=workspace_root,
+            sink=sink,
         )
 
         return results

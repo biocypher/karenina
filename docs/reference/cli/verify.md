@@ -114,8 +114,8 @@ Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` d
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--progressive-save` | flag | `False` | Enable incremental saving to `.tmp` and `.state` files for crash recovery. Requires `--output`. |
-| `--resume` | `PATH` | — | Resume from a `.state` file. Loads config from state; other config options are ignored. |
+| `--progressive-save` | flag | `False` | Enable incremental saving to `.results.jsonl` and `.state` sidecar files for crash recovery. Requires `--output`. |
+| `--resume` | `PATH` | — | Resume from a `.state` file. Loads config from state; other config options are ignored. Resume is triple-level: completed (question, answering-model, parsing-model, replicate) tuples are skipped. |
 
 ---
 
@@ -145,14 +145,18 @@ Progressive save enables crash recovery for long-running verification jobs. When
 ### How it works
 
 1. **Start with progressive save**: The command creates two sidecar files next to the output path:
-    - `<output>.tmp` — Accumulated results so far
-    - `<output>.state` — Job state including config, benchmark path, and task manifest
+    - `<output>.results.jsonl` — Append-only, one completed result per line (O(1) write per task)
+    - `<output>.state` — Job state including config snapshot, benchmark path, task manifest, and the set of completed triples
 
-2. **On crash or interrupt**: The `.state` file preserves which tasks have completed. The `.tmp` file holds partial results.
+2. **On crash or interrupt**: Both sidecars are retained. The `.state` file records which triples have completed; the `.results.jsonl` file holds the results themselves.
 
-3. **Resume**: Pass the `.state` file path to `--resume`. The command reloads config from state, identifies pending tasks, and runs only those. All other CLI options are ignored when resuming.
+3. **Resume**: Pass the `.state` file path to `--resume`. The command reloads config from state, merges the completed triple set into `skip_triples`, and runs only the pending triples. All other CLI config options are ignored when resuming.
 
-4. **Finalize**: When all tasks complete, results are written to the output file and the `.tmp`/`.state` sidecar files are cleaned up.
+4. **Finalize**: On full completion, the final export is assembled from the JSONL sidecar, written to the output path, and both sidecars are deleted. On partial failure (`VerificationBatchError`), the sidecars are retained so `--resume` picks up only the failed triples.
+
+Resume is **triple-level**: the unit of work is `(question_id, answering_canonical_key, parsing_canonical_key, replicate)`. Multi-model / multi-replicate fan-outs skip only the completed tuples, not whole questions.
+
+Progressive save is also available from the Python API via `Benchmark.run_verification(sink=ProgressiveFileSink(...))` and `Benchmark.resume_verification(state_path)`. See the [Progressive Save tutorial](../../workflows/running-verification/progressive-save.md).
 
 ### Check progress
 
