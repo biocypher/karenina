@@ -1616,13 +1616,13 @@ class TestRetryConfigFields:
 class TestTaskOrdering:
     """Tests for the task_ordering field on VerificationConfig."""
 
-    def test_default_is_prefix_cache(self) -> None:
-        """Test that task_ordering defaults to 'prefix_cache'."""
+    def test_default_is_auto(self) -> None:
+        """Test that task_ordering defaults to 'auto'."""
         config = VerificationConfig(
             parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
             parsing_only=True,
         )
-        assert config.task_ordering == "prefix_cache"
+        assert config.task_ordering == "auto"
 
     def test_accepts_generation_order(self) -> None:
         """Test that task_ordering accepts 'generation_order'."""
@@ -1650,3 +1650,79 @@ class TestTaskOrdering:
                 parsing_only=True,
                 task_ordering="invalid",
             )
+
+
+# =============================================================================
+# Multi-endpoint scheduling: task_ordering + answerer_concurrency_limits
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTaskOrderingSchema:
+    """Tests for the extended task_ordering Literal and 'auto' default."""
+
+    def _minimal_config(self, **overrides) -> VerificationConfig:
+        parsing = ModelConfig(
+            id="parser",
+            model_name="parser",
+            model_provider="anthropic",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+        kwargs: dict = {"parsing_models": [parsing], "parsing_only": True}
+        kwargs.update(overrides)
+        return VerificationConfig(**kwargs)
+
+    def test_default_task_ordering_is_auto(self) -> None:
+        config = self._minimal_config()
+        assert config.task_ordering == "auto"
+
+    def test_distribute_answerers_is_accepted(self) -> None:
+        config = self._minimal_config(task_ordering="distribute_answerers")
+        assert config.task_ordering == "distribute_answerers"
+
+    def test_existing_strategies_still_accepted(self) -> None:
+        for value in ("prefix_cache", "generation_order", "random"):
+            config = self._minimal_config(task_ordering=value)
+            assert config.task_ordering == value
+
+    def test_unknown_task_ordering_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            self._minimal_config(task_ordering="nope")
+
+
+@pytest.mark.unit
+class TestAnswererConcurrencyLimitsSchema:
+    """Tests for the new answerer_concurrency_limits field."""
+
+    def _minimal_config(self, **overrides) -> VerificationConfig:
+        parsing = ModelConfig(
+            id="parser",
+            model_name="parser",
+            model_provider="anthropic",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+        kwargs: dict = {"parsing_models": [parsing], "parsing_only": True}
+        kwargs.update(overrides)
+        return VerificationConfig(**kwargs)
+
+    def test_default_is_none(self) -> None:
+        config = self._minimal_config()
+        assert config.answerer_concurrency_limits is None
+
+    def test_int_accepted(self) -> None:
+        config = self._minimal_config(answerer_concurrency_limits=16)
+        assert config.answerer_concurrency_limits == 16
+
+    def test_dict_accepted(self) -> None:
+        config = self._minimal_config(
+            answerer_concurrency_limits={"m1": 10, "m2": 20},
+        )
+        assert config.answerer_concurrency_limits == {"m1": 10, "m2": 20}
+
+    def test_unknown_types_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            self._minimal_config(answerer_concurrency_limits="sixteen")
