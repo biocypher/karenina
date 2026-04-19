@@ -110,7 +110,11 @@ def _safe_json_serialize(data: Any, question_id: str, field_name: str) -> str:
 
 
 def export_verification_results_json(
-    job: VerificationJob, results: VerificationResultSet, global_rubric: HasTraitNames | None = None
+    job: VerificationJob,
+    results: VerificationResultSet,
+    global_rubric: HasTraitNames | None = None,
+    *,
+    is_complete: bool = True,
 ) -> str:
     """
     Export verification results to JSON format with metadata (v2.0 format).
@@ -125,6 +129,11 @@ def export_verification_results_json(
         job: The verification job
         results: VerificationResultSet containing all verification results
         global_rubric: Optional global rubric to include in shared_data for rubric definition
+        is_complete: True when this export is the final write for the job.
+            ProgressiveFileSink passes True from write_final_export; intermediate
+            flushes (future extension) would pass False. Emitted into
+            job_summary.is_complete so downstream readers can distinguish
+            final exports from in-progress snapshots.
 
     Returns:
         JSON string with results and metadata in v2.0 format
@@ -148,18 +157,24 @@ def export_verification_results_json(
             "karenina_version": get_karenina_version(),
             "job_id": job.job_id,
             "verification_config": {
-                "answering_model": {
-                    "provider": job.config.answering_models[0].model_provider if job.config.answering_models else None,
-                    "name": job.config.answering_models[0].model_name if job.config.answering_models else None,
-                    "temperature": job.config.answering_models[0].temperature if job.config.answering_models else None,
-                    "interface": job.config.answering_models[0].interface if job.config.answering_models else None,
-                },
-                "parsing_model": {
-                    "provider": job.config.parsing_models[0].model_provider if job.config.parsing_models else None,
-                    "name": job.config.parsing_models[0].model_name if job.config.parsing_models else None,
-                    "temperature": job.config.parsing_models[0].temperature if job.config.parsing_models else None,
-                    "interface": job.config.parsing_models[0].interface if job.config.parsing_models else None,
-                },
+                "answering_models": [
+                    {
+                        "provider": m.model_provider,
+                        "name": m.model_name,
+                        "temperature": m.temperature,
+                        "interface": m.interface,
+                    }
+                    for m in job.config.answering_models
+                ],
+                "parsing_models": [
+                    {
+                        "provider": m.model_provider,
+                        "name": m.model_name,
+                        "temperature": m.temperature,
+                        "interface": m.interface,
+                    }
+                    for m in job.config.parsing_models
+                ],
             },
             "job_summary": {
                 "total_questions": job.total_questions,
@@ -168,6 +183,7 @@ def export_verification_results_json(
                 "start_time": job.start_time,
                 "end_time": job.end_time,
                 "total_duration": job.end_time - job.start_time if job.end_time and job.start_time else None,
+                "is_complete": is_complete,
             },
         },
         "shared_data": {

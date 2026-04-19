@@ -388,17 +388,19 @@ class ProgressiveFileSink:
             The path the export was written to.
         """
         target = output_path or self.output_path
+        now = time.time()
         job = VerificationJob(
-            job_id=f"progressive-{int(self._start_time or time.time())}",
+            job_id=f"progressive-{int(self._start_time or now)}",
             run_name="progressive",
             status="completed",
             config=self.config,
             total_questions=self.total_tasks,
             successful_count=self.completed_count,
             start_time=self._start_time,
+            end_time=now,
         )
         result_set = VerificationResultSet(results=list(self._results))
-        json_str = export_verification_results_json(job, result_set, self.global_rubric)
+        json_str = export_verification_results_json(job, result_set, self.global_rubric, is_complete=True)
         atomic_write(target, json_str)
         return target
 
