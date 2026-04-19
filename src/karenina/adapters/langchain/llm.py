@@ -132,6 +132,9 @@ class LangChainLLMAdapter:
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
 
+        if self._config.max_tokens is not None:
+            kwargs["max_tokens"] = self._config.max_tokens
+
         if self._config.request_timeout is not None:
             # LangChain's ChatAnthropic uses 'default_request_timeout', not 'request_timeout'.
             # Other providers (OpenAI, Google) accept 'request_timeout' as-is.
