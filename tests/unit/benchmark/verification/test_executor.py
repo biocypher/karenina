@@ -894,3 +894,74 @@ class TestPreTeardownAclose:
             _active_adapters.clear()
         with _adapter_portal_lock:
             _adapter_portal_refs.clear()
+
+
+# =============================================================================
+# ExecutorConfig.answerer_concurrency_limits + _get_endpoint_semaphore
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAnswererConcurrencyLimitsPlumbing:
+    """Config plumbing and lazy semaphore accessor on VerificationExecutor."""
+
+    def test_default_is_none(self) -> None:
+        from karenina.benchmark.verification.executor import ExecutorConfig
+
+        assert ExecutorConfig().answerer_concurrency_limits is None
+
+    def test_can_be_set(self) -> None:
+        from karenina.benchmark.verification.executor import ExecutorConfig
+
+        cfg = ExecutorConfig(answerer_concurrency_limits={"m1": 3})
+        assert cfg.answerer_concurrency_limits == {"m1": 3}
+
+    def test_get_endpoint_semaphore_caches(self) -> None:
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        executor = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+
+        sem_a = executor._get_endpoint_semaphore("m1", 2)
+        sem_b = executor._get_endpoint_semaphore("m1", 2)
+        assert sem_a is sem_b
+        # Duck-type check: a Semaphore exposes acquire/release. CPython's
+        # Semaphore is a factory, so isinstance checks against
+        # threading.Semaphore are brittle across versions.
+        assert hasattr(sem_a, "acquire") and hasattr(sem_a, "release")
+
+    def test_get_endpoint_semaphore_thread_safe_first_time(self) -> None:
+        import threading
+
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        executor = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+
+        barrier = threading.Barrier(8)
+        seen: list[object] = []
+        seen_lock = threading.Lock()
+
+        def _race() -> None:
+            barrier.wait()
+            sem = executor._get_endpoint_semaphore("m1", 2)
+            with seen_lock:
+                seen.append(sem)
+
+        threads = [threading.Thread(target=_race) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len({id(s) for s in seen}) == 1

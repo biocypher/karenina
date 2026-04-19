@@ -126,6 +126,11 @@ class ExecutorConfig:
         max_requeue_count: Maximum times a task can be requeued before forcing a
             fresh generation (default: 5). When exceeded, the cache entry is reset
             and the task restarts with retry_count=0.
+        answerer_concurrency_limits: Optional dict mapping answerer
+            ``ModelConfig.id`` to the max number of concurrent tasks allowed on
+            that answerer. Already normalized (the public int-or-dict form is
+            reduced to a plain dict by ``_normalize_answerer_limits``). ``None``
+            (the default) disables caps; every task runs unthrottled.
     """
 
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
@@ -133,6 +138,7 @@ class ExecutorConfig:
     retry_wait_seconds: float = 5.0
     timeout_seconds: float | None = None
     max_requeue_count: int = 5
+    answerer_concurrency_limits: dict[str, int] | None = None
 
 
 # ============================================================================
@@ -161,6 +167,25 @@ class VerificationExecutor:
         """
         self.parallel = parallel
         self.config = config or ExecutorConfig()
+        self._endpoint_semaphores: dict[str, threading.Semaphore] = {}
+        self._endpoint_semaphores_lock = threading.Lock()
+
+    def _get_endpoint_semaphore(self, ans_id: str, limit: int) -> threading.Semaphore:
+        """Return the semaphore for ``ans_id``, creating it on first access.
+
+        Thread-safe: the mutation of ``self._endpoint_semaphores`` is guarded
+        by ``self._endpoint_semaphores_lock`` so that two workers racing for
+        the same unseen key share a single ``threading.Semaphore`` instance.
+        """
+        existing = self._endpoint_semaphores.get(ans_id)
+        if existing is not None:
+            return existing
+        with self._endpoint_semaphores_lock:
+            existing = self._endpoint_semaphores.get(ans_id)
+            if existing is None:
+                existing = threading.Semaphore(limit)
+                self._endpoint_semaphores[ans_id] = existing
+            return existing
 
     def run_batch(
         self,
