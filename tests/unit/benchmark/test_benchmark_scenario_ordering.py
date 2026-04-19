@@ -132,3 +132,106 @@ class TestScenarioComboOrdering:
         # (matches the benchmark.py code path)
 
         assert combos == original_order
+
+
+# =============================================================================
+# task_ordering dispatch via _run_scenario_verification
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestScenarioTaskOrderingDispatch:
+    """Pins the dispatch in Benchmark._run_scenario_verification to the shared
+    ordering resolver so scenario users honor 'auto' and 'distribute_answerers'.
+    """
+
+    def _combos(self, *, answerers: list[str], scenarios: list[str]) -> list:
+        out = []
+        for scen_name in scenarios:
+            s = MagicMock()
+            s.name = scen_name
+            for ans_id in answerers:
+                ans = _make_model(ans_id)
+                parse = _make_model("parser")
+                out.append((s, ans, parse, None))
+        return out
+
+    def test_auto_single_answerer_groups_like_prefix_cache(self) -> None:
+        """Default (auto) with one answerer preserves pre-feature behavior: grouped by answerer."""
+        from karenina.benchmark.benchmark import _apply_scenario_ordering
+
+        combos = self._combos(answerers=["only"], scenarios=["s2", "s1"])
+        config = VerificationConfig(
+            answering_models=[_make_model("only")],
+            parsing_models=[_make_model("parser")],
+            # default task_ordering = "auto"
+        )
+
+        ordered = _apply_scenario_ordering(combos, config)
+
+        # All for the single answerer; scenarios sorted alphabetically
+        assert [c[0].name for c in ordered] == ["s1", "s2"]
+
+    def test_auto_multiple_answerers_round_robin(self) -> None:
+        """Default (auto) with multiple answerers interleaves across answerers."""
+        from karenina.benchmark.benchmark import _apply_scenario_ordering
+
+        combos = self._combos(answerers=["a", "b"], scenarios=["s1", "s2"])
+        config = VerificationConfig(
+            answering_models=[_make_model("a"), _make_model("b")],
+            parsing_models=[_make_model("parser")],
+            # default task_ordering = "auto"
+        )
+
+        ordered = _apply_scenario_ordering(combos, config)
+
+        # First two combos must span both answerers (round-robin head)
+        head_ids = {c[1].id for c in ordered[:2]}
+        assert head_ids == {"a", "b"}
+        assert len(ordered) == 4
+
+    def test_explicit_distribute_answerers_round_robin(self) -> None:
+        """Explicit distribute_answerers works at the scenario site too."""
+        from karenina.benchmark.benchmark import _apply_scenario_ordering
+
+        combos = self._combos(answerers=["a", "b", "c"], scenarios=["s1"])
+        config = VerificationConfig(
+            answering_models=[_make_model("a"), _make_model("b"), _make_model("c")],
+            parsing_models=[_make_model("parser")],
+            task_ordering="distribute_answerers",
+        )
+
+        ordered = _apply_scenario_ordering(combos, config)
+
+        # First three combos cover all three answerers
+        head_ids = {c[1].id for c in ordered[:3]}
+        assert head_ids == {"a", "b", "c"}
+
+    def test_explicit_prefix_cache_still_groups(self) -> None:
+        """Existing prefix_cache behavior preserved by the helper."""
+        from karenina.benchmark.benchmark import _apply_scenario_ordering
+
+        combos = self._combos(answerers=["b", "a"], scenarios=["s1"])
+        config = VerificationConfig(
+            answering_models=[_make_model("a"), _make_model("b")],
+            parsing_models=[_make_model("parser")],
+            task_ordering="prefix_cache",
+        )
+
+        ordered = _apply_scenario_ordering(combos, config)
+        answerer_run = [c[1].id for c in ordered]
+        assert answerer_run == ["a", "b"]
+
+    def test_generation_order_is_passthrough(self) -> None:
+        from karenina.benchmark.benchmark import _apply_scenario_ordering
+
+        combos = self._combos(answerers=["a", "b"], scenarios=["s1", "s2"])
+        config = VerificationConfig(
+            answering_models=[_make_model("a"), _make_model("b")],
+            parsing_models=[_make_model("parser")],
+            task_ordering="generation_order",
+        )
+
+        ordered = _apply_scenario_ordering(combos, config)
+        # With generation_order we preserve list-comprehension order
+        assert ordered == combos

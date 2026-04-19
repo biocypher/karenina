@@ -46,6 +46,69 @@ from .core.questions import _NOT_PROVIDED
 logger = logging.getLogger(__name__)
 
 
+def _apply_scenario_ordering(
+    combos: list[tuple[Any, Any, Any, int | None]],
+    config: VerificationConfig,
+) -> list[tuple[Any, Any, Any, int | None]]:
+    """Apply resolved task_ordering to a scenario combo list.
+
+    Routes through ``_resolve_task_ordering`` so scenario runs honor the
+    ``auto`` default introduced by the multi-endpoint scheduling work, matching
+    the QA path in :func:`karenina.benchmark.verification.batch_runner._apply_task_ordering`.
+
+    Combo shape: ``(scenario_def, answering_model, parsing_model, replicate)``.
+
+    Args:
+        combos: List of scenario combo tuples. Mutated in place for
+            ``prefix_cache`` and ``random``.
+        config: Verification config. ``config.task_ordering`` is resolved via
+            ``_resolve_task_ordering`` so ``auto`` collapses to
+            ``distribute_answerers`` (2+ answerer identities) or
+            ``prefix_cache`` (single identity).
+
+    Returns:
+        The same ``combos`` list (possibly re-sorted in place) for
+        ``prefix_cache``, ``random``, and ``generation_order``. A new list for
+        ``distribute_answerers``.
+    """
+    from itertools import zip_longest
+
+    from karenina.benchmark.verification.batch_runner import _resolve_task_ordering
+    from karenina.benchmark.verification.utils.task_helpers import model_sort_key
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    strategy = _resolve_task_ordering(config)
+
+    def _within_group_key(c: tuple[Any, Any, Any, int | None]) -> tuple[Any, ...]:
+        # None-safe replicate sort key: None runs sort before integer
+        # replicates, integers sort numerically. Python 3 cannot compare
+        # int with None directly.
+        return (
+            c[0].name,  # scenario name
+            model_sort_key(c[2]),  # parsing_model
+            (0, 0) if c[3] is None else (1, c[3]),  # replicate tiebreaker
+        )
+
+    if strategy == "prefix_cache":
+        combos.sort(key=lambda c: (model_sort_key(c[1]),) + _within_group_key(c))
+        return combos
+    if strategy == "distribute_answerers":
+        groups: dict[str, list[tuple[Any, Any, Any, int | None]]] = {}
+        for combo in combos:
+            key = ModelIdentity.from_model_config(combo[1], role="answering").canonical_key
+            groups.setdefault(key, []).append(combo)
+        for group in groups.values():
+            group.sort(key=_within_group_key)
+        return [c for row in zip_longest(*groups.values()) for c in row if c is not None]
+    if strategy == "random":
+        import random
+
+        random.shuffle(combos)
+        return combos
+    # "generation_order": no-op, preserve original list comprehension order
+    return combos
+
+
 class Benchmark:
     """
     Main class for managing Karenina benchmarks in JSON-LD format.
@@ -1015,26 +1078,9 @@ class Benchmark:
             for replicate in _replicate_values(config.replicate_count)
         ]
 
-        # Apply task ordering to scenario combos
-        from karenina.benchmark.verification.utils.task_helpers import model_sort_key
-
-        if config.task_ordering == "prefix_cache":
-            # None-safe replicate sort key: None runs sort before integer
-            # replicates, integers sort numerically. Python 3 cannot compare
-            # int with None directly.
-            combos.sort(
-                key=lambda c: (
-                    model_sort_key(c[1]),  # answering_model
-                    c[0].name,  # scenario name
-                    model_sort_key(c[2]),  # parsing_model
-                    (0, 0) if c[3] is None else (1, c[3]),  # replicate tiebreaker
-                )
-            )
-        elif config.task_ordering == "random":
-            import random
-
-            random.shuffle(combos)
-        # "generation_order": no-op, preserve original list comprehension order
+        # Apply task ordering to scenario combos (routes auto/prefix_cache/
+        # distribute_answerers/random/generation_order through the shared helper).
+        combos = _apply_scenario_ordering(combos, config)
 
         # Honor config.skip_triples at combo level. For scenarios, slot-0
         # of the triple holds the scenario_id (not question_id), matching
