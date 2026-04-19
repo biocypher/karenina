@@ -433,6 +433,28 @@ for i, s in enumerate(orch.stages, 1):
     print(f"  {i:2d}. {s.name}")
 ```
 
+## Scheduling across multiple inference endpoints
+
+`VerificationConfig` offers two knobs for multi-endpoint deployments (for example several vLLM servers, each hosting one answering model):
+
+1. **`task_ordering`** controls the order in which expanded tasks are handed to the executor. The default `"auto"` picks `"distribute_answerers"` when the configured `answering_models` span more than one distinct `ModelIdentity.canonical_key`, and `"prefix_cache"` otherwise. `"distribute_answerers"` round-robins tasks across answerer identities while preserving prefix-cache locality inside each answerer group, so consecutive tasks target different inference endpoints and no single server is serialized. The other values (`"prefix_cache"`, `"generation_order"`, `"random"`) remain available for manual pinning.
+
+2. **`answerer_concurrency_limits`** caps how many tasks may be in flight on a given answerer at once. Pass an `int` to apply the same cap to every configured answerer; pass a `dict[str, int]` keyed by `ModelConfig.id` for per-model caps. Answerers not present in the dict run uncapped. `None` (the default) disables caps.
+
+Ordering and caps compose. Ordering smooths the steady state so the cap rarely engages; caps guarantee the ceiling under retry bursts or cache-hit cascades. Example for a run with three vLLM hosts and `async_max_workers=48`:
+
+```python
+VerificationConfig(
+    answering_models=[qwen_a, qwen_b, qwen_c],
+    parsing_models=[...],
+    async_max_workers=48,
+    answerer_concurrency_limits=16,  # every answerer capped at 16
+    # task_ordering defaults to "auto" -> distribute_answerers
+)
+```
+
+The cap is applied at task start (around the whole pipeline run for each task), so when the same endpoint hosts both the answerer and the parser the cap implicitly covers both phases. Stage-level caps are not currently supported.
+
 ## 10. Next Steps
 
 - [Evaluation Modes](../evaluation-modes/): how the three modes shape which stages run
