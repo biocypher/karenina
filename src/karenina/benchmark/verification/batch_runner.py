@@ -63,6 +63,62 @@ def _apply_retry_config(model: Any, retry_policy: Any | None) -> Any:
     return model
 
 
+def _resolve_task_ordering(config: VerificationConfig) -> str:
+    """Resolve ``task_ordering='auto'`` based on the number of distinct answerer identities.
+
+    Returns the resolved strategy name. Non-``auto`` values pass through
+    unchanged. A single INFO log records the resolution for operator
+    visibility.
+    """
+    if config.task_ordering != "auto":
+        return config.task_ordering
+
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    answerer_keys = {
+        ModelIdentity.from_model_config(m, role="answering").canonical_key for m in config.answering_models
+    }
+    if len(answerer_keys) > 1:
+        logger.info(
+            "task_ordering=auto -> distribute_answerers (%d distinct answerer identities)",
+            len(answerer_keys),
+        )
+        return "distribute_answerers"
+
+    logger.info("task_ordering=auto -> prefix_cache (single answerer identity)")
+    return "prefix_cache"
+
+
+def _apply_task_ordering(task_queue: list[dict[str, Any]], strategy: str) -> list[dict[str, Any]]:
+    """Apply the given task-ordering strategy to ``task_queue`` and return the result.
+
+    Mutates the input list for in-place strategies (``prefix_cache``,
+    ``random``) and returns the same reference. Returns a new list for
+    ``distribute_answerers``. ``generation_order`` returns the input as-is.
+    """
+    from .utils.task_helpers import interleave_by_answerer, model_sort_key
+
+    if strategy == "prefix_cache":
+        task_queue.sort(
+            key=lambda t: (
+                model_sort_key(t["answering_model"]),
+                t["question_id"],
+                model_sort_key(t["parsing_model"]),
+                t.get("replicate") or 0,
+            )
+        )
+        return task_queue
+    if strategy == "distribute_answerers":
+        return interleave_by_answerer(task_queue)
+    if strategy == "random":
+        import random
+
+        random.shuffle(task_queue)
+        return task_queue
+    # "generation_order": no-op, preserve loop order
+    return task_queue
+
+
 # ============================================================================
 # Task Queue Generation
 # ============================================================================
@@ -434,22 +490,8 @@ def run_verification_batch(
         progress_callback = _sink_progress_adapter
 
     # Apply task ordering strategy
-    from .utils.task_helpers import model_sort_key
-
-    if config.task_ordering == "prefix_cache":
-        task_queue.sort(
-            key=lambda t: (
-                model_sort_key(t["answering_model"]),
-                t["question_id"],
-                model_sort_key(t["parsing_model"]),
-                t.get("replicate") or 0,
-            )
-        )
-    elif config.task_ordering == "random":
-        import random
-
-        random.shuffle(task_queue)
-    # "generation_order": no-op, preserve loop order
+    effective = _resolve_task_ordering(config)
+    task_queue = _apply_task_ordering(task_queue, effective)
 
     # Log execution plan
     logger.info(f"Starting verification: {len(task_queue)} tasks ({'parallel' if async_enabled else 'sequential'})")

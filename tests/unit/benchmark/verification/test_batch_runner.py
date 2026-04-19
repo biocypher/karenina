@@ -161,3 +161,101 @@ class TestApplyRetryConfig:
         result = _apply_retry_config(model, retry_policy=None)
         assert result.retry_policy is None
         assert result is model  # Same object, no copy
+
+
+# =============================================================================
+# task_ordering resolution and dispatch
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestResolveTaskOrdering:
+    """Tests for _resolve_task_ordering (auto resolution + passthrough)."""
+
+    def _make_config(self, *, ordering: str, answerers: list[ModelConfig]) -> VerificationConfig:
+        return VerificationConfig(
+            answering_models=answerers,
+            parsing_models=[HAIKU],
+            task_ordering=ordering,
+        )
+
+    def test_auto_picks_prefix_cache_for_single_answerer(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _resolve_task_ordering
+
+        config = self._make_config(ordering="auto", answerers=[HAIKU])
+        assert _resolve_task_ordering(config) == "prefix_cache"
+
+    def test_auto_picks_distribute_answerers_for_multiple_answerers(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _resolve_task_ordering
+
+        config = self._make_config(ordering="auto", answerers=[HAIKU, SONNET])
+        assert _resolve_task_ordering(config) == "distribute_answerers"
+
+    def test_auto_picks_prefix_cache_when_duplicated_answerers_share_identity(self) -> None:
+        """Duplicate ModelConfigs with the same canonical_key count as one group."""
+        from karenina.benchmark.verification.batch_runner import _resolve_task_ordering
+
+        dup = _make_model("haiku")
+        config = self._make_config(ordering="auto", answerers=[HAIKU, dup])
+        assert _resolve_task_ordering(config) == "prefix_cache"
+
+    def test_passthrough_for_pinned_values(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _resolve_task_ordering
+
+        for pinned in ("prefix_cache", "distribute_answerers", "generation_order", "random"):
+            config = self._make_config(ordering=pinned, answerers=[HAIKU, SONNET])
+            assert _resolve_task_ordering(config) == pinned
+
+
+@pytest.mark.unit
+class TestSortDispatch:
+    """Tests for the dispatch that applies the resolved ordering to the queue."""
+
+    def _tasks(self, answerers: list[str], questions: list[str]) -> list[dict]:
+        out: list[dict] = []
+        for ans in answerers:
+            for q in questions:
+                out.append(
+                    {
+                        "answering_model": _make_model(ans),
+                        "parsing_model": HAIKU,
+                        "question_id": q,
+                        "replicate": 1,
+                    }
+                )
+        return out
+
+    def test_distribute_answerers_produces_round_robin_head(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _apply_task_ordering
+
+        tasks = self._tasks(["a", "b", "c"], ["q1", "q2", "q3"])
+        ordered = _apply_task_ordering(tasks, "distribute_answerers")
+
+        head = [t["answering_model"].id for t in ordered[:3]]
+        assert set(head) == {"a", "b", "c"}
+        assert len(ordered) == len(tasks)
+
+    def test_prefix_cache_groups_by_answerer(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _apply_task_ordering
+
+        tasks = self._tasks(["b", "a"], ["q2", "q1"])
+        ordered = _apply_task_ordering(tasks, "prefix_cache")
+
+        answerer_run = [t["answering_model"].id for t in ordered]
+        assert answerer_run == ["a", "a", "b", "b"]
+
+    def test_generation_order_is_passthrough(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _apply_task_ordering
+
+        tasks = self._tasks(["a", "b"], ["q1", "q2"])
+        assert _apply_task_ordering(list(tasks), "generation_order") == tasks
+
+    def test_random_preserves_task_count(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _apply_task_ordering
+
+        tasks = self._tasks(["a", "b"], ["q1", "q2", "q3"])
+        ordered = _apply_task_ordering(list(tasks), "random")
+        assert len(ordered) == len(tasks)
+        ids = sorted((t["answering_model"].id, t["question_id"]) for t in ordered)
+        expected = sorted((t["answering_model"].id, t["question_id"]) for t in tasks)
+        assert ids == expected
