@@ -19,6 +19,7 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) |
 | **Prompt Assembly** | How prompts are constructed for pipeline LLM calls (tri-section pattern) | [Prompt Assembly](../notebooks/core_concepts/prompt-assembly.ipynb) |
 | **Results & Scoring** | What verification produces: pass/fail, scores, traits, and metrics | [Results & Scoring](../notebooks/core_concepts/results-and-scoring.ipynb) |
+| **Extending Runs** | Reuse prior traces to add judges/answerers/replicates (`extend_template`) or attach a new rubric (`extend_rubric`) | [Extending Runs](../notebooks/core_concepts/extending-runs.ipynb) |
 | **Adapters** | LLM backend interfaces (LangChain, Claude SDK, Claude Tool, Manual, and more) | [Adapters](adapters.md) |
 | **MCP** | Tool-augmented evaluation via Model Context Protocol servers | [MCP Overview](../notebooks/core_concepts/mcp-overview.ipynb) |
 | **Manual Interface** | Evaluation using pre-recorded LLM traces instead of live API calls | [Manual Interface](../notebooks/core_concepts/manual-interface.ipynb) |

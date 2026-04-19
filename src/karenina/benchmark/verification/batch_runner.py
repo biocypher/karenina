@@ -93,6 +93,10 @@ def generate_task_queue(
         List of task dictionaries with all arguments for verification
     """
     tasks = []
+    skip_triples = config.skip_triples
+    n_skipped = 0
+    if skip_triples is not None:
+        from karenina.schemas.verification.model_identity import ModelIdentity
 
     for template in templates:
         # Prepare rubric for this question
@@ -117,6 +121,13 @@ def generate_task_queue(
                 for rep in range(1, config.replicate_count + 1):
                     # For single replicate, don't include replicate numbers
                     replicate = None if config.replicate_count == 1 else rep
+
+                    if skip_triples is not None:
+                        ans_key = ModelIdentity.from_model_config(ans_model, role="answering").canonical_key
+                        parse_key = ModelIdentity.from_model_config(parse_model, role="parsing").canonical_key
+                        if (template.question_id, ans_key, parse_key, replicate) in skip_triples:
+                            n_skipped += 1
+                            continue
 
                     task = {
                         # Core
@@ -151,6 +162,9 @@ def generate_task_queue(
                     if workspace_root is not None:
                         task["workspace_root"] = workspace_root
                     tasks.append(task)
+
+    if skip_triples is not None and n_skipped:
+        logger.info("generate_task_queue: skipped %d tasks covered by prior_results", n_skipped)
 
     return tasks
 
