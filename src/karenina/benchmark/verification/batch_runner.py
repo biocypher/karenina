@@ -526,11 +526,18 @@ def run_verification_batch(
     # Execute tasks using the VerificationExecutor
     from .executor import ExecutorConfig, VerificationExecutor
 
+    answerer_limits = _normalize_answerer_limits(config.answerer_concurrency_limits, config.answering_models)
+    if answerer_limits:
+        logger.info(
+            "answerer_concurrency_limits active: %s",
+            answerer_limits,
+        )
     executor = VerificationExecutor(
         parallel=async_enabled,
         config=ExecutorConfig(
             max_workers=max_workers,
             max_requeue_count=config.max_requeue_count,
+            answerer_concurrency_limits=answerer_limits,
         ),
     )
 

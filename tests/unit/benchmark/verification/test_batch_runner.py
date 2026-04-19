@@ -306,3 +306,83 @@ class TestNormalizeAnswererLimits:
 
         assert out == {"ghost": 5}
         assert any("ghost" in rec.message for rec in caplog.records)
+
+
+# =============================================================================
+# answerer_concurrency_limits -> ExecutorConfig plumbing
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAnswererConcurrencyLimitsPlumbing:
+    """End-to-end plumbing: VerificationConfig -> normalization -> ExecutorConfig.
+
+    Uses a ``_FakeExecutor`` patched onto ``executor.VerificationExecutor`` so
+    the test intercepts the constructor before any tasks run. The patch target
+    is correct because ``run_verification_batch`` does a local
+    ``from .executor import VerificationExecutor`` at call time, which reads
+    ``executor.VerificationExecutor``.
+    """
+
+    def test_int_limit_reaches_executor_as_dict(self, monkeypatch) -> None:
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification import executor as exec_mod
+
+        captured: dict[str, object] = {}
+
+        class _FakeExecutor:
+            def __init__(self, parallel, config):  # noqa: ARG002
+                captured["parallel"] = parallel
+                captured["config"] = config
+
+            def run_batch(self, tasks, progress_callback=None):  # noqa: ARG002
+                return {}
+
+        monkeypatch.setattr(br_mod, "cleanup_resources", lambda: None)
+        monkeypatch.setattr(exec_mod, "VerificationExecutor", _FakeExecutor)
+
+        template = _make_template()
+        config = VerificationConfig(
+            answering_models=[HAIKU, SONNET],
+            parsing_models=[HAIKU],
+            answerer_concurrency_limits=16,
+            async_enabled=True,
+            async_max_workers=4,
+        )
+
+        br_mod.run_verification_batch(
+            templates=[template],
+            config=config,
+            run_name="plumb-test",
+        )
+
+        executor_config = captured["config"]
+        assert executor_config.answerer_concurrency_limits == {"haiku": 16, "sonnet": 16}
+
+    def test_none_limit_passes_none(self, monkeypatch) -> None:
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification import executor as exec_mod
+
+        captured: dict[str, object] = {}
+
+        class _FakeExecutor:
+            def __init__(self, parallel, config):  # noqa: ARG002
+                captured["config"] = config
+
+            def run_batch(self, tasks, progress_callback=None):  # noqa: ARG002
+                return {}
+
+        monkeypatch.setattr(br_mod, "cleanup_resources", lambda: None)
+        monkeypatch.setattr(exec_mod, "VerificationExecutor", _FakeExecutor)
+
+        template = _make_template()
+        config = VerificationConfig(
+            answering_models=[HAIKU],
+            parsing_models=[HAIKU],
+            async_enabled=True,
+            async_max_workers=4,
+        )
+
+        br_mod.run_verification_batch(templates=[template], config=config)
+
+        assert captured["config"].answerer_concurrency_limits is None
