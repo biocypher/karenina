@@ -65,12 +65,17 @@ def extract_answer_data_from_result(result: VerificationResult) -> dict[str, Any
                 }
             }
 
+    trace_messages = template.trace_messages if template else None
+    conversation_context = template.conversation_context if template else None
+
     return {
         "raw_llm_response": template.raw_llm_response if template else None,
         "usage_metadata": usage_metadata,
         "agent_metrics": template.agent_metrics if template else None,
         "recursion_limit_reached": template.recursion_limit_reached if template else None,
         "answering_mcp_servers": template.answering_mcp_servers if template else None,
+        "trace_messages": trace_messages if trace_messages else None,
+        "conversation_context": conversation_context if conversation_context else None,
     }
 
 
