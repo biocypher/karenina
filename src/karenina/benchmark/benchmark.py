@@ -1036,12 +1036,18 @@ class Benchmark:
             random.shuffle(combos)
         # "generation_order": no-op, preserve original list comprehension order
 
-        # Sink wiring: build the full combo manifest (before filtering) and
-        # drop combos whose triple is already complete. The slot-0 of a
-        # scenario TaskIdentifier holds the scenario_id (not question_id),
-        # matching metadata.scenario_id on the turn_results that
-        # ProgressiveFileSink stores. See TaskIdentifier.from_result.
-        if sink is not None:
+        # Honor config.skip_triples at combo level. For scenarios, slot-0
+        # of the triple holds the scenario_id (not question_id), matching
+        # metadata.scenario_id on turn_results stored by ProgressiveFileSink.
+        # See TaskIdentifier.from_result. This mirrors the QA path where
+        # generate_task_queue drops triples listed in skip_triples before
+        # execution. Gate strictly on concrete frozenset/set instances so
+        # MagicMock configs in legacy tests do not trigger the key-compute
+        # path (they cannot be passed to ModelIdentity.from_model_config).
+        cfg_skip = getattr(config, "skip_triples", None)
+        has_cfg_skip = isinstance(cfg_skip, set | frozenset) and len(cfg_skip) > 0
+        need_keys = sink is not None or has_cfg_skip
+        if need_keys:
             from karenina.schemas.verification.model_identity import ModelIdentity
             from karenina.utils.progressive_save import TaskIdentifier
 
@@ -1061,15 +1067,24 @@ class Benchmark:
                 for k in (_combo_key(c) for c in combos)
             ]
 
-            sink_triples = sink.completed_triples()
-            if sink_triples:
-                combos = [c for c in combos if _combo_key(c) not in sink_triples]
-                logger.info(
-                    "Scenario sink reports %d already-completed combos; %d remain",
-                    len(sink_triples),
-                    len(combos),
-                )
-            sink.on_start(full_manifest, config)
+            skip_set: set[tuple[str, str, str, int | None]] = set()
+            if sink is not None:
+                sink_triples = sink.completed_triples()
+                if sink_triples:
+                    skip_set |= set(sink_triples)
+                    logger.info(
+                        "Scenario sink reports %d already-completed combos",
+                        len(sink_triples),
+                    )
+            if has_cfg_skip:
+                skip_set |= set(cfg_skip)  # type: ignore[arg-type]  # narrowed by isinstance gate above
+
+            if skip_set:
+                combos = [c for c in combos if _combo_key(c) not in skip_set]
+                logger.info("Skipping %d scenario combos; %d remain", len(skip_set), len(combos))
+
+            if sink is not None:
+                sink.on_start(full_manifest, config)
 
         executor = ScenarioExecutor(
             parallel=bool(async_enabled) and len(combos) > 1,
