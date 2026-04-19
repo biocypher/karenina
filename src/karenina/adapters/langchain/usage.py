@@ -252,10 +252,11 @@ def _extract_from_response(response: Any) -> dict[str, Any]:
       3. response.usage_metadata (LangChain normalized; populated under streaming
          when stream_usage=True and the one reliable path for vLLM streaming)
 
-    The previous implementation treated a None value at step 1 as "found" and
-    stopped probing, which is why streaming calls silently reported zero tokens.
-    This revision treats None/empty values as "not found" and continues to the
-    next source.
+    This revision pins the probe order with explicit tests (see
+    tests/test_usage_extraction_streaming.py) so future edits cannot regress
+    to "None at step 1 stops probing". The production streaming-usage bug
+    is closed by ChatOpenAIEndpoint defaulting stream_usage=True; this
+    function guards the path that reads the resulting usage_metadata.
     """
     usage_data: dict[str, Any] = {}
 

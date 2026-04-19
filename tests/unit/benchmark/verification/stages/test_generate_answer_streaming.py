@@ -332,3 +332,53 @@ class TestAgentTimeoutPath:
 
         # Normal response stored
         assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+    def test_agent_completes_with_none_usage_marks_usage_unavailable(self) -> None:
+        """When the agent completes normally but reports usage=None, the
+        stage should flip USAGE_UNAVAILABLE=True. This mirrors the LLMPort
+        branch's handling and closes the asymmetric coverage gap: the
+        3888/3888 masquerade bug affected both paths, so both paths must
+        be exercised end-to-end."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        # Explicit: the helper already defaults to usage=None, but we make
+        # the intent of this test obvious.
+        result.usage = None
+
+        self._run_agent_stage(ctx, result)
+
+        # Usage unavailable should be flipped through the stage's wiring
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+
+        # No timeout artifacts (the agent completed normally)
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.error is None
+
+        # Normal response still stored
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+    def test_agent_completes_with_zero_usage_marks_usage_unavailable(self) -> None:
+        """When the agent completes normally but reports all-zero usage
+        (0/0/0), the stage should flip USAGE_UNAVAILABLE=True. Zero counts
+        alone cannot distinguish "consumed nothing" from "adapter could
+        not capture usage", so the conservative mark is required."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        result.usage = UsageMetadata(input_tokens=0, output_tokens=0, total_tokens=0)
+
+        self._run_agent_stage(ctx, result)
+
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.error is None
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
