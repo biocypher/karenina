@@ -80,3 +80,31 @@ class TestCachePreservesStructuredTrace:
 
         assert cached["trace_messages"] is None
         assert cached["conversation_context"] is None
+
+    def test_cache_round_trip_preserves_conversation_context(self) -> None:
+        """Round-trip through AnswerTraceCache.set/get preserves conversation_context.
+
+        Regression guard: a cache hit must expose the same conversation_context
+        dicts that were stored, so the retrieval path in generate_answer.py can
+        re-hydrate them into Messages symmetrically to trace_messages.
+        """
+        from karenina.utils.answer_cache import AnswerTraceCache
+
+        context = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "What is 2+2?"},
+        ]
+        result = _make_result(trace_messages=None, conversation_context=context)
+        cached = extract_answer_data_from_result(result)
+
+        cache = AnswerTraceCache()
+        key = "q-test_model-test_rep0"
+
+        status, _ = cache.get_or_reserve(key)
+        assert status == "MISS"
+        cache.complete(key, cached)
+
+        status, retrieved = cache.get_or_reserve(key)
+        assert status == "HIT"
+        assert retrieved is not None
+        assert retrieved["conversation_context"] == context

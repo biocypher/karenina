@@ -296,12 +296,25 @@ class GenerateAnswerStage(BaseVerificationStage):
                 usage_tracker.set_agent_metrics(agent_metrics)
             context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
-            # Reconstruct conversation context for cached results (scenario turns)
-            conversation_history = context.get_artifact("conversation_history")
-            if conversation_history:
-                context_messages = list(conversation_history)
-                context_messages.append(Message.user(context.question_text))
-                context.set_artifact(ArtifactKeys.CONVERSATION_CONTEXT, context_messages)
+            # Prefer cached conversation_context (symmetric to trace_messages
+            # rehydration above). Fall back to reconstruction from
+            # conversation_history only when the cache did not carry it.
+            conversation_context_data = context.cached_answer_data.get("conversation_context")
+            if conversation_context_data:
+                from karenina.ports.messages import Message as PortMessage
+
+                if isinstance(conversation_context_data[0], dict):
+                    ctx_msgs = [PortMessage.from_dict(m) for m in conversation_context_data]
+                else:
+                    ctx_msgs = conversation_context_data
+                context.set_artifact(ArtifactKeys.CONVERSATION_CONTEXT, ctx_msgs)
+            else:
+                # Reconstruct conversation context for cached results (scenario turns)
+                conversation_history = context.get_artifact("conversation_history")
+                if conversation_history:
+                    context_messages = list(conversation_history)
+                    context_messages.append(Message.user(context.question_text))
+                    context.set_artifact(ArtifactKeys.CONVERSATION_CONTEXT, context_messages)
 
             return  # Skip LLM invocation
 

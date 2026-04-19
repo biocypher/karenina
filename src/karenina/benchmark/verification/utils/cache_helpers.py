@@ -65,6 +65,10 @@ def extract_answer_data_from_result(result: VerificationResult) -> dict[str, Any
                 }
             }
 
+    # Normalize empty trace fields to None: retrieval paths (e.g.
+    # generate_answer.py uses `if trace_messages_data:` / `if conversation_context_data:`)
+    # treat falsy list and None identically, so preserving this collapsing
+    # avoids drift between extraction and retrieval.
     trace_messages = template.trace_messages if template else None
     conversation_context = template.conversation_context if template else None
 
