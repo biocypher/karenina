@@ -386,17 +386,34 @@ class LangChainLLMAdapter:
             >>> response = await structured.ainvoke(messages)
             >>> assert isinstance(response.raw, Answer)
         """
-        # Try to create a structured model for native support
+        # Try to create a structured model for native support.
+        # For OpenAI-compatible self-hosted endpoints (e.g. vLLM, Ollama), force
+        # method="json_schema" so the server enforces the schema via guided
+        # decoding. Small models on these backends often fail the LangChain
+        # default function-calling path, which silently returns None or raises.
         structured_model = None
         if hasattr(self._model, "with_structured_output"):
+            kwargs: dict[str, Any] = {}
+            if self._config.interface == "openai_endpoint":
+                kwargs["method"] = "json_schema"
             try:
-                structured_model = self._model.with_structured_output(schema)
+                structured_model = self._model.with_structured_output(schema, **kwargs)
             except Exception as e:
-                # Creation failed - will use fallback at invoke time
                 logger.debug(
-                    f"Could not create structured model for {self._config.model_name}: {e}. "
-                    "Will use fallback parsing at invoke time."
+                    "Could not create structured model for %s with %s: %s. Retrying without method override.",
+                    self._config.model_name,
+                    kwargs or "default method",
+                    e,
                 )
+                if kwargs:
+                    try:
+                        structured_model = self._model.with_structured_output(schema)
+                    except Exception as e2:
+                        logger.debug(
+                            "Could not create structured model for %s: %s. Will use fallback parsing at invoke time.",
+                            self._config.model_name,
+                            e2,
+                        )
 
         return LangChainLLMAdapter(
             model_config=self._config,
