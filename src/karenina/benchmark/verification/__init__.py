@@ -11,6 +11,7 @@ from .executor import (
     get_async_portal,
     set_async_portal,
 )
+from .extension import extend_verification_run
 from .stages import (
     export_verification_results_csv,
     export_verification_results_json,
@@ -24,6 +25,8 @@ __all__ = [
     "generate_task_queue",
     "execute_task",
     "auto_save_results",
+    # Extension
+    "extend_verification_run",
     # Executor
     "VerificationExecutor",
     "ExecutorConfig",

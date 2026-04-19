@@ -1007,6 +1007,76 @@ class Benchmark:
             errors=[(d, e) for d, e in errors] if errors else None,
         )
 
+    def extend_judgment(
+        self,
+        prior_results: VerificationResultSet,
+        config: VerificationConfig,
+        *,
+        run_name: str | None = None,
+        question_ids: list[str] | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+        store: bool = True,
+    ) -> VerificationResultSet:
+        """Extend a prior verification run with additional parsing models via replay.
+
+        Reuses the answering traces captured in ``prior_results`` (no live
+        answering calls), runs the parsing / judgment / rubric stages against
+        ``config.parsing_models`` (the new judges), and returns a single merged
+        ``VerificationResultSet`` under one ``run_name``. The output shape
+        matches a joint ``parsing_models=[j1, j2, ...]`` run.
+
+        Args:
+            prior_results: Result set from an earlier ``run_verification``
+                call to extend.
+            config: Verification configuration for the extension. Must carry
+                the new parsing models in ``parsing_models``, the original
+                answering model(s) in ``answering_models``, and the same
+                ``replicate_count`` observed in ``prior_results``.
+                ``config.replay_store`` must be ``None``.
+            run_name: Optional override for the merged run name. Defaults to
+                the run name carried by ``prior_results``.
+            question_ids: Optional subset of question IDs to re-judge.
+                Defaults to every question present in ``prior_results``.
+            async_enabled: Optional async control forwarded to
+                ``run_verification``.
+            progress_callback: Optional progress callback forwarded to
+                ``run_verification``.
+            store: When True (default), also store the merged set into the
+                in-memory results manager under ``run_name`` so it is
+                available to ``get_verification_results`` and the exporters.
+
+        Returns:
+            Merged ``VerificationResultSet`` with the prior rows plus the
+            newly-produced rows, all stamped with the effective ``run_name``.
+        """
+        from .verification.extension import extend_verification_run
+
+        merged = extend_verification_run(
+            self,
+            prior_results,
+            config,
+            run_name=run_name,
+            question_ids=question_ids,
+            async_enabled=async_enabled,
+            progress_callback=progress_callback,
+        )
+        if store:
+            results_dict: dict[str, VerificationResult] = {}
+            for idx, row in enumerate(merged.results):
+                md = row.metadata
+                key = f"{md.question_id}_{md.answering_model}_{md.parsing_model}"
+                if md.replicate is not None:
+                    key += f"_rep{md.replicate}"
+                if md.timestamp:
+                    key += f"_{md.timestamp}"
+                if key in results_dict:
+                    key += f"_{idx}"
+                results_dict[key] = row
+            effective_run_name = merged.results[0].metadata.run_name if merged.results else run_name
+            self._results_manager.store_verification_results(results_dict, effective_run_name)
+        return merged
+
     # ── Results management ───────────────────────────────────────────────
 
     def store_verification_results(
