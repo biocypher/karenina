@@ -150,6 +150,10 @@ class ChatOpenRouter(ChatOpenAI):
         # the read timeout we tried to set on the http client.
         if "request_timeout" not in kwargs and "timeout" not in kwargs:
             kwargs["request_timeout"] = _build_default_request_timeout()
+        # OpenRouter proxies OpenAI-compatible providers; same streaming-usage
+        # default as ChatOpenAIEndpoint.
+        if "stream_usage" not in kwargs:
+            kwargs["stream_usage"] = True
         super().__init__(
             base_url="https://openrouter.ai/api/v1",
             api_key=SecretStr(openai_api_key) if openai_api_key else None,
@@ -208,6 +212,15 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         # the read timeout we tried to set on the http client.
         if "request_timeout" not in kwargs and "timeout" not in kwargs:
             kwargs["request_timeout"] = _build_default_request_timeout()
+
+        # vLLM and other OpenAI-compatible endpoints drop the `usage` block
+        # from streaming responses unless stream_options.include_usage is set.
+        # langchain-openai exposes this as `stream_usage=True` on ChatOpenAI;
+        # default it on so token accounting works for streaming flows (karenina
+        # uses LLMPort.stream_invoke for all openai_endpoint answer generation).
+        # Callers can override by passing stream_usage=False explicitly.
+        if "stream_usage" not in kwargs:
+            kwargs["stream_usage"] = True
 
         super().__init__(
             base_url=normalized_url,

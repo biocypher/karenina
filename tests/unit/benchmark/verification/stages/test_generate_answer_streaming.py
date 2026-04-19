@@ -49,13 +49,20 @@ def _make_agent_result(
     turns: int = 1,
     limit_reached: bool = False,
 ) -> MagicMock:
-    """Create a mock AgentResult with configurable timeout behavior."""
+    """Create a mock AgentResult with configurable timeout behavior.
+
+    Note: real AgentResult has no ``usage_unavailable`` attribute; we set it
+    to False explicitly here because MagicMock auto-creates missing
+    attributes as truthy Mocks, which would make
+    ``should_mark_usage_unavailable`` always return True.
+    """
     result = MagicMock()
     result.timeout_reached = timeout_reached
     result.raw_trace = raw_trace
     result.limit_reached = limit_reached
     result.turns = turns
     result.usage = None
+    result.usage_unavailable = False
     result.trace_messages = None
     return result
 
@@ -309,6 +316,12 @@ class TestAgentTimeoutPath:
             raw_trace="--- AI Message ---\nComplete response",
             turns=2,
         )
+        # Provide realistic non-zero usage so should_mark_usage_unavailable
+        # does not flag this as an unavailable-usage response. A real adapter
+        # returning a completed trace would report non-zero tokens; a mock
+        # with usage=None models the broken streaming-without-include-usage
+        # path that Commit 2 specifically wants to detect.
+        result.usage = UsageMetadata(input_tokens=8, output_tokens=4, total_tokens=12)
 
         self._run_agent_stage(ctx, result)
 

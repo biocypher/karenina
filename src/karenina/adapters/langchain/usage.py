@@ -246,23 +246,32 @@ def extract_usage_from_chunk(chunk: Any, *, model_name: str | None = None) -> Us
 def _extract_from_response(response: Any) -> dict[str, Any]:
     """Extract usage dict from a response object.
 
-    Handles both response_metadata (newer) and usage_metadata attributes.
+    Probes, in order:
+      1. response_metadata["token_usage"] (non-streaming OpenAI/Anthropic path)
+      2. response_metadata["usage"] (some providers use this key)
+      3. response.usage_metadata (LangChain normalized; populated under streaming
+         when stream_usage=True and the one reliable path for vLLM streaming)
+
+    The previous implementation treated a None value at step 1 as "found" and
+    stopped probing, which is why streaming calls silently reported zero tokens.
+    This revision treats None/empty values as "not found" and continues to the
+    next source.
     """
     usage_data: dict[str, Any] = {}
 
-    # Try response_metadata first (newer LangChain versions)
+    # Step 1 and 2: response_metadata (populated in non-streaming mode)
     if hasattr(response, "response_metadata") and response.response_metadata:
         metadata = response.response_metadata
-        # Anthropic/OpenAI style: token_usage or usage
-        usage_data = metadata.get("token_usage") or metadata.get("usage") or {}
+        candidate = metadata.get("token_usage") or metadata.get("usage")
+        if candidate:
+            usage_data = candidate
 
-    # Fallback to usage_metadata attribute
+    # Step 3: usage_metadata (populated under streaming with stream_usage=True)
     if not usage_data and hasattr(response, "usage_metadata") and response.usage_metadata:
         um = response.usage_metadata
         if isinstance(um, dict):
             usage_data = um
         else:
-            # UsageMetadata object - convert to dict
             usage_data = {
                 "input_tokens": getattr(um, "input_tokens", 0),
                 "output_tokens": getattr(um, "output_tokens", 0),

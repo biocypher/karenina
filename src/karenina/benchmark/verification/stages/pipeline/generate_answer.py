@@ -16,6 +16,7 @@ from karenina.adapters import get_agent, get_llm
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
+from karenina.benchmark.verification.utils.usage_helpers import should_mark_usage_unavailable
 from karenina.ports import AgentConfig, AgentPort, LLMPort, Message, Role
 from karenina.replay.exceptions import ReplayMissError
 from karenina.replay.ports_message_hydration import hydrate_trace_messages
@@ -488,6 +489,12 @@ class GenerateAnswerStage(BaseVerificationStage):
                     usage_metadata = {answering_model_str: inner_usage}
                     usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
 
+                # Mark usage_unavailable for the agent path when usage is
+                # missing or all-zero. Uses the same helper as the LLMPort
+                # branch so both paths report missing tokens consistently.
+                if should_mark_usage_unavailable(result):
+                    self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
+
                 # Track agent metrics — extract full tool metrics from trace
                 if result.trace_messages:
                     agent_metrics = extract_agent_metrics_from_messages(result.trace_messages)
@@ -528,8 +535,12 @@ class GenerateAnswerStage(BaseVerificationStage):
                     context.mark_error(error_msg, category=ErrorCategory.TIMEOUT)
                     logger.warning("Question %s: %s", context.question_id, error_msg)
 
-                # Propagate usage_unavailable flag if present
-                if llm_response.usage_unavailable:
+                # Mark usage_unavailable if the adapter signalled it OR if
+                # the reported usage is missing/all-zero. Silently emitting
+                # (0,0,0) has masqueraded as real data in the past; downstream
+                # analyses cannot distinguish that from a truly-zero response
+                # without this flag. See usage_helpers.should_mark_usage_unavailable.
+                if should_mark_usage_unavailable(llm_response):
                     self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
 
                 # Build trace_messages for the LLM path too
