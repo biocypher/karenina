@@ -92,7 +92,7 @@ class TestVerificationBaseExceptionNoHang:
         """
         tasks = [_make_task("q1"), _make_task("q2"), _make_task("q3")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
                 raise KeyboardInterrupt()
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -119,7 +119,7 @@ class TestVerificationBaseExceptionNoHang:
         """A task raising SystemExit is collected as an error without hanging."""
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
                 raise SystemExit(1)
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -148,7 +148,7 @@ class TestVerificationBaseExceptionNoHang:
         """
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             raise KeyboardInterrupt()
 
         monkeypatch.setattr(
@@ -173,7 +173,7 @@ class TestVerificationBaseExceptionNoHang:
         """Mix of successful tasks and BaseException produces partial results."""
         tasks = [_make_task("q1"), _make_task("q2"), _make_task("q3"), _make_task("q4")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
                 raise KeyboardInterrupt()
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -254,7 +254,7 @@ class TestVerificationPortalCreationFailure:
             mock_start_blocking_portal,
         )
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
         monkeypatch.setattr(
@@ -294,7 +294,7 @@ class TestVerificationTimeoutWithHangingWorkers:
 
         block_forever = threading.Event()
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
                 block_forever.wait(timeout=30.0)
                 return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -363,7 +363,7 @@ class TestCacheRetryCompletes:
         call_count = [0]
         call_lock = threading.Lock()
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             with call_lock:
                 call_count[0] += 1
             return (f"key_{task['question_id']}_{call_count[0]}", _make_result(task["question_id"]))
