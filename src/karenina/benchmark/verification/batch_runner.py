@@ -63,6 +63,33 @@ def _apply_retry_config(model: Any, retry_policy: Any | None) -> Any:
     return model
 
 
+def _normalize_answerer_limits(
+    value: int | dict[str, int] | None,
+    answering_models: list[Any],
+) -> dict[str, int] | None:
+    """Normalize ``VerificationConfig.answerer_concurrency_limits`` to a dict or None.
+
+    - ``None``: returned as ``None``.
+    - ``int``: broadcast to every model in ``answering_models`` that has an ``id``.
+    - ``dict``: returned as a shallow copy. Keys not present in
+      ``answering_models`` are still retained (in case the caller wants them)
+      but logged at WARNING so operator typos are visible.
+    """
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return {m.id: value for m in answering_models if getattr(m, "id", None)}
+
+    known_ids = {m.id for m in answering_models if getattr(m, "id", None)}
+    unknown = sorted(set(value) - known_ids)
+    if unknown:
+        logger.warning(
+            "answerer_concurrency_limits contains ids not in answering_models: %s",
+            unknown,
+        )
+    return dict(value)
+
+
 def _resolve_task_ordering(config: VerificationConfig) -> str:
     """Resolve ``task_ordering='auto'`` based on the number of distinct answerer identities.
 

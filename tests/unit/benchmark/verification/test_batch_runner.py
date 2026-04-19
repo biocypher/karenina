@@ -259,3 +259,50 @@ class TestSortDispatch:
         ids = sorted((t["answering_model"].id, t["question_id"]) for t in ordered)
         expected = sorted((t["answering_model"].id, t["question_id"]) for t in tasks)
         assert ids == expected
+
+
+# =============================================================================
+# _normalize_answerer_limits
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestNormalizeAnswererLimits:
+    """Tests for _normalize_answerer_limits (int broadcast, dict passthrough, warnings)."""
+
+    def test_none_returns_none(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _normalize_answerer_limits
+
+        assert _normalize_answerer_limits(None, [HAIKU, SONNET]) is None
+
+    def test_int_broadcast(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _normalize_answerer_limits
+
+        assert _normalize_answerer_limits(16, [HAIKU, SONNET]) == {
+            "haiku": 16,
+            "sonnet": 16,
+        }
+
+    def test_int_broadcast_skips_models_without_id(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _normalize_answerer_limits
+
+        class _NoId:
+            id = None
+            model_name = "x"
+
+        assert _normalize_answerer_limits(5, [HAIKU, _NoId()]) == {"haiku": 5}
+
+    def test_dict_passthrough(self) -> None:
+        from karenina.benchmark.verification.batch_runner import _normalize_answerer_limits
+
+        out = _normalize_answerer_limits({"haiku": 10, "sonnet": 20}, [HAIKU, SONNET])
+        assert out == {"haiku": 10, "sonnet": 20}
+
+    def test_dict_with_unknown_id_warns_and_returns_dict(self, caplog) -> None:
+        from karenina.benchmark.verification.batch_runner import _normalize_answerer_limits
+
+        with caplog.at_level("WARNING"):
+            out = _normalize_answerer_limits({"ghost": 5}, [HAIKU])
+
+        assert out == {"ghost": 5}
+        assert any("ghost" in rec.message for rec in caplog.records)
