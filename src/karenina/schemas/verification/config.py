@@ -286,6 +286,13 @@ class VerificationConfig(BaseModel):
     replay_store: Any = Field(default=None, exclude=True)
     replay_parse_on_hydration_mismatch: Literal["fall_through", "strict"] = "fall_through"
 
+    # Internal plumbing for Benchmark.extend_judgment: set of
+    # (question_id, answering canonical_key, parsing canonical_key, replicate)
+    # tuples already covered by prior_results. The batch runner skips these
+    # during task-queue expansion so prior rows pass through verbatim.
+    # Not part of the public surface; always None for standard verification runs.
+    skip_triples: frozenset[tuple[str, str, str, int | None]] | None = Field(default=None, exclude=True, repr=False)
+
     @model_validator(mode="after")
     def _validate_custom_mode_has_config(self) -> "VerificationConfig":
         """Validate that custom mode has the required config.

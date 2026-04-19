@@ -1,9 +1,10 @@
-"""Extend a prior verification run with additional parsing models via replay.
+"""Extend a prior verification run along three axes: judges, answerers, replicates.
 
-Mirrors the error-analysis facade pattern: result-set-in, result-set-out. The
-heavy lifting is delegated to the existing batch runner through
-``Benchmark.run_verification`` with a ``VerificationConfig.replay_store`` set
-to a store built from the prior results, so answering is never re-executed.
+Mirrors the error-analysis facade pattern: result-set-in, result-set-out. A
+``ReplayStore`` built from the prior results serves the answering stage for
+triples already covered; new answerers or replicates miss and run live.
+``VerificationConfig.skip_triples`` tells the batch runner to drop tasks
+already present in ``prior_results`` so those rows pass through verbatim.
 """
 
 from __future__ import annotations
@@ -34,14 +35,22 @@ def extend_verification_run(
     async_enabled: bool | None = None,
     progress_callback: Callable[[float, str], None] | None = None,
 ) -> VerificationResultSet:
-    """Re-judge a prior verification run with additional parsing models.
+    """Extend a prior verification run along any combination of three axes.
 
-    Builds a :class:`~karenina.replay.ReplayStore` from ``prior_results`` and
-    attaches it to a clone of ``config`` so that the answering stage is served
-    from replay. The parsing stages run live against ``config.parsing_models``
-    (the new judges). The returned set merges the original results with the
-    newly produced ones, stamped with a single ``run_name`` so its shape
-    matches a joint ``parsing_models=[j1, j2]`` run.
+    The axes, all optional and composable in a single call:
+
+    1. **Parsing models (judges)**: new judge(s) in ``config.parsing_models``.
+    2. **Answering models**: new answerer(s) in ``config.answering_models``.
+    3. **Replicates**: higher ``config.replicate_count`` than the prior fan-out.
+
+    A :class:`~karenina.replay.ReplayStore` is built from ``prior_results`` so
+    that prior ``(question, answerer, replicate)`` combinations serve the
+    answering stage from replay. New answerers, new replicates, or any
+    combination thereof miss the store and run answering live. Parsing
+    always runs live. Triples already covered by ``prior_results`` are
+    filtered out of the task queue so prior rows pass through the merge
+    verbatim. The returned set matches the shape of a joint run with the
+    full ``(answerers × judges × replicates)`` matrix.
 
     Args:
         benchmark: The :class:`Benchmark` whose questions and templates the
@@ -49,14 +58,17 @@ def extend_verification_run(
             on this benchmark.
         prior_results: Result set from an earlier ``run_verification`` call
             to extend. Must be non-empty.
-        config: Verification configuration for the extension. Must carry:
+        config: Verification configuration for the extension. Must describe
+            the **final** state (full union, not deltas):
 
-            - ``parsing_models`` = the new judge(s) to run (not the original).
-            - ``answering_models`` = the same answering model(s) used for
-              ``prior_results`` (identity is compared via
+            - ``parsing_models`` = every judge you want in the merged output
+              (old judges from ``prior_results`` + any new judges).
+            - ``answering_models`` = every answerer you want in the merged
+              output. Must be a superset of the answering identities in
+              ``prior_results`` (compared via
               :meth:`ModelIdentity.from_model_config`).
-            - ``replicate_count`` = the number of replicates present in
-              ``prior_results``.
+            - ``replicate_count`` = the final number of replicates. Must be
+              ``>=`` the fan-out observed in ``prior_results``.
             - ``replay_store`` must be ``None`` (the extension owns that slot).
         run_name: Optional override for the merged run name. Defaults to the
             run name carried by ``prior_results`` when all rows agree; raises
@@ -98,7 +110,31 @@ def extend_verification_run(
         len(prior_results.results),
     )
 
-    extended_config = config.model_copy(update={"replay_store": replay_store})
+    skip_triples = frozenset(
+        (
+            r.metadata.question_id,
+            r.metadata.answering.canonical_key,
+            r.metadata.parsing.canonical_key,
+            r.metadata.replicate,
+        )
+        for r in prior_results.results
+    )
+
+    observed_replicates = _observed_replicate_count(prior_results)
+    prior_answering_keys: set[str] = {r.metadata.answering.canonical_key for r in prior_results.results}
+    new_answering_keys = sorted(
+        {ModelIdentity.from_model_config(m, role="answering").canonical_key for m in config.answering_models}
+        - prior_answering_keys
+    )
+    added_replicates = config.replicate_count - observed_replicates
+    logger.info(
+        "extend_judgment: new answerers=%s, added replicates=%d, skip_triples=%d",
+        new_answering_keys or "[]",
+        added_replicates,
+        len(skip_triples),
+    )
+
+    extended_config = config.model_copy(update={"replay_store": replay_store, "skip_triples": skip_triples})
 
     new_results = benchmark.run_verification(
         config=extended_config,
@@ -168,13 +204,7 @@ def _validate_answering_identity(
         )
 
 
-def _validate_replicate_count(
-    prior_results: VerificationResultSet,
-    config: VerificationConfig,
-) -> None:
-    # For each (question_id, answering_identity, parsing_identity) triple, how many
-    # distinct replicate values exist? Expect the max across triples to equal
-    # config.replicate_count so the new judge reproduces the same replicate fan-out.
+def _observed_replicate_count(prior_results: VerificationResultSet) -> int:
     counts_per_triple: Counter[tuple[str, str, str]] = Counter()
     replicate_values: dict[tuple[str, str, str], set[int | None]] = {}
     for r in prior_results.results:
@@ -186,13 +216,23 @@ def _validate_replicate_count(
         replicate_values.setdefault(key, set()).add(r.metadata.replicate)
     for key, values in replicate_values.items():
         counts_per_triple[key] = len(values)
+    return max(counts_per_triple.values()) if counts_per_triple else 0
 
-    observed = max(counts_per_triple.values()) if counts_per_triple else 0
-    if observed != config.replicate_count:
+
+def _validate_replicate_count(
+    prior_results: VerificationResultSet,
+    config: VerificationConfig,
+) -> None:
+    # config.replicate_count must be >= the replicate fan-out observed in
+    # prior_results. Equal => pure judge/answerer extension; greater => also
+    # adds replicates. Less is rejected: replicate reduction is out of scope.
+    observed = _observed_replicate_count(prior_results)
+    if config.replicate_count < observed:
         raise ValueError(
-            f"config.replicate_count={config.replicate_count} does not match the "
-            f"replicate fan-out observed in prior_results (={observed}). The extended "
-            "run must match the original replicate count so replay keys line up."
+            f"config.replicate_count={config.replicate_count} is lower than the "
+            f"replicate fan-out observed in prior_results (={observed}). Replicate "
+            "reduction is not supported by extend_judgment; pass "
+            f"replicate_count>={observed}."
         )
 
 

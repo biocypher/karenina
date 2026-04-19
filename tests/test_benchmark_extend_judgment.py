@@ -148,11 +148,16 @@ class _FakeVerifyRecorder:
             [None] if config.replicate_count <= 1 else list(range(1, config.replicate_count + 1))
         )
 
+        skip = config.skip_triples or frozenset()
         rows: list[VerificationResult] = []
         for qid in effective_qids:
             for ans_model in config.answering_models:
+                ans_key = ModelIdentity.from_model_config(ans_model, role="answering").canonical_key
                 for parse_model in config.parsing_models:
+                    parse_key = ModelIdentity.from_model_config(parse_model, role="parsing").canonical_key
                     for rep in replicate_slots:
+                        if (qid, ans_key, parse_key, rep) in skip:
+                            continue
                         rows.append(
                             _make_result(
                                 question_id=qid,
@@ -271,6 +276,105 @@ class TestExtendJudgmentMultipleAnsweringModels:
 
 
 @pytest.mark.unit
+class TestExtendJudgmentAddAnsweringModel:
+    def test_new_answerer_rows_added_prior_rows_kept(self, recorder: _FakeVerifyRecorder) -> None:
+        bench = _make_bench()
+        prior = _make_prior_set(run_name="add-ans", question_ids=["q1", "q2"])
+
+        config = VerificationConfig(
+            answering_models=[ANSWERING_MODEL, OTHER_ANSWERING_MODEL],
+            parsing_models=[JUDGE_A],
+            evaluation_mode="template_only",
+        )
+
+        merged = bench.extend_judgment(prior, config, store=False)
+
+        assert len(merged.results) == 4, "2 prior (A1 x JA) + 2 new (A2 x JA) = 4"
+
+        # Every (question, answering) pair exists exactly once.
+        pairs: set[tuple[str, str]] = {
+            (r.metadata.question_id, r.metadata.answering.canonical_key) for r in merged.results
+        }
+        assert len(pairs) == 4
+        assert {p[0] for p in pairs} == {"q1", "q2"}
+
+        # Recorder only saw the new answerer (skip filter removed A1xJA tasks).
+        saw_ans_keys = {
+            ModelIdentity.from_model_config(m, role="answering").canonical_key
+            for m in recorder.calls[-1]["config"].answering_models
+        }
+        assert len(saw_ans_keys) == 2
+        skip = recorder.calls[-1]["config"].skip_triples
+        assert skip is not None and len(skip) == 2
+
+
+@pytest.mark.unit
+class TestExtendJudgmentAddReplicate:
+    def test_added_replicate_runs_live_prior_replicates_kept(self, recorder: _FakeVerifyRecorder) -> None:  # noqa: ARG002
+        bench = _make_bench()
+        prior = _make_prior_set(
+            run_name="add-rep",
+            question_ids=["q1", "q2"],
+            replicates=[1, 2, 3],
+        )
+
+        config = VerificationConfig(
+            answering_models=[ANSWERING_MODEL],
+            parsing_models=[JUDGE_A],
+            evaluation_mode="template_only",
+            replicate_count=4,
+        )
+
+        merged = bench.extend_judgment(prior, config, store=False)
+
+        assert len(merged.results) == 8, "6 prior (reps 1..3) + 2 new (rep 4) = 8"
+
+        rep_counts: dict[int | None, int] = {}
+        for r in merged.results:
+            rep_counts[r.metadata.replicate] = rep_counts.get(r.metadata.replicate, 0) + 1
+        assert rep_counts == {1: 2, 2: 2, 3: 2, 4: 2}
+
+
+@pytest.mark.unit
+class TestExtendJudgmentAddAllAxes:
+    def test_full_symmetric_matrix(self, recorder: _FakeVerifyRecorder) -> None:
+        bench = _make_bench()
+        prior = _make_prior_set(
+            run_name="all-axes",
+            question_ids=["q1", "q2"],
+            replicates=[1, 2, 3],
+        )
+
+        config = VerificationConfig(
+            answering_models=[ANSWERING_MODEL, OTHER_ANSWERING_MODEL],
+            parsing_models=[JUDGE_A, JUDGE_B],
+            evaluation_mode="template_only",
+            replicate_count=4,
+        )
+
+        merged = bench.extend_judgment(prior, config, store=False)
+
+        # Full joint matrix: 2 questions x 2 answerers x 2 judges x 4 replicates = 32
+        assert len(merged.results) == 32
+
+        triples = {
+            (
+                r.metadata.question_id,
+                r.metadata.answering.canonical_key,
+                r.metadata.parsing.canonical_key,
+                r.metadata.replicate,
+            )
+            for r in merged.results
+        }
+        assert len(triples) == 32, "every (q, ans, parse, rep) triple is unique"
+
+        skip = recorder.calls[-1]["config"].skip_triples
+        assert skip is not None and len(skip) == 6
+        # The 6 skipped triples are exactly the prior rows.
+        assert triples.issuperset(skip)
+
+
+@pytest.mark.unit
 class TestExtendJudgmentValidation:
     def test_empty_prior_raises(self) -> None:
         bench = _make_bench()
@@ -285,7 +389,7 @@ class TestExtendJudgmentValidation:
         with pytest.raises(ValueError, match="answering_models does not cover"):
             extend_verification_run(bench, prior, config)
 
-    def test_replicate_count_mismatch_raises(self) -> None:
+    def test_replicate_count_reduction_raises(self) -> None:
         bench = _make_bench()
         prior = _make_prior_set(run_name="r", question_ids=["q1", "q2"], replicates=[1, 2])
         config = VerificationConfig(
@@ -293,7 +397,7 @@ class TestExtendJudgmentValidation:
             parsing_models=[JUDGE_B],
             replicate_count=1,
         )
-        with pytest.raises(ValueError, match="replicate_count"):
+        with pytest.raises(ValueError, match="Replicate reduction is not supported"):
             extend_verification_run(bench, prior, config)
 
     def test_replay_store_already_set_raises(self) -> None:

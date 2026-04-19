@@ -1018,22 +1018,30 @@ class Benchmark:
         progress_callback: Callable[[float, str], None] | None = None,
         store: bool = True,
     ) -> VerificationResultSet:
-        """Extend a prior verification run with additional parsing models via replay.
+        """Extend a prior verification run along any combination of three axes.
 
-        Reuses the answering traces captured in ``prior_results`` (no live
-        answering calls), runs the parsing / judgment / rubric stages against
-        ``config.parsing_models`` (the new judges), and returns a single merged
-        ``VerificationResultSet`` under one ``run_name``. The output shape
-        matches a joint ``parsing_models=[j1, j2, ...]`` run.
+        Axes, all optional and composable in a single call:
+
+        1. New judges (``config.parsing_models``).
+        2. New answerers (``config.answering_models``).
+        3. More replicates (higher ``config.replicate_count``).
+
+        Prior ``(question, answerer, replicate)`` answering traces are served
+        from a :class:`~karenina.replay.ReplayStore`; new answerers, new
+        replicates, or any combination thereof run answering live. Parsing
+        always runs live. Triples already present in ``prior_results`` are
+        skipped so prior rows pass through verbatim. The merged output matches
+        a joint run over the full ``(answerers × judges × replicates)`` matrix.
 
         Args:
             prior_results: Result set from an earlier ``run_verification``
                 call to extend.
-            config: Verification configuration for the extension. Must carry
-                the new parsing models in ``parsing_models``, the original
-                answering model(s) in ``answering_models``, and the same
-                ``replicate_count`` observed in ``prior_results``.
-                ``config.replay_store`` must be ``None``.
+            config: Verification configuration describing the **final**
+                state (full union, not deltas): every judge in
+                ``parsing_models``, every answerer in ``answering_models``,
+                and the final ``replicate_count`` (must be ``>=`` observed
+                in ``prior_results``). ``config.replay_store`` must be
+                ``None``.
             run_name: Optional override for the merged run name. Defaults to
                 the run name carried by ``prior_results``.
             question_ids: Optional subset of question IDs to re-judge.
