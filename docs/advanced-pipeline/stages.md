@@ -193,6 +193,8 @@ Detects whether the model refused to answer or abstained from responding. Runs b
 2. The judge decides whether the response contains a genuine refusal or abstention
 3. If abstention detected: sets `verify_result = False` and signals downstream stages to skip parsing
 
+The stage honors `use_full_trace_for_template`: by default the judge sees only the final AI message, which matches `ParseTemplate` and keeps prompts small on long agent runs.
+
 ### Detection Patterns
 
 Detects:
@@ -248,6 +250,8 @@ Detects whether the response contains sufficient information to populate the tem
 2. Sends the raw response + schema to the parsing LLM with a sufficiency detection prompt
 3. The judge decides whether the response contains enough information to fill the schema
 4. If insufficient: sets `verify_result = False` and signals downstream stages to skip parsing
+
+The stage honors `use_full_trace_for_template`: by default the judge sees only the final AI message, which matches `ParseTemplate` and keeps prompts small on long agent runs.
 
 ### Result Fields
 

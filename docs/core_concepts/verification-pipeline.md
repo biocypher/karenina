@@ -205,6 +205,8 @@ Both pre-parse stages share a pattern: they use the parsing model to assess the 
 
 **SufficiencyCheck** (stage 6) evaluates whether the response contains enough information to populate the template's fields. It retrieves the template's JSON schema and asks the parsing model to judge sufficiency. When the response is insufficient, parsing is skipped.
 
+Both stages follow the `use_full_trace_for_template` setting, so by default the judge sees the same input it gets during template parsing (the final AI message, not the full agent trace).
+
 Both stages record four metadata fields: `*_check_performed`, `*_detected`, `*_override_applied`, and `*_reasoning`.
 
 ### Template Processing
