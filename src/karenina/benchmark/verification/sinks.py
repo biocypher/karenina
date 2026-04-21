@@ -66,14 +66,19 @@ class ResultSink(Protocol):
 
     Lifecycle:
 
-    1. ``on_start(manifest, config)`` is called once, before any task runs.
+    1. ``seed_prior_results(prior_results)`` is optional and only used by the
+       ``extend_template`` / ``extend_rubric`` flows. It tells the sink about
+       rows that exist outside this batch so the sink's persisted state and
+       final export reflect the merged (prior + new) shape rather than only
+       the new work. Called before ``on_start``.
+    2. ``on_start(manifest, config)`` is called once, before any task runs.
        The sink may advertise already-completed triples via
        :meth:`completed_triples` before this call so the caller can populate
        ``config.skip_triples`` and avoid resubmitting work.
-    2. ``on_result(result)`` is called once per completed task, in completion
+    3. ``on_result(result)`` is called once per completed task, in completion
        order. The executor may also emit preview results (task started,
        no timestamp); sinks must ignore those via :func:`is_completed_result`.
-    3. ``on_finalize(all_complete)`` is called exactly once when the batch
+    4. ``on_finalize(all_complete)`` is called exactly once when the batch
        returns. ``all_complete=True`` means every task in the manifest
        produced a successful result; ``False`` means something failed or
        was cancelled. Sinks use this to decide whether to keep or delete
@@ -84,6 +89,17 @@ class ResultSink(Protocol):
         """Return the set of (question_id, ans_key, parse_key, replicate)
         triples already persisted by this sink, to be fed into
         :attr:`VerificationConfig.skip_triples` on resume."""
+        ...
+
+    def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
+        """Pre-populate the sink with already-completed rows.
+
+        Used by the ``extend_*`` facades so prior rows land in the sink's
+        buffer / persisted state and the final export reflects the merged
+        shape. Implementations must be idempotent (safe to call with rows
+        whose triples are already tracked) and must not require ``on_start``
+        to have run first.
+        """
         ...
 
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:
@@ -224,6 +240,37 @@ class ProgressiveFileSink:
         )
         return sink
 
+    # -- Seeding ----------------------------------------------------------
+
+    def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
+        """Pre-populate JSONL, ``_results``, ``_completed``, ``_manifest``.
+
+        Called by the ``extend_*`` facades before ``run_verification`` so
+        the sink's final export covers prior rows in addition to the new
+        rows produced by the pipeline. Idempotent: rows whose triple is
+        already tracked are skipped. Does not require :meth:`on_start` to
+        have run first; the JSONL file is created on demand.
+        """
+        added = 0
+        manifest_set = set(self._manifest)
+        for row in prior_results.results:
+            if not is_completed_result(row):
+                continue
+            task_id = TaskIdentifier.from_result(row).to_key()
+            if task_id in self._completed:
+                continue
+            _append_jsonl_line(self.jsonl_path, row.model_dump_json())
+            self._results.append(row)
+            self._completed.add(task_id)
+            self._failed.discard(task_id)
+            if task_id not in manifest_set:
+                self._manifest.append(task_id)
+                manifest_set.add(task_id)
+            added += 1
+        if added:
+            self._save_state()
+            logger.info("ProgressiveFileSink seeded with %d prior rows", added)
+
     # -- ResultSink protocol ----------------------------------------------
 
     def completed_triples(self) -> set[TripleKey]:
@@ -248,21 +295,21 @@ class ProgressiveFileSink:
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:
         """Record the manifest and write the initial state file.
 
-        Safe to call twice: on resume, the manifest is already known and
-        this call reconciles the provided manifest with the stored one
-        (manifests must match; a mismatch is a programming error).
+        Merge semantics: the stored manifest is unioned with the provided
+        one, preserving insertion order. This handles both the resume path
+        (provided manifest is a subset of the stored full manifest) and
+        the seeded-extend path (stored holds prior keys from
+        :meth:`seed_prior_results`, provided holds the new-task keys
+        from :func:`generate_task_queue`). Repeated keys are dropped.
         """
-        if self._manifest and self._manifest != manifest:
-            # Not an error per se; the caller (batch_runner) may regenerate
-            # the manifest from the filtered task queue. On resume, the
-            # stored manifest is the authoritative full manifest; keep it.
-            logger.debug(
-                "on_start manifest differs from stored (stored=%d, provided=%d); keeping stored",
-                len(self._manifest),
-                len(manifest),
-            )
-        elif not self._manifest:
+        if not self._manifest:
             self._manifest = list(manifest)
+        else:
+            existing = set(self._manifest)
+            for key in manifest:
+                if key not in existing:
+                    self._manifest.append(key)
+                    existing.add(key)
 
         # Always refresh config + hash: a resume may pass a config that was
         # rehydrated from the state, but we keep whatever the caller handed
@@ -448,6 +495,13 @@ class CompositeSink:
             out.update(sink.completed_triples())
         return out
 
+    def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
+        """Forward ``seed_prior_results`` to each child that implements it."""
+        for sink in self._sinks:
+            seeder = getattr(sink, "seed_prior_results", None)
+            if callable(seeder):
+                seeder(prior_results)
+
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:
         """Forward ``on_start`` to each child."""
         for sink in self._sinks:
@@ -507,10 +561,26 @@ class DBSink:
         self._templates = list(templates or [])
         self._config_dict: dict[str, object] = {}
         self._initialized = False
+        # Buffer of prior rows accepted before on_start. Flushed on on_start
+        # once _initialized flips and the config snapshot is available.
+        self._pending_seed: list[VerificationResult] = []
 
     def completed_triples(self) -> set[TripleKey]:
         """Always empty; DB-based resume is out of scope for this sink."""
         return set()
+
+    def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
+        """Buffer prior rows for durable DB write during :meth:`on_start`.
+
+        DBSink requires a config snapshot (populated in ``on_start``) before
+        it can persist rows, so seeding is deferred rather than written
+        immediately. The buffer is flushed exactly once when ``on_start``
+        runs, using the same :func:`save_verification_results` path as
+        ``on_result``.
+        """
+        for row in prior_results.results:
+            if is_completed_result(row):
+                self._pending_seed.append(row)
 
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:  # noqa: ARG002
         """Seed the benchmark row if missing; cache the config snapshot."""
@@ -544,15 +614,27 @@ class DBSink:
             logger.warning("DBSink benchmark bootstrap failed; results will still be attempted", exc_info=True)
             self._initialized = True
 
+        if self._pending_seed:
+            flushed = 0
+            for row in self._pending_seed:
+                if self._persist(row):
+                    flushed += 1
+            self._pending_seed.clear()
+            logger.info("DBSink flushed %d seeded prior rows", flushed)
+
     def on_result(self, result: VerificationResult) -> None:
         """Persist a single completed result."""
         if not is_completed_result(result) or not self._initialized:
             return
+        self._persist(result)
+
+    def _persist(self, result: VerificationResult) -> bool:
+        """Write a single result to the DB. Returns True on success."""
         try:
             from karenina.storage import DBConfig, save_verification_results
         except Exception:  # noqa: BLE001
-            logger.warning("DBSink on_result: import failed", exc_info=True)
-            return
+            logger.warning("DBSink _persist: import failed", exc_info=True)
+            return False
 
         task_id = TaskIdentifier.from_result(result).to_key()
         try:
@@ -564,8 +646,10 @@ class DBSink:
                 run_name=self.run_name,
                 config=self._config_dict,
             )
+            return True
         except Exception:  # noqa: BLE001
             logger.warning("DBSink failed to persist result %s; continuing", task_id, exc_info=True)
+            return False
 
     def on_finalize(self, *, all_complete: bool) -> None:
         """Log a summary. Rows are already durable."""
@@ -606,9 +690,32 @@ class InMemorySink:
             )
         return out
 
+    def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
+        """Append prior rows and their task keys, skipping duplicates."""
+        existing_keys: set[str] = {TaskIdentifier.from_result(r).to_key() for r in self.results}
+        manifest_set = set(self.manifest)
+        for row in prior_results.results:
+            if not is_completed_result(row):
+                continue
+            task_id = TaskIdentifier.from_result(row).to_key()
+            if task_id in existing_keys:
+                continue
+            self.results.append(row)
+            existing_keys.add(task_id)
+            if task_id not in manifest_set:
+                self.manifest.append(task_id)
+                manifest_set.add(task_id)
+
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:  # noqa: ARG002
-        """Record the manifest and mark started."""
-        self.manifest = list(manifest)
+        """Record the manifest and mark started. Unions with any seeded keys."""
+        if not self.manifest:
+            self.manifest = list(manifest)
+        else:
+            existing = set(self.manifest)
+            for key in manifest:
+                if key not in existing:
+                    self.manifest.append(key)
+                    existing.add(key)
         self.started = True
 
     def on_result(self, result: VerificationResult) -> None:

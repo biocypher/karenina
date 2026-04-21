@@ -372,3 +372,151 @@ class TestCompositeSink:
 
         assert len(mem.results) == 1
         assert (tmp_path / "results.json").exists()
+
+
+class TestSeedPriorResults:
+    """Coverage for seed_prior_results on each sink implementation."""
+
+    def test_progressive_sink_seed_populates_state(self, tmp_path: Path):
+        from karenina.schemas.results import VerificationResultSet
+
+        prior = VerificationResultSet(results=[_result("q1"), _result("q2")])
+        sink = ProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+        )
+        sink.seed_prior_results(prior)
+
+        assert sink.completed_count == 2
+        assert len(sink.get_all_results()) == 2
+        assert sink.jsonl_path.exists()
+        assert sink.state_path.exists()
+        state = json.loads(sink.state_path.read_text())
+        assert state["completed_count"] == 2
+        assert len(state["task_manifest"]) == 2
+
+    def test_progressive_sink_seed_skips_preview_rows(self, tmp_path: Path):
+        from karenina.schemas.results import VerificationResultSet
+
+        prior = VerificationResultSet(
+            results=[_result("q1"), _result("q2", completed=False)],
+        )
+        sink = ProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+        )
+        sink.seed_prior_results(prior)
+
+        assert sink.completed_count == 1
+
+    def test_progressive_sink_seed_is_idempotent(self, tmp_path: Path):
+        from karenina.schemas.results import VerificationResultSet
+
+        prior = VerificationResultSet(results=[_result("q1")])
+        sink = ProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+        )
+        sink.seed_prior_results(prior)
+        sink.seed_prior_results(prior)
+
+        assert sink.completed_count == 1
+        assert len(sink.get_all_results()) == 1
+        jsonl_lines = [line for line in sink.jsonl_path.read_text().splitlines() if line.strip()]
+        assert len(jsonl_lines) == 1
+
+    def test_progressive_sink_on_start_unions_with_seeded_manifest(self, tmp_path: Path):
+        from karenina.schemas.results import VerificationResultSet
+
+        prior_r = _result("q1")
+        new_r = _result("q2")
+        sink = ProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+        )
+        sink.seed_prior_results(VerificationResultSet(results=[prior_r]))
+
+        prior_key = TaskIdentifier.from_result(prior_r).to_key()
+        new_key = TaskIdentifier.from_result(new_r).to_key()
+        sink.on_start([new_key], _config())
+
+        state = json.loads(sink.state_path.read_text())
+        assert set(state["task_manifest"]) == {prior_key, new_key}
+
+    def test_progressive_sink_final_export_contains_seeded_rows(self, tmp_path: Path):
+        from karenina.schemas.results import VerificationResultSet
+
+        prior = VerificationResultSet(results=[_result("q1"), _result("q2")])
+        sink = ProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+        )
+        sink.seed_prior_results(prior)
+
+        new_r = _result("q3")
+        sink.on_start([TaskIdentifier.from_result(new_r).to_key()], _config())
+        sink.on_result(new_r)
+        sink.on_finalize(all_complete=True)
+
+        export = json.loads((tmp_path / "results.json").read_text())
+        question_ids = {entry["metadata"]["question_id"] for entry in export["results"]}
+        assert question_ids == {"q1", "q2", "q3"}
+
+    def test_in_memory_sink_seed_populates_results_and_manifest(self):
+        from karenina.schemas.results import VerificationResultSet
+
+        sink = InMemorySink()
+        prior = VerificationResultSet(results=[_result("q1"), _result("q2")])
+        sink.seed_prior_results(prior)
+
+        assert len(sink.results) == 2
+        assert len(sink.manifest) == 2
+
+    def test_in_memory_sink_seed_is_idempotent(self):
+        from karenina.schemas.results import VerificationResultSet
+
+        sink = InMemorySink()
+        prior = VerificationResultSet(results=[_result("q1")])
+        sink.seed_prior_results(prior)
+        sink.seed_prior_results(prior)
+
+        assert len(sink.results) == 1
+        assert len(sink.manifest) == 1
+
+    def test_in_memory_sink_on_start_unions_with_seeded(self):
+        from karenina.schemas.results import VerificationResultSet
+
+        sink = InMemorySink()
+        prior_r = _result("q1")
+        new_r = _result("q2")
+        sink.seed_prior_results(VerificationResultSet(results=[prior_r]))
+
+        prior_key = TaskIdentifier.from_result(prior_r).to_key()
+        new_key = TaskIdentifier.from_result(new_r).to_key()
+        sink.on_start([new_key], _config())
+
+        assert set(sink.manifest) == {prior_key, new_key}
+
+    def test_composite_sink_forwards_seed(self):
+        from karenina.schemas.results import VerificationResultSet
+
+        a, b = InMemorySink(), InMemorySink()
+        composite = CompositeSink([a, b])
+        prior = VerificationResultSet(results=[_result("q1")])
+        composite.seed_prior_results(prior)
+
+        assert len(a.results) == 1
+        assert len(b.results) == 1
+
+    def test_progressive_sink_satisfies_protocol(self, tmp_path: Path):
+        sink = ProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+        )
+        assert isinstance(sink, ResultSink)
