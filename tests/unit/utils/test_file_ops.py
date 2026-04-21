@@ -102,3 +102,97 @@ class TestAtomicWrite:
         atomic_write(filepath, content)
 
         assert filepath.read_text(encoding="utf-8") == content
+
+
+@pytest.mark.unit
+class TestAtomicWriter:
+    """Tests for atomic_writer() context manager."""
+
+    def test_writes_streamed_content_correctly(self, tmp_path: Path) -> None:
+        """Content written chunk by chunk ends up in the target file."""
+        from karenina.utils.file_ops import atomic_writer
+
+        filepath = tmp_path / "output.json"
+        with atomic_writer(filepath) as f:
+            f.write('{"a":')
+            f.write("1")
+            f.write("}")
+
+        assert filepath.exists()
+        assert filepath.read_text(encoding="utf-8") == '{"a":1}'
+
+    def test_partial_removed_after_success(self, tmp_path: Path) -> None:
+        """The .partial sidecar is not left behind after a clean exit."""
+        from karenina.utils.file_ops import atomic_writer
+
+        filepath = tmp_path / "output.json"
+        partial_path = filepath.with_suffix(".json.partial")
+        with atomic_writer(filepath) as f:
+            f.write("data")
+
+        assert not partial_path.exists()
+
+    def test_exception_inside_with_block_removes_partial(self, tmp_path: Path) -> None:
+        """If the caller raises inside the with block, partial is cleaned up and target never appears."""
+        from karenina.utils.file_ops import atomic_writer
+
+        filepath = tmp_path / "output.json"
+        partial_path = filepath.with_suffix(".json.partial")
+
+        with pytest.raises(RuntimeError, match="boom"), atomic_writer(filepath) as f:
+            f.write("some-data")
+            raise RuntimeError("boom")
+
+        assert not filepath.exists()
+        assert not partial_path.exists()
+
+    def test_write_error_cleans_up_partial(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """If an OSError is raised during write, the .partial file is still removed."""
+        from karenina.utils.file_ops import atomic_writer
+
+        filepath = tmp_path / "output.json"
+        partial_path = filepath.with_suffix(".json.partial")
+
+        real_open = open
+
+        class FailingFile:
+            def __init__(self, path: str, mode: str, **kwargs: object) -> None:
+                self._path = path
+                self._mode = mode
+                self._real = real_open(path, mode, **kwargs)
+
+            def write(self, data: str) -> int:  # noqa: ARG002
+                raise OSError("disk full")
+
+            def fileno(self) -> int:
+                return self._real.fileno()
+
+            def flush(self) -> None:
+                self._real.flush()
+
+            @property
+            def closed(self) -> bool:
+                return self._real.closed
+
+            def close(self) -> None:
+                if not self._real.closed:
+                    self._real.close()
+
+            def __enter__(self) -> "FailingFile":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                self.close()
+
+        def fake_open(path: str, mode: str = "r", **kwargs: object) -> object:
+            if str(path).endswith(".partial"):
+                return FailingFile(path, mode, **kwargs)
+            return real_open(path, mode, **kwargs)
+
+        monkeypatch.setattr("builtins.open", fake_open)
+
+        with pytest.raises(OSError, match="disk full"), atomic_writer(filepath) as f:
+            f.write("data")
+
+        assert not filepath.exists()
+        assert not partial_path.exists()
