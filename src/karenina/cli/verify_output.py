@@ -22,7 +22,7 @@ from rich.prompt import Confirm, Prompt
 from karenina.benchmark import Benchmark
 from karenina.benchmark.verification import (
     export_verification_results_csv,
-    export_verification_results_json,
+    export_verification_results_json_stream,
 )
 from karenina.benchmark.verification.batch_runner import run_verification_batch
 from karenina.benchmark.verification.sinks import ProgressiveFileSink
@@ -169,11 +169,17 @@ def export_results(
 
     global_rubric = benchmark.get_global_rubric()
     if output_format == "json":
-        export_data = export_verification_results_json(job, final_results, global_rubric, is_complete=True)
+        export_verification_results_json_stream(
+            job,
+            iter(final_results.results),
+            global_rubric,
+            is_complete=True,
+            out_path=output,
+        )
     else:  # csv
-        export_data = export_verification_results_csv(job, final_results, global_rubric)
+        csv_str = export_verification_results_csv(job, final_results, global_rubric)
+        output.write_text(csv_str)
 
-    output.write_text(export_data)
     console.print(f"[green]✓ Results exported to {output}[/green]")
 
 
