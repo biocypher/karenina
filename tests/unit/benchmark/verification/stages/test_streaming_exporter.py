@@ -176,3 +176,90 @@ class TestStreamingExporterResults:
         assert len(data["results"]) == 1000
         assert data["results"][0]["metadata"]["question_id"] == "q-0000"
         assert data["results"][-1]["metadata"]["question_id"] == "q-0999"
+
+
+@pytest.mark.unit
+class TestStreamingExporterHeader:
+    def test_is_complete_defaults_false(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        out_path = tmp_path / "out.json"
+        export_verification_results_json_stream(build_empty_job(), iter([]), out_path=out_path)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        assert data["metadata"]["job_summary"]["is_complete"] is False
+
+    def test_is_complete_true_when_opted_in(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        out_path = tmp_path / "out.json"
+        export_verification_results_json_stream(build_empty_job(), iter([]), is_complete=True, out_path=out_path)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        assert data["metadata"]["job_summary"]["is_complete"] is True
+
+    def test_multi_model_sweep_emits_full_arrays(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+        from karenina.schemas.config.models import ModelConfig
+        from karenina.schemas.verification import VerificationConfig, VerificationJob
+
+        def _m(name: str) -> ModelConfig:
+            return ModelConfig(
+                id=f"model-{name}",
+                model_name=name,
+                model_provider=None,
+                interface="openai_endpoint",
+                temperature=0.7,
+            )
+
+        answering = [_m("a"), _m("b"), _m("c")]
+        parsing = [_m("a"), _m("b"), _m("c")]
+        job = VerificationJob(
+            job_id="mm-job",
+            run_name="mm",
+            status="completed",
+            config=VerificationConfig(answering_models=answering, parsing_models=parsing, replicate_count=1),
+            total_questions=0,
+            successful_count=0,
+        )
+
+        out_path = tmp_path / "out.json"
+        export_verification_results_json_stream(job, iter([]), out_path=out_path)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        cfg = data["metadata"]["verification_config"]
+        assert [m["name"] for m in cfg["answering_models"]] == ["a", "b", "c"]
+        assert [m["name"] for m in cfg["parsing_models"]] == ["a", "b", "c"]
+
+    def test_total_duration_populated_when_both_times_present(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        job = build_empty_job()  # has both start_time and end_time pinned
+        out_path = tmp_path / "out.json"
+        export_verification_results_json_stream(job, iter([]), out_path=out_path)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        summary = data["metadata"]["job_summary"]
+        assert summary["start_time"] == job.start_time
+        assert summary["end_time"] == job.end_time
+        assert summary["total_duration"] == pytest.approx(job.end_time - job.start_time)
