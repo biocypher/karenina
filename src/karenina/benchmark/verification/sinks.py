@@ -136,7 +136,7 @@ class ProgressiveFileSink:
     On successful completion (:meth:`on_finalize` with ``all_complete=True``):
 
     - The JSONL sidecar is reassembled into the final frontend-export JSON
-      at ``output_path`` via :func:`export_verification_results_json`.
+      at ``output_path`` via :func:`export_verification_results_json_stream`.
     - The ``.state`` and ``.results.jsonl`` files are deleted.
 
     On partial completion (:meth:`on_finalize` with ``all_complete=False``):

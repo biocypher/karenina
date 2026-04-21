@@ -5,7 +5,7 @@ This module provides functions for exporting verification execution results
 the OUTPUTS of verification runs - what happened when questions were verified.
 
 Key Functions:
-- export_verification_results_json(): Export complete verification results as JSON
+- export_verification_results_json_stream(): Stream verification results as JSON to a file
 - export_verification_results_csv(): Export verification results as CSV with rubric columns
 - create_export_filename(): Generate filename for exports
 
@@ -14,10 +14,10 @@ exporting benchmark STRUCTURE/METADATA (questions, templates, rubrics definition
 not verification execution results.
 
 Usage:
-    from karenina.benchmark.verification import export_verification_results_csv, export_verification_results_json
+    from karenina.benchmark.verification import export_verification_results_csv, export_verification_results_json_stream
 
     # Export verification job results
-    json_export = export_verification_results_json(job, results, global_rubric)
+    export_verification_results_json_stream(job, results, global_rubric, out_path=Path("out.json"))
     csv_export = export_verification_results_csv(job, results, global_rubric)
 """
 
@@ -112,102 +112,6 @@ def _safe_json_serialize(data: Any, question_id: str, field_name: str) -> str:
             return f"<serialization_failed:{type(data).__name__}>"
 
 
-def export_verification_results_json(
-    job: VerificationJob,
-    results: VerificationResultSet,
-    global_rubric: HasTraitNames | None = None,
-    *,
-    is_complete: bool = False,
-) -> str:
-    """
-    Export verification results to JSON format with metadata (v2.0 format).
-
-    The v2.0 format optimizations:
-    - Stores rubric definition once in shared_data (not per-result)
-    - Stores trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
-      at result root level (shared by template and rubric evaluation)
-    - 50-70% size reduction compared to legacy format
-
-    Args:
-        job: The verification job
-        results: VerificationResultSet containing all verification results
-        global_rubric: Optional global rubric to include in shared_data for rubric definition
-        is_complete: True when this export is the final write for the job. Defaults to False
-            so intermediate snapshots (future extensions writing partial JSON)
-            are not silently mislabeled as final. ProgressiveFileSink.write_final_export
-            passes True explicitly for its end-of-run write. Emitted into
-            job_summary.is_complete so downstream readers can distinguish
-            final exports from in-progress snapshots.
-
-    Returns:
-        JSON string with results and metadata in v2.0 format
-    """
-    # Build rubric definition from global_rubric if provided
-    # This is stored once in shared_data instead of per-result
-    # Use exclude_unset=True to match frontend export format (only include explicitly set fields)
-    rubric_definition = None
-    if global_rubric is not None:
-        # Use model_dump for Pydantic models, otherwise try to extract trait lists
-        if hasattr(global_rubric, "model_dump"):
-            rubric_definition = global_rubric.model_dump(mode="json", exclude_unset=True)
-        else:
-            # Fallback for non-Pydantic objects that implement HasTraitNames
-            rubric_definition = {"trait_names": global_rubric.get_trait_names()}
-
-    export_data: dict[str, Any] = {
-        "format_version": "2.2",
-        "metadata": {
-            "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-            "karenina_version": get_karenina_version(),
-            "job_id": job.job_id,
-            "verification_config": {
-                "answering_models": [
-                    {
-                        "provider": m.model_provider,
-                        "name": m.model_name,
-                        "temperature": m.temperature,
-                        "interface": m.interface,
-                    }
-                    for m in job.config.answering_models
-                ],
-                "parsing_models": [
-                    {
-                        "provider": m.model_provider,
-                        "name": m.model_name,
-                        "temperature": m.temperature,
-                        "interface": m.interface,
-                    }
-                    for m in job.config.parsing_models
-                ],
-            },
-            "job_summary": {
-                "total_questions": job.total_questions,
-                "successful_count": job.successful_count,
-                "failed_count": job.failed_count,
-                "start_time": job.start_time,
-                "end_time": job.end_time,
-                "total_duration": (
-                    job.end_time - job.start_time if job.end_time is not None and job.start_time is not None else None
-                ),
-                "is_complete": is_complete,
-            },
-        },
-        "shared_data": {
-            "rubric_definition": rubric_definition,
-        },
-        "results": [],
-    }
-
-    # Convert results to serializable format with nested structure
-    for result in results:
-        # Use Pydantic's native JSON serialization - NO custom stringification
-        # This preserves complex types (dicts, lists, booleans) for JSON export
-        result_dict = result.model_dump(mode="json")
-        export_data["results"].append(result_dict)
-
-    return json.dumps(export_data, indent=2, ensure_ascii=False)
-
-
 def export_verification_results_json_stream(
     job: VerificationJob,
     results_iter: Iterable[VerificationResult],
@@ -222,10 +126,10 @@ def export_verification_results_json_stream(
     atomically renames it into place on success. On any exception raised
     by the iterator or I/O, removes the ``.partial`` file and reraises.
 
-    The on-disk schema matches ``export_verification_results_json``
-    byte-for-byte at the top-level keys and per-result fields; only
-    whitespace differs (compact outer + one compact JSON line per
-    result, separated by ",\\n").
+    The on-disk schema matches the v2.2 export format byte-for-byte at
+    the top-level keys and per-result fields; only whitespace differs
+    (compact outer + one compact JSON line per result, separated by
+    ",\\n").
 
     Args:
         job: The verification job whose metadata heads the export.
