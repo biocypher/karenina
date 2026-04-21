@@ -167,3 +167,40 @@ class TestLangChainStreaming:
         result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=10.0)
 
         assert result.is_partial is False
+
+    @pytest.mark.asyncio
+    async def test_astream_accumulates_text_from_thinking_blocks(self, model_config: Any) -> None:
+        """Anthropic extended thinking chunks arrive as list[dict] with thinking + text blocks.
+
+        Regression: the old ``isinstance(chunk.content, str)`` gate dropped
+        every block-list chunk, producing empty ``accumulated_content``.
+        The fix must extract only ``type == "text"`` blocks while dropping
+        ``thinking`` blocks.
+        """
+        chunks = [
+            _FakeChunk(content=[{"type": "thinking", "thinking": "Reasoning...", "index": 0}]),
+            _FakeChunk(content=[{"type": "thinking", "thinking": " more reasoning", "index": 0}]),
+            _FakeChunk(content=[{"type": "text", "text": "Hello, "}]),
+            _FakeChunk(content=[{"type": "text", "text": "world!"}]),
+        ]
+        adapter = _build_adapter(model_config, chunks)
+
+        async with adapter.astream([Message.user("Hi")]) as sr:
+            async for _ in sr:
+                pass
+
+        assert sr.accumulated_content == "Hello, world!"
+
+    @pytest.mark.asyncio
+    async def test_astream_with_timeout_extracts_text_from_list_chunks(self, model_config: Any) -> None:
+        """_astream_with_timeout returns text-only content for list-block streams."""
+        chunks = [
+            _FakeChunk(content=[{"type": "thinking", "thinking": "secret", "index": 0}]),
+            _FakeChunk(content=[{"type": "text", "text": "Final answer."}]),
+        ]
+        adapter = _build_adapter(model_config, chunks)
+
+        result = await adapter._astream_with_timeout([Message.user("Hi")], timeout=10.0)
+
+        assert result.content == "Final answer."
+        assert "secret" not in result.content
