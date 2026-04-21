@@ -34,3 +34,11 @@ def _whitelist_schema(schema):
 def _whitelist_conformance_fixtures(mock_deep_agents_agent_result):
     """Whitelist for conformance test fixture parameters (test_agent_port.py)."""
     _ = mock_deep_agents_agent_result
+
+
+# Pytest fixtures used as side-effect-only parameters in streaming exporter tests.
+# deterministic_header pins export_timestamp and karenina_version via monkeypatch;
+# its return value is None, so the test body never references the parameter.
+def _whitelist_streaming_exporter_fixtures(deterministic_header):
+    """Whitelist for streaming exporter test fixture (test_streaming_exporter.py)."""
+    _ = deterministic_header

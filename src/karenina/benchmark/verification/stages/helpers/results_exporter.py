@@ -25,11 +25,14 @@ import csv
 import json
 import logging
 import time
+from collections.abc import Iterable
 from io import StringIO
+from pathlib import Path
 from typing import Any, Protocol
 
 from karenina.schemas.results import VerificationResultSet
-from karenina.schemas.verification import VerificationJob
+from karenina.schemas.verification import VerificationJob, VerificationResult
+from karenina.utils.file_ops import atomic_writer
 from karenina.utils.version import get_karenina_version
 
 
@@ -203,6 +206,106 @@ def export_verification_results_json(
         export_data["results"].append(result_dict)
 
     return json.dumps(export_data, indent=2, ensure_ascii=False)
+
+
+def export_verification_results_json_stream(
+    job: VerificationJob,
+    results_iter: Iterable[VerificationResult],
+    global_rubric: HasTraitNames | None = None,
+    *,
+    is_complete: bool = False,
+    out_path: Path,
+) -> None:
+    """Stream the v2.2 JSON export directly to out_path.
+
+    Writes to ``out_path.with_suffix(out_path.suffix + '.partial')`` and
+    atomically renames it into place on success. On any exception raised
+    by the iterator or I/O, removes the ``.partial`` file and reraises.
+
+    The on-disk schema matches ``export_verification_results_json``
+    byte-for-byte at the top-level keys and per-result fields; only
+    whitespace differs (compact outer + one compact JSON line per
+    result, separated by ",\\n").
+
+    Args:
+        job: The verification job whose metadata heads the export.
+        results_iter: Single-pass iterable over VerificationResult. Lists,
+            generators, and JSONL-backed iterators all work.
+        global_rubric: Optional rubric folded into shared_data. Must expose
+            either a ``model_dump()`` method (Pydantic) or ``get_trait_names``.
+        is_complete: Written into ``job_summary.is_complete`` so readers
+            can distinguish final exports from in-progress snapshots.
+        out_path: Target path (required kwarg, no default).
+
+    Raises:
+        Propagates any exception from ``results_iter`` or disk I/O after
+        cleaning up the ``.partial`` sidecar.
+    """
+    rubric_definition = None
+    if global_rubric is not None:
+        if hasattr(global_rubric, "model_dump"):
+            rubric_definition = global_rubric.model_dump(mode="json", exclude_unset=True)
+        else:
+            rubric_definition = {"trait_names": global_rubric.get_trait_names()}
+
+    start_time = job.start_time
+    end_time = job.end_time
+    total_duration = end_time - start_time if (end_time is not None and start_time is not None) else None
+
+    header: dict[str, Any] = {
+        "format_version": "2.2",
+        "metadata": {
+            "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+            "karenina_version": get_karenina_version(),
+            "job_id": job.job_id,
+            "verification_config": {
+                "answering_models": [
+                    {
+                        "provider": m.model_provider,
+                        "name": m.model_name,
+                        "temperature": m.temperature,
+                        "interface": m.interface,
+                    }
+                    for m in job.config.answering_models
+                ],
+                "parsing_models": [
+                    {
+                        "provider": m.model_provider,
+                        "name": m.model_name,
+                        "temperature": m.temperature,
+                        "interface": m.interface,
+                    }
+                    for m in job.config.parsing_models
+                ],
+            },
+            "job_summary": {
+                "total_questions": job.total_questions,
+                "successful_count": job.successful_count,
+                "failed_count": job.failed_count,
+                "start_time": start_time,
+                "end_time": end_time,
+                "total_duration": total_duration,
+                "is_complete": is_complete,
+            },
+        },
+        "shared_data": {
+            "rubric_definition": rubric_definition,
+        },
+    }
+
+    header_str = json.dumps(header, ensure_ascii=False)
+    assert header_str.endswith("}"), "json.dumps of a dict must end with }"
+
+    with atomic_writer(out_path) as f:
+        f.write(header_str[:-1])  # drop trailing "}"
+        f.write(',"results":[\n')
+        first = True
+        for result in results_iter:
+            if not first:
+                f.write(",\n")
+            f.write(json.dumps(result.model_dump(mode="json"), ensure_ascii=False))
+            first = False
+        f.write("\n]}\n")
 
 
 def export_verification_results_csv(
