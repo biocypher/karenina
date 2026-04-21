@@ -6,6 +6,7 @@ Detects when LLMs refuse to answer or abstain from responding.
 from typing import Any
 
 from karenina.benchmark.verification.evaluators import detect_abstention
+from karenina.benchmark.verification.utils.trace_parsing import prepare_evaluation_input
 
 from ..core.base import ArtifactKeys, VerificationContext
 from ..core.check_stage_base import BaseCheckStage
@@ -81,11 +82,22 @@ class AbstentionCheckStage(BaseCheckStage):
         self,
         context: VerificationContext,
     ) -> tuple[bool | None, bool, str | None, dict[str, Any] | None]:
-        """Detect abstention in the raw LLM response."""
+        """Detect abstention in the raw LLM response.
+
+        Respects ``use_full_trace_for_template``: when False, passes only the
+        extracted final AI message to the detector (abstention is a property
+        of the final answer, and agent traces can exceed the judge's context
+        window). If extraction fails, falls back to the full trace so this
+        never becomes the reason a run regresses.
+        """
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
 
+        detection_input, _ = prepare_evaluation_input(
+            raw_llm_response, use_full_trace=context.use_full_trace_for_template
+        )
+
         return detect_abstention(
-            raw_llm_response=raw_llm_response,
+            raw_llm_response=detection_input,
             parsing_model=context.parsing_model,
             question_text=context.question_text,
             prompt_config=context.prompt_config,
