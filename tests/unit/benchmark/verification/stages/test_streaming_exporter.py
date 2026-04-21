@@ -263,3 +263,96 @@ class TestStreamingExporterHeader:
         assert summary["start_time"] == job.start_time
         assert summary["end_time"] == job.end_time
         assert summary["total_duration"] == pytest.approx(job.end_time - job.start_time)
+
+
+@pytest.mark.unit
+class TestStreamingExporterErrors:
+    def test_iterator_raises_midstream_cleans_up_partial(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        out_path = tmp_path / "out.json"
+        partial_path = tmp_path / "out.json.partial"
+
+        results = build_full_results().results
+
+        def raising_iter():
+            yield results[0]
+            yield results[1]
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            export_verification_results_json_stream(build_full_job(), raising_iter(), out_path=out_path)
+
+        assert not out_path.exists()
+        assert not partial_path.exists()
+
+    def test_disk_write_failure_cleans_up_partial(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """OSError during f.write propagates and leaves no orphan .partial file."""
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        out_path = tmp_path / "out.json"
+        partial_path = tmp_path / "out.json.partial"
+
+        real_open = open
+
+        class FailingFile:
+            def __init__(self, path: str, mode: str, **kwargs: object) -> None:
+                self._real = real_open(path, mode, **kwargs)
+                self._write_count = 0
+
+            def write(self, data: str) -> int:  # noqa: ARG002
+                self._write_count += 1
+                # Let the header write succeed; fail on the results-array write
+                if self._write_count >= 2:
+                    raise OSError("disk full")
+                return self._real.write(data)
+
+            def fileno(self) -> int:
+                return self._real.fileno()
+
+            def flush(self) -> None:
+                self._real.flush()
+
+            @property
+            def closed(self) -> bool:
+                return self._real.closed
+
+            def close(self) -> None:
+                if not self._real.closed:
+                    self._real.close()
+
+            def __enter__(self) -> FailingFile:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                self.close()
+
+        def fake_open(path: str, mode: str = "r", **kwargs: object) -> object:
+            if str(path).endswith(".partial"):
+                return FailingFile(path, mode, **kwargs)
+            return real_open(path, mode, **kwargs)
+
+        monkeypatch.setattr("builtins.open", fake_open)
+
+        with pytest.raises(OSError, match="disk full"):
+            export_verification_results_json_stream(
+                build_full_job(),
+                iter(build_full_results().results),
+                out_path=out_path,
+            )
+
+        assert not out_path.exists()
+        assert not partial_path.exists()
