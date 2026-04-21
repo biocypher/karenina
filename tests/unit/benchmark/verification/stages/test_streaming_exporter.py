@@ -356,3 +356,64 @@ class TestStreamingExporterErrors:
 
         assert not out_path.exists()
         assert not partial_path.exists()
+
+
+@pytest.mark.unit
+class TestStreamingExporterGolden:
+    """Byte-exact golden tests. Regenerate via
+
+        uv run python -m tests.fixtures.export_format.regen_fixtures
+
+    when the on-disk format intentionally changes.
+    """
+
+    # parents: [0]=stages, [1]=verification, [2]=benchmark, [3]=unit, [4]=tests, [5]=repo_root
+    FIXTURE_DIR = Path(__file__).resolve().parents[5] / "tests" / "fixtures" / "export_format"
+
+    def test_empty_matches_golden(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        out_path = tmp_path / "out.json"
+        export_verification_results_json_stream(
+            build_empty_job(),
+            iter(build_empty_results().results),
+            out_path=out_path,
+        )
+
+        expected = (self.FIXTURE_DIR / "results_export_empty.json").read_bytes()
+        actual = out_path.read_bytes()
+        assert actual == expected, (
+            "Exporter output drift detected. If this is intentional, "
+            "regenerate fixtures via regen_fixtures.py and review the diff."
+        )
+
+    def test_full_matches_golden(
+        self,
+        tmp_path: Path,
+        deterministic_header: None,  # noqa: ARG002
+    ) -> None:
+        from karenina.benchmark.verification.stages.helpers.results_exporter import (
+            export_verification_results_json_stream,
+        )
+
+        out_path = tmp_path / "out.json"
+        export_verification_results_json_stream(
+            build_full_job(),
+            iter(build_full_results().results),
+            build_full_rubric(),
+            is_complete=True,
+            out_path=out_path,
+        )
+
+        expected = (self.FIXTURE_DIR / "results_export_full.json").read_bytes()
+        actual = out_path.read_bytes()
+        assert actual == expected, (
+            "Exporter output drift detected. If this is intentional, "
+            "regenerate fixtures via regen_fixtures.py and review the diff."
+        )
