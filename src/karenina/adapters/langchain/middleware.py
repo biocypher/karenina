@@ -423,6 +423,10 @@ def build_agent_middleware(
     )
 
     # 3. Model retry middleware (replaces tenacity for agent path)
+    # ToolRetryMiddleware accepts "raise" via upstream back-compat, but
+    # ModelRetryMiddleware checks `on_failure == "error"` directly. Map here
+    # so the karenina-facing literal `["continue", "raise"]` propagates correctly.
+    _model_retry_on_failure = "error" if config.model_retry.on_failure == "raise" else config.model_retry.on_failure
     middleware.append(
         ModelRetryMiddleware(
             max_retries=config.model_retry.max_retries,
@@ -430,7 +434,7 @@ def build_agent_middleware(
             initial_delay=config.model_retry.initial_delay,
             max_delay=config.model_retry.max_delay,
             jitter=config.model_retry.jitter,
-            on_failure=config.model_retry.on_failure,  # type: ignore[arg-type]
+            on_failure=_model_retry_on_failure,  # type: ignore[arg-type]
         )
     )
 
