@@ -397,6 +397,16 @@ class ProgressiveFileSink:
         """Return a shallow copy of buffered completed results."""
         return list(self._results)
 
+    def iter_results(self) -> Iterable[VerificationResult]:
+        """Iterate over buffered completed results without copying.
+
+        Used by the batch runner to hydrate the workspace
+        :class:`AnswerTraceCache` on resume so new parser variants for
+        already-completed answerer triples reuse the prior trace instead
+        of regenerating it.
+        """
+        return iter(self._results)
+
     def get_result_set(self) -> VerificationResultSet:
         """Return buffered results as a :class:`VerificationResultSet`."""
         return VerificationResultSet(results=list(self._results))
@@ -505,6 +515,20 @@ class CompositeSink:
         for sink in self._sinks:
             out.update(sink.completed_triples())
         return out
+
+    def iter_results(self) -> Iterable[VerificationResult]:
+        """Iterate buffered results across children that expose them.
+
+        Iteration order: first child to expose ``iter_results`` is drained
+        first, then the next, and so on. The fan-out is used by the batch
+        runner to hydrate the workspace cache on resume; duplicate rows
+        across children are tolerated because cache hydration is idempotent
+        per cache key.
+        """
+        for sink in self._sinks:
+            iterator = getattr(sink, "iter_results", None)
+            if callable(iterator):
+                yield from iterator()
 
     def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
         """Forward ``seed_prior_results`` to each child that implements it."""
@@ -700,6 +724,14 @@ class InMemorySink:
                 )
             )
         return out
+
+    def iter_results(self) -> Iterable[VerificationResult]:
+        """Iterate buffered results without copying.
+
+        Symmetry with :class:`ProgressiveFileSink` so the batch runner can
+        hydrate the workspace cache from any sink type.
+        """
+        return iter(self.results)
 
     def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
         """Append prior rows and their task keys, skipping duplicates."""

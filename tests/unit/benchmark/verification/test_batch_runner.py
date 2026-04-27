@@ -335,7 +335,7 @@ class TestAnswererConcurrencyLimitsPlumbing:
                 captured["parallel"] = parallel
                 captured["config"] = config
 
-            def run_batch(self, tasks, progress_callback=None):  # noqa: ARG002
+            def run_batch(self, tasks, progress_callback=None, prior_results=None):  # noqa: ARG002
                 return {}
 
         monkeypatch.setattr(br_mod, "cleanup_resources", lambda: None)
@@ -369,7 +369,7 @@ class TestAnswererConcurrencyLimitsPlumbing:
             def __init__(self, parallel, config):  # noqa: ARG002
                 captured["config"] = config
 
-            def run_batch(self, tasks, progress_callback=None):  # noqa: ARG002
+            def run_batch(self, tasks, progress_callback=None, prior_results=None):  # noqa: ARG002
                 return {}
 
         monkeypatch.setattr(br_mod, "cleanup_resources", lambda: None)

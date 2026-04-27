@@ -103,7 +103,12 @@ def _install_executor(
         def __init__(self, parallel: bool = True, config: Any = None) -> None:  # noqa: ARG002
             pass
 
-        def run_batch(self, tasks: list[dict[str, Any]], progress_callback: Any) -> dict[str, VerificationResult]:
+        def run_batch(
+            self,
+            tasks: list[dict[str, Any]],
+            progress_callback: Any,
+            prior_results: Any = None,  # noqa: ARG002 (forwarded by batch_runner; ignored by the stub)
+        ) -> dict[str, VerificationResult]:
             partial: dict[str, VerificationResult] = {}
             errors: list[tuple[str, BaseException]] = []
             for idx, task in enumerate(tasks):
