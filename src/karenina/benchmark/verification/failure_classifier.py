@@ -27,6 +27,12 @@ _AUTOFAIL_STAGE_TO_CATEGORY: dict[str, FailureCategory] = {
     "TraceValidationAutoFail": FailureCategory.TRACE_VALIDATION,
     "DeepJudgmentAutoFail": FailureCategory.DEEP_JUDGMENT,
     "DeepJudgmentRubricAutoFail": FailureCategory.DEEP_JUDGMENT_RUBRIC,
+    # PlaceholderRetryAutoFail fires when LangChain's ModelRetryMiddleware
+    # emits its exhaustion placeholder ("Model call failed after ..."). The
+    # underlying cause is always an infrastructure failure that exhausted the
+    # in-agent retry budget, so we map it to CONNECTION (which lives in the
+    # RETRY_EXHAUSTED FailureGroup).
+    "PlaceholderRetryAutoFail": FailureCategory.CONNECTION,
 }
 
 _ERROR_CATEGORY_TO_FAILURE: dict[ErrorCategory, FailureCategory] = {

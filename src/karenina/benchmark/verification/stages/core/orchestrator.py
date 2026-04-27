@@ -21,6 +21,7 @@ from ..pipeline.embedding_check import EmbeddingCheckStage
 from ..pipeline.finalize_result import FinalizeResultStage
 from ..pipeline.generate_answer import GenerateAnswerStage
 from ..pipeline.parse_template import ParseTemplateStage
+from ..pipeline.placeholder_retry_autofail import PlaceholderRetryAutoFailStage
 from ..pipeline.recursion_limit_autofail import RecursionLimitAutoFailStage
 from ..pipeline.rubric_evaluation import RubricEvaluationStage
 from ..pipeline.sufficiency_check import SufficiencyCheckStage
@@ -195,6 +196,9 @@ class StageOrchestrator:
             # Auto-fail if trace doesn't end with AI message
             stages.append(TraceValidationAutoFailStage())
 
+            # Auto-fail if trace is solely a ModelRetryMiddleware exhaustion placeholder
+            stages.append(PlaceholderRetryAutoFailStage())
+
             # Optional abstention check (can run on raw response)
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
@@ -232,6 +236,7 @@ class StageOrchestrator:
                     GenerateAnswerStage(),
                     RecursionLimitAutoFailStage(),  # Auto-fail if recursion limit hit
                     TraceValidationAutoFailStage(),  # Auto-fail if trace doesn't end with AI message
+                    PlaceholderRetryAutoFailStage(),  # Auto-fail on ModelRetryMiddleware placeholder
                 ]
             )
 
