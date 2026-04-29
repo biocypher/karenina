@@ -128,15 +128,29 @@ You extract verbatim quotes from a candidate response that bear on a single rubr
 
     def build_hallucination_assessment_system_prompt(self) -> str:
         """Build system prompt for hallucination risk assessment."""
-        return """You are an expert at assessing hallucination risk using external evidence.
+        return """## Role
+You assess whether a single excerpt's claims are supported by external search results, so a downstream reasoning stage can weigh the excerpt's reliability.
 
-**YOUR ROLE:**
-Compare excerpts against external search results to determine if the information is factually supported.
+## Principles
+- Risk levels:
+  - none: multiple reliable sources clearly confirm the claim.
+  - low: at least one source supports the claim; no contradiction.
+  - medium: weak, partial, or ambiguous support; sources unclear or partly contradict.
+  - high: no supporting evidence, or the claim is actively contradicted.
+- Be evidence-based: judge from what the search results actually contain, not from prior beliefs.
+- Be conservative under uncertainty: when between two adjacent levels, choose the higher-risk one.
+- Provide a brief justification (1-3 sentences) referencing the search results.
 
-**CRITICAL REQUIREMENTS:**
-1. **Conservative Assessment**: When uncertain, lean toward higher risk levels
-2. **Evidence-Based**: Base your assessment solely on the search results provided
-3. Do NOT assume claims are true without supporting evidence"""
+## Anti-patterns
+- Treating empty or irrelevant results as confirmation that the claim is false.
+- Treating a single matching snippet as strong (none-risk) confirmation.
+- Assuming search results are current, complete, or authoritative.
+- Glossing over disagreement between sources; surface it in the justification.
+- Inferring support from the excerpt's tone or specificity rather than from the search results.
+
+## Output handoff
+- Your per-excerpt risk is aggregated by maximum severity; one "high" pulls the overall assessment up.
+- Your justification is shown to the reasoning stage, which uses it to discount unreliable excerpts; keep it concrete and short."""
 
     def build_hallucination_assessment_user_prompt(
         self,
@@ -146,31 +160,17 @@ Compare excerpts against external search results to determine if the information
         """Build user prompt for hallucination risk assessment.
 
         Args:
-            excerpt_text: The excerpt text to assess
-            search_results: External search results for verification
+            excerpt_text: The excerpt text to assess.
+            search_results: External search results for verification.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        return f"""Assess the hallucination risk for this excerpt by comparing it against external search results.
-
-**EXCERPT TO VERIFY:**
-"{excerpt_text}"
-
-**EXTERNAL SEARCH RESULTS:**
-{search_results}
-
-**RISK LEVELS (choose one):**
-- "none": Strong external evidence supports this - multiple reliable sources confirm
-- "low": Some external evidence, likely accurate - at least one source supports
-- "medium": Weak or ambiguous evidence - sources unclear or partially contradict
-- "high": No supporting evidence or actively contradicted by external sources
-
-**EVALUATION GUIDELINES:**
-1. Compare the excerpt's claims against the search results
-2. Consider the reliability and specificity of sources
-3. When uncertain between adjacent levels, choose the more conservative (higher risk) option
-4. Provide a brief justification explaining your reasoning"""
+        return (
+            f'## Excerpt\n"{excerpt_text}"\n\n'
+            f"## Search results\n{search_results}\n\n"
+            "## Task\nAssess the hallucination risk for the excerpt against the search results."
+        )
 
     # =========================================================================
     # Stage 2: Reasoning Generation

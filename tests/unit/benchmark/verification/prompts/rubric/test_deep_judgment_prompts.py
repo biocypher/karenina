@@ -183,3 +183,49 @@ class TestExcerptExtractionPrompts:
         assert "0.42" in feedback
         assert "0.85" in feedback
         assert "Please provide verbatim quotes" not in feedback
+
+
+# ----------------------------------------------------------------------
+# Stage 1.5: Hallucination assessment
+# ----------------------------------------------------------------------
+
+
+class TestHallucinationAssessmentPrompts:
+    def test_system_prompt_has_four_sections(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_hallucination_assessment_system_prompt()
+        assert "## Role" in prompt
+        assert "## Principles" in prompt
+        assert "## Anti-patterns" in prompt
+        assert "## Output handoff" in prompt
+
+    def test_system_prompt_defines_risk_levels(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_hallucination_assessment_system_prompt()
+        assert "none:" in prompt
+        assert "low:" in prompt
+        assert "medium:" in prompt
+        assert "high:" in prompt
+
+    def test_system_prompt_includes_skepticism_anti_patterns(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_hallucination_assessment_system_prompt()
+        assert "empty or irrelevant" in prompt.lower()
+        assert "single matching snippet" in prompt.lower()
+
+    def test_user_prompt_is_data_only(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_hallucination_assessment_user_prompt(
+            excerpt_text="BCL2 was the target.",
+            search_results="No matches found.",
+        )
+        assert "## Excerpt" in prompt
+        assert "## Search results" in prompt
+        assert "## Task" in prompt
+        assert "**EXCERPT TO VERIFY:**" not in prompt
+        assert "**RISK LEVELS" not in prompt
+        assert "EVALUATION GUIDELINES" not in prompt.upper()
+
+    def test_user_prompt_includes_input_data(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_hallucination_assessment_user_prompt(
+            excerpt_text="BCL2 was the target.",
+            search_results="Five sources confirm BCL2.",
+        )
+        assert "BCL2 was the target." in prompt
+        assert "Five sources confirm BCL2." in prompt
