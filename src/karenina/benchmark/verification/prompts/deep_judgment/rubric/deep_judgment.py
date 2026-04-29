@@ -371,3 +371,86 @@ Based on your reasoning above, does the answer meet the criteria?
 - {min_score} = Poor - Does not meet criteria at all
 - {mid_score} = Average - Partially meets criteria
 - {max_score} = Excellent - Fully meets or exceeds criteria"""
+
+
+# =========================================================================
+# Module-level helpers
+# =========================================================================
+
+
+_INTEGER_LABEL_LOOKUP: dict[int, list[str]] = {
+    3: ["Does not meet", "Partially meets", "Fully meets"],
+    5: ["Poor", "Below average", "Adequate", "Strong", "Excellent"],
+    7: [
+        "Very poor",
+        "Poor",
+        "Below average",
+        "Adequate",
+        "Above average",
+        "Strong",
+        "Excellent",
+    ],
+    10: [
+        "Poor",
+        "Very weak",
+        "Weak",
+        "Below average",
+        "Adequate",
+        "Above average",
+        "Good",
+        "Strong",
+        "Very strong",
+        "Excellent",
+    ],
+}
+
+_FALLBACK_LADDER: list[str] = [
+    "lowest",
+    "very low",
+    "low",
+    "below average",
+    "average",
+    "above average",
+    "high",
+    "very high",
+    "highest",
+]
+
+
+def build_integer_score_labels(min_score: int, max_score: int) -> list[tuple[int, str]]:
+    """Return one (integer, label) per integer in [min_score, max_score].
+
+    For ranges that start at 1 and have a known total length (3, 5, 7, 10),
+    use a curated lookup. Otherwise interpolate the fallback ladder onto the
+    range linearly so the lowest rung maps to min_score and the highest rung
+    maps to max_score.
+
+    Args:
+        min_score: Minimum score (inclusive).
+        max_score: Maximum score (inclusive). Must be >= min_score.
+
+    Returns:
+        List of (integer, label) tuples ordered from min_score to max_score.
+
+    Raises:
+        ValueError: If max_score < min_score.
+    """
+    if max_score < min_score:
+        raise ValueError(f"max_score ({max_score}) must be >= min_score ({min_score})")
+
+    span = max_score - min_score + 1
+    integers = list(range(min_score, max_score + 1))
+
+    if min_score == 1 and span in _INTEGER_LABEL_LOOKUP:
+        labels = _INTEGER_LABEL_LOOKUP[span]
+        return list(zip(integers, labels, strict=True))
+
+    last_idx = len(_FALLBACK_LADDER) - 1
+    if span == 1:
+        return [(integers[0], _FALLBACK_LADDER[last_idx // 2])]
+
+    pairs: list[tuple[int, str]] = []
+    for i, value in enumerate(integers):
+        rung = round(i * last_idx / (span - 1))
+        pairs.append((value, _FALLBACK_LADDER[rung]))
+    return pairs
