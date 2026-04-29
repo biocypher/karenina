@@ -23,7 +23,6 @@ where structured output is needed, and regular LLMPort.invoke() for text generat
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import asdict
@@ -564,24 +563,6 @@ class RubricDeepJudgmentHandler:
                 failed.append(excerpt)
 
         return valid, failed
-
-    def _parse_excerpt_response(self, response: str) -> list[dict[str, Any]]:
-        """Parse the excerpt extraction response."""
-        # Try to extract JSON from response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in response: {response[:200]}")
-
-        try:
-            result = json.loads(json_match.group())
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in response: {e}") from e
-
-        excerpts = result.get("excerpts", [])
-        if not isinstance(excerpts, list):
-            raise ValueError(f"'excerpts' must be a list, got {type(excerpts)}")
-
-        return excerpts
 
     def _assess_trait_hallucination(
         self, excerpts: list[dict[str, Any]], trait: LLMRubricTrait, config: Any
