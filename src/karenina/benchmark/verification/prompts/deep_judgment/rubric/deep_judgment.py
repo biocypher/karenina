@@ -50,16 +50,29 @@ class DeepJudgmentPromptBuilder:
 
     def build_excerpt_extraction_system_prompt(self) -> str:
         """Build system prompt for excerpt extraction."""
-        return """You are an expert at extracting verbatim quotes from text that demonstrate specific qualities.
+        return """## Role
+You extract verbatim quotes from a candidate response that bear on a single rubric trait, so a downstream reasoning stage can weigh the evidence.
 
-**CRITICAL REQUIREMENTS:**
-1. **VERBATIM QUOTES**: Excerpts must be EXACT text from the answer - do not paraphrase
-2. **Confidence Levels**: Assign confidence based on strength of evidence:
-   - "high": Direct, explicit evidence for the trait
-   - "medium": Reasonable inference or moderate evidence
-   - "low": Weak or ambiguous evidence
-3. Do NOT paraphrase or modify quotes
-4. Do NOT invent quotes not present in the text"""
+## Principles
+- Verbatim only: every quote must appear character-for-character in the response (minor whitespace differences are tolerated, paraphrasing is not).
+- Confidence levels:
+  - high: direct, explicit statement that clearly bears on the trait.
+  - medium: indirect or partial evidence; reasonable inference.
+  - low: weak, ambiguous, or tangential evidence.
+- Include weak evidence at low confidence rather than returning an empty list. Reserve the empty list for responses with no relevant text at all.
+- Prefer focused, sentence-level excerpts. If a longer span is needed, keep it tight around the load-bearing words.
+- Within the configured maximum, prioritize the strongest and most distinct excerpts; do not pad.
+
+## Anti-patterns
+- Paraphrasing or summarizing the response text.
+- Inventing quotes that the response does not contain.
+- Returning the entire response as a single excerpt.
+- Returning an empty list when ambiguous evidence exists; mark it low instead.
+- Selecting near-duplicate excerpts that say the same thing.
+
+## Output handoff
+- Your excerpts are fuzzy-matched against the response text; near-misses trigger a retry with feedback identifying the failed quotes.
+- The next stage reads excerpts in order and weighs them by their confidence label; ordering and labels carry signal."""
 
     def build_excerpt_extraction_user_prompt(
         self,
@@ -71,66 +84,43 @@ class DeepJudgmentPromptBuilder:
         """Build user prompt for excerpt extraction.
 
         Args:
-            trait: The LLM trait to extract excerpts for
-            max_excerpts: Maximum number of excerpts to extract
-            answer: The answer to extract excerpts from
-            feedback: Optional retry feedback from validation failure
+            trait: The LLM trait to extract excerpts for.
+            max_excerpts: Maximum number of excerpts to extract.
+            answer: The answer to extract excerpts from.
+            feedback: Optional retry feedback from validation failure.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        prompt = f"""Extract verbatim quotes from the answer that demonstrate the following quality trait:
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Assess this quality"}
-
-**ANSWER TO ANALYZE:**
-{answer}
-
-**TASK:**
-Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or relate to this trait.
-
-**CONFIDENCE LEVELS:**
-- "high": Direct, explicit statement that clearly demonstrates the trait
-- "medium": Indirect evidence or reasonable inference supporting the trait
-- "low": Weak, ambiguous, or tangential evidence
-
-**IMPORTANT RULES:**
-1. Quotes MUST be EXACT verbatim text from the answer above
-2. Do not paraphrase, summarize, or modify the text in any way
-3. If no relevant excerpts exist, return an empty excerpts array: {{"excerpts": []}}
-4. Select the most relevant excerpts - quality over quantity
-"""
-
+        criteria = trait.description or "Assess this quality."
+        prompt = (
+            f"## Trait\n{trait.name}\n\n"
+            f"## Criteria\n{criteria}\n\n"
+            f"## Response\n{answer}\n\n"
+            f"## Maximum excerpts\n{max_excerpts}\n"
+        )
         if feedback:
-            prompt += f"""
-**RETRY FEEDBACK (previous excerpts failed validation):**
-{feedback}
-"""
-
+            prompt += f"\n## Retry feedback\n{feedback}\n"
+        prompt += "\n## Task\nExtract verbatim excerpts that bear on the trait, with confidence levels."
         return prompt
 
     def build_retry_feedback(self, failed_excerpts: list[dict[str, Any]], fuzzy_threshold: float) -> str:
         """Build feedback message for retry attempt after validation failure.
 
         Args:
-            failed_excerpts: List of excerpts that failed validation
-            fuzzy_threshold: The similarity threshold used for validation
+            failed_excerpts: List of excerpts that failed validation.
+            fuzzy_threshold: The similarity threshold used for validation.
 
         Returns:
-            Feedback message string
+            Feedback message string. The verbatim rule lives in the system prompt;
+            this message only enumerates the failed quotes.
         """
-        feedback = "The following excerpts failed validation (not found in answer):\n"
-
+        lines = ["The following excerpts failed validation (not found in answer):"]
         for i, excerpt in enumerate(failed_excerpts, 1):
-            feedback += (
-                f'{i}. "{excerpt.get("text", "")}" '
-                f"(similarity: {excerpt.get('similarity_score', 0):.2f}, "
-                f"threshold: {fuzzy_threshold:.2f})\n"
-            )
-
-        feedback += "\nPlease provide verbatim quotes that exactly match the answer text."
-        return feedback
+            text = excerpt.get("text", "")
+            similarity = excerpt.get("similarity_score", 0)
+            lines.append(f'{i}. "{text}" (similarity: {similarity:.2f}, threshold: {fuzzy_threshold:.2f})')
+        return "\n".join(lines)
 
     # =========================================================================
     # Stage 1.5: Hallucination Assessment
