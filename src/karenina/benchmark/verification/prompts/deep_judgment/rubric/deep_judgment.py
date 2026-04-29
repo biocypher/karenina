@@ -300,7 +300,7 @@ You translate a reasoning analysis into a final boolean verdict for a rubric tra
 ## Anti-patterns
 - Introducing new evidence or context not present in the reasoning.
 - Contradicting the reasoning's Conclusion to "split the difference".
-- Returning true when the reasoning is uncertain or balanced; default to false unless the criteria are clearly met.
+- Biasing toward true or false when the reasoning is hedged or balanced; the verdict should mirror the Conclusion line in the reasoning, regardless of how confident or uncertain that conclusion is. Exception: if the trait description explicitly requests a directional default (e.g., "lean false on hedged answers"), follow that instruction.
 
 ## Output handoff
 - Your boolean verdict is the final score for this trait; no further interpretation happens after you."""
