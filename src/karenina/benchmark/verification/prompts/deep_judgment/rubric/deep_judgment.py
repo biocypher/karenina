@@ -188,7 +188,14 @@ Compare excerpts against external search results to determine if the information
 
     def build_reasoning_system_prompt(self) -> str:
         """Build system prompt for reasoning generation."""
-        return "You are an expert at analyzing text quality and providing clear reasoning."
+        return """You are a careful rubric evaluator. Reason about the answer against the trait's criteria using only the evidence visible in the answer text.
+
+GUIDELINES:
+- Be thorough; do not infer beyond what is stated.
+- Weigh both supporting and contradicting evidence before concluding.
+- Cite specific passages or features when they bear on the criteria.
+- If the criteria are ambiguous, state the interpretation you used and apply it consistently.
+- Use as much room as the evidence requires; avoid both unnecessary verbosity and premature conclusions."""
 
     def build_reasoning_user_prompt_with_excerpts(
         self,
@@ -196,17 +203,20 @@ Compare excerpts against external search results to determine if the information
         trait: "LLMRubricTrait",
         excerpts: list[dict[str, Any]],
         hallucination_risk: dict[str, Any] | None = None,
+        *,
+        task_eval_mode: bool = False,
     ) -> str:
         """Build reasoning prompt when excerpts are available.
 
         Args:
-            question: The original question
-            trait: The LLM trait being evaluated
-            excerpts: List of validated excerpts with confidence scores
-            hallucination_risk: Optional hallucination risk assessment
+            question: The original question.
+            trait: The LLM trait being evaluated.
+            excerpts: List of validated excerpts with confidence scores.
+            hallucination_risk: Optional hallucination risk assessment.
+            task_eval_mode: When True, omit the **Question** block entirely.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
         # Format excerpts
         excerpts_formatted = []
@@ -223,22 +233,24 @@ Compare excerpts against external search results to determine if the information
         if hallucination_risk:
             risk_context = f"\n**Overall Hallucination Risk**: {hallucination_risk.get('overall_risk', 'unknown')}\n"
 
+        question_block = "" if task_eval_mode else f"\n**Question**: {question}\n"
+
         return f"""Analyze the extracted excerpts to explain how they demonstrate (or fail to demonstrate) the following trait.
 
 **Trait**: {trait.name}
 **Criteria**: {trait.description or "Assess this quality"}
-
-**Question**: {question}
-
+{question_block}
 **Extracted Excerpts**:
 {excerpts_text}
 {risk_context}
 
 **Your Task**:
-Provide 2-3 sentences of reasoning that:
-1. Reference specific excerpts and their content
-2. Connect each excerpt to the trait criteria
-3. Assess whether the excerpts collectively satisfy the trait
+Walk through the evidence carefully:
+1. Reference specific excerpts and their content.
+2. Connect each excerpt to the trait criteria.
+3. Consider both supporting and contradicting evidence.
+4. State your interpretation when the criteria are ambiguous.
+5. End with a one-line conclusion that follows from the evidence.
 
 This reasoning will be used in a follow-up step to determine the final score.
 
@@ -249,34 +261,38 @@ This reasoning will be used in a follow-up step to determine the final score.
         question: str,
         answer: str,
         trait: "LLMRubricTrait",
+        *,
+        task_eval_mode: bool = False,
     ) -> str:
         """Build reasoning prompt when excerpts are not available.
 
         Args:
-            question: The original question
-            answer: The complete LLM response
-            trait: The LLM trait being evaluated
+            question: The original question.
+            answer: The complete LLM response.
+            trait: The LLM trait being evaluated.
+            task_eval_mode: When True, omit the **Question** block entirely.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        return f"""Analyze the following answer for the quality trait below and provide your reasoning.
+        question_block = "" if task_eval_mode else f"\n**Question**: {question}\n"
+        return f"""Analyze the following answer against the trait's criteria. Walk through the evidence carefully; this reasoning will be used in a follow-up step to determine the final score.
 
 **Trait**: {trait.name}
 **Criteria**: {trait.description or "Assess this quality"}
-
-**Question**: {question}
-
-**Complete Answer**:
+{question_block}
+**Answer**:
 {answer}
 
 **Your Task**:
-Provide 2-3 sentences of reasoning that:
-1. Identify specific aspects of the answer relevant to this trait
-2. Explain how these aspects satisfy or fail to satisfy the criteria
-3. Consider both positive and negative evidence
+Your reasoning should:
+1. Identify which parts of the answer bear on the trait's criteria.
+2. Cite specific evidence (passages or features) that supports or contradicts the criteria; quote when useful.
+3. Consider both supporting and contradicting evidence before concluding.
+4. State your interpretation when the criteria are ambiguous.
+5. End with a one-line conclusion that follows from the evidence.
 
-This reasoning will be used in a follow-up step to determine the final score.
+Use as much room as the evidence requires; avoid both unnecessary verbosity and premature conclusions.
 
 **Your reasoning:**"""
 
@@ -286,21 +302,13 @@ This reasoning will be used in a follow-up step to determine the final score.
 
     def build_score_extraction_system_prompt(self) -> str:
         """Build system prompt for final score extraction."""
-        return """You are an expert evaluator providing precise trait scores based on prior reasoning.
+        return """You translate a reasoning analysis into a final score for a trait.
 
-**YOUR ROLE:**
-Convert analytical reasoning into a final score that accurately reflects the assessment.
-
-**CRITICAL REQUIREMENTS:**
-1. **Reasoning-Based**: Base your score solely on the reasoning provided
-2. **Consistency**: Your score should logically follow from the reasoning's conclusions
-3. Do NOT contradict the reasoning - your score should align with it
-
-**SCORING GUIDELINES:**
-- Be consistent: similar reasoning should lead to similar scores
-- When uncertain, choose conservatively based on the trait's nature:
-  - For positive traits (e.g., "is accurate"), lean toward `false` or lower scores
-  - For negative traits (e.g., "contains errors"), lean toward `true` or higher scores"""
+GUIDELINES:
+- Base the score solely on the reasoning provided.
+- The score must follow logically from the reasoning's conclusion.
+- Do not introduce new evidence or contradict the reasoning.
+- Be consistent: similar reasoning should yield similar scores."""
 
     def build_score_extraction_user_prompt(
         self,

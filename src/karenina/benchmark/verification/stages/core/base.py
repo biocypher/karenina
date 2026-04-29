@@ -311,6 +311,7 @@ class VerificationContext:
     abstention_enabled: bool = False
     sufficiency_enabled: bool = False
     deep_judgment_mode: str = "disabled"  # Template deep-judgment mode: "disabled", "reasoning_only", "full"
+    task_eval_mode: bool = False  # True when invoked via TaskEval; suppresses QUESTION slot in rubric prompts
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"

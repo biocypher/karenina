@@ -113,6 +113,8 @@ def run_single_model_verification(
     # Replay layer
     replay_store: Any = None,
     replay_parse_on_hydration_mismatch: str = "fall_through",
+    # TaskEval signal (set by TaskEval entry; suppresses QUESTION slot in rubric prompts)
+    task_eval_mode: bool = False,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -236,6 +238,8 @@ def run_single_model_verification(
         # Replay layer
         replay_store=replay_store,
         replay_parse_on_hydration_mismatch=replay_parse_on_hydration_mismatch,
+        # TaskEval signal
+        task_eval_mode=task_eval_mode,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)

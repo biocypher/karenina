@@ -865,6 +865,7 @@ class Answer(BaseAnswer):
             sufficiency_enabled=sufficiency_enabled,
             rubric_evaluation_strategy="batch",
             evaluation_mode=evaluation_mode,
+            task_eval_mode=True,
         )
 
         return verification_result

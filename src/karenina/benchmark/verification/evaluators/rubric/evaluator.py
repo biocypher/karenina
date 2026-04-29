@@ -102,15 +102,22 @@ class RubricEvaluator:
         return self._metric_trait_evaluator
 
     def evaluate_rubric(
-        self, question: str, answer: str, rubric: Rubric
+        self,
+        question: str,
+        answer: str,
+        rubric: Rubric,
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, Any], dict[str, str] | None, list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (LLM, regex, and callable).
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            rubric: The rubric containing evaluation traits
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            rubric: The rubric containing evaluation traits.
+            task_eval_mode: When True, omit the **QUESTION:** block from
+                rendered LLM-trait user prompts. Set automatically by TaskEval.
 
         Returns:
             Tuple of (results, llm_trait_labels, usage_metadata_list) where:
@@ -151,7 +158,7 @@ class RubricEvaluator:
             if template_traits:
                 try:
                     template_results, template_usage_list = self.llm_trait_evaluator.evaluate_template(
-                        question, answer, template_traits
+                        question, answer, template_traits, task_eval_mode=task_eval_mode
                     )
                     results.update(template_results)
                     usage_metadata_list.extend(template_usage_list)
@@ -164,7 +171,7 @@ class RubricEvaluator:
                 if self.evaluation_strategy == "batch":
                     try:
                         llm_results, usage_metadata = self.llm_trait_evaluator.evaluate_batch(
-                            question, answer, non_literal_traits
+                            question, answer, non_literal_traits, task_eval_mode=task_eval_mode
                         )
                         results.update(llm_results)
                         if usage_metadata:
@@ -175,7 +182,7 @@ class RubricEvaluator:
                 else:  # "sequential"
                     try:
                         llm_results, seq_usage_metadata_list = self.llm_trait_evaluator.evaluate_sequential(
-                            question, answer, non_literal_traits
+                            question, answer, non_literal_traits, task_eval_mode=task_eval_mode
                         )
                         results.update(llm_results)
                         usage_metadata_list.extend(seq_usage_metadata_list)
@@ -188,7 +195,9 @@ class RubricEvaluator:
                 if self.evaluation_strategy == "batch":
                     try:
                         literal_scores, literal_labels, usage_metadata = (
-                            self.llm_trait_evaluator.evaluate_literal_batch(question, answer, literal_traits)
+                            self.llm_trait_evaluator.evaluate_literal_batch(
+                                question, answer, literal_traits, task_eval_mode=task_eval_mode
+                            )
                         )
                         results.update(literal_scores)
                         llm_trait_labels = literal_labels if literal_labels else None
@@ -200,7 +209,9 @@ class RubricEvaluator:
                 else:  # "sequential"
                     try:
                         literal_scores, literal_labels, seq_usage_metadata_list = (
-                            self.llm_trait_evaluator.evaluate_literal_sequential(question, answer, literal_traits)
+                            self.llm_trait_evaluator.evaluate_literal_sequential(
+                                question, answer, literal_traits, task_eval_mode=task_eval_mode
+                            )
                         )
                         results.update(literal_scores)
                         llm_trait_labels = literal_labels if literal_labels else None
@@ -308,6 +319,8 @@ class RubricEvaluator:
         answer: str,
         rubric: Rubric,
         config: Any,  # VerificationConfig
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Evaluate rubric with deep judgment for enabled traits.
@@ -316,10 +329,13 @@ class RubricEvaluator:
         multi-stage evaluation process.
 
         Args:
-            question: The original question
-            answer: The LLM response to evaluate
-            rubric: The rubric containing evaluation traits
-            config: VerificationConfig with deep judgment settings
+            question: The original question.
+            answer: The LLM response to evaluate.
+            rubric: The rubric containing evaluation traits.
+            config: VerificationConfig with deep judgment settings.
+            task_eval_mode: When True, omit the **Question** block from the
+                deep-judgment reasoning user prompt and from the standard
+                evaluator's user prompts. Set automatically by TaskEval.
 
         Returns:
             Dictionary containing:
@@ -331,8 +347,14 @@ class RubricEvaluator:
                 - hallucination_risks: Per-trait hallucination risk (if search enabled)
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
+        from functools import partial
+
         # Create handler with the same LLM instance
         handler = RubricDeepJudgmentHandler(self.llm, self.model_config, prompt_config=self._prompt_config)
+
+        # Bake the flag into the standard-evaluator callback so the deep-judgment
+        # handler can call it without knowing about task_eval_mode.
+        standard_fn = partial(self.evaluate_rubric, task_eval_mode=task_eval_mode)
 
         # Delegate to handler, providing a callback for standard trait evaluation
         return handler.evaluate_rubric_with_deep_judgment(
@@ -340,5 +362,6 @@ class RubricEvaluator:
             answer=answer,
             rubric=rubric,
             config=config,
-            standard_evaluator_fn=self.evaluate_rubric,
+            standard_evaluator_fn=standard_fn,
+            task_eval_mode=task_eval_mode,
         )
