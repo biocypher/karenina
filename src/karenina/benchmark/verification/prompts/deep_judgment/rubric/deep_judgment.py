@@ -287,15 +287,44 @@ You produce reasoning that explains how the available evidence bears on a single
     # Stage 3: Score Extraction
     # =========================================================================
 
-    def build_score_extraction_system_prompt(self) -> str:
-        """Build system prompt for final score extraction."""
-        return """You translate a reasoning analysis into a final score for a trait.
+    def build_score_extraction_system_prompt_boolean(self) -> str:
+        """Build system prompt for boolean score extraction."""
+        return """## Role
+You translate a reasoning analysis into a final boolean verdict for a rubric trait.
 
-GUIDELINES:
+## Principles
+- Base the verdict solely on the reasoning provided.
+- The verdict must follow logically from the reasoning's Conclusion.
+- Be consistent: similar reasoning should yield the same verdict.
+
+## Anti-patterns
+- Introducing new evidence or context not present in the reasoning.
+- Contradicting the reasoning's Conclusion to "split the difference".
+- Returning true when the reasoning is uncertain or balanced; default to false unless the criteria are clearly met.
+
+## Output handoff
+- Your boolean verdict is the final score for this trait; no further interpretation happens after you."""
+
+    def build_score_extraction_system_prompt_numeric(self) -> str:
+        """Build system prompt for numeric score extraction."""
+        return """## Role
+You translate a reasoning analysis into a final integer score for a rubric trait.
+
+## Principles
 - Base the score solely on the reasoning provided.
-- The score must follow logically from the reasoning's conclusion.
-- Do not introduce new evidence or contradict the reasoning.
-- Be consistent: similar reasoning should yield similar scores."""
+- The score must follow logically from the reasoning's Conclusion.
+- Be consistent: similar reasoning should yield similar scores.
+- Each integer in the scale corresponds to a specific level (provided in the user prompt). Pick the integer whose level best matches the reasoning.
+
+## Anti-patterns
+- Introducing new evidence or context not present in the reasoning.
+- Contradicting the reasoning's Conclusion.
+- Defaulting to the middle of the scale when the reasoning is balanced; the middle is reserved for genuinely mixed evidence, not as a "safe" choice.
+- Returning a non-integer or a value outside the scale.
+
+## Output handoff
+- Your integer score is the final score for this trait; no further interpretation happens after you.
+- Scores outside the scale are clamped to the bounds; non-integers are rejected."""
 
     def build_score_extraction_user_prompt(
         self,
@@ -305,16 +334,15 @@ GUIDELINES:
         """Build user prompt for final score extraction.
 
         Args:
-            trait: The LLM trait being evaluated
-            reasoning: The generated reasoning from the previous stage
+            trait: The LLM trait being evaluated.
+            reasoning: The generated reasoning from the previous stage.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
         if trait.kind == "boolean":
             return self._build_boolean_score_user_prompt(trait, reasoning)
-        else:
-            return self._build_numeric_score_user_prompt(trait, reasoning)
+        return self._build_numeric_score_user_prompt(trait, reasoning)
 
     def _build_boolean_score_user_prompt(
         self,
@@ -322,19 +350,13 @@ GUIDELINES:
         reasoning: str,
     ) -> str:
         """Build user prompt for boolean score extraction."""
-        return f"""Based on the following reasoning, provide a final score for this trait.
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Boolean evaluation"}
-
-**YOUR PREVIOUS REASONING:**
-{reasoning}
-
-**SCORE REQUIRED:** true or false
-
-Based on your reasoning above, does the answer meet the criteria?
-- `true`: The criteria IS met based on your reasoning
-- `false`: The criteria IS NOT met based on your reasoning"""
+        criteria = trait.description or "Boolean evaluation."
+        return (
+            f"## Trait\n{trait.name}\n\n"
+            f"## Criteria\n{criteria}\n\n"
+            f"## Reasoning\n{reasoning}\n\n"
+            "## Task\nProduce the final boolean verdict (true if the criteria are met based on the reasoning, otherwise false)."
+        )
 
     def _build_numeric_score_user_prompt(
         self,
@@ -342,22 +364,18 @@ Based on your reasoning above, does the answer meet the criteria?
         reasoning: str,
     ) -> str:
         """Build user prompt for numeric score extraction."""
-        min_score = trait.min_score or 1
-        max_score = trait.max_score or 5
-        mid_score = (min_score + max_score) // 2
-
-        return f"""Based on the following reasoning, provide a final score for this trait.
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Score-based evaluation"}
-
-**YOUR PREVIOUS REASONING:**
-{reasoning}
-
-**SCORING SCALE:**
-- {min_score} = Poor - Does not meet criteria at all
-- {mid_score} = Average - Partially meets criteria
-- {max_score} = Excellent - Fully meets or exceeds criteria"""
+        criteria = trait.description or "Score-based evaluation."
+        min_score = trait.min_score if trait.min_score is not None else 1
+        max_score = trait.max_score if trait.max_score is not None else 5
+        scale_pairs = build_integer_score_labels(min_score, max_score)
+        scale_block = "\n".join(f"{n} = {label}" for n, label in scale_pairs)
+        return (
+            f"## Trait\n{trait.name}\n\n"
+            f"## Criteria\n{criteria}\n\n"
+            f"## Reasoning\n{reasoning}\n\n"
+            f"## Scale\n{scale_block}\n\n"
+            "## Task\nProduce the final integer score from the scale."
+        )
 
 
 # =========================================================================

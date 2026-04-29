@@ -738,7 +738,10 @@ class RubricDeepJudgmentHandler:
 
         schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
 
-        system_prompt = self._prompt_builder.build_score_extraction_system_prompt()
+        if trait.kind == "boolean":
+            system_prompt = self._prompt_builder.build_score_extraction_system_prompt_boolean()
+        else:
+            system_prompt = self._prompt_builder.build_score_extraction_system_prompt_numeric()
         user_prompt = self._prompt_builder.build_score_extraction_user_prompt(trait, reasoning)
 
         # Build instruction_context for adapter instructions

@@ -328,3 +328,70 @@ class TestReasoningPrompts:
         assert "Evidence:" in prompt
         assert "Interpretation:" in prompt
         assert "Conclusion:" in prompt
+
+
+# ----------------------------------------------------------------------
+# Stage 3: Score extraction
+# ----------------------------------------------------------------------
+
+
+class TestScoreExtractionPrompts:
+    def test_boolean_system_prompt_has_four_sections(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_boolean()
+        assert "## Role" in prompt
+        assert "## Principles" in prompt
+        assert "## Anti-patterns" in prompt
+        assert "## Output handoff" in prompt
+
+    def test_boolean_system_prompt_warns_against_default_true(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_boolean()
+        assert "default to false" in prompt.lower()
+
+    def test_numeric_system_prompt_has_four_sections(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_numeric()
+        assert "## Role" in prompt
+        assert "## Principles" in prompt
+        assert "## Anti-patterns" in prompt
+        assert "## Output handoff" in prompt
+
+    def test_numeric_system_prompt_warns_against_middle_clustering(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_numeric()
+        assert "middle" in prompt.lower()
+        assert "balanced" in prompt.lower()
+
+    def test_boolean_user_prompt_uses_h2_sections(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_user_prompt(
+            trait=boolean_trait,
+            reasoning="Evidence: ...\nInterpretation: ...\nConclusion: criteria met.",
+        )
+        assert "## Trait" in prompt
+        assert "## Criteria" in prompt
+        assert "## Reasoning" in prompt
+        assert "## Task" in prompt
+
+    def test_numeric_user_prompt_renders_all_integer_anchors(self, score_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_user_prompt(
+            trait=score_trait,
+            reasoning="Evidence: ...\nInterpretation: ...\nConclusion: adequate.",
+        )
+        assert "## Scale" in prompt
+        for n in range(1, 6):
+            assert f"{n} = " in prompt
+        assert "Poor" in prompt
+        assert "Excellent" in prompt
+
+    def test_numeric_user_prompt_handles_atypical_range(self) -> None:
+        atypical_trait = LLMRubricTrait(
+            name="OffScale",
+            description="Test trait.",
+            kind="score",
+            min_score=2,
+            max_score=4,
+            higher_is_better=True,
+        )
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_user_prompt(
+            trait=atypical_trait,
+            reasoning="Evidence: ...\nInterpretation: ...\nConclusion: medium.",
+        )
+        for n in range(2, 5):
+            assert f"{n} = " in prompt

@@ -75,12 +75,14 @@ class TestLLMTraitSystemPromptsNoBias:
 
 
 class TestDeepJudgmentSystemPromptsNoBias:
-    def test_score_extraction_system_prompt_has_no_bias(self) -> None:
-        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt()
+    def test_score_extraction_boolean_system_prompt_has_no_bias(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_boolean()
+        assert not _has_bias(prompt), prompt
+
+    def test_score_extraction_numeric_system_prompt_has_no_bias(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_numeric()
         assert not _has_bias(prompt), prompt
 
     def test_reasoning_system_prompt_has_no_bias(self) -> None:
-        # The reasoning system prompt was rewritten alongside score-extraction;
-        # ensure it also stays bias-free.
         prompt = DeepJudgmentPromptBuilder().build_reasoning_system_prompt()
         assert not _has_bias(prompt), prompt
