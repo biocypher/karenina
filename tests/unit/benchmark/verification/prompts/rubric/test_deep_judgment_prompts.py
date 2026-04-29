@@ -395,3 +395,60 @@ class TestScoreExtractionPrompts:
         )
         for n in range(2, 5):
             assert f"{n} = " in prompt
+
+
+# ----------------------------------------------------------------------
+# Cross-cutting: layout invariants
+# ----------------------------------------------------------------------
+
+
+class TestLayoutInvariants:
+    SYSTEM_PROMPT_FACTORIES = [
+        "build_excerpt_extraction_system_prompt",
+        "build_hallucination_assessment_system_prompt",
+        "build_reasoning_system_prompt",
+        "build_score_extraction_system_prompt_boolean",
+        "build_score_extraction_system_prompt_numeric",
+    ]
+
+    @pytest.mark.parametrize("method_name", SYSTEM_PROMPT_FACTORIES)
+    def test_every_system_prompt_has_four_sections(self, method_name: str) -> None:
+        builder = DeepJudgmentPromptBuilder()
+        prompt = getattr(builder, method_name)()
+        for section in ("## Role", "## Principles", "## Anti-patterns", "## Output handoff"):
+            assert section in prompt, f"{method_name} is missing {section}"
+
+    @pytest.mark.parametrize("method_name", SYSTEM_PROMPT_FACTORIES)
+    def test_no_old_uppercase_headers(self, method_name: str) -> None:
+        builder = DeepJudgmentPromptBuilder()
+        prompt = getattr(builder, method_name)()
+        for header in ("**TRAIT:**", "**CRITICAL REQUIREMENTS:**", "**RISK LEVELS"):
+            assert header not in prompt, f"{method_name} still uses old header {header}"
+
+    def test_user_prompts_omit_principles_lists(
+        self, boolean_trait: LLMRubricTrait, score_trait: LLMRubricTrait
+    ) -> None:
+        builder = DeepJudgmentPromptBuilder()
+        prompts = [
+            builder.build_excerpt_extraction_user_prompt(trait=boolean_trait, max_excerpts=3, answer="x"),
+            builder.build_hallucination_assessment_user_prompt(excerpt_text="x", search_results="y"),
+            builder.build_reasoning_user_prompt_with_excerpts(
+                question="q",
+                trait=boolean_trait,
+                excerpts=[{"text": "x", "confidence": "low"}],
+                hallucination_risk=None,
+                task_eval_mode=False,
+            ),
+            builder.build_reasoning_user_prompt_without_excerpts(
+                question="q", answer="a", trait=boolean_trait, task_eval_mode=False
+            ),
+            builder.build_score_extraction_user_prompt(trait=boolean_trait, reasoning="r"),
+            builder.build_score_extraction_user_prompt(trait=score_trait, reasoning="r"),
+        ]
+        for prompt in prompts:
+            # Role/Principles/Anti-patterns/Output handoff sections are
+            # system-prompt-only; user prompts must not contain them.
+            assert "## Role" not in prompt
+            assert "## Principles" not in prompt
+            assert "## Anti-patterns" not in prompt
+            assert "## Output handoff" not in prompt
