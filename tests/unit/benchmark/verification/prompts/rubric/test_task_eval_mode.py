@@ -24,13 +24,21 @@ from karenina.benchmark.verification.prompts.rubric.llm_trait import LLMTraitPro
 from karenina.schemas.entities import LLMRubricTrait
 
 # Case-insensitive match for any QUESTION header variant rendered by the
-# builders today: "**QUESTION:**" (basic + literal paths) and "**Question**:"
-# (deep-judgment path).
+# basic + literal-trait builders: "**QUESTION:**" / "**Question**:".
 _QUESTION_HEADER_RE = re.compile(r"\*\*Question[: *]+", re.IGNORECASE)
 
 
 def _question_header_present(text: str) -> bool:
     return bool(_QUESTION_HEADER_RE.search(text))
+
+
+# Deep-judgment prompts use H2 markdown sections; match "## Question" at
+# the start of a line.
+_DJ_QUESTION_HEADER_RE = re.compile(r"^## Question\b", re.MULTILINE)
+
+
+def _dj_question_header_present(text: str) -> bool:
+    return bool(_DJ_QUESTION_HEADER_RE.search(text))
 
 
 @pytest.fixture
@@ -213,7 +221,7 @@ class TestDeepJudgmentPromptBuilderTaskEvalMode:
             hallucination_risk=None,
             task_eval_mode=False,
         )
-        assert _question_header_present(prompt)
+        assert _dj_question_header_present(prompt)
         assert "What is the target?" in prompt
 
     def test_reasoning_with_excerpts_omits_question_when_enabled(self, boolean_trait: LLMRubricTrait) -> None:
@@ -224,7 +232,7 @@ class TestDeepJudgmentPromptBuilderTaskEvalMode:
             hallucination_risk=None,
             task_eval_mode=True,
         )
-        assert not _question_header_present(prompt)
+        assert not _dj_question_header_present(prompt)
         assert "What is the target?" not in prompt
         assert "BCL2 is targeted." in prompt
         assert boolean_trait.name in prompt
@@ -236,7 +244,7 @@ class TestDeepJudgmentPromptBuilderTaskEvalMode:
             trait=boolean_trait,
             task_eval_mode=False,
         )
-        assert _question_header_present(prompt)
+        assert _dj_question_header_present(prompt)
         assert "What is the target?" in prompt
 
     def test_reasoning_without_excerpts_omits_question_when_enabled(self, boolean_trait: LLMRubricTrait) -> None:
@@ -246,7 +254,7 @@ class TestDeepJudgmentPromptBuilderTaskEvalMode:
             trait=boolean_trait,
             task_eval_mode=True,
         )
-        assert not _question_header_present(prompt)
+        assert not _dj_question_header_present(prompt)
         assert "What is the target?" not in prompt
         assert "The target is BCL2." in prompt
         assert boolean_trait.name in prompt

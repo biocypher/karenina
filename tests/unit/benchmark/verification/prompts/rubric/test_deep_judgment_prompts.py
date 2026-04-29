@@ -229,3 +229,102 @@ class TestHallucinationAssessmentPrompts:
         )
         assert "BCL2 was the target." in prompt
         assert "Five sources confirm BCL2." in prompt
+
+
+# ----------------------------------------------------------------------
+# Stage 2: Reasoning generation
+# ----------------------------------------------------------------------
+
+
+class TestReasoningPrompts:
+    def test_system_prompt_has_four_sections(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_system_prompt()
+        assert "## Role" in prompt
+        assert "## Principles" in prompt
+        assert "## Anti-patterns" in prompt
+        assert "## Output handoff" in prompt
+
+    def test_system_prompt_describes_evidence_interpretation_conclusion(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_system_prompt()
+        assert "Evidence" in prompt
+        assert "Interpretation" in prompt
+        assert "Conclusion" in prompt
+
+    def test_system_prompt_warns_against_scoring(self) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_system_prompt()
+        assert "score" in prompt.lower()
+        assert "next stage" in prompt.lower()
+
+    def test_user_with_excerpts_uses_h2_sections(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_user_prompt_with_excerpts(
+            question="What is the target?",
+            trait=boolean_trait,
+            excerpts=[{"text": "BCL2 is targeted.", "confidence": "high"}],
+            hallucination_risk=None,
+            task_eval_mode=False,
+        )
+        assert "## Trait" in prompt
+        assert "## Criteria" in prompt
+        assert "## Question" in prompt
+        assert "## Excerpts" in prompt
+        assert "## Task" in prompt
+        assert "**Trait**:" not in prompt
+        assert "**Question**:" not in prompt
+
+    def test_user_with_excerpts_renders_overall_risk_when_provided(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_user_prompt_with_excerpts(
+            question="What is the target?",
+            trait=boolean_trait,
+            excerpts=[{"text": "BCL2 is targeted.", "confidence": "high"}],
+            hallucination_risk={"overall_risk": "low"},
+            task_eval_mode=False,
+        )
+        assert "## Overall hallucination risk" in prompt
+        assert "low" in prompt
+
+    def test_user_with_excerpts_omits_overall_risk_when_absent(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_user_prompt_with_excerpts(
+            question="What is the target?",
+            trait=boolean_trait,
+            excerpts=[{"text": "BCL2 is targeted.", "confidence": "high"}],
+            hallucination_risk=None,
+            task_eval_mode=False,
+        )
+        assert "## Overall hallucination risk" not in prompt
+
+    def test_user_with_excerpts_renders_per_excerpt_risk_when_present(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_user_prompt_with_excerpts(
+            question="What is the target?",
+            trait=boolean_trait,
+            excerpts=[
+                {"text": "BCL2 is targeted.", "confidence": "high", "hallucination_risk": "medium"},
+            ],
+            hallucination_risk={"overall_risk": "medium"},
+            task_eval_mode=False,
+        )
+        assert "hallucination risk: medium" in prompt
+
+    def test_user_without_excerpts_uses_h2_sections(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_user_prompt_without_excerpts(
+            question="What is the target?",
+            answer="The target is BCL2.",
+            trait=boolean_trait,
+            task_eval_mode=False,
+        )
+        assert "## Trait" in prompt
+        assert "## Criteria" in prompt
+        assert "## Question" in prompt
+        assert "## Response" in prompt
+        assert "## Task" in prompt
+
+    def test_user_with_excerpts_task_skeleton_is_present(self, boolean_trait: LLMRubricTrait) -> None:
+        prompt = DeepJudgmentPromptBuilder().build_reasoning_user_prompt_with_excerpts(
+            question="Q?",
+            trait=boolean_trait,
+            excerpts=[{"text": "x", "confidence": "low"}],
+            hallucination_risk=None,
+            task_eval_mode=False,
+        )
+        assert "Evidence:" in prompt
+        assert "Interpretation:" in prompt
+        assert "Conclusion:" in prompt

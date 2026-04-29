@@ -178,14 +178,29 @@ You assess whether a single excerpt's claims are supported by external search re
 
     def build_reasoning_system_prompt(self) -> str:
         """Build system prompt for reasoning generation."""
-        return """You are a careful rubric evaluator. Reason about the answer against the trait's criteria using only the evidence visible in the answer text.
+        return """## Role
+You produce reasoning that explains how the available evidence bears on a single rubric trait. A downstream stage will translate your reasoning into a final score; do not score the trait yourself.
 
-GUIDELINES:
-- Be thorough; do not infer beyond what is stated.
+## Principles
+- Use only the evidence visible in the inputs (excerpts or full response, plus any provided context).
 - Weigh both supporting and contradicting evidence before concluding.
-- Cite specific passages or features when they bear on the criteria.
-- If the criteria are ambiguous, state the interpretation you used and apply it consistently.
-- Use as much room as the evidence requires; avoid both unnecessary verbosity and premature conclusions."""
+- Cite specific excerpts or passages when they bear on the criteria.
+- When the criteria are ambiguous, state the interpretation you used and apply it consistently.
+- When hallucination risk is provided, factor it into how much weight you place on each excerpt.
+- Use as much room as the evidence requires; avoid both unnecessary verbosity and premature conclusions.
+- Structure your output as three labeled sections: Evidence, Interpretation, Conclusion.
+
+## Anti-patterns
+- Concluding before all evidence has been weighed.
+- Inventing evidence not present in the inputs.
+- Restating the trait description as if it were analysis.
+- Using vague hedges ("appears to", "seems") without naming the specific evidence behind them.
+- Producing a score, label, or numeric verdict; that belongs to the next stage.
+
+## Output handoff
+- The next stage extracts a score by reading your output, keying primarily on the "Conclusion:" line and secondarily on "Interpretation:".
+- Make the Conclusion a single sentence that follows from the Evidence and Interpretation; do not place caveats there.
+- If your reasoning is genuinely balanced, say so explicitly in the Conclusion; the score stage treats balanced reasoning as the middle of the scale, not a default."""
 
     def build_reasoning_user_prompt_with_excerpts(
         self,
@@ -202,49 +217,39 @@ GUIDELINES:
             question: The original question.
             trait: The LLM trait being evaluated.
             excerpts: List of validated excerpts with confidence scores.
+                Caller guarantees a non-empty list; the handler auto-fails the
+                trait before reaching this stage if no excerpts validate.
             hallucination_risk: Optional hallucination risk assessment.
-            task_eval_mode: When True, omit the **Question** block entirely.
+            task_eval_mode: When True, omit the ## Question section entirely.
 
         Returns:
             Formatted user prompt string.
         """
-        # Format excerpts
-        excerpts_formatted = []
+        criteria = trait.description or "Assess this quality."
+
+        excerpts_lines: list[str] = []
         for i, excerpt in enumerate(excerpts, 1):
-            conf = excerpt.get("confidence", "unknown")
             text = excerpt.get("text", "")
+            confidence = excerpt.get("confidence", "unknown")
             risk = excerpt.get("hallucination_risk", "")
-            risk_str = f" (hallucination risk: {risk})" if risk else ""
-            excerpts_formatted.append(f'{i}. "{text}" [{conf} confidence]{risk_str}')
+            risk_suffix = f" (hallucination risk: {risk})" if risk else ""
+            excerpts_lines.append(f'{i}. "{text}" [{confidence} confidence]{risk_suffix}')
+        excerpts_block = "\n".join(excerpts_lines)
 
-        excerpts_text = "\n".join(excerpts_formatted) if excerpts_formatted else "No excerpts found."
-
-        risk_context = ""
+        sections = [
+            f"## Trait\n{trait.name}",
+            f"## Criteria\n{criteria}",
+        ]
+        if not task_eval_mode:
+            sections.append(f"## Question\n{question}")
+        sections.append(f"## Excerpts\n{excerpts_block}")
         if hallucination_risk:
-            risk_context = f"\n**Overall Hallucination Risk**: {hallucination_risk.get('overall_risk', 'unknown')}\n"
-
-        question_block = "" if task_eval_mode else f"\n**Question**: {question}\n"
-
-        return f"""Analyze the extracted excerpts to explain how they demonstrate (or fail to demonstrate) the following trait.
-
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
-{question_block}
-**Extracted Excerpts**:
-{excerpts_text}
-{risk_context}
-
-**Your Task**:
-Walk through the evidence carefully:
-1. Reference specific excerpts and their content.
-2. Connect each excerpt to the trait criteria.
-3. Consider both supporting and contradicting evidence.
-4. State your interpretation when the criteria are ambiguous.
-5. End with a one-line conclusion that follows from the evidence.
-
-This reasoning will be used in a follow-up step to determine the final score.
-
-**Your reasoning:**"""
+            overall = hallucination_risk.get("overall_risk", "unknown")
+            sections.append(f"## Overall hallucination risk\n{overall}")
+        sections.append(
+            "## Task\nProduce reasoning under three labeled sections:\nEvidence: ...\nInterpretation: ...\nConclusion: ..."
+        )
+        return "\n\n".join(sections)
 
     def build_reasoning_user_prompt_without_excerpts(
         self,
@@ -260,31 +265,23 @@ This reasoning will be used in a follow-up step to determine the final score.
             question: The original question.
             answer: The complete LLM response.
             trait: The LLM trait being evaluated.
-            task_eval_mode: When True, omit the **Question** block entirely.
+            task_eval_mode: When True, omit the ## Question section entirely.
 
         Returns:
             Formatted user prompt string.
         """
-        question_block = "" if task_eval_mode else f"\n**Question**: {question}\n"
-        return f"""Analyze the following answer against the trait's criteria. Walk through the evidence carefully; this reasoning will be used in a follow-up step to determine the final score.
-
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
-{question_block}
-**Answer**:
-{answer}
-
-**Your Task**:
-Your reasoning should:
-1. Identify which parts of the answer bear on the trait's criteria.
-2. Cite specific evidence (passages or features) that supports or contradicts the criteria; quote when useful.
-3. Consider both supporting and contradicting evidence before concluding.
-4. State your interpretation when the criteria are ambiguous.
-5. End with a one-line conclusion that follows from the evidence.
-
-Use as much room as the evidence requires; avoid both unnecessary verbosity and premature conclusions.
-
-**Your reasoning:**"""
+        criteria = trait.description or "Assess this quality."
+        sections = [
+            f"## Trait\n{trait.name}",
+            f"## Criteria\n{criteria}",
+        ]
+        if not task_eval_mode:
+            sections.append(f"## Question\n{question}")
+        sections.append(f"## Response\n{answer}")
+        sections.append(
+            "## Task\nProduce reasoning under three labeled sections:\nEvidence: ...\nInterpretation: ...\nConclusion: ..."
+        )
+        return "\n\n".join(sections)
 
     # =========================================================================
     # Stage 3: Score Extraction
