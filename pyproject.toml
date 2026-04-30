@@ -253,6 +253,7 @@ dev = [
     "twine>=6.1.0",
     "vulture>=2.0.0",
     "matplotlib>=3.10.8",
+    "pypdf>=5.0.0",
     "types-pyyaml>=6.0.12.20260408",
 ]
 
