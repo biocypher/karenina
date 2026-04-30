@@ -50,6 +50,7 @@ dependencies = [
     "rich>=13.0.0", # Beautiful terminal output
     "cloudpickle>=3.0.0", # For CallableTrait serialization
     "json-repair>=0.30.0", # For fixing malformed JSON in LLM responses
+    "ijson>=3.3.0", # Streaming parser for large paper artifact JSON files
     "gepa>=0.0.24",
     "litellm>=1.83.0",
     "python-dateutil>=2.8.0",
