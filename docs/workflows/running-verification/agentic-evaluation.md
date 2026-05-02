@@ -26,7 +26,7 @@ This scenario walks through a complete agentic evaluation end-to-end, using a re
 - Compare agentic vs trace-only parsing on the same answer
 - Combine agentic parsing with agentic rubric evaluation using `AgenticRubricTrait`
 
-For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/).
+For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation/).
 
 ```python tags=["hide-cell"]
 # Setup cell: creates mock data and patches run_verification so that all code
@@ -457,7 +457,7 @@ Four stages do the substantive work in this configuration:
 
 4. **FinalizeResult** (Stage 13): Stores the investigation trace in the result. Because `workspace_cleanup=False`, the working directory is preserved.
 
-For full details on stage ordering, context modes, and the two-step investigation/extraction architecture, see [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/).
+For full details on stage ordering, context modes, and the two-step investigation/extraction architecture, see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation/).
 
 ---
 
@@ -643,6 +643,7 @@ Three settings control agentic rubric evaluation:
 |-------|-------|-------------|
 | `evaluation_mode` | `"template_and_rubric"` | Runs both template verification (Stages 7/8) and rubric evaluation (Stage 11) |
 | `agentic_rubric_strategy` | `"individual"` | Each agentic trait gets its own agent session. The alternative, `"shared"`, evaluates all agentic traits in a single session. |
+| `agentic_rubric_parallel` | `False` (default) | When `True` and strategy is `"individual"`, agentic trait sessions run concurrently. Ignored under the `"shared"` strategy. |
 
 ### Run Verification and Inspect Rubric Results
 
@@ -688,17 +689,17 @@ When `evaluation_mode="template_and_rubric"` with both `agentic_parsing=True` an
 
 Stage 7b and Stage 11b each launch independent agent sessions. The Stage 7b agent fills in the template schema; the Stage 11b agent(s) produce rubric scores. They do not share context or state with each other.
 
-For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../../advanced-pipeline/agentic-rubric-evaluation/). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/).
+For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation/). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/).
 
 ---
 
 ## Related Pages
 
 - [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/): Conceptual overview, context modes, independence guarantees
-- [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/): Pipeline internals, stage architecture, investigation prompts
+- [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation/): Pipeline internals, stage architecture, investigation prompts
 - [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/): `AgenticRubricTrait` API, kinds, context modes
-- [Agentic Rubric Evaluation (Advanced)](../../../advanced-pipeline/agentic-rubric-evaluation/): Stage 11b internals, investigation prompts, extraction
+- [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation/): Stage 11b internals, investigation prompts, extraction
 - [MCP Agent Evaluation](../mcp-agent-evaluation/): Evaluating tool-using agents with MCP servers
 - [Basic Verification](../basic-verification/): Simplest verification path (template-only, no agents)
 - [Answer Templates](../../core_concepts/answer-templates/): `VerifiedField` API and verification primitives
-- [VerificationConfig Reference](../../../reference/configuration/verification-config/): All configuration fields
+- [VerificationConfig Reference](../../reference/configuration/verification-config.md): All configuration fields

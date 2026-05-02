@@ -368,16 +368,15 @@ for result in rubric_dj_results:
 ## CLI Equivalent
 
 ```python
-# Enable deep judgment via CLI:
+# Enable template deep judgment via CLI:
 # karenina verify benchmark.jsonld --preset base.json --deep-judgment
 
-# With search validation:
-# karenina verify benchmark.jsonld --preset base.json --deep-judgment --deep-judgment-search
+# With rubric deep judgment (search validation flag is rubric-only):
+# karenina verify benchmark.jsonld --preset base.json --deep-judgment --deep-judgment-rubric-mode enable_all --deep-judgment-rubric-search
 
-# With rubric deep judgment:
-# karenina verify benchmark.jsonld --preset base.json --deep-judgment --deep-judgment-rubric-mode all
+# Note: template-side search validation is preset-only (no CLI flag).
 
-print("CLI: --deep-judgment, --deep-judgment-search, --deep-judgment-rubric-mode")
+print("CLI: --deep-judgment, --deep-judgment-rubric-mode, --deep-judgment-rubric-search")
 ```
 
 ---

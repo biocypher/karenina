@@ -178,7 +178,7 @@ print(f"Sufficiency:{config.sufficiency_enabled}")
 print(f"Embedding:  {config.embedding_check_enabled}")
 ```
 
-When abstention is detected, parsing and rubric stages are skipped — the result is auto-failed. When sufficiency is insufficient, the same skipping applies. See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for stage-skipping rules.
+When abstention is detected at Stage 5, the pipeline short-circuits subsequent parsing and rubric stages and records the outcome as structured `failure` / `caveat` metadata on the `VerificationResult`. The same applies when Stage 6 flags an insufficient response. These are recorded outcomes, not deep-judgment auto-fails. See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for stage-skipping rules.
 
 ---
 

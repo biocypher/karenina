@@ -265,7 +265,7 @@ for result in results[:2]:
 
 ## Recursion Limits
 
-When an agent hits the recursion limit (`agent_max_turns`), it is auto-failed:
+When an agent exhausts its call budget or hits the framework's recursion sentinel, the recursion-limit autofail stage marks the result as failed. Budgets live on `ModelConfig`: `agent_timeout` (wall-clock seconds) and `AgentMiddlewareConfig.limits = AgentLimitConfig(model_call_limit=..., tool_call_limit=...)`. The autofail stage triggers on the recursion sentinel returned by the adapter (e.g. when LangChain's `recursion_limit` is hit), not on a single config field by that name:
 
 ```python
 for result in results:

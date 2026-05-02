@@ -169,7 +169,8 @@ print("Inspection pattern shown in comments above")
 # sink = CompositeSink([
 #     ProgressiveFileSink(output_path=Path("results.json"),
 #                         config=config, benchmark_path="checkpoint.jsonld"),
-#     DBSink(db_path="runs.sqlite", run_name="my-run"),
+#     DBSink(storage_url="sqlite:///runs.sqlite",
+#            benchmark_name="my-benchmark", run_name="my-run"),
 # ])
 # benchmark.run_verification(config=config, sink=sink)
 print("CompositeSink pattern shown in comments above")
