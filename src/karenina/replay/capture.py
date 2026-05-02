@@ -275,6 +275,27 @@ def _none_last(value: Any) -> tuple[int, Any]:
     return (1, 0) if value is None else (0, value)
 
 
+def _normalise_usage_metadata(usage_metadata: Any) -> Any:
+    if not isinstance(usage_metadata, dict):
+        return usage_metadata
+
+    stage_summaries = {
+        stage: summary
+        for stage, summary in usage_metadata.items()
+        if stage != "total" and isinstance(summary, dict) and isinstance(summary.get("input_tokens"), int)
+    }
+    if not stage_summaries:
+        return usage_metadata
+
+    normalised = dict(usage_metadata)
+    normalised["total"] = {
+        "input_tokens": sum(int(summary.get("input_tokens", 0)) for summary in stage_summaries.values()),
+        "output_tokens": sum(int(summary.get("output_tokens", 0)) for summary in stage_summaries.values()),
+        "total_tokens": sum(int(summary.get("total_tokens", 0)) for summary in stage_summaries.values()),
+    }
+    return normalised
+
+
 def _build_entry_from_vr(
     vr: Any,
     *,
@@ -301,7 +322,7 @@ def _build_entry_from_vr(
         trace_messages=trace_messages if trace_messages is not None else None,
         parsed_answer_fields=parsed_fields if parsed_fields is not None else None,
         verify_result=getattr(template, "verify_result", None),
-        usage_metadata=getattr(template, "usage_metadata", None),
+        usage_metadata=_normalise_usage_metadata(getattr(template, "usage_metadata", None)),
         agent_metrics=getattr(template, "agent_metrics", None),
         captured_model_id=_answering_display(md),
         captured_at=getattr(md, "completed_at", None) or datetime.now(UTC).isoformat(),

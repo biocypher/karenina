@@ -180,6 +180,9 @@ class FinalizeResultStage(BaseVerificationStage):
             parsing=parsing_identity,
             timestamp=timestamp,
             replicate=context.replicate,
+            scenario_id=context.scenario_id,
+            scenario_node=context.scenario_node,
+            scenario_turn=context.scenario_turn,
         )
 
         # Read retry counts captured by the orchestrator's track_retries() block.
