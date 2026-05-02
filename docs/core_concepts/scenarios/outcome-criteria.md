@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -292,7 +292,7 @@ class TurnRecord:
 @dataclass
 class ScenarioExecutionResult:
     scenario_id: str
-    status: Literal["completed", "limit_reached", "error"]
+    status: Literal["completed", "limit_reached", "error", "timeout"]
     path: list[str]
     turn_count: int
     history: list[TurnRecord]
@@ -686,5 +686,5 @@ Returns `-1` if no turn matches.
 ## 7. Next Steps
 
 - [State and Routing](state-and-routing.md): how runtime state accumulates and how edges are resolved
-- [Sycophancy Tutorial](../../../workflows/scenarios/sycophancy-tutorial.md): end-to-end walkthrough of a sycophancy resistance scenario that uses outcome criteria
+- [Sycophancy Tutorial](../../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses outcome criteria
 - [Verification Primitives](../../verification-primitives.md): the `verify_with` primitives used in check nodes

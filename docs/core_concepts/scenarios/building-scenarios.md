@@ -61,10 +61,6 @@ class ScenarioDefinition(BaseModel):
     entry_node: str = ""
     outcome_criteria: list = []
 
-    @property
-    def node_ids(self) -> list[str]:
-        return list(self.nodes.keys())
-
 
 class _Edge:
     def __init__(self, source: str, target: str, condition: Any = None) -> None:
@@ -82,6 +78,7 @@ class Scenario:
         self._nodes: dict[str, Any] = {}
         self._edges: list[_Edge] = []
         self._entry_node: str | None = None
+        self._outcome_criteria: list[Any] = []
 
     def add_node(
         self,
@@ -91,11 +88,18 @@ class Scenario:
         model_override: Any = None,
         tool_filter: Any = None,
         state_update: Any = None,
+        agent_identity: str | None = None,
         **metadata: Any,
     ) -> None:
         if node_id in self._nodes:
             raise ValueError(f"Node '{node_id}' already exists")
-        self._nodes[node_id] = {"node_id": node_id, "question": deepcopy(question)}
+        if agent_identity == "__user__":
+            raise ValueError("agent_identity='__user__' is reserved")
+        self._nodes[node_id] = {
+            "node_id": node_id,
+            "question": deepcopy(question),
+            "agent_identity": agent_identity,
+        }
 
     def add_edge(
         self,
@@ -103,8 +107,29 @@ class Scenario:
         target: str,
         *,
         when: Any = None,
+        handover: Any = None,
     ) -> None:
-        self._edges.append(_Edge(source=source, target=target, condition=when))
+        if isinstance(handover, str):
+            _KNOWN_STRATEGIES = {
+                "transcript_prepend",
+                "transcript_append",
+                "transcript_materialize",
+            }
+            if handover not in _KNOWN_STRATEGIES:
+                raise ValueError(f"Unknown handover strategy '{handover}'")
+        edge = _Edge(source=source, target=target, condition=when)
+        edge.handover = handover
+        self._edges.append(edge)
+
+    def add_outcome(self, name: str, check: Any, *, description: str = "") -> None:
+        self._outcome_criteria = getattr(self, "_outcome_criteria", [])
+        self._outcome_criteria.append(
+            {"name": name, "description": description, "check": check}
+        )
+
+    def add_outcome_criterion(self, criterion: Any) -> None:
+        self._outcome_criteria = getattr(self, "_outcome_criteria", [])
+        self._outcome_criteria.append(criterion)
 
     def set_entry(self, node_id: str) -> None:
         if node_id not in self._nodes:
@@ -120,6 +145,7 @@ class Scenario:
             nodes=dict(self._nodes),
             edges=[{"source": e.source, "target": e.target} for e in self._edges],
             entry_node=self._entry_node,
+            outcome_criteria=list(self._outcome_criteria),
         )
 
 
@@ -182,7 +208,7 @@ s.set_entry("initial")
 
 defn = s.validate()
 print(f"Scenario: {defn.name}")
-print(f"Nodes: {defn.node_ids}")
+print(f"Nodes: {list(defn.nodes.keys())}")
 print(f"Entry: {defn.entry_node}")
 ```
 
@@ -190,8 +216,10 @@ Builder method summary:
 
 | Method | Purpose |
 |--------|---------|
-| `add_node(node_id, *, question, ...)` | Register a node with a question |
-| `add_edge(source, target, *, when=None)` | Connect two nodes, optionally with a condition |
+| `add_node(node_id, *, question, ...)` | Register a node with a question (optionally with `agent_identity`, `state_update`, `model_override`, `tool_filter`) |
+| `add_edge(source, target, *, when=None, handover=None)` | Connect two nodes, optionally with a condition and a handover strategy |
+| `add_outcome(name, check, *, description="")` | Sugar for attaching a declarative outcome criterion |
+| `add_outcome_criterion(criterion)` | Attach a pre-built `ScenarioOutcomeCriterion` (escape hatch for callable outcomes) |
 | `set_entry(node_id)` | Set the starting node |
 | `validate()` | Run graph checks; return frozen `ScenarioDefinition` |
 
@@ -252,19 +280,59 @@ Accepted `when` forms:
 | `dict` | `when={"verify_result": True}` | Shorthand converted to `StateCheck` |
 | `list[dict]` | `when=[{"verify_result": True}, {"turn": 2}]` | AND of multiple `StateCheck`s |
 | `StateCheck` | `when=StateCheck(...)` | Used directly |
-| `callable` | `when=lambda acc, p: ...` | Evaluated against runtime state |
+| `callable` | `when=lambda state: ...` | Evaluated against runtime `ScenarioState` |
 
 ### 4.3 Validation
 
-`validate()` runs four structural checks before freezing the graph, plus one warning:
+`validate()` enforces three hard-fail structural checks before freezing the graph, plus one explicit allowance and one warning:
 
 1. Edge sources and targets must reference registered nodes (or `END`).
 2. All nodes must be reachable from the entry node via BFS.
 3. Every node with conditional edges must also have at least one unconditional fallback edge.
-4. Nodes with no outbound edges are valid implicit terminals (they terminate the scenario without an explicit `END` edge).
-5. If a node has multiple unconditional edges, a `UserWarning` is emitted. Only the first unconditional edge will be used; the rest are silently ignored. This is a warning, not a hard failure, but it almost always indicates a graph construction error.
+4. *(Allowance, not a failure)* Nodes with no outbound edges are valid implicit terminals; they terminate the scenario without an explicit `END` edge.
+5. *(Warning, not a failure)* If a node has multiple unconditional edges, a `UserWarning` is emitted. Only the first unconditional edge will be used; the rest are silently ignored. This almost always indicates a graph construction error.
 
-If any of checks 1 through 4 fails, `validate()` raises `ValueError` with a description of the problem.
+If any of the three hard-fail checks (1, 2, or 3) fails, `validate()` raises `ValueError` with a description of the problem.
+
+### 4.4 Agent Identity (Multi-Agent Scenarios)
+
+Each node can declare an `agent_identity` label. The label tags trace messages and drives transcript handover when execution moves between nodes whose `agent_identity` differs (see [State and Routing](state-and-routing.md) for how the runtime tags messages).
+
+```python
+s_multi = Scenario("multi-agent")
+s_multi.add_node("triage_question", question=q, agent_identity="triage")
+s_multi.add_node("specialist_question", question=q, agent_identity="specialist")
+```
+
+The string `"__user__"` is reserved for scenario-internal user prompts and cannot be used here. Nodes that do not set `agent_identity` execute without an identity tag, and edges between such nodes require no handover.
+
+### 4.5 Handover Strategies
+
+When an edge crosses an `agent_identity` boundary (or whenever you want explicit control over how the next agent sees prior turns), `add_edge` accepts a `handover` parameter. Three string strategies are recognised:
+
+| Strategy | What it does |
+|----------|--------------|
+| `"transcript_prepend"` | Prepends the prior agent's transcript before the next agent's first message |
+| `"transcript_append"` | Appends the prior agent's transcript after the next agent's prompt |
+| `"transcript_materialize"` | Materializes the prior agent's tagged trace as a flattened transcript fed to the next agent |
+
+A callable `(messages, state) -> messages` may also be passed. Callable handovers are not serialized to checkpoints and emit a `UserWarning`; prefer string strategies when you intend to persist the scenario.
+
+```python
+s_handoff = Scenario("with-handover")
+s_handoff.add_node("first", question=q, agent_identity="agent_a")
+s_handoff.add_node("second", question=q, agent_identity="agent_b")
+s_handoff.add_edge("first", "second", handover="transcript_append")
+```
+
+### 4.6 Attaching Outcome Criteria
+
+Outcome criteria run after every turn completes and assert over the full execution. Two methods attach them to a scenario:
+
+- `add_outcome(name, check, *, description="")`: sugar that wraps a declarative `OutcomeNode` (e.g., `TurnCheck`, `ResultCheck`, `AllOf`, `CountTurns`) into a `ScenarioOutcomeCriterion`. This is the primary path; fully serializable.
+- `add_outcome_criterion(criterion)`: attach a pre-built `ScenarioOutcomeCriterion` directly. Use this when you need the callable `evaluate=` escape hatch.
+
+Outcome criteria are explained in depth on the [Outcome Criteria](outcome-criteria.md) page; this section only documents the attachment surface on the builder.
 
 ## 5. Patterns
 
@@ -290,7 +358,7 @@ linear.add_edge("b", "c")
 linear.add_edge("c", END)
 linear.set_entry("a")
 linear_defn = linear.validate()
-print(f"Linear scenario: {linear_defn.node_ids}")
+print(f"Linear scenario: {list(linear_defn.nodes.keys())}")
 ```
 
 ### Branching
@@ -356,7 +424,7 @@ looping.add_edge("probe", END)
 
 looping.set_entry("probe")
 loop_defn = looping.validate()
-print(f"Looping scenario: {loop_defn.node_ids}")
+print(f"Looping scenario: {list(loop_defn.nodes.keys())}")
 ```
 
 Note: looping scenarios require a fallback edge on the looping node. Without it, `validate()` raises a `ValueError` because the node has conditional edges with no unconditional fallback.
@@ -372,7 +440,24 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 | `model_override` | `ModelOverride \| None` | No | Per-node override for answering and/or parsing models |
 | `tool_filter` | `ToolFilter \| None` | No | Removes specific MCP tools from the answering model at this node |
 | `state_update` | `callable \| str \| None` | No | Called after the turn to update accumulated state; accepts a lambda or source string |
+| `agent_identity` | `str \| None` | No | Identity label for this node's agent. The reserved value `"__user__"` is rejected. Used to drive transcript handover between agents. |
 | `**metadata` | `Any` | No | Arbitrary key-value pairs stored on the node for reference |
+
+### `add_edge()` Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `source` | `str` | Yes | Source node id (must be a registered node) |
+| `target` | `str` | Yes | Target node id, or `END` |
+| `when` | `dict \| list[dict] \| StateCheck \| callable \| str \| None` | No | Edge condition (see Edge Condition Formats) |
+| `handover` | `str \| callable \| None` | No | Transcript handover strategy. String values: `"transcript_prepend"`, `"transcript_append"`, `"transcript_materialize"`. Callable form `(messages, state) -> messages` is allowed but is not serialized to checkpoints. |
+
+### Outcome Attachment
+
+| Method | Signature | Use when |
+|--------|-----------|----------|
+| `add_outcome` | `add_outcome(name, check, *, description="")` | You have a declarative `OutcomeNode` (TurnCheck, ResultCheck, AllOf, etc.). Fully serializable. |
+| `add_outcome_criterion` | `add_outcome_criterion(criterion: ScenarioOutcomeCriterion)` | You need the `evaluate=` callable escape hatch on `ScenarioOutcomeCriterion`. |
 
 ### Edge Condition Formats
 
@@ -382,7 +467,7 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 | `{"field": value}` | `dict` | Single-key shorthand; converted to a `StateCheck` with an automatically chosen primitive |
 | `[{"f1": v1}, {"f2": v2}]` | `list[dict]` | Multiple `StateCheck`s; edge fires only when all checks pass (AND semantics) |
 | `StateCheck(...)` | `StateCheck` | Used directly; gives explicit control over the comparison primitive |
-| `lambda acc, p: ...` | `callable` | Evaluated at runtime with the accumulated state and the current turn's parsed result |
+| `lambda state: ...` | `callable` | Evaluated at runtime with the full `ScenarioState`; returns `bool` |
 
 ### State Field Paths (for dict shorthand and `StateCheck`)
 
@@ -415,4 +500,4 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 
 - [Outcome Criteria](outcome-criteria.md): declarative assertions evaluated after the scenario completes
 - [State and Routing](state-and-routing.md): how runtime state accumulates and how edges are resolved
-- [Sycophancy Tutorial](../../../workflows/scenarios/sycophancy-tutorial.md): end-to-end walkthrough building a sycophancy resistance scenario
+- [Sycophancy Tutorial](../../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough building a sycophancy resistance scenario
