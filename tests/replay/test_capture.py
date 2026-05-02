@@ -19,6 +19,7 @@ def _build_fake_qa_result(
     raw: str,
     parsed: dict | None,
     model_display: str,
+    verify_result: bool | None = True,
     ok: bool = True,
     failure_category=None,
 ):
@@ -42,6 +43,7 @@ def _build_fake_qa_result(
     template = SimpleNamespace(
         raw_llm_response=raw,
         parsed_llm_response=parsed,
+        verify_result=verify_result,
         trace_messages=[],
     )
     return SimpleNamespace(metadata=metadata, template=template)
@@ -80,6 +82,7 @@ class TestCaptureFromResultSet:
         assert hit is not None
         assert hit.raw_trace == "qa answer"
         assert hit.parsed_answer_fields == {"value": 42}
+        assert hit.verify_result is True
 
     def test_scenario_results_use_per_node_visit_counter(self):
         rs = _fake_result_set(

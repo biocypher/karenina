@@ -103,6 +103,29 @@ class TraceValidationAutoFailStage(BaseVerificationStage):
         # Also check for manual interface
         is_manual = context.answering_model.interface == "manual"
 
+        replay_entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
+        replay_verify_result = getattr(replay_entry, "verify_result", None) if replay_entry is not None else None
+        if replay_verify_result is not None:
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_ERROR, None)
+            context.set_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT, replay_verify_result)
+            context.set_artifact(ArtifactKeys.VERIFY_RESULT, replay_verify_result)
+            context.set_result_field(ArtifactKeys.VERIFY_RESULT, replay_verify_result)
+            logger.debug(
+                "Trace validation skipped for question %s: replay entry carries verify_result",
+                context.question_id,
+            )
+            return
+
+        if replay_entry is not None and getattr(replay_entry, "parsed_answer_fields", None) is not None:
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False)
+            context.set_artifact(ArtifactKeys.TRACE_VALIDATION_ERROR, None)
+            logger.debug(
+                "Trace validation skipped for question %s: replay entry carries parsed_answer_fields",
+                context.question_id,
+            )
+            return
+
         if not mcp_enabled or is_manual:
             # Non-MCP response or manual trace - skip validation
             # Regular LLM responses are plain text, manual traces are trusted

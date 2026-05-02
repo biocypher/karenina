@@ -239,6 +239,7 @@ def capture_from_scenario_result(
             raw_trace=getattr(record, "raw_response", "") or "",
             trace_messages=trace_messages_dicts,
             parsed_answer_fields=parsed_fields if parsed_fields is not None else None,
+            verify_result=getattr(record, "verify_result", None),
             captured_model_id=answering_model_id,
             captured_at=datetime.now(UTC).isoformat(),
         )
@@ -299,6 +300,7 @@ def _build_entry_from_vr(
         raw_trace=getattr(template, "raw_llm_response", "") or "",
         trace_messages=trace_messages if trace_messages is not None else None,
         parsed_answer_fields=parsed_fields if parsed_fields is not None else None,
+        verify_result=getattr(template, "verify_result", None),
         captured_model_id=_answering_display(md),
         captured_at=getattr(md, "completed_at", None) or datetime.now(UTC).isoformat(),
     )

@@ -119,6 +119,13 @@ class ParseTemplateStage(BaseVerificationStage):
         # Skip parsing if response was truncated by streaming timeout
         if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
             return False
+        entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
+        if (
+            entry is not None
+            and getattr(entry, "verify_result", None) is not None
+            and getattr(entry, "parsed_answer_fields", None) is None
+        ):
+            return False
         # Skip parsing if trace validation failed (trace doesn't end with AI message)
         if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False

@@ -57,7 +57,9 @@ class ReplayEntry(BaseModel):
     paths). trace_messages, when present, is a list of
     Message.to_dict() outputs for agent traces with tool calls.
     parsed_answer_fields, when present, is a plain dict suitable for
-    Answer.model_validate().
+    Answer.model_validate(). verify_result, when present, is the
+    captured template verdict and can replay verdict-only rows whose raw
+    trace cannot be reparsed.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -65,6 +67,7 @@ class ReplayEntry(BaseModel):
     raw_trace: str
     trace_messages: list[dict[str, Any]] | None = None
     parsed_answer_fields: dict[str, Any] | None = None
+    verify_result: bool | None = None
     agent_metrics: dict[str, Any] | None = None
     captured_model_id: str | None = None
     captured_at: str | None = None

@@ -55,6 +55,7 @@ class TestReplayEntry:
         assert entry.raw_trace == "hello"
         assert entry.trace_messages is None
         assert entry.parsed_answer_fields is None
+        assert entry.verify_result is None
         assert entry.agent_metrics is None
         assert entry.captured_model_id is None
         assert entry.captured_at is None
@@ -69,11 +70,13 @@ class TestReplayEntry:
             raw_trace="final answer",
             trace_messages=[{"role": "assistant", "content": "final answer"}],
             parsed_answer_fields={"mechanism": "COX inhibition"},
+            verify_result=True,
             agent_metrics={"iterations": 2, "limit_reached": False},
             captured_model_id="anthropic/claude-sonnet-4-6 (answering)",
             captured_at="2026-04-08T12:34:56Z",
         )
         assert entry.parsed_answer_fields == {"mechanism": "COX inhibition"}
+        assert entry.verify_result is True
         assert entry.agent_metrics == {"iterations": 2, "limit_reached": False}
 
     def test_extra_fields_rejected(self):
