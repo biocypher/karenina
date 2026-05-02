@@ -113,6 +113,53 @@ class TestModelResolution:
         assert ans.model_name == "claude"
         assert parse.model_name == "claude"
 
+    def test_openai_endpoint_override_inherits_missing_api_key_for_same_endpoint(self):
+        q = _make_question()
+        base_ans = ModelConfig(
+            id="qwen",
+            model_name="qwen",
+            interface="openai_endpoint",
+            endpoint_base_url="http://vllm:8000",
+            endpoint_api_key="EMPTY",
+        )
+        override = ModelOverride(
+            answering_model=ModelConfig(
+                id="qwen",
+                model_name="qwen",
+                interface="openai_endpoint",
+                endpoint_base_url="http://vllm:8000",
+            ),
+        )
+        node = ScenarioNode(node_id="ask", question=q, model_override=override)
+
+        ans, _ = _resolve_models(node, base_ans, _make_model("parser"))
+
+        assert ans.endpoint_api_key is not None
+        assert ans.endpoint_api_key.get_secret_value() == "EMPTY"
+
+    def test_openai_endpoint_override_does_not_inherit_api_key_for_different_endpoint(self):
+        q = _make_question()
+        base_ans = ModelConfig(
+            id="qwen",
+            model_name="qwen",
+            interface="openai_endpoint",
+            endpoint_base_url="http://vllm-a:8000",
+            endpoint_api_key="EMPTY",
+        )
+        override = ModelOverride(
+            answering_model=ModelConfig(
+                id="qwen",
+                model_name="qwen",
+                interface="openai_endpoint",
+                endpoint_base_url="http://vllm-b:8000",
+            ),
+        )
+        node = ScenarioNode(node_id="ask", question=q, model_override=override)
+
+        ans, _ = _resolve_models(node, base_ans, _make_model("parser"))
+
+        assert ans.endpoint_api_key is None
+
 
 # ---------------------------------------------------------------------------
 # _evaluate_outcome_criteria

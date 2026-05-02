@@ -35,6 +35,35 @@ def _build_single_node_scenario(name: str = "failing_scenario"):
     )
 
 
+def _build_false_branch_scenario(name: str = "false_branch_scenario"):
+    from karenina.schemas.entities import Question
+    from karenina.schemas.primitives import BooleanMatch
+    from karenina.schemas.scenario.definition import ScenarioDefinition
+    from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode, StateCheck
+
+    question = Question(
+        question="what?",
+        raw_answer="y",
+        answer_template="class Answer: pass",
+    )
+    return ScenarioDefinition(
+        name=name,
+        nodes={
+            "n1": ScenarioNode(node_id="n1", question=question),
+            "n2": ScenarioNode(node_id="n2", question=question),
+        },
+        edges=[
+            ScenarioEdge(
+                source="n1",
+                target="n2",
+                condition=StateCheck(field="verify_result", expected=False, verify_with=BooleanMatch()),
+            ),
+            ScenarioEdge(source="n2", target=END),
+        ],
+        entry_node="n1",
+    )
+
+
 def _make_config() -> MagicMock:
     config = MagicMock()
     config.replay_store = None
@@ -112,3 +141,37 @@ class TestScenarioManagerFailureMigration:
         )
 
         assert result.status == "completed"
+
+    def test_content_failure_routes_on_false_verify_result(self, monkeypatch) -> None:
+        from karenina.scenario import manager as mgr_mod
+
+        content_failure = Failure(
+            category=FailureCategory.CONTENT,
+            stage="verify_template",
+            reason="verify_template returned False",
+        )
+        calls = iter([(False, content_failure, "rid_false"), (True, None, "rid_true")])
+
+        def fake_run_turn(self, **kwargs):
+            verify_result, failure, result_id = next(calls)
+            vr = MagicMock()
+            vr.metadata.failure = failure
+            vr.metadata.replicate = kwargs.get("replicate")
+            vr.metadata.result_id = result_id
+            vr.template.verify_result = verify_result
+            vr.rubric = None
+            return (vr, [], None, None)
+
+        monkeypatch.setattr(mgr_mod.ScenarioManager, "_run_turn", fake_run_turn, raising=True)
+
+        manager = mgr_mod.ScenarioManager()
+        result = manager.run(
+            scenario=_build_false_branch_scenario(),
+            config=_make_config(),
+            base_answering_model=MagicMock(id="m", model_name="m", system_prompt="", request_timeout=None),
+            base_parsing_model=MagicMock(id="p", model_name="p", system_prompt="", request_timeout=None),
+        )
+
+        assert result.status == "completed"
+        assert result.path == ["n1", "n2"]
+        assert [turn.verify_result for turn in result.history] == [False, True]
