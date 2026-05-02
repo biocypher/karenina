@@ -58,6 +58,8 @@ Outcome criteria are declarative assertions evaluated after the scenario complet
 - [Building Scenarios](../../notebooks/core_concepts/scenarios/building-scenarios.ipynb): builder API, graph construction
 - [Outcome Criteria](../../notebooks/core_concepts/scenarios/outcome-criteria.ipynb): check nodes, sugar functions
 - [State and Routing](../../notebooks/core_concepts/scenarios/state-and-routing.ipynb): runtime state, edge resolution
+- [Handover](../../notebooks/core_concepts/scenarios/handover.ipynb): per-edge context routing, `TaggedMessage`, transcript strategies, multi-agent scenarios
+- [Execution](../../notebooks/core_concepts/scenarios/execution.ipynb): `ScenarioExecutor`, parallel/sequential modes, replicates, trace materialization, SchemaOrg checkpoints
 - [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough
 
 Scenario runs render as single files with per-turn sections in [Error Analysis](../../workflows/analyzing-results/error-analysis.md).

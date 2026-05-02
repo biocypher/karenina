@@ -516,8 +516,35 @@ Missing keys return `None`, except `node_visits.<node_id>`, which returns `0`.
 
 Scenarios auto-detect evaluation mode per turn based on whether a rubric is present (per-question rubric or global rubric). Setting `evaluation_mode='rubric_only'` on `VerificationConfig` has no effect in scenarios: the ScenarioManager ignores it and emits a `UserWarning` explaining why. If you need rubric-only evaluation, attach rubrics to your questions without answer templates and the auto-detection will select `template_and_rubric` or `template_only` as appropriate.
 
+### `state_update` snapshot and rollback
+
+A `state_update` callback attached to a `ScenarioNode` can mutate the `accumulated` dict freely. The runtime guards against buggy callbacks with a deepcopy snapshot and rollback:
+
+1. Before invoking `state_update(accumulated, parsed_fields)`, the runtime takes a `copy.deepcopy(accumulated)` snapshot.
+2. If the callback returns normally, the returned dict replaces the prior `accumulated`.
+3. If the callback raises any exception, the snapshot is restored, the exception is logged at `warning` level (with traceback), and execution continues at the next turn with the pre-callback `accumulated` state.
+
+This guarantee means a callback that fails on one turn cannot corrupt the accumulated state seen by subsequent turns, and never aborts the scenario by itself; downstream edge conditions on `accumulated.<field>` will read consistent values regardless of whether the callback succeeded.
+
+### `condition_callable` failure semantics
+
+Edge `condition_callable` lambdas (the form passed as `when=lambda state: ...`) are wrapped in a `try`/`except` in `_edge_matches`. If the callable raises any exception, the runtime logs at `warning` level (with traceback) and treats the edge as unmatched (returns `False`). The scenario continues; resolution falls through to the next conditional edge or the unconditional fallback. A buggy callable cannot crash a run, but it can silently mis-route execution: prefer declarative `StateCheck` `when={...}` forms when you can express the condition that way.
+
+### Public API
+
+`evaluate_state_check` and `resolve_next_node` are re-exported from `karenina.scenario` and form the public surface of edge resolution.
+
+| Symbol | Purpose |
+|--------|---------|
+| `karenina.scenario.evaluate_state_check(check, state)` | Evaluate a single `StateCheck` against a `ScenarioState`. Resolves the dot-path `field` and applies `check.verify_with.check(value, expected)`. Returns `bool`. |
+| `karenina.scenario.resolve_next_node(edges, state)` | Choose the next node given outbound edges. Returns `(target_node_id, matched_edge)`. The `matched_edge` is needed by the runner to inspect `handover` settings on the followed edge (see [Handover](handover.md)). Returns `(None, None)` when no edge matches and there is no fallback (implicit terminal). |
+
+Both helpers are useful in tests and when prototyping conditions outside a full scenario run.
+
 ## 7. Next Steps
 
 - [Sycophancy Tutorial](../../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses state-driven routing
+- [Handover](handover.md): per-edge context routing fired when a matched edge carries a `handover` setting; documents `TaggedMessage`, transcript strategies, and callable handovers
+- [Execution](execution.md): the `ScenarioExecutor` and `ScenarioExecutorConfig` that host scenario runs, parallel/sequential modes, replicates, and SchemaOrg checkpoint persistence
 - Scenario Internals: contributor-level detail on the execution engine is in the karenina-guide skill reference at `references/advanced/scenario-internals.md`, not a separate docs page
 - [Building Scenarios](building-scenarios.md): constructing the graph, adding nodes and edges, serialization

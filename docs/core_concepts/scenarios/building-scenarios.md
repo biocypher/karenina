@@ -296,7 +296,7 @@ If any of the three hard-fail checks (1, 2, or 3) fails, `validate()` raises `Va
 
 ### 4.4 Agent Identity (Multi-Agent Scenarios)
 
-Each node can declare an `agent_identity` label. The label tags trace messages and drives transcript handover when execution moves between nodes whose `agent_identity` differs (see [State and Routing](state-and-routing.md) for how the runtime tags messages).
+Each node can declare an `agent_identity` label. The label tags every message the node's agent produces in the scenario's tagged-message log (`TaggedMessage.agent_id`), and it controls when the runtime fires a handover. When an edge crosses a node-to-node boundary whose `agent_identity` changes, the matched edge's `handover` strategy decides how the next agent sees the prior conversation. See [Handover](handover.md) for the four strategies and the `TaggedMessage` shape, and [State and Routing](state-and-routing.md) for how the runtime emits tagged messages each turn.
 
 ```python
 s_multi = Scenario("multi-agent")
@@ -306,7 +306,30 @@ s_multi.add_node("specialist_question", question=q, agent_identity="specialist")
 
 The string `"__user__"` is reserved for scenario-internal user prompts and cannot be used here. Nodes that do not set `agent_identity` execute without an identity tag, and edges between such nodes require no handover.
 
-### 4.5 Handover Strategies
+### 4.5 Tool Filter (Restricting MCP Tools per Node)
+
+`tool_filter` is an optional per-node setting that removes specific MCP tools from the answering model's tool set when this node runs. It is built as a `ToolFilter` containing one or more `ToolFilterEntry` records: each entry names a server, and optionally a tool on that server. Omitting the `tool` field removes every tool from the named server. This is most useful when a scenario wants the same model to behave differently at successive turns: e.g., grant search tools at turn 0, then strip them at turn 1 to test recall under tool removal.
+
+```python
+# ToolFilter and ToolFilterEntry are real Pydantic schemas; the mock cell
+# above does not import them, so we sketch the call site only.
+
+# from karenina.schemas.scenario.types import ToolFilter, ToolFilterEntry
+#
+# tool_filter = ToolFilter(remove=[
+#     ToolFilterEntry(server="pubmed", tool="search_articles"),
+#     ToolFilterEntry(server="filesystem"),  # remove every tool from this server
+# ])
+#
+# s_filter = Scenario("tool-controlled")
+# s_filter.add_node("with_tools", question=q)  # full MCP tool set available
+# s_filter.add_node("without_tools", question=q, tool_filter=tool_filter)
+print("ToolFilter / ToolFilterEntry: karenina.schemas.scenario.types")
+```
+
+`ToolFilter` is fully serialized in the SchemaOrg checkpoint and round-trips through `scenario_to_schema_org` / `schema_org_to_scenario`. For how MCP tools are wired into the answering model in the first place, see the [MCP Integration](../../notebooks/advanced/mcp-integration.ipynb) page.
+
+### 4.6 Handover Strategies
 
 When an edge crosses an `agent_identity` boundary (or whenever you want explicit control over how the next agent sees prior turns), `add_edge` accepts a `handover` parameter. Three string strategies are recognised:
 
@@ -325,7 +348,9 @@ s_handoff.add_node("second", question=q, agent_identity="agent_b")
 s_handoff.add_edge("first", "second", handover="transcript_append")
 ```
 
-### 4.6 Attaching Outcome Criteria
+The full semantics of each strategy (what the rendered transcript looks like, how `transcript_materialize` writes traces under `<turn_dir>/traces/`, and how callable handovers receive `tagged_messages` and `state`) live in [Handover](handover.md).
+
+### 4.7 Attaching Outcome Criteria
 
 Outcome criteria run after every turn completes and assert over the full execution. Two methods attach them to a scenario:
 

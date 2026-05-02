@@ -460,14 +460,30 @@ After all turns complete, `ScenarioManager` evaluates each criterion in registra
 2. If `criterion.evaluate` is set (escape hatch): calls the callable directly with the `ScenarioExecutionResult`.
 3. Results are stored in `ScenarioExecutionResult.outcome_results` as a `dict[str, bool | int | float]`, keyed by criterion name.
 
+`evaluate_outcome` is re-exported from `karenina.scenario` and is itself a public API: it accepts `(node, result)` and dispatches on the node type. Boolean check nodes (`TurnCheck`, `ResultCheck`, `CrossTurnCheck`, plus `AllOf`/`AnyOf`/`AtLeastN` compositions) return `True` or `False`. Aggregation nodes (`CountTurns`, `FirstMatchIndex`) return an `int`. Use it directly when reproducing or testing outcome semantics outside of a full scenario run.
+
 For `TurnCheck` specifically, the evaluation sequence is:
 
 1. Resolve `scope` to turn(s) from `result.history`.
-2. Extract `field` from each resolved `TurnRecord` via attribute access or `parsed_fields` lookup (for `parsed.<x>` paths).
+2. Extract `field` from each resolved `TurnRecord` via the field grammar below.
 3. Apply `verify_with.check(value, expected)`.
 4. For `AnyTurn`: return `True` if any resolved turn passes. For `AllTurns`: return `True` only if all pass.
 
 For `CrossTurnCheck`, `source_turn` and `target_turn` each resolve to a single `TurnRecord`, and the `comparison` operator is applied as `target_value <op> source_value`.
+
+### TurnCheck field grammar
+
+`TurnCheck.field` and the source/target fields on `CrossTurnCheck` are resolved against a `TurnRecord` via the private `_resolve_turn_field(field, turn)` helper. The grammar is:
+
+| Field path | Resolves to |
+|------------|-------------|
+| `"node_id"` | `turn.node_id` |
+| `"verify_result"` | `turn.verify_result` |
+| `"raw_response"` | `turn.raw_response` |
+| `"question_text"` | `turn.question_text` |
+| `"parsed.<x>"` | `turn.parsed_fields.get("x")` |
+
+Anything else falls through to `getattr(turn, field, None)`. Missing keys return `None`. Note `_resolve_turn_field` is private (leading underscore); reach for it only when writing tests against the resolution rules; for normal use the grammar above is what `TurnCheck` enforces.
 
 ```python
 # Demonstrate evaluation against a synthetic execution result.
@@ -655,7 +671,21 @@ Note: callable outcomes are not fully serializable. The `evaluate_source` field 
 | `comparison` | `str` | Operator: `"eq"`, `"neq"`, `"contains"`, `"gt"`, `"gte"`, `"lt"`, `"lte"` |
 | `normalize` | `list[Normalizer]` | Optional normalizers applied to both values before comparison |
 
-Note: semantics are `target_value <comparison> source_value`. For `"contains"`, target contains source. For `"gt"`, target is greater than source.
+#### CrossTurnCheck operators
+
+All comparisons evaluate as `target_value <op> source_value`:
+
+| Operator | Semantics |
+|----------|-----------|
+| `"eq"` | `target == source` |
+| `"neq"` | `target != source` |
+| `"gt"` | `target > source` |
+| `"gte"` | `target >= source` |
+| `"lt"` | `target < source` |
+| `"lte"` | `target <= source` |
+| `"contains"` | `str(source) in str(target)` |
+
+If either side resolves to `None`, the check returns `False`. A failed comparison (`TypeError`/`ValueError`) is logged at warning level and returns `False` rather than crashing the run.
 
 ### CountTurns Fields
 
@@ -672,6 +702,21 @@ Note: semantics are `target_value <comparison> source_value`. For `"contains"`, 
 | `verify_result` | `bool \| None` | Filter by verification result; `None` matches all |
 
 Returns `-1` if no turn matches.
+
+### Sugar API surface
+
+Builder sugar functions live in `karenina.scenario.sugar` and are re-exported from `karenina.scenario`. The condensed surface:
+
+| Sugar | Purpose |
+|-------|---------|
+| `first_turn_scope()` | Returns a `FirstTurn` scope selector |
+| `last_turn_scope()` | Returns a `LastTurn` scope selector |
+| `cross_turn(*, source, source_field, target, target_field, comparison, normalize=None)` | Builds a `CrossTurnCheck` between two turns |
+| `at_least_n(n, *checks)` | Wraps checks in `AtLeastN`; n or more must pass |
+| `count_turns(*, node=None, verify_result=None)` | Aggregation: count turns matching filters |
+| `first_match_index(*, node=None, verify_result=None)` | Aggregation: index of first matching turn (`-1` if none) |
+
+These complement the wider sugar surface listed in the `Sugar Functions` table above.
 
 ### ScenarioOutcomeCriterion Fields
 
