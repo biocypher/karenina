@@ -53,6 +53,7 @@ uv pip install "karenina[embeddings,examples] @ git+https://github.com/biocypher
 | `examples` | jupyter, ipykernel | Running example notebooks |
 | `embeddings` | sentence-transformers | Embedding similarity checks (pipeline stage 9) |
 | `gepa` | gepa | GEPA prompt optimization integration |
+| `deep-agents` | deepagents, langchain-mcp-adapters | Deep-agents adapter for advanced agentic verification |
 
 !!! note "MCP is a core dependency"
     The MCP client library (`mcp>=1.25.0`) is included in the base installation.

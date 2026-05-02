@@ -162,7 +162,7 @@ for q in questions:
 print(f"Added {len(question_ids)} questions")
 ```
 
-> **Learn more**: [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) — including bulk import from Excel, CSV, and TSV files
+> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb), including bulk import from Excel, CSV, and TSV files
 
 ---
 
@@ -224,15 +224,15 @@ benchmark.update_template(question_ids[1], Answer)
 print("Updated template for Venetoclax question with class-based definition")
 ```
 
-> **Learn more**: [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Authoring](creating-benchmarks/scaled-authoring.ipynb) · [Answer Templates (Concepts)](core_concepts/answer-templates.ipynb)
+> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb) · [Answer Templates (Concepts)](../notebooks/core_concepts/answer-templates.ipynb)
 
 ---
 
 ## Step 4: Add Rubric Traits
 
-While templates verify **correctness**, rubrics assess **quality** — properties of the raw response like conciseness, safety, or format compliance.
+While templates verify **correctness**, rubrics assess **quality**: properties of the raw response like conciseness, safety, or format compliance.
 
-Karenina supports four trait types: LLM, regex, callable, and metric. Here we use two.
+Karenina supports five trait types: LLM, Regex, Callable, Metric, and Agentic. Here we use two.
 
 ### Global Trait: evaluated for every question
 
@@ -274,7 +274,7 @@ benchmark.add_question_rubric_trait(
 print(f"Added LLM trait 'Discusses Safety Profile' to question {venetoclax_qid}")
 ```
 
-> **Learn more**: [Full Evaluation Benchmark](creating-benchmarks/full-evaluation-benchmark.ipynb) · [All Four Trait Types](../core_concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
+> **Learn more**: [Full Evaluation Benchmark](../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) · [All Five Trait Types](../core_concepts/rubrics/index.md): LLM, Regex, Callable, Metric, and Agentic traits
 
 ---
 
@@ -312,7 +312,7 @@ results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
-> **Learn more**: [Verification Config](running-verification/basic-verification.ipynb) · [Multi-Model Evaluation](running-verification/multi-model-comparison.ipynb) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
+> **Learn more**: [Verification Config](../notebooks/running-verification/basic-verification.ipynb) · [Multi-Model Evaluation](../notebooks/running-verification/multi-model-comparison.ipynb) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
 
 ---
 
@@ -348,7 +348,7 @@ df_rubrics = rubric_results.to_dataframe()
 df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
 ```
 
-> **Learn more**: [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) · [VerificationResult](../07-analyzing-results/verification-result.md) · [Exporting Results](../07-analyzing-results/exporting.md)
+> **Learn more**: [DataFrame Analysis](../notebooks/analyzing-results/dataframe-analysis.ipynb) · [VerificationResult](../workflows/analyzing-results/verification-result.md) · [Exporting Results](../workflows/analyzing-results/exporting.md)
 
 ---
 
@@ -371,7 +371,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](running-verification/basic-verification.ipynb)
+> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](../notebooks/running-verification/basic-verification.ipynb)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory

@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -172,7 +172,7 @@ task = TaskEval(
 print(f"Created TaskEval: {task.task_id}")
 ```
 
-> **Learn more**: [TaskEval Concepts](../core_concepts/task-eval.md)
+> **Learn more**: [TaskEval Concepts](../notebooks/core_concepts/task-eval.ipynb)
 
 ---
 
@@ -192,7 +192,7 @@ task.log(
 print(f"Logged {len(task.global_logs)} event(s)")
 ```
 
-> **Learn more**: [Logging methods](../notebooks/task-eval/index.ipynb#step-2-log-outputs) · [Structured trace logging](../notebooks/task-eval/index.ipynb#trace-logging)
+> **Learn more**: [Logging methods](../notebooks/task-eval/basic-evaluation.ipynb#log-outputs) · [Structured trace logging](../notebooks/task-eval/basic-evaluation.ipynb#trace-logging)
 
 ---
 
@@ -232,7 +232,7 @@ task.add_template(Answer)
 print("Attached answer template with 2 verification fields")
 ```
 
-> **Learn more**: [Answer Templates](../core_concepts/answer-templates.md) · [Template Authoring skill](/karenina-template-authoring)
+> **Learn more**: [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) · [Template Authoring](../workflows/creating-benchmarks/index.md)
 
 ---
 
@@ -269,7 +269,7 @@ task.add_rubric(rubric)
 print(f"Added rubric with {len(rubric.llm_traits)} LLM trait(s) and {len(rubric.regex_traits)} regex trait(s)")
 ```
 
-> **Learn more**: [Rubrics](../core_concepts/rubrics/index.md) · [All trait types](../core_concepts/rubrics/index.md): LLM, regex, callable, metric, literal
+> **Learn more**: [Rubrics](../core_concepts/rubrics/index.md) · [All trait types](../core_concepts/rubrics/index.md): LLM, Regex, Callable, Metric, Agentic
 
 ---
 
@@ -323,9 +323,9 @@ You can also export the full results as JSON or Markdown for downstream analysis
 print(result.export_json()[:300])
 ```
 
-For programmatic access to individual fields (template verdicts, rubric scores, metadata), see the [results inspection reference](../notebooks/task-eval/index.ipynb#step-5-inspect-results).
+For programmatic access to individual fields (template verdicts, rubric scores, metadata), see the [results inspection reference](../notebooks/task-eval/basic-evaluation.ipynb#inspect-results).
 
-> **Learn more**: [Results inspection](../notebooks/task-eval/index.ipynb#step-5-inspect-results) · [DataFrame analysis](../07-analyzing-results/dataframe-analysis.md)
+> **Learn more**: [Results inspection](../notebooks/task-eval/basic-evaluation.ipynb#inspect-results) · [DataFrame analysis](../notebooks/analyzing-results/dataframe-analysis.ipynb)
 
 ---
 
@@ -377,16 +377,16 @@ for step_id in ["retrieval", "synthesis"]:
     print(f"Step '{step_id}': {stats['rubric_traits_passed']}/{stats['rubric_traits_total']} traits passed")
 ```
 
-> **Learn more**: [Multi-step evaluation](../notebooks/task-eval/index.ipynb#step-4-configure-and-evaluate) · [Step scoping](../core_concepts/task-eval.md#step-specific-evaluation)
+> **Learn more**: [Multi-step evaluation](../notebooks/task-eval/multi-step-evaluation.ipynb) · [Step scoping](../notebooks/core_concepts/task-eval.ipynb#9-step-specific-evaluation)
 
 ---
 
 ## Next Steps
 
-- **[TaskEval Concepts](../core_concepts/task-eval.md)**: Merge strategies, object structure, pipeline integration
-- **[Answer Templates](../core_concepts/answer-templates.md)**: Field types, descriptions, and writing `verify()` methods
-- **[Rubrics](../core_concepts/rubrics/index.md)**: All five trait types (LLM, regex, callable, metric, literal)
-- **[Benchmark Quick Start](quickstart.md)**: If you need Karenina to generate responses and evaluate them
+- **[TaskEval Concepts](../notebooks/core_concepts/task-eval.ipynb)**: Merge strategies, object structure, pipeline integration
+- **[Answer Templates](../notebooks/core_concepts/answer-templates.ipynb)**: Field types, descriptions, and writing `verify()` methods
+- **[Rubrics](../core_concepts/rubrics/index.md)**: All five trait types (LLM, Regex, Callable, Metric, Agentic)
+- **[Benchmark Quick Start](../notebooks/quickstart.ipynb)**: If you need Karenina to generate responses and evaluate them
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and add_template

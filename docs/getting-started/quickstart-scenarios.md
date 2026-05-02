@@ -533,4 +533,4 @@ with TemporaryDirectory() as tmpdir:
 - **[Sycophancy Tutorial](../notebooks/scenarios/sycophancy-tutorial.ipynb)**: Full three-node walkthrough with branching paths, both outcome criteria, and result interpretation
 - **[Building Scenarios](../notebooks/core_concepts/scenarios/building-scenarios.ipynb)**: Complete builder API, node parameters, and graph patterns
 - **[Outcome Criteria](../notebooks/core_concepts/scenarios/outcome-criteria.ipynb)**: All check node types, composition operators, and sugar functions
-- **[Q/A Benchmark Quick Start](quickstart.md)**: If you need single-turn evaluation with template correctness and rubric quality checks
+- **[Q/A Benchmark Quick Start](../notebooks/quickstart.ipynb)**: If you need single-turn evaluation with template correctness and rubric quality checks
