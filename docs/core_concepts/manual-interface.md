@@ -15,7 +15,7 @@ jupyter:
 
 # Manual Interface
 
-The manual interface is an [adapter](../../../core_concepts/adapters/) that replays pre-recorded LLM responses through the [verification pipeline](../verification-pipeline/) instead of calling a live model. The pipeline evaluates these traces identically to live responses: parsing, template verification, and rubric evaluation all run the same way. The only stage that changes behavior is answer generation, which reads from a local trace store instead of making an API call.
+The manual interface is an [adapter](../../../core_concepts/adapters/) that replays pre-recorded LLM responses through the [verification pipeline](../verification-pipeline/) instead of calling a live model. The pipeline evaluates these traces identically to live responses: parsing, template verification, and rubric evaluation all run the same way (including the always-on placeholder-retry guard between stages 4 and 5, and the agentic sub-stages 7b/11b when configured). The only stage that changes behavior is answer generation, which reads from a local trace store instead of making an API call.
 
 The most important idea is: **the manual interface decouples answer generation from evaluation.** You can generate answers once, then re-evaluate them many times under different templates, rubrics, parsing models, or configurations, without repeating the expensive generation step.
 
@@ -80,7 +80,7 @@ Benchmark.run_verification = lambda self, config, **kw: _mock_results
 
 <div class="admonition info">
 <p class="admonition-title">Manual interface vs TaskEval</p>
-<p>Both let you evaluate pre-recorded text, but they address different situations. The manual interface operates <strong>inside the Benchmark pipeline</strong>: it replaces the answering model with a trace lookup, so all 13 pipeline stages still run. <a href="../task-eval/">TaskEval</a> operates <strong>outside the Benchmark pipeline</strong>: you feed free text directly into the evaluation engine without needing a benchmark, questions, or checkpoints. See <a href="#6-manual-interface-vs-taskeval">Section 6</a> for detailed guidance on choosing between them.</p>
+<p>Both let you evaluate pre-recorded text, but they address different situations. The manual interface operates <strong>inside the Benchmark pipeline</strong>: it replaces the answering model with a trace lookup, so all 13 pipeline stages (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) still run. <a href="../task-eval/">TaskEval</a> operates <strong>outside the Benchmark pipeline</strong>: you feed free text directly into the evaluation engine without needing a benchmark, questions, or checkpoints. See <a href="#6-manual-interface-vs-taskeval">Section 6</a> for detailed guidance on choosing between them.</p>
 </div>
 
 
@@ -303,7 +303,7 @@ Both mechanisms evaluate pre-recorded text, but they serve different workflows.
 
 | Dimension | Manual Interface | [TaskEval](../task-eval/) |
 |-----------|-----------------|--------------------------|
-| **Operates within** | Benchmark pipeline (all 13 stages run) | Standalone evaluation engine (no benchmark required) |
+| **Operates within** | Benchmark pipeline (all 13 stages run, with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) | Standalone evaluation engine (no benchmark required) |
 | **Requires** | Benchmark with questions, checkpoint, `ManualTraces` | Just a template and/or rubric |
 | **Input** | Trace per question, keyed by question hash | Free text logged via `task.log()` |
 | **Use case** | Re-evaluate benchmark answers under new configs | Evaluate arbitrary text (production logs, human writing, one-off outputs) |

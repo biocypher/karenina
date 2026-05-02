@@ -263,7 +263,7 @@ Every distinct LLM call in the pipeline is identified by a `PromptTask` enum val
 ```python
 from karenina.benchmark.verification.prompts.task_types import PromptTask
 
-# All 21 prompt task values, grouped by category
+# All 22 prompt task values, grouped by category
 for task in PromptTask:
     print(f"  {task.value:<40} ({task.name})")
 ```
@@ -280,20 +280,23 @@ The full mapping from task to pipeline stage:
 | | `sufficiency_detection` | SufficiencyCheck | Checks response completeness for template |
 | **Rubric evaluation** | `rubric_llm_trait_batch` | RubricEvaluation | All boolean/score LLM traits in one call |
 | | `rubric_llm_trait_single` | RubricEvaluation | One boolean/score LLM trait per call |
+| | `rubric_llm_trait_template` | RubricEvaluation | Template-kind LLM trait: LLM fills a Pydantic schema from the response |
 | | `rubric_literal_trait_batch` | RubricEvaluation | All literal traits in one call |
 | | `rubric_literal_trait_single` | RubricEvaluation | One literal trait per call |
 | | `rubric_metric_trait` | RubricEvaluation | Metric trait confusion matrix extraction |
 | **Agentic rubric** | `rubric_agentic_trait_investigation` | AgenticRubricEvaluation | Agent investigates response/workspace for rubric trait |
 | | `rubric_agentic_trait_extraction` | AgenticRubricEvaluation | Extracts score from agentic investigation trace |
+| **Dynamic rubric** | `rubric_dynamic_presence_check` | RubricEvaluation | Batch presence check for dynamic rubric trait concepts |
 | **Deep judgment (template)** | `dj_template_excerpt_extraction` | DeepJudgmentAutoFail | Extract verbatim excerpts per template attribute |
 | | `dj_template_hallucination` | DeepJudgmentAutoFail | Assess hallucination risk via search |
 | | `dj_template_reasoning` | DeepJudgmentAutoFail | Map excerpts to template attributes |
+| | `dj_template_reasoning_only` | DeepJudgmentAutoFail | Reasoning-only path: per-attribute reasoning directly from the response (no excerpts) |
 | **Deep judgment (rubric)** | `dj_rubric_excerpt_extraction` | DeepJudgmentRubric | Extract excerpts for rubric traits |
 | | `dj_rubric_hallucination` | DeepJudgmentRubric | Assess per-excerpt hallucination risk |
 | | `dj_rubric_reasoning` | DeepJudgmentRubric | Generate trait evaluation reasoning |
 | | `dj_rubric_score_extraction` | DeepJudgmentRubric | Extract final score from reasoning |
 
-21 distinct LLM call types. Each one can have its own adapter instructions and user instructions.
+22 distinct LLM call types. Each one can have its own adapter instructions and user instructions.
 
 ## 6. Customizing Prompts via PromptConfig
 
@@ -372,7 +375,7 @@ _ = _patcher.stop()
 
 ## 8. Next Steps
 
-- [Verification Pipeline](../verification-pipeline/): the 13 stages that use assembled prompts
+- [Verification Pipeline](../verification-pipeline/): the 13 stages (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) that use assembled prompts
 - [Adapters](../../../core_concepts/adapters/): which LLM backends are available and how they differ
 - [Prompt Assembly Internals](../../../advanced-pipeline/prompt-assembly/): technical deep dive into `PromptAssembler`, `AdapterInstructionRegistry`, `PromptTask`, and `PortCapabilities`
 - [Prompt Config Reference](../../../reference/configuration/prompt-config/): full field documentation for `PromptConfig`

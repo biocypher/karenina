@@ -138,7 +138,7 @@ You would record this text with `log()`, attach a template for the BCL2 check an
 | Starting point | Questions (define what to ask) | Text (record what happened) |
 | Answer generation | Pipeline generates responses | You supply pre-recorded text |
 | Question definition | Required | Not required |
-| Pipeline stages used | All 13 stages | Same pipeline; generation stage bypassed |
+| Pipeline stages used | All 13 stages (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) | Same pipeline; generation stage bypassed |
 | Result type | `VerificationResult` (per question/model) | `TaskEvalResult` (global + per-step) |
 | Best for | Controlled model comparison | Evaluating existing outputs |
 
@@ -308,5 +308,5 @@ See the [workflow](../../task-eval/#step-4-configure-and-evaluate) for step-scop
 - [TaskEval workflow](../../task-eval/): step-by-step guide with complete code
 - [Answer templates](../answer-templates/): writing templates for correctness evaluation
 - [Rubrics](../../../core_concepts/rubrics/): defining quality traits
-- [Verification pipeline](../verification-pipeline/): the 13-stage pipeline TaskEval routes through
+- [Verification pipeline](../verification-pipeline/): the 13-stage pipeline (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) TaskEval routes through
 - [Evaluation modes](../evaluation-modes/): `template_only`, `rubric_only`, `template_and_rubric`

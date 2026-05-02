@@ -79,7 +79,7 @@ Phase 1: Storage
 Phase 2: Resolution (at verification time)
   FewShotConfig.resolve_examples_for_question()
     ├─ Input: available examples from question, question ID, question text
-    ├─ Check source (pool / global / both / disabled)
+    ├─ Check source (question_pool / global / both / disabled)
     ├─ Apply mode (all / k-shot / custom)
     ├─ Apply exclusions
     └─ Append global examples
@@ -115,7 +115,7 @@ print(f"Stored {len(question.few_shot_examples)} examples on question")
 
 | Source | Behavior | Best for |
 |--------|----------|----------|
-| `"pool"` | Use only per-question stored examples | Questions with curated example pools |
+| `"question_pool"` | Use only per-question stored examples | Questions with curated example pools |
 | `"global"` | Use only global examples | Uniform examples across all questions |
 | `"both"` | Use per-question stored examples and global examples | Combining per-question and shared examples |
 | `"disabled"` | No examples used | Establishing a zero-shot baseline |
@@ -400,7 +400,7 @@ print(f"Validation errors: {errors}")
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `source` | `Literal["pool", "global", "both", "disabled"]` | `"both"` | Controls where examples come from: per-question pool, global list, both, or disabled entirely |
+| `source` | `Literal["disabled", "question_pool", "global", "both"]` | `"both"` | Controls where examples come from: per-question pool, global list, both, or disabled entirely |
 | `pool_mode` | `Literal["all", "k-shot", "custom"]` | `"all"` | Default selection mode for per-question example pools |
 | `pool_k` | `int` | `3` | Number of examples for `k-shot` mode |
 | `question_configs` | `dict[str, QuestionFewShotConfig]` | `{}` | Per-question overrides keyed by question ID |
@@ -429,6 +429,6 @@ These fields enable filtering and grouping in analysis (e.g., comparing accuracy
 ## 14. Next Steps
 
 - [Answer Templates](../answer-templates/): what few-shot examples help the answering model produce
-- [Verification Pipeline](../verification-pipeline/): where GenerateAnswer fits in the 13-stage pipeline
+- [Verification Pipeline](../verification-pipeline/): where GenerateAnswer fits in the 13-stage pipeline (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard)
 - [Running Verification](../../../workflows/running-verification/): complete configuration and execution workflow
 - [VerificationConfig Reference](../../../reference/configuration/verification-config/): exhaustive field reference including `few_shot_config`

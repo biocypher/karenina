@@ -15,7 +15,7 @@ jupyter:
 
 # Verification Pipeline
 
-The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 13 stages, each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
+The **verification pipeline** is the execution engine that turns a question and its evaluation criteria into a structured `VerificationResult`. It runs a fixed sequence of up to 13 stages (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard), each performing one step: validating a template, generating a response, parsing it, checking correctness, evaluating rubric traits, or finalizing the result.
 
 The most important idea is that the pipeline is a **result-producing machine**: it always returns a `VerificationResult`, even when the model fails, abstains, or a stage throws an exception. Individual stages may skip, fail, or override earlier outcomes, but the pipeline itself never crashes without producing an output.
 
@@ -63,7 +63,7 @@ Structuring evaluation as an ordered sequence of stages provides four guarantees
 
 ## 2. Anatomy: The 13 Stages
 
-The pipeline groups its stages into functional categories. Within each category, stages execute in the order shown.
+The pipeline groups its stages into functional categories. Within each category, stages execute in the order shown. Stages 7a/7b and 11a/11b are mutually exclusive sub-stages of one logical step (classical vs agentic). The placeholder-retry guard always runs immediately after `TraceValidationAutoFail`.
 
 ```
   Category           Stage                            Always present?
@@ -72,19 +72,23 @@ The pipeline groups its stages into functional categories. Within each category,
   Generation         2. GenerateAnswer                 Yes
   Guards             3. RecursionLimitAutoFail          Yes
                      4. TraceValidationAutoFail         Yes
+                     -- PlaceholderRetryAutoFail        Yes (always-on guard)
   Pre-parse checks   5. AbstentionCheck                If abstention_enabled
                      6. SufficiencyCheck                If sufficiency_enabled (template modes)
-  Template path      7. ParseTemplate                  Template modes only
+  Template path     7a. ParseTemplate                  Template modes only (classical path)
+                    7b. AgenticParseTemplate           Template modes only (if agentic_parsing)
                      8. VerifyTemplate                  Template modes only
   Enhancements       9. EmbeddingCheck                 Template modes only
                     10. DeepJudgmentAutoFail            If deep_judgment_mode != "disabled"
-  Rubric path       11. RubricEvaluation               If rubric has traits + mode includes rubric
+  Rubric path      11a. RubricEvaluation               If rubric has non-agentic traits + mode includes rubric
                    11b. AgenticRubricEvaluation        If rubric has agentic traits
                     12. DeepJudgmentRubricAutoFail      If rubric stages present
   Finalization      13. FinalizeResult                  Yes (always last)
 ```
 
 **"Template modes"** means `template_only` or `template_and_rubric`. In `rubric_only` mode, stages 1 and 6 through 10 are omitted entirely at the orchestrator level. See [Evaluation Modes](../evaluation-modes/) for the full matrix and decision guidance.
+
+**PlaceholderRetryAutoFail** is an always-on guard appended by `StageOrchestrator.from_config` between `TraceValidationAutoFail` and `AbstentionCheck`, in every evaluation mode. It catches the case where the answering trace is solely a `ModelRetryMiddleware` exhaustion placeholder (a sentinel inserted when the adapter's retry policy ran out) and auto-fails the result with a structured `Failure`. It has no feature flag and no per-stage config.
 
 ## 3. How It Works: Execution Lifecycle
 
@@ -197,6 +201,8 @@ The stage stores the raw response text, trace messages, usage metadata, and a `r
 
 **TraceValidationAutoFail** (stage 4) checks that MCP agent traces end with an AI message. Non-MCP responses and manual-interface traces skip this check. When validation fails, it sets `verify_result=False` and stores a diagnostic error.
 
+**PlaceholderRetryAutoFail** (always-on guard, between stages 4 and 5) inspects the response and trace for the `ModelRetryMiddleware` exhaustion sentinel. When the trace is only that placeholder (the adapter's retry policy ran out before producing real content), the stage records a structured `Failure` and sets `verify_result=False`. It is unconditionally appended by `StageOrchestrator.from_config` in every evaluation mode and has no feature flag.
+
 ### Pre-Parse Checks
 
 Both pre-parse stages share a pattern: they use the parsing model to assess the raw response, and if the check triggers, they set `verify_result=False` and skip downstream parsing.
@@ -211,7 +217,7 @@ Both stages record four metadata fields: `*_check_performed`, `*_detected`, `*_o
 
 ### Template Processing
 
-**ParseTemplate** (stage 7) sends the response to the Judge LLM along with the template's JSON schema. The Judge extracts structured fields, producing a filled `Answer` instance. Two fast paths exist:
+**ParseTemplate** (stage 7a) sends the response to the Judge LLM along with the template's JSON schema. The Judge extracts structured fields, producing a filled `Answer` instance. When `agentic_parsing=True`, this stage is replaced by `AgenticParseTemplateStage` (stage 7b), which performs investigation + extraction in two LLM calls; see [Agentic Evaluation](agentic-evaluation.md). Two fast paths exist:
 
 - **Regex-only templates** (templates with no LLM-parsed fields) skip the LLM call entirely and create an empty `Answer()` for regex verification.
 - **Deep judgment mode**: when `deep_judgment_mode` is `"full"` or `"reasoning_only"`, the stage also performs deep judgment processing on the response for each parsed field, enabling evidence-based verification.
@@ -231,7 +237,7 @@ The stage respects `use_full_trace_for_template`: when `False` (the default), on
 
 ### Rubric Evaluation
 
-**RubricEvaluation** (stage 11) evaluates all applicable rubric traits on the response. It handles four trait types through specialized evaluators:
+**RubricEvaluation** (stage 11a) evaluates all applicable non-agentic rubric traits on the response. It handles four trait types through specialized evaluators:
 
 | Trait type | Evaluator | LLM required |
 |------------|-----------|:------------:|
@@ -333,14 +339,15 @@ The full matrix:
 | GenerateAnswer | Yes | Yes | Yes |
 | RecursionLimitAutoFail | Yes | Yes | Yes |
 | TraceValidationAutoFail | Yes | Yes | Yes |
+| PlaceholderRetryAutoFail | Yes (always-on) | Yes (always-on) | Yes (always-on) |
 | AbstentionCheck | If enabled | If enabled | If enabled |
 | SufficiencyCheck | If enabled | If enabled | No |
-| ParseTemplate | Yes | Yes | No |
+| ParseTemplate (7a) / AgenticParseTemplate (7b) | Yes (one path) | Yes (one path) | No |
 | VerifyTemplate | Yes | Yes | No |
 | EmbeddingCheck | Present (runs conditionally) | Present (runs conditionally) | No |
 | DeepJudgmentAutoFail | If enabled | If enabled | No |
-| RubricEvaluation | No | If rubric has traits | If rubric has traits |
-| AgenticRubricEvaluation | No | If agentic traits | If agentic traits |
+| RubricEvaluation (11a) | No | If rubric has non-agentic traits | If rubric has non-agentic traits |
+| AgenticRubricEvaluation (11b) | No | If agentic traits | If agentic traits |
 | DeepJudgmentRubricAutoFail | No | If rubric stages present | If rubric stages present |
 | FinalizeResult | Yes | Yes | Yes |
 
@@ -368,7 +375,7 @@ The pipeline distinguishes three kinds of non-success:
 
 | Kind | Set by | Effect on remaining stages | `metadata.failure` |
 |------|--------|---------------------------|:------------------------:|
-| **Auto-fail** | Guard stages (3, 4, 10, 12) | Sets `verify_result=False`; other stages continue normally | populated (group `autofail`) |
+| **Auto-fail** | Guard stages (3, 4, placeholder-retry, 10, 12) | Sets `verify_result=False`; other stages continue normally | populated (group `autofail`) |
 | **Override skip** | Pre-parse checks (5, 6) | Sets `verify_result=False`; downstream stages skip via `should_run()` conditions | populated (group `abstained`) |
 | **Error** | Any stage setting `context.failure` or raising an exception | All subsequent stages except `FinalizeResult` skip via `should_run()` | populated (group varies) |
 
@@ -382,6 +389,7 @@ Every stage inherits a default `should_run()` that returns `False` when `context
 |-------|--------------------------------------|
 | RecursionLimitAutoFail | `recursion_limit_reached` is `True` |
 | TraceValidationAutoFail | `raw_llm_response` artifact exists |
+| PlaceholderRetryAutoFail | Trace contains the `ModelRetryMiddleware` exhaustion sentinel; otherwise no-op |
 | AbstentionCheck | `abstention_enabled` is `True` and `recursion_limit_reached` is `False` |
 | SufficiencyCheck | `sufficiency_enabled` is `True`, no recursion limit, no trace validation failure, no abstention detected |
 | ParseTemplate | No prior failures, sufficiency not detected as insufficient, has both response and Answer artifacts |
@@ -406,15 +414,19 @@ Consider a benchmark question in `template_and_rubric` mode with `abstention_ena
 
 **Stage 4: TraceValidationAutoFail** checks if MCP is enabled. It is not. Stage skips the validation (non-MCP responses are always valid).
 
+**PlaceholderRetryAutoFail** (always-on guard, between stages 4 and 5) inspects the response for the `ModelRetryMiddleware` exhaustion sentinel. The trace contains real content, so the stage skips itself.
+
 **Stage 5: AbstentionCheck** asks the parsing model: "Did this response refuse to answer?" The model says no. `abstention_detected=False`. Pipeline continues.
 
-**Stage 7: ParseTemplate** sends the response and the `Answer` schema to the Judge LLM. The Judge extracts: `{"target": "BCL2"}`. A filled `Answer` instance is stored as `parsed_answer`. For coding tasks with `agentic_parsing=True`, this stage is replaced by `AgenticParseTemplateStage` (Stage 7b), which uses a two-step process: an investigation agent independently verifies workspace artifacts, then a parser extracts structured data from the investigation findings. See [Agentic Evaluation](agentic-evaluation.md) for details.
+**Stage 6: SufficiencyCheck** is not enabled in this configuration (`sufficiency_enabled=False`), so it is not present in the stage list. (When enabled, it would ask the parsing model whether the response contains enough information to populate the template's fields.)
+
+**Stage 7a: ParseTemplate** sends the response and the `Answer` schema to the Judge LLM. The Judge extracts: `{"target": "BCL2"}`. A filled `Answer` instance is stored as `parsed_answer`. For coding tasks with `agentic_parsing=True`, this stage is replaced by `AgenticParseTemplateStage` (stage 7b), which uses a two-step process: an investigation agent independently verifies workspace artifacts, then a parser extracts structured data from the investigation findings. See [Agentic Evaluation](agentic-evaluation.md) for details.
 
 **Stage 8: VerifyTemplate** calls `answer.verify()`, which compares `"BCL2"` against the ground truth `"BCL2"`. Field verification passes. Regex verification (if defined) also runs. `verify_result=True`.
 
 **Stage 9: EmbeddingCheck** checks `field_verification_result`. It is `True`. Stage skips itself (embedding fallback is unnecessary).
 
-**Stage 11: RubricEvaluation** evaluates the attached traits. A `RegexRubricTrait` for `has_citations` checks for `\[\d+\]` in the response. No match: `has_citations=False`. An `LLMRubricTrait` for `conciseness` asks the parsing model to judge. Result: `True`.
+**Stage 11a: RubricEvaluation** evaluates the attached non-agentic traits. A `RegexRubricTrait` for `has_citations` checks for `\[\d+\]` in the response. No match: `has_citations=False`. An `LLMRubricTrait` for `conciseness` asks the parsing model to judge. Result: `True`. (Stage 11b `AgenticRubricEvaluation` is not present in this rubric, since no agentic traits are defined.)
 
 **Stage 13: FinalizeResult** assembles the `VerificationResult`:
 - `result.template.verify_result = True`

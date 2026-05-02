@@ -356,7 +356,7 @@ See [Agentic Rubric Traits](rubrics/agentic-traits.md) for trait definition and 
 
 ## 10. Next Steps
 
-- [Verification Pipeline](verification-pipeline.md): The 13-stage engine that hosts both classical and agentic parsing
+- [Verification Pipeline](verification-pipeline.md): The 13-stage engine (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) that hosts both classical and agentic parsing
 - [Answer Templates](answer-templates.md): Writing the schemas that both classical and agentic judges fill in
 - [Adapters](adapters.md): Understanding port protocols and the adapter registry
 - [MCP Overview](mcp-overview.md): Tool-augmented evaluation for the answering model
