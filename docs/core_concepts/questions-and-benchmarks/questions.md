@@ -37,28 +37,35 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
-    "sqlalchemy.sql", "sqlalchemy.event",
-    "karenina.storage", "karenina.storage.base",
-    "karenina.storage.engine", "karenina.storage.db_config",
-    "karenina.storage.models", "karenina.storage.generated_models",
-    "karenina.storage.auto_mapper", "karenina.storage.operations",
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
 ]:
     mock_modules[mod] = MagicMock()
 
 with patch.dict("sys.modules", mock_modules):
-    from karenina.benchmark import Benchmark
+    from pydantic import Field
+
     from karenina.schemas.entities import BaseAnswer
     from karenina.schemas.entities.question import Question
-    from pydantic import Field
 ```
 
 ```python
 # Standard imports for working with questions
-from karenina.schemas.entities.question import Question
 from karenina.schemas.entities import BaseAnswer
-from karenina.benchmark import Benchmark
+from karenina.schemas.entities.question import Question
 ```
 
 ## 1. Anatomy of a Question
@@ -159,8 +166,7 @@ print(f"q2.id: {q2.id}")
 print(f"Same:  {q1.id == q2.id}")
 
 # Under the hood: MD5 of the UTF-8 encoded question text
-import hashlib
-manual_id = hashlib.md5("What is the capital of France?".encode("utf-8")).hexdigest()
+manual_id = hashlib.md5(b"What is the capital of France?").hexdigest()
 print(f"Manual hash: {manual_id}")
 print(f"Matches:     {manual_id == q1.id}")
 ```

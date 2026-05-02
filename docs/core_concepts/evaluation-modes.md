@@ -82,6 +82,7 @@ At the orchestration layer, evaluation mode controls which stages `StageOrchestr
 | `GenerateAnswer` | Yes | Yes | Yes |
 | `RecursionLimitAutoFail` | Yes | Yes | Yes |
 | `TraceValidationAutoFail` | Yes | Yes | Yes |
+| `PlaceholderRetryAutoFail` | Yes | Yes | Yes |
 | `AbstentionCheck` | Optional | Optional | Optional |
 | `SufficiencyCheck` | Optional | Optional | No |
 | `ParseTemplate` | Yes | Yes | No |

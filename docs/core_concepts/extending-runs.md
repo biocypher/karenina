@@ -17,7 +17,7 @@ jupyter:
 
 A verification run captures enough state on every result row that later runs can reuse parts of it instead of re-executing the whole pipeline. Two facades on `Benchmark` expose this reuse as a first-class operation:
 
-- [`Benchmark.extend_template`](../verification-pipeline/) extends a prior run along the template-verification axes: new judges, new answerers, more replicates. Prior `(question, answerer, replicate)` traces are served from a [ReplayStore](../../reference/replay/) so no answering tokens are spent twice; parsing runs live against new judges.
+- [`Benchmark.extend_template`](../verification-pipeline/) extends a prior run along the template-verification axes: new judges, new answerers, more replicates. Prior `(question, answerer, replicate)` traces are served from a [ReplayStore](../../advanced-pipeline/replay-store/) so no answering tokens are spent twice; parsing runs live against new judges.
 - [`Benchmark.extend_rubric`](../rubrics/) attaches a new rubric to a prior run and scores every existing trace against it. Answering is replayed, template parsing and verification are skipped entirely, and the new trait scores are merged onto copies of the prior rows.
 
 ```python tags=["hide-cell"]
@@ -40,7 +40,7 @@ Composing both: if you need new judges *and* new rubric traits on top of a singl
 
 ## 2. Shared Mechanics
 
-Both facades build a [ReplayStore](../../reference/replay/) from the prior `VerificationResultSet` and pass it through `VerificationConfig.replay_store`. At the generate-answer stage, any `(question, answering_model, replicate)` triple that hits the store replays the captured trace instead of invoking the LLM. Anything that misses runs live.
+Both facades build a [ReplayStore](../../advanced-pipeline/replay-store/) from the prior `VerificationResultSet` and pass it through `VerificationConfig.replay_store`. At the generate-answer stage, any `(question, answering_model, replicate)` triple that hits the store replays the captured trace instead of invoking the LLM. Anything that misses runs live.
 
 | Field captured in the store | `extend_template` | `extend_rubric` |
 |---|---|---|
@@ -200,7 +200,7 @@ Supported trait types: LLM, regex, callable, agentic, plus `DynamicRubric` prese
 
 - `prior_results` is empty.
 - `config.replay_store` is pre-populated.
-- `config.evaluation_mode` is set to `"template_and_rubric"` (the caller should not preset a conflicting mode; the helper rewrites it to `"rubric_only"` internally).
+- `config.evaluation_mode` is anything other than `"template_only"` or `"rubric_only"` (for example, `"template_and_rubric"`); the helper rewrites the mode to `"rubric_only"` internally, so it only accepts those two starting values.
 - The benchmark has no rubric attached anywhere (global or per-question) for any question in `prior_results`.
 - Any attached rubric contains metric traits.
 - `config.answering_models`, `config.parsing_models`, or `config.replicate_count` disagree with the observed prior shape.
@@ -225,7 +225,7 @@ Both facades accept `store: bool = True`. When true, the merged set is written t
 
 ## 7. Further Reading
 
-- [Verification Pipeline](../verification-pipeline/): the 13-stage engine both facades drive.
+- [Verification Pipeline](../verification-pipeline/): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that both facades drive.
 - [Evaluation Modes](../evaluation-modes/): how `rubric_only` differs from `template_only` and `template_and_rubric`.
 - [Rubrics](../../../core_concepts/rubrics/): trait types and `DynamicRubric`.
 - `karenina/src/karenina/benchmark/verification/extension.py`: the helper implementations (`extend_template_run`, `extend_rubric_run`) if you need to read the exact validation and merge code.
