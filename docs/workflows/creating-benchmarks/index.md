@@ -1,6 +1,6 @@
 # Creating Benchmarks
 
-This section walks through building benchmarks end-to-end — from creating an empty checkpoint to saving a fully populated benchmark with questions, templates, rubrics, and few-shot examples.
+This section walks through building benchmarks end-to-end, from creating an empty checkpoint to saving a fully populated benchmark with questions, templates, rubrics, and few-shot examples.
 
 Each tutorial is a complete, self-contained scenario. Choose the one that matches your evaluation needs, or work through them in order to learn all the tools.
 
@@ -95,12 +95,12 @@ Reload and verify round-trip
 
 These concept pages provide the foundational knowledge that the scenarios build on:
 
-- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) — What templates are, field types, `verify()` semantics
-- [Rubrics](../../core_concepts/rubrics/index.md) — Trait types (LLM, regex, callable, metric), global vs per-question
-- [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md) — JSON-LD format, save/load behavior
-- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) — How template-only, template+rubric, and rubric-only map to pipeline stages
-- [ADeLe Classification](../../notebooks/core_concepts/adele.ipynb) — Question complexity dimensions
-- [Few-Shot Examples](../../notebooks/core_concepts/few-shot.ipynb) — Configuration modes and example selection
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): What templates are, field types, `verify()` semantics
+- [Rubrics](../../core_concepts/rubrics/index.md): Trait types (LLM, regex, callable, metric), global vs per-question
+- [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md): JSON-LD format, save/load behavior
+- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How template-only, template+rubric, and rubric-only map to pipeline stages
+- [ADeLe Classification](../../notebooks/core_concepts/adele.ipynb): Question complexity dimensions
+- [Few-Shot Examples](../../notebooks/core_concepts/few-shot.ipynb): Configuration modes and example selection
 
 ---
 
@@ -108,5 +108,5 @@ These concept pages provide the foundational knowledge that the scenarios build 
 
 Once your benchmark is built and saved, proceed to:
 
-- [Running Verification](../running-verification/index.md) — Execute the benchmark against LLMs
-- [Analyzing Results](../analyzing-results/index.md) — Inspect and compare verification outcomes
+- [Running Verification](../running-verification/index.md): Execute the benchmark against LLMs
+- [Analyzing Results](../analyzing-results/index.md): Inspect and compare verification outcomes

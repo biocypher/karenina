@@ -512,8 +512,8 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Build a complete template + rubric benchmark from scratch
 - [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation for tasks with no single correct answer
-- [Rubrics Overview](../../../core_concepts/rubrics/): Deep dive into rubric concepts, the `higher_is_better` field, and trait type API details
-- [LLM Traits](../../core_concepts/rubrics/llm-traits.ipynb): Boolean, score, and literal kinds with deep judgment
-- [Regex Traits](../../core_concepts/rubrics/regex-traits.ipynb): Deterministic pattern matching
-- [Callable Traits](../../core_concepts/rubrics/callable-traits.ipynb): Custom Python functions
-- [Metric Traits](../../core_concepts/rubrics/metric-traits.ipynb): Precision, recall, F1 computation
+- [Rubrics Overview](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts, the `higher_is_better` field, and trait type API details
+- [LLM Traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): Boolean, score, and literal kinds with deep judgment
+- [Regex Traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb): Deterministic pattern matching
+- [Callable Traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb): Custom Python functions
+- [Metric Traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb): Precision, recall, F1 computation

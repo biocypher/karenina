@@ -384,7 +384,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Answer Templates](../../core_concepts/answer-templates.md): Deep dive into template concepts, field types, and `verify()` patterns
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Deep dive into template concepts, field types, and `verify()` patterns
 - [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb): Hand-written template patterns (boolean, string, numeric, regex)
 - [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb): Bulk ingestion, ADeLe classification, and few-shot examples
 - [Running Verification](../running-verification/index.md): Execute the benchmark against LLMs

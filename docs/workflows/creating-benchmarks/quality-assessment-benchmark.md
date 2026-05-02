@@ -15,11 +15,11 @@ jupyter:
 
 # Quality Assessment Benchmark
 
-Some evaluation tasks have no single correct answer. A patient communication, a creative explanation, or a safety assessment can be "right" in many ways -- what matters is quality. This scenario creates a rubric-only benchmark that evaluates response quality across multiple dimensions without templates.
+Some evaluation tasks have no single correct answer. A patient communication, a creative explanation, or a safety assessment can be "right" in many ways; what matters is quality. This scenario creates a rubric-only benchmark that evaluates response quality across multiple dimensions without templates.
 
 **What you'll learn:**
 
-- Rubric-only evaluation mode -- no templates needed
+- Rubric-only evaluation mode (no templates needed)
 - Quality dimensions: safety, empathy, plain language, format compliance
 - Mixing trait types (LLM, regex, callable, metric) for a single use case
 - Global vs per-question trait scoping
@@ -50,7 +50,7 @@ print(f"Created: {benchmark.name}")
 
 ## Add Questions
 
-In rubric-only mode, questions still have a `raw_answer` -- this serves as a reference response, not a ground-truth answer to match against.
+In rubric-only mode, questions still have a `raw_answer`; this serves as a reference response, not a ground-truth answer to match against.
 
 ```python
 q1_id = benchmark.add_question(
@@ -110,7 +110,7 @@ q3_id = benchmark.add_question(
 print(f"Q3 added: {q3_id[:50]}...")
 ```
 
-No templates are attached -- all evaluation will come from rubric traits.
+No templates are attached; all evaluation will come from rubric traits.
 
 ```python
 print(f"\nTotal questions: {benchmark.question_count}")
@@ -127,7 +127,7 @@ In rubric-only mode, all evaluation comes from rubric traits. We define a mix of
 
 These traits apply to every question in the benchmark.
 
-**LLM Boolean -- Medical Safety**
+**LLM Boolean: Medical Safety**
 
 ```python
 from karenina.schemas import LLMRubricTrait
@@ -148,7 +148,7 @@ benchmark.add_global_rubric_trait(safety_trait)
 print(f"Added global: {safety_trait.name}")
 ```
 
-**LLM Boolean -- Empathetic Tone**
+**LLM Boolean: Empathetic Tone**
 
 ```python
 empathy_trait = LLMRubricTrait(
@@ -166,7 +166,7 @@ benchmark.add_global_rubric_trait(empathy_trait)
 print(f"Added global: {empathy_trait.name}")
 ```
 
-**Regex -- Plain Language Check**
+**Regex: Plain Language Check**
 
 Deterministic pattern matching catches unexplained medical jargon without an LLM call.
 
@@ -185,7 +185,7 @@ benchmark.add_global_rubric_trait(jargon_trait)
 print(f"Added global: {jargon_trait.name}")
 ```
 
-**Callable -- Appropriate Length**
+**Callable: Appropriate Length**
 
 Custom Python logic checks that responses are substantive but not overwhelming.
 
@@ -207,7 +207,7 @@ print(f"Added global: {length_trait.name}")
 
 These traits target specific questions where additional evaluation dimensions are relevant.
 
-**LLM Score -- Explanation Clarity (Q1)**
+**LLM Score: Explanation Clarity (Q1)**
 
 ```python
 clarity_trait = LLMRubricTrait(
@@ -228,7 +228,7 @@ benchmark.add_question_rubric_trait(q1_id, clarity_trait)
 print(f"Added to Q1: {clarity_trait.name}")
 ```
 
-**LLM Literal -- Reassurance Level (Q1)**
+**LLM Literal: Reassurance Level (Q1)**
 
 ```python
 reassurance_trait = LLMRubricTrait(
@@ -246,7 +246,7 @@ benchmark.add_question_rubric_trait(q1_id, reassurance_trait)
 print(f"Added to Q1: {reassurance_trait.name}")
 ```
 
-**Metric -- Response Coverage (Q3)**
+**Metric: Response Coverage (Q3)**
 
 Metric traits measure instruction adherence using a confusion-matrix approach. Here we check whether the mental health response covers key aspects.
 
@@ -343,7 +343,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.ipynb) -- Template-only evaluation for factual correctness
-- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb) -- Combine templates and rubrics
-- [Scaled Authoring](scaled-authoring.ipynb) -- Bulk workflows and auto-generation
-- [Rubrics Overview](../../core_concepts/rubrics/index.md) -- Deep dive into rubric concepts
+- [Factual QA Benchmark](factual-qa-benchmark.ipynb): Template-only evaluation for factual correctness
+- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Combine templates and rubrics
+- [Scaled Authoring](scaled-authoring.ipynb): Bulk workflows and auto-generation
+- [Rubrics Overview](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts

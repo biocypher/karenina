@@ -98,7 +98,7 @@ benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
 ```
 
-These templates use `VerifiedField` with built-in verification primitives. For cases requiring custom logic, see [Advanced: Custom Verification](../../core_concepts/answer-templates.md#8-advanced-custom-verification).
+These templates use `VerifiedField` with built-in verification primitives. For cases requiring custom logic, see [Advanced: Custom Verification](../../notebooks/core_concepts/answer-templates.ipynb#8-advanced-custom-verification).
 
 A boolean check avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description. The `BooleanMatch()` primitive compares the extracted boolean against `ground_truth=True` automatically; no `verify()` method needed.
 
@@ -234,7 +234,7 @@ print(f"Q4 added with template: {q4_id[:50]}...")
 
 Each `TraceRegex` field is a named check: the `pattern` is applied to the raw trace, and the result is compared against `ground_truth`. Because these fields are excluded from the parsing schema, the pipeline detects a template with only `TraceRegex` fields and skips LLM parsing entirely. No judge model is needed.
 
-`TraceRegex` fields can also be combined with regular parsed fields when you want both structured extraction and pattern matching. In that case, the parsed fields are verified by their own primitives and the `TraceRegex` fields independently check the raw response. See [Answer Templates: Regex Checks](../../core_concepts/answer-templates.md#regex-checks) for a combined example.
+`TraceRegex` fields can also be combined with regular parsed fields when you want both structured extraction and pattern matching. In that case, the parsed fields are verified by their own primitives and the `TraceRegex` fields independently check the raw response. See [Answer Templates: Regex Checks](../../notebooks/core_concepts/answer-templates.ipynb#regex-checks) for a combined example.
 
 ### Question 5: Multi-Field with Weighted Scoring (Vaccine Mechanism)
 
@@ -364,4 +364,4 @@ The five patterns above form a toolkit for factual verification. Most real bench
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Add rubric traits for quality assessment
 - [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation without templates
 - [Scaled Authoring](scaled-authoring.ipynb): Bulk workflows and auto-generation
-- [Answer Templates](../core_concepts/answer-templates.ipynb): Deep dive into template concepts
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Deep dive into template concepts

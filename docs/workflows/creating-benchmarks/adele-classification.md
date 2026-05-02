@@ -15,7 +15,7 @@ jupyter:
 
 # ADeLe Question Classification
 
-ADeLe (Assessment of Difficulty Level) classifies benchmark questions across 18 cognitive dimensions, from domain knowledge required to reasoning complexity. Each dimension produces an ordinal score from 0 (none) to 5 (very high). Use classification results to understand your benchmark's difficulty profile, filter questions by complexity, or create rubrics based on ADeLe traits.
+ADeLe (Annotated Demand Levels) classifies benchmark questions across 18 cognitive dimensions, from domain knowledge required to reasoning complexity. Each dimension produces an ordinal score from 0 (none) to 5 (very high). Use classification results to understand your benchmark's difficulty profile, filter questions by complexity, or create rubrics based on ADeLe traits.
 
 This tutorial is useful when you have a set of questions and want to characterize what your benchmark measures before running verification. Classification can also guide question selection: keep only high-reasoning questions for a challenging benchmark, or balance difficulty across categories.
 
@@ -360,7 +360,7 @@ print("Done.")
 
 ## Next Steps
 
-- [ADeLe Concept Page](../../core_concepts/adele.md): Full dimension reference and scoring details
+- [ADeLe Concept Page](../../notebooks/core_concepts/adele.ipynb): Full dimension reference and scoring details
 - [Rubrics](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts and trait types
 - [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb): Bulk workflows, template generation, and classification in context
 - [Running Verification](../running-verification/index.md): Execute benchmarks with ADeLe rubrics

@@ -6,7 +6,7 @@ Karenina provides a layered configuration system that lets you control LLM provi
 
 ## Configuration Hierarchy
 
-When Karenina resolves a configuration value, it checks sources in this order — the first source that provides a value wins:
+When Karenina resolves a configuration value, it checks sources in this order; the first source that provides a value wins:
 
 ```
 ┌──────────────────────────────────┐
@@ -32,9 +32,9 @@ karenina verify checkpoint.jsonld --preset claude-haiku.json --answering-model c
 
 Karenina resolves configuration in three steps:
 
-1. **Load the preset** — All values from `claude-haiku.json` become the base configuration
-2. **Apply CLI overrides** — `--answering-model claude-sonnet-4-5` replaces the preset's answering model
-3. **Fill remaining gaps** — Any fields not set by the preset or CLI are resolved from environment variables, then from built-in defaults
+1. **Load the preset**: all values from `claude-haiku.json` become the base configuration
+2. **Apply CLI overrides**: `--answering-model claude-sonnet-4-5` replaces the preset's answering model
+3. **Fill remaining gaps**: any fields not set by the preset or CLI are resolved from environment variables, then from built-in defaults
 
 The same precedence applies when using the Python API:
 
@@ -68,7 +68,7 @@ karenina verify checkpoint.jsonld \
     --deep-judgment
 ```
 
-CLI arguments are converted to a `VerificationConfig` internally using `from_overrides()`, which selectively applies only the flags you provide — unset flags don't override preset or default values.
+CLI arguments are converted to a `VerificationConfig` internally using `from_overrides()`, which selectively applies only the flags you provide; unset flags don't override preset or default values.
 
 See [CLI Reference](../../reference/cli/index.md) for all available flags.
 
@@ -97,7 +97,7 @@ See [Presets](presets.md) for the preset file format, creation, and management.
 
 ### 3. Environment Variables
 
-Environment variables provide project-wide defaults. They're read during `VerificationConfig` initialization — but only for fields that weren't already set by CLI arguments or preset values.
+Environment variables provide project-wide defaults. They're read during `VerificationConfig` initialization, but only for fields that weren't already set by CLI arguments or preset values.
 
 The most commonly used environment variables:
 
@@ -110,12 +110,12 @@ The most commonly used environment variables:
 | `KARENINA_ASYNC_MAX_WORKERS` | Number of parallel workers | `2` |
 | `KARENINA_PRESETS_DIR` | Directory for preset files | `./presets/` |
 | `EMBEDDING_CHECK` | Enable embedding similarity fallback | `false` |
-| `DB_PATH` | SQLite database path | `dbs/karenina.db` |
+| `DB_PATH` | Directory containing SQLite database files | current working directory (set to `<workdir>/dbs` by `karenina init`) |
 
 Set environment variables via a `.env` file (recommended) or shell export:
 
 ```bash
-# .env file (recommended — add to .gitignore)
+# .env file (recommended; add to .gitignore)
 OPENAI_API_KEY="sk-..."
 KARENINA_ASYNC_MAX_WORKERS=4
 ```
@@ -220,8 +220,8 @@ karenina verify checkpoint.jsonld --preset my-config.json --async-workers 8
 
 ## Next Steps
 
-- [Environment Variables](environment-variables.md) — Full list of environment variables and how to set them
-- [Presets](presets.md) — Creating, managing, and sharing configuration presets
-- [Workspace Initialization](../../getting-started/workspace-init.md) — Setting up a new karenina project with `karenina init`
-- [Core Concepts](../../core_concepts/index.md) — Understanding templates, rubrics, and evaluation modes
-- [Running Verification](../running-verification/index.md) — Putting configuration into practice
+- [Environment Variables](environment-variables.md): Full list of environment variables and how to set them
+- [Presets](presets.md): Creating, managing, and sharing configuration presets
+- [Workspace Initialization](../../getting-started/workspace-init.md): Setting up a new karenina project with `karenina init`
+- [Core Concepts](../../core_concepts/index.md): Understanding templates, rubrics, and evaluation modes
+- [Running Verification](../running-verification/index.md): Putting configuration into practice
