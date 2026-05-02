@@ -19,6 +19,8 @@ This tutorial shows how to checkpoint verification progress so you can resume in
 
 Progressive save is available both from the CLI (`--progressive-save` / `--resume`) and from the Python API (via the `ResultSink` protocol). Both paths share the same on-disk layout, so a run started on the CLI can be resumed from Python and vice versa.
 
+For the API reference of every sink (`ResultSink` Protocol, `ProgressiveFileSink`, `CompositeSink`, `DBSink`, `InMemorySink`) plus the helpers in `karenina.utils.progressive_save`, see the [Sinks reference](../../reference/api/sinks.md).
+
 **What you'll learn:**
 
 - Enable progressive save with `--progressive-save` (CLI)
@@ -78,6 +80,8 @@ verify --progressive-save
 ```
 
 The `.results.jsonl` file is append-only, so each completed result is an O(1) write. The `.state` file tracks the task manifest (every triple that needs to run), the set of completed triple keys, a config snapshot, and a config hash. Both files use atomic writes to prevent corruption if the process terminates mid-write.
+
+These two files are referred to as the sink's "sidecars" throughout the codebase. The unrelated `.partial` files in `karenina.utils.file_ops.atomic_write` are also called sidecars, but those are short-lived atomic-write companion files; see the [Sinks reference](../../reference/api/sinks.md#31-progressivefilesink) for the disambiguation.
 
 On successful completion, `on_finalize(all_complete=True)` assembles the final export from the JSONL, writes it to the output path, and removes the sidecars. If a run finishes with some tasks still failed, `on_finalize(all_complete=False)` retains the sidecars so `--resume` works next time.
 
@@ -178,6 +182,8 @@ print("CompositeSink pattern shown in comments above")
 
 `DBSink` writes one row per completed result (replacing the end-of-batch `auto_save_results` pattern). Both children see the same stream of results, so the JSON export and the SQLite rows stay consistent.
 
+When a sink is used by [`extend_template` / `extend_rubric`](../../core_concepts/extending-runs.md), prior rows are persisted progressively via `ResultSink.seed_prior_results(prior_results)`, which is forwarded by `CompositeSink` to every child that implements it. This is how an extension run's final export ends up containing both the prior rows and the new ones without holding everything in memory.
+
 ---
 
 ## Partial Failure: Keep State, Retry Only Failures
@@ -185,6 +191,41 @@ print("CompositeSink pattern shown in comments above")
 When the executor raises `VerificationBatchError` (some tasks failed, others succeeded), the batch runner catches it, flushes partial results through the sink, and calls `on_finalize(all_complete=False)`. The sidecars are kept. A subsequent `resume_verification()` will skip the completed triples and re-run only the failed ones.
 
 Without a sink, `VerificationBatchError` still propagates for back-compat with existing code.
+
+---
+
+## Extending a Prior Run with Progressive Save
+
+Both [`extend_template` and `extend_rubric`](../../core_concepts/extending-runs.md) accept the same `sink=` argument as `Benchmark.run_verification`, so the resumability story carries over verbatim to extension runs. This matters when an extension is itself long-running: a multi-judge `extend_template` on a 10k-question prior, or an `extend_rubric` over many traits, can take hours and is exactly the kind of workload progressive save was built for.
+
+The mechanics:
+
+1. The extension engine calls `sink.seed_prior_results(prior_results)` (when the sink implements it) before the pipeline starts, pre-populating the `.results.jsonl` and the `.state` manifest with the prior rows. This is how the merged final export ends up containing both prior and new rows even though only the new rows flow through `on_result`.
+2. The new rows stream through `on_result` as the pipeline produces them, written incrementally to the JSONL.
+3. On clean completion, `on_finalize(all_complete=True)` collapses the JSONL into a final JSON export at `output_path` and removes the sidecars.
+4. On crash or partial failure, the sidecars are kept; `Benchmark.resume_verification(state_path)` resumes the extension, seeded prior rows included.
+
+```python
+# Extending a long prior run with a resumable sink:
+#
+# from pathlib import Path
+# from karenina.benchmark.verification.sinks import ProgressiveFileSink
+#
+# sink = ProgressiveFileSink(
+#     output_path=Path("merged.json"),
+#     config=phase_b,
+#     benchmark_path="checkpoint.jsonld",
+# )
+# merged = bench.extend_template(prior_results=prior, config=phase_b, sink=sink)
+#
+# # On crash, resume from the .state file:
+# # bench.resume_verification("merged.json.state")
+print("Extension-with-sink pattern shown in comments above")
+```
+
+The pattern composes with `CompositeSink`: pair a `ProgressiveFileSink` with a `DBSink` to get both an on-disk extension and a SQLite extension that survive a crash mid-run. All four in-tree sinks (`ProgressiveFileSink`, `DBSink`, `CompositeSink`, `InMemorySink`) implement `seed_prior_results`, so the prior rows make it into every persistence path. Third-party sinks that omit `seed_prior_results` are silently tolerated; the extension still completes, but the sink's final export contains only the new rows.
+
+For the full extension surface, see the [Extending a Prior Run tutorial](./extending-a-prior-run.md).
 
 ---
 
