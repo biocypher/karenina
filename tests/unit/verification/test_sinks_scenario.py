@@ -26,8 +26,10 @@ from karenina.schemas.verification import (
     VerificationConfig,
     VerificationResult,
     VerificationResultMetadata,
+    VerificationResultTemplate,
 )
 from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.utils.progressive_save import TaskIdentifier
 
 
@@ -40,6 +42,8 @@ def _turn_result(
     replicate: int | None = None,
     answering: str = "qwen3.5-a3b",
     parsing: str = "qwen3.5-a3b",
+    failure_category: FailureCategory | None = None,
+    verify_result: bool | None = None,
 ) -> VerificationResult:
     """Build a VerificationResult that looks like one scenario turn."""
     ans = ModelIdentity(interface="openai_endpoint", model_name=answering)
@@ -50,6 +54,9 @@ def _turn_result(
         metadata=VerificationResultMetadata(
             question_id=question_id,
             template_id="tmpl",
+            failure=Failure(category=failure_category, stage="verify_template", reason="failed")
+            if failure_category is not None
+            else None,
             question_text="turn text",
             answering=ans,
             parsing=parse,
@@ -62,6 +69,7 @@ def _turn_result(
             scenario_node=scenario_node,
             scenario_turn=scenario_turn,
         ),
+        template=VerificationResultTemplate(verify_result=verify_result),
     )
 
 
@@ -164,7 +172,9 @@ class TestProgressiveFileSinkScenario:
         sink = self._fresh(tmp_path)
         combo_key = TaskIdentifier.from_result(_turn_result("S1", "q_t1")).to_key()
         sink.on_start([combo_key], sink.config)
-        sink.on_result(_turn_result("S1", "q_t1", scenario_turn=1))
+        sink.on_result(
+            _turn_result("S1", "q_t1", scenario_turn=1, failure_category=FailureCategory.CONTENT)
+        )
         sink.on_result(_turn_result("S1", "q_t2", scenario_turn=2))
 
         reloaded = ProgressiveFileSink.load_for_resume(sink.state_path)
@@ -232,9 +242,11 @@ class TestRunScenarioVerificationWithSink:
         s1 = MagicMock()
         s1.name = "S1"
         s1.nodes = {}
+        s1.outcome_criteria = []
         s2 = MagicMock()
         s2.name = "S2"
         s2.nodes = {}
+        s2.outcome_criteria = []
         benchmark._scenarios = {"S1": s1, "S2": s2}
 
         # Pre-populate a sink with S1 already done.
@@ -251,11 +263,19 @@ class TestRunScenarioVerificationWithSink:
 
         # Executor should only see S2 this pass.
         exec_result_s2 = MagicMock()
+        exec_result_s2.scenario_id = "S2"
         exec_result_s2.turn_results = [_turn_result("S2", "q_t1", scenario_turn=1)]
         MockExecutor.return_value.run_batch.return_value = ([exec_result_s2], [])
 
-        benchmark._run_scenario_verification(config, async_enabled=False, sink=sink)
+        result_set = benchmark._run_scenario_verification(config, async_enabled=False, sink=sink)
 
         combos_passed = MockExecutor.return_value.run_batch.call_args.kwargs["combos"]
         scen_names = {c[0].name for c in combos_passed}
         assert scen_names == {"S2"}
+        assert len(result_set.results) == 2
+        assert {r.metadata.scenario_id for r in result_set.results} == {"S1", "S2"}
+        assert result_set.scenario_results is not None
+        assert len(result_set.scenario_results) == 2
+        assert {r.scenario_id for r in result_set.scenario_results} == {"S1", "S2"}
+        prior = next(r for r in result_set.scenario_results if r.scenario_id == "S1")
+        assert prior.status == "completed"

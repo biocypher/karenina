@@ -109,6 +109,110 @@ def _apply_scenario_ordering(
     return combos
 
 
+def _reconstruct_scenario_results_from_sink_rows(
+    rows: list[VerificationResult],
+    *,
+    combo_by_key: dict[tuple[str, str, str, int | None], tuple[Any, Any, Any, int | None]],
+    skipped_combo_keys: set[tuple[str, str, str, int | None]],
+) -> list[Any]:
+    """Rebuild skipped scenario summaries from per-turn sink rows."""
+    from contextlib import suppress
+
+    from karenina.ports.messages import Message
+    from karenina.scenario.manager import _evaluate_outcome_criteria
+    from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState, TurnRecord
+    from karenina.utils.progressive_save import TaskIdentifier
+
+    grouped: dict[tuple[str, str, str, int | None], list[VerificationResult]] = {}
+    for row in rows:
+        meta = row.metadata
+        if meta.scenario_id is None:
+            continue
+        task = TaskIdentifier.from_result(row)
+        key = (
+            task.question_id,
+            task.answering_canonical_key,
+            task.parsing_canonical_key,
+            task.replicate,
+        )
+        if key in skipped_combo_keys:
+            grouped.setdefault(key, []).append(row)
+
+    reconstructed: list[Any] = []
+    for key in sorted(grouped, key=lambda item: item[0]):
+        scenario, _, _, replicate = combo_by_key[key]
+        turn_rows = sorted(grouped[key], key=lambda row: row.metadata.scenario_turn or 0)
+        history: list[TurnRecord] = []
+        node_results: dict[str, dict[str, Any]] = {}
+
+        for row in turn_rows:
+            meta = row.metadata
+            template = row.template
+            trace_messages = []
+            for message in (template.trace_messages if template is not None else []) or []:
+                with suppress(Exception):
+                    trace_messages.append(Message.from_dict(message))
+
+            parsed_fields = template.parsed_llm_response if template is not None else None
+            parsed_fields = dict(parsed_fields or {})
+            verify_result = template.verify_result if template is not None else None
+            node_id = meta.scenario_node or ""
+            record = TurnRecord(
+                node_id=node_id,
+                question_text=meta.question_text,
+                question_messages=[Message.user(meta.question_text)],
+                trace_messages=trace_messages,
+                raw_response=template.raw_llm_response if template is not None else "",
+                parsed_answer=None,
+                parsed_fields=parsed_fields,
+                verify_result=verify_result,
+                verification_result_id=meta.result_id,
+            )
+            history.append(record)
+            node_results[node_id] = {
+                "verify_result": verify_result,
+                "parsed": parsed_fields,
+                "rubric": {},
+            }
+
+        path = [turn.node_id for turn in history]
+        last_row = turn_rows[-1] if turn_rows else None
+        last_failure = last_row.metadata.failure if last_row is not None else None
+        failure_group = getattr(getattr(last_failure, "group", None), "value", getattr(last_failure, "group", None))
+        failure_category = getattr(
+            getattr(last_failure, "category", None),
+            "value",
+            getattr(last_failure, "category", None),
+        )
+        is_content_failure = failure_group == "content" or failure_category == "content"
+        status = "error" if last_failure is not None and not is_content_failure else "completed"
+        final_state = ScenarioState(
+            turn=len(history),
+            current_node=path[-1] if path else "",
+            verify_result=history[-1].verify_result if history else None,
+            parsed=history[-1].parsed_fields if history else {},
+            node_visits={node: path.count(node) for node in set(path)},
+            history=history,
+            accumulated={},
+            node_results=node_results,
+        )
+        result = ScenarioExecutionResult(
+            scenario_id=scenario.name,
+            status=status,
+            path=path,
+            turn_count=len(history),
+            history=history,
+            turn_results=turn_rows,
+            final_state=final_state,
+            outcome_results={},
+            replicate=replicate,
+        )
+        result.outcome_results = _evaluate_outcome_criteria(scenario, result)
+        reconstructed.append(result)
+
+    return reconstructed
+
+
 class Benchmark:
     """
     Main class for managing Karenina benchmarks in JSON-LD format.
@@ -859,11 +963,12 @@ class Benchmark:
             async_enabled: Whether to run in parallel.
             progress_callback: Optional UI progress callback.
             sink: Optional :class:`ResultSink` for progressive save and
-                crash recovery. Only supported for standalone benchmarks
-                (not scenario mode). Pass a :class:`ProgressiveFileSink` to
-                get ``--resume``-compatible sidecars written incrementally,
-                or a :class:`CompositeSink` to combine multiple persistence
-                strategies.
+                crash recovery. Pass a :class:`ProgressiveFileSink` to get
+                ``--resume``-compatible sidecars written incrementally, or a
+                :class:`CompositeSink` to combine multiple persistence
+                strategies. Scenario mode stores per-turn verification rows
+                and skips already-completed scenario/model/parser combos on
+                resume.
         """
         # Auto-build replay store from legacy interface="manual" models.
         # The benchmark is only reachable here (not from VerificationConfig
@@ -1093,6 +1198,8 @@ class Benchmark:
         cfg_skip = getattr(config, "skip_triples", None)
         has_cfg_skip = isinstance(cfg_skip, set | frozenset) and len(cfg_skip) > 0
         need_keys = sink is not None or has_cfg_skip
+        skipped_combo_keys: set[tuple[str, str, str, int | None]] = set()
+        combo_by_key: dict[tuple[str, str, str, int | None], ScenarioCombo] = {}
         if need_keys:
             from karenina.schemas.verification.model_identity import ModelIdentity
             from karenina.utils.progressive_save import TaskIdentifier
@@ -1103,6 +1210,7 @@ class Benchmark:
                 parse_key = ModelIdentity.from_model_config(parse, role="parsing").canonical_key
                 return (scen.name, ans_key, parse_key, rep)
 
+            combo_by_key = {_combo_key(c): c for c in combos}
             full_manifest: list[str] = [
                 TaskIdentifier(
                     question_id=k[0],
@@ -1110,7 +1218,7 @@ class Benchmark:
                     parsing_canonical_key=k[2],
                     replicate=k[3],
                 ).to_key()
-                for k in (_combo_key(c) for c in combos)
+                for k in combo_by_key
             ]
 
             skip_set: set[tuple[str, str, str, int | None]] = set()
@@ -1126,11 +1234,25 @@ class Benchmark:
                 skip_set |= set(cfg_skip)  # type: ignore[arg-type]  # narrowed by isinstance gate above
 
             if skip_set:
+                skipped_combo_keys = skip_set & set(combo_by_key)
                 combos = [c for c in combos if _combo_key(c) not in skip_set]
                 logger.info("Skipping %d scenario combos; %d remain", len(skip_set), len(combos))
 
             if sink is not None:
                 sink.on_start(full_manifest, config)
+
+        prior_sink_results: list[VerificationResult] = []
+        prior_scenario_results: list[Any] = []
+        if sink is not None:
+            iterator = getattr(sink, "iter_results", None)
+            if iterator is not None:
+                prior_sink_results = list(iterator())
+                if prior_sink_results and skipped_combo_keys:
+                    prior_scenario_results = _reconstruct_scenario_results_from_sink_rows(
+                        prior_sink_results,
+                        combo_by_key=combo_by_key,
+                        skipped_combo_keys=skipped_combo_keys,
+                    )
 
         executor = ScenarioExecutor(
             parallel=bool(async_enabled) and len(combos) > 1,
@@ -1176,13 +1298,15 @@ class Benchmark:
             except Exception:  # noqa: BLE001
                 logger.warning("Scenario sink on_finalize raised; continuing", exc_info=True)
 
-        all_turn_results: list[VerificationResult] = []
+        all_turn_results: list[VerificationResult] = list(prior_sink_results)
         for er in exec_results:
             all_turn_results.extend(er.turn_results)
 
         return VerificationResultSet(
             results=all_turn_results,
-            scenario_results=exec_results if exec_results else None,
+            scenario_results=[*prior_scenario_results, *exec_results]
+            if (prior_scenario_results or exec_results)
+            else None,
             errors=[(d, e) for d, e in errors] if errors else None,
         )
 
