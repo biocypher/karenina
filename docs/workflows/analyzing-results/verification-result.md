@@ -170,6 +170,9 @@ The `template` section is present when template evaluation was performed (evalua
 |-------|------|-------------|
 | `raw_llm_response` | `str` | Raw text response from the answering model |
 | `trace_messages` | `list[dict]` | Full message trace (for multi-turn/agent interactions) |
+| `conversation_context` | `list[dict]` | Conversation context messages assembled by prompt assembly (system/few-shot/preceding turns) |
+| `response_timeout_partial` | `bool` | `True` if the response was truncated by a streaming timeout |
+| `usage_unavailable` | `bool` | `True` if usage metadata could not be captured (e.g., due to streaming timeout) |
 
 ### Parsed Responses
 
@@ -196,6 +199,9 @@ if result.template and result.template.parsed_llm_response:
 | `template_verification_performed` | `bool` | Whether `verify()` was executed |
 | `verify_result` | `bool \| None` | Template verification result (`True`/`False`, or `None` if skipped) |
 | `verify_granular_result` | `Any \| None` | Granular verification result from `verify_granular()` (e.g., `0.67` for partial credit) |
+| `field_verification_error` | `str \| None` | Error message captured when `verify()` raised an exception |
+| `field_results` | `dict[str, bool] \| None` | Per-field primitive verification outcomes |
+| `composition_strategy` | `str \| None` | Composition strategy used to combine field results (`"all_of"`, `"any_of"`, `"at_least_n(N)"`) |
 
 ### Embedding Check
 
@@ -233,6 +239,13 @@ if result.template and result.template.parsed_llm_response:
 | `sufficiency_detected` | `bool \| None` | Whether the response has sufficient information (`True` = sufficient) |
 | `sufficiency_override_applied` | `bool` | Whether sufficiency check overrode the result |
 | `sufficiency_reasoning` | `str \| None` | LLM's reasoning for the sufficiency determination |
+
+### Agentic Parsing
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agentic_parsing_performed` | `bool` | Whether the agentic parsing variant ran (stage 7b) instead of standard judge parsing |
+| `investigation_trace` | `str \| None` | Raw trace from the agentic judge investigation step, if agentic parsing was used |
 
 ### MCP and Agent Metrics
 
@@ -294,12 +307,12 @@ Scores are split by trait type for type-safe access:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `llm_trait_scores` | `dict[str, int \| bool] \| None` | LLM-evaluated traits — boolean (`True`/`False`) for boolean kind, integer score for score kind, class index for literal kind |
+| `llm_trait_scores` | `dict[str, Any] \| None` | LLM-evaluated traits. Scalar kinds use boolean (`True`/`False`) for boolean kind, integer score for score kind, class index (`int`, or `-1` for invalid classification) for literal kind. Template-kind LLM traits contribute multiple dotted-key entries (`trait.field`) whose values follow the user-defined Pydantic schema, so the value type is widened to `Any`. |
 | `llm_trait_labels` | `dict[str, str] \| None` | Human-readable class names for literal kind traits (e.g., `{"tone": "Professional"}`) |
 | `regex_trait_scores` | `dict[str, bool] \| None` | Regex-based traits (boolean pass/fail) |
 | `callable_trait_scores` | `dict[str, bool \| int] \| None` | Callable-based traits (boolean or integer score) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric traits with nested metrics (e.g., `{"extraction": {"precision": 1.0, "recall": 0.8, "f1": 0.89}}`) |
-| `agentic_trait_scores` | `dict[str, int \| bool] \| None` | Agentic rubric trait scores, keyed by trait name. Same value types as LLM traits (boolean, integer score, or class index for literal kind). |
+| `agentic_trait_scores` | `dict[str, int \| bool \| float \| str \| list[Any] \| None] \| None` | Agentic rubric trait scores, keyed by trait name. Value type matches the underlying trait kind (boolean, integer score, class index for literal kind, or any value emitted by a template-kind agentic trait). |
 | `agentic_trait_investigation_traces` | `dict[str, str] \| None` | Raw investigation traces from agentic trait agents, keyed by trait name. Each trace is the full text of the agent's investigation session. |
 
 ### Metric Trait Details
@@ -328,7 +341,7 @@ The `VerificationResultRubric` provides helper methods for working with trait sc
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `get_all_trait_scores()` | `dict` | All trait scores across all types in a flat dictionary |
-| `get_trait_by_name(name)` | `tuple \| None` | Look up a trait by name — returns `(value, trait_type)` or `None` |
+| `get_trait_by_name(name)` | `tuple \| None` | Look up a trait by name; returns `(value, trait_type)` where `trait_type` is one of `"llm"`, `"regex"`, `"callable"`, `"metric"`, or `"agentic"`, or `None` if not found |
 | `get_llm_trait_labels()` | `dict[str, str]` | Class labels for literal kind LLM traits |
 
 Example:
@@ -473,14 +486,16 @@ Hallucination risk structure:
 
 For verification against source code, here are the field counts per section:
 
+Counts are approximate; consult `src/karenina/schemas/verification/result_components.py` for the authoritative list.
+
 | Section | Fields | Convenience Methods |
 |---------|--------|---------------------|
-| Root level | 3 (evaluation_input, used_full_trace, trace_extraction_error) | — |
-| `metadata` | 24 fields + 2 properties | `answering_model`, `parsing_model` |
-| `template` | 33 fields | — |
-| `rubric` | 13 fields | `get_all_trait_scores()`, `get_trait_by_name()`, `get_llm_trait_labels()` |
-| `deep_judgment` | 10 fields | — |
-| `deep_judgment_rubric` | 11 fields | — |
+| Root level | 3 (`evaluation_input`, `used_full_trace`, `trace_extraction_error`) | — |
+| `metadata` | ~26 fields + 2 properties | `answering_model`, `parsing_model` |
+| `template` | ~36 fields | — |
+| `rubric` | ~13 fields | `get_all_trait_scores()`, `get_trait_by_name()`, `get_llm_trait_labels()` |
+| `deep_judgment` | ~10 fields | — |
+| `deep_judgment_rubric` | ~11 fields | — |
 
 ---
 

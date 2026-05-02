@@ -39,14 +39,15 @@ for result in results:
     print(f"Q: {meta.question_id} | Model: {meta.answering.model_name}")
 ```
 
-Each `VerificationResult` contains four sections:
+Each `VerificationResult` contains five sections:
 
 | Section | Contains | Present When |
 |---------|----------|--------------|
 | **metadata** | Question ID, model info, timing, execution status | Always |
 | **template** | Parsed answers, verify result, regex results, embedding similarity | Template evaluation ran |
-| **rubric** | Trait scores by type (LLM, regex, callable, metric) | Rubric evaluation ran |
-| **deep_judgment** | Excerpts, reasoning, hallucination risk | Deep judgment enabled |
+| **rubric** | Trait scores by type (LLM, regex, callable, metric, agentic) | Rubric evaluation ran |
+| **deep_judgment** | Template excerpts, attribute reasoning, hallucination risk | Deep judgment enabled for templates |
+| **deep_judgment_rubric** | Rubric trait excerpts, per-trait reasoning, deep-judgment scores | Deep judgment enabled for rubrics |
 
 [Understand the full result structure →](verification-result.md)
 

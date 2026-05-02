@@ -512,4 +512,4 @@ _TaskEval.add_template = _original_add_template
 - [Quality Assessment](../../notebooks/task-eval/quality-assessment.ipynb): Rubric-only evaluation with all trait types
 - [TaskEval concept page](../../core_concepts/task-eval.md): Object structure, pipeline integration, merge strategies
 - [Rubrics](../../core_concepts/rubrics/index.md): All five trait types in depth
-- [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine that TaskEval feeds into
+- [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine (with sub-stages 7a/7b and 11a/11b) that TaskEval feeds into
