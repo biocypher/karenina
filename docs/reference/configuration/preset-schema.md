@@ -51,7 +51,8 @@ The `config` key contains a `VerificationConfig` dictionary. All fields are docu
 |-------|--------|
 | `manual_traces` | Runtime-specific; must be provided via `--manual-traces` or Python API |
 | `db_config` | Environment-specific database configuration |
-| `run_name` | Per-job metadata, not part of reusable configuration |
+| `replay_store` | Runtime-only object (can hold large captured traces); excluded from serialization |
+| `skip_triples` | Internal plumbing for `Benchmark.extend_template`; never user-facing |
 
 ---
 

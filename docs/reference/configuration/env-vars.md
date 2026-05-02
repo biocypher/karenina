@@ -33,6 +33,7 @@ This is the exhaustive reference for every environment variable recognized by ka
 |----------|------|---------|-------------|
 | `KARENINA_ASYNC_ENABLED` | `bool` | `true` | Enable parallel verification execution across multiple questions. Also read by `VerificationConfig.__init__()` to set `async_enabled` if not explicitly provided. |
 | `KARENINA_ASYNC_MAX_WORKERS` | `int` | `2` | Maximum number of parallel workers for async execution. Also read by `VerificationConfig.__init__()` to set `async_max_workers` if not explicitly provided. Invalid values fall back to the default. |
+| `KARENINA_MAX_CONCURRENT_LLM_REQUESTS` | `int` | — | Global cap on concurrent LLM requests across all workers. Read by `VerificationConfig.__init__()` to set `max_concurrent_requests` if not explicitly provided. Useful for self-hosted inference servers (vLLM, SGLang). Invalid values fall back to no cap. |
 
 ### Path Configuration
 
@@ -48,6 +49,8 @@ This is the exhaustive reference for every environment variable recognized by ka
 |----------|------|---------|-------------|
 | `AUTOSAVE_DATABASE` | `bool` | `true` | Automatically save verification results to the SQLite database after each run. Disable to keep results in-memory only. |
 | `KARENINA_EXPOSE_GROUND_TRUTH` | `bool` | `false` | Include ground truth values in the judge LLM prompt during template evaluation. **Debugging only** — enabling this biases the judge and invalidates benchmark results. |
+| `KARENINA_TRACE_TRUNCATION_THRESHOLD` | `int` | (module default) | Maximum number of characters retained per trace when materializing failure cases for error analysis or scenario trace materialization. Read by `benchmark/error_analysis/case_renderer.py`, `benchmark/error_analysis/materializer.py`, and `scenario/trace_materialization.py`. The `analyze-errors` CLI accepts `--max-trace-chars` as an explicit override. Invalid values fall back to the module default. |
+| `CLAUDE_CONFIG_DIR` | `str` | — | Forwarded by the `claude_agent_sdk` agent adapter to the spawned Claude CLI subprocess. When set on the parent process, the child inherits the same Claude config directory; otherwise the SDK falls back to its own resolution. |
 
 ---
 
@@ -62,7 +65,7 @@ Boolean environment variables recognize these truthy strings (case-insensitive):
 
 ### VerificationConfig Integration
 
-Five environment variables are read directly by `VerificationConfig.__init__()` as fallbacks when the corresponding field is not set explicitly (via constructor, preset, or CLI):
+Six environment variables are read directly by `VerificationConfig.__init__()` as fallbacks when the corresponding field is not set explicitly (via constructor, preset, or CLI):
 
 | Env Var | VerificationConfig Field |
 |---------|-------------------------|
@@ -71,6 +74,7 @@ Five environment variables are read directly by `VerificationConfig.__init__()` 
 | `EMBEDDING_CHECK_THRESHOLD` | `embedding_check_threshold` |
 | `KARENINA_ASYNC_ENABLED` | `async_enabled` |
 | `KARENINA_ASYNC_MAX_WORKERS` | `async_max_workers` |
+| `KARENINA_MAX_CONCURRENT_LLM_REQUESTS` | `max_concurrent_requests` |
 
 These variables are only read when the field is **not present in the data dict** — explicit values always take precedence.
 
@@ -100,11 +104,14 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 | `EMBEDDING_CHECK_THRESHOLD` | `schemas/verification/config.py`, `benchmark/verification/utils/embedding_check.py` |
 | `KARENINA_ASYNC_ENABLED` | `schemas/verification/config.py`, `benchmark/verification/batch_runner.py`, `adapters/_parallel_base.py` |
 | `KARENINA_ASYNC_MAX_WORKERS` | `schemas/verification/config.py`, `benchmark/verification/executor.py`, `adapters/_parallel_base.py` |
+| `KARENINA_MAX_CONCURRENT_LLM_REQUESTS` | `schemas/verification/config.py` |
 | `DB_PATH` | `cli/serve.py` |
 | `KARENINA_PRESETS_DIR` | `schemas/verification/config_presets.py`, `cli/serve.py` |
 | `MCP_PRESETS_DIR` | `cli/serve.py` |
 | `AUTOSAVE_DATABASE` | `benchmark/verification/batch_runner.py` |
 | `KARENINA_EXPOSE_GROUND_TRUTH` | `benchmark/verification/evaluators/template/evaluator.py` |
+| `KARENINA_TRACE_TRUNCATION_THRESHOLD` | `benchmark/error_analysis/case_renderer.py`, `benchmark/error_analysis/materializer.py`, `scenario/trace_materialization.py` |
+| `CLAUDE_CONFIG_DIR` | `adapters/claude_agent_sdk/agent.py` |
 
 ---
 
@@ -114,10 +121,10 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 |----------|-------|
 | API Keys | 5 |
 | Embedding Check | 3 |
-| Async Execution | 2 |
+| Async Execution | 3 |
 | Path Configuration | 3 |
-| Other Settings | 2 |
-| **Total** | **15** |
+| Other Settings | 4 |
+| **Total** | **18** |
 
 ---
 

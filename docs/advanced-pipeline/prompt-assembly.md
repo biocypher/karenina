@@ -252,7 +252,7 @@ Factories should use `kwargs.get()` with defaults so they work even when keys ar
 ## Next Steps
 
 - [Prompt Config](../notebooks/running-verification/full-evaluation.ipynb): configure user instructions per task
-- [13 Stages in Detail](stages.md): which stages make LLM calls and use the assembler
+- [Pipeline Stages in Detail](stages.md): which stages make LLM calls and use the assembler
 - [Available Adapters](../advanced-adapters/available-adapters.md): adapter-specific prompt behavior
 - [Verification Config Reference](../reference/configuration/verification-config.md): `prompt_config` field in `VerificationConfig`
 - [Pipeline Overview](index.md): how stages execute and interact

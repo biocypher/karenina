@@ -306,6 +306,6 @@ This allows the investigation agent to selectively search the trace using file t
 
 - [Agentic Traits](../core_concepts/rubrics/agentic-traits.md): conceptual overview and usage guide
 - [Agentic Evaluation](agentic-evaluation.md): Stage 7b internals (agentic template parsing)
-- [Verification Pipeline](../core_concepts/verification-pipeline.md): the 13-stage execution engine
+- [Verification Pipeline](../core_concepts/verification-pipeline.md): the verification pipeline execution engine (13 stages with sub-stages 7a/7b and 11a/11b plus the always-on PlaceholderRetryAutoFail guard)
 - [Rubrics](../core_concepts/rubrics/index.md): rubric architecture and trait types
 - [Deep Judgment Rubrics](deep-judgment-rubrics.md): deep judgment for standard rubric traits

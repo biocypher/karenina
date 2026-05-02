@@ -19,9 +19,10 @@ The simplest port. Makes stateless LLM calls without agent loops or tool use. Us
 ### Protocol Signature
 
 ```python
+from contextlib import AbstractAsyncContextManager
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.messages import Message
-from karenina.ports.llm import LLMPort, LLMResponse
+from karenina.ports.llm import LLMPort, LLMResponse, StreamingLLMResponse
 
 class LLMPort(Protocol):
     @property
@@ -35,6 +36,14 @@ class LLMPort(Protocol):
         self, schema: type[BaseModel], *, max_retries: int | None = None
     ) -> "LLMPort": ...
 
+    def astream(
+        self, messages: list[Message]
+    ) -> AbstractAsyncContextManager[StreamingLLMResponse]: ...
+
+    def stream_invoke(
+        self, messages: list[Message], timeout: float | None = None
+    ) -> LLMResponse: ...
+
     async def aclose(self) -> None: ...
 ```
 
@@ -45,6 +54,8 @@ class LLMPort(Protocol):
 | `ainvoke(messages)` | Async invocation — primary API. Takes a list of `Message` objects, returns `LLMResponse`. |
 | `invoke(messages)` | Sync wrapper around `ainvoke()`. Uses `asyncio.run()` internally. |
 | `with_structured_output(schema, *, max_retries=None)` | Returns a new `LLMPort` configured for structured output using the provided Pydantic schema. Not all adapters support `max_retries`; those that do not will log a warning. |
+| `astream(messages)` | Open a streaming connection. Returns an async context manager that yields a `StreamingLLMResponse`; the response is async-iterable, producing text chunks while accumulating content. Adapters that do not support streaming raise `NotImplementedError`. Check `capabilities.supports_streaming` before calling. |
+| `stream_invoke(messages, timeout=None)` | Sync wrapper that streams tokens with an optional wall-clock timeout. On timeout, returns an `LLMResponse` with `is_partial=True` and whatever content arrived. Adapters that do not support streaming raise `NotImplementedError`. |
 | `capabilities` | Property returning `PortCapabilities` declaring adapter feature support. |
 | `aclose()` | Release adapter resources. Required; must be safe to call multiple times. |
 
@@ -53,10 +64,25 @@ class LLMPort(Protocol):
 ```python
 @dataclass
 class LLMResponse:
-    content: str              # The text content of the response
-    usage: UsageMetadata      # Token usage and cost metadata
-    raw: Any = None           # Provider-specific raw response object
+    content: str                  # The text content of the response
+    usage: UsageMetadata          # Token usage and cost metadata
+    raw: Any = None               # Provider-specific raw response object
+    is_partial: bool = False      # True when streaming was truncated (e.g., timeout)
+    usage_unavailable: bool = False  # True when usage metadata could not be captured
 ```
+
+`is_partial` is set by `stream_invoke()` when a wall-clock timeout interrupts the stream; the partial content is preserved. `usage_unavailable` is set when the streaming timeout interrupted the final chunk that carries token counts: usage fields are zero but do not reflect actual consumption.
+
+### StreamingLLMResponse
+
+```python
+class StreamingLLMResponse:
+    accumulated_content: str    # All text chunks received so far
+    usage: UsageMetadata        # Populated when the stream completes cleanly
+    is_complete: bool           # True after the stream finished without interruption
+```
+
+`StreamingLLMResponse` is async-iterable: iterating yields each `str` chunk as it arrives and appends it to `accumulated_content`. Use it inside an `async with llm.astream(...) as sr:` block.
 
 ### Pipeline Usage
 

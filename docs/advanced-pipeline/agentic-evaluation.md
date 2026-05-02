@@ -377,7 +377,7 @@ Agentic parsing affects several other stages:
 
 ## 11. Next Steps
 
-- [Verification Pipeline](../core_concepts/verification-pipeline.md): the 13-stage execution engine
+- [Verification Pipeline](../core_concepts/verification-pipeline.md): the verification pipeline execution engine (13 stages with sub-stages 7a/7b and 11a/11b plus the always-on PlaceholderRetryAutoFail guard)
 - [Adapters](../core_concepts/adapters.md): port/adapter architecture and available interfaces
 - [Answer Templates](../core_concepts/answer-templates.md): writing templates and VerifiedField
 - [Prompt Assembly](prompt-assembly.md): how prompts are constructed for each LLM call

@@ -2,7 +2,7 @@
 
 This page explains how to extend the verification pipeline with custom stages. Custom stages let you add domain-specific checks, additional evaluations, or integration with external systems — all within the standard pipeline execution flow.
 
-For the built-in stage reference, see [13 Stages in Detail](stages.md).
+For the built-in stage reference, see [Pipeline Stages in Detail](stages.md).
 
 ## The Stage Interface
 
@@ -325,7 +325,7 @@ class ToxicityCheckStage(BaseVerificationStage):
 
 ## Next Steps
 
-- [13 Stages in Detail](stages.md) — reference for all built-in stages
+- [Pipeline Stages in Detail](stages.md) — reference for all built-in stages
 - [Prompt Assembly](prompt-assembly.md) — how prompts are constructed for LLM-calling stages
 - [Deep Judgment Templates](deep-judgment-templates.md) — deep verification internals
 - [Adapter Architecture](../advanced-adapters/index.md) — the ports and adapters system used by LLM-calling stages

@@ -371,7 +371,7 @@ Traits that exhaust all retries without valid excerpts are added to `traits_with
 ## Related
 
 - [Advanced Pipeline Overview](index.md) — Stage ordering and evaluation mode matrix
-- [13 Stages in Detail](stages.md) — Stage 11 (RubricEvaluation) and Stage 12 (DeepJudgmentRubricAutoFail)
+- [Pipeline Stages in Detail](stages.md) — Stages 11a (RubricEvaluation), 11b (AgenticRubricEvaluation), and 12 (DeepJudgmentRubricAutoFail)
 - [Deep Judgment: Templates](deep-judgment-templates.md) — The parallel system for template attributes
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — All configuration fields including deep judgment rubric settings
 - [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — Complete result hierarchy including `deep_judgment_rubric`

@@ -2,7 +2,7 @@
 
 This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) and [Adapters Overview](../../core_concepts/adapters.md).
 
-`ModelConfig` is a Pydantic model with **20 fields** organized into 8 categories below. Import: `from karenina.schemas import ModelConfig`.
+`ModelConfig` is a Pydantic model with **22 fields** organized into the categories below. Import: `from karenina.schemas import ModelConfig`. Field counts can drift slightly with new releases; the source of truth is `karenina/schemas/config/models.py`.
 
 ---
 
@@ -167,6 +167,8 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `agent_timeout` | `int \| None` | `None` | Timeout in seconds for agent execution. Overrides the default timeout (180s) used in answer generation. Set higher for complex questions with many tool calls. |
+| `request_timeout` | `float \| None` | `None` | HTTP request timeout in seconds for individual LLM API calls on this model. Typically stamped by the pipeline from `VerificationConfig.request_timeout`. `None` means use the provider SDK default (no timeout). |
+| `retry_policy` | `RetryPolicy \| None` | `None` | Per-category retry policy for transient LLM errors on this model. Typically stamped by the pipeline from `VerificationConfig.retry_policy`. `None` means inherit the pipeline-level policy. |
 
 ---
 

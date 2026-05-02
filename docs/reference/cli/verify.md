@@ -50,7 +50,7 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | `--parsing-provider` | `TEXT` | — | Parsing model provider for LangChain (required without `--preset`) |
 | `--parsing-id` | `TEXT` | `parsing-1` | Parsing model ID |
 | `--temperature` | `FLOAT` | — | Model temperature (`0.0`–`2.0`) |
-| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual` |
+| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual`, `taskeval` |
 
 ### General Settings
 
@@ -109,6 +109,14 @@ Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` d
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--manual-traces` | `PATH` | — | JSON file with manual traces (`{question_hash: trace_string}`). Required when `--interface manual`. |
+
+### Replay Store
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--replay` | `PATH` | — | Path to a replay store JSON (built by `VerificationResultSet.to_replay_store()`). When set, the pipeline short-circuits to the canned traces on matching keys and runs live otherwise. Loaded into `VerificationConfig.replay_store` after the config is built. |
+
+See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme and capture/hydration semantics.
 
 ### Progressive Save and Resume
 

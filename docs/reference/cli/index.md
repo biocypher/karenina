@@ -19,6 +19,7 @@ The only global option is `--help`, which displays the command list.
 | **preset** | Manage verification presets (list, show, delete) | [preset](preset.md) |
 | **serve** | Start the Karenina webapp server | [serve](serve.md) |
 | **init** | Initialize Karenina configuration and directories | [init](init.md) |
+| **analyze-errors** | Materialize failure cases from a results JSON-LD into per-failure folders for triage and Claude Code launching | — |
 | **optimize** | Optimize prompts and instructions using GEPA | [optimize](optimize.md) |
 | **optimize-history** | View optimization history | — |
 | **optimize-compare** | Compare multiple optimization runs | — |
