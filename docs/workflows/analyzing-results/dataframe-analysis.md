@@ -211,6 +211,28 @@ print(f"Pass rate: {summary['pass_rate']:.0%}")
 print(f"Unique questions: {summary['num_questions']}")
 ```
 
+## Unified Failure and Caveat Columns
+
+Every Template, Rubric, and Judgment DataFrame includes six columns that summarize the run's [Failure and Caveats](../../reference/api/failure-and-caveats.md) verdict. They appear on every row, populated from `result.metadata.failure` and `result.metadata.caveats`.
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `success` | `bool` | `True` when `metadata.failure is None`, otherwise `False` |
+| `failure_category` | `str | None` | The leaf [`FailureCategory`](../../reference/api/failure-and-caveats.md#3-failurecategory-14-leaf-values) string value (e.g. `"content"`, `"rate_limit"`); `None` on success |
+| `failure_group` | `str | None` | The aggregation [`FailureGroup`](../../reference/api/failure-and-caveats.md#4-failuregroup-5-aggregation-buckets) string value (one of `content`, `autofail`, `retry`, `abstained`, `system`); `None` on success |
+| `failure_stage` | `str | None` | The pipeline stage that originated the failure (e.g. `"verify_template"`, `"parse_template"`); `None` on success |
+| `failure_reason` | `str | None` | Trimmed reason string capped at 500 characters; `None` on success |
+| `caveats` | `str` | Comma-joined list of [`Caveat`](../../reference/api/failure-and-caveats.md#5-caveat-3-informational-flags) string values; empty string when no caveats fired |
+
+```python
+template_df = results.get_template_results().to_dataframe()
+print(template_df[
+    ["question_id", "answering_model", "success", "failure_category", "failure_group", "caveats"]
+].head().to_string(index=False))
+```
+
+The `failure_*` values use the enum string forms (e.g. `failure_group == "retry"`, not `"retry_exhausted"`). For the full taxonomy and the classifier priority that decides which category fires, see the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
+
 ## Rubric DataFrames
 
 `RubricResults` converts rubric evaluation scores to DataFrames, with one row

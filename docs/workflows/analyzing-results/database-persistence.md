@@ -322,6 +322,22 @@ This lets you inspect what would change before committing. When you are satisfie
 
 ---
 
+## Failure and Caveat Persistence Columns
+
+When results are written to a CSV export (via `ResultsIOManager`) or saved to the database, the [`metadata.failure`](../../reference/api/failure-and-caveats.md) and [`metadata.caveats`](../../reference/api/failure-and-caveats.md#5-caveat-3-informational-flags) fields are flattened into dedicated columns rather than serialized as a nested object. This keeps queries simple: filtering by failure category is a column comparison.
+
+| Column | Type | Source |
+|--------|------|--------|
+| `success` | `bool` | `metadata.failure is None` |
+| `failure_category` | `str` (empty when no failure) | `metadata.failure.category.value` |
+| `failure_group` | `str` (empty when no failure) | `metadata.failure.group.value` (computed from category) |
+| `failure_stage` | `str` (empty when no failure) | `metadata.failure.stage` |
+| `failure_reason` | `str` (empty when no failure) | `metadata.failure.reason` (capped at 500 chars) |
+| `failure_details_json` | `str` (empty when no details) | `json.dumps(metadata.failure.details)` |
+| `caveats` | `str` (comma-joined enum values, possibly empty) | `",".join(c.value for c in metadata.caveats)` |
+
+Round-trip is symmetric: `_row_to_result` parses these columns back into a `Failure` object (with `group` re-derived from `category`) and a `list[Caveat]`. The exact column names and serialization live in `karenina/benchmark/core/results_io.py`. For the full taxonomy of categories, groups, and caveats, see the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
+
 ## JSON-LD vs Database
 
 Both storage approaches are complementary. Use the one that fits your workflow, or use both together.

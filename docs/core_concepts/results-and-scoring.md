@@ -196,8 +196,8 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `run_name` | `str \| None` | Organizing label for verification runs |
 | `replicate` | `int \| None` | Replicate number (1, 2, 3, ...) for repeated runs |
 | `keywords` | `list[str] \| None` | Keywords associated with the question |
-| `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason` |
-| `caveats` | `list[Caveat]` | Informational flags attached to the run (e.g. `partial_content`, `embedding_override`, `retries_used`) |
+| `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason`. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md) for the full taxonomy |
+| `caveats` | `list[Caveat]` | Informational flags attached to the run, orthogonal to pass/fail. Three values: `partial_content` (streaming response truncated), `embedding_override` (similarity fallback flipped a verdict), `retries_used` (at least one retry attempt was made). A passing result can carry caveats. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md#5-caveat-3-informational-flags) for trigger conditions |
 | `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
 | `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
 | `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |

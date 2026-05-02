@@ -379,7 +379,19 @@ The pipeline distinguishes three kinds of non-success:
 | **Override skip** | Pre-parse checks (5, 6) | Sets `verify_result=False`; downstream stages skip via `should_run()` conditions | populated (group `abstained`) |
 | **Error** | Any stage setting `context.failure` or raising an exception | All subsequent stages except `FinalizeResult` skip via `should_run()` | populated (group varies) |
 
-The critical distinction: **auto-fails are expected outcomes** (the model behaved in a detectable bad way), while **errors are infrastructure failures** (a stage threw an exception or encountered an unrecoverable state). Both produce a valid `VerificationResult`; inspecting `metadata.failure.group` tells you which case applies (`autofail`, `content`, `abstained`, `retry`, or `system`).
+The critical distinction: **auto-fails are expected outcomes** (the model behaved in a detectable bad way), while **errors are infrastructure failures** (a stage threw an exception or encountered an unrecoverable state). Both produce a valid `VerificationResult`; inspecting `metadata.failure.group` tells you which case applies.
+
+The five `FailureGroup` values are:
+
+| Group | When It Applies |
+|-------|-----------------|
+| `content` | Real answer was produced; `verify_template` returned `False` |
+| `autofail` | A guard stage decided the run is unacceptable (recursion limit, trace validation, deep-judgment rejection) |
+| `retry` | A retryable infrastructure error category (timeout, connection, rate limit, server error) exhausted its retry budget |
+| `abstained` | The pre-parse guards detected refusal or insufficient response |
+| `system` | Karenina-side or template-side problem: invalid template, parse exception, unexpected error |
+
+Each group expands into one or more leaf categories (14 in total) that pinpoint the exact failure mode. The full enumeration, the eight-rule classifier priority, and the conventions for `Failure.details` and `Caveat` flags live in the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
 
 ### How `should_run()` Works
 
