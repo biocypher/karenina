@@ -6,7 +6,12 @@ Karenina provides a command-line interface for running verifications, managing p
 karenina [OPTIONS] COMMAND [ARGS]...
 ```
 
-The only global option is `--help`, which displays the command list.
+Global options apply to the `karenina` entry point itself (before any subcommand):
+
+| Option | Description |
+|--------|-------------|
+| `--version` | Print the installed karenina version and exit |
+| `--help` | Show the command list and exit |
 
 ---
 

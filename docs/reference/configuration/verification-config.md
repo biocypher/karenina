@@ -189,8 +189,9 @@ The `workspace_root` directory is configured on `Benchmark`, not on `Verificatio
 |-------|------|---------|-------------|
 | `replay_store` | `ReplayStore \| None` | `None` | Replay layer (see `karenina.replay`). When provided, the pipeline short-circuits to canned traces on matching keys and runs live otherwise. Excluded from serialization (can hold large captured traces). Loaded by the CLI from `--replay <path>`. |
 | `replay_parse_on_hydration_mismatch` | `Literal["fall_through", "strict"]` | `"fall_through"` | What to do when a replay key matches the answering call but downstream parse inputs differ from the captured run. `fall_through` falls back to live execution, `strict` raises an error. |
+| `skip_triples` | `frozenset[tuple[str, str, str, int \| None]] \| None` | `None` | Set of completed `(question_id, answering_canonical_key, parsing_canonical_key, replicate)` tuples that the executor must skip. Populated by the resume path (loaded from a `.state` file) and by [`extend_template`](../../notebooks/core_concepts/extending-runs.ipynb) so already-completed work is not re-run. Excluded from serialization and `repr`. |
 
-See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme.
+See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme, and [Extending Runs](../../notebooks/core_concepts/extending-runs.ipynb) for how `skip_triples` drives `extend_template` / `extend_rubric`.
 
 ---
 

@@ -114,7 +114,7 @@ Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` d
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--replay` | `PATH` | — | Path to a replay store JSON (built by `VerificationResultSet.to_replay_store()`). When set, the pipeline short-circuits to the canned traces on matching keys and runs live otherwise. Loaded into `VerificationConfig.replay_store` after the config is built. |
+| `--replay` | `PATH` | — | Path to a replay store JSON (built by `VerificationResultSet.to_replay_store()`). The store is loaded at startup and assigned to `VerificationConfig.replay_store`; lookups during the run hit the store first and the pipeline short-circuits to the canned traces on matching keys. Misses follow the `replay_parse_on_hydration_mismatch` policy (`fall_through` by default, which runs live), so the run can mix replayed and fresh execution. |
 
 See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme and capture/hydration semantics.
 
@@ -290,6 +290,34 @@ karenina verify checkpoint.jsonld --preset default.json \
 karenina verify checkpoint.jsonld --interactive
 karenina verify checkpoint.jsonld --interactive --mode advanced
 ```
+
+---
+
+## Interactive Modes: Basic vs Advanced
+
+`--interactive` launches a step-by-step wizard that builds a [VerificationConfig](../configuration/verification-config.md) through prompts. The `--mode` flag selects how many configuration knobs the wizard exposes (default: `basic`).
+
+**Basic mode** (`--mode basic`) walks through:
+
+1. Question selection (subset of finished templates)
+2. Replicate count
+3. Feature configuration: evaluation mode, abstention, sufficiency, embedding check, deep-judgment template mode
+4. Answering models (one or more)
+5. Parsing models (one or more)
+6. Optional preset save
+7. Progress bar / progressive save toggles
+
+**Advanced mode** (`--mode advanced`) runs the same flow plus an "Advanced Configuration" block before model collection. The advanced block adds prompts for:
+
+- Filtering specific rubric trait names (when rubrics are enabled)
+- Tuning deep-judgment template parameters (max excerpts, fuzzy threshold, retry attempts, search-based validation, search tool) when the template deep-judgment mode is not `disabled`
+- Configuring rubric deep-judgment (mode, global excerpt toggle, per-trait defaults, search settings, custom config)
+- [Few-shot](../../notebooks/core_concepts/few-shot.ipynb) prompting configuration
+- Async execution settings (enabled flag, max workers)
+
+Per-model prompts are also richer in advanced mode: MCP tool configuration is offered for the answering model only when `--mode advanced` is set and the chosen interface is not `manual`.
+
+Source: `karenina/src/karenina/cli/interactive.py:78` (`build_config_interactively`).
 
 ---
 
