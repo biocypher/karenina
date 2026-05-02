@@ -31,6 +31,7 @@ exclude_docs: |
   workflows/running-verification/deep-judgment.md
   workflows/running-verification/mcp-agent-evaluation.md
   workflows/running-verification/manual-interface-workflow.md
+  workflows/running-verification/extending-a-prior-run.md
   workflows/analyzing-results/dataframe-analysis.md
   core_concepts/questions-and-benchmarks/benchmarks.md
   core_concepts/questions-and-benchmarks/questions.md
@@ -45,10 +46,13 @@ exclude_docs: |
   core_concepts/results-and-scoring.md
   core_concepts/rubrics/agentic-traits.md
   core_concepts/agentic-evaluation.md
+  core_concepts/extending-runs.md
   workflows/running-verification/agentic-evaluation.md
   core_concepts/scenarios/building-scenarios.md
   core_concepts/scenarios/outcome-criteria.md
   core_concepts/scenarios/state-and-routing.md
+  core_concepts/scenarios/handover.md
+  core_concepts/scenarios/execution.md
   workflows/scenarios/sycophancy-tutorial.md
   advanced-pipeline/error-handling.md
   advanced-pipeline/replay-store.md
@@ -198,6 +202,8 @@ nav:
       - Building Scenarios: notebooks/core_concepts/scenarios/building-scenarios.ipynb
       - Outcome Criteria: notebooks/core_concepts/scenarios/outcome-criteria.ipynb
       - State and Routing: notebooks/core_concepts/scenarios/state-and-routing.ipynb
+      - Handover: notebooks/core_concepts/scenarios/handover.ipynb
+      - Execution: notebooks/core_concepts/scenarios/execution.ipynb
     - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
@@ -208,6 +214,7 @@ nav:
       - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
       - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
       - Agentic Evaluation: notebooks/core_concepts/agentic-evaluation.ipynb
+      - Extending Runs: notebooks/core_concepts/extending-runs.ipynb
     - Infrastructure:
       - Adapters: core_concepts/adapters.md
       - MCP Overview: notebooks/core_concepts/mcp-overview.ipynb
@@ -235,6 +242,7 @@ nav:
       - MCP Agent Evaluation: notebooks/running-verification/mcp-agent-evaluation.ipynb
       - Manual Interface: notebooks/running-verification/manual-interface-workflow.ipynb
       - Agentic Evaluation: notebooks/running-verification/agentic-evaluation.ipynb
+      - Extending a Prior Run: notebooks/running-verification/extending-a-prior-run.ipynb
     - Analyzing Results:
       - Overview: workflows/analyzing-results/index.md
       - Verification Result: workflows/analyzing-results/verification-result.md
@@ -261,6 +269,9 @@ nav:
       - serve: reference/cli/serve.md
       - init: reference/cli/init.md
       - optimize: reference/cli/optimize.md
+    - Failure and Caveats: reference/api/failure-and-caveats.md
+    - Sinks: reference/api/sinks.md
+    - Replay: reference/api/replay.md
     - API Reference: reference/api/
   - Advanced:
     - advanced.md
