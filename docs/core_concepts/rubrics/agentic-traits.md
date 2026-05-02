@@ -134,6 +134,7 @@ Question + Response Trace + Workspace Path
 |-------|------|----------|---------|-------------|
 | `name` | `str` | Yes | | Human-readable identifier (must be unique within the rubric) |
 | `description` | `str` | Yes | | Evaluation instructions for the agent. This is the primary channel for telling the agent what to investigate and what counts as evidence |
+| `summary` | `str \| None` | No | `None` | Short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset |
 | `kind` | `"boolean"` / `"score"` / `"literal"` / `type[BaseModel]` | Yes | | Shape of the result. String literals produce scalar scores; a `BaseModel` subclass (template kind) produces structured multi-field findings (see Section 5.4) |
 | `higher_is_better` | `bool \| None` | Yes | | Whether higher values indicate better performance. Must be `None` for template kind, because structured results have no single direction |
 | `min_score` | `int \| None` | No | `1` | Lower bound for score traits. Auto-derived for literal |
@@ -149,7 +150,7 @@ Question + Response Trace + Workspace Path
 | `timeout_seconds` | `int` | `120` | Wall-clock timeout for the investigation step |
 | `materialize_trace` | `bool` | `False` | Write the answering agent trace to a file in the workspace instead of inlining it in the investigation prompt. The investigation agent receives the file path and can use grep/search tools on it. Requires `context_mode` that includes the trace (`"trace_only"` or `"trace_and_workspace"`). See Section 5.5 |
 | `persist_trace` | `bool` | `False` | When `True`, the materialized trace file is kept after evaluation. When `False` (default), cleaned up after evaluation completes |
-| `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. The model's interface must have a registered `agent_factory` |
+| `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. The interface must be registered with `agent_tier="deep_agent"`; a model-validator rejects any other tier (including `"basic_agent"`) at trait construction time |
 
 ## 4. How It Works
 

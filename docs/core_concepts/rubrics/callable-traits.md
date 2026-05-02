@@ -67,6 +67,7 @@ The function is serialized using [cloudpickle](https://github.com/cloudpipe/clou
 |-------|------|---------|-------------|
 | `name` | `str` | *(required)* | Human-readable identifier |
 | `description` | `str \| None` | `None` | What this trait evaluates |
+| `summary` | `str \| None` | `None` | Short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset |
 | `kind` | `str` | *(required)* | `"boolean"` for pass/fail, `"score"` for numeric, `"literal"` for categorical |
 | `callable_code` | `bytes` | *(required)* | Serialized function (cloudpickle) |
 | `classes` | `dict[str, str] \| None` | `None` | Class name to description mapping (required if `kind="literal"`) |

@@ -73,6 +73,8 @@ Choose the kind based on the shape of the judgment:
 - Use **literal** when you can define distinct named categories.
 - Use **[template](#7-template-kind)** when one evaluation naturally produces several related fields that you would otherwise split across multiple scalar traits.
 
+In addition to `name`, `description`, and `kind`, every `LLMRubricTrait` accepts an optional `summary: str | None` field (a short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset).
+
 ## 3. Why the `description` Field Matters
 
 LLM traits are evaluated during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). During evaluation, the [prompt assembler](../../../../advanced-pipeline/prompt-assembly/) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response trace, and your trait definition.
@@ -531,7 +533,7 @@ Template traits flatten their structured output into `VerificationResultRubric.l
 
 For the example above, a successful evaluation stores:
 
-```python
+```text
 result.rubric.llm_trait_scores == {
     "citation_audit.cites_named_trial": True,
     "citation_audit.citation_count": 2,
