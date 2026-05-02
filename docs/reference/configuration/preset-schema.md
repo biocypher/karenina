@@ -44,6 +44,7 @@ The `config` key contains a `VerificationConfig` dictionary. All fields are docu
 - Async execution settings (`async_enabled`, `async_max_workers`)
 - Few-shot configuration (`few_shot_config`)
 - Prompt configuration (`prompt_config`)
+- Retry settings (`retry_policy`, `custom_error_patterns`)
 
 **Excluded from presets:**
 
@@ -91,6 +92,133 @@ When a preset is saved, each model in `answering_models` and `parsing_models` is
 | Field | Reason |
 |-------|--------|
 | `manual_traces` | Runtime-specific, never serialized in presets |
+
+---
+
+## Retry Configuration
+
+Two top-level fields on `VerificationConfig` control the central retry layer (`RetryExecutor`). Both are optional. When omitted, the pipeline falls back to `RetryPolicy()` defaults and the built-in `ErrorRegistry` rules. For the system's behavior at runtime, see [Error Handling and Retries](../../advanced-pipeline/error-handling.md).
+
+### `retry_policy`
+
+A nested object grouping one `CategoryRetryConfig` per retryable error category, plus an optional `timeout_escalation` block. Each category controls how many retries fire and how the per-attempt backoff grows.
+
+```yaml
+retry_policy:
+  connection:
+    max_attempts: 3
+    backoff_min: 1.0
+    backoff_max: 10.0
+    backoff_multiplier: 2.0
+  timeout:
+    max_attempts: 3
+    backoff_min: 5.0
+    backoff_max: 30.0
+    backoff_multiplier: 2.0
+  rate_limit:
+    max_attempts: 5
+    backoff_min: 5.0
+    backoff_max: 30.0
+    backoff_multiplier: 2.0
+  server_error:
+    max_attempts: 2
+    backoff_min: 2.0
+    backoff_max: 15.0
+    backoff_multiplier: 2.0
+  timeout_escalation:
+    strategy: additive       # or "multiplicative", "linear"
+    increment: 15.0
+    multiplier: 1.0
+    max_timeout: 180.0
+```
+
+`CategoryRetryConfig` fields (each category):
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `max_attempts` | int | varies | `>= 0` | Number of retries (not total calls); `0` disables retry for this category. |
+| `backoff_min` | float | `1.0` | `>= 0` | Lower bound for the per-attempt backoff in seconds. |
+| `backoff_max` | float | `10.0` | `>= 0` | Upper bound for the per-attempt backoff in seconds. |
+| `backoff_multiplier` | float | `2.0` | `>= 1.0` | Exponential growth factor between attempts. |
+
+Per-category `max_attempts` defaults: `connection=3`, `timeout=3`, `rate_limit=5`, `server_error=2`. Permanent errors are never retried.
+
+`timeout_escalation` (optional `TimeoutEscalationConfig`):
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `strategy` | string | (required) | `"additive"`, `"multiplicative"`, or `"linear"` | Growth function for the per-attempt timeout on `TIMEOUT` retries. |
+| `increment` | float | `0.0` | `>= 0`; required `> 0` for `additive` | Seconds added per retry; used by `additive` only. |
+| `multiplier` | float | `1.0` | `>= 1.0`; required `> 1.0` for `multiplicative` | Factor applied per retry; used by `multiplicative` only. |
+| `max_timeout` | float \| null | `null` | `>= 0`; required for `linear` | Cap (`additive`/`multiplicative`) or endpoint (`linear`). |
+
+### `custom_error_patterns`
+
+A list of declarative `ErrorPatternConfig` entries. The pipeline registers each entry on the shared `ErrorRegistry` at the start of every verification run, so the rules apply uniformly across all adapters. Use this to teach karenina about provider-specific exceptions that the built-in classifier does not recognize.
+
+```yaml
+custom_error_patterns:
+  - pattern: VllmQueueTimeout
+    category: rate_limit
+    match_type: type_name
+  - pattern: context length exceeded
+    category: permanent
+    match_type: message_substring
+```
+
+`ErrorPatternConfig` fields:
+
+| Field | Type | Default | Constraints | Description |
+|-------|------|---------|-------------|-------------|
+| `pattern` | string | (required) |   | Either an exception class name (`type_name`) or a substring of `str(exc)` (`message_substring`). |
+| `category` | string | (required) | `"connection"`, `"timeout"`, `"rate_limit"`, `"server_error"`, `"permanent"` | Target `ErrorCategory`. |
+| `match_type` | string | `"message_substring"` | `"type_name"` or `"message_substring"` | How `pattern` is matched against incoming exceptions. Substring matches are lowercased. |
+
+User rules run before built-in rules, so a custom entry can override any default classification. For the full match order and the available categories, see [Error Handling and Retries](../../advanced-pipeline/error-handling.md).
+
+### Worked Example: Both Blocks Together
+
+A preset that widens the rate-limit budget for a flaky vLLM host and reclassifies its queue-timeout exception:
+
+```yaml
+config:
+  answering_models: [...]
+  parsing_models: [...]
+  retry_policy:
+    connection:
+      max_attempts: 3
+      backoff_min: 1.0
+      backoff_max: 10.0
+      backoff_multiplier: 2.0
+    timeout:
+      max_attempts: 4
+      backoff_min: 10.0
+      backoff_max: 60.0
+      backoff_multiplier: 2.0
+    rate_limit:
+      max_attempts: 8
+      backoff_min: 10.0
+      backoff_max: 60.0
+      backoff_multiplier: 2.0
+    server_error:
+      max_attempts: 1
+      backoff_min: 2.0
+      backoff_max: 15.0
+      backoff_multiplier: 2.0
+    timeout_escalation:
+      strategy: additive
+      increment: 15.0
+      max_timeout: 180.0
+  custom_error_patterns:
+    - pattern: VllmQueueTimeout
+      category: rate_limit
+      match_type: type_name
+    - pattern: context length exceeded
+      category: permanent
+      match_type: message_substring
+```
+
+JSON form (the persisted preset format) is the same structure with `null` instead of omitted optional fields.
 
 ---
 

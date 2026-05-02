@@ -303,10 +303,31 @@ See the [workflow](../../task-eval/#step-4-configure-and-evaluate) for step-scop
 
 `StepEval` provides `get_summary_stats()` for aggregate statistics (traces passed, template verification counts, rubric trait counts, success rate) and `aggregate_rubric_results()` for averaging rubric scores across replicates. For replicate support, set `replicate_count` on your `VerificationConfig`.
 
-## 11. Next Steps
+## 11. The `taskeval` Interface
+
+TaskEval is wired through a sentinel value of `ModelConfig.interface`: `"taskeval"`. When the verification pipeline encounters this interface, it routes around answer generation entirely and consumes the pre-collected text supplied via `log()` / `log_trace()` instead.
+
+The interface is registered on `AdapterRegistry` with `llm_factory=None`, `parser_factory=None`, and `agent_factory=None`, plus `requires_provider=False`. There is no LLM, parser, or agent backing it: this interface is a routing signal, not an adapter that calls a model.
+
+```python
+from karenina.schemas.config import ModelConfig
+
+answering_model = ModelConfig(
+    id="taskeval-answerer",
+    model_name="recorded-output",   # arbitrary sentinel name
+    interface="taskeval",
+)
+```
+
+`model_name` is required by `ModelConfig` but its value is treated as a label (it identifies the recorded output set, not a live model). `model_provider` is not required because `requires_provider=False`. Parsing and rubric models in the same `VerificationConfig` still use a real adapter (typically `langchain` or `claude_tool`) for judge calls.
+
+For the registry-side details and the full interface matrix, see [Available Adapters](../../../advanced-adapters/available-adapters/#taskeval-taskeval-no-op-interface).
+
+## 12. Next Steps
 
 - [TaskEval workflow](../../task-eval/): step-by-step guide with complete code
 - [Answer templates](../answer-templates/): writing templates for correctness evaluation
 - [Rubrics](../../../core_concepts/rubrics/): defining quality traits
 - [Verification pipeline](../verification-pipeline/): the 13-stage pipeline (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) TaskEval routes through
 - [Evaluation modes](../evaluation-modes/): `template_only`, `rubric_only`, `template_and_rubric`
+- [Available adapters](../../../advanced-adapters/available-adapters/): the full interface matrix, including the `taskeval` row

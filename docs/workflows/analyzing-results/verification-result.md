@@ -138,6 +138,44 @@ Convenience properties:
 | `execution_time` | `float` | Execution time in seconds |
 | `timestamp` | `str` | ISO timestamp of when verification was run |
 
+### Retry Counts
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `retry_counts` | `dict[str, dict[str, int]] \| None` | Per-category retry usage and budget observed during this pipeline run. `None` when retry tracking was not active. |
+
+The dict is keyed by `ErrorCategory.value`: `"connection"`, `"timeout"`, `"rate_limit"`, `"server_error"`. Each entry has shape `{"used": int, "budget": int}`, where `budget` reflects the `max_attempts` of the `RetryPolicy` active when the pipeline started, and `used` counts how many of those retries actually fired.
+
+```python
+result.metadata.retry_counts
+# {
+#   "connection":   {"used": 0, "budget": 3},
+#   "timeout":      {"used": 2, "budget": 3},
+#   "rate_limit":   {"used": 5, "budget": 5},
+#   "server_error": {"used": 0, "budget": 2},
+# }
+```
+
+`Caveat.RETRIES_USED` fires iff any category has `used > 0`. The presence of this caveat is the cheapest "did we retry at all" check; for category-level analysis, read `retry_counts` directly.
+
+Detect budget-exhaustion failures (the run consumed the entire budget for a category, and was about to fail had it not succeeded or did fail because no retries were left):
+
+```python
+rc = result.metadata.retry_counts or {}
+exhausted_rate_limits = (
+    rc.get("rate_limit", {}).get("used") == rc.get("rate_limit", {}).get("budget")
+    and rc.get("rate_limit", {}).get("budget", 0) > 0
+)
+if exhausted_rate_limits:
+    print("rate_limit budget exhausted; consider widening max_attempts")
+```
+
+A category whose `used` consistently matches `budget` across many results is the signal to widen the corresponding `CategoryRetryConfig.max_attempts` or to register a [custom error pattern](../../reference/configuration/preset-schema.md#custom_error_patterns) that splits the offending exceptions into a category with more budget.
+
+A `retry_counts` of `None` (rather than a dict with all-zero counts) means the pipeline ran without an active retry tracker, typically a legacy code path that bypasses `RetryExecutor`.
+
+For the full retry system see [Error Handling and Retries](../../advanced-pipeline/error-handling.md). For the structured `failure` field that pairs with `retry_counts` after a budget-exhaustion failure, see [Failure and Caveats](../../reference/api/failure-and-caveats.md).
+
 ### Scenario Linking Fields
 
 These fields are populated only for results produced by scenario execution. For standalone (non-scenario) questions, all four are `None`.

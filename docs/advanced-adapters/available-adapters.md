@@ -421,6 +421,11 @@ config = ModelConfig(
 
 This adapter is wired by TaskEval; users do not normally instantiate it directly. See the [TaskEval skill / docs](../notebooks/core_concepts/task-eval.ipynb) for the supported workflow.
 
+<div class="admonition note">
+<p class="admonition-title">Not an adapter: <code>karenina/src/karenina/adapters/deep_agents/</code></p>
+<p>A directory named <code>deep_agents/</code> exists in the source tree but is <strong>not</strong> a registered adapter. Only <code>__pycache__</code> and an empty <code>prompts/</code> subdirectory remain; there is no <code>registration.py</code> and no entry in <code>AdapterRegistry._load_builtins()</code>. The actual deep-agents adapter is <code>langchain_deep_agents/</code> (interface <code>"langchain_deep_agents"</code>), documented above. Treat the bare <code>deep_agents/</code> path as historical residue, not a usable interface.</p>
+</div>
+
 ---
 
 ## Choosing an Adapter

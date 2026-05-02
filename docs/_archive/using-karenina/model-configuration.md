@@ -408,6 +408,55 @@ answering_model = ModelConfig(
 
 ---
 
+## Per-Model Retry Policy Override
+
+`ModelConfig.retry_policy: RetryPolicy | None` lets a single model override the pipeline-level retry policy. When `None` (the default), the pipeline stamps `VerificationConfig.retry_policy` onto the model before tasks run, so the model inherits the global policy. When set, the per-model value wins for every adapter call made on that model. For the underlying retry system (categories, budgets, tracking), see [Error Handling and Retries](../advanced-pipeline/error-handling.md).
+
+The most common reason to override is a single flaky endpoint. A vLLM host that queues requests under load benefits from a longer rate-limit budget than what the rest of your pipeline needs:
+
+```python
+from karenina.schemas import ModelConfig
+from karenina.utils.retry_policy import (
+    CategoryRetryConfig,
+    RetryPolicy,
+    TimeoutEscalationConfig,
+)
+
+flaky_vllm_policy = RetryPolicy(
+    rate_limit=CategoryRetryConfig(
+        max_attempts=8,        # default is 5
+        backoff_min=10.0,
+        backoff_max=60.0,
+    ),
+    timeout=CategoryRetryConfig(
+        max_attempts=4,
+        backoff_min=10.0,
+        backoff_max=60.0,
+    ),
+    timeout_escalation=TimeoutEscalationConfig(
+        strategy="additive",
+        increment=15.0,
+        max_timeout=180.0,
+    ),
+)
+
+vllm_model = ModelConfig(
+    id="local-qwen",
+    model_name="qwen-3-235",
+    interface="openai_endpoint",
+    endpoint_base_url="http://localhost:8000/v1",
+    endpoint_api_key="dummy",
+    temperature=0.0,
+    retry_policy=flaky_vllm_policy,    # overrides VerificationConfig.retry_policy
+)
+```
+
+Other answering and parsing models in the same `VerificationConfig` keep using the pipeline-level policy. Only `vllm_model`'s adapter sees the larger budgets.
+
+Leave `retry_policy` as `None` unless a specific model needs different behavior. A single pipeline-level setting is easier to reason about and produces more comparable `retry_counts` across models.
+
+---
+
 ## MCP Tool Integration
 
 Karenina supports Model Context Protocol (MCP) for tool access during answer generation. LLMs can invoke external tools (web search, database queries, calculations, etc.) through MCP servers.

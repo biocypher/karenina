@@ -184,6 +184,8 @@ The seven interfaces fall into three categories.
 
 `openrouter` and `openai_endpoint` are **routing interfaces**. They resolve to the `langchain` adapter at creation time, sharing the same adapter implementation with interface-specific configuration (API keys, base URLs). From the pipeline's perspective, they behave identically to `langchain`.
 
+Routing is implemented by `AdapterRegistry.resolve_interface(interface)`. The method follows `AdapterSpec.routes_to` recursively until it reaches an interface with no `routes_to`, then returns that interface name. So `resolve_interface("openrouter")` returns `"langchain"`, and a hypothetical chain `A -> B -> C` (with `C.routes_to = None`) returns `"C"`. Currently no built-in interface uses a chain longer than one hop. The registry does not detect cycles: a `routes_to` cycle would recurse without termination, so adapter authors must keep the routing graph acyclic. Use routing only when the routed interface adds configuration (extra base URLs, API keys, descriptive metadata) on top of a base adapter that handles the actual call.
+
 ### Automatic Fallback
 
 When an adapter's required dependency is missing, the factory transparently falls back to an alternative:
@@ -250,22 +252,59 @@ config = ModelConfig(
 The three factory functions create port adapters from a `ModelConfig`:
 
 ```python
-from karenina.adapters.factory import get_llm, get_agent, get_parser
+from karenina.adapters import get_llm, get_agent, get_parser
 
 llm = get_llm(config)       # Returns an LLMPort implementation
 agent = get_agent(config)    # Returns an AgentPort implementation
 parser = get_parser(config)  # Returns a ParserPort implementation
 ```
 
+<div class="admonition tip">
+<p class="admonition-title">Canonical import path</p>
+<p>Import factory functions from <code>karenina.adapters</code>, not from <code>karenina.adapters.factory</code>. The package <code>__init__.py</code> re-exports <code>get_llm</code>, <code>get_agent</code>, <code>get_parser</code>, <code>check_adapter_available</code>, <code>validate_model_config</code>, and <code>build_llm_kwargs</code> via lazy <code>__getattr__</code>. Importing through the package keeps user code stable across internal reorganizations of <code>factory.py</code>.</p>
+</div>
+
 All three functions:
 
 1. Read `model_config.interface` to select the adapter
-2. Validate required fields (model name; model provider for `langchain` only)
+2. Validate required fields (model name; model provider for interfaces with `requires_provider=True`)
 3. Check adapter availability via the registry
 4. Fall back automatically if the preferred adapter is unavailable
 5. Return a port implementation (never `None`)
+6. Call `register_adapter(adapter)` so the registry can run `aclose()` at shutdown (see [Adapter Lifecycle and Cleanup Tracking](../../../advanced-adapters/writing-adapters/#adapter-lifecycle-and-cleanup-tracking))
 
 In normal usage, you do not call these functions directly. The verification pipeline calls them based on your `VerificationConfig`.
+
+### Preflight Helpers
+
+Two related helpers are exported alongside the factories. Use them when you need to inspect a `ModelConfig` before constructing an adapter (e.g., during config validation, presets, or CLI feedback).
+
+| Helper | Purpose |
+|--------|---------|
+| `validate_model_config(model_config)` | Raise `AdapterUnavailableError` if `model_config` is `None`, `model_name` is empty, or `model_provider` is missing for an interface whose registered `AdapterSpec` has `requires_provider=True`. The factories call this before doing anything else. |
+| `check_adapter_available(interface)` | Return an `AdapterAvailability` record (`available`, `reason`, `fallback_interface`) for the named interface without constructing an adapter. Useful for surfacing setup issues (missing CLIs, missing SDKs) up-front. |
+
+```python
+from karenina.adapters import check_adapter_available, validate_model_config
+
+validate_model_config(config)                          # raises if invalid
+status = check_adapter_available("claude_agent_sdk")
+if not status.available:
+    print(status.reason, status.fallback_interface)
+```
+
+### Building LangChain Kwargs
+
+`build_llm_kwargs(model_config, *, question_hash=None)` produces the kwargs dict consumed by `init_chat_model_unified` (the unified LangChain entry point). It centralizes the per-interface plumbing previously duplicated across pipeline stages: base parameters, MCP server configuration, agent middleware, max context tokens, OpenAI-endpoint URL/API key, manual-interface question hashes, and `model_config.extra_kwargs`. Pass `question_hash` only when constructing a manual-interface client where the hash is needed for trace lookup.
+
+```python
+from karenina.adapters import build_llm_kwargs
+
+kwargs = build_llm_kwargs(config, question_hash=md5_of_question)
+# kwargs is a dict ready to forward to init_chat_model_unified(**kwargs)
+```
+
+Most user code does not call `build_llm_kwargs` directly; pipeline stages and the LangChain adapter do. It is exposed for custom adapter wrappers and integration code that needs to mirror the same parameter handling.
 
 ## 7. How Adapters Connect to the Pipeline
 

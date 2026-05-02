@@ -328,11 +328,7 @@ MCPServerConfig = MCPStdioServerConfig | MCPHttpServerConfig
 
 ### Error Types
 
-| Error | Description |
-|-------|-------------|
-| `AgentExecutionError` | General failure during agent execution |
-| `AgentTimeoutError` | Execution exceeded the configured timeout |
-| `AgentResponseError` | Response is malformed or invalid |
+`AgentPort` implementations raise `AgentExecutionError` (and its subclass `AgentTimeoutError`) for runtime failures, and `AgentResponseError` when the agent produced unparsable output. Both inherit from `PortError`. See the consolidated [Error Hierarchy](#error-hierarchy) below for the full table including attributes (`stderr`, `limit_reached`) and guidance for custom adapter authors.
 
 ### Example
 
@@ -353,6 +349,70 @@ print(result.final_response)
 print(f"Completed in {result.turns} turns")
 print(f"Limit reached: {result.limit_reached}")
 ```
+
+## Error Hierarchy
+
+All port-layer exceptions inherit from `PortError`, which itself inherits from `KareninaError`. Adapters should raise these (never bare `Exception` or provider-specific exceptions); pipeline stages catch them at the port boundary and convert them into structured `Failure` records.
+
+```
+PortError
+├── AdapterUnavailableError
+├── AgentExecutionError
+│   └── AgentTimeoutError
+├── AgentResponseError
+└── ParseError
+```
+
+### Class Reference
+
+| Class | Inherits from | Constructor signature | Extra attributes | When to raise |
+|-------|---------------|----------------------|------------------|---------------|
+| `PortError` | `KareninaError` | `(message)` | (none) | Base class. Do not raise directly; raise a subclass. |
+| `AdapterUnavailableError` | `PortError` | `(message, reason=None, fallback_interface=None)` | `reason: str` (defaults to `message` if not provided), `fallback_interface: str \| None` | Required infrastructure is missing: SDK not installed, CLI not in `PATH`, API key absent, missing `model_config` field. The factories raise this with `fallback_interface` populated when a sensible fallback exists. |
+| `AgentExecutionError` | `PortError` | `(message, stderr=None, limit_reached=False)` | `stderr: str \| None`, `limit_reached: bool` | Runtime failure during `arun()`: subprocess crashed, SDK threw, agent loop exited with an error. Set `stderr` when a captured stderr stream is available; set `limit_reached=True` if the failure is "model hit `max_turns`/`recursion_limit`" rather than a hard error. |
+| `AgentTimeoutError` | `AgentExecutionError` | inherited | inherited | Wall-clock timeout or recursion-limit timeout during agent execution. Raise instead of `AgentExecutionError` when the cause is specifically a timeout, so retry logic can route it to `RetryExecutor`'s `TIMEOUT` category. |
+| `AgentResponseError` | `PortError` | `(message)` | (none) | Agent completed but produced output that cannot be processed: invalid JSON, unexpected message shape, missing required fields. |
+| `ParseError` | `PortError` | `(message, raw_response=None)` | `raw_response: str \| None` | The judge LLM ran but its output could not be parsed into the requested Pydantic schema. Populate `raw_response` with the original text so callers can inspect it for debugging. |
+
+Source: `karenina/src/karenina/ports/errors.py`.
+
+### Custom Adapter Guidelines
+
+When writing your own adapter, route every provider exception through this hierarchy at the port boundary:
+
+```python
+from karenina.ports.errors import (
+    AdapterUnavailableError,
+    AgentExecutionError,
+    AgentResponseError,
+    AgentTimeoutError,
+    ParseError,
+)
+
+# Construction-time / config issue
+if not _has_my_sdk():
+    raise AdapterUnavailableError(
+        "my_provider SDK not installed",
+        reason="my_provider_sdk import failed",
+        fallback_interface="langchain",
+    )
+
+# Agent runtime crash
+try:
+    result = await self._client.run(...)
+except MyProviderTimeout as e:
+    raise AgentTimeoutError(str(e), stderr=getattr(e, "stderr", None)) from e
+except MyProviderError as e:
+    raise AgentExecutionError(str(e), stderr=getattr(e, "stderr", None)) from e
+
+# Parser could not extract the schema
+try:
+    parsed = schema.model_validate(data)
+except ValidationError as e:
+    raise ParseError("Failed to parse response", raw_response=raw_text) from e
+```
+
+Always chain via `from e` so the original exception is preserved. The pipeline's `failure_classifier` reads these attributes (`reason`, `fallback_interface`, `stderr`, `limit_reached`, `raw_response`) when building `Failure` records, so populating them is what makes downstream debugging useful.
 
 ## Supporting Types
 
@@ -417,11 +477,12 @@ Declares what prompt features an adapter supports. Used by `PromptAssembler` to 
 ```python
 @dataclass(frozen=True)
 class PortCapabilities:
-    supports_system_prompt: bool = True     # Separate system messages supported
+    supports_system_prompt: bool = True       # Separate system messages supported
     supports_structured_output: bool = False  # JSON schema enforcement supported
+    supports_streaming: bool = False          # astream/stream_invoke implemented
 ```
 
-When `supports_system_prompt` is `False`, the `PromptAssembler` prepends system text to the user message instead of sending it as a separate system message.
+When `supports_system_prompt` is `False`, the `PromptAssembler` prepends system text to the user message instead of sending it as a separate system message. `supports_streaming` is set by adapters that implement `LLMPort.astream` and `LLMPort.stream_invoke`; the default `False` reflects that streaming is not part of the standard verification path. Streaming is currently used only by callers that need partial-output recovery on wall-clock timeouts (see [`stream_invoke` and `is_partial`](#llmresponse) above) and is internal/experimental for most evaluation workflows: do not rely on it as a stable user-facing API. Always check `capabilities.supports_streaming` before invoking the streaming methods, since adapters that lack support raise `NotImplementedError`.
 
 ## Port Relationship
 
@@ -461,6 +522,17 @@ from karenina.ports.agent import MCPServerConfig, MCPStdioServerConfig, MCPHttpS
 # Factory functions
 from karenina.adapters.factory import get_llm, get_parser, get_agent
 ```
+
+## Testing Utilities
+
+Two registry-level helpers exist for test isolation only; they are not public API and must not be used in production code.
+
+| Helper | Module | Purpose |
+|--------|--------|---------|
+| `AdapterRegistry._reset()` | `karenina.adapters.registry` | Clear `_specs` and reset initialization flags so tests can register their own `AdapterSpec` without colliding with built-ins. |
+| `AdapterInstructionRegistry.clear()` | `karenina.ports.adapter_instruction` | Remove all `(interface, task)` factory mappings from the global instruction registry. |
+
+Use them inside pytest fixtures with both setup and teardown so the global state is always restored. See [Writing Custom Adapters: Testing Utilities](writing-adapters.md#testing-utilities) for an example fixture.
 
 ## Related
 
