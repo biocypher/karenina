@@ -201,6 +201,13 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
 | `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
 | `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |
+| `warnings` | `list[str]` | Non-fatal warning messages collected during the run |
+| `partial_content` | `str \| None` | Truncated response payload preserved when generation was cut short (e.g., streaming timeout) |
+| `retry_counts` | `dict[str, dict[str, int]] \| None` | Per-`ErrorCategory` retry usage and budget; each entry is `{"used": int, "budget": int}`. `None` when retry tracking was inactive |
+| `scenario_id` | `str \| None` | Scenario identifier when the result is part of a scenario; `None` for standalone questions |
+| `scenario_node` | `str \| None` | Scenario node id that produced this result |
+| `scenario_turn` | `int \| None` | 1-indexed turn position within the scenario path |
+| `scenario_path` | `list[str] \| None` | Sequence of node ids traversed before this turn |
 
 ```python
 meta = result.metadata
@@ -322,7 +329,7 @@ The `rubric` sub-object (`VerificationResultRubric`) is present whenever rubric 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `llm_trait_scores` | `dict[str, int \| bool] \| None` | LLM-evaluated traits (boolean or 1-5 scale) |
+| `llm_trait_scores` | `dict[str, Any] \| None` | LLM-evaluated traits. Scalar kinds (boolean, score, literal) store an `int`/`bool` value; template-kind traits inject dotted-key entries (`trait.field`) whose values follow the user-defined schema (string, list, dict, numeric, bool) |
 | `llm_trait_labels` | `dict[str, str] \| None` | Class labels for literal-kind LLM traits (index-to-name mapping) |
 | `regex_trait_scores` | `dict[str, bool] \| None` | Regex trait pass/fail results |
 | `callable_trait_scores` | `dict[str, bool \| int] \| None` | Callable trait results |
@@ -392,8 +399,8 @@ The `deep_judgment_rubric` sub-object (`VerificationResultDeepJudgmentRubric`) r
 |-------|------|-------------|
 | `extracted_rubric_excerpts` | `dict[str, list[dict]]` | Per-trait excerpts (only for traits with `deep_judgment_excerpt_enabled=True`) |
 | `rubric_trait_reasoning` | `dict[str, str]` | Per-trait reasoning (all deep-judgment-enabled traits) |
-| `deep_judgment_rubric_scores` | `dict[str, int \| bool]` | Scores from deep-judgment evaluation |
-| `standard_rubric_scores` | `dict[str, int \| bool]` | Scores for non-deep-judgment traits (for comparison) |
+| `deep_judgment_rubric_scores` | `dict[str, int \| bool] \| None` | Scores from deep-judgment evaluation |
+| `standard_rubric_scores` | `dict[str, int \| bool] \| None` | Scores for non-deep-judgment traits (for comparison) |
 | `traits_without_valid_excerpts` | `list[str]` | Traits that exhausted retries without valid excerpts |
 | `trait_metadata` | `dict[str, dict]` | Per-trait tracking (stages completed, model calls, retry counts) |
 

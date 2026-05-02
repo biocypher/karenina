@@ -155,11 +155,11 @@ print(f"Wrong:    pair_count=46  -> verify(): {parsed_wrong.verify()}")
 
 ## 3. Two Categories: Parsed vs Trace
 
-Karenina provides 18 primitives in two categories:
+Karenina provides 19 primitives in two categories:
 
 | Category | Count | Operates on | Included in judge schema? | Method |
 |----------|-------|-------------|--------------------------|--------|
-| **Parsed** | 15 | Judge-extracted field value + ground truth | Yes | `check(extracted, expected)` |
+| **Parsed** | 16 | Judge-extracted field value + ground truth | Yes | `check(extracted, expected)` |
 | **Trace** | 3 | Raw LLM response text | No (field excluded from schema) | `check_trace(raw_trace)` |
 
 **Parsed primitives** are the default. The Judge LLM sees the field in the JSON schema, extracts a value, and the primitive compares that value against `ground_truth`. Most evaluation uses parsed primitives.
@@ -203,10 +203,10 @@ Use trace primitives when the check is a pure pattern match or length constraint
 | Exact number | `NumericExact` | (none) |
 | Number within tolerance | `NumericTolerance` | `tolerance`, `mode` |
 | Number graded by distance (partial credit) | `NumericGraded` | `cutoff`, `full_credit` |
-| Number in a range | `NumericRange` | `min`, `max` |
+| Number in a range | `NumericRange` | `min`, `max`, `exclusive_min`, `exclusive_max` |
 | Number in a range, graded outside it | `NumericRangeGraded` | `min`, `max`, `margin` |
-| Number at least N | `NumericMinimum` | `minimum` |
-| Number at most N | `NumericMaximum` | `maximum` |
+| Number at least N (`ground_truth`) | `NumericMinimum` | `exclusive` |
+| Number at most N (`ground_truth`) | `NumericMaximum` | `exclusive` |
 | Number past a one-sided bound, graded near it | `NumericThresholdGraded` | `direction`, `margin` |
 | Set membership | `SetContainment` | `mode` |
 | Ordered list equality | `OrderedMatch` | `normalize` |
@@ -455,12 +455,14 @@ for value in [0.72, 0.70, 0.77, 0.80]:
 
 #### NumericRange
 
-Pass if the extracted value falls within the specified bounds (inclusive). This primitive ignores `ground_truth`.
+Pass if the extracted value falls within the specified bounds. Bounds are inclusive by default; set `exclusive_min` or `exclusive_max` to use strict inequality on the corresponding side. This primitive ignores `ground_truth`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `min` | `float \| None` | `None` | Lower bound (inclusive); no lower bound if `None` |
-| `max` | `float \| None` | `None` | Upper bound (inclusive); no upper bound if `None` |
+| `min` | `float \| None` | `None` | Lower bound; no lower bound if `None` |
+| `max` | `float \| None` | `None` | Upper bound; no upper bound if `None` |
+| `exclusive_min` | `bool` | `False` | If `True`, use strict `>` for the lower bound instead of `>=` |
+| `exclusive_max` | `bool` | `False` | If `True`, use strict `<` for the upper bound instead of `<=` |
 
 **Applies to:** `int`, `float`
 
