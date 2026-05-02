@@ -112,6 +112,11 @@ class TestScenarioManagerFailureMigration:
         )
 
         assert result.status == "error"
+        assert result.terminal_failure is not None
+        assert result.terminal_failure.node_id == "n1"
+        assert result.terminal_failure.category == "timeout"
+        assert result.terminal_failure.stage == "generate_answer"
+        assert result.terminal_failure.reason == "timed out after 120s"
         # Manager logs the failure reason and category (not the legacy fields).
         log_messages = [record.getMessage() for record in caplog.records]
         assert any("timed out after 120s" in msg for msg in log_messages)
@@ -173,5 +178,6 @@ class TestScenarioManagerFailureMigration:
         )
 
         assert result.status == "completed"
+        assert result.terminal_failure is None
         assert result.path == ["n1", "n2"]
         assert [turn.verify_result for turn in result.history] == [False, True]

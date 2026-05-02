@@ -88,6 +88,19 @@ def _populate_artifacts_from_replay_entry(
     context.set_artifact(ArtifactKeys.ANSWERING_MODEL_STR, answering_model_str)
     context.set_artifact(ArtifactKeys.REPLAY_ENTRY, entry)
 
+    usage_tracker = UsageTracker()
+    for stage_name, stage_usage in (getattr(entry, "usage_metadata", None) or {}).items():
+        if stage_name == "total" or not isinstance(stage_usage, dict):
+            continue
+        if "input_tokens" not in stage_usage:
+            continue
+        model_name = stage_usage.get("model") or answering_model_str
+        usage_tracker.track_call(stage_name, model_name, stage_usage)
+    if entry.agent_metrics:
+        usage_tracker.set_agent_metrics(entry.agent_metrics)
+    if usage_tracker.get_total_summary() or usage_tracker.get_agent_metrics():
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
+
 
 class GenerateAnswerStage(BaseVerificationStage):
     """

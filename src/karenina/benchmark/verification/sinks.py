@@ -62,6 +62,105 @@ def is_completed_result(result: VerificationResult | None) -> bool:
     return bool(timestamp)
 
 
+def _failure_attr(failure: Any, name: str) -> Any:
+    value = getattr(failure, name, None)
+    return getattr(value, "value", value)
+
+
+def _is_content_failure(failure: Any) -> bool:
+    return bool(_failure_attr(failure, "group") == "content" or _failure_attr(failure, "category") == "content")
+
+
+def _export_scenario_turn(row: VerificationResult) -> dict[str, Any]:
+    template = row.template
+    return {
+        "node_id": row.metadata.scenario_node,
+        "question_text": row.metadata.question_text,
+        "raw_response": template.raw_llm_response if template is not None else "",
+        "parsed_fields": dict((template.parsed_llm_response if template is not None else None) or {}),
+        "verify_result": template.verify_result if template is not None else None,
+        "verification_result_id": row.metadata.result_id,
+    }
+
+
+def _scenario_manifest_key(result: VerificationResult, manifest: Iterable[str]) -> str:
+    fallback = TaskIdentifier.from_result(result).to_key()
+    scenario_id = result.metadata.scenario_id
+    if not scenario_id:
+        return fallback
+
+    candidates: list[str] = []
+    for key in manifest:
+        try:
+            ident = TaskIdentifier.from_key(key)
+        except ValueError:
+            continue
+        if ident.question_id == scenario_id and ident.replicate == result.metadata.replicate:
+            candidates.append(key)
+    if len(candidates) == 1:
+        return candidates[0]
+    if fallback in candidates:
+        return fallback
+    return fallback
+
+
+def _reconstruct_scenario_results_for_export(
+    rows: Iterable[VerificationResult],
+    *,
+    manifest: Iterable[str] = (),
+) -> list[dict[str, Any]]:
+    """Build top-level scenario summaries from per-node sink rows.
+
+    The progressive sink persists only completed ``VerificationResult`` rows.
+    For scenario runs those rows are node turns, so the final sink export must
+    rebuild the compact scenario view that callers get from
+    ``Benchmark.run_verification``.
+    """
+    grouped: dict[str, list[VerificationResult]] = {}
+    first_seen: list[str] = []
+    for row in rows:
+        scenario_id = row.metadata.scenario_id
+        if not scenario_id:
+            continue
+        key = _scenario_manifest_key(row, manifest)
+        if key not in grouped:
+            first_seen.append(key)
+            grouped[key] = []
+        grouped[key].append(row)
+
+    scenario_results: list[dict[str, Any]] = []
+    for key in first_seen:
+        turn_rows = sorted(grouped[key], key=lambda row: row.metadata.scenario_turn or 0)
+        if not turn_rows:
+            continue
+        last_row = turn_rows[-1]
+        last_failure = last_row.metadata.failure
+        status = "error" if last_failure is not None and not _is_content_failure(last_failure) else "completed"
+        path = [row.metadata.scenario_node or "" for row in turn_rows]
+        terminal_failure = None
+        if status == "error" and last_failure is not None:
+            terminal_failure = {
+                "node_id": last_row.metadata.scenario_node,
+                "category": _failure_attr(last_failure, "category"),
+                "stage": getattr(last_failure, "stage", None),
+                "reason": getattr(last_failure, "reason", None),
+            }
+        ident = TaskIdentifier.from_key(key)
+        scenario_results.append(
+            {
+                "scenario_id": last_row.metadata.scenario_id,
+                "status": status,
+                "path": path,
+                "turn_count": len(turn_rows),
+                "replicate": ident.replicate,
+                "terminal_failure": terminal_failure,
+                "outcome_results": {},
+                "history": [_export_scenario_turn(row) for row in turn_rows],
+            }
+        )
+    return scenario_results
+
+
 @runtime_checkable
 class ResultSink(Protocol):
     """Side-effect handler invoked by the batch runner.
@@ -232,7 +331,7 @@ class ProgressiveFileSink:
             # JSONL has more entries than the state tracked (e.g. a crash
             # right after append, before state rewrite), trust the JSONL.
             for result in sink._results:
-                sink._completed.add(TaskIdentifier.from_result(result).to_key())
+                sink._completed.add(_scenario_manifest_key(result, sink._manifest))
 
         logger.info(
             "Loaded progressive sink: %d/%d tasks completed (%d failed)",
@@ -258,7 +357,7 @@ class ProgressiveFileSink:
         for row in prior_results.results:
             if not is_completed_result(row):
                 continue
-            task_id = TaskIdentifier.from_result(row).to_key()
+            task_id = _scenario_manifest_key(row, self._manifest)
             if task_id in self._completed:
                 continue
             _append_jsonl_line(self.jsonl_path, row.model_dump_json())
@@ -340,7 +439,7 @@ class ProgressiveFileSink:
         if not is_completed_result(result):
             return
 
-        task_id = TaskIdentifier.from_result(result).to_key()
+        task_id = _scenario_manifest_key(result, self._manifest)
         _append_jsonl_line(self.jsonl_path, result.model_dump_json())
         self._results.append(result)
         if task_id not in self._completed:
@@ -462,12 +561,14 @@ class ProgressiveFileSink:
         # called before any on_result (e.g. the empty-run case), in which case
         # jsonl_path was never created; guard is mandatory because
         # _read_jsonl_results opens the path unconditionally.
-        results_iter = _read_jsonl_results(self.jsonl_path) if self.jsonl_path.exists() else iter(())
+        results = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
+        scenario_results = _reconstruct_scenario_results_for_export(results, manifest=self._manifest)
         export_verification_results_json_stream(
             job,
-            results_iter,
+            iter(results),
             self.global_rubric,
             is_complete=True,
+            scenario_results=scenario_results or None,
             out_path=target,
         )
         return target

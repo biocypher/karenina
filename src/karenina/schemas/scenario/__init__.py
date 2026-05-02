@@ -15,7 +15,7 @@ from .checks import (
     TurnCheck,
 )
 from .definition import ScenarioDefinition
-from .state import ScenarioExecutionResult, ScenarioState, TurnRecord
+from .state import ScenarioExecutionResult, ScenarioState, ScenarioTerminalFailure, TurnRecord
 from .types import (
     END,
     EdgeCondition,
@@ -61,5 +61,6 @@ __all__ = [
     # State dataclasses
     "ScenarioExecutionResult",
     "ScenarioState",
+    "ScenarioTerminalFailure",
     "TurnRecord",
 ]

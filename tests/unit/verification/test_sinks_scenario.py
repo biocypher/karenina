@@ -14,6 +14,7 @@ Covers the combo-atomic resume contract:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -22,6 +23,7 @@ import pytest
 
 from karenina.benchmark.verification.sinks import ProgressiveFileSink
 from karenina.schemas.config.models import ModelConfig
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationConfig,
     VerificationResult,
@@ -29,7 +31,6 @@ from karenina.schemas.verification import (
     VerificationResultTemplate,
 )
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.utils.progressive_save import TaskIdentifier
 
 
@@ -172,15 +173,48 @@ class TestProgressiveFileSinkScenario:
         sink = self._fresh(tmp_path)
         combo_key = TaskIdentifier.from_result(_turn_result("S1", "q_t1")).to_key()
         sink.on_start([combo_key], sink.config)
-        sink.on_result(
-            _turn_result("S1", "q_t1", scenario_turn=1, failure_category=FailureCategory.CONTENT)
-        )
+        sink.on_result(_turn_result("S1", "q_t1", scenario_turn=1, failure_category=FailureCategory.CONTENT))
         sink.on_result(_turn_result("S1", "q_t2", scenario_turn=2))
 
         reloaded = ProgressiveFileSink.load_for_resume(sink.state_path)
         assert reloaded.completed_count == 1
         assert len(reloaded.get_all_results()) == 2
         assert reloaded.completed_triples() == sink.completed_triples()
+
+    def test_final_export_reconstructs_scenario_results(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        combo_key = TaskIdentifier.from_result(_turn_result("S1", "q_t1", replicate=1)).to_key()
+        sink.on_start([combo_key], sink.config)
+        sink.on_result(_turn_result("S1", "q_t1", scenario_turn=1, scenario_node="ask", replicate=1))
+        sink.on_result(
+            _turn_result(
+                "S1",
+                "q_t2",
+                scenario_turn=2,
+                scenario_node="adversarial",
+                replicate=1,
+                answering="sonnet-4.6",
+                failure_category=FailureCategory.TRACE_VALIDATION,
+            )
+        )
+        assert sink.completed_count == 1
+
+        sink.on_finalize(all_complete=True)
+
+        payload = json.loads(sink.output_path.read_text())
+        assert len(payload["results"]) == 2
+        assert len(payload["scenario_results"]) == 1
+        scenario = payload["scenario_results"][0]
+        assert scenario["scenario_id"] == "S1"
+        assert scenario["status"] == "error"
+        assert scenario["path"] == ["ask", "adversarial"]
+        assert scenario["replicate"] == 1
+        assert scenario["terminal_failure"] == {
+            "node_id": "adversarial",
+            "category": "trace_validation",
+            "stage": "verify_template",
+            "reason": "failed",
+        }
 
 
 @pytest.mark.unit

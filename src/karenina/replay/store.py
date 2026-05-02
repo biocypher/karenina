@@ -59,7 +59,9 @@ class ReplayEntry(BaseModel):
     parsed_answer_fields, when present, is a plain dict suitable for
     Answer.model_validate(). verify_result, when present, is the
     captured template verdict and can replay verdict-only rows whose raw
-    trace cannot be reparsed.
+    trace cannot be reparsed. usage_metadata, when present, is the
+    captured VerificationResultTemplate usage summary and is rehydrated
+    into the replayed result so token accounting survives replay.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -68,6 +70,7 @@ class ReplayEntry(BaseModel):
     trace_messages: list[dict[str, Any]] | None = None
     parsed_answer_fields: dict[str, Any] | None = None
     verify_result: bool | None = None
+    usage_metadata: dict[str, Any] | None = None
     agent_metrics: dict[str, Any] | None = None
     captured_model_id: str | None = None
     captured_at: str | None = None

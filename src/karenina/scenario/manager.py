@@ -22,7 +22,12 @@ from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
 from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.scenario.definition import ScenarioDefinition
-from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState, TurnRecord
+from karenina.schemas.scenario.state import (
+    ScenarioExecutionResult,
+    ScenarioState,
+    ScenarioTerminalFailure,
+    TurnRecord,
+)
 from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -150,6 +155,7 @@ class ScenarioManager:
         previous_agent_id: str | None = None
         previous_system_prompt: str | None = None
         status: Literal["completed", "limit_reached", "error"] = "completed"
+        terminal_failure: ScenarioTerminalFailure | None = None
 
         # Resolve base identity from entry node
         entry_node_obj = scenario.nodes[scenario.entry_node]
@@ -286,14 +292,13 @@ class ScenarioManager:
                 )
 
                 failure = vr.metadata.failure
-                if failure is not None:
-                    if failure.category == FailureCategory.CONTENT:
-                        logger.debug(
-                            "Scenario %s: node '%s' verified false: %s",
-                            scenario.name,
-                            state.current_node,
-                            failure.reason,
-                        )
+                if failure is not None and failure.category == FailureCategory.CONTENT:
+                    logger.debug(
+                        "Scenario %s: node '%s' verified false: %s",
+                        scenario.name,
+                        state.current_node,
+                        failure.reason,
+                    )
 
                 # Complete cache entry after final attempt
                 if answer_cache is not None and cache_key is not None and cached_answer_data is None:
@@ -383,6 +388,12 @@ class ScenarioManager:
                         failure.reason,
                         failure.category.value,
                     )
+                    terminal_failure = ScenarioTerminalFailure(
+                        node_id=state.current_node,
+                        category=failure.category.value,
+                        stage=failure.stage,
+                        reason=failure.reason,
+                    )
                     self._report_progress(
                         progress_callback,
                         scenario.name,
@@ -449,6 +460,7 @@ class ScenarioManager:
             turn_results=turn_results,
             final_state=state,
             outcome_results={},
+            terminal_failure=terminal_failure,
             replicate=replicate,
         )
 
@@ -717,9 +729,13 @@ def _hydrate_override_runtime_fields(model: ModelConfig, base: ModelConfig) -> M
         ):
             updates["endpoint_api_key"] = base.endpoint_api_key
 
-    if model.interface == base.interface and model.model_provider == base.model_provider:
-        if model.anthropic_api_key is None and base.anthropic_api_key is not None:
-            updates["anthropic_api_key"] = base.anthropic_api_key
+    if (
+        model.interface == base.interface
+        and model.model_provider == base.model_provider
+        and model.anthropic_api_key is None
+        and base.anthropic_api_key is not None
+    ):
+        updates["anthropic_api_key"] = base.anthropic_api_key
 
     return model.model_copy(update=updates) if updates else model
 

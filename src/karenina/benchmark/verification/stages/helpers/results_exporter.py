@@ -118,6 +118,7 @@ def export_verification_results_json_stream(
     global_rubric: HasTraitNames | None = None,
     *,
     is_complete: bool = False,
+    scenario_results: Iterable[Any] | None = None,
     out_path: Path,
 ) -> None:
     """Stream the v2.2 JSON export directly to out_path.
@@ -209,7 +210,18 @@ def export_verification_results_json_stream(
                 f.write(",\n")
             f.write(json.dumps(result.model_dump(mode="json"), ensure_ascii=False))
             first = False
-        f.write("\n]}\n")
+        f.write("\n]")
+        if scenario_results is not None:
+            f.write(',"scenario_results":[\n')
+            first = True
+            for result in scenario_results:
+                if not first:
+                    f.write(",\n")
+                payload = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+                f.write(json.dumps(payload, ensure_ascii=False, default=str))
+                first = False
+            f.write("\n]")
+        f.write("}\n")
 
 
 def export_verification_results_csv(

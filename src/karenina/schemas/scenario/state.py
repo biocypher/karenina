@@ -49,6 +49,16 @@ class ScenarioState:
 
 
 @dataclass
+class ScenarioTerminalFailure:
+    """Structured reason a scenario stopped with ``status='error'``."""
+
+    node_id: str
+    category: str
+    stage: str
+    reason: str
+
+
+@dataclass
 class ScenarioExecutionResult:
     """Computed wrapper returned by ScenarioManager.run().
 
@@ -64,6 +74,7 @@ class ScenarioExecutionResult:
     turn_results: list[VerificationResult]
     final_state: ScenarioState
     outcome_results: dict[str, bool | int | float]
+    terminal_failure: ScenarioTerminalFailure | None = None
     # Run-level replicate index for multi-replicate scenario runs.
     # None when the scenario was executed with replicate_count=1
     # (matches the QA convention in batch_runner.py).

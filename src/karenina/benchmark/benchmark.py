@@ -14,7 +14,7 @@ import threading
 import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
@@ -120,7 +120,12 @@ def _reconstruct_scenario_results_from_sink_rows(
 
     from karenina.ports.messages import Message
     from karenina.scenario.manager import _evaluate_outcome_criteria
-    from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState, TurnRecord
+    from karenina.schemas.scenario.state import (
+        ScenarioExecutionResult,
+        ScenarioState,
+        ScenarioTerminalFailure,
+        TurnRecord,
+    )
     from karenina.utils.progressive_save import TaskIdentifier
 
     grouped: dict[tuple[str, str, str, int | None], list[VerificationResult]] = {}
@@ -185,7 +190,9 @@ def _reconstruct_scenario_results_from_sink_rows(
             getattr(last_failure, "category", None),
         )
         is_content_failure = failure_group == "content" or failure_category == "content"
-        status = "error" if last_failure is not None and not is_content_failure else "completed"
+        status: Literal["completed", "error"] = (
+            "error" if last_failure is not None and not is_content_failure else "completed"
+        )
         final_state = ScenarioState(
             turn=len(history),
             current_node=path[-1] if path else "",
@@ -205,6 +212,14 @@ def _reconstruct_scenario_results_from_sink_rows(
             turn_results=turn_rows,
             final_state=final_state,
             outcome_results={},
+            terminal_failure=ScenarioTerminalFailure(
+                node_id=path[-1] if path else "",
+                category=failure_category or "",
+                stage=last_failure.stage,
+                reason=last_failure.reason,
+            )
+            if status == "error" and last_failure is not None
+            else None,
             replicate=replicate,
         )
         result.outcome_results = _evaluate_outcome_criteria(scenario, result)
