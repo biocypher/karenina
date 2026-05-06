@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from karenina.adapters.registry import AdapterRegistry
+from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.ports import PortCapabilities
@@ -282,6 +282,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         shared_timeout = max(t.timeout_seconds for t in valid_traits)
 
         # Run a single shared investigation
+        agent: Any | None = None
         try:
             from karenina.adapters import get_agent
             from karenina.ports import AgentConfig
@@ -343,6 +344,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 raw_response,
                 workspace_path,
             )
+        finally:
+            if agent is not None:
+                close_adapter(agent)
 
         # Per-trait extraction from the shared trace
         result_scores: dict[str, int | bool | dict[str, Any] | None] = {}

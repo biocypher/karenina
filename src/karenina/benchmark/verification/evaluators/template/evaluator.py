@@ -13,6 +13,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from karenina.adapters import get_llm, get_parser
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
 from karenina.benchmark.verification.utils import prepare_evaluation_input
@@ -115,6 +116,11 @@ class TemplateEvaluator:
 
         # Initialize prompt builder
         self._prompt_builder = TemplatePromptBuilder(answer_class=answer_class)
+
+    def close(self) -> None:
+        """Release adapter resources held by this evaluator."""
+        close_adapter(self._parser)
+        close_adapter(self._llm)
 
     # ========================================================================
     # Public API

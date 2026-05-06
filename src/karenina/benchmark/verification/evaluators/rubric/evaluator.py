@@ -19,6 +19,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from karenina.adapters import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.ports import LLMPort
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import CallableRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
@@ -100,6 +101,10 @@ class RubricEvaluator:
                 self.llm, model_config=self.model_config, prompt_config=self._prompt_config
             )
         return self._metric_trait_evaluator
+
+    def close(self) -> None:
+        """Release adapter resources held by this evaluator."""
+        close_adapter(self.llm)
 
     def evaluate_rubric(
         self,

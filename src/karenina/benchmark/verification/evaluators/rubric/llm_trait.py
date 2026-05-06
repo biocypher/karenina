@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel
 
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.rubric.literal_trait import LiteralTraitPromptBuilder
 from karenina.benchmark.verification.prompts.rubric.llm_trait import LLMTraitPromptBuilder
@@ -166,7 +167,11 @@ class LLMTraitEvaluator:
         # Use LLMPort.with_structured_output() for parsing
         # The adapter guarantees response.raw is a validated BatchRubricScores instance
         structured_llm = self.llm.with_structured_output(BatchRubricScores)
-        response = structured_llm.invoke(messages)
+        try:
+            response = structured_llm.invoke(messages)
+        finally:
+            if structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
         # Extract usage metadata
         usage_metadata = asdict(response.usage) if response.usage else {}
@@ -279,6 +284,7 @@ class LLMTraitEvaluator:
 
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
+            structured_llm: LLMPort | None = None
             try:
                 # Use LLMPort.with_structured_output() for parsing
                 structured_llm = self.llm.with_structured_output(model_class)
@@ -299,6 +305,9 @@ class LLMTraitEvaluator:
                 logger.warning(f"Failed to evaluate trait '{trait.name}': {e}")
                 results[trait.name] = None  # type: ignore[assignment]
                 usage_metadata_list.append({})
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
         return results, usage_metadata_list
 
@@ -464,6 +473,7 @@ class LLMTraitEvaluator:
 
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
+            structured_llm: LLMPort | None = None
             try:
                 structured_llm = self.llm.with_structured_output(model_class)
                 response = structured_llm.invoke(messages)
@@ -474,6 +484,9 @@ class LLMTraitEvaluator:
                 logger.warning("Failed to evaluate template trait '%s': %s", trait.name, e)
                 self._flatten_template_result(trait.name, None, results)
                 usage_metadata_list.append({})
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
         return results, usage_metadata_list
 
@@ -537,7 +550,11 @@ class LLMTraitEvaluator:
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
-        response = structured_llm.invoke(messages)
+        try:
+            response = structured_llm.invoke(messages)
+        finally:
+            if structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
         # Extract usage metadata
         usage_metadata = asdict(response.usage) if response.usage else {}
@@ -660,6 +677,7 @@ class LLMTraitEvaluator:
 
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
+            structured_llm: LLMPort | None = None
             try:
                 # Use LLMPort.with_structured_output() for parsing
                 structured_llm = self.llm.with_structured_output(model_class)
@@ -679,6 +697,9 @@ class LLMTraitEvaluator:
                 scores[trait.name] = -1
                 labels[trait.name] = f"[EVALUATION_ERROR: {e!s}]"
                 usage_metadata_list.append({})
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
         return scores, labels, usage_metadata_list
 

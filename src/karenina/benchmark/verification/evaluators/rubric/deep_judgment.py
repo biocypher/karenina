@@ -28,6 +28,7 @@ import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts.assembler import PromptAssembler
 from karenina.benchmark.verification.prompts.deep_judgment.rubric.deep_judgment import DeepJudgmentPromptBuilder
 from karenina.benchmark.verification.prompts.task_types import PromptTask
@@ -465,6 +466,7 @@ class RubricDeepJudgmentHandler:
             )
 
             # Use LLMPort.with_structured_output() for parsing
+            structured_llm: LLMPort | None = None
             try:
                 structured_llm = self.llm.with_structured_output(TraitExcerptsOutput)
                 response = structured_llm.invoke(messages)
@@ -495,6 +497,9 @@ class RubricDeepJudgmentHandler:
                         "auto_fail": True,
                         "usage_metadata_list": usage_metadata_list,
                     }
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
             # Validate excerpts with fuzzy matching
             validated, failed = self._validate_trait_excerpts(raw_excerpts, answer, fuzzy_threshold)
@@ -622,6 +627,7 @@ class RubricDeepJudgmentHandler:
             # Use LLMPort.with_structured_output() for parsing
             from karenina.schemas.outputs import HallucinationRiskOutput
 
+            structured_llm: LLMPort | None = None
             try:
                 structured_llm = self.llm.with_structured_output(HallucinationRiskOutput)
                 response = structured_llm.invoke(messages)
@@ -640,6 +646,9 @@ class RubricDeepJudgmentHandler:
                 logger.warning(f"Failed to parse hallucination assessment: {e}")
                 risk = "medium"
                 justification = "Failed to parse"
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
             # Update excerpt with search data
             excerpt["search_results"] = search_results[i] if i < len(search_results) else None
@@ -750,6 +759,7 @@ class RubricDeepJudgmentHandler:
         )
 
         # Use LLMPort.with_structured_output() for parsing
+        structured_llm: LLMPort | None = None
         try:
             structured_llm = self.llm.with_structured_output(schema_class)
             response = structured_llm.invoke(messages)
@@ -773,6 +783,9 @@ class RubricDeepJudgmentHandler:
             score = self._parse_trait_score_response(raw_response, trait)
             usage_metadata = asdict(response.usage) if response.usage else {}
             return {"score": score, "usage_metadata": usage_metadata}
+        finally:
+            if structured_llm is not None and structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
     def _parse_trait_score_response(self, response: str, trait: LLMRubricTrait) -> int | bool:
         """Parse a trait score response."""

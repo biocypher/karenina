@@ -13,6 +13,7 @@ import traceback
 from typing import Any
 
 from karenina.adapters import get_agent, get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
@@ -612,6 +613,11 @@ class GenerateAnswerStage(BaseVerificationStage):
             context.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "")
             context.set_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False)
             return
+        finally:
+            if answering_agent is not None:
+                close_adapter(answering_agent)
+            if answering_llm is not None:
+                close_adapter(answering_llm)
 
         # Store results (both artifact and result field)
         self.set_artifact_and_result(context, "raw_llm_response", raw_llm_response)
