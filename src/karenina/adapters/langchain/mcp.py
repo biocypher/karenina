@@ -17,9 +17,13 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import json
 import logging
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Any, cast
+
+from langchain_core.tools import BaseTool
+from pydantic import Field
 
 from karenina.exceptions import McpClientError, McpTimeoutError
 from karenina.ports.agent import MCPHttpServerConfig
@@ -35,6 +39,152 @@ __all__ = [
     "cleanup_mcp_client",
     "apply_tool_description_overrides",
 ]
+
+
+def _schema_dict(args_schema: Any) -> dict[str, Any] | None:
+    if args_schema is None:
+        return None
+    if isinstance(args_schema, dict):
+        return args_schema
+    if hasattr(args_schema, "model_json_schema"):
+        schema = args_schema.model_json_schema()
+        return cast(dict[str, Any], schema) if isinstance(schema, dict) else None
+    if hasattr(args_schema, "schema"):
+        schema = args_schema.schema()
+        return cast(dict[str, Any], schema) if isinstance(schema, dict) else None
+    return None
+
+
+def _resolve_schema_ref(schema: dict[str, Any], root: dict[str, Any]) -> dict[str, Any]:
+    ref = schema.get("$ref")
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return schema
+
+    current: Any = root
+    for part in ref.removeprefix("#/").split("/"):
+        if not isinstance(current, dict):
+            return schema
+        current = current.get(part)
+    return current if isinstance(current, dict) else schema
+
+
+def _schema_accepts_type(schema: dict[str, Any], root: dict[str, Any], expected: str) -> bool:
+    schema = _resolve_schema_ref(schema, root)
+    schema_type = schema.get("type")
+    if schema_type == expected or (isinstance(schema_type, list) and expected in schema_type):
+        return True
+
+    for key in ("anyOf", "oneOf", "allOf"):
+        variants = schema.get(key)
+        if isinstance(variants, list) and any(
+            isinstance(item, dict) and _schema_accepts_type(item, root, expected) for item in variants
+        ):
+            return True
+    return False
+
+
+def _expected_json_container(
+    schema: dict[str, Any], root: dict[str, Any]
+) -> type[list[Any]] | type[dict[str, Any]] | None:
+    if _schema_accepts_type(schema, root, "array"):
+        return list
+    if _schema_accepts_type(schema, root, "object"):
+        return dict
+    return None
+
+
+def _coerce_json_string_tool_args(
+    tool_input: str | dict[str, Any], args_schema: Any, tool_name: str
+) -> str | dict[str, Any]:
+    """Decode JSON-looking strings only where the tool schema expects containers."""
+    if not isinstance(tool_input, dict):
+        return tool_input
+
+    schema = _schema_dict(args_schema)
+    if schema is None:
+        return tool_input
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return tool_input
+
+    coerced = dict(tool_input)
+    for name, value in tool_input.items():
+        if not isinstance(value, str):
+            continue
+
+        field_schema = properties.get(name)
+        if not isinstance(field_schema, dict):
+            continue
+
+        expected_type = _expected_json_container(field_schema, schema)
+        if expected_type is None:
+            continue
+
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed, expected_type):
+            coerced[name] = parsed
+            logger.debug(
+                "Coerced JSON string argument %s.%s to %s before tool validation",
+                tool_name,
+                name,
+                expected_type.__name__,
+            )
+
+    return coerced
+
+
+class _JsonStringCoercingTool(BaseTool):
+    wrapped_tool: Any = Field(exclude=True)
+
+    def _parse_input(
+        self,
+        tool_input: str | dict[str, Any],
+        tool_call_id: str | None,
+    ) -> str | dict[str, Any]:
+        coerced = _coerce_json_string_tool_args(tool_input, self.args_schema, self.name)
+        return super()._parse_input(coerced, tool_call_id)
+
+    def _tool_input_from_call(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> str | dict[str, Any]:
+        kwargs.pop("run_manager", None)
+        if args and not kwargs:
+            return cast(str | dict[str, Any], args[0])
+        if args:
+            return {"args": list(args), **kwargs}
+        return kwargs
+
+    def _run(self, *args: Any, **kwargs: Any) -> Any:
+        return self.wrapped_tool.invoke(self._tool_input_from_call(args, kwargs))
+
+    async def _arun(self, *args: Any, **kwargs: Any) -> Any:
+        return await self.wrapped_tool.ainvoke(self._tool_input_from_call(args, kwargs))
+
+
+def _wrap_json_string_args_tool(tool: Any) -> Any:
+    if isinstance(tool, _JsonStringCoercingTool) or not isinstance(tool, BaseTool):
+        return tool
+    return _JsonStringCoercingTool(
+        wrapped_tool=tool,
+        name=tool.name,
+        description=tool.description,
+        args_schema=tool.args_schema,
+        return_direct=tool.return_direct,
+        tags=tool.tags,
+        metadata=tool.metadata,
+        handle_tool_error=tool.handle_tool_error,
+        handle_validation_error=tool.handle_validation_error,
+        # The wrapped tool's public invoke/ainvoke returns final message
+        # content, not the internal content/artifact tuple.
+        response_format="content",
+    )
+
+
+def _wrap_json_string_args_tools(tools: list[Any]) -> list[Any]:
+    return [_wrap_json_string_args_tool(tool) for tool in tools]
 
 
 async def acreate_mcp_client_and_tools(
@@ -90,7 +240,7 @@ async def acreate_mcp_client_and_tools(
 
     try:
         # Create client and fetch tools with timeout
-        client = MultiServerMCPClient(server_config)
+        client = MultiServerMCPClient(cast(Any, server_config))
 
         # Add timeout to prevent hanging
         tools = await asyncio.wait_for(client.get_tools(), timeout=30.0)
@@ -108,6 +258,8 @@ async def acreate_mcp_client_and_tools(
         # Apply tool description overrides if provided (for GEPA optimization)
         if tool_description_overrides:
             tools = apply_tool_description_overrides(tools, tool_description_overrides)
+
+        tools = _wrap_json_string_args_tools(tools)
 
         return client, tools
 
@@ -195,6 +347,8 @@ async def acreate_persistent_mcp_tools(
     # Apply tool description overrides if provided
     if tool_description_overrides:
         all_tools = apply_tool_description_overrides(all_tools, tool_description_overrides)
+
+    all_tools = _wrap_json_string_args_tools(all_tools)
 
     logger.info(f"Created {len(all_tools)} persistent MCP tools across {len(mcp_urls_dict)} servers")
 
