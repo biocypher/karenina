@@ -468,7 +468,7 @@ class RubricDataFrameBuilder:
         self,
         result: VerificationResult,
         trait_name: str,
-        trait_score: bool | int,
+        trait_score: bool | int | float,
     ) -> dict[str, Any]:
         """Create DataFrame row for callable trait."""
         metadata = result.metadata

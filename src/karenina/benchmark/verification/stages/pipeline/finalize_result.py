@@ -306,7 +306,7 @@ class FinalizeResultStage(BaseVerificationStage):
 
             llm_trait_scores: dict[str, Any] | None = None
             regex_trait_scores: dict[str, bool] | None = None
-            callable_trait_scores: dict[str, bool | int] | None = None
+            callable_trait_scores: dict[str, bool | int | float] | None = None
             metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
 
             if verify_rubric and evaluation_rubric and isinstance(verify_rubric, dict):
@@ -320,7 +320,7 @@ class FinalizeResultStage(BaseVerificationStage):
                 # carries Any to accept strings, lists, bools, and numerics.
                 llm_results: dict[str, Any] = {}
                 regex_results: dict[str, bool] = {}
-                callable_results: dict[str, bool | int] = {}
+                callable_results: dict[str, bool | int | float] = {}
 
                 for trait_name, trait_value in verify_rubric.items():
                     # Skip failed trait evaluations (None values)

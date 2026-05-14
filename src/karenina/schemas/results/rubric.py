@@ -222,7 +222,7 @@ class RubricResults(BaseModel):
 
     def get_callable_trait_scores(
         self, question_id: str | None = None, trait_name: str | None = None
-    ) -> dict[str, dict[str, bool | int]]:
+    ) -> dict[str, dict[str, bool | int | float]]:
         """
         Get callable trait scores from all results.
 
@@ -232,7 +232,7 @@ class RubricResults(BaseModel):
 
         Returns:
             Dictionary mapping result identifiers to callable trait scores
-            Format: {result_id: {trait_name: bool | int}}
+            Format: {result_id: {trait_name: bool | int | float}}
         """
         scores = {}
         for result in self.get_results_with_rubric():
