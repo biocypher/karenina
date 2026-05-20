@@ -397,7 +397,7 @@ class StepEval(BaseModel):
         Returns:
             dict: Trait names mapped to aggregated values (pass rate or average score)
         """
-        trait_values: dict[str, list[bool | int]] = {}
+        trait_values: dict[str, list[bool | int | float]] = {}
 
         for result in results:
             if result.rubric and result.rubric.callable_trait_scores:

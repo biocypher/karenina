@@ -10,6 +10,7 @@ import logging
 from typing import Any
 
 from karenina.adapters import get_agent, get_parser
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
 from karenina.ports import AgentConfig, PortCapabilities
@@ -206,13 +207,16 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             workspace_path=context.workspace_path,
         )
 
-        result = agent.run(messages=messages, config=agent_config)
-        logger.info(
-            "Investigation completed in %d turns (limit_reached=%s)",
-            result.turns,
-            result.limit_reached,
-        )
-        return result.raw_trace
+        try:
+            result = agent.run(messages=messages, config=agent_config)
+            logger.info(
+                "Investigation completed in %d turns (limit_reached=%s)",
+                result.turns,
+                result.limit_reached,
+            )
+            return result.raw_trace
+        finally:
+            close_adapter(agent)
 
     def _run_extraction(
         self,
@@ -264,5 +268,8 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             },
         )
 
-        parse_result = parser.parse_to_pydantic(messages, answer_class)
-        return parse_result.parsed
+        try:
+            parse_result = parser.parse_to_pydantic(messages, answer_class)
+            return parse_result.parsed
+        finally:
+            close_adapter(parser)

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, field_validator
 from tqdm import tqdm
 
 from karenina.adapters import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.authoring.questions.reader import read_questions_from_file
 from karenina.benchmark.verification.utils.class_discovery import find_answer_class
 from karenina.benchmark.verification.utils.template_validation import (
@@ -168,7 +169,8 @@ def _generate_structured_output(
     user_content = user_template.format(**inputs)
 
     # Get LLM with structured output and retry support
-    llm = get_llm(config).with_structured_output(output_schema, max_retries=max_retries)
+    base_llm = get_llm(config)
+    llm = base_llm.with_structured_output(output_schema, max_retries=max_retries)
 
     # Build messages
     messages = [
@@ -176,19 +178,24 @@ def _generate_structured_output(
         Message.user(user_content),
     ]
 
-    # Invoke and return parsed model from raw
-    response = llm.invoke(messages)
+    try:
+        # Invoke and return parsed model from raw
+        response = llm.invoke(messages)
 
-    # The adapter guarantees response.raw is the Pydantic model instance
-    if isinstance(response.raw, output_schema):
-        return response.raw
+        # The adapter guarantees response.raw is the Pydantic model instance
+        if isinstance(response.raw, output_schema):
+            return response.raw
 
-    # Fail if the adapter did not return the expected type
-    raise TypeError(
-        f"Adapter returned invalid structured output. "
-        f"Expected {output_schema.__name__}, got {type(response.raw).__name__}. "
-        f"The adapter's with_structured_output() must guarantee a Pydantic model in response.raw."
-    )
+        # Fail if the adapter did not return the expected type
+        raise TypeError(
+            f"Adapter returned invalid structured output. "
+            f"Expected {output_schema.__name__}, got {type(response.raw).__name__}. "
+            f"The adapter's with_structured_output() must guarantee a Pydantic model in response.raw."
+        )
+    finally:
+        close_adapter(llm)
+        if base_llm is not llm:
+            close_adapter(base_llm)
 
 
 def _generate_plan(
@@ -225,8 +232,11 @@ def _generate_plan(
         ),
     ]
 
-    response = llm.invoke(messages)
-    return response.content
+    try:
+        response = llm.invoke(messages)
+        return response.content
+    finally:
+        close_adapter(llm)
 
 
 def _smoke_test_generated_code(template_code: str) -> tuple[bool, str | None]:

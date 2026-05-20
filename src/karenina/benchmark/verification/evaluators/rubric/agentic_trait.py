@@ -14,6 +14,7 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 from karenina.adapters import get_agent, get_llm, get_parser
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.ports import AgentConfig, Message, PortCapabilities
 from karenina.schemas.config.models import ModelConfig
@@ -189,12 +190,15 @@ class AgenticTraitEvaluator:
         and no workspace tools are needed.
         """
         llm = get_llm(self._model_config)
-        result = llm.invoke(messages)
-        logger.info(
-            "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
-            trait.name,
-        )
-        return result.content or ""
+        try:
+            result = llm.invoke(messages)
+            logger.info(
+                "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
+                trait.name,
+            )
+            return result.content or ""
+        finally:
+            close_adapter(llm)
 
     def _run_agent_investigation(
         self,
@@ -211,14 +215,17 @@ class AgenticTraitEvaluator:
             workspace_path=Path(workspace_path) if workspace_path else None,
         )
 
-        result = agent.run(messages=messages, config=agent_config)
-        logger.info(
-            "Agentic rubric investigation for '%s' completed in %d turns (limit_reached=%s)",
-            trait.name,
-            result.turns,
-            result.limit_reached,
-        )
-        return result.raw_trace
+        try:
+            result = agent.run(messages=messages, config=agent_config)
+            logger.info(
+                "Agentic rubric investigation for '%s' completed in %d turns (limit_reached=%s)",
+                trait.name,
+                result.turns,
+                result.limit_reached,
+            )
+            return result.raw_trace
+        finally:
+            close_adapter(agent)
 
     def run_extraction(
         self,
@@ -258,23 +265,26 @@ class AgenticTraitEvaluator:
             user_instructions=user_instructions,
         )
 
-        if trait.kind == "boolean":
-            bool_result = parser.parse_to_pydantic(messages, SingleBooleanScore)
-            return bool_result.parsed.result
+        try:
+            if trait.kind == "boolean":
+                bool_result = parser.parse_to_pydantic(messages, SingleBooleanScore)
+                return bool_result.parsed.result
 
-        if trait.kind == "score":
-            score_result = parser.parse_to_pydantic(messages, SingleNumericScore)
-            return score_result.parsed.score
+            if trait.kind == "score":
+                score_result = parser.parse_to_pydantic(messages, SingleNumericScore)
+                return score_result.parsed.score
 
-        if trait.kind == "literal":
-            literal_result = parser.parse_to_pydantic(
-                messages,
-                SingleLiteralClassification,
-            )
-            return self._resolve_literal_index(
-                literal_result.parsed.classification,
-                trait,
-            )
+            if trait.kind == "literal":
+                literal_result = parser.parse_to_pydantic(
+                    messages,
+                    SingleLiteralClassification,
+                )
+                return self._resolve_literal_index(
+                    literal_result.parsed.classification,
+                    trait,
+                )
+        finally:
+            close_adapter(parser)
 
         raise ValueError(f"Unknown trait kind: {trait.kind}")
 
@@ -318,9 +328,12 @@ class AgenticTraitEvaluator:
             user_instructions=user_instructions,
         )
 
-        kind_class = cast(type[BaseModel], trait.kind)
-        parse_result = parser.parse_to_pydantic(messages, kind_class)
-        return parse_result.parsed.model_dump()
+        try:
+            kind_class = cast(type[BaseModel], trait.kind)
+            parse_result = parser.parse_to_pydantic(messages, kind_class)
+            return parse_result.parsed.model_dump()
+        finally:
+            close_adapter(parser)
 
     @staticmethod
     def _build_extraction_texts(

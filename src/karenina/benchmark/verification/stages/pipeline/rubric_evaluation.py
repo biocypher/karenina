@@ -11,6 +11,7 @@ from dataclasses import asdict
 from typing import Any
 
 from karenina.adapters import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.evaluators import RubricEvaluator
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.rubric.presence_check import PresenceCheckPromptBuilder
@@ -173,6 +174,7 @@ class RubricEvaluationStage(BaseVerificationStage):
         llm_trait_labels = None
         metric_confusion_lists = None
         metric_results = None
+        evaluator: RubricEvaluator | None = None
 
         # If rubric is None after dynamic resolution (all traits absent), skip evaluation
         if rubric is None or not any(
@@ -354,6 +356,9 @@ class RubricEvaluationStage(BaseVerificationStage):
             logger.warning("Rubric evaluation failed for question %s: %s", context.question_id, e)
             context.add_warning(f"Rubric evaluation failed: {e}")
             rubric_result = None  # type: ignore[assignment]
+        finally:
+            if evaluator is not None:
+                evaluator.close()
 
         self._store_results(context, rubric_result, llm_trait_labels, metric_confusion_lists, metric_results)
 
@@ -550,9 +555,17 @@ class RubricEvaluationStage(BaseVerificationStage):
 
         # Invoke structured LLM
         detection_config = parsing_model.model_copy(update={"temperature": 0.0})
-        llm = get_llm(detection_config)
-        structured_llm = llm.with_structured_output(ConceptPresenceResult)
-        response: LLMResponse = structured_llm.invoke(messages)
+        llm: Any | None = None
+        structured_llm: Any | None = None
+        try:
+            llm = get_llm(detection_config)
+            structured_llm = llm.with_structured_output(ConceptPresenceResult)
+            response: LLMResponse = structured_llm.invoke(messages)
+        finally:
+            if structured_llm is not None:
+                close_adapter(structured_llm)
+            if llm is not None and llm is not structured_llm:
+                close_adapter(llm)
 
         # Track usage
         usage_tracker = self.get_or_create_usage_tracker(context)

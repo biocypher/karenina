@@ -262,7 +262,7 @@ class DeepAgentsAgentAdapter:
                 # Execute agent
                 async def execute_agent() -> None:
                     nonlocal result, limit_reached
-                    result = await agent.ainvoke(invoke_input, config=langgraph_config)  # type: ignore[call-overload]
+                    result = await agent.ainvoke(invoke_input, config=langgraph_config)
                     if result.get("is_last_step", False):
                         limit_reached = True
 

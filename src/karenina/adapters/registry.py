@@ -26,6 +26,7 @@ import logging
 import threading
 import weakref
 from collections.abc import Callable
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
@@ -37,6 +38,8 @@ if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+ADAPTER_CLOSE_TIMEOUT = 10.0
 
 # ============================================================================
 # Adapter Instance Tracking for Resource Cleanup
@@ -136,6 +139,70 @@ def unregister_adapter(adapter: Any) -> None:
     with _adapters_lock:
         if adapter in _active_adapters:
             _active_adapters.remove(adapter)
+    with _adapter_portal_lock:
+        _adapter_portal_refs[:] = [
+            pair for pair in _adapter_portal_refs if (tracked := pair[0]()) is not None and tracked is not adapter
+        ]
+
+
+async def aclose_adapter(adapter: Any, *, unregister: bool = True) -> None:
+    """Close one adapter immediately and optionally remove it from tracking.
+
+    This is intended for adapters with a short, local lifetime. Batch-level
+    cleanup remains as a fallback for adapters that are intentionally shared or
+    whose close fails here.
+    """
+    aclose = getattr(adapter, "aclose", None)
+    if not callable(aclose):
+        if unregister:
+            unregister_adapter(adapter)
+        return
+
+    await aclose()
+    if unregister:
+        unregister_adapter(adapter)
+
+
+def close_adapter(adapter: Any, *, timeout: float = ADAPTER_CLOSE_TIMEOUT, unregister: bool = True) -> None:
+    """Synchronously close one adapter using the active worker portal when available."""
+    aclose = getattr(adapter, "aclose", None)
+    if not callable(aclose):
+        if unregister:
+            unregister_adapter(adapter)
+        return
+
+    try:
+        from karenina.benchmark.verification.executor import get_async_portal
+    except ImportError:
+        portal = None
+    else:
+        portal = get_async_portal()
+
+    try:
+        if portal is not None:
+            future = portal.start_task_soon(aclose)
+            future.result(timeout=timeout)
+        else:
+            import asyncio
+
+            asyncio.run(aclose())
+    except FutureTimeoutError:
+        logger.warning(
+            "Immediate adapter close timed out on %s (>%ss); leaving it registered for batch cleanup",
+            type(adapter).__name__,
+            timeout,
+        )
+        return
+    except Exception as exc:
+        logger.debug(
+            "Immediate adapter close failed on %s; leaving it registered for batch cleanup: %s",
+            type(adapter).__name__,
+            exc,
+        )
+        return
+
+    if unregister:
+        unregister_adapter(adapter)
 
 
 async def cleanup_all_adapters() -> None:

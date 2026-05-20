@@ -18,6 +18,7 @@ import logging
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.rubric.metric_trait import MetricTraitPromptBuilder
 from karenina.ports import LLMPort, PortCapabilities
@@ -157,7 +158,11 @@ class MetricTraitEvaluator:
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(ConfusionMatrixOutput)
-        response = structured_llm.invoke(messages)
+        try:
+            response = structured_llm.invoke(messages)
+        finally:
+            if structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
         # Extract usage metadata
         usage_metadata = asdict(response.usage) if response.usage else {}

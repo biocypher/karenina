@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from karenina.adapters import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts.assembler import PromptAssembler
 from karenina.benchmark.verification.prompts.task_types import PromptTask
 from karenina.benchmark.verification.prompts.trace.abstention import ABSTENTION_DETECTION_SYS, ABSTENTION_DETECTION_USER
@@ -62,6 +63,8 @@ def detect_abstention(
     """
 
     usage_metadata: dict[str, Any] = {}
+    llm: Any | None = None
+    structured_llm: Any | None = None
 
     try:
         # Create config copy with temperature=0 for consistent detection
@@ -112,3 +115,8 @@ def detect_abstention(
         # Non-recoverable error: log and treat as check failure
         logger.warning("Abstention detection failed: %s", e)
         return False, False, None, usage_metadata
+    finally:
+        if structured_llm is not None:
+            close_adapter(structured_llm)
+        if llm is not None and llm is not structured_llm:
+            close_adapter(llm)

@@ -8,6 +8,7 @@ from collections import OrderedDict
 from typing import Any
 
 from karenina.adapters.factory import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.ports.messages import Message
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_THRESHOLD
@@ -232,6 +233,8 @@ def check_semantic_equivalence(
     if not ground_truth_data or not llm_response_data:
         return False
 
+    parsing_llm: Any | None = None
+
     try:
         # Get LLM via the port/adapter factory (respects interface routing)
         parsing_llm = get_llm(parsing_model)
@@ -286,6 +289,9 @@ Are these two responses semantically equivalent?"""
 
     except Exception as e:
         raise RuntimeError(f"Failed to perform semantic equivalence check: {e}") from e
+    finally:
+        if parsing_llm is not None:
+            close_adapter(parsing_llm)
 
 
 def perform_embedding_check(

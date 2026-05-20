@@ -232,7 +232,9 @@ class VerificationResultRubric(BaseModel):
     # and the human-readable class names are stored here. For non-literal traits, this field is not used.
     # Error state: score=-1 in llm_trait_scores indicates invalid classification, label contains the invalid value.
     regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
-    callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
+    callable_trait_scores: dict[str, bool | int | float] | None = (
+        None  # Callable-based traits (boolean or score; score may be float in [min_score, max_score])
+    )
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
 
     # Metric trait evaluation metadata (confusion-matrix analysis)

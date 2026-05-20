@@ -200,3 +200,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             error_msg = f"Verification failed: {e}"
             logger.error(error_msg)
             context.mark_error(error_msg)
+        finally:
+            if evaluator is not None and hasattr(evaluator, "close"):
+                evaluator.close()
+                context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
