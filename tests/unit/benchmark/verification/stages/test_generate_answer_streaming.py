@@ -49,13 +49,20 @@ def _make_agent_result(
     turns: int = 1,
     limit_reached: bool = False,
 ) -> MagicMock:
-    """Create a mock AgentResult with configurable timeout behavior."""
+    """Create a mock AgentResult with configurable timeout behavior.
+
+    Note: real AgentResult has no ``usage_unavailable`` attribute; we set it
+    to False explicitly here because MagicMock auto-creates missing
+    attributes as truthy Mocks, which would make
+    ``should_mark_usage_unavailable`` always return True.
+    """
     result = MagicMock()
     result.timeout_reached = timeout_reached
     result.raw_trace = raw_trace
     result.limit_reached = limit_reached
     result.turns = turns
     result.usage = None
+    result.usage_unavailable = False
     result.trace_messages = None
     return result
 
@@ -309,6 +316,12 @@ class TestAgentTimeoutPath:
             raw_trace="--- AI Message ---\nComplete response",
             turns=2,
         )
+        # Provide realistic non-zero usage so should_mark_usage_unavailable
+        # does not flag this as an unavailable-usage response. A real adapter
+        # returning a completed trace would report non-zero tokens; a mock
+        # with usage=None models the broken streaming-without-include-usage
+        # path that Commit 2 specifically wants to detect.
+        result.usage = UsageMetadata(input_tokens=8, output_tokens=4, total_tokens=12)
 
         self._run_agent_stage(ctx, result)
 
@@ -318,4 +331,54 @@ class TestAgentTimeoutPath:
         assert ctx.error is None
 
         # Normal response stored
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+    def test_agent_completes_with_none_usage_marks_usage_unavailable(self) -> None:
+        """When the agent completes normally but reports usage=None, the
+        stage should flip USAGE_UNAVAILABLE=True. This mirrors the LLMPort
+        branch's handling and closes the asymmetric coverage gap: the
+        3888/3888 masquerade bug affected both paths, so both paths must
+        be exercised end-to-end."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        # Explicit: the helper already defaults to usage=None, but we make
+        # the intent of this test obvious.
+        result.usage = None
+
+        self._run_agent_stage(ctx, result)
+
+        # Usage unavailable should be flipped through the stage's wiring
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+
+        # No timeout artifacts (the agent completed normally)
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.error is None
+
+        # Normal response still stored
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+    def test_agent_completes_with_zero_usage_marks_usage_unavailable(self) -> None:
+        """When the agent completes normally but reports all-zero usage
+        (0/0/0), the stage should flip USAGE_UNAVAILABLE=True. Zero counts
+        alone cannot distinguish "consumed nothing" from "adapter could
+        not capture usage", so the conservative mark is required."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        result.usage = UsageMetadata(input_tokens=0, output_tokens=0, total_tokens=0)
+
+        self._run_agent_stage(ctx, result)
+
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.error is None
         assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
