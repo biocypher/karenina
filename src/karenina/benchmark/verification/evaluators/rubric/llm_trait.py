@@ -125,15 +125,22 @@ class LLMTraitEvaluator:
         )
 
     def evaluate_batch(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
         Evaluate all traits in a single LLM call using structured output.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from the
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (results_dict, usage_metadata)
@@ -141,7 +148,9 @@ class LLMTraitEvaluator:
         from karenina.schemas.outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits)
+        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(
+            question, answer, traits, task_eval_mode=task_eval_mode
+        )
 
         # Build instruction_context for adapter instructions (format-specific content)
         instruction_context: dict[str, object] = {
@@ -167,7 +176,12 @@ class LLMTraitEvaluator:
         return results, usage_metadata
 
     def evaluate_sequential(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
         Evaluate traits one by one.
@@ -177,9 +191,11 @@ class LLMTraitEvaluator:
         sequentially.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from each
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
@@ -191,7 +207,9 @@ class LLMTraitEvaluator:
         for trait in traits:
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             system_prompt = self._llm_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
             # Build instruction_context for adapter instructions
             format_hint = '{"result": true} or {"result": false}' if trait.kind == "boolean" else '{"score": N}'
@@ -334,6 +352,8 @@ class LLMTraitEvaluator:
         question: str,
         answer: str,
         traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """Evaluate template-kind LLM traits and return flattened dotted results.
 
@@ -346,9 +366,11 @@ class LLMTraitEvaluator:
         ``None`` under the bare trait name (no flattening possible).
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
             traits: Template-kind LLM traits (``trait.is_template_kind`` True).
+            task_eval_mode: When True, omit the **QUESTION:** block from each
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (flattened_results, usage_metadata_list).
@@ -364,7 +386,9 @@ class LLMTraitEvaluator:
                 )
             kind_class = cast(type[BaseModel], trait.kind)  # already a BaseModel subclass
             system_prompt = self._llm_prompt_builder.build_template_system_prompt(trait)
-            user_prompt = self._llm_prompt_builder.build_template_user_prompt(question, answer, trait)
+            user_prompt = self._llm_prompt_builder.build_template_user_prompt(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
             instruction_context: dict[str, object] = {
                 "json_schema": kind_class.model_json_schema(),
@@ -456,7 +480,12 @@ class LLMTraitEvaluator:
     # ========== Literal Trait Evaluation Methods ==========
 
     def evaluate_literal_batch(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
         """
         Evaluate literal (categorical) traits in a single LLM call.
@@ -467,9 +496,11 @@ class LLMTraitEvaluator:
         Uses LLMPort.with_structured_output() for parsing.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of literal kind LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of literal kind LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from the
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (scores, labels, usage_metadata) where:
@@ -485,7 +516,9 @@ class LLMTraitEvaluator:
             return {}, {}, {}
 
         system_prompt = self._literal_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(question, answer, literal_traits)
+        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(
+            question, answer, literal_traits, task_eval_mode=task_eval_mode
+        )
 
         # Build instruction_context for adapter instructions (format-specific content)
         instruction_context: dict[str, object] = {
@@ -516,7 +549,12 @@ class LLMTraitEvaluator:
         return scores, labels, usage_metadata
 
     def evaluate_literal_sequential(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
         """
         Evaluate literal traits one by one.
@@ -526,9 +564,11 @@ class LLMTraitEvaluator:
         sequentially.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of literal kind LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of literal kind LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from each
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (scores, labels, usage_metadata_list) where:
@@ -547,7 +587,9 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[Message], type[SingleLiteralClassification]]] = []
         for trait in literal_traits:
             system_prompt = self._literal_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
             # Build instruction_context for adapter instructions
             instruction_context: dict[str, object] = {

@@ -451,7 +451,7 @@ def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path, 
     This uses the real TemplateEvaluator with real Answer templates from our fixtures
     to ensure captured prompts match production exactly.
     """
-    from karenina.benchmark.verification.evaluators.template_evaluator import TemplateEvaluator
+    from karenina.benchmark.verification.evaluators import TemplateEvaluator
     from karenina.schemas.workflow import ModelConfig
 
     real_llm = _create_real_llm(model, provider)
@@ -581,7 +581,7 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path,
     This uses the real RubricEvaluator with real rubric traits to ensure
     captured prompts match production exactly.
     """
-    from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+    from karenina.benchmark.verification.evaluators import RubricEvaluator
     from karenina.schemas.domain import LLMRubricTrait, Rubric
     from karenina.schemas.workflow import ModelConfig
 
@@ -1058,7 +1058,7 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
     - Multiple literal traits batch evaluation (sentiment + response_type)
     - Invalid classification handling (LLM returns invalid class name)
     """
-    from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+    from karenina.benchmark.verification.evaluators import RubricEvaluator
     from karenina.schemas.domain import LLMRubricTrait, Rubric
     from karenina.schemas.workflow import ModelConfig
 
