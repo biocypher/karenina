@@ -218,6 +218,7 @@ BUILTIN_INTERFACES: frozenset[str] = frozenset(
         INTERFACE_LANGCHAIN_DEEP_AGENTS,
     }
 )
+DEFAULT_MAX_TOKENS = 16_384
 
 
 class QuestionFewShotConfig(BaseModel):
@@ -550,7 +551,7 @@ class ModelConfig(BaseModel):
     model_provider: str | None = None  # Optional - only required for langchain interface
     model_name: str | None = None  # Optional - defaults to "manual" for manual interface
     temperature: float = 0.1
-    max_tokens: int = 8192  # Maximum tokens for model response
+    max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for model response
     interface: str = "langchain"
     system_prompt: str | None = None  # Optional - defaults applied based on context (answering/parsing)
     max_retries: int = 2  # Optional max retries for template generation

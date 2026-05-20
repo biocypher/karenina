@@ -136,6 +136,7 @@ class GenerateAnswerStage(BaseVerificationStage):
             ArtifactKeys.ANSWERING_MODEL_STR,
             ArtifactKeys.ANSWERING_MCP_SERVERS,
             ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL,
+            ArtifactKeys.TRACE_MESSAGES,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:

@@ -90,7 +90,7 @@ async def acreate_mcp_client_and_tools(
 
     try:
         # Create client and fetch tools with timeout
-        client = MultiServerMCPClient(server_config)  # type: ignore[arg-type]
+        client = MultiServerMCPClient(server_config)
 
         # Add timeout to prevent hanging
         tools = await asyncio.wait_for(client.get_tools(), timeout=30.0)
