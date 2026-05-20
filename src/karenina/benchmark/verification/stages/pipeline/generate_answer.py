@@ -13,7 +13,7 @@ import traceback
 from typing import Any
 
 from karenina.adapters import get_agent, get_llm
-from karenina.adapters.langchain_deep_agents.runtime import workspace_path_for_prompt
+from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages

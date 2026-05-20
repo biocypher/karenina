@@ -31,17 +31,17 @@ class DockerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: 
     ) -> None:
         if not image:
             raise AdapterUnavailableError(
-                "deepagents_docker_image is required when deepagents_backend='docker'",
+                "agent_runtime docker_image is required when backend='docker'",
                 reason="missing_deepagents_docker_image",
             )
         if network not in {"bridge", "none"}:
             raise AdapterUnavailableError(
-                "deepagents_docker_network must be 'bridge' or 'none'",
+                "agent_runtime docker_network must be 'bridge' or 'none'",
                 reason="invalid_deepagents_docker_network",
             )
         if shutil.which("docker") is None:
             raise AdapterUnavailableError(
-                "Docker is required for deepagents_backend='docker', but the docker command was not found",
+                "Docker is required for agent_runtime backend='docker', but the docker command was not found",
                 reason="docker_unavailable",
             )
 

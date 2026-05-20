@@ -172,19 +172,6 @@ def sanitize_model_config(model: dict[str, Any]) -> dict[str, Any]:
     if "extra_kwargs" in model and model["extra_kwargs"]:
         sanitized["extra_kwargs"] = model["extra_kwargs"]
 
-    # Include DeepAgents backend settings when they differ from defaults or
-    # are required for the selected backend.
-    if "deepagents_backend" in model and model["deepagents_backend"] != "filesystem":
-        sanitized["deepagents_backend"] = model["deepagents_backend"]
-    if "deepagents_docker_image" in model and model["deepagents_docker_image"]:
-        sanitized["deepagents_docker_image"] = model["deepagents_docker_image"]
-    if "deepagents_docker_network" in model and model["deepagents_docker_network"] != "bridge":
-        sanitized["deepagents_docker_network"] = model["deepagents_docker_network"]
-    if "deepagents_execute_timeout" in model and model["deepagents_execute_timeout"] != 120:
-        sanitized["deepagents_execute_timeout"] = model["deepagents_execute_timeout"]
-    if "deepagents_execute_max_output_bytes" in model and model["deepagents_execute_max_output_bytes"] != 100000:
-        sanitized["deepagents_execute_max_output_bytes"] = model["deepagents_execute_max_output_bytes"]
-
     # Include agent_middleware if present (for MCP-enabled agents)
     if "agent_middleware" in model and model["agent_middleware"]:
         sanitized["agent_middleware"] = model["agent_middleware"]

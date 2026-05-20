@@ -56,7 +56,8 @@ class TestWorkspacePath:
         )
         assert str(options.cwd) == "/tmp/test_workspace"
 
-    def test_build_options_no_cwd_when_workspace_path_is_none(self):
+    def test_build_options_uses_process_cwd_when_workspace_path_is_none(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
         adapter = self._make_adapter()
         config = AgentConfig()
         options = adapter._build_options(
@@ -64,7 +65,75 @@ class TestWorkspacePath:
             mcp_servers=None,
             config=config,
         )
-        assert options.cwd is None
+        assert str(options.cwd) == str(tmp_path)
+
+    def test_build_options_enables_native_sandbox_by_default(self):
+        adapter = self._make_adapter()
+        options = adapter._build_options(
+            system_prompt="test",
+            mcp_servers=None,
+            config=AgentConfig(),
+        )
+
+        assert options.permission_mode == "acceptEdits"
+        assert options.sandbox == {
+            "enabled": True,
+            "failIfUnavailable": True,
+            "autoAllowBashIfSandboxed": True,
+            "allowUnsandboxedCommands": False,
+        }
+
+    def test_capabilities_report_sandboxed_execution_by_default(self):
+        adapter = self._make_adapter()
+
+        assert adapter.capabilities.supports_file_tools is True
+        assert adapter.capabilities.supports_code_execution is True
+        assert adapter.capabilities.uses_sandboxed_execution is True
+
+    def test_build_options_can_disable_sandbox(self):
+        config = ModelConfig(
+            id="test",
+            model_name="claude-sonnet-4-20250514",
+            interface="claude_agent_sdk",
+            extra_kwargs={"agent_runtime": {"sandbox_enabled": False}},
+        )
+        adapter = ClaudeSDKAgentAdapter(config)
+
+        options = adapter._build_options(
+            system_prompt="test",
+            mcp_servers=None,
+            config=AgentConfig(),
+        )
+
+        assert getattr(options, "sandbox", None) is None
+        assert adapter.capabilities.uses_sandboxed_execution is False
+
+    def test_build_options_ignores_plain_permission_mode_extra(self):
+        adapter = self._make_adapter()
+
+        options = adapter._build_options(
+            system_prompt="test",
+            mcp_servers=None,
+            config=AgentConfig(extra={"permission_mode": "bypassPermissions"}),
+        )
+
+        assert options.permission_mode == "acceptEdits"
+
+    def test_build_options_allows_named_unsafe_permission_override(self):
+        adapter = self._make_adapter()
+
+        options = adapter._build_options(
+            system_prompt="test",
+            mcp_servers=None,
+            config=AgentConfig(
+                extra={
+                    "permission_mode": "bypassPermissions",
+                    "allow_unsafe_permission_mode_override": True,
+                }
+            ),
+        )
+
+        assert options.permission_mode == "bypassPermissions"
 
 
 @pytest.mark.unit

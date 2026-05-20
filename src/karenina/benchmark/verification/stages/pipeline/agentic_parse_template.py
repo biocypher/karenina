@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from karenina.adapters import get_agent, get_parser
-from karenina.adapters.langchain_deep_agents.runtime import workspace_path_for_prompt
+from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema

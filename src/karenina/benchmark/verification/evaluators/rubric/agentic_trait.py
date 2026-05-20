@@ -14,7 +14,7 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 from karenina.adapters import get_agent, get_llm, get_parser
-from karenina.adapters.langchain_deep_agents.runtime import map_path_for_prompt, workspace_path_for_prompt
+from karenina.adapters.agent_runtime import map_path_for_prompt, workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.ports import AgentConfig, Message, PortCapabilities

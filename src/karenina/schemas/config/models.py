@@ -566,16 +566,10 @@ class ModelConfig(BaseModel):
     # Anthropic-specific configuration (for claude_tool and claude_agent_sdk interfaces)
     anthropic_base_url: str | None = None  # Custom Anthropic API endpoint (for proxies, self-hosted)
     anthropic_api_key: SecretStr | None = None  # Override ANTHROPIC_API_KEY env var
-    # Extra keyword arguments to pass to the underlying model interface
+    # Extra keyword arguments to pass to the underlying model interface.
+    # Adapter runtime settings can live under extra_kwargs["agent_runtime"].
     # Useful for passing vendor-specific API keys, custom parameters, etc.
     extra_kwargs: dict[str, Any] | None = None
-    # DeepAgents runtime configuration. Only used by the langchain_deep_agents
-    # adapter; ignored by other interfaces.
-    deepagents_backend: Literal["filesystem", "docker", "local_shell"] = "filesystem"
-    deepagents_docker_image: str | None = None
-    deepagents_docker_network: Literal["bridge", "none"] = "bridge"
-    deepagents_execute_timeout: int = Field(default=120, ge=1)
-    deepagents_execute_max_output_bytes: int = Field(default=100_000, ge=1)
     # Manual interface configuration
     manual_traces: Any = Field(default=None, exclude=True)  # Excluded from serialization; type: ManualTraces | None
     # Agent middleware configuration (only used when mcp_urls_dict is provided)

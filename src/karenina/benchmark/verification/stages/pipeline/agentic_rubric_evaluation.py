@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from karenina.adapters.langchain_deep_agents.runtime import workspace_path_for_prompt
+from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask

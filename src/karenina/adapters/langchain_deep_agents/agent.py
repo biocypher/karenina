@@ -19,6 +19,11 @@ import logging
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any
 
+from karenina.adapters.agent_runtime import (
+    get_agent_runtime_capabilities,
+    get_agent_runtime_option,
+    get_deepagents_backend,
+)
 from karenina.ports import (
     AdapterUnavailableError,
     AgentConfig,
@@ -35,7 +40,6 @@ from karenina.ports.capabilities import PortCapabilities
 from .errors import wrap_deep_agents_error
 from .initialization import create_chat_model
 from .messages import DeepAgentsMessageConverter
-from .runtime import get_deepagents_backend, get_deepagents_capabilities
 from .trace import deep_agents_messages_to_raw_trace
 from .usage import extract_actual_model, extract_deep_agents_usage
 
@@ -47,6 +51,15 @@ if TYPE_CHECKING:
 _create_deep_agent = None
 
 logger = logging.getLogger(__name__)
+
+
+def _runtime_int_option(model_config: ModelConfig, key: str, default: int) -> int:
+    """Read an integer runtime option from ModelConfig.extra_kwargs."""
+
+    raw_value = get_agent_runtime_option(model_config, key, default)
+    if isinstance(raw_value, int | float | str):
+        return int(raw_value)
+    raise TypeError(f"agent_runtime option '{key}' must be an integer-compatible value")
 
 
 class DeepAgentsAgentAdapter:
@@ -96,7 +109,7 @@ class DeepAgentsAgentAdapter:
         Returns:
             PortCapabilities implied by the configured DeepAgents backend.
         """
-        return get_deepagents_capabilities(self._config)
+        return get_agent_runtime_capabilities(self._config)
 
     def _build_backend(self, workspace_path: Any) -> Any:
         """Create the DeepAgents backend configured for this model."""
@@ -105,23 +118,23 @@ class DeepAgentsAgentAdapter:
         if backend == "docker":
             if workspace_path is None:
                 raise AdapterUnavailableError(
-                    "deepagents_backend='docker' requires an AgentConfig.workspace_path",
+                    "agent_runtime backend='docker' requires an AgentConfig.workspace_path",
                     reason="missing_workspace",
                 )
             from .docker_backend import DockerSandboxBackend
 
             return DockerSandboxBackend(
                 root_dir=workspace_path,
-                image=self._config.deepagents_docker_image or "",
-                network=self._config.deepagents_docker_network,
-                timeout=self._config.deepagents_execute_timeout,
-                max_output_bytes=self._config.deepagents_execute_max_output_bytes,
+                image=str(get_agent_runtime_option(self._config, "docker_image", "")),
+                network=str(get_agent_runtime_option(self._config, "docker_network", "bridge")),
+                timeout=_runtime_int_option(self._config, "execute_timeout", 120),
+                max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
             )
 
         if backend == "local_shell":
             if workspace_path is None:
                 raise AdapterUnavailableError(
-                    "deepagents_backend='local_shell' requires an AgentConfig.workspace_path",
+                    "agent_runtime backend='local_shell' requires an AgentConfig.workspace_path",
                     reason="missing_workspace",
                 )
             from deepagents.backends import LocalShellBackend
@@ -133,8 +146,8 @@ class DeepAgentsAgentAdapter:
             return LocalShellBackend(
                 root_dir=str(workspace_path),
                 virtual_mode=True,
-                timeout=self._config.deepagents_execute_timeout,
-                max_output_bytes=self._config.deepagents_execute_max_output_bytes,
+                timeout=_runtime_int_option(self._config, "execute_timeout", 120),
+                max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
                 inherit_env=True,
             )
 

@@ -21,8 +21,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from karenina.adapters.agent_runtime import get_agent_runtime_capabilities, get_agent_runtime_option
 from karenina.ports import (
     AgentConfig,
     AgentPort,
@@ -101,11 +103,39 @@ class ClaudeSDKAgentAdapter:
         Returns:
             PortCapabilities with system_prompt=True.
         """
-        return PortCapabilities(
-            supports_system_prompt=True,
-            supports_file_tools=True,
-            supports_code_execution=True,
-        )
+        return get_agent_runtime_capabilities(self._config)
+
+    def _build_sandbox_settings(self) -> dict[str, Any] | None:
+        """Build Claude Code sandbox settings for Bash isolation."""
+
+        if not get_agent_runtime_option(
+            self._config,
+            "sandbox_enabled",
+            True,
+            legacy_attr="claude_sdk_sandbox_enabled",
+        ):
+            return None
+
+        return {
+            "enabled": True,
+            "failIfUnavailable": bool(
+                get_agent_runtime_option(
+                    self._config,
+                    "sandbox_fail_if_unavailable",
+                    True,
+                    legacy_attr="claude_sdk_sandbox_fail_if_unavailable",
+                )
+            ),
+            "autoAllowBashIfSandboxed": True,
+            "allowUnsandboxedCommands": bool(
+                get_agent_runtime_option(
+                    self._config,
+                    "allow_unsandboxed_commands",
+                    False,
+                    legacy_attr="claude_sdk_allow_unsandboxed_commands",
+                )
+            ),
+        }
 
     def _build_options(
         self,
@@ -128,8 +158,16 @@ class ClaudeSDKAgentAdapter:
         from claude_agent_sdk import ClaudeAgentOptions
 
         options_kwargs: dict[str, Any] = {
-            # Use bypassPermissions for batch/automated calls
-            "permission_mode": "bypassPermissions",
+            # Use sandbox-aware permissions by default. Do not use
+            # bypassPermissions here: allowed_tools does not constrain it.
+            "permission_mode": str(
+                get_agent_runtime_option(
+                    self._config,
+                    "permission_mode",
+                    "acceptEdits",
+                    legacy_attr="claude_sdk_permission_mode",
+                )
+            ),
             # Map AgentConfig.max_turns to SDK
             "max_turns": config.max_turns,
         }
@@ -173,11 +211,28 @@ class ClaudeSDKAgentAdapter:
             # SDK supports tool filtering via allowed_tools
             options_kwargs["allowed_tools"] = [t.name for t in tools]
 
+        sandbox_settings = self._build_sandbox_settings()
+        if sandbox_settings:
+            options_kwargs["sandbox"] = sandbox_settings
+
         # Apply any extra options from config
         if config.extra:
+            extra_permission_mode = config.extra.get("claude_sdk_permission_mode")
+            if extra_permission_mode:
+                options_kwargs["permission_mode"] = extra_permission_mode
+            elif config.extra.get("allow_unsafe_permission_mode_override") and "permission_mode" in config.extra:
+                options_kwargs["permission_mode"] = config.extra["permission_mode"]
+
             for key, value in config.extra.items():
                 # Don't override critical options
-                if key not in ("permission_mode", "max_turns", "mcp_servers", "allowed_tools"):
+                if key not in (
+                    "permission_mode",
+                    "claude_sdk_permission_mode",
+                    "allow_unsafe_permission_mode_override",
+                    "max_turns",
+                    "mcp_servers",
+                    "allowed_tools",
+                ):
                     options_kwargs[key] = value
 
         # Build env dict for Anthropic settings (api_key, base_url).
@@ -205,9 +260,10 @@ class ClaudeSDKAgentAdapter:
         # can still override this default.
         options_kwargs.setdefault("setting_sources", [])
 
-        # Wire workspace_path to SDK's cwd for filesystem isolation
-        if config.workspace_path:
-            options_kwargs["cwd"] = str(config.workspace_path)
+        # Wire cwd to the workspace boundary used by Claude Code permissions
+        # and native Bash sandboxing. When no workspace is supplied, use the
+        # current process directory instead of letting the SDK choose implicitly.
+        options_kwargs["cwd"] = str(config.workspace_path or Path.cwd())
 
         return ClaudeAgentOptions(**options_kwargs)
 

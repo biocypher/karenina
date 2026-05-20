@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from karenina.adapters.langchain_deep_agents.agent import DeepAgentsAgentAdapter
 from karenina.ports import AgentConfig, AgentResult, Message
+
+
+def _mock_deep_agent(result):
+    """Return a minimal DeepAgents-like object that streams one state."""
+
+    class MockDeepAgent:
+        async def astream(self, *_args, **_kwargs):
+            yield result
+
+    return MockDeepAgent()
 
 
 @pytest.mark.unit
@@ -30,14 +40,12 @@ class TestDeepAgentsBackendConfiguration:
 
         def capture_create(**kwargs):
             captured_kwargs.update(kwargs)
-            mock_agent = MagicMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
+            return _mock_deep_agent(
+                {
                     "messages": [AIMessage(content="ok")],
                     "is_last_step": False,
                 }
             )
-            return mock_agent
 
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
@@ -68,14 +76,12 @@ class TestDeepAgentsBackendConfiguration:
 
         def capture_create(**kwargs):
             captured_kwargs.update(kwargs)
-            mock_agent = MagicMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
+            return _mock_deep_agent(
+                {
                     "messages": [AIMessage(content="ok")],
                     "is_last_step": False,
                 }
             )
-            return mock_agent
 
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
@@ -111,14 +117,12 @@ class TestDeepAgentsBackendConfiguration:
 
         def capture_create(**kwargs):
             captured_kwargs.update(kwargs)
-            mock_agent = MagicMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
+            return _mock_deep_agent(
+                {
                     "messages": [AIMessage(content="ok")],
                     "is_last_step": False,
                 }
             )
-            return mock_agent
 
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
@@ -155,12 +159,9 @@ class TestDeepAgentsAgentAdapter:
             "is_last_step": False,
         }
 
-        mock_agent = MagicMock()
-        mock_agent.ainvoke = AsyncMock(return_value=mock_result)
-
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
-            lambda **_kwargs: mock_agent,
+            lambda **_kwargs: _mock_deep_agent(mock_result),
         )
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
@@ -191,12 +192,9 @@ class TestDeepAgentsAgentAdapter:
             "is_last_step": True,
         }
 
-        mock_agent = MagicMock()
-        mock_agent.ainvoke = AsyncMock(return_value=mock_result)
-
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
-            lambda **_kwargs: mock_agent,
+            lambda **_kwargs: _mock_deep_agent(mock_result),
         )
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
@@ -228,12 +226,9 @@ class TestDeepAgentsAgentAdapter:
             "is_last_step": False,
         }
 
-        mock_agent = MagicMock()
-        mock_agent.ainvoke = AsyncMock(return_value=mock_result)
-
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
-            lambda **_kwargs: mock_agent,
+            lambda **_kwargs: _mock_deep_agent(mock_result),
         )
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
@@ -277,6 +272,8 @@ class TestDeepAgentsMCPToolsWiring:
     @pytest.mark.asyncio
     async def test_explicit_tools_passed_to_agent(self, deep_agents_model_config, monkeypatch):
         """Explicit tools should be forwarded to create_deep_agent."""
+        from langchain_core.messages import AIMessage
+
         from karenina.ports import AgentConfig, Message, Tool
         from karenina.ports.usage import UsageMetadata
 
@@ -284,14 +281,12 @@ class TestDeepAgentsMCPToolsWiring:
 
         def mock_create_deep_agent(**kwargs):
             captured_kwargs.update(kwargs)
-            mock_agent = AsyncMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
-                    "messages": [MagicMock(content="Done", type="ai")],
+            return _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="Done")],
                     "is_last_step": False,
                 }
             )
-            return mock_agent
 
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
@@ -325,6 +320,8 @@ class TestDeepAgentsMCPToolsWiring:
     @pytest.mark.asyncio
     async def test_mcp_tools_loaded_and_combined(self, deep_agents_model_config, monkeypatch):
         """MCP servers should be converted to tools and combined with explicit tools."""
+        from langchain_core.messages import AIMessage
+
         from karenina.ports import AgentConfig, Message, Tool
         from karenina.ports.usage import UsageMetadata
 
@@ -334,14 +331,12 @@ class TestDeepAgentsMCPToolsWiring:
 
         def mock_create_deep_agent(**kwargs):
             captured_kwargs.update(kwargs)
-            mock_agent = AsyncMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
-                    "messages": [MagicMock(content="Done", type="ai")],
+            return _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="Done")],
                     "is_last_step": False,
                 }
             )
-            return mock_agent
 
         async def mock_convert_mcp(servers, exit_stack):
             return [fake_mcp_tool]
@@ -384,6 +379,8 @@ class TestDeepAgentsMCPToolsWiring:
     @pytest.mark.asyncio
     async def test_no_tools_kwarg_when_none_provided(self, deep_agents_model_config, monkeypatch):
         """When neither tools nor mcp_servers are given, tools kwarg should be absent."""
+        from langchain_core.messages import AIMessage
+
         from karenina.ports import AgentConfig, Message
         from karenina.ports.usage import UsageMetadata
 
@@ -391,14 +388,12 @@ class TestDeepAgentsMCPToolsWiring:
 
         def mock_create_deep_agent(**kwargs):
             captured_kwargs.update(kwargs)
-            mock_agent = AsyncMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
-                    "messages": [MagicMock(content="Done", type="ai")],
+            return _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="Done")],
                     "is_last_step": False,
                 }
             )
-            return mock_agent
 
         monkeypatch.setattr(
             "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
