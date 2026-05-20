@@ -145,12 +145,33 @@ class VerificationConfig(BaseModel):
     )
 
     # Task ordering strategy for queue generation
-    task_ordering: Literal["prefix_cache", "generation_order", "random"] = Field(
-        default="prefix_cache",
+    task_ordering: Literal[
+        "auto",
+        "prefix_cache",
+        "distribute_answerers",
+        "generation_order",
+        "random",
+    ] = Field(
+        default="auto",
         description="Task queue ordering strategy. "
-        "'prefix_cache' (default) groups by answering model for KV cache hits. "
+        "'auto' (default) picks 'distribute_answerers' when answerers span "
+        "more than one distinct identity, else 'prefix_cache'. "
+        "'prefix_cache' groups by answering model for KV cache hits on a "
+        "single endpoint. "
+        "'distribute_answerers' round-robins across answerer identities to "
+        "spread load over multiple inference endpoints. "
         "'generation_order' preserves template-first loop order. "
         "'random' shuffles tasks.",
+    )
+
+    # Per-answerer concurrency caps (enforced at task start by the executor)
+    answerer_concurrency_limits: int | dict[str, int] | None = Field(
+        default=None,
+        description="Cap on concurrent tasks per answerer, enforced at task start. "
+        "Pass an int to apply the same cap to every entry in answering_models "
+        "(keyed by ModelConfig.id). Pass a dict keyed by ModelConfig.id for "
+        "per-model caps; answerers not in the dict run without a cap. "
+        "None disables caps (default).",
     )
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)

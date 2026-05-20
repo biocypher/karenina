@@ -147,7 +147,7 @@ class TestSequentialErrorHandling:
         tasks = [_make_task("q1"), _make_task("q2"), _make_task("q3")]
         call_count = 0
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             nonlocal call_count
             call_count += 1
             if task["question_id"] == "q2":
@@ -181,7 +181,7 @@ class TestSequentialErrorHandling:
         """When all tasks succeed, sequential mode returns a normal dict (no exception)."""
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
         monkeypatch.setattr(
@@ -200,7 +200,7 @@ class TestSequentialErrorHandling:
         """When all tasks fail, the error has empty partial_results and all errors."""
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             raise RuntimeError(f"fail_{task['question_id']}")
 
         monkeypatch.setattr(
@@ -232,7 +232,7 @@ class TestParallelDeadlockFix:
         (does not hang) and raises VerificationBatchError."""
         tasks = [_make_task("q1"), _make_task("q2"), _make_task("q3")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
                 raise RuntimeError("infrastructure failure")
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -260,7 +260,7 @@ class TestParallelDeadlockFix:
         """When all tasks succeed in parallel mode, returns a normal dict."""
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
         monkeypatch.setattr(
@@ -290,7 +290,7 @@ class TestErrorSymmetry:
         """Sequential and parallel modes raise VerificationBatchError for the same failure."""
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
                 raise RuntimeError("boom")
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -340,7 +340,7 @@ class TestTimeoutSafetyNet:
         the timeout fires and raises VerificationBatchError."""
         tasks = [_make_task("q1")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             # This succeeds, but we'll patch the completion tracking to never fire
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
@@ -385,7 +385,7 @@ class TestErrorDetailQuality:
         """Error message reports how many tasks failed out of total."""
         tasks = [_make_task("q1"), _make_task("q2"), _make_task("q3")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] in ("q1", "q3"):
                 raise ValueError(f"bad_{task['question_id']}")
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -408,7 +408,7 @@ class TestErrorDetailQuality:
         """Each error entry has the original exception with its type and message."""
         tasks = [_make_task("q1"), _make_task("q2")]
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q1":
                 raise TypeError("type mismatch in q1")
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -445,7 +445,12 @@ class TestSequentialPortalManagement:
 
         captured_portals: list = []
 
-        def mock_execute_task(task: dict, answer_cache: object) -> tuple[str, VerificationResult]:
+        def mock_execute_task(
+            task: dict,
+            answer_cache: object = None,
+            cache_status: str | None = None,
+            cached_answer_data: dict | None = None,
+        ) -> tuple[str, VerificationResult]:
             captured_portals.append(get_async_portal())
             return (task["question_id"], _make_result(task["question_id"]))
 
@@ -469,7 +474,12 @@ class TestSequentialPortalManagement:
         """Portal is cleared even when all tasks fail."""
         from karenina.benchmark.verification.executor import get_async_portal
 
-        def mock_execute_task(task: dict, answer_cache: object) -> tuple[str, VerificationResult]:
+        def mock_execute_task(
+            task: dict,
+            answer_cache: object = None,
+            cache_status: str | None = None,
+            cached_answer_data: dict | None = None,
+        ) -> tuple[str, VerificationResult]:
             raise RuntimeError("task failed")
 
         monkeypatch.setattr(
@@ -494,7 +504,12 @@ class TestSequentialPortalManagement:
         async def async_fn() -> str:
             return "ok"
 
-        def mock_execute_task(task: dict, answer_cache: object) -> tuple[str, VerificationResult]:
+        def mock_execute_task(
+            task: dict,
+            answer_cache: object = None,
+            cache_status: str | None = None,
+            cached_answer_data: dict | None = None,
+        ) -> tuple[str, VerificationResult]:
             portal = get_async_portal()
             async_results.append(portal.call(async_fn))
             return (task["question_id"], _make_result(task["question_id"]))
@@ -605,7 +620,7 @@ class TestPerWorkerPortals:
         worker_barrier = threading.Barrier(2, timeout=5.0)
         barrier_released = threading.Event()
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if not barrier_released.is_set():
                 with contextlib.suppress(threading.BrokenBarrierError):
                     worker_barrier.wait()
@@ -662,7 +677,7 @@ class TestInFlightTasksNotSilentlyDropped:
         fast_ids = {"q0", "q1"}
         slow_delay = 0.8  # slow tasks finish ~0.5s after the batch timeout
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] not in fast_ids:
                 time.sleep(slow_delay)
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
@@ -704,7 +719,7 @@ class TestInFlightTasksNotSilentlyDropped:
         tasks = [_make_task(f"q{i}") for i in range(4)]
         fast_ids = {"q0", "q1"}
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             qid = task["question_id"]
             if qid not in fast_ids:
                 time.sleep(0.8)
@@ -784,7 +799,7 @@ class TestPreTeardownAclose:
                 with aclose_lock:
                     aclose_thread_ids.append(threading.get_ident())
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             # Run inside the worker thread: register an adapter so the
             # registry tracks it against this worker's portal.
             register_adapter(PortalAwareAdapter())
@@ -853,7 +868,7 @@ class TestPreTeardownAclose:
                 # Exceed the short timeout so the finally block must give up.
                 await asyncio.sleep(10.0)
 
-        def mock_execute_task(task, answer_cache=None, **kwargs):
+        def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             register_adapter(StuckAdapter())
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
@@ -894,3 +909,254 @@ class TestPreTeardownAclose:
             _active_adapters.clear()
         with _adapter_portal_lock:
             _adapter_portal_refs.clear()
+
+
+# =============================================================================
+# ExecutorConfig.answerer_concurrency_limits + _get_endpoint_semaphore
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAnswererConcurrencyLimitsPlumbing:
+    """Config plumbing and lazy semaphore accessor on VerificationExecutor."""
+
+    def test_default_is_none(self) -> None:
+        from karenina.benchmark.verification.executor import ExecutorConfig
+
+        assert ExecutorConfig().answerer_concurrency_limits is None
+
+    def test_can_be_set(self) -> None:
+        from karenina.benchmark.verification.executor import ExecutorConfig
+
+        cfg = ExecutorConfig(answerer_concurrency_limits={"m1": 3})
+        assert cfg.answerer_concurrency_limits == {"m1": 3}
+
+    def test_get_endpoint_semaphore_caches(self) -> None:
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        executor = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+
+        sem_a = executor._get_endpoint_semaphore("m1", 2)
+        sem_b = executor._get_endpoint_semaphore("m1", 2)
+        assert sem_a is sem_b
+        # Duck-type check: a Semaphore exposes acquire/release. CPython's
+        # Semaphore is a factory, so isinstance checks against
+        # threading.Semaphore are brittle across versions.
+        assert hasattr(sem_a, "acquire") and hasattr(sem_a, "release")
+
+    def test_get_endpoint_semaphore_thread_safe_first_time(self) -> None:
+        import threading
+
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        executor = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+
+        barrier = threading.Barrier(8)
+        seen: list[object] = []
+        seen_lock = threading.Lock()
+
+        def _race() -> None:
+            barrier.wait()
+            sem = executor._get_endpoint_semaphore("m1", 2)
+            with seen_lock:
+                seen.append(sem)
+
+        threads = [threading.Thread(target=_race) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len({id(s) for s in seen}) == 1
+
+
+# =============================================================================
+# _execute_task_with_cap and integration with run_batch
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestExecuteTaskWithCap:
+    """Direct unit tests for _execute_task_with_cap.
+
+    Note on monkeypatching: ``_execute_task_with_cap`` does a local
+    ``from .batch_runner import execute_task`` at call time, so we patch the
+    *source* attribute ``batch_runner.execute_task`` (not
+    ``executor.execute_task``, which does not exist as a module attribute).
+    """
+
+    def _stub_task(self, ans_id: str) -> dict:
+        class _M:
+            id = ans_id
+
+        return {"answering_model": _M(), "question_id": "q1", "replicate": None}
+
+    def test_no_limits_calls_through(self, monkeypatch) -> None:
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        calls: list[dict] = []
+
+        def _fake_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
+            calls.append(task)
+            return ("key", object())
+
+        monkeypatch.setattr(br_mod, "execute_task", _fake_execute_task)
+
+        ex = VerificationExecutor(parallel=False, config=ExecutorConfig())
+        key, _ = ex._execute_task_with_cap(self._stub_task("m1"), None, None, None)
+
+        assert key == "key"
+        assert len(calls) == 1
+        assert ex._endpoint_semaphores == {}
+
+    def test_matching_limit_acquires_semaphore(self, monkeypatch) -> None:
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        def _fake_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
+            return ("key", object())
+
+        monkeypatch.setattr(br_mod, "execute_task", _fake_execute_task)
+
+        ex = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+        ex._execute_task_with_cap(self._stub_task("m1"), None, None, None)
+        assert "m1" in ex._endpoint_semaphores
+
+    def test_unmatched_id_is_uncapped(self, monkeypatch) -> None:
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        def _fake_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
+            return ("key", object())
+
+        monkeypatch.setattr(br_mod, "execute_task", _fake_execute_task)
+
+        ex = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+        ex._execute_task_with_cap(self._stub_task("other"), None, None, None)
+        assert ex._endpoint_semaphores == {}
+
+    def test_missing_id_is_uncapped(self, monkeypatch) -> None:
+        """Answerers with ``id is None`` are not constrained by any cap."""
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        def _fake_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
+            return ("key", object())
+
+        monkeypatch.setattr(br_mod, "execute_task", _fake_execute_task)
+
+        class _NoId:
+            id = None
+
+        ex = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 2}),
+        )
+        task = {"answering_model": _NoId(), "question_id": "q1", "replicate": None}
+        ex._execute_task_with_cap(task, None, None, None)
+        assert ex._endpoint_semaphores == {}
+
+    def test_exception_releases_semaphore(self, monkeypatch) -> None:
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        def _boom(task, answer_cache=None, cache_status=None, cached_answer_data=None):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(br_mod, "execute_task", _boom)
+
+        ex = VerificationExecutor(
+            parallel=False,
+            config=ExecutorConfig(answerer_concurrency_limits={"m1": 1}),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            ex._execute_task_with_cap(self._stub_task("m1"), None, None, None)
+
+        sem = ex._endpoint_semaphores["m1"]
+        # After release, a cap-1 semaphore must have a slot available.
+        assert sem.acquire(blocking=False)
+        sem.release()
+
+
+@pytest.mark.unit
+class TestCapEnforcementUnderLoad:
+    """End-to-end concurrency assertion: counter never exceeds the cap."""
+
+    def test_concurrency_counter_never_exceeds_cap(self, monkeypatch) -> None:
+        import threading
+        import time
+
+        from karenina.benchmark.verification import batch_runner as br_mod
+        from karenina.benchmark.verification.executor import (
+            ExecutorConfig,
+            VerificationExecutor,
+        )
+
+        active = [0]
+        peak = [0]
+        lock = threading.Lock()
+
+        def _slow_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
+            with lock:
+                active[0] += 1
+                peak[0] = max(peak[0], active[0])
+            try:
+                time.sleep(0.05)
+            finally:
+                with lock:
+                    active[0] -= 1
+            return (f"key_{id(task)}", object())
+
+        monkeypatch.setattr(br_mod, "execute_task", _slow_execute_task)
+
+        class _M:
+            id = "m1"
+
+        tasks = [{"answering_model": _M(), "question_id": f"q{i}", "replicate": None} for i in range(10)]
+
+        ex = VerificationExecutor(
+            parallel=True,
+            config=ExecutorConfig(
+                max_workers=10,
+                enable_cache=False,
+                answerer_concurrency_limits={"m1": 3},
+            ),
+        )
+        ex.run_batch(tasks)
+
+        assert peak[0] <= 3

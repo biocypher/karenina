@@ -126,6 +126,11 @@ class ExecutorConfig:
         max_requeue_count: Maximum times a task can be requeued before forcing a
             fresh generation (default: 5). When exceeded, the cache entry is reset
             and the task restarts with retry_count=0.
+        answerer_concurrency_limits: Optional dict mapping answerer
+            ``ModelConfig.id`` to the max number of concurrent tasks allowed on
+            that answerer. Already normalized (the public int-or-dict form is
+            reduced to a plain dict by ``_normalize_answerer_limits``). ``None``
+            (the default) disables caps; every task runs unthrottled.
     """
 
     max_workers: int = DEFAULT_ASYNC_MAX_WORKERS
@@ -133,6 +138,7 @@ class ExecutorConfig:
     retry_wait_seconds: float = 5.0
     timeout_seconds: float | None = None
     max_requeue_count: int = 5
+    answerer_concurrency_limits: dict[str, int] | None = None
 
 
 # ============================================================================
@@ -161,6 +167,51 @@ class VerificationExecutor:
         """
         self.parallel = parallel
         self.config = config or ExecutorConfig()
+        self._endpoint_semaphores: dict[str, threading.Semaphore] = {}
+        self._endpoint_semaphores_lock = threading.Lock()
+
+    def _get_endpoint_semaphore(self, ans_id: str, limit: int) -> threading.Semaphore:
+        """Return the semaphore for ``ans_id``, creating it on first access.
+
+        Thread-safe: the mutation of ``self._endpoint_semaphores`` is guarded
+        by ``self._endpoint_semaphores_lock`` so that two workers racing for
+        the same unseen key share a single ``threading.Semaphore`` instance.
+        """
+        existing = self._endpoint_semaphores.get(ans_id)
+        if existing is not None:
+            return existing
+        with self._endpoint_semaphores_lock:
+            existing = self._endpoint_semaphores.get(ans_id)
+            if existing is None:
+                existing = threading.Semaphore(limit)
+                self._endpoint_semaphores[ans_id] = existing
+            return existing
+
+    def _execute_task_with_cap(
+        self,
+        task: dict[str, Any],
+        answer_cache: AnswerTraceCache | None,
+        cache_status: str | None,
+        cached_answer_data: dict[str, Any] | None,
+    ) -> tuple[str, VerificationResult]:
+        """Run ``execute_task`` with optional per-answerer concurrency capping.
+
+        Imports ``execute_task`` lazily to avoid circular imports.
+        """
+        from .batch_runner import execute_task
+
+        limits = self.config.answerer_concurrency_limits
+        if not limits:
+            return execute_task(task, answer_cache, cache_status, cached_answer_data)
+
+        ans_id: str | None = getattr(task["answering_model"], "id", None)
+        limit = limits.get(ans_id) if ans_id else None
+        if limit is None or ans_id is None:
+            return execute_task(task, answer_cache, cache_status, cached_answer_data)
+
+        sem = self._get_endpoint_semaphore(ans_id, limit)
+        with sem:
+            return execute_task(task, answer_cache, cache_status, cached_answer_data)
 
     def run_batch(
         self,
@@ -206,7 +257,6 @@ class VerificationExecutor:
         """
         from karenina.exceptions import VerificationBatchError
 
-        from .batch_runner import execute_task
         from .utils.cache_helpers import log_cache_stats
         from .utils.task_helpers import create_preview_result
 
@@ -230,7 +280,7 @@ class VerificationExecutor:
 
                     try:
                         # Execute the task with answer cache
-                        result_key, result = execute_task(task, answer_cache)
+                        result_key, result = self._execute_task_with_cap(task, answer_cache, None, None)
                         results[result_key] = result
                     except Exception as e:
                         logger.error("Sequential task %s failed: %s", task["question_id"], e)
@@ -289,7 +339,6 @@ class VerificationExecutor:
         """
         from karenina.exceptions import VerificationBatchError
 
-        from .batch_runner import execute_task
         from .utils.cache_helpers import generate_answer_cache_key, log_cache_stats
         from .utils.task_helpers import create_preview_result
 
@@ -338,7 +387,7 @@ class VerificationExecutor:
                     progress_callback(completed_count[0] + 1, total, preview_result)
 
             if not answer_cache:
-                return idx, execute_task(task, answer_cache)
+                return idx, self._execute_task_with_cap(task, answer_cache, None, None)
 
             cache_key = generate_answer_cache_key(task)
             for attempt in range(max_requeue + 1):
@@ -363,11 +412,11 @@ class VerificationExecutor:
                     continue
 
                 # MISS or HIT: execute
-                return idx, execute_task(
+                return idx, self._execute_task_with_cap(
                     task,
                     answer_cache,
-                    cache_status=status,
-                    cached_answer_data=cached_answer_data,
+                    status,
+                    cached_answer_data,
                 )
 
             # Exceeded max requeue: force reset, generate fresh
@@ -377,7 +426,7 @@ class VerificationExecutor:
                 max_requeue,
             )
             answer_cache.force_reset(cache_key)
-            return idx, execute_task(task, answer_cache)
+            return idx, self._execute_task_with_cap(task, answer_cache, None, None)
 
         # Preserve incoming order (ordering is controlled by task_ordering config)
         indexed_tasks = list(enumerate(tasks))
