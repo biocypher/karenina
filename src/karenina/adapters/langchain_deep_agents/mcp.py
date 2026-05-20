@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ async def convert_mcp_to_tools(
 
     from langchain_mcp_adapters.client import MultiServerMCPClient
 
-    client = MultiServerMCPClient(server_params)
-    await exit_stack.enter_async_context(client)
+    client = MultiServerMCPClient(cast(Any, server_params))
+    await exit_stack.enter_async_context(cast(Any, client))
     tools: list[Any] = await client.get_tools()
     return tools
