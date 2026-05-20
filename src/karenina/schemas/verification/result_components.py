@@ -82,6 +82,9 @@ class VerificationResultMetadata(BaseModel):
         parsing: ModelIdentity,
         timestamp: str,
         replicate: int | None = None,
+        scenario_id: str | None = None,
+        scenario_node: str | None = None,
+        scenario_turn: int | None = None,
     ) -> str:
         """
         Compute deterministic 16-char SHA256 hash from verification parameters.
@@ -95,6 +98,9 @@ class VerificationResultMetadata(BaseModel):
             parsing: ModelIdentity for the parsing model
             timestamp: ISO timestamp string
             replicate: Replicate number (None for single run)
+            scenario_id: Scenario identifier, when this result is a scenario turn
+            scenario_node: Scenario node identifier, when this result is a scenario turn
+            scenario_turn: Scenario turn index, when this result is a scenario turn
 
         Returns:
             16-character hex string (first 16 chars of SHA256 hash)
@@ -108,6 +114,9 @@ class VerificationResultMetadata(BaseModel):
             "parsing": parsing.canonical_key,
             "question_id": question_id,
             "replicate": replicate,
+            "scenario_id": scenario_id,
+            "scenario_node": scenario_node,
+            "scenario_turn": scenario_turn,
             "timestamp": timestamp,
         }
 

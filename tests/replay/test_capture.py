@@ -19,8 +19,11 @@ def _build_fake_qa_result(
     raw: str,
     parsed: dict | None,
     model_display: str,
+    verify_result: bool | None = True,
     ok: bool = True,
     failure_category=None,
+    usage_metadata: dict | None = None,
+    agent_metrics: dict | None = None,
 ):
     """Build a minimal object that quacks like a VerificationResult for capture.
 
@@ -42,7 +45,10 @@ def _build_fake_qa_result(
     template = SimpleNamespace(
         raw_llm_response=raw,
         parsed_llm_response=parsed,
+        verify_result=verify_result,
         trace_messages=[],
+        usage_metadata=usage_metadata,
+        agent_metrics=agent_metrics,
     )
     return SimpleNamespace(metadata=metadata, template=template)
 
@@ -80,6 +86,82 @@ class TestCaptureFromResultSet:
         assert hit is not None
         assert hit.raw_trace == "qa answer"
         assert hit.parsed_answer_fields == {"value": 42}
+        assert hit.verify_result is True
+
+    def test_usage_metadata_and_agent_metrics_are_captured(self):
+        usage = {
+            "answer_generation": {
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "total_tokens": 15,
+                "model": "gpt-5",
+            },
+            "total": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+        }
+        metrics = {"iterations": 2, "tool_calls": 1, "limit_reached": False}
+        rs = _fake_result_set(
+            results=[
+                _build_fake_qa_result(
+                    question_id="q",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    raw="qa answer",
+                    parsed={"value": 42},
+                    model_display="gpt-5 (answering)",
+                    usage_metadata=usage,
+                    agent_metrics=metrics,
+                )
+            ],
+        )
+
+        store = capture_from_result_set(rs)
+        hit = store.lookup(question_id="q", answering_model_id="gpt-5 (answering)")
+
+        assert hit is not None
+        assert hit.usage_metadata == usage
+        assert hit.agent_metrics == metrics
+
+    def test_usage_metadata_total_is_normalised_from_stages(self):
+        usage = {
+            "answer_generation": {
+                "input_tokens": 100,
+                "output_tokens": 5,
+                "total_tokens": 105,
+                "model": "gpt-5",
+            },
+            "parsing": {
+                "input_tokens": 20,
+                "output_tokens": 3,
+                "total_tokens": 23,
+                "model": "gpt-5",
+            },
+            "total": {"input_tokens": 20, "output_tokens": 3, "total_tokens": 23},
+        }
+        rs = _fake_result_set(
+            results=[
+                _build_fake_qa_result(
+                    question_id="q",
+                    scenario_id=None,
+                    scenario_node=None,
+                    scenario_turn=None,
+                    raw="qa answer",
+                    parsed={"value": 42},
+                    model_display="gpt-5 (answering)",
+                    usage_metadata=usage,
+                )
+            ],
+        )
+
+        store = capture_from_result_set(rs)
+        hit = store.lookup(question_id="q", answering_model_id="gpt-5 (answering)")
+
+        assert hit is not None
+        assert hit.usage_metadata["total"] == {
+            "input_tokens": 120,
+            "output_tokens": 8,
+            "total_tokens": 128,
+        }
 
     def test_scenario_results_use_per_node_visit_counter(self):
         rs = _fake_result_set(

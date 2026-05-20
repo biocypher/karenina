@@ -20,8 +20,14 @@ from karenina.benchmark.verification.stages.core.orchestrator import StageOrches
 from karenina.ports.messages import Message
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
+from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.scenario.definition import ScenarioDefinition
-from karenina.schemas.scenario.state import ScenarioExecutionResult, ScenarioState, TurnRecord
+from karenina.schemas.scenario.state import (
+    ScenarioExecutionResult,
+    ScenarioState,
+    ScenarioTerminalFailure,
+    TurnRecord,
+)
 from karenina.schemas.scenario.types import END, ScenarioEdge, ScenarioNode
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -149,6 +155,7 @@ class ScenarioManager:
         previous_agent_id: str | None = None
         previous_system_prompt: str | None = None
         status: Literal["completed", "limit_reached", "error"] = "completed"
+        terminal_failure: ScenarioTerminalFailure | None = None
 
         # Resolve base identity from entry node
         entry_node_obj = scenario.nodes[scenario.entry_node]
@@ -284,13 +291,13 @@ class ScenarioManager:
                     node_results=dict(state.node_results),
                 )
 
-                if vr.metadata.failure is not None:
-                    logger.error(
-                        "Scenario %s: node '%s' failed with error: %s (category: %s)",
+                failure = vr.metadata.failure
+                if failure is not None and failure.category == FailureCategory.CONTENT:
+                    logger.debug(
+                        "Scenario %s: node '%s' verified false: %s",
                         scenario.name,
                         state.current_node,
-                        vr.metadata.failure.reason,
-                        vr.metadata.failure.category.value,
+                        failure.reason,
                     )
 
                 # Complete cache entry after final attempt
@@ -370,8 +377,23 @@ class ScenarioManager:
                 state.verify_result = verify_result
                 state.parsed = parsed_fields
 
-                # Check for pipeline error
-                if vr.metadata.failure is not None:
+                # Check for pipeline infrastructure/autofail errors. Content
+                # failures are valid scenario state: branches may explicitly
+                # route on ``verify_result=False``.
+                if failure is not None and failure.category != FailureCategory.CONTENT:
+                    logger.error(
+                        "Scenario %s: node '%s' failed with error: %s (category: %s)",
+                        scenario.name,
+                        state.current_node,
+                        failure.reason,
+                        failure.category.value,
+                    )
+                    terminal_failure = ScenarioTerminalFailure(
+                        node_id=state.current_node,
+                        category=failure.category.value,
+                        stage=failure.stage,
+                        reason=failure.reason,
+                    )
                     self._report_progress(
                         progress_callback,
                         scenario.name,
@@ -438,6 +460,7 @@ class ScenarioManager:
             turn_results=turn_results,
             final_state=state,
             outcome_results={},
+            terminal_failure=terminal_failure,
             replicate=replicate,
         )
 
@@ -666,6 +689,9 @@ def _resolve_models(
     answering = override.answering_model if override and override.answering_model else base_answering
     parsing = override.parsing_model if override and override.parsing_model else base_parsing
 
+    answering = _hydrate_override_runtime_fields(answering, base_answering)
+    parsing = _hydrate_override_runtime_fields(parsing, base_parsing)
+
     # Propagate request_timeout from base models to overrides that don't set their own
     if answering.request_timeout is None and base_answering.request_timeout is not None:
         answering = answering.model_copy(update={"request_timeout": base_answering.request_timeout})
@@ -679,6 +705,39 @@ def _resolve_models(
         parsing = parsing.model_copy(update={"retry_policy": base_parsing.retry_policy})
 
     return answering, parsing
+
+
+def _hydrate_override_runtime_fields(model: ModelConfig, base: ModelConfig) -> ModelConfig:
+    """Fill non-artifact runtime fields missing from a per-node override.
+
+    Scenario checkpoints intentionally strip API keys from serialized
+    ``ModelOverride`` values. When the override points at the same runtime
+    family as the base model, borrow missing connection fields from the base
+    config so reloaded executable checkpoints still run without persisting
+    secrets in the artifact.
+    """
+    updates: dict[str, Any] = {}
+
+    if model.interface == "openai_endpoint" and base.interface == "openai_endpoint":
+        if model.endpoint_base_url is None and base.endpoint_base_url is not None:
+            updates["endpoint_base_url"] = base.endpoint_base_url
+        effective_endpoint = updates.get("endpoint_base_url", model.endpoint_base_url)
+        if (
+            model.endpoint_api_key is None
+            and base.endpoint_api_key is not None
+            and effective_endpoint == base.endpoint_base_url
+        ):
+            updates["endpoint_api_key"] = base.endpoint_api_key
+
+    if (
+        model.interface == base.interface
+        and model.model_provider == base.model_provider
+        and model.anthropic_api_key is None
+        and base.anthropic_api_key is not None
+    ):
+        updates["anthropic_api_key"] = base.anthropic_api_key
+
+    return model.model_copy(update=updates) if updates else model
 
 
 def _evaluate_outcome_criteria(

@@ -104,6 +104,52 @@ class TestGenerateAnswerReplayHit:
         assert model_str is not None
         assert "(replay)" in model_str
 
+    def test_hit_rehydrates_usage_metadata_and_agent_metrics(self, stage, monkeypatch):
+        def _boom(*_args, **_kwargs):
+            raise AssertionError("get_agent / get_llm must not be called on a replay hit")
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent",
+            _boom,
+        )
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
+            _boom,
+        )
+
+        ans = ModelConfig(id="gpt-5", model_name="gpt-5", model_provider="openai")
+        usage = {
+            "answer_generation": {
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "total_tokens": 15,
+                "model": "gpt-5",
+            },
+            "parsing": {
+                "input_tokens": 7,
+                "output_tokens": 3,
+                "total_tokens": 10,
+                "model": "parser",
+            },
+            "total": {"input_tokens": 17, "output_tokens": 8, "total_tokens": 25},
+        }
+        metrics = {"iterations": 2, "tool_calls": 1, "limit_reached": False}
+        store = ReplayStore()
+        store.register(
+            ReplayKey(question_id="q", answering_model_id=_answering_display(ans)),
+            ReplayEntry(raw_trace="trace", usage_metadata=usage, agent_metrics=metrics),
+        )
+        context = _make_context(replay_store=store)
+
+        stage.execute(context)
+
+        tracker = context.get_artifact(ArtifactKeys.USAGE_TRACKER)
+        assert tracker is not None
+        assert tracker.get_total_summary()["total"] == usage["total"]
+        assert tracker.get_total_summary()["answer_generation"]["model"] == "gpt-5"
+        assert tracker.get_total_summary()["parsing"]["model"] == "parser"
+        assert tracker.get_agent_metrics() == metrics
+
     def test_strict_miss_marks_error(self, stage, monkeypatch):
         def _boom(*_args, **_kwargs):
             raise AssertionError("get_agent / get_llm must not be called on a replay hit")

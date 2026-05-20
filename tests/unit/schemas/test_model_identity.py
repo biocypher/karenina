@@ -283,6 +283,33 @@ class TestComputeResultId:
         assert id_no_rep != id_rep1
         assert id_rep1 != id_rep2
 
+    def test_scenario_context_changes_hash(self) -> None:
+        """Scenario turns with shared node questions must not collide."""
+        answering = ModelIdentity(interface="langchain", model_name="gpt-4")
+        parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5")
+        ts = "2025-01-01T00:00:00Z"
+
+        first = VerificationResultMetadata.compute_result_id(
+            "shared-guardrail-question",
+            answering,
+            parsing,
+            ts,
+            scenario_id="scenario-a",
+            scenario_node="guardrail_check",
+            scenario_turn=2,
+        )
+        second = VerificationResultMetadata.compute_result_id(
+            "shared-guardrail-question",
+            answering,
+            parsing,
+            ts,
+            scenario_id="scenario-b",
+            scenario_node="guardrail_check",
+            scenario_turn=2,
+        )
+
+        assert first != second
+
 
 # =============================================================================
 # Backward-Compatible Properties on VerificationResultMetadata

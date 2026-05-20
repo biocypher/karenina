@@ -114,3 +114,9 @@ class TestParseTemplateReplayBypass:
         # because we fell through to the live path.
         parsing_model_str = context.get_artifact(ArtifactKeys.PARSING_MODEL_STR)
         assert parsing_model_str != "replay (no LLM)"
+
+    def test_verdict_only_replay_skips_parsing(self):
+        context = _build_context_with_answer_cls()
+        context.set_artifact(ArtifactKeys.REPLAY_ENTRY, ReplayEntry(raw_trace="raw", verify_result=False))
+
+        assert ParseTemplateStage().should_run(context) is False
