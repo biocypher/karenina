@@ -569,6 +569,13 @@ class ModelConfig(BaseModel):
     # Extra keyword arguments to pass to the underlying model interface
     # Useful for passing vendor-specific API keys, custom parameters, etc.
     extra_kwargs: dict[str, Any] | None = None
+    # DeepAgents runtime configuration. Only used by the langchain_deep_agents
+    # adapter; ignored by other interfaces.
+    deepagents_backend: Literal["filesystem", "docker", "local_shell"] = "filesystem"
+    deepagents_docker_image: str | None = None
+    deepagents_docker_network: Literal["bridge", "none"] = "bridge"
+    deepagents_execute_timeout: int = Field(default=120, ge=1)
+    deepagents_execute_max_output_bytes: int = Field(default=100_000, ge=1)
     # Manual interface configuration
     manual_traces: Any = Field(default=None, exclude=True)  # Excluded from serialization; type: ManualTraces | None
     # Agent middleware configuration (only used when mcp_urls_dict is provided)

@@ -10,10 +10,11 @@ import logging
 from typing import Any
 
 from karenina.adapters import get_agent, get_parser
+from karenina.adapters.langchain_deep_agents.runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
-from karenina.ports import AgentConfig, PortCapabilities
+from karenina.ports import AgentConfig
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
 
@@ -93,12 +94,19 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
         # Step 1: Investigation
         try:
-            investigation_trace = self._run_investigation(context, clean_schema)
+            investigation_trace, investigation_limit_reached = self._run_investigation(context, clean_schema)
         except Exception as e:
             context.mark_error(f"Agentic investigation failed: {e}")
             return
 
         context.set_artifact(ArtifactKeys.INVESTIGATION_TRACE, investigation_trace)
+        context.set_result_field(
+            ArtifactKeys.INVESTIGATION_TRACE,
+            investigation_trace,
+        )
+        if investigation_limit_reached:
+            context.mark_error("Agentic investigation hit the turn limit before producing a reliable report")
+            return
 
         # Step 2: Extraction
         try:
@@ -125,10 +133,6 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
 
         context.set_result_field(
-            ArtifactKeys.INVESTIGATION_TRACE,
-            investigation_trace,
-        )
-        context.set_result_field(
             ArtifactKeys.AGENTIC_PARSING_PERFORMED,
             True,
         )
@@ -139,7 +143,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         self,
         context: VerificationContext,
         clean_schema: dict[str, Any],
-    ) -> str:
+    ) -> tuple[str, bool]:
         """Run investigation agent with tools.
 
         Args:
@@ -147,20 +151,31 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             clean_schema: Pre-built JSON schema for the answer template.
 
         Returns:
-            Raw trace from the investigation agent.
+            Raw trace from the investigation agent and whether it hit the turn limit.
         """
         agent = get_agent(context.parsing_model)
         schema_json = json.dumps(clean_schema, indent=2)
+        capabilities = agent.capabilities
+        if capabilities.supports_code_execution:
+            execution_text = (
+                "You have access to file tools and can execute code in a sandboxed workspace."
+                if capabilities.uses_sandboxed_execution
+                else "You have access to file tools and can execute code."
+            )
+            rerun_text = (
+                "You may re-run existing scripts to confirm their output, "
+                "but do NOT re-implement the task from scratch or write your own solution."
+            )
+        else:
+            execution_text = "You have access to file tools, but command execution is not available."
+            rerun_text = "Inspect existing scripts, output files, logs, and data, but do not claim to have re-run code."
 
         system_text = (
             "You are a verification agent evaluating whether an AI coding "
-            "assistant correctly completed a task. You have access to the "
-            "file system and can execute code.\n\n"
+            f"assistant correctly completed a task. {execution_text}\n\n"
             "Your job is to evaluate the artifacts the assistant left in the "
             "workspace (scripts, output files, logs, data). Read and inspect "
-            "these artifacts to determine the results. You may re-run existing "
-            "scripts to confirm their output, but do NOT re-implement the task "
-            "from scratch or write your own solution. If the workspace contains "
+            f"these artifacts to determine the results. {rerun_text} If the workspace contains "
             "no usable artifacts, report that you could not verify the results.\n\n"
             "Report your findings as a JSON object matching this schema:\n"
             f"{schema_json}"
@@ -177,8 +192,9 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_trace}\n--- END TRACE ---")
 
         if context.workspace_path and context.agentic_judge_context != "trace_only":
+            prompt_workspace = workspace_path_for_prompt(context.parsing_model, context.workspace_path)
             user_parts.append(
-                f"\nWorkspace directory: {context.workspace_path}",
+                f"\nWorkspace directory: {prompt_workspace}",
             )
 
         user_text = "\n".join(user_parts)
@@ -187,7 +203,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         assembler = PromptAssembler(
             task=PromptTask.AGENTIC_PARSING_INVESTIGATION,
             interface=context.parsing_model.interface,
-            capabilities=PortCapabilities(),
+            capabilities=capabilities,
         )
         user_instructions = (
             context.prompt_config.get_for_task(PromptTask.AGENTIC_PARSING_INVESTIGATION.value)
@@ -214,7 +230,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                 result.turns,
                 result.limit_reached,
             )
-            return result.raw_trace
+            return result.raw_trace, result.limit_reached
         finally:
             close_adapter(agent)
 

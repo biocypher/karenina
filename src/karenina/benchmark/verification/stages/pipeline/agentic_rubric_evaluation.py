@@ -11,10 +11,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from karenina.adapters.langchain_deep_agents.runtime import workspace_path_for_prompt
 from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
-from karenina.ports import PortCapabilities
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 
@@ -288,10 +288,22 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             from karenina.ports import AgentConfig
 
             agent = get_agent(first_model)
+            capabilities = agent.capabilities
+            if capabilities.supports_code_execution:
+                access_text = (
+                    "You have access to tools and can examine files, execute code in the sandbox, "
+                    "and navigate the workspace."
+                    if capabilities.uses_sandboxed_execution
+                    else "You have access to tools and can examine files, run code, and navigate the workspace."
+                )
+            else:
+                access_text = (
+                    "You have access to tools and can examine files and navigate the workspace, "
+                    "but command execution is not available."
+                )
             system_text = (
                 "You are an evaluation agent investigating the quality of an LLM "
-                "response. You have access to tools and can examine files, run "
-                "code, and navigate the workspace.\n\n"
+                f"response. {access_text}\n\n"
                 "Evaluate ALL of the following criteria:\n"
                 f"{combined_description}\n\n"
                 "After investigating, report your findings for each criterion "
@@ -304,7 +316,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_response}\n--- END TRACE ---")
 
             if workspace_path and include_workspace:
-                user_parts.append(f"\nWorkspace directory: {workspace_path}")
+                prompt_workspace = workspace_path_for_prompt(first_model, workspace_path)
+                user_parts.append(f"\nWorkspace directory: {prompt_workspace}")
 
             user_text = "\n".join(user_parts)
 
@@ -312,7 +325,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             assembler = PromptAssembler(
                 task=PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION,
                 interface=first_model.interface,
-                capabilities=PortCapabilities(),
+                capabilities=capabilities,
             )
             user_instructions = (
                 context.prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION.value)

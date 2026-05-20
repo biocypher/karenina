@@ -14,6 +14,7 @@ from typing import Any, cast
 from pydantic import BaseModel
 
 from karenina.adapters import get_agent, get_llm, get_parser
+from karenina.adapters.langchain_deep_agents.runtime import map_path_for_prompt, workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.ports import AgentConfig, Message, PortCapabilities
@@ -123,9 +124,31 @@ class AgenticTraitEvaluator:
         Returns:
             Raw investigation trace string.
         """
+        agent = None
+        capabilities = PortCapabilities()
+        needs_tools = (
+            trait.context_mode != "trace_only"
+            or workspace_path is not None
+            or (trait.materialize_trace and trace_file_path is not None)
+        )
+        if needs_tools:
+            agent = get_agent(self._model_config)
+            capabilities = agent.capabilities
+
+        if capabilities.supports_code_execution:
+            execution_text = (
+                "You may inspect files and execute commands in the sandboxed workspace."
+                if capabilities.uses_sandboxed_execution
+                else "You may inspect files and execute commands in the configured workspace."
+            )
+        elif capabilities.supports_file_tools:
+            execution_text = "You may inspect files, but command execution is not available."
+        else:
+            execution_text = "Use only the response text supplied in the prompt."
         system_text = (
             "You are an evaluation agent investigating the quality of an LLM response. "
             f"Your task: {trait.description}\n\n"
+            f"{execution_text}\n\n"
             "After investigating, summarize your findings clearly. Your investigation "
             f"trace will be parsed into a {trait.kind} result."
         )
@@ -135,8 +158,13 @@ class AgenticTraitEvaluator:
 
         if trait.context_mode in ("trace_and_workspace", "trace_only") and raw_llm_response:
             if trait.materialize_trace and trace_file_path:
+                prompt_trace_path = map_path_for_prompt(
+                    self._model_config,
+                    trace_file_path,
+                    Path(workspace_path) if workspace_path else None,
+                )
                 trace_content = (
-                    f"The full agent trace is saved to: {trace_file_path}\n"
+                    f"The full agent trace is saved to: {prompt_trace_path}\n"
                     "Use file tools (grep, search, read) to examine it."
                 )
             else:
@@ -144,7 +172,8 @@ class AgenticTraitEvaluator:
             user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{trace_content}\n--- END TRACE ---")
 
         if workspace_path and trait.context_mode != "trace_only":
-            user_parts.append(f"\nWorkspace directory: {workspace_path}")
+            prompt_workspace = workspace_path_for_prompt(self._model_config, Path(workspace_path))
+            user_parts.append(f"\nWorkspace directory: {prompt_workspace}")
 
         user_text = "\n".join(user_parts)
 
@@ -152,7 +181,7 @@ class AgenticTraitEvaluator:
         assembler = PromptAssembler(
             task=PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION,
             interface=self._model_config.interface,
-            capabilities=PortCapabilities(),
+            capabilities=capabilities,
         )
         user_instructions = (
             self._prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION.value)
@@ -165,19 +194,11 @@ class AgenticTraitEvaluator:
             user_instructions=user_instructions,
         )
 
-        # For trace_only without workspace and without materialized trace file,
-        # use LLMPort (no tools needed; trace is inlined in the prompt).
-        # When materialize_trace is active with a file path, the agent needs
-        # file tools to read the trace, so AgentPort is still required.
-        needs_tools = (
-            trait.context_mode != "trace_only"
-            or workspace_path is not None
-            or (trait.materialize_trace and trace_file_path is not None)
-        )
         if not needs_tools:
             return self._run_llm_investigation(trait, messages)
 
-        return self._run_agent_investigation(trait, messages, workspace_path)
+        assert agent is not None
+        return self._run_agent_investigation(trait, messages, workspace_path, agent=agent)
 
     def _run_llm_investigation(
         self,
@@ -205,9 +226,12 @@ class AgenticTraitEvaluator:
         trait: AgenticRubricTrait,
         messages: list[Message],
         workspace_path: Path | str | None,
+        *,
+        agent: Any | None = None,
     ) -> str:
         """Run investigation via AgentPort (multi-turn with tools)."""
-        agent = get_agent(self._model_config)
+        if agent is None:
+            agent = get_agent(self._model_config)
 
         agent_config = AgentConfig(
             max_turns=trait.max_turns,

@@ -13,6 +13,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain.chat_models import init_chat_model
+from pydantic import SecretStr
 
 from karenina.ports import AdapterUnavailableError
 
@@ -20,6 +21,15 @@ if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_openai_endpoint_url(base_url: str) -> str:
+    """Normalize OpenAI-compatible endpoint URLs to include /v1."""
+
+    url = base_url.rstrip("/")
+    if url.endswith("/v1"):
+        return url
+    return f"{url}/v1"
 
 
 def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
@@ -55,6 +65,17 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
             model_kwargs["default_request_timeout"] = model_config.request_timeout
         else:
             model_kwargs["request_timeout"] = model_config.request_timeout
+    if model_config.endpoint_base_url is not None:
+        if model_config.endpoint_api_key is None:
+            raise AdapterUnavailableError(
+                "endpoint_api_key is required when endpoint_base_url is set for langchain_deep_agents",
+                reason="missing_endpoint_api_key",
+            )
+        model_kwargs["base_url"] = _normalize_openai_endpoint_url(model_config.endpoint_base_url)
+        endpoint_api_key = model_config.endpoint_api_key
+        model_kwargs["api_key"] = (
+            endpoint_api_key.get_secret_value() if isinstance(endpoint_api_key, SecretStr) else endpoint_api_key
+        )
 
     model_kwargs.update(kwargs)
 

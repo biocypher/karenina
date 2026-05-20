@@ -101,7 +101,11 @@ class ClaudeSDKAgentAdapter:
         Returns:
             PortCapabilities with system_prompt=True.
         """
-        return PortCapabilities(supports_system_prompt=True)
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_file_tools=True,
+            supports_code_execution=True,
+        )
 
     def _build_options(
         self,

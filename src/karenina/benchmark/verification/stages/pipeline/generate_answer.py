@@ -13,6 +13,7 @@ import traceback
 from typing import Any
 
 from karenina.adapters import get_agent, get_llm
+from karenina.adapters.langchain_deep_agents.runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
@@ -428,11 +429,20 @@ class GenerateAnswerStage(BaseVerificationStage):
             # knows where its files are instead of searching the filesystem.
             user_prompt = constructed_prompt
             if context.workspace_path:
+                prompt_workspace = workspace_path_for_prompt(answering_model, context.workspace_path)
                 user_prompt += (
-                    f"\n\nWorkspace directory: {context.workspace_path}\n"
+                    f"\n\nWorkspace directory: {prompt_workspace}\n"
                     "All input data files are in this directory. "
                     "Save any output files here as well."
                 )
+                if use_agent and answering_agent is not None:
+                    capabilities = answering_agent.capabilities
+                    if capabilities.supports_code_execution and capabilities.uses_sandboxed_execution:
+                        user_prompt += " You can execute commands in this sandboxed workspace."
+                    elif capabilities.supports_code_execution:
+                        user_prompt += " You can execute commands in the configured local workspace."
+                    elif capabilities.supports_file_tools:
+                        user_prompt += " You can inspect files, but command execution is not available."
             adapter_messages.append(Message.user(user_prompt))
 
             # Store the full conversation input for curation trace display
