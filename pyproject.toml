@@ -85,6 +85,11 @@ examples = [
     "jupyter>=1.0.0",  # For running example notebooks
     "ipykernel>=6.0.0",  # Jupyter kernel support
 ]
+paper-analysis = [
+    "bambi>=0.17.2",
+    "arviz>=0.23.4",
+    "pymc>=5.28.5",
+]
 # webapp extra disabled until karenina-server is published to PyPI
 # webapp = [
 #     "karenina-server>=0.1.0",  # Webapp server with bundled GUI
