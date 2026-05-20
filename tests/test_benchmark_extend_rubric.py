@@ -164,6 +164,7 @@ class _FakeRubricRecorder:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Any | None = None,  # noqa: ARG002
+        sink: Any = None,
     ) -> VerificationResultSet:
         self.calls.append(
             {
@@ -171,6 +172,7 @@ class _FakeRubricRecorder:
                 "question_ids": list(question_ids or []),
                 "run_name": run_name,
                 "async_enabled": async_enabled,
+                "sink": sink,
             }
         )
         effective_qids = list(question_ids or [])
@@ -442,3 +444,65 @@ class TestExtendRubricStoreFlag:
 
         fetched = bench.get_verification_results(run_name="stored")
         assert len(fetched) == 2
+
+
+@pytest.mark.unit
+class TestExtendRubricSinkForwarding:
+    def test_default_sink_is_none(self, bench_and_recorder: tuple[Benchmark, _FakeRubricRecorder]) -> None:
+        bench, recorder = bench_and_recorder
+        prior = _make_prior_set(run_name="no-sink", question_ids=["q1"])
+        bench.set_global_rubric(
+            Rubric(llm_traits=[LLMRubricTrait(name="ok", description="ok", kind="score", min_score=1, max_score=5)])
+        )
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_A])
+        bench.extend_rubric(prior, config, store=False)
+
+        assert recorder.calls[-1]["sink"] is None
+
+    def test_sink_forwarded_to_run_verification(
+        self, bench_and_recorder: tuple[Benchmark, _FakeRubricRecorder]
+    ) -> None:
+        from karenina.benchmark.verification.sinks import InMemorySink
+
+        bench, recorder = bench_and_recorder
+        prior = _make_prior_set(run_name="with-sink", question_ids=["q1"])
+        bench.set_global_rubric(
+            Rubric(llm_traits=[LLMRubricTrait(name="ok", description="ok", kind="score", min_score=1, max_score=5)])
+        )
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_A])
+        sink = InMemorySink()
+        bench.extend_rubric(prior, config, sink=sink, store=False)
+
+        assert recorder.calls[-1]["sink"] is sink
+
+    def test_extend_rubric_run_forwards_sink(self, bench_and_recorder: tuple[Benchmark, _FakeRubricRecorder]) -> None:
+        from karenina.benchmark.verification.sinks import InMemorySink
+
+        bench, recorder = bench_and_recorder
+        prior = _make_prior_set(run_name="direct", question_ids=["q1"])
+        bench.set_global_rubric(
+            Rubric(llm_traits=[LLMRubricTrait(name="ok", description="ok", kind="score", min_score=1, max_score=5)])
+        )
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_A])
+        sink = InMemorySink()
+        extend_rubric_run(bench, prior, config, sink=sink)
+
+        assert recorder.calls[-1]["sink"] is sink
+
+    def test_prior_rows_not_seeded_into_sink(self, bench_and_recorder: tuple[Benchmark, _FakeRubricRecorder]) -> None:
+        from karenina.benchmark.verification.sinks import InMemorySink
+
+        bench, _ = bench_and_recorder
+        prior = _make_prior_set(run_name="no-seed", question_ids=["q1", "q2"])
+        bench.set_global_rubric(
+            Rubric(llm_traits=[LLMRubricTrait(name="ok", description="ok", kind="score", min_score=1, max_score=5)])
+        )
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_A])
+        sink = InMemorySink()
+        bench.extend_rubric(prior, config, sink=sink, store=False)
+
+        # Rubric-only rows share task keys with prior rows; seeding would
+        # duplicate entries. The sink should only hold what the fake
+        # recorder pushed through the (unmocked) sink lifecycle, which in
+        # this monkey-patched setup is nothing.
+        assert sink.results == []

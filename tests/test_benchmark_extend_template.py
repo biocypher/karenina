@@ -134,6 +134,7 @@ class _FakeVerifyRecorder:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Any | None = None,  # noqa: ARG002 (kept to mirror real signature)
+        sink: Any = None,
     ) -> VerificationResultSet:
         self.calls.append(
             {
@@ -141,6 +142,7 @@ class _FakeVerifyRecorder:
                 "question_ids": list(question_ids or []),
                 "run_name": run_name,
                 "async_enabled": async_enabled,
+                "sink": sink,
             }
         )
         effective_qids = list(question_ids or [])
@@ -453,3 +455,50 @@ class TestExtendTemplateStoreFlag:
         bench.extend_template(prior, config, store=False)
 
         assert "not-stored" not in bench._results_manager._in_memory_results
+
+
+@pytest.mark.unit
+class TestExtendTemplateSinkForwarding:
+    def test_default_sink_is_none(self, recorder: _FakeVerifyRecorder) -> None:
+        bench = _make_bench()
+        prior = _make_prior_set(run_name="no-sink", question_ids=["q1"])
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
+        bench.extend_template(prior, config, store=False)
+
+        assert recorder.calls[-1]["sink"] is None
+
+    def test_sink_forwarded_to_run_verification(self, recorder: _FakeVerifyRecorder) -> None:
+        from karenina.benchmark.verification.sinks import InMemorySink
+
+        bench = _make_bench()
+        prior = _make_prior_set(run_name="with-sink", question_ids=["q1"])
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
+        sink = InMemorySink()
+        bench.extend_template(prior, config, sink=sink, store=False)
+
+        assert recorder.calls[-1]["sink"] is sink
+
+    def test_extend_template_run_forwards_sink(self, recorder: _FakeVerifyRecorder) -> None:
+        from karenina.benchmark.verification.sinks import InMemorySink
+
+        bench = _make_bench()
+        prior = _make_prior_set(run_name="direct", question_ids=["q1"])
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
+        sink = InMemorySink()
+        extend_template_run(bench, prior, config, sink=sink)
+
+        assert recorder.calls[-1]["sink"] is sink
+
+    def test_sink_pre_seeded_with_prior_rows(self, recorder: _FakeVerifyRecorder) -> None:  # noqa: ARG002
+        from karenina.benchmark.verification.sinks import InMemorySink
+
+        bench = _make_bench()
+        prior = _make_prior_set(run_name="seeded", question_ids=["q1", "q2"])
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_B])
+        sink = InMemorySink()
+        bench.extend_template(prior, config, sink=sink, store=False)
+
+        # The fake recorder does not exercise the sink lifecycle, so the
+        # only rows in the buffer are the pre-seeded prior rows.
+        assert len(sink.results) == 2
+        assert {r.metadata.question_id for r in sink.results} == {"q1", "q2"}

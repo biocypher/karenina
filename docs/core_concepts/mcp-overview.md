@@ -245,14 +245,14 @@ print(f"Rubric sees full trace: {config.use_full_trace_for_rubric}")
 
 | Field | Type | Default | Effect |
 |-------|------|---------|--------|
-| `use_full_trace_for_template` | `bool` | `False` | `True`: template parsing sees the complete trace. `False`: only the final AI message is passed to the Judge LLM. |
+| `use_full_trace_for_template` | `bool` | `False` | `True`: template parsing and the abstention/sufficiency checks see the full trace. `False`: they see only the final AI message. |
 | `use_full_trace_for_rubric` | `bool` | `True` | `True`: rubric evaluation sees the complete trace. `False`: only the final AI message is evaluated. |
 
 !!! note
 
     The full trace is **always captured and stored** regardless of these settings. These flags only control what input the parsing and evaluation models receive. If set to `False` and the trace does not end with an AI message, the corresponding verification stage will fail.
 
-The defaults reflect typical evaluation patterns: template parsing usually needs only the final answer (the model's conclusion after tool use), while rubric evaluation benefits from the full trace (to assess qualities like tool selection, reasoning process, or citation of retrieved information).
+The defaults reflect typical evaluation patterns: template parsing usually needs only the final answer (the model's conclusion after tool use), while rubric evaluation benefits from the full trace (to assess qualities like tool selection, reasoning process, or citation of retrieved information). Keep `use_full_trace_for_template=False` on long MCP runs: full traces can easily blow past a judge's context window.
 
 ## 8. MCP Execution Lifecycle
 

@@ -628,7 +628,7 @@ def import_verification_results(
     """Import verification results from JSON export format.
 
     Supports:
-    - v2.x format: {format_version: "2.0"/"2.1", metadata, shared_data, results}
+    - v2.x format: {format_version: "2.0"/"2.1"/"2.2", metadata, shared_data, results}
 
     Args:
         json_data: Parsed JSON data from export file
@@ -653,13 +653,13 @@ def import_verification_results(
     format_version = json_data.get("format_version")
 
     # Extract results and metadata based on format
-    if format_version in ("2.0", "2.1"):
+    if format_version in ("2.0", "2.1", "2.2"):
         results_list = json_data.get("results", [])
         metadata = json_data.get("metadata", {})
         shared_data = json_data.get("shared_data", {})
     else:
         raise ValueError(
-            f"Unsupported checkpoint format. Expected format_version '2.0' or '2.1'. Got: {format_version!r}"
+            f"Unsupported checkpoint format. Expected format_version '2.0', '2.1', or '2.2'. Got: {format_version!r}"
         )
 
     if not results_list:

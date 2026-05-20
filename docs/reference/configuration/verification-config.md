@@ -47,7 +47,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `use_full_trace_for_template` | `bool` | `False` | If `True`, pass full agent trace to template parsing. If `False`, extract only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
+| `use_full_trace_for_template` | `bool` | `False` | If `True`, the judge sees the full agent trace when parsing the template and when running the abstention/sufficiency checks. If `False`, the judge sees only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
 | `use_full_trace_for_rubric` | `bool` | `True` | If `True`, pass full agent trace to rubric evaluation. If `False`, extract only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
 
 !!! note

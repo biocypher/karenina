@@ -1195,6 +1195,7 @@ class Benchmark:
         question_ids: list[str] | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
         store: bool = True,
     ) -> VerificationResultSet:
         """Extend a prior verification run along any combination of three axes.
@@ -1229,6 +1230,12 @@ class Benchmark:
                 ``run_verification``.
             progress_callback: Optional progress callback forwarded to
                 ``run_verification``.
+            sink: Optional :class:`~karenina.benchmark.verification.sinks.ResultSink`
+                forwarded to ``run_verification`` so newly produced rows are
+                persisted as they complete. Prior rows pass through the merge
+                verbatim and never reach the sink. Pair with
+                :class:`~karenina.benchmark.verification.sinks.ProgressiveFileSink`
+                to make the extension resumable.
             store: When True (default), also store the merged set into the
                 in-memory results manager under ``run_name`` so it is
                 available to ``get_verification_results`` and the exporters.
@@ -1247,6 +1254,7 @@ class Benchmark:
             question_ids=question_ids,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
+            sink=sink,
         )
         if store:
             results_dict: dict[str, VerificationResult] = {}
@@ -1273,6 +1281,7 @@ class Benchmark:
         question_ids: list[str] | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
         store: bool = True,
     ) -> VerificationResultSet:
         """Attach a new rubric to a prior verification run.
@@ -1302,6 +1311,13 @@ class Benchmark:
             question_ids: Optional subset of question IDs.
             async_enabled: Forwarded to ``run_verification``.
             progress_callback: Forwarded to ``run_verification``.
+            sink: Optional :class:`~karenina.benchmark.verification.sinks.ResultSink`
+                forwarded to ``run_verification``. The sink receives the
+                ``rubric_only`` rows produced by the extension pipeline (one
+                per prior triple); it does not see the enriched rows returned
+                to the caller. Pair with
+                :class:`~karenina.benchmark.verification.sinks.ProgressiveFileSink`
+                to make rubric extension resumable.
             store: When True (default), write the merged set into the
                 results manager.
 
@@ -1322,6 +1338,7 @@ class Benchmark:
             question_ids=question_ids,
             async_enabled=async_enabled,
             progress_callback=progress_callback,
+            sink=sink,
         )
         if store:
             results_dict: dict[str, VerificationResult] = {}

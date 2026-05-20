@@ -50,6 +50,7 @@ def extend_template_run(
     question_ids: list[str] | None = None,
     async_enabled: bool | None = None,
     progress_callback: Callable[[float, str], None] | None = None,
+    sink: Any = None,
 ) -> VerificationResultSet:
     """Extend a prior verification run along any combination of three axes.
 
@@ -93,6 +94,14 @@ def extend_template_run(
             to every question in ``prior_results``.
         async_enabled: Forwarded to ``run_verification``.
         progress_callback: Forwarded to ``run_verification``.
+        sink: Optional :class:`~karenina.benchmark.verification.sinks.ResultSink`
+            forwarded to ``run_verification`` so newly produced rows are
+            persisted as they complete. Prior rows are pre-seeded into the
+            sink via :meth:`~karenina.benchmark.verification.sinks.ResultSink.seed_prior_results`
+            before the pipeline starts, so the sink's final export reflects
+            the full merged shape (prior + new). Pair with a
+            :class:`~karenina.benchmark.verification.sinks.ProgressiveFileSink`
+            to make the extension resumable.
 
     Returns:
         Merged ``VerificationResultSet`` with ``len(prior_results.results)
@@ -152,12 +161,15 @@ def extend_template_run(
 
     extended_config = config.model_copy(update={"replay_store": replay_store, "skip_triples": skip_triples})
 
+    _seed_sink_if_supported(sink, prior_results)
+
     new_results = benchmark.run_verification(
         config=extended_config,
         question_ids=effective_question_ids,
         run_name=effective_run_name,
         async_enabled=async_enabled,
         progress_callback=progress_callback,
+        sink=sink,
     )
 
     merged = _merge(prior_results, new_results, effective_run_name)
@@ -169,6 +181,25 @@ def extend_template_run(
         effective_run_name,
     )
     return merged
+
+
+# ----------------------------------------------------------------------
+# Sink seeding
+# ----------------------------------------------------------------------
+
+
+def _seed_sink_if_supported(sink: Any, prior_results: VerificationResultSet) -> None:
+    """Forward prior rows to ``sink.seed_prior_results`` when available.
+
+    Third-party sinks that do not implement the optional ``seed_prior_results``
+    method are silently tolerated; the sink simply will not contain prior
+    rows in its final export. All four in-tree sinks implement the method.
+    """
+    if sink is None:
+        return
+    seeder = getattr(sink, "seed_prior_results", None)
+    if callable(seeder):
+        seeder(prior_results)
 
 
 # ----------------------------------------------------------------------
@@ -318,6 +349,7 @@ def extend_rubric_run(
     question_ids: list[str] | None = None,
     async_enabled: bool | None = None,
     progress_callback: Callable[[float, str], None] | None = None,
+    sink: Any = None,
 ) -> VerificationResultSet:
     """Attach a new rubric to an existing verification run.
 
@@ -347,6 +379,17 @@ def extend_rubric_run(
             question present in ``prior_results``.
         async_enabled: Forwarded to ``run_verification``.
         progress_callback: Forwarded to ``run_verification``.
+        sink: Optional :class:`~karenina.benchmark.verification.sinks.ResultSink`
+            forwarded to ``run_verification``. The sink receives the
+            ``rubric_only`` rows produced by the extension pipeline (one per
+            prior triple); it never sees the final enriched rows returned to
+            the caller. Unlike ``extend_template``, prior rows are **not**
+            seeded into the sink because rubric-only rows reuse the same
+            task keys; seeding would duplicate entries in append-only sinks.
+            Pair with a
+            :class:`~karenina.benchmark.verification.sinks.ProgressiveFileSink`
+            to make the rubric-only pass resumable; persisting the merged
+            enriched output is the caller's responsibility.
 
     Returns:
         ``VerificationResultSet`` of enriched prior rows (same count as
@@ -383,12 +426,19 @@ def extend_rubric_run(
 
     extended_config = config.model_copy(update={"replay_store": replay_store, "evaluation_mode": "rubric_only"})
 
+    # Note: no pre-seeding here. Rubric-only rows share task keys with prior
+    # rows, so seeding would produce duplicate append-only entries in the
+    # sink (one prior row, one rubric-only row per key). The sink is
+    # durability for the rubric-only pass; the enriched merged set is the
+    # return value and the caller's responsibility to persist.
+
     new_results = benchmark.run_verification(
         config=extended_config,
         question_ids=effective_question_ids,
         run_name=effective_run_name,
         async_enabled=async_enabled,
         progress_callback=progress_callback,
+        sink=sink,
     )
 
     enriched = _enrich_with_rubric(prior_results, new_results, effective_run_name)
