@@ -12,6 +12,10 @@ from karenina.benchmark.verification.failure_classifier import (
     collect_caveats,
 )
 from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
+from karenina.benchmark.verification.workspace_capture import (
+    DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
+    capture_workspace,
+)
 from karenina.schemas.verification import VerificationResult
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -441,6 +445,23 @@ class FinalizeResultStage(BaseVerificationStage):
 
         # Store final result
         context.set_artifact(ArtifactKeys.FINAL_RESULT, result)
+
+        # Capture workspace sidecars before cleanup so cleanup can remain enabled.
+        if context.workspace_output_mode != "none":
+            exclude_patterns = []
+            if context.workspace_output_mode == "produced":
+                exclude_patterns = [
+                    *DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
+                    *context.workspace_output_exclude_patterns,
+                ]
+            capture_workspace(
+                mode=context.workspace_output_mode,  # type: ignore[arg-type]
+                output_dir=context.workspace_output_dir,
+                workspace_path=context.workspace_path,
+                baseline=context.workspace_output_baseline,
+                result=result,
+                exclude_patterns=exclude_patterns,
+            )
 
         # Clean up workspace working copies (never originals)
         if context.workspace_path and context.workspace_cleanup and context.workspace_is_copy:

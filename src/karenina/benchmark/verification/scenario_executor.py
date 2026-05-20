@@ -128,8 +128,22 @@ class ScenarioExecutor:
             combo ordering. Errors are (description, exception) tuples.
         """
         if self.parallel:
-            return self._run_parallel(combos, config, global_rubric, run_name, progress_callback, workspace_root)
-        return self._run_sequential(combos, config, global_rubric, run_name, progress_callback, workspace_root)
+            results, errors = self._run_parallel(
+                combos, config, global_rubric, run_name, progress_callback, workspace_root
+            )
+        else:
+            results, errors = self._run_sequential(
+                combos, config, global_rubric, run_name, progress_callback, workspace_root
+            )
+
+        if not errors and config.workspace_output_mode != "none" and config.workspace_output_dir is not None:
+            from karenina.benchmark.verification.workspace_capture import compact_manifest
+
+            try:
+                compact_manifest(config.workspace_output_dir)
+            except Exception:  # noqa: BLE001
+                logger.warning("Workspace capture manifest compaction raised; continuing", exc_info=True)
+        return results, errors
 
     def _run_sequential(
         self,

@@ -17,7 +17,7 @@ import asyncio
 import concurrent.futures
 import logging
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from karenina.adapters.agent_runtime import (
     get_agent_runtime_capabilities,
@@ -36,6 +36,7 @@ from karenina.ports import (
     UsageMetadata,
 )
 from karenina.ports.capabilities import PortCapabilities
+from karenina.utils.retry_policy import RetryPolicy
 
 from .errors import wrap_deep_agents_error
 from .initialization import create_chat_model
@@ -51,6 +52,33 @@ if TYPE_CHECKING:
 _create_deep_agent = None
 
 logger = logging.getLogger(__name__)
+
+
+def _run_in_fresh_loop(
+    coro_func: Any,
+    *args: Any,
+    timeout: float = 600,
+) -> Any:
+    """Run an async callable in a dedicated thread with a fresh event loop.
+
+    DeepAgents runs a LangGraph async task graph backed by LangChain chat
+    models. Some OpenAI-compatible async transports are loop-affine; running
+    multiple DeepAgents calls through Karenina's shared BlockingPortal can
+    surface httpcore errors such as "Event is bound to a different event loop".
+    Keeping each synchronous DeepAgents invocation on its own loop avoids
+    sharing loop-bound SDK state across answerer/judge calls.
+    """
+
+    def _target() -> Any:
+        return asyncio.run(coro_func(*args))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future: concurrent.futures.Future[Any] = executor.submit(_target)
+        # The coroutine enforces the user-facing agent timeout with
+        # asyncio.wait_for and can return a partial trace. Give that inner
+        # timeout a short grace period so this wrapper does not race it and
+        # replace the partial result with a bare concurrent.futures.TimeoutError.
+        return future.result(timeout=timeout + 30)
 
 
 def _runtime_int_option(model_config: ModelConfig, key: str, default: int) -> int:
@@ -268,8 +296,13 @@ class DeepAgentsAgentAdapter:
         elif not system_prompt and self._config.system_prompt:
             system_prompt = self._config.system_prompt
 
-        # Initialize model
-        chat_model = create_chat_model(self._config)
+        # Initialize model. Agent loops need SDK-level retries at the model
+        # call boundary; retrying the whole agent can repeat workspace writes.
+        retry_policy = self._config.retry_policy or RetryPolicy()
+        chat_model = create_chat_model(
+            self._config,
+            max_retries=retry_policy.derive_sdk_max_retries(),
+        )
 
         # Build agent kwargs
         agent_kwargs: dict[str, Any] = {"model": chat_model}
@@ -466,29 +499,18 @@ class DeepAgentsAgentAdapter:
             AgentTimeoutError: If execution exceeds the timeout.
             AgentResponseError: If the response is malformed or invalid.
         """
-        from karenina.benchmark.verification.executor import get_async_portal
-
-        portal = get_async_portal()
-
-        if portal is not None:
-            return portal.call(self.arun, messages, tools, mcp_servers, config)
-
-        # No portal: check if we're in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context: use ThreadPoolExecutor
-
-            def run_in_thread() -> AgentResult:
-                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
-
-            timeout = config.timeout if config and config.timeout else 600
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=timeout)
-
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
+        timeout = config.timeout if config and config.timeout else 600
+        return cast(
+            AgentResult,
+            _run_in_fresh_loop(
+                self.arun,
+                messages,
+                tools,
+                mcp_servers,
+                config,
+                timeout=timeout,
+            ),
+        )
 
     async def aclose(self) -> None:
         """Close underlying resources.

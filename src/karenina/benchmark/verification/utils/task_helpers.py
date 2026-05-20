@@ -332,6 +332,9 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "agentic_parsing_persist_trace": getattr(config, "agentic_parsing_persist_trace", False),
         "workspace_copy": getattr(config, "workspace_copy", True),
         "workspace_cleanup": getattr(config, "workspace_cleanup", True),
+        "workspace_output_mode": getattr(config, "workspace_output_mode", "none"),
+        "workspace_output_dir": getattr(config, "workspace_output_dir", None),
+        "workspace_output_exclude_patterns": getattr(config, "workspace_output_exclude_patterns", []),
         # Agentic rubric evaluation configuration
         "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
         "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),

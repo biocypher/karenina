@@ -79,10 +79,11 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
 
     model_kwargs.update(kwargs)
 
-    # Suppress SDK-level retries. Retry logic is handled by RetryExecutor
-    # at the adapter layer to ensure unified retry behavior across all adapters.
-    # Placed after kwargs merge to ensure SDK retries stay at 0.
-    model_kwargs["max_retries"] = 0
+    # Suppress SDK-level retries unless a caller explicitly opts in. The
+    # single-turn LLM/parser paths use RetryExecutor at the adapter layer.
+    # Agent loops instead need model-call retries inside LangGraph, because
+    # retrying the entire agent can repeat workspace side effects.
+    model_kwargs.setdefault("max_retries", 0)
 
     return init_chat_model(
         model=model_config.model_name,

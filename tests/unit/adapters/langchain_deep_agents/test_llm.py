@@ -99,3 +99,22 @@ class TestDeepAgentsSDKRetrySuppression:
         create_chat_model(deep_agents_model_config)
 
         assert captured_kwargs.get("max_retries") == 0
+
+    def test_create_chat_model_allows_explicit_max_retries_override(self, deep_agents_model_config, monkeypatch):
+        """Agent loops can opt into SDK model-call retries without changing LLM/parser defaults."""
+        captured_kwargs: dict = {}
+
+        def _capture_init(*, model, model_provider, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.initialization.init_chat_model",
+            _capture_init,
+        )
+
+        from karenina.adapters.langchain_deep_agents.initialization import create_chat_model
+
+        create_chat_model(deep_agents_model_config, max_retries=3)
+
+        assert captured_kwargs.get("max_retries") == 3

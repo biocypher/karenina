@@ -389,6 +389,10 @@ class VerificationContext:
     workspace_root: Path | None = None
     workspace_copy: bool = True
     workspace_cleanup: bool = True
+    workspace_output_mode: str = "none"
+    workspace_output_dir: Path | None = None
+    workspace_output_exclude_patterns: list[str] = field(default_factory=list)
+    workspace_output_baseline: dict[str, dict[str, Any]] | None = None
 
     # Artifacts (populated by stages)
     artifacts: dict[str, Any] = field(default_factory=dict)

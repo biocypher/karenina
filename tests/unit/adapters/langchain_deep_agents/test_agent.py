@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from karenina.adapters.langchain_deep_agents.agent import DeepAgentsAgentAdapter
+from karenina.benchmark.verification.executor import set_async_portal
 from karenina.ports import AgentConfig, AgentResult, Message
 
 
@@ -251,6 +252,74 @@ class TestDeepAgentsAgentAdapter:
         """aclose() should not raise."""
         adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
         await adapter.aclose()
+
+    def test_run_uses_fresh_loop_even_when_portal_is_active(self, deep_agents_model_config, monkeypatch):
+        """The sync agent-loop path must not run DeepAgents on the shared batch portal."""
+        from langchain_core.messages import AIMessage
+
+        class FailingPortal:
+            def call(self, *_args, **_kwargs):
+                raise AssertionError("DeepAgentsAgentAdapter.run() should not use the shared portal")
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            lambda **_kwargs: _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="ok")],
+                    "is_last_step": False,
+                }
+            ),
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
+            lambda _config, **_kw: MagicMock(),
+        )
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        set_async_portal(FailingPortal())
+        try:
+            result = adapter.run(
+                messages=[Message.user("test")],
+                config=AgentConfig(max_turns=2),
+            )
+        finally:
+            set_async_portal(None)
+
+        assert result.final_response == "ok"
+
+    @pytest.mark.asyncio
+    async def test_arun_enables_model_call_retries(self, deep_agents_model_config, monkeypatch):
+        """Agent loops should pass retry budget to LangChain model calls."""
+        from langchain_core.messages import AIMessage
+
+        captured_model_kwargs: dict = {}
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            lambda **_kwargs: _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="ok")],
+                    "is_last_step": False,
+                }
+            ),
+        )
+
+        def capture_chat_model(_config, **kwargs):
+            captured_model_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
+            capture_chat_model,
+        )
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        await adapter.arun(
+            messages=[Message.user("test")],
+            config=AgentConfig(max_turns=2),
+        )
+
+        assert captured_model_kwargs["max_retries"] >= 1
 
 
 @pytest.mark.unit
