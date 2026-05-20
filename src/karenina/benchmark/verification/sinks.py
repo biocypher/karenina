@@ -29,7 +29,9 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from karenina.benchmark.verification.stages.helpers.results_exporter import export_verification_results_json
+from karenina.benchmark.verification.stages.helpers.results_exporter import (
+    export_verification_results_json_stream,
+)
 from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.entities import Rubric
 from karenina.schemas.results import VerificationResultSet
@@ -134,7 +136,7 @@ class ProgressiveFileSink:
     On successful completion (:meth:`on_finalize` with ``all_complete=True``):
 
     - The JSONL sidecar is reassembled into the final frontend-export JSON
-      at ``output_path`` via :func:`export_verification_results_json`.
+      at ``output_path`` via :func:`export_verification_results_json_stream`.
     - The ``.state`` and ``.results.jsonl`` files are deleted.
 
     On partial completion (:meth:`on_finalize` with ``all_complete=False``):
@@ -446,9 +448,18 @@ class ProgressiveFileSink:
             start_time=self._start_time,
             end_time=now,
         )
-        result_set = VerificationResultSet(results=list(self._results))
-        json_str = export_verification_results_json(job, result_set, self.global_rubric, is_complete=True)
-        atomic_write(target, json_str)
+        # Stream from the JSONL sidecar if it exists. write_final_export may be
+        # called before any on_result (e.g. the empty-run case), in which case
+        # jsonl_path was never created; guard is mandatory because
+        # _read_jsonl_results opens the path unconditionally.
+        results_iter = _read_jsonl_results(self.jsonl_path) if self.jsonl_path.exists() else iter(())
+        export_verification_results_json_stream(
+            job,
+            results_iter,
+            self.global_rubric,
+            is_complete=True,
+            out_path=target,
+        )
         return target
 
     def _delete_sidecars(self) -> None:

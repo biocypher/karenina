@@ -39,7 +39,7 @@ from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
 from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
-from .messages import LangChainMessageConverter
+from .messages import LangChainMessageConverter, extract_text_from_lc_content
 from .prompts import FORMAT_INSTRUCTIONS
 from .usage import extract_langchain_usage, extract_usage_from_chunk, extract_usage_from_response
 
@@ -269,9 +269,14 @@ class LangChainLLMAdapter:
         response = StreamingLLMResponse()
 
         async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
-            """Yield text chunks from LangChain's astream, extracting usage from final chunk."""
+            """Yield text chunks from LangChain's astream, extracting usage from final chunk.
+
+            Chunk content may be a ``str`` or a ``list`` of block dicts
+            (Anthropic extended thinking, vision, tool_use). The helper
+            extracts only text blocks; non-text blocks stay internal.
+            """
             async for chunk in self._model.astream(lc_messages):
-                text = chunk.content if isinstance(chunk.content, str) else ""
+                text = extract_text_from_lc_content(chunk.content)
                 if text:
                     yield text
                 # Usage metadata typically arrives on the final chunk
@@ -440,7 +445,7 @@ class LangChainLLMAdapter:
             timeout=self._config.request_timeout,
         )
 
-        content = str(response.content) if hasattr(response, "content") else str(response)
+        content = extract_text_from_lc_content(response.content) if hasattr(response, "content") else str(response)
         usage = extract_usage_from_response(response, model_name=self._config.model_name)
 
         return LLMResponse(content=content, usage=usage, raw=response)
@@ -626,7 +631,7 @@ class LangChainLLMAdapter:
         )
 
         # Extract and parse response
-        text_content = str(response.content) if hasattr(response, "content") else str(response)
+        text_content = extract_text_from_lc_content(response.content) if hasattr(response, "content") else str(response)
         parsed_model = self._parse_json_response(text_content)
 
         return LLMResponse(

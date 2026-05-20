@@ -22,7 +22,7 @@ from .sinks import (
 )
 from .stages import (
     export_verification_results_csv,
-    export_verification_results_json,
+    export_verification_results_json_stream,
 )
 from .utils.embedding_check import clear_embedding_model_cache, preload_embedding_model
 from .utils.storage_helpers import auto_save_results
@@ -45,7 +45,7 @@ __all__ = [
     "preload_embedding_model",
     # Results export
     "export_verification_results_csv",
-    "export_verification_results_json",
+    "export_verification_results_json_stream",
     # Sinks
     "ResultSink",
     "ProgressiveFileSink",

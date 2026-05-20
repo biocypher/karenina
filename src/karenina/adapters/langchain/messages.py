@@ -6,6 +6,8 @@ and LangChain message types from langchain_core.messages.
 
 from __future__ import annotations
 
+from typing import Any
+
 from langchain_core.messages import (
     AIMessage,
     BaseMessage,
@@ -20,6 +22,43 @@ from karenina.ports import (
     ToolResultContent,
     ToolUseContent,
 )
+
+
+def extract_text_from_lc_content(content: Any) -> str:
+    """Extract plain text from a LangChain message or chunk ``content``.
+
+    LangChain message ``content`` is ``str`` for most providers, but provider
+    features that carry structured output (Anthropic extended thinking,
+    vision inputs, server-executed tool calls) return a list of block dicts
+    with a ``type`` discriminator. Only ``type == "text"`` blocks and bare
+    string items are visible answer text; ``thinking``, ``tool_use``,
+    ``image``, and other non-text blocks are internal state that must not
+    leak into the parser's answer input.
+
+    Args:
+        content: The raw ``content`` attribute from a LangChain message or
+            streaming chunk. Expected shapes: ``str``, ``list[str |
+            dict[str, Any]]``, or ``None``.
+
+    Returns:
+        Concatenated text from all text-bearing blocks. Returns the string
+        unchanged when ``content`` is already a ``str``. Returns an empty
+        string for lists containing no text blocks and for unrecognized
+        types.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text", "")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
 
 
 class LangChainMessageConverter:

@@ -10,12 +10,13 @@ import csv
 import json
 from datetime import datetime
 from io import StringIO
+from pathlib import Path
 
 import pytest
 
 from karenina.benchmark.verification.stages.helpers.results_exporter import (
     export_verification_results_csv,
-    export_verification_results_json,
+    export_verification_results_json_stream,
 )
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.results.failure import Failure, FailureCategory
@@ -110,7 +111,7 @@ class TestResultsExporterSuccessField:
         assert rows[0]["success"] == "False"
         assert "timeout exceeded" in rows[0]["error"]
 
-    def test_json_includes_failure_field(self) -> None:
+    def test_json_includes_failure_field(self, tmp_path: Path) -> None:
         """JSON exports must expose the structured ``failure`` object and no legacy fields."""
         job = _make_job()
         failure = Failure(
@@ -118,10 +119,11 @@ class TestResultsExporterSuccessField:
             stage="generate_answer",
             reason="timeout exceeded",
         )
-        result_set = VerificationResultSet(results=[_make_result("q1", failure=failure)])
+        results = [_make_result("q1", failure=failure)]
 
-        json_text = export_verification_results_json(job, result_set)
-        payload = json.loads(json_text)
+        dst = tmp_path / "out.json"
+        export_verification_results_json_stream(job, iter(results), out_path=dst)
+        payload = json.loads(dst.read_text(encoding="utf-8"))
 
         assert len(payload["results"]) == 1
         metadata = payload["results"][0]["metadata"]

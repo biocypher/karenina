@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .messages import extract_text_from_lc_content
+
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
 
@@ -170,7 +172,7 @@ def langchain_messages_to_trace_messages(
         elif isinstance(msg, AIMessage):
             trace_msg: dict[str, Any] = {
                 "role": "assistant",
-                "content": str(msg.content) if msg.content else "",
+                "content": extract_text_from_lc_content(msg.content),
                 "block_index": block_index,
             }
 
@@ -275,9 +277,12 @@ def _format_langchain_message(msg: Any) -> str:
         header = "--- AI Message ---"
         content_parts: list[str] = []
 
-        # Add main content if present
-        if msg.content:
-            content_parts.append(str(msg.content))
+        # Add main content if present. Anthropic extended thinking and
+        # vision responses carry structured block lists; extract only
+        # visible text so thinking and non-text blocks stay out of the trace.
+        text_content = extract_text_from_lc_content(msg.content)
+        if text_content:
+            content_parts.append(text_content)
 
         # Add tool calls if present
         if hasattr(msg, "tool_calls") and msg.tool_calls:

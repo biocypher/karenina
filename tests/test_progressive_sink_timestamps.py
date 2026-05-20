@@ -1,8 +1,8 @@
 """Tests that ProgressiveFileSink.write_final_export sets job timestamps.
 
-Without end_time, export_verification_results_json emits total_duration=None.
-The sink must populate start_time (from its state) and end_time (now) before
-calling the exporter.
+Without end_time, export_verification_results_json_stream emits
+total_duration=None. The sink must populate start_time (from its state)
+and end_time (now) before calling the exporter.
 """
 
 import json

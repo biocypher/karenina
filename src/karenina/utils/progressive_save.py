@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from karenina.benchmark.verification.stages.helpers.results_exporter import export_verification_results_json
+from karenina.benchmark.verification.stages.helpers.results_exporter import (
+    export_verification_results_json_stream,
+)
 from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
@@ -363,7 +365,7 @@ class ProgressiveSaveManager:
     def _save_results(self) -> None:
         """Save results file in standard export format with atomic write.
 
-        Delegates to export_verification_results_json() to avoid duplicating
+        Delegates to export_verification_results_json_stream() to avoid duplicating
         the export format construction logic.
         """
         job = VerificationJob(
@@ -375,9 +377,12 @@ class ProgressiveSaveManager:
             successful_count=self.completed_count,
             start_time=self._start_time,
         )
-        result_set = VerificationResultSet(results=list(self._results))
-        json_str = export_verification_results_json(job, result_set, self.global_rubric)
-        atomic_write(self.tmp_path, json_str)
+        export_verification_results_json_stream(
+            job,
+            iter(self._results),
+            self.global_rubric,
+            out_path=self.tmp_path,
+        )
 
 
 def generate_task_manifest(tasks: list[dict[str, Any]]) -> list[str]:

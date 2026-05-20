@@ -5,7 +5,7 @@ This module provides functions for exporting verification execution results
 the OUTPUTS of verification runs - what happened when questions were verified.
 
 Key Functions:
-- export_verification_results_json(): Export complete verification results as JSON
+- export_verification_results_json_stream(): Stream verification results as JSON to a file
 - export_verification_results_csv(): Export verification results as CSV with rubric columns
 - create_export_filename(): Generate filename for exports
 
@@ -14,10 +14,10 @@ exporting benchmark STRUCTURE/METADATA (questions, templates, rubrics definition
 not verification execution results.
 
 Usage:
-    from karenina.benchmark.verification import export_verification_results_csv, export_verification_results_json
+    from karenina.benchmark.verification import export_verification_results_csv, export_verification_results_json_stream
 
     # Export verification job results
-    json_export = export_verification_results_json(job, results, global_rubric)
+    export_verification_results_json_stream(job, results, global_rubric, out_path=Path("out.json"))
     csv_export = export_verification_results_csv(job, results, global_rubric)
 """
 
@@ -25,11 +25,14 @@ import csv
 import json
 import logging
 import time
+from collections.abc import Iterable
 from io import StringIO
+from pathlib import Path
 from typing import Any, Protocol
 
 from karenina.schemas.results import VerificationResultSet
-from karenina.schemas.verification import VerificationJob
+from karenina.schemas.verification import VerificationJob, VerificationResult
+from karenina.utils.file_ops import atomic_writer
 from karenina.utils.version import get_karenina_version
 
 
@@ -109,49 +112,51 @@ def _safe_json_serialize(data: Any, question_id: str, field_name: str) -> str:
             return f"<serialization_failed:{type(data).__name__}>"
 
 
-def export_verification_results_json(
+def export_verification_results_json_stream(
     job: VerificationJob,
-    results: VerificationResultSet,
+    results_iter: Iterable[VerificationResult],
     global_rubric: HasTraitNames | None = None,
     *,
     is_complete: bool = False,
-) -> str:
-    """
-    Export verification results to JSON format with metadata (v2.0 format).
+    out_path: Path,
+) -> None:
+    """Stream the v2.2 JSON export directly to out_path.
 
-    The v2.0 format optimizations:
-    - Stores rubric definition once in shared_data (not per-result)
-    - Stores trace filtering fields (evaluation_input, used_full_trace, trace_extraction_error)
-      at result root level (shared by template and rubric evaluation)
-    - 50-70% size reduction compared to legacy format
+    Writes to ``out_path.with_suffix(out_path.suffix + '.partial')`` and
+    atomically renames it into place on success. On any exception raised
+    by the iterator or I/O, removes the ``.partial`` file and reraises.
+
+    The on-disk schema matches the v2.2 export format byte-for-byte at
+    the top-level keys and per-result fields; only whitespace differs
+    (compact outer + one compact JSON line per result, separated by
+    ",\\n").
 
     Args:
-        job: The verification job
-        results: VerificationResultSet containing all verification results
-        global_rubric: Optional global rubric to include in shared_data for rubric definition
-        is_complete: True when this export is the final write for the job. Defaults to False
-            so intermediate snapshots (future extensions writing partial JSON)
-            are not silently mislabeled as final. ProgressiveFileSink.write_final_export
-            passes True explicitly for its end-of-run write. Emitted into
-            job_summary.is_complete so downstream readers can distinguish
-            final exports from in-progress snapshots.
+        job: The verification job whose metadata heads the export.
+        results_iter: Single-pass iterable over VerificationResult. Lists,
+            generators, and JSONL-backed iterators all work.
+        global_rubric: Optional rubric folded into shared_data. Must expose
+            either a ``model_dump()`` method (Pydantic) or ``get_trait_names``.
+        is_complete: Written into ``job_summary.is_complete`` so readers
+            can distinguish final exports from in-progress snapshots.
+        out_path: Target path (required kwarg, no default).
 
-    Returns:
-        JSON string with results and metadata in v2.0 format
+    Raises:
+        Propagates any exception from ``results_iter`` or disk I/O after
+        cleaning up the ``.partial`` sidecar.
     """
-    # Build rubric definition from global_rubric if provided
-    # This is stored once in shared_data instead of per-result
-    # Use exclude_unset=True to match frontend export format (only include explicitly set fields)
     rubric_definition = None
     if global_rubric is not None:
-        # Use model_dump for Pydantic models, otherwise try to extract trait lists
         if hasattr(global_rubric, "model_dump"):
             rubric_definition = global_rubric.model_dump(mode="json", exclude_unset=True)
         else:
-            # Fallback for non-Pydantic objects that implement HasTraitNames
             rubric_definition = {"trait_names": global_rubric.get_trait_names()}
 
-    export_data: dict[str, Any] = {
+    start_time = job.start_time
+    end_time = job.end_time
+    total_duration = end_time - start_time if (end_time is not None and start_time is not None) else None
+
+    header: dict[str, Any] = {
         "format_version": "2.2",
         "metadata": {
             "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
@@ -181,28 +186,30 @@ def export_verification_results_json(
                 "total_questions": job.total_questions,
                 "successful_count": job.successful_count,
                 "failed_count": job.failed_count,
-                "start_time": job.start_time,
-                "end_time": job.end_time,
-                "total_duration": (
-                    job.end_time - job.start_time if job.end_time is not None and job.start_time is not None else None
-                ),
+                "start_time": start_time,
+                "end_time": end_time,
+                "total_duration": total_duration,
                 "is_complete": is_complete,
             },
         },
         "shared_data": {
             "rubric_definition": rubric_definition,
         },
-        "results": [],
     }
 
-    # Convert results to serializable format with nested structure
-    for result in results:
-        # Use Pydantic's native JSON serialization - NO custom stringification
-        # This preserves complex types (dicts, lists, booleans) for JSON export
-        result_dict = result.model_dump(mode="json")
-        export_data["results"].append(result_dict)
+    header_str = json.dumps(header, ensure_ascii=False)
+    assert header_str.endswith("}"), "json.dumps of a dict must end with }"
 
-    return json.dumps(export_data, indent=2, ensure_ascii=False)
+    with atomic_writer(out_path) as f:
+        f.write(header_str[:-1])  # drop trailing "}"
+        f.write(',"results":[\n')
+        first = True
+        for result in results_iter:
+            if not first:
+                f.write(",\n")
+            f.write(json.dumps(result.model_dump(mode="json"), ensure_ascii=False))
+            first = False
+        f.write("\n]}\n")
 
 
 def export_verification_results_csv(

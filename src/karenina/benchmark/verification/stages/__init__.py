@@ -56,7 +56,7 @@ from .helpers import (
     apply_deep_judgment_config_to_traits,
     create_export_filename,
     export_verification_results_csv,
-    export_verification_results_json,
+    export_verification_results_json_stream,
     resolve_deep_judgment_config_for_trait,
 )
 
@@ -107,7 +107,7 @@ __all__ = [
     "apply_deep_judgment_config_to_traits",
     # Export functions
     "export_verification_results_csv",
-    "export_verification_results_json",
+    "export_verification_results_json_stream",
     "create_export_filename",
     "HasTraitNames",
 ]
