@@ -14,7 +14,7 @@ from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
-from karenina.ports import AgentConfig
+from karenina.ports import AgentConfig, UsageMetadata
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
 
@@ -89,16 +89,30 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         """Run investigation then extraction."""
         answer_class = context.get_artifact(ArtifactKeys.ANSWER)
         parsing_model = context.parsing_model
+        parsing_model_str = ModelIdentity.from_model_config(
+            parsing_model,
+            role="parsing",
+        ).display_string
+        usage_tracker = self.get_or_create_usage_tracker(context)
 
         clean_schema = build_parsing_schema(answer_class)
 
         # Step 1: Investigation
         try:
-            investigation_trace, investigation_limit_reached = self._run_investigation(context, clean_schema)
+            investigation_trace, investigation_limit_reached, investigation_usage = self._run_investigation(
+                context, clean_schema
+            )
         except Exception as e:
             context.mark_error(f"Agentic investigation failed: {e}")
             return
 
+        self._track_usage(
+            usage_tracker,
+            "agentic_parsing_investigation",
+            parsing_model_str,
+            investigation_usage,
+        )
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
         context.set_artifact(ArtifactKeys.INVESTIGATION_TRACE, investigation_trace)
         context.set_result_field(
             ArtifactKeys.INVESTIGATION_TRACE,
@@ -110,7 +124,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
         # Step 2: Extraction
         try:
-            parsed_answer = self._run_extraction(
+            parsed_answer, extraction_usage = self._run_extraction(
                 context,
                 answer_class,
                 investigation_trace,
@@ -120,14 +134,17 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             context.mark_error(f"Agentic extraction failed: {e}")
             return
 
-        # Store results
-        model_str = ModelIdentity.from_model_config(
-            parsing_model,
-            role="parsing",
-        ).display_string
+        self._track_usage(
+            usage_tracker,
+            "agentic_parsing_extraction",
+            parsing_model_str,
+            extraction_usage,
+        )
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
+        # Store results
         context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
-        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, model_str)
+        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, parsing_model_str)
         context.set_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED, True)
         context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
         context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
@@ -143,7 +160,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         self,
         context: VerificationContext,
         clean_schema: dict[str, Any],
-    ) -> tuple[str, bool]:
+    ) -> tuple[str, bool, UsageMetadata]:
         """Run investigation agent with tools.
 
         Args:
@@ -151,32 +168,31 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             clean_schema: Pre-built JSON schema for the answer template.
 
         Returns:
-            Raw trace from the investigation agent and whether it hit the turn limit.
+            Raw trace from the investigation agent, whether it hit the turn
+            limit, and token usage from the investigation agent call.
         """
         agent = get_agent(context.parsing_model)
         schema_json = json.dumps(clean_schema, indent=2)
         capabilities = agent.capabilities
         if capabilities.supports_code_execution:
             execution_text = (
-                "You have access to file tools and can execute code in a sandboxed workspace."
+                "You have access to file tools. Code execution may be available, but do not use it for this check."
                 if capabilities.uses_sandboxed_execution
-                else "You have access to file tools and can execute code."
-            )
-            rerun_text = (
-                "You may re-run existing scripts to confirm their output, "
-                "but do NOT re-implement the task from scratch or write your own solution."
+                else "You have access to file tools. Code execution may be available, but do not use it for this check."
             )
         else:
             execution_text = "You have access to file tools, but command execution is not available."
-            rerun_text = "Inspect existing scripts, output files, logs, and data, but do not claim to have re-run code."
 
         system_text = (
             "You are a verification agent evaluating whether an AI coding "
             f"assistant correctly completed a task. {execution_text}\n\n"
-            "Your job is to evaluate the artifacts the assistant left in the "
-            "workspace (scripts, output files, logs, data). Read and inspect "
-            f"these artifacts to determine the results. {rerun_text} If the workspace contains "
-            "no usable artifacts, report that you could not verify the results.\n\n"
+            "Be parsimonious. Look only for artifacts that appear to contain final "
+            "reported results, such as result files, summaries, reports, tables, "
+            "or final answer JSON/CSV/TXT/Markdown outputs. Read those artifacts "
+            "and extract the values they report. Do not run scripts, notebooks, "
+            "or commands. Do not re-compute the task, repair code, or create new "
+            "files. If you cannot find a usable final-results artifact, report "
+            "that you could not verify the results.\n\n"
             "Report your findings as a JSON object matching this schema:\n"
             f"{schema_json}"
         )
@@ -230,7 +246,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                 result.turns,
                 result.limit_reached,
             )
-            return result.raw_trace, result.limit_reached
+            return result.raw_trace, result.limit_reached, result.usage
         finally:
             close_adapter(agent)
 
@@ -240,7 +256,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         answer_class: type[BaseAnswer],
         investigation_trace: str,
         clean_schema: dict[str, Any],
-    ) -> BaseAnswer:
+    ) -> tuple[BaseAnswer, UsageMetadata]:
         """Extract structured answer from investigation findings.
 
         Args:
@@ -250,7 +266,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             clean_schema: Pre-built JSON schema for the answer template.
 
         Returns:
-            Parsed answer instance.
+            Parsed answer instance and token usage from the extraction call.
         """
         parser = get_parser(context.parsing_model)
         schema_json = json.dumps(clean_schema, indent=2)
@@ -286,6 +302,18 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
         try:
             parse_result = parser.parse_to_pydantic(messages, answer_class)
-            return parse_result.parsed
+            return parse_result.parsed, parse_result.usage
         finally:
             close_adapter(parser)
+
+    @staticmethod
+    def _track_usage(
+        usage_tracker: Any,
+        stage_name: str,
+        model_str: str,
+        usage: UsageMetadata,
+    ) -> None:
+        """Track non-empty token usage for one agentic parsing substage."""
+        usage_dict = usage.to_dict()
+        if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
+            usage_tracker.track_call(stage_name, model_str, usage_dict)

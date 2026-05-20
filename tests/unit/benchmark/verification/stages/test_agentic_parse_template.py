@@ -128,8 +128,12 @@ class TestAgenticParseTemplateStage:
         # Agent was called with workspace_path
         mock_agent.run.assert_called_once()
         call_kwargs = mock_agent.run.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         agent_config = call_kwargs.kwargs.get("config") or call_kwargs[1].get("config")
+        system_prompt = messages[0].text
         assert agent_config.workspace_path == Path("/tmp/test_workspace")
+        assert "Look only for artifacts that appear to contain final reported results" in system_prompt
+        assert "Do not run scripts, notebooks, or commands" in system_prompt
 
         # Parser was called
         mock_parser.parse_to_pydantic.assert_called_once()
@@ -138,6 +142,48 @@ class TestAgenticParseTemplateStage:
         assert ctx.get_artifact(ArtifactKeys.PARSED_ANSWER) is parsed_answer
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED) is True
         assert ctx.get_artifact(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"
+
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    def test_execute_tracks_agentic_parsing_usage_separately(self, mock_get_parser, mock_get_agent):
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import AgentResult, ParsePortResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace="investigation trace",
+            trace_messages=[],
+            usage=UsageMetadata(input_tokens=100, output_tokens=20, total_tokens=120),
+            turns=3,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        mock_parser = MagicMock()
+        parsed_answer = MockAnswer(test_field=True)
+        mock_parser.parse_to_pydantic.return_value = ParsePortResult(
+            parsed=parsed_answer,
+            usage=UsageMetadata(input_tokens=30, output_tokens=10, total_tokens=40),
+        )
+        mock_get_parser.return_value = mock_parser
+
+        stage = AgenticParseTemplateStage()
+        ctx = _make_context()
+        stage.execute(ctx)
+
+        usage_tracker = ctx.get_artifact(ArtifactKeys.USAGE_TRACKER)
+        usage_metadata = usage_tracker.get_total_summary()
+
+        assert usage_metadata["agentic_parsing_investigation"]["input_tokens"] == 100
+        assert usage_metadata["agentic_parsing_investigation"]["output_tokens"] == 20
+        assert usage_metadata["agentic_parsing_extraction"]["input_tokens"] == 30
+        assert usage_metadata["agentic_parsing_extraction"]["output_tokens"] == 10
+        assert usage_metadata["total"]["input_tokens"] == 130
+        assert usage_metadata["total"]["output_tokens"] == 30
+        assert usage_metadata["total"]["total_tokens"] == 160
 
     @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
     def test_execute_marks_error_on_agent_failure(self, mock_get_agent):

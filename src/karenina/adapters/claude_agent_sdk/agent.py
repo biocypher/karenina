@@ -24,8 +24,14 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from karenina.adapters.agent_runtime import get_agent_runtime_capabilities, get_agent_runtime_option
+from karenina.adapters.agent_runtime import (
+    get_agent_runtime_access_mode,
+    get_agent_runtime_capabilities,
+    get_agent_runtime_option,
+    get_claude_sdk_backend,
+)
 from karenina.ports import (
+    AdapterUnavailableError,
     AgentConfig,
     AgentPort,
     AgentResponseError,
@@ -50,6 +56,9 @@ if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+CLAUDE_SDK_READ_ONLY_TOOLS = ("Read", "Grep", "Glob", "LS")
+CLAUDE_SDK_DOCKER_WRAPPER = Path(__file__).with_name("docker_cli_wrapper.py")
 
 
 class ClaudeSDKAgentAdapter:
@@ -108,6 +117,8 @@ class ClaudeSDKAgentAdapter:
     def _build_sandbox_settings(self) -> dict[str, Any] | None:
         """Build Claude Code sandbox settings for Bash isolation."""
 
+        if get_claude_sdk_backend(self._config) == "docker":
+            return None
         if not get_agent_runtime_option(
             self._config,
             "sandbox_enabled",
@@ -137,6 +148,50 @@ class ClaudeSDKAgentAdapter:
             ),
         }
 
+    def _workspace_local_env(self, workspace_path: Path | None) -> dict[str, str]:
+        """Return environment defaults that keep tool state inside a workspace."""
+
+        if workspace_path is None:
+            return {}
+        return {
+            "UV_CACHE_DIR": str(workspace_path / ".uv-cache"),
+            "XDG_CACHE_HOME": str(workspace_path / ".cache"),
+            "UV_PROJECT_ENVIRONMENT": str(workspace_path / ".venv"),
+        }
+
+    def _docker_wrapper_env(self, workspace_path: Path | None) -> dict[str, str]:
+        """Return environment required by the Docker CLI wrapper."""
+
+        if workspace_path is None:
+            raise AdapterUnavailableError(
+                "agent_runtime backend='docker' requires an AgentConfig.workspace_path",
+                reason="missing_workspace",
+            )
+        docker_image = str(get_agent_runtime_option(self._config, "docker_image", ""))
+        if not docker_image:
+            raise AdapterUnavailableError(
+                "agent_runtime docker_image is required when claude_agent_sdk backend='docker'",
+                reason="missing_claude_sdk_docker_image",
+            )
+        docker_network = str(get_agent_runtime_option(self._config, "docker_network", "bridge"))
+        if docker_network not in {"bridge", "none"}:
+            raise AdapterUnavailableError(
+                "agent_runtime docker_network must be 'bridge' or 'none'",
+                reason="invalid_claude_sdk_docker_network",
+            )
+        env = {
+            "KARENINA_CLAUDE_DOCKER_WORKSPACE": str(workspace_path.resolve()),
+            "KARENINA_CLAUDE_DOCKER_IMAGE": docker_image,
+            "KARENINA_CLAUDE_DOCKER_NETWORK": docker_network,
+            "CLAUDE_CONFIG_DIR": "/tmp/claude-config",
+        }
+        docker_add_hosts = get_agent_runtime_option(self._config, "docker_add_hosts", None)
+        if isinstance(docker_add_hosts, str):
+            env["KARENINA_CLAUDE_DOCKER_ADD_HOSTS"] = docker_add_hosts
+        elif isinstance(docker_add_hosts, list):
+            env["KARENINA_CLAUDE_DOCKER_ADD_HOSTS"] = ",".join(str(item) for item in docker_add_hosts)
+        return env
+
     def _build_options(
         self,
         system_prompt: str | None,
@@ -157,14 +212,23 @@ class ClaudeSDKAgentAdapter:
         """
         from claude_agent_sdk import ClaudeAgentOptions
 
+        runtime_backend = get_claude_sdk_backend(self._config)
+        access_mode = get_agent_runtime_access_mode(self._config)
+        default_permission_mode = (
+            "bypassPermissions" if runtime_backend == "docker" and access_mode == "read_write" else "acceptEdits"
+        )
+
         options_kwargs: dict[str, Any] = {
-            # Use sandbox-aware permissions by default. Do not use
-            # bypassPermissions here: allowed_tools does not constrain it.
+            # In native mode, use sandbox-aware permissions by default. For
+            # Docker read-write mode, the container is the execution boundary,
+            # so non-interactive runs need Bash to execute without prompts.
+            # Keep read-only mode on acceptEdits because bypassPermissions does
+            # not respect allowed_tools.
             "permission_mode": str(
                 get_agent_runtime_option(
                     self._config,
                     "permission_mode",
-                    "acceptEdits",
+                    default_permission_mode,
                     legacy_attr="claude_sdk_permission_mode",
                 )
             ),
@@ -211,6 +275,11 @@ class ClaudeSDKAgentAdapter:
             # SDK supports tool filtering via allowed_tools
             options_kwargs["allowed_tools"] = [t.name for t in tools]
 
+        if get_agent_runtime_access_mode(self._config) == "read_only":
+            read_only_tools = list(CLAUDE_SDK_READ_ONLY_TOOLS)
+            options_kwargs["tools"] = read_only_tools
+            options_kwargs["allowed_tools"] = read_only_tools
+
         sandbox_settings = self._build_sandbox_settings()
         if sandbox_settings:
             options_kwargs["sandbox"] = sandbox_settings
@@ -237,11 +306,13 @@ class ClaudeSDKAgentAdapter:
 
         # Build env dict for Anthropic settings (api_key, base_url).
         # The Claude Agent SDK reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL from env.
-        env_vars: dict[str, str] = {}
+        env_vars: dict[str, str] = dict(options_kwargs.get("env") or {})
+        workspace_path = config.workspace_path
         if self._config.anthropic_api_key:
             env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
         if self._config.anthropic_base_url:
             env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
+        env_vars.update(self._workspace_local_env(workspace_path))
         # Forward CLAUDE_CONFIG_DIR from the parent process so the subprocess does
         # not load the user's personal MCP servers from ~/.claude/. Combined with
         # setting_sources=[] below, this mitigates issue 089: 30-40s startup
@@ -249,6 +320,10 @@ class ClaudeSDKAgentAdapter:
         parent_claude_config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
         if parent_claude_config_dir:
             env_vars["CLAUDE_CONFIG_DIR"] = parent_claude_config_dir
+
+        if get_claude_sdk_backend(self._config) == "docker":
+            env_vars.update(self._docker_wrapper_env(workspace_path))
+            options_kwargs["cli_path"] = str(CLAUDE_SDK_DOCKER_WRAPPER)
 
         if env_vars:
             options_kwargs["env"] = env_vars
@@ -335,6 +410,55 @@ class ClaudeSDKAgentAdapter:
                 return msg.model
 
         return None
+
+    def _build_agent_result(
+        self,
+        collected_messages: list[Any],
+        result_message: Any | None,
+        *,
+        limit_reached: bool,
+        timeout_reached: bool = False,
+    ) -> AgentResult:
+        """Build an AgentResult from completed or partial SDK messages."""
+
+        raw_trace = self._build_raw_trace(collected_messages)
+        if limit_reached:
+            raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
+        if timeout_reached:
+            raw_trace += "\n\n[Note: Agent timed out - partial trace shown]"
+
+        # Exclude user and system messages: system prompts are captured
+        # separately via tagged_messages injection.
+        trace_messages = [
+            m for m in self._converter.from_provider(collected_messages) if m.role not in (Role.USER, Role.SYSTEM)
+        ]
+
+        final_response = self._extract_final_response(collected_messages, result_message)
+        usage = (
+            extract_sdk_usage(result_message, model=self._config.model_name)
+            if result_message
+            else UsageMetadata(
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                model=self._config.model_name,
+            )
+        )
+        turns = result_message.num_turns if result_message and hasattr(result_message, "num_turns") else 0
+        actual_model = self._extract_actual_model(collected_messages) or self._config.model_name
+        session_id = result_message.session_id if result_message and hasattr(result_message, "session_id") else None
+
+        return AgentResult(
+            final_response=final_response,
+            raw_trace=raw_trace,
+            trace_messages=trace_messages,
+            usage=usage,
+            turns=turns or len([m for m in trace_messages if m.role.value == "assistant"]),
+            limit_reached=limit_reached,
+            session_id=session_id,
+            actual_model=actual_model,
+            timeout_reached=timeout_reached,
+        )
 
     def _convert_mcp_servers(
         self,
@@ -453,6 +577,18 @@ class ClaudeSDKAgentAdapter:
                 await execute_agent()
 
         except TimeoutError as e:
+            if collected_messages:
+                logger.warning(
+                    "Claude SDK agent timed out after %ss with %d partial messages",
+                    config.timeout,
+                    len(collected_messages),
+                )
+                return self._build_agent_result(
+                    collected_messages,
+                    result_message,
+                    limit_reached=limit_reached,
+                    timeout_reached=True,
+                )
             raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s") from e
         except Exception as e:
             from .errors import wrap_sdk_error
@@ -467,53 +603,10 @@ class ClaudeSDKAgentAdapter:
         if result_message is None and not collected_messages:
             raise AgentResponseError("No messages received from SDK agent")
 
-        # Build raw_trace (legacy string format)
-        raw_trace = self._build_raw_trace(collected_messages)
-        if limit_reached:
-            raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
-
-        # Build trace_messages (structured format)
-        # Exclude user and system messages: system prompts are captured
-        # separately via tagged_messages injection.
-        trace_messages = [
-            m for m in self._converter.from_provider(collected_messages) if m.role not in (Role.USER, Role.SYSTEM)
-        ]
-
-        # Extract final response
-        final_response = self._extract_final_response(collected_messages, result_message)
-
-        # Extract usage
-        usage = (
-            extract_sdk_usage(result_message, model=self._config.model_name)
-            if result_message
-            else UsageMetadata(
-                input_tokens=0,
-                output_tokens=0,
-                total_tokens=0,
-                model=self._config.model_name,
-            )
-        )
-
-        # Extract turns from ResultMessage
-        turns = result_message.num_turns if result_message and hasattr(result_message, "num_turns") else 0
-
-        # Extract actual model
-        actual_model = self._extract_actual_model(collected_messages) or self._config.model_name
-
-        # Session ID - SDK may provide one
-        session_id = None
-        if result_message and hasattr(result_message, "session_id"):
-            session_id = result_message.session_id
-
-        return AgentResult(
-            final_response=final_response,
-            raw_trace=raw_trace,
-            trace_messages=trace_messages,
-            usage=usage,
-            turns=turns or len([m for m in trace_messages if m.role.value == "assistant"]),
+        return self._build_agent_result(
+            collected_messages,
+            result_message,
             limit_reached=limit_reached,
-            session_id=session_id,
-            actual_model=actual_model,
         )
 
     def run(
@@ -546,7 +639,7 @@ class ClaudeSDKAgentAdapter:
         """
         from .llm import _run_in_fresh_loop
 
-        timeout = config.timeout if config and config.timeout else 600
+        timeout = (config.timeout + 30) if config and config.timeout else 600
         return _run_in_fresh_loop(
             self.arun,
             messages,

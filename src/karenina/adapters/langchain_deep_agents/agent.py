@@ -20,6 +20,7 @@ from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, cast
 
 from karenina.adapters.agent_runtime import (
+    get_agent_runtime_access_mode,
     get_agent_runtime_capabilities,
     get_agent_runtime_option,
     get_deepagents_backend,
@@ -143,6 +144,7 @@ class DeepAgentsAgentAdapter:
         """Create the DeepAgents backend configured for this model."""
 
         backend = get_deepagents_backend(self._config)
+        access_mode = get_agent_runtime_access_mode(self._config)
         if backend == "docker":
             if workspace_path is None:
                 raise AdapterUnavailableError(
@@ -151,13 +153,18 @@ class DeepAgentsAgentAdapter:
                 )
             from .docker_backend import DockerSandboxBackend
 
-            return DockerSandboxBackend(
+            docker_backend = DockerSandboxBackend(
                 root_dir=workspace_path,
                 image=str(get_agent_runtime_option(self._config, "docker_image", "")),
                 network=str(get_agent_runtime_option(self._config, "docker_network", "bridge")),
                 timeout=_runtime_int_option(self._config, "execute_timeout", 120),
                 max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
             )
+            if access_mode == "read_only":
+                from .read_only_backend import ReadOnlyBackend
+
+                return ReadOnlyBackend(docker_backend)
+            return docker_backend
 
         if backend == "local_shell":
             if workspace_path is None:
@@ -171,22 +178,37 @@ class DeepAgentsAgentAdapter:
                 "Using unsafe DeepAgents LocalShellBackend with root_dir=%s",
                 workspace_path,
             )
-            return LocalShellBackend(
+            local_backend = LocalShellBackend(
                 root_dir=str(workspace_path),
                 virtual_mode=True,
                 timeout=_runtime_int_option(self._config, "execute_timeout", 120),
                 max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
                 inherit_env=True,
             )
+            if access_mode == "read_only":
+                from .read_only_backend import ReadOnlyBackend
+
+                return ReadOnlyBackend(local_backend)
+            return local_backend
 
         from deepagents.backends import FilesystemBackend
 
         if workspace_path:
             logger.info("Using FilesystemBackend with root_dir=%s", workspace_path)
-            return FilesystemBackend(root_dir=str(workspace_path), virtual_mode=True)
+            filesystem_backend = FilesystemBackend(root_dir=str(workspace_path), virtual_mode=True)
+            if access_mode == "read_only":
+                from .read_only_backend import ReadOnlyBackend
+
+                return ReadOnlyBackend(filesystem_backend)
+            return filesystem_backend
 
         logger.info("Using FilesystemBackend with default root (cwd)")
-        return FilesystemBackend(virtual_mode=True)
+        filesystem_backend = FilesystemBackend(virtual_mode=True)
+        if access_mode == "read_only":
+            from .read_only_backend import ReadOnlyBackend
+
+            return ReadOnlyBackend(filesystem_backend)
+        return filesystem_backend
 
     def _build_raw_trace(
         self,

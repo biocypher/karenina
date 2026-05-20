@@ -109,6 +109,57 @@ class TestDeepAgentsBackendConfiguration:
         assert backend.cwd == workspace
 
     @pytest.mark.asyncio
+    async def test_read_only_access_mode_wraps_backend(self, deep_agents_model_config, tmp_path, monkeypatch):
+        """Read-only access mode should keep reads but block writes and execution."""
+        from deepagents.backends import FilesystemBackend
+        from langchain_core.messages import AIMessage
+
+        from karenina.adapters.langchain_deep_agents.read_only_backend import ReadOnlyBackend
+
+        captured_kwargs: dict = {}
+
+        def capture_create(**kwargs):
+            captured_kwargs.update(kwargs)
+            return _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="ok")],
+                    "is_last_step": False,
+                }
+            )
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            capture_create,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
+            lambda _config, **_kw: MagicMock(),
+        )
+
+        workspace = tmp_path / "my_workspace"
+        workspace.mkdir()
+        (workspace / "results.txt").write_text("answer: 42")
+        read_only_config = deep_agents_model_config.model_copy(
+            update={"extra_kwargs": {"agent_runtime": {"access_mode": "read_only"}}}
+        )
+
+        adapter = DeepAgentsAgentAdapter(read_only_config)
+        await adapter.arun(
+            messages=[Message.user("inspect results")],
+            config=AgentConfig(max_turns=2, workspace_path=workspace),
+        )
+
+        backend = captured_kwargs["backend"]
+        assert isinstance(backend, ReadOnlyBackend)
+        assert isinstance(backend.delegate, FilesystemBackend)
+        assert backend.read("/results.txt") == "     1\tanswer: 42"
+        assert backend.write("/new.txt", "content").error is not None
+        assert backend.edit("/results.txt", "42", "43").error is not None
+        assert (await backend.awrite("/async-new.txt", "content")).error is not None
+        assert (await backend.aedit("/results.txt", "42", "43")).error is not None
+        assert not hasattr(backend, "execute")
+
+    @pytest.mark.asyncio
     async def test_backend_is_never_state_backend(self, deep_agents_model_config, monkeypatch):
         """StateBackend must never be used; it makes the agent blind to real files."""
         from deepagents.backends import StateBackend

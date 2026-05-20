@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 SANDBOX_WORKSPACE_PATH = "/workspace"
 AGENT_RUNTIME_EXTRA_KEY = "agent_runtime"
+AGENT_RUNTIME_ACCESS_MODES = {"read_write", "read_only"}
+CLAUDE_SDK_BACKENDS = {"native", "docker"}
 
 
 @dataclass(frozen=True)
@@ -63,9 +65,31 @@ def get_deepagents_backend(model_config: ModelConfig) -> str:
     )
 
 
+def get_claude_sdk_backend(model_config: ModelConfig) -> str:
+    """Return the configured Claude SDK runtime backend."""
+
+    backend = str(get_agent_runtime_option(model_config, "backend", "native"))
+    if backend not in CLAUDE_SDK_BACKENDS:
+        allowed = ", ".join(sorted(CLAUDE_SDK_BACKENDS))
+        raise ValueError(f"agent_runtime backend for claude_agent_sdk must be one of: {allowed}")
+    return backend
+
+
+def get_agent_runtime_access_mode(model_config: ModelConfig) -> str:
+    """Return the configured runtime access mode."""
+
+    access_mode = str(get_agent_runtime_option(model_config, "access_mode", "read_write"))
+    if access_mode not in AGENT_RUNTIME_ACCESS_MODES:
+        allowed = ", ".join(sorted(AGENT_RUNTIME_ACCESS_MODES))
+        raise ValueError(f"agent_runtime access_mode must be one of: {allowed}")
+    return access_mode
+
+
 def claude_sdk_sandbox_enabled(model_config: ModelConfig) -> bool:
     """Return whether Claude Agent SDK native sandboxing is enabled."""
 
+    if get_claude_sdk_backend(model_config) == "docker":
+        return False
     return bool(
         get_agent_runtime_option(
             model_config,
@@ -109,20 +133,23 @@ def get_agent_runtime_option(
 
 def _deepagents_capabilities(model_config: ModelConfig) -> PortCapabilities:
     backend = get_deepagents_backend(model_config)
+    access_mode = get_agent_runtime_access_mode(model_config)
     return PortCapabilities(
         supports_system_prompt=True,
         supports_file_tools=True,
-        supports_code_execution=backend in {"docker", "local_shell"},
+        supports_code_execution=access_mode != "read_only" and backend in {"docker", "local_shell"},
         uses_sandboxed_execution=backend == "docker",
     )
 
 
 def _claude_sdk_capabilities(model_config: ModelConfig) -> PortCapabilities:
+    access_mode = get_agent_runtime_access_mode(model_config)
+    backend = get_claude_sdk_backend(model_config)
     return PortCapabilities(
         supports_system_prompt=True,
         supports_file_tools=True,
-        supports_code_execution=True,
-        uses_sandboxed_execution=claude_sdk_sandbox_enabled(model_config),
+        supports_code_execution=access_mode != "read_only",
+        uses_sandboxed_execution=backend == "docker" or claude_sdk_sandbox_enabled(model_config),
     )
 
 
@@ -158,6 +185,34 @@ def _deepagents_map_path_for_prompt(
     if path is None:
         return None
     if get_deepagents_backend(model_config) != "docker" or workspace_path is None:
+        return str(path)
+
+    try:
+        rel = path.resolve().relative_to(workspace_path.resolve())
+    except ValueError:
+        return str(path)
+
+    if rel.as_posix() == ".":
+        return SANDBOX_WORKSPACE_PATH
+    return f"{SANDBOX_WORKSPACE_PATH}/{rel.as_posix()}"
+
+
+def _claude_sdk_workspace_path_for_prompt(model_config: ModelConfig, workspace_path: Path | None) -> str | None:
+    if workspace_path is None:
+        return None
+    if get_claude_sdk_backend(model_config) == "docker":
+        return SANDBOX_WORKSPACE_PATH
+    return str(workspace_path)
+
+
+def _claude_sdk_map_path_for_prompt(
+    model_config: ModelConfig,
+    path: Path | None,
+    workspace_path: Path | None,
+) -> str | None:
+    if path is None:
+        return None
+    if get_claude_sdk_backend(model_config) != "docker" or workspace_path is None:
         return str(path)
 
     try:
@@ -219,7 +274,7 @@ register_agent_runtime_profile(
     "claude_agent_sdk",
     AgentRuntimeProfile(
         capabilities=_claude_sdk_capabilities,
-        workspace_path_for_prompt=_default_workspace_path_for_prompt,
-        map_path_for_prompt=_default_map_path_for_prompt,
+        workspace_path_for_prompt=_claude_sdk_workspace_path_for_prompt,
+        map_path_for_prompt=_claude_sdk_map_path_for_prompt,
     ),
 )
