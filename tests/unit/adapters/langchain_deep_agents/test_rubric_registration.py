@@ -17,4 +17,4 @@ class TestRubricTaskRegistration:
         """Deep Agents should register the same number of rubric tasks as Claude Tool."""
         from karenina.adapters.langchain_deep_agents.prompts.rubric import _RUBRIC_TASKS
 
-        assert len(_RUBRIC_TASKS) == 6
+        assert len(_RUBRIC_TASKS) == 7

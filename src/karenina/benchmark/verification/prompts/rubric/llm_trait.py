@@ -190,3 +190,39 @@ When uncertain about borderline cases, choose conservatively based on the trait'
 
 **TRAIT:** {trait.name}
 **CRITERIA:** {trait.description or "No description provided"}"""
+
+    def build_template_system_prompt(self, trait: "LLMRubricTrait") -> str:
+        """Build system prompt for template-kind trait evaluation.
+
+        Template-kind traits ask the judge to populate a user-defined Pydantic
+        schema based on evidence in the response. The schema is enforced by
+        structured output at the adapter layer, so this prompt focuses on
+        behaviour: ground every field in the response, populate every field,
+        and stay conservative when evidence is missing.
+        """
+        return f"""You are evaluating responses for the trait: **{trait.name}**
+
+**Criteria:** {trait.description or "Structured evaluation"}
+
+**EVALUATION GUIDELINES:**
+- Populate EVERY field of the requested output schema.
+- Ground each field in evidence observable in the response text.
+- When evidence is missing, choose the most conservative value (empty string, empty list, `false`, or the minimum numeric value) rather than fabricating content.
+- Base your assessment solely on the answer content; do not assume facts not present in the response.
+- Be consistent: similar answers should produce similar structured outputs."""
+
+    def build_template_user_prompt(
+        self,
+        question: str,
+        answer: str,
+        trait: "LLMRubricTrait",
+    ) -> str:
+        """Build user prompt for template-kind trait evaluation."""
+        return f"""**QUESTION:**
+{question}
+
+**ANSWER TO EVALUATE:**
+{answer}
+
+**TRAIT:** {trait.name}
+**CRITERIA:** {trait.description or "No description provided"}"""

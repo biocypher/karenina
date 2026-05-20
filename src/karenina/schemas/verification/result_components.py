@@ -213,7 +213,10 @@ class VerificationResultRubric(BaseModel):
     rubric_evaluation_strategy: str | None = None  # Strategy used: "batch" or "sequential"
 
     # Split trait scores by type (replaces old verify_rubric dict)
-    llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
+    # Template-kind LLM traits contribute multiple dotted-key entries
+    # ("trait.field") whose values follow the user-defined Pydantic schema
+    # (strings, lists, bools, numerics), hence the Any-typed value here.
+    llm_trait_scores: dict[str, Any] | None = None  # LLM-evaluated traits (scalar kinds) + template-kind fields
     llm_trait_labels: dict[str, str] | None = None  # Class labels for literal kind traits
     # Structure: {"trait_name": "ClassName"}
     # For literal kind traits, scores are stored as int indices (0 to len(classes)-1) in llm_trait_scores,

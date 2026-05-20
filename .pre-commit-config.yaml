@@ -15,7 +15,8 @@ repos:
         args: [--fix]
         files: ^(src/|tests/)
       - id: ruff-format
-        files: ^(src/|tests/)
+        files: ^(src/|tests/|docs/notebooks/)
+        types_or: [python, pyi, jupyter]
 
   # Type checking with mypy using local environment
   - repo: local

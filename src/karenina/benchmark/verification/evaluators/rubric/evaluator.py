@@ -103,7 +103,7 @@ class RubricEvaluator:
 
     def evaluate_rubric(
         self, question: str, answer: str, rubric: Rubric
-    ) -> tuple[dict[str, int | bool | float], dict[str, str] | None, list[dict[str, Any]]]:
+    ) -> tuple[dict[str, Any], dict[str, str] | None, list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (LLM, regex, and callable).
 
@@ -114,14 +114,18 @@ class RubricEvaluator:
 
         Returns:
             Tuple of (results, llm_trait_labels, usage_metadata_list) where:
-            - results: Dictionary mapping trait names to their evaluated scores
+            - results: Dictionary mapping trait names to their evaluated scores.
+              Scalar traits (boolean/score/literal, regex, callable) use the
+              trait name as the key. Template-kind LLM traits produce multiple
+              entries with dotted keys ``trait_name.field_name`` (one per
+              schema field).
             - llm_trait_labels: Dictionary mapping literal trait names to class labels (or None if no literal traits)
             - usage_metadata_list: List of usage metadata dicts from LLM calls
 
         Raises:
             Exception: If evaluation fails completely
         """
-        results: dict[str, int | bool | float] = {}
+        results: dict[str, Any] = {}
         llm_trait_labels: dict[str, str] | None = None
         usage_metadata_list: list[dict[str, Any]] = []
 
@@ -137,9 +141,23 @@ class RubricEvaluator:
 
         # Evaluate LLM traits if present - delegate to LLMTraitEvaluator
         if rubric.llm_traits:
-            # Separate literal traits from boolean/score traits
-            literal_traits = [t for t in rubric.llm_traits if t.kind == "literal"]
-            non_literal_traits = [t for t in rubric.llm_traits if t.kind != "literal"]
+            # Partition traits: template (structured), literal, boolean/score
+            template_traits = [t for t in rubric.llm_traits if t.is_template_kind]
+            scalar_traits = [t for t in rubric.llm_traits if not t.is_template_kind]
+            literal_traits = [t for t in scalar_traits if t.kind == "literal"]
+            non_literal_traits = [t for t in scalar_traits if t.kind != "literal"]
+
+            # Evaluate template traits (always sequential; each has a unique schema)
+            if template_traits:
+                try:
+                    template_results, template_usage_list = self.llm_trait_evaluator.evaluate_template(
+                        question, answer, template_traits
+                    )
+                    results.update(template_results)
+                    usage_metadata_list.extend(template_usage_list)
+                except Exception as e:
+                    logger.error(f"Template evaluation failed: {e}")
+                    raise RuntimeError(f"Failed to evaluate template LLM traits: {e}") from e
 
             # Evaluate non-literal (boolean/score) traits
             if non_literal_traits:

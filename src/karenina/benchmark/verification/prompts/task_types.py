@@ -49,6 +49,9 @@ class PromptTask(str, Enum):
     RUBRIC_LLM_TRAIT_SINGLE = "rubric_llm_trait_single"
     """Evaluates a single boolean/score LLM rubric trait sequentially."""
 
+    RUBRIC_LLM_TRAIT_TEMPLATE = "rubric_llm_trait_template"
+    """Evaluates a template-kind LLM rubric trait: LLM fills a Pydantic schema from the response."""
+
     RUBRIC_LITERAL_TRAIT_BATCH = "rubric_literal_trait_batch"
     """Evaluates all literal (categorical) rubric traits in a single batched call."""
 
