@@ -70,7 +70,8 @@ def extract_agent_metrics_from_messages(messages: list[Message]) -> dict[str, An
         Dict with agent metrics matching the documented schema in result_components.
     """
     iterations = 0
-    tool_calls = 0
+    assistant_tool_calls = 0
+    tool_result_calls = 0
     tools_used: set[str] = set()
     tool_call_counts: dict[str, int] = defaultdict(int)
     suspect_failed_tool_calls = 0
@@ -84,6 +85,7 @@ def extract_agent_metrics_from_messages(messages: list[Message]) -> dict[str, An
         if msg.role == Role.ASSISTANT:
             iterations += 1
             for tc in msg.tool_calls:
+                assistant_tool_calls += 1
                 tools_used.add(tc.name)
                 tool_call_counts[tc.name] += 1
                 tool_id_to_name[tc.id] = tc.name
@@ -91,7 +93,7 @@ def extract_agent_metrics_from_messages(messages: list[Message]) -> dict[str, An
         elif msg.role == Role.TOOL:
             for content_block in msg.content:
                 if isinstance(content_block, ToolResultContent):
-                    tool_calls += 1
+                    tool_result_calls += 1
 
                     # Check for suspected failures
                     is_suspect = content_block.is_error
@@ -110,7 +112,7 @@ def extract_agent_metrics_from_messages(messages: list[Message]) -> dict[str, An
 
     return {
         "iterations": iterations,
-        "tool_calls": tool_calls,
+        "tool_calls": max(assistant_tool_calls, tool_result_calls),
         "tools_used": sorted(tools_used),
         "tool_call_counts": dict(tool_call_counts),
         "suspect_failed_tool_calls": suspect_failed_tool_calls,

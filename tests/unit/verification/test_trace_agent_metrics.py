@@ -381,6 +381,30 @@ class TestAdapterShapedTraces:
         assert metrics["tool_calls"] == 2
         assert metrics["tools_used"] == ["mcp_tool_details", "mcp_tool_search"]
 
+    def test_claude_sdk_assistant_only_tool_calls(self) -> None:
+        """claude_agent_sdk can preserve tool uses without separate tool results."""
+        msgs = [
+            Message.assistant(
+                "Inspecting workspace.",
+                tool_calls=[_tool_call("Glob", "call_1")],
+            ),
+            Message.assistant(
+                "Running setup.",
+                tool_calls=[
+                    _tool_call("Bash", "call_2"),
+                    _tool_call("Read", "call_3"),
+                ],
+            ),
+            Message.assistant("Final answer."),
+        ]
+
+        metrics = extract_agent_metrics_from_messages(msgs)
+
+        assert metrics["iterations"] == 3
+        assert metrics["tool_calls"] == 3
+        assert metrics["tools_used"] == ["Bash", "Glob", "Read"]
+        assert metrics["tool_call_counts"] == {"Glob": 1, "Bash": 1, "Read": 1}
+
     def test_manual_adapter_empty_trace(self) -> None:
         """manual adapter: returns empty trace_messages — metrics should be zeroed."""
         metrics = extract_agent_metrics_from_messages([])
