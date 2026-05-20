@@ -461,7 +461,20 @@ class TestScenarioPerWorkerPortals:
 
         mock_start_portal.side_effect = make_portal
 
-        mock_manager_cls.return_value.run.return_value = _make_exec_result("s")
+        portal_barrier = threading.Barrier(2, timeout=5.0)
+        seen_threads: set[int] = set()
+        seen_threads_lock = threading.Lock()
+
+        def mock_run(**kwargs):  # noqa: ARG001
+            thread_id = threading.get_ident()
+            with seen_threads_lock:
+                is_first_combo_for_thread = thread_id not in seen_threads
+                seen_threads.add(thread_id)
+            if is_first_combo_for_thread:
+                portal_barrier.wait()
+            return _make_exec_result("s")
+
+        mock_manager_cls.return_value.run.side_effect = mock_run
 
         combos = [_make_combo(f"s{i}") for i in range(6)]
         config = MagicMock()
