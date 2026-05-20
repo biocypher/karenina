@@ -97,7 +97,12 @@ class _SuccessExecutor:
     def __init__(self, parallel: bool = True, config: Any = None) -> None:  # noqa: ARG002
         self.parallel = parallel
 
-    def run_batch(self, tasks: list[dict[str, Any]], progress_callback: Any) -> dict[str, VerificationResult]:
+    def run_batch(
+        self,
+        tasks: list[dict[str, Any]],
+        progress_callback: Any,
+        prior_results: Any = None,  # noqa: ARG002
+    ) -> dict[str, VerificationResult]:
         results: dict[str, VerificationResult] = {}
         for idx, task in enumerate(tasks, 1):
             result = _result_for_task(task)
@@ -115,7 +120,12 @@ class _FailingExecutor:
         self.succeed_first = succeed_first
         self.parallel = True
 
-    def run_batch(self, tasks: list[dict[str, Any]], progress_callback: Any) -> dict[str, VerificationResult]:
+    def run_batch(
+        self,
+        tasks: list[dict[str, Any]],
+        progress_callback: Any,
+        prior_results: Any = None,  # noqa: ARG002
+    ) -> dict[str, VerificationResult]:
         partial: dict[str, VerificationResult] = {}
         errors = []
         for idx, task in enumerate(tasks):
@@ -219,7 +229,12 @@ class TestResumeSkipsCompletedTriples:
         class _MixedExecutor:
             parallel = True
 
-            def run_batch(self, tasks: list[dict[str, Any]], progress_callback: Any) -> dict[str, VerificationResult]:
+            def run_batch(
+                self,
+                tasks: list[dict[str, Any]],
+                progress_callback: Any,
+                prior_results: Any = None,  # noqa: ARG002
+            ) -> dict[str, VerificationResult]:
                 partial: dict[str, VerificationResult] = {}
                 errors: list[tuple[str, BaseException]] = []
                 for idx, task in enumerate(tasks):
@@ -258,7 +273,12 @@ class TestResumeSkipsCompletedTriples:
         class _AssertExecutor:
             parallel = True
 
-            def run_batch(self, tasks: list[dict[str, Any]], progress_callback: Any) -> dict[str, VerificationResult]:
+            def run_batch(
+                self,
+                tasks: list[dict[str, Any]],
+                progress_callback: Any,
+                prior_results: Any = None,  # noqa: ARG002
+            ) -> dict[str, VerificationResult]:
                 seen_question_ids.extend(t["question_id"] for t in tasks)
                 results: dict[str, VerificationResult] = {}
                 for idx, task in enumerate(tasks, 1):

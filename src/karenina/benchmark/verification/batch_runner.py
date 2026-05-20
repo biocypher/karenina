@@ -476,12 +476,26 @@ def run_verification_batch(
 
     # Merge sink-completed triples into skip_triples so resume does not
     # re-execute work a ProgressiveFileSink / DBSink already persisted.
+    # Also snapshot the sink's prior results so the executor can hydrate
+    # its workspace AnswerTraceCache before the batch starts. Without
+    # this, new parser variants for already-completed triples regenerate
+    # the answerer at non-zero temperature instead of reusing the prior
+    # trace (see VerificationExecutor._hydrate_cache_from_results). The
+    # hydration helper is a no-op when the executor's cache is disabled,
+    # so it is safe to always materialize when the sink offers results.
+    prior_results: list[VerificationResult] | None = None
     if sink is not None:
         sink_triples = sink.completed_triples()
         if sink_triples:
             existing = config.skip_triples or frozenset()
             config = config.model_copy(update={"skip_triples": frozenset(existing | sink_triples)})
             logger.info("Sink reports %d already-completed triples; merged into skip_triples", len(sink_triples))
+        iterator = getattr(sink, "iter_results", None)
+        if callable(iterator):
+            # Materialize once: the executor consumes prior_results
+            # exactly once on whichever execution path runs, but the
+            # iterator may be a generator that cannot be replayed.
+            prior_results = list(iterator())
 
     # Generate task queue
     logger.info(f"Generating task queue for {len(templates)} templates...")
@@ -545,7 +559,7 @@ def run_verification_batch(
 
     all_complete = True
     try:
-        results = executor.run_batch(task_queue, progress_callback)
+        results = executor.run_batch(task_queue, progress_callback, prior_results=prior_results)
     except VerificationBatchError as exc:
         # Preserve partial results so the sink-enabled path can still write
         # a partial export and keep resume state. Without a sink, re-raise

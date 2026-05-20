@@ -21,8 +21,11 @@ from typing import TYPE_CHECKING, Any
 from anyio.from_thread import start_blocking_portal
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from anyio.from_thread import BlockingPortal
 
+from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from karenina.utils.answer_cache import AnswerTraceCache
@@ -30,6 +33,20 @@ from karenina.utils.answer_cache import AnswerTraceCache
 logger = logging.getLogger(__name__)
 
 _SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
+
+# Failure categories whose answerer trace is not worth hydrating into the
+# workspace cache: the trace either never produced real content or was
+# truncated by an infra fault. Mirrors the hard-infra subset of the
+# operational purge_infra_failures filter.
+_INFRA_FAILURE_CATEGORIES: frozenset[FailureCategory] = frozenset(
+    {
+        FailureCategory.CONNECTION,
+        FailureCategory.RATE_LIMIT,
+        FailureCategory.TIMEOUT,
+        FailureCategory.SERVER_ERROR,
+        FailureCategory.UNEXPECTED_ERROR,
+    }
+)
 
 # Bound (seconds) on each adapter.aclose() call issued via the worker portal
 # before the portal is torn down. A stuck aclose must not wedge the finally
@@ -213,10 +230,124 @@ class VerificationExecutor:
         with sem:
             return execute_task(task, answer_cache, cache_status, cached_answer_data)
 
+    @staticmethod
+    def _hydrate_cache_from_results(
+        answer_cache: AnswerTraceCache | None,
+        results: Iterable[VerificationResult] | None,
+    ) -> None:
+        """Pre-populate the workspace cache with answerer traces from prior results.
+
+        On sink-resume the executor instantiates a fresh cache. If the
+        resumed config adds new parser variants for already-completed
+        ``(question_id, answerer, replicate)`` triples, those new parser
+        tasks are not in ``skip_triples`` (different parse_key), enter the
+        queue, miss the empty cache, and regenerate the answerer at
+        non-zero temperature. This helper closes that gap by writing a
+        ``HIT`` entry into the cache for every prior triple whose answerer
+        trace is real.
+
+        Args:
+            answer_cache: The workspace cache to populate. ``None`` is a
+                no-op (caching is disabled).
+            results: Iterable of prior :class:`VerificationResult` rows
+                (typically from a ``ProgressiveFileSink`` resume buffer).
+                ``None`` is a no-op.
+
+        Raises:
+            ValueError: If a hydrated cache key fails the replicate-axis
+                invariant. This indicates a bug in
+                :func:`generate_answer_cache_key` and should never fire in
+                practice.
+        """
+        if answer_cache is None or results is None:
+            return
+
+        from types import SimpleNamespace
+
+        from karenina.schemas.verification.model_identity import ModelIdentity
+
+        from .utils.cache_helpers import (
+            extract_answer_data_from_result,
+            generate_answer_cache_key,
+        )
+
+        populated = 0
+        skipped = 0
+        dupes = 0
+
+        for result in results:
+            template = result.template
+            if template is None or template.raw_llm_response is None:
+                skipped += 1
+                continue
+
+            failure = result.metadata.failure
+            if failure is not None:
+                if failure.category in _INFRA_FAILURE_CATEGORIES:
+                    skipped += 1
+                    continue
+                if failure.stage == "TraceValidationAutoFail":
+                    skipped += 1
+                    continue
+                if failure.reason.startswith("Empty or whitespace-only trace"):
+                    skipped += 1
+                    continue
+
+            answering_identity = result.metadata.answering
+            if not isinstance(answering_identity, ModelIdentity):
+                # Defensive: metadata.answering is typed as ModelIdentity,
+                # but tolerate dict-shaped inputs by validating into one.
+                answering_identity = ModelIdentity.model_validate(answering_identity)
+
+            answerer_id = answering_identity.canonical_key
+            replicate = result.metadata.replicate
+
+            task_shaped = {
+                "question_id": result.metadata.question_id,
+                "answering_model": SimpleNamespace(id=answerer_id),
+                "replicate": replicate,
+            }
+            cache_key = generate_answer_cache_key(task_shaped)
+
+            # Replicate-axis invariant: if the source row is replicated, the
+            # cache key must carry the per-replicate suffix so multiple
+            # replicates of the same (qid, answerer) become independent
+            # entries. A failure here would mean the key generator and the
+            # task-dict shape have drifted apart.
+            if replicate is not None and f"_rep{replicate}" not in cache_key:
+                raise ValueError(
+                    f"Hydration produced cache key {cache_key!r} without "
+                    f"_rep{replicate} suffix; replicate-axis invariant violated."
+                )
+
+            status, _ = answer_cache.get_or_reserve(cache_key)
+            if status == "HIT":
+                # Duplicate parser-row for the same answerer triple. The
+                # first write already populated the entry; nothing to do.
+                dupes += 1
+                continue
+            if status == "IN_PROGRESS":
+                # Should never happen during single-threaded hydration, but
+                # if some other path reserved this key, leave it alone.
+                dupes += 1
+                continue
+
+            answer_data = extract_answer_data_from_result(result)
+            answer_cache.complete(cache_key, answer_data, error=None)
+            populated += 1
+
+        logger.info(
+            "Hydrated %d answerer traces from prior sink results (skipped %d failures, %d duplicates)",
+            populated,
+            skipped,
+            dupes,
+        )
+
     def run_batch(
         self,
         tasks: list[dict[str, Any]],
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None = None,
+        prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
         """Execute verification tasks.
 
@@ -225,19 +356,25 @@ class VerificationExecutor:
             progress_callback: Optional callback(current, total, result | None) for progress updates.
                              Called before starting each task (with preview result) and
                              after completion (with actual result).
+            prior_results: Optional iterable of completed
+                :class:`VerificationResult` rows from a sink-resume.
+                When ``enable_cache`` is true these are written into the
+                workspace cache via :meth:`_hydrate_cache_from_results`
+                so new parser variants share the prior answerer trace.
 
         Returns:
             Dictionary mapping result keys to verification results
         """
         if self.parallel:
-            return self._run_parallel(tasks, progress_callback)
+            return self._run_parallel(tasks, progress_callback, prior_results)
         else:
-            return self._run_sequential(tasks, progress_callback)
+            return self._run_sequential(tasks, progress_callback, prior_results)
 
     def _run_sequential(
         self,
         tasks: list[dict[str, Any]],
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
+        prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
         """Execute tasks one at a time.
 
@@ -248,6 +385,9 @@ class VerificationExecutor:
         Args:
             tasks: List of task dictionaries
             progress_callback: Optional progress callback
+            prior_results: Optional iterable of completed
+                :class:`VerificationResult` rows used to hydrate the
+                workspace cache before execution starts.
 
         Returns:
             Dictionary mapping result keys to verification results
@@ -261,6 +401,8 @@ class VerificationExecutor:
         from .utils.task_helpers import create_preview_result
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
+        if answer_cache is not None and prior_results is not None:
+            self._hydrate_cache_from_results(answer_cache, prior_results)
         results: dict[str, VerificationResult] = {}
         errors: list[tuple[str, BaseException]] = []
         total = len(tasks)
@@ -320,6 +462,7 @@ class VerificationExecutor:
         self,
         tasks: list[dict[str, Any]],
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
+        prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
         """Execute tasks in parallel using ThreadPoolExecutor.
 
@@ -330,6 +473,9 @@ class VerificationExecutor:
         Args:
             tasks: List of task dictionaries
             progress_callback: Optional progress callback
+            prior_results: Optional iterable of completed
+                :class:`VerificationResult` rows used to hydrate the
+                workspace cache before workers spin up.
 
         Returns:
             Dictionary mapping result keys to verification results (in original task order)
@@ -346,6 +492,8 @@ class VerificationExecutor:
         logger.info("Parallel execution: %d tasks with %d workers", len(tasks), max_workers)
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
+        if answer_cache is not None and prior_results is not None:
+            self._hydrate_cache_from_results(answer_cache, prior_results)
         total = len(tasks)
         max_requeue = self.config.max_requeue_count
         retry_wait = self.config.retry_wait_seconds
