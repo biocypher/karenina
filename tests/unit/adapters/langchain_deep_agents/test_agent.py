@@ -167,8 +167,9 @@ class TestDeepAgentsBackendConfiguration:
         captured_preflight: dict[str, str | None] = {}
         captured_kwargs: dict = {}
 
-        def capture_preflight(*, image, **_kwargs):
-            captured_preflight["image"] = image
+        def capture_preflight(config, **_kwargs):
+            captured_preflight["image"] = config.image
+            captured_preflight["runtime"] = config.runtime
 
         def capture_create(**kwargs):
             captured_kwargs.update(kwargs)
@@ -180,7 +181,7 @@ class TestDeepAgentsBackendConfiguration:
             )
 
         monkeypatch.setattr(
-            "karenina.adapters.langchain_deep_agents.docker_backend.preflight_docker_runtime",
+            "karenina.adapters.langchain_deep_agents.docker_backend.preflight_container_runtime",
             capture_preflight,
         )
         monkeypatch.setattr(
@@ -211,7 +212,7 @@ class TestDeepAgentsBackendConfiguration:
             config=AgentConfig(max_turns=2, workspace_path=workspace),
         )
 
-        assert captured_preflight == {"image": "karenina-bixbench:latest"}
+        assert captured_preflight == {"image": "karenina-bixbench:latest", "runtime": "docker"}
         assert captured_kwargs["backend"].id.startswith("docker-")
 
     @pytest.mark.asyncio

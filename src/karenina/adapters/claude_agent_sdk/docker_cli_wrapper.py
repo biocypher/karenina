@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Docker wrapper used as Claude Agent SDK ``cli_path``.
+"""Container wrapper used as Claude Agent SDK ``cli_path``.
 
 The Claude Agent SDK expects ``cli_path`` to be an executable compatible with
-the Claude Code CLI. This wrapper preserves that contract while launching the
-real ``claude`` executable inside a configured Docker image.
+the Claude Code CLI. This wrapper preserves that contract while launching
+the real ``claude`` executable inside a configured container image.
 """
 
 from __future__ import annotations
@@ -12,27 +12,30 @@ import os
 import socket
 import sys
 from contextlib import suppress
+from pathlib import Path
 from urllib.parse import urlparse
 
-SANDBOX_WORKSPACE_PATH = "/workspace"
+from karenina.adapters.agent_runtime import (
+    SANDBOX_WORKSPACE_PATH,
+    ContainerRuntimeConfig,
+)
+from karenina.adapters.agent_runtime import (
+    build_container_command as build_runtime_container_command,
+)
 
 
-def _required_env(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        print(f"{name} is required for Claude SDK Docker runtime", file=sys.stderr)
-        raise SystemExit(2)
-    return value
+def _env_with_legacy(preferred: str, legacy: str | None = None, default: str | None = None) -> str | None:
+    value = os.environ.get(preferred)
+    if value:
+        return value
+    if legacy:
+        value = os.environ.get(legacy)
+        if value:
+            return value
+    return default
 
 
-def _env_flag(name: str, value: str | None = None) -> list[str]:
-    if value is None:
-        return ["--env", name]
-    return ["--env", f"{name}={value}"]
-
-
-def _forward_env_flags() -> list[str]:
-    flags: list[str] = []
+def _forward_env_dict() -> dict[str, str | None]:
     passthrough = [
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_API_KEY",
@@ -52,23 +55,17 @@ def _forward_env_flags() -> list[str]:
         "https_proxy",
         "no_proxy",
     ]
-    for name in passthrough:
-        if name in os.environ:
-            flags.extend(_env_flag(name))
-
-    flags.extend(
-        [
-            *_env_flag("HOME", "/tmp"),
-            *_env_flag("CLAUDE_CONFIG_DIR", os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude-config")),
-            *_env_flag("UV_LINK_MODE", "copy"),
-            *_env_flag("UV_CACHE_DIR", "/tmp/uv-cache"),
-            *_env_flag(
-                "PATH",
-                "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            ),
-        ]
+    env: dict[str, str | None] = {name: None for name in passthrough if name in os.environ}
+    env.update(
+        {
+            "HOME": "/tmp",
+            "CLAUDE_CONFIG_DIR": os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude-config"),
+            "UV_LINK_MODE": "copy",
+            "UV_CACHE_DIR": "/tmp/uv-cache",
+            "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        }
     )
-    return flags
+    return env
 
 
 def _rewrite_workspace_args(args: list[str], host_workspace: str) -> list[str]:
@@ -77,7 +74,7 @@ def _rewrite_workspace_args(args: list[str], host_workspace: str) -> list[str]:
 
 def _add_host_flags() -> list[str]:
     flags: list[str] = []
-    configured = os.environ.get("KARENINA_CLAUDE_DOCKER_ADD_HOSTS")
+    configured = _env_with_legacy("KARENINA_CLAUDE_CONTAINER_ADD_HOSTS", "KARENINA_CLAUDE_DOCKER_ADD_HOSTS")
     if configured:
         for host_mapping in configured.split(","):
             host_mapping = host_mapping.strip()
@@ -100,43 +97,72 @@ def _add_host_flags() -> list[str]:
     return flags
 
 
-def build_docker_command(argv: list[str] | None = None) -> list[str]:
-    """Build the Docker command for tests and for ``main``."""
+def _container_config() -> ContainerRuntimeConfig:
+    runtime = _env_with_legacy("KARENINA_CLAUDE_CONTAINER_RUNTIME", default="docker") or "docker"
+    image = _env_with_legacy("KARENINA_CLAUDE_CONTAINER_IMAGE", "KARENINA_CLAUDE_DOCKER_IMAGE")
+    network = _env_with_legacy("KARENINA_CLAUDE_CONTAINER_NETWORK", "KARENINA_CLAUDE_DOCKER_NETWORK", "bridge")
+    add_hosts = _env_with_legacy("KARENINA_CLAUDE_CONTAINER_ADD_HOSTS", "KARENINA_CLAUDE_DOCKER_ADD_HOSTS")
+    return ContainerRuntimeConfig(
+        runtime=runtime,
+        image=image,
+        network=network or "bridge",
+        add_hosts=tuple(host.strip() for host in (add_hosts or "").split(",") if host.strip()),
+    )
+
+
+def build_container_command(argv: list[str] | None = None) -> list[str]:
+    """Build the configured container command for tests and for ``main``."""
 
     argv = list(sys.argv[1:] if argv is None else argv)
-    host_workspace = _required_env("KARENINA_CLAUDE_DOCKER_WORKSPACE")
-    image = _required_env("KARENINA_CLAUDE_DOCKER_IMAGE")
-    network = os.environ.get("KARENINA_CLAUDE_DOCKER_NETWORK", "bridge")
-    if network not in {"bridge", "none"}:
-        print("KARENINA_CLAUDE_DOCKER_NETWORK must be 'bridge' or 'none'", file=sys.stderr)
+    host_workspace = _env_with_legacy("KARENINA_CLAUDE_CONTAINER_WORKSPACE", "KARENINA_CLAUDE_DOCKER_WORKSPACE")
+    if not host_workspace:
+        print("KARENINA_CLAUDE_CONTAINER_WORKSPACE is required for Claude SDK container runtime", file=sys.stderr)
         raise SystemExit(2)
 
-    command = [
-        "docker",
-        "run",
-        "--rm",
-        "-i",
-        "--network",
-        network,
-        "--workdir",
-        SANDBOX_WORKSPACE_PATH,
-        "--volume",
-        f"{host_workspace}:{SANDBOX_WORKSPACE_PATH}:rw",
-        *_add_host_flags(),
-        *_forward_env_flags(),
-        "--pids-limit",
-        "256",
-    ]
+    config = _container_config()
+    if not config.image:
+        print("KARENINA_CLAUDE_CONTAINER_IMAGE is required for Claude SDK container runtime", file=sys.stderr)
+        raise SystemExit(2)
+    if config.runtime == "docker" and config.network not in {"bridge", "none"}:
+        print("KARENINA_CLAUDE_CONTAINER_NETWORK must be 'bridge' or 'none' for Docker", file=sys.stderr)
+        raise SystemExit(2)
+    if config.runtime != "docker" and config.add_hosts:
+        print("KARENINA_CLAUDE_CONTAINER_ADD_HOSTS is Docker-only", file=sys.stderr)
+        raise SystemExit(2)
+    if config.runtime != "docker" and Path(config.image).suffix != ".sif":
+        print("KARENINA_CLAUDE_CONTAINER_IMAGE must be a local .sif file for Singularity/Apptainer", file=sys.stderr)
+        raise SystemExit(2)
 
-    if hasattr(os, "getuid") and hasattr(os, "getgid"):
-        command.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+    add_hosts = list(config.add_hosts)
+    if config.runtime == "docker":
+        auto_hosts = _add_host_flags()
+        for index, token in enumerate(auto_hosts):
+            if token == "--add-host" and index + 1 < len(auto_hosts):
+                add_hosts.append(auto_hosts[index + 1])
+        config = ContainerRuntimeConfig(
+            runtime=config.runtime,
+            image=config.image,
+            network=config.network,
+            add_hosts=tuple(add_hosts),
+        )
 
-    command.extend([image, "claude", *_rewrite_workspace_args(argv, host_workspace)])
-    return command
+    return build_runtime_container_command(
+        config=config,
+        host_workspace=host_workspace,
+        argv=["claude", *_rewrite_workspace_args(argv, host_workspace)],
+        env=_forward_env_dict(),
+        interactive=True,
+    )
+
+
+def build_docker_command(argv: list[str] | None = None) -> list[str]:
+    """Compatibility alias for existing tests and imports."""
+
+    return build_container_command(argv)
 
 
 def main() -> None:
-    command = build_docker_command()
+    command = build_container_command()
     os.execvp(command[0], command)
 
 

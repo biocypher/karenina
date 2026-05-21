@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -18,7 +19,12 @@ if TYPE_CHECKING:
 SANDBOX_WORKSPACE_PATH = "/workspace"
 AGENT_RUNTIME_EXTRA_KEY = "agent_runtime"
 AGENT_RUNTIME_ACCESS_MODES = {"read_write", "read_only"}
-CLAUDE_SDK_BACKENDS = {"native", "docker"}
+CONTAINER_BACKEND = "container"
+LEGACY_DOCKER_BACKEND = "docker"
+CONTAINER_BACKEND_ALIASES = {CONTAINER_BACKEND, LEGACY_DOCKER_BACKEND}
+CONTAINER_RUNTIMES = {"docker", "singularity", "apptainer"}
+CLAUDE_SDK_BACKENDS = {"native", CONTAINER_BACKEND, LEGACY_DOCKER_BACKEND}
+DEEPAGENTS_BACKENDS = {"filesystem", CONTAINER_BACKEND, LEGACY_DOCKER_BACKEND, "local_shell"}
 DOCKER_PREFLIGHT_TIMEOUT_SECONDS = 10
 
 
@@ -29,6 +35,16 @@ class AgentRuntimeProfile:
     capabilities: Callable[[ModelConfig], PortCapabilities]
     workspace_path_for_prompt: Callable[[ModelConfig, Path | None], str | None] | None = None
     map_path_for_prompt: Callable[[ModelConfig, Path | None, Path | None], str | None] | None = None
+
+
+@dataclass(frozen=True)
+class ContainerRuntimeConfig:
+    """Resolved configuration for one-shot container command execution."""
+
+    runtime: str
+    image: str | None
+    network: str = "bridge"
+    add_hosts: tuple[str, ...] = ()
 
 
 _runtime_profiles: dict[str, AgentRuntimeProfile] = {}
@@ -58,7 +74,7 @@ def register_agent_runtime_profile(
 def get_deepagents_backend(model_config: ModelConfig) -> str:
     """Return the configured DeepAgents backend name."""
 
-    return str(
+    backend = str(
         get_agent_runtime_option(
             model_config,
             "backend",
@@ -66,6 +82,12 @@ def get_deepagents_backend(model_config: ModelConfig) -> str:
             legacy_attr="deepagents_backend",
         )
     )
+    if backend not in DEEPAGENTS_BACKENDS:
+        allowed = ", ".join(sorted(DEEPAGENTS_BACKENDS))
+        raise ValueError(f"agent_runtime backend for langchain_deep_agents must be one of: {allowed}")
+    if backend == LEGACY_DOCKER_BACKEND:
+        return CONTAINER_BACKEND
+    return backend
 
 
 def get_claude_sdk_backend(model_config: ModelConfig) -> str:
@@ -75,7 +97,16 @@ def get_claude_sdk_backend(model_config: ModelConfig) -> str:
     if backend not in CLAUDE_SDK_BACKENDS:
         allowed = ", ".join(sorted(CLAUDE_SDK_BACKENDS))
         raise ValueError(f"agent_runtime backend for claude_agent_sdk must be one of: {allowed}")
+    if backend == LEGACY_DOCKER_BACKEND:
+        return CONTAINER_BACKEND
     return backend
+
+
+def is_container_backend(model_config: ModelConfig) -> bool:
+    """Return whether this model is configured for containerized execution."""
+
+    backend = str(get_agent_runtime_option(model_config, "backend", "native"))
+    return backend in CONTAINER_BACKEND_ALIASES
 
 
 def get_agent_runtime_access_mode(model_config: ModelConfig) -> str:
@@ -91,7 +122,7 @@ def get_agent_runtime_access_mode(model_config: ModelConfig) -> str:
 def claude_sdk_sandbox_enabled(model_config: ModelConfig) -> bool:
     """Return whether Claude Agent SDK native sandboxing is enabled."""
 
-    if get_claude_sdk_backend(model_config) == "docker":
+    if get_claude_sdk_backend(model_config) == CONTAINER_BACKEND:
         return False
     return bool(
         get_agent_runtime_option(
@@ -132,6 +163,73 @@ def get_agent_runtime_option(
     if legacy_attr and hasattr(model_config, legacy_attr):
         return getattr(model_config, legacy_attr)
     return default
+
+
+def _runtime_option_alias(
+    model_config: ModelConfig,
+    preferred_key: str,
+    legacy_key: str,
+    default: object = None,
+) -> object:
+    options = get_agent_runtime_options(model_config)
+    if preferred_key in options:
+        return options[preferred_key]
+    if legacy_key in options:
+        return options[legacy_key]
+    return default
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, list | tuple):
+        return tuple(str(item) for item in value)
+    return (str(value),)
+
+
+def get_container_runtime_config(model_config: ModelConfig) -> ContainerRuntimeConfig:
+    """Resolve neutral container runtime options with Docker compatibility aliases."""
+
+    runtime = str(get_agent_runtime_option(model_config, "container_runtime", "docker"))
+    if runtime not in CONTAINER_RUNTIMES:
+        allowed = ", ".join(sorted(CONTAINER_RUNTIMES))
+        raise ValueError(f"agent_runtime container_runtime must be one of: {allowed}")
+
+    image = _runtime_option_alias(model_config, "container_image", "docker_image")
+    network = str(_runtime_option_alias(model_config, "container_network", "docker_network", "bridge"))
+    add_hosts = _string_tuple(_runtime_option_alias(model_config, "container_add_hosts", "docker_add_hosts"))
+    if runtime == "docker":
+        if network not in {"bridge", "none"}:
+            from karenina.ports import AdapterUnavailableError
+
+            raise AdapterUnavailableError(
+                "agent_runtime container_network must be 'bridge' or 'none' for Docker",
+                reason="invalid_container_network",
+            )
+    else:
+        if network not in {"bridge", ""}:
+            from karenina.ports import AdapterUnavailableError
+
+            raise AdapterUnavailableError(
+                f"agent_runtime container_network={network!r} is Docker-only and is not supported for {runtime}",
+                reason="unsupported_container_network",
+            )
+        if add_hosts:
+            from karenina.ports import AdapterUnavailableError
+
+            raise AdapterUnavailableError(
+                f"agent_runtime container_add_hosts is Docker-only and is not supported for {runtime}",
+                reason="unsupported_container_add_hosts",
+            )
+
+    return ContainerRuntimeConfig(
+        runtime=runtime,
+        image=str(image) if image else None,
+        network=network or "bridge",
+        add_hosts=add_hosts,
+    )
 
 
 def _docker_command_output(result: subprocess.CompletedProcess[str]) -> str:
@@ -222,14 +320,131 @@ def preflight_docker_runtime(
         )
 
 
+def preflight_container_runtime(
+    config: ContainerRuntimeConfig,
+    *,
+    timeout: int = DOCKER_PREFLIGHT_TIMEOUT_SECONDS,
+    check_image: bool = True,
+) -> None:
+    """Validate a configured container runtime before an agent starts."""
+
+    if config.runtime == "docker":
+        preflight_docker_runtime(image=config.image, timeout=timeout, check_image=check_image)
+        return
+
+    executable = config.runtime
+    if shutil.which(executable) is None:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            f"{executable} is required for agent_runtime container_runtime='{config.runtime}', "
+            f"but the {executable} command was not found",
+            reason=f"{config.runtime}_unavailable",
+        )
+
+    if not check_image:
+        return
+    if not config.image:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            f"agent_runtime container_image is required when container_runtime='{config.runtime}'",
+            reason="missing_container_image",
+        )
+
+    image_path = Path(config.image).expanduser()
+    if image_path.suffix != ".sif" or not image_path.is_file():
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            f"agent_runtime container_image for {config.runtime} must be an existing local .sif file: {config.image}",
+            reason="container_image_unavailable",
+        )
+
+
+def _env_flags_for_docker(env: dict[str, str | None]) -> list[str]:
+    flags: list[str] = []
+    for name, value in env.items():
+        if value is None:
+            flags.extend(["--env", name])
+        else:
+            flags.extend(["--env", f"{name}={value}"])
+    return flags
+
+
+def _env_flags_for_singularity(env: dict[str, str | None]) -> list[str]:
+    flags: list[str] = []
+    for name, value in env.items():
+        env_value = os.environ.get(name, "") if value is None else value
+        flags.extend(["--env", f"{name}={env_value}"])
+    return flags
+
+
+def build_container_command(
+    *,
+    config: ContainerRuntimeConfig,
+    host_workspace: str | Path,
+    argv: list[str],
+    env: dict[str, str | None] | None = None,
+    interactive: bool = False,
+) -> list[str]:
+    """Build a one-shot command for Docker, Singularity, or Apptainer."""
+
+    if not config.image:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            "agent_runtime container_image is required for container execution",
+            reason="missing_container_image",
+        )
+    host_workspace = str(Path(host_workspace).resolve())
+    env = env or {}
+
+    if config.runtime == "docker":
+        command = ["docker", "run", "--rm"]
+        if interactive:
+            command.append("-i")
+        command.extend(
+            [
+                "--network",
+                config.network,
+                "--workdir",
+                SANDBOX_WORKSPACE_PATH,
+                "--volume",
+                f"{host_workspace}:{SANDBOX_WORKSPACE_PATH}:rw",
+            ]
+        )
+        for host_mapping in config.add_hosts:
+            command.extend(["--add-host", host_mapping])
+        command.extend(_env_flags_for_docker(env))
+        command.extend(["--pids-limit", "256"])
+        if hasattr(os, "getuid") and hasattr(os, "getgid"):
+            command.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
+        command.extend([config.image, *argv])
+        return command
+
+    command = [
+        config.runtime,
+        "exec",
+        "--bind",
+        f"{host_workspace}:{SANDBOX_WORKSPACE_PATH}:rw",
+        "--pwd",
+        SANDBOX_WORKSPACE_PATH,
+        *_env_flags_for_singularity(env),
+        config.image,
+        *argv,
+    ]
+    return command
+
+
 def _deepagents_capabilities(model_config: ModelConfig) -> PortCapabilities:
     backend = get_deepagents_backend(model_config)
     access_mode = get_agent_runtime_access_mode(model_config)
     return PortCapabilities(
         supports_system_prompt=True,
         supports_file_tools=True,
-        supports_code_execution=access_mode != "read_only" and backend in {"docker", "local_shell"},
-        uses_sandboxed_execution=backend == "docker",
+        supports_code_execution=access_mode != "read_only" and backend in {CONTAINER_BACKEND, "local_shell"},
+        uses_sandboxed_execution=backend == CONTAINER_BACKEND,
     )
 
 
@@ -240,7 +455,7 @@ def _claude_sdk_capabilities(model_config: ModelConfig) -> PortCapabilities:
         supports_system_prompt=True,
         supports_file_tools=True,
         supports_code_execution=access_mode != "read_only",
-        uses_sandboxed_execution=backend == "docker" or claude_sdk_sandbox_enabled(model_config),
+        uses_sandboxed_execution=backend == CONTAINER_BACKEND or claude_sdk_sandbox_enabled(model_config),
     )
 
 
@@ -263,7 +478,7 @@ def _default_map_path_for_prompt(
 def _deepagents_workspace_path_for_prompt(model_config: ModelConfig, workspace_path: Path | None) -> str | None:
     if workspace_path is None:
         return None
-    if get_deepagents_backend(model_config) == "docker":
+    if get_deepagents_backend(model_config) == CONTAINER_BACKEND:
         return SANDBOX_WORKSPACE_PATH
     return str(workspace_path)
 
@@ -275,7 +490,7 @@ def _deepagents_map_path_for_prompt(
 ) -> str | None:
     if path is None:
         return None
-    if get_deepagents_backend(model_config) != "docker" or workspace_path is None:
+    if get_deepagents_backend(model_config) != CONTAINER_BACKEND or workspace_path is None:
         return str(path)
 
     try:
@@ -291,7 +506,7 @@ def _deepagents_map_path_for_prompt(
 def _claude_sdk_workspace_path_for_prompt(model_config: ModelConfig, workspace_path: Path | None) -> str | None:
     if workspace_path is None:
         return None
-    if get_claude_sdk_backend(model_config) == "docker":
+    if get_claude_sdk_backend(model_config) == CONTAINER_BACKEND:
         return SANDBOX_WORKSPACE_PATH
     return str(workspace_path)
 
@@ -303,7 +518,7 @@ def _claude_sdk_map_path_for_prompt(
 ) -> str | None:
     if path is None:
         return None
-    if get_claude_sdk_backend(model_config) != "docker" or workspace_path is None:
+    if get_claude_sdk_backend(model_config) != CONTAINER_BACKEND or workspace_path is None:
         return str(path)
 
     try:

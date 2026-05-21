@@ -25,11 +25,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from karenina.adapters.agent_runtime import (
+    CONTAINER_BACKEND,
     get_agent_runtime_access_mode,
     get_agent_runtime_capabilities,
     get_agent_runtime_option,
     get_claude_sdk_backend,
-    preflight_docker_runtime,
+    get_container_runtime_config,
+    preflight_container_runtime,
 )
 from karenina.ports import (
     AdapterUnavailableError,
@@ -59,7 +61,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CLAUDE_SDK_READ_ONLY_TOOLS = ("Read", "Grep", "Glob", "LS")
-CLAUDE_SDK_DOCKER_WRAPPER = Path(__file__).with_name("docker_cli_wrapper.py")
+CLAUDE_SDK_CONTAINER_WRAPPER = Path(__file__).with_name("docker_cli_wrapper.py")
+CLAUDE_SDK_DOCKER_WRAPPER = CLAUDE_SDK_CONTAINER_WRAPPER
 ZAI_ANTHROPIC_BASE_URL_MARKER = "api.z.ai/api/anthropic"
 
 
@@ -123,7 +126,7 @@ class ClaudeSDKAgentAdapter:
     def _build_sandbox_settings(self) -> dict[str, Any] | None:
         """Build Claude Code sandbox settings for Bash isolation."""
 
-        if get_claude_sdk_backend(self._config) == "docker":
+        if get_claude_sdk_backend(self._config) == CONTAINER_BACKEND:
             return None
         if not get_agent_runtime_option(
             self._config,
@@ -165,38 +168,40 @@ class ClaudeSDKAgentAdapter:
             "UV_PROJECT_ENVIRONMENT": str(workspace_path / ".venv"),
         }
 
-    def _docker_wrapper_env(self, workspace_path: Path | None) -> dict[str, str]:
-        """Return environment required by the Docker CLI wrapper."""
+    def _container_wrapper_env(self, workspace_path: Path | None) -> dict[str, str]:
+        """Return environment required by the container CLI wrapper."""
 
         if workspace_path is None:
             raise AdapterUnavailableError(
-                "agent_runtime backend='docker' requires an AgentConfig.workspace_path",
+                "agent_runtime backend='container' requires an AgentConfig.workspace_path",
                 reason="missing_workspace",
             )
-        docker_image = str(get_agent_runtime_option(self._config, "docker_image", ""))
-        if not docker_image:
+        container_config = get_container_runtime_config(self._config)
+        if not container_config.image:
             raise AdapterUnavailableError(
-                "agent_runtime docker_image is required when claude_agent_sdk backend='docker'",
-                reason="missing_claude_sdk_docker_image",
+                "agent_runtime container_image is required when claude_agent_sdk backend='container'",
+                reason="missing_claude_sdk_container_image",
             )
-        docker_network = str(get_agent_runtime_option(self._config, "docker_network", "bridge"))
-        if docker_network not in {"bridge", "none"}:
-            raise AdapterUnavailableError(
-                "agent_runtime docker_network must be 'bridge' or 'none'",
-                reason="invalid_claude_sdk_docker_network",
-            )
-        preflight_docker_runtime(image=docker_image)
+        preflight_container_runtime(container_config)
         env = {
-            "KARENINA_CLAUDE_DOCKER_WORKSPACE": str(workspace_path.resolve()),
-            "KARENINA_CLAUDE_DOCKER_IMAGE": docker_image,
-            "KARENINA_CLAUDE_DOCKER_NETWORK": docker_network,
+            "KARENINA_CLAUDE_CONTAINER_WORKSPACE": str(workspace_path.resolve()),
+            "KARENINA_CLAUDE_CONTAINER_RUNTIME": container_config.runtime,
+            "KARENINA_CLAUDE_CONTAINER_IMAGE": container_config.image,
+            "KARENINA_CLAUDE_CONTAINER_NETWORK": container_config.network,
             "CLAUDE_CONFIG_DIR": "/tmp/claude-config",
         }
-        docker_add_hosts = get_agent_runtime_option(self._config, "docker_add_hosts", None)
-        if isinstance(docker_add_hosts, str):
-            env["KARENINA_CLAUDE_DOCKER_ADD_HOSTS"] = docker_add_hosts
-        elif isinstance(docker_add_hosts, list):
-            env["KARENINA_CLAUDE_DOCKER_ADD_HOSTS"] = ",".join(str(item) for item in docker_add_hosts)
+        if container_config.add_hosts:
+            env["KARENINA_CLAUDE_CONTAINER_ADD_HOSTS"] = ",".join(container_config.add_hosts)
+        if container_config.runtime == "docker":
+            env.update(
+                {
+                    "KARENINA_CLAUDE_DOCKER_WORKSPACE": str(workspace_path.resolve()),
+                    "KARENINA_CLAUDE_DOCKER_IMAGE": container_config.image,
+                    "KARENINA_CLAUDE_DOCKER_NETWORK": container_config.network,
+                }
+            )
+            if container_config.add_hosts:
+                env["KARENINA_CLAUDE_DOCKER_ADD_HOSTS"] = ",".join(container_config.add_hosts)
         return env
 
     def _build_options(
@@ -222,12 +227,14 @@ class ClaudeSDKAgentAdapter:
         runtime_backend = get_claude_sdk_backend(self._config)
         access_mode = get_agent_runtime_access_mode(self._config)
         default_permission_mode = (
-            "bypassPermissions" if runtime_backend == "docker" and access_mode == "read_write" else "acceptEdits"
+            "bypassPermissions"
+            if runtime_backend == CONTAINER_BACKEND and access_mode == "read_write"
+            else "acceptEdits"
         )
 
         options_kwargs: dict[str, Any] = {
             # In native mode, use sandbox-aware permissions by default. For
-            # Docker read-write mode, the container is the execution boundary,
+            # Container read-write mode, the container is the execution boundary,
             # so non-interactive runs need Bash to execute without prompts.
             # Keep read-only mode on acceptEdits because bypassPermissions does
             # not respect allowed_tools.
@@ -342,9 +349,9 @@ class ClaudeSDKAgentAdapter:
         if parent_claude_config_dir:
             env_vars["CLAUDE_CONFIG_DIR"] = parent_claude_config_dir
 
-        if get_claude_sdk_backend(self._config) == "docker":
-            env_vars.update(self._docker_wrapper_env(workspace_path))
-            options_kwargs["cli_path"] = str(CLAUDE_SDK_DOCKER_WRAPPER)
+        if get_claude_sdk_backend(self._config) == CONTAINER_BACKEND:
+            env_vars.update(self._container_wrapper_env(workspace_path))
+            options_kwargs["cli_path"] = str(CLAUDE_SDK_CONTAINER_WRAPPER)
 
         if env_vars:
             options_kwargs["env"] = env_vars

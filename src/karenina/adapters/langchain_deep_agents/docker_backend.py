@@ -1,8 +1,7 @@
-"""Docker-backed DeepAgents sandbox backend."""
+"""Container-backed DeepAgents sandbox backend."""
 
 from __future__ import annotations
 
-import os
 import subprocess
 import uuid
 from pathlib import Path
@@ -11,52 +10,48 @@ from typing import cast
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.backends.protocol import ExecuteResponse, SandboxBackendProtocol
 
-from karenina.adapters.agent_runtime import preflight_docker_runtime
+from karenina.adapters.agent_runtime import (
+    SANDBOX_WORKSPACE_PATH,
+    ContainerRuntimeConfig,
+    build_container_command,
+    preflight_container_runtime,
+)
 from karenina.ports import AdapterUnavailableError
 
-SANDBOX_WORKSPACE_PATH = "/workspace"
 
-
-class DockerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: ignore[misc]
-    """DeepAgents backend that maps a host workspace to `/workspace` in Docker."""
+class ContainerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: ignore[misc]
+    """DeepAgents backend that maps a host workspace to `/workspace` in a container."""
 
     def __init__(
         self,
         *,
         root_dir: str | Path,
-        image: str,
-        network: str = "bridge",
+        container_config: ContainerRuntimeConfig,
         timeout: int = 120,
         max_output_bytes: int = 100_000,
     ) -> None:
-        if not image:
+        if not container_config.image:
             raise AdapterUnavailableError(
-                "agent_runtime docker_image is required when backend='docker'",
-                reason="missing_deepagents_docker_image",
-            )
-        if network not in {"bridge", "none"}:
-            raise AdapterUnavailableError(
-                "agent_runtime docker_network must be 'bridge' or 'none'",
-                reason="invalid_deepagents_docker_network",
+                "agent_runtime container_image is required when backend='container'",
+                reason="missing_deepagents_container_image",
             )
         self._host_workspace = Path(root_dir).resolve()
         if not self._host_workspace.is_dir():
             raise AdapterUnavailableError(
-                f"Docker sandbox workspace does not exist: {self._host_workspace}",
+                f"Container sandbox workspace does not exist: {self._host_workspace}",
                 reason="missing_workspace",
             )
-        preflight_docker_runtime(image=image)
+        preflight_container_runtime(container_config)
 
         super().__init__(
             root_dir=self._host_workspace,
             virtual_mode=True,
             max_file_size_mb=10,
         )
-        self._image = image
-        self._network = network
+        self._container_config = container_config
         self._default_timeout = timeout
         self._max_output_bytes = max_output_bytes
-        self._sandbox_id = f"docker-{uuid.uuid4().hex[:8]}"
+        self._sandbox_id = f"{container_config.runtime}-{uuid.uuid4().hex[:8]}"
 
     @property
     def id(self) -> str:
@@ -88,39 +83,17 @@ class DockerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: 
 
         return command.replace(str(self._host_workspace), SANDBOX_WORKSPACE_PATH)
 
-    def _docker_command(self, command: str) -> list[str]:
-        docker_cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "--network",
-            self._network,
-            "--workdir",
-            SANDBOX_WORKSPACE_PATH,
-            "--volume",
-            f"{self._host_workspace}:{SANDBOX_WORKSPACE_PATH}:rw",
-            "--env",
-            "UV_LINK_MODE=copy",
-            "--env",
-            "UV_CACHE_DIR=/tmp/uv-cache",
-            "--env",
-            "PATH=/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "--pids-limit",
-            "256",
-        ]
-
-        if hasattr(os, "getuid") and hasattr(os, "getgid"):
-            docker_cmd.extend(["--user", f"{os.getuid()}:{os.getgid()}"])
-
-        docker_cmd.extend(
-            [
-                self._image,
-                "/bin/sh",
-                "-lc",
-                self._command_for_container(command),
-            ]
+    def _container_command(self, command: str) -> list[str]:
+        return build_container_command(
+            config=self._container_config,
+            host_workspace=self._host_workspace,
+            argv=["/bin/sh", "-lc", self._command_for_container(command)],
+            env={
+                "UV_LINK_MODE": "copy",
+                "UV_CACHE_DIR": "/tmp/uv-cache",
+                "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            },
         )
-        return docker_cmd
 
     def execute(
         self,
@@ -147,7 +120,7 @@ class DockerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: 
 
         try:
             result = subprocess.run(  # noqa: S603
-                self._docker_command(command),
+                self._container_command(command),
                 check=False,
                 capture_output=True,
                 text=True,
@@ -187,4 +160,28 @@ class DockerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: 
             output=output,
             exit_code=result.returncode,
             truncated=truncated,
+        )
+
+
+class DockerSandboxBackend(ContainerSandboxBackend):
+    """Compatibility wrapper for callers importing the old Docker backend."""
+
+    def __init__(
+        self,
+        *,
+        root_dir: str | Path,
+        image: str,
+        network: str = "bridge",
+        timeout: int = 120,
+        max_output_bytes: int = 100_000,
+    ) -> None:
+        super().__init__(
+            root_dir=root_dir,
+            container_config=ContainerRuntimeConfig(
+                runtime="docker",
+                image=image,
+                network=network,
+            ),
+            timeout=timeout,
+            max_output_bytes=max_output_bytes,
         )

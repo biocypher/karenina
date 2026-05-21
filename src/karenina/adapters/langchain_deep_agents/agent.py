@@ -20,9 +20,11 @@ from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, cast
 
 from karenina.adapters.agent_runtime import (
+    CONTAINER_BACKEND,
     get_agent_runtime_access_mode,
     get_agent_runtime_capabilities,
     get_agent_runtime_option,
+    get_container_runtime_config,
     get_deepagents_backend,
 )
 from karenina.ports import (
@@ -145,26 +147,25 @@ class DeepAgentsAgentAdapter:
 
         backend = get_deepagents_backend(self._config)
         access_mode = get_agent_runtime_access_mode(self._config)
-        if backend == "docker":
+        if backend == CONTAINER_BACKEND:
             if workspace_path is None:
                 raise AdapterUnavailableError(
-                    "agent_runtime backend='docker' requires an AgentConfig.workspace_path",
+                    "agent_runtime backend='container' requires an AgentConfig.workspace_path",
                     reason="missing_workspace",
                 )
-            from .docker_backend import DockerSandboxBackend
+            from .docker_backend import ContainerSandboxBackend
 
-            docker_backend = DockerSandboxBackend(
+            container_backend = ContainerSandboxBackend(
                 root_dir=workspace_path,
-                image=str(get_agent_runtime_option(self._config, "docker_image", "")),
-                network=str(get_agent_runtime_option(self._config, "docker_network", "bridge")),
+                container_config=get_container_runtime_config(self._config),
                 timeout=_runtime_int_option(self._config, "execute_timeout", 120),
                 max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
             )
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(docker_backend)
-            return docker_backend
+                return ReadOnlyBackend(container_backend)
+            return container_backend
 
         if backend == "local_shell":
             if workspace_path is None:

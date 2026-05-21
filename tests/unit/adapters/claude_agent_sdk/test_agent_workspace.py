@@ -41,8 +41,8 @@ def patch_claude_agent_sdk(monkeypatch):
 @pytest.fixture
 def no_docker_preflight(monkeypatch):
     monkeypatch.setattr(
-        "karenina.adapters.claude_agent_sdk.agent.preflight_docker_runtime",
-        lambda **_kwargs: None,
+        "karenina.adapters.claude_agent_sdk.agent.preflight_container_runtime",
+        lambda *_args, **_kwargs: None,
     )
 
 
@@ -174,8 +174,8 @@ class TestWorkspacePath:
         workspace.mkdir()
         captured: dict[str, str | None] = {}
         monkeypatch.setattr(
-            "karenina.adapters.claude_agent_sdk.agent.preflight_docker_runtime",
-            lambda *, image, **_kwargs: captured.update({"image": image}),
+            "karenina.adapters.claude_agent_sdk.agent.preflight_container_runtime",
+            lambda config, **_kwargs: captured.update({"image": config.image, "runtime": config.runtime}),
         )
         config = ModelConfig(
             id="test",
@@ -196,7 +196,7 @@ class TestWorkspacePath:
             config=AgentConfig(workspace_path=workspace),
         )
 
-        assert captured == {"image": "karenina-bixbench-claude:latest"}
+        assert captured == {"image": "karenina-bixbench-claude:latest", "runtime": "docker"}
 
     @pytest.mark.usefixtures("no_docker_preflight")
     def test_zai_anthropic_endpoint_sets_auth_token_and_glm_mapping(self, tmp_path):
@@ -353,6 +353,28 @@ class TestDockerCliWrapper:
         assert "ANTHROPIC_DEFAULT_SONNET_MODEL" in command
         assert "ANTHROPIC_DEFAULT_OPUS_MODEL" in command
         assert "karenina-bixbench-claude:latest" in command
+        assert "claude" in command
+        assert str(workspace) not in command[-1]
+        assert "/workspace" in command[-1]
+
+    def test_build_singularity_command_maps_workspace(self, monkeypatch, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        image = tmp_path / "karenina.sif"
+        image.write_text("")
+        monkeypatch.setenv("KARENINA_CLAUDE_CONTAINER_WORKSPACE", str(workspace))
+        monkeypatch.setenv("KARENINA_CLAUDE_CONTAINER_RUNTIME", "singularity")
+        monkeypatch.setenv("KARENINA_CLAUDE_CONTAINER_IMAGE", str(image))
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://hl-codon-gpu-020:8000")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "EMPTY")
+
+        command = build_docker_command(["--settings", f'{{"cwd":"{workspace}"}}'])
+
+        assert command[:2] == ["singularity", "exec"]
+        assert f"{workspace.resolve()}:/workspace:rw" in command
+        assert "--pwd" in command
+        assert command[command.index("--pwd") + 1] == "/workspace"
+        assert str(image) in command
         assert "claude" in command
         assert str(workspace) not in command[-1]
         assert "/workspace" in command[-1]

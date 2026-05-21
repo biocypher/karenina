@@ -8,8 +8,13 @@ import pytest
 
 from karenina.adapters.agent_runtime import (
     AgentRuntimeProfile,
+    ContainerRuntimeConfig,
+    build_container_command,
     get_agent_runtime_capabilities,
+    get_claude_sdk_backend,
+    get_container_runtime_config,
     map_path_for_prompt,
+    preflight_container_runtime,
     preflight_docker_runtime,
     register_agent_runtime_profile,
     workspace_path_for_prompt,
@@ -109,6 +114,104 @@ def test_claude_sdk_docker_capabilities_report_sandboxed_execution():
     assert capabilities.supports_file_tools is True
     assert capabilities.supports_code_execution is True
     assert capabilities.uses_sandboxed_execution is True
+
+
+def test_legacy_docker_backend_normalizes_to_container_runtime():
+    config = ModelConfig(
+        id="claude",
+        model_name="claude-sonnet-4-20250514",
+        interface="claude_agent_sdk",
+        extra_kwargs={
+            "agent_runtime": {
+                "backend": "docker",
+                "docker_image": "karenina-bixbench-claude:latest",
+            }
+        },
+    )
+
+    assert get_claude_sdk_backend(config) == "container"
+    container_config = get_container_runtime_config(config)
+    assert container_config.runtime == "docker"
+    assert container_config.image == "karenina-bixbench-claude:latest"
+
+
+def test_singularity_container_workspace_maps_to_container_path(tmp_path):
+    config = ModelConfig(
+        id="claude",
+        model_name="claude-sonnet-4-20250514",
+        interface="claude_agent_sdk",
+        extra_kwargs={
+            "agent_runtime": {
+                "backend": "container",
+                "container_runtime": "singularity",
+                "container_image": str(tmp_path / "image.sif"),
+            }
+        },
+    )
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    trace_path = workspace / "traces" / "trace.md"
+
+    assert workspace_path_for_prompt(config, workspace) == "/workspace"
+    assert map_path_for_prompt(config, trace_path, workspace) == "/workspace/traces/trace.md"
+
+
+def test_singularity_preflight_requires_existing_sif(monkeypatch, tmp_path):
+    monkeypatch.setattr("karenina.adapters.agent_runtime.shutil.which", lambda _name: "/usr/bin/singularity")
+
+    with pytest.raises(AdapterUnavailableError) as exc_info:
+        preflight_container_runtime(
+            ContainerRuntimeConfig(
+                runtime="singularity",
+                image=str(tmp_path / "missing.sif"),
+            )
+        )
+
+    assert exc_info.value.reason == "container_image_unavailable"
+
+
+def test_singularity_command_binds_workspace_and_sets_env(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    image = tmp_path / "image.sif"
+    image.write_text("")
+
+    command = build_container_command(
+        config=ContainerRuntimeConfig(runtime="singularity", image=str(image)),
+        host_workspace=workspace,
+        argv=["/bin/sh", "-lc", "pwd"],
+        env={"UV_LINK_MODE": "copy"},
+    )
+
+    assert command[:2] == ["singularity", "exec"]
+    assert f"{workspace.resolve()}:/workspace:rw" in command
+    assert "--pwd" in command
+    assert command[command.index("--pwd") + 1] == "/workspace"
+    assert "--env" in command
+    assert "UV_LINK_MODE=copy" in command
+    assert str(image) in command
+
+
+def test_singularity_rejects_docker_only_add_hosts():
+    config = ModelConfig(
+        id="claude",
+        model_name="claude-sonnet-4-20250514",
+        interface="claude_agent_sdk",
+        extra_kwargs={
+            "agent_runtime": {
+                "backend": "container",
+                "container_runtime": "singularity",
+                "container_image": "/tmp/image.sif",
+                "container_add_hosts": ["internal:10.0.0.1"],
+            }
+        },
+    )
+
+    with pytest.raises(AdapterUnavailableError) as exc_info:
+        get_container_runtime_config(config)
+
+    assert exc_info.value.reason == "unsupported_container_add_hosts"
 
 
 def test_runtime_profile_registry_allows_extension_adapters():
