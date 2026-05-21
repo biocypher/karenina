@@ -5,12 +5,15 @@ as each task completes. It is the single extension point for progressive
 save, crash recovery, database auto-save, and any other per-result
 persistence the caller may need.
 
-Three implementations live here:
+Four implementations live here:
 
 - :class:`ProgressiveFileSink`: appends each completed result to a JSONL
   sidecar and maintains a :file:`.state` manifest, so a crashed run can be
   resumed via :func:`VerificationConfig.skip_triples`. Replaces the legacy
   `ProgressiveSaveManager` full-rewrite strategy.
+- :class:`AgenticProgressiveFileSink`: extends the progressive file sink with
+  readable trace sidecars and parser-failure retry semantics for agentic
+  workspace runs.
 - :class:`CompositeSink`: fans out to several sinks in order; used when a
   single run wants both file progressive-save and database auto-save.
 - :class:`InMemorySink`: test-friendly sink that just buffers results.
@@ -32,9 +35,11 @@ from typing import Any, Protocol, runtime_checkable
 from karenina.benchmark.verification.stages.helpers.results_exporter import (
     export_verification_results_json_stream,
 )
+from karenina.benchmark.verification.workspace_capture import safe_path_component
 from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.entities import Rubric
 from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationJob
 from karenina.utils.file_ops import atomic_write
 from karenina.utils.progressive_save import TaskIdentifier
@@ -71,6 +76,36 @@ def _is_content_failure(failure: Any) -> bool:
     return bool(_failure_attr(failure, "group") == "content" or _failure_attr(failure, "category") == "content")
 
 
+def _is_parser_stage(stage: str | None) -> bool:
+    return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate"}
+
+
+def _has_usable_answer_trace(result: VerificationResult) -> bool:
+    template = result.template
+    if template is None:
+        return False
+    return bool((template.raw_llm_response or "").strip())
+
+
+def _is_retryable_parser_failure(result: VerificationResult) -> bool:
+    """Return True when a result should checkpoint answer output, not skip resume.
+
+    Agentic workspace runs can fail after answer generation, during the
+    investigation or structured extraction/parser phase. Those rows contain a
+    useful answer trace and workspace artifacts, so resume should rehydrate the
+    answer cache and retry parsing/verification instead of rerunning the
+    answerer or treating the task as terminal.
+    """
+
+    failure = result.metadata.failure
+    if failure is None or not _has_usable_answer_trace(result):
+        return False
+
+    category = _failure_attr(failure, "category")
+    stage = _failure_attr(failure, "stage")
+    return bool(category == FailureCategory.PARSING.value or _is_parser_stage(stage))
+
+
 def _export_scenario_turn(row: VerificationResult) -> dict[str, Any]:
     template = row.template
     return {
@@ -102,6 +137,36 @@ def _scenario_manifest_key(result: VerificationResult, manifest: Iterable[str]) 
     if fallback in candidates:
         return fallback
     return fallback
+
+
+def _dedupe_latest_by_manifest_key(
+    rows: Iterable[VerificationResult],
+    *,
+    manifest: Iterable[str] = (),
+) -> list[VerificationResult]:
+    """Keep the latest row for each manifest key while preserving first-key order."""
+
+    latest: dict[str, VerificationResult] = {}
+    order: list[str] = []
+    for row in rows:
+        key = _scenario_manifest_key(row, manifest)
+        if key not in latest:
+            order.append(key)
+        latest[key] = row
+    return [latest[key] for key in order]
+
+
+def _count_success_failure(rows: Iterable[VerificationResult]) -> tuple[int, int]:
+    """Count passing and failing rows using the structured failure marker."""
+
+    successful = 0
+    failed = 0
+    for row in rows:
+        if row.metadata.failure is None:
+            successful += 1
+        else:
+            failed += 1
+    return successful, failed
 
 
 def _reconstruct_scenario_results_for_export(
@@ -492,6 +557,11 @@ class ProgressiveFileSink:
         """Total tasks in the manifest."""
         return len(self._manifest)
 
+    @property
+    def task_manifest(self) -> list[str]:
+        """Task manifest keys recorded for this run."""
+        return list(self._manifest)
+
     def get_all_results(self) -> list[VerificationResult]:
         """Return a shallow copy of buffered completed results."""
         return list(self._results)
@@ -547,13 +617,17 @@ class ProgressiveFileSink:
         """
         target = output_path or self.output_path
         now = time.time()
+        results = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
+        latest_rows = _dedupe_latest_by_manifest_key(results, manifest=self._manifest)
+        successful_count, failed_count = _count_success_failure(latest_rows)
         job = VerificationJob(
             job_id=f"progressive-{int(self._start_time or now)}",
             run_name="progressive",
             status="completed",
             config=self.config,
             total_questions=self.total_tasks,
-            successful_count=self.completed_count,
+            successful_count=successful_count,
+            failed_count=failed_count,
             start_time=self._start_time,
             end_time=now,
         )
@@ -561,7 +635,6 @@ class ProgressiveFileSink:
         # called before any on_result (e.g. the empty-run case), in which case
         # jsonl_path was never created; guard is mandatory because
         # _read_jsonl_results opens the path unconditionally.
-        results = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
         scenario_results = _reconstruct_scenario_results_for_export(results, manifest=self._manifest)
         export_verification_results_json_stream(
             job,
@@ -581,6 +654,193 @@ class ProgressiveFileSink:
                     path.unlink()
             except OSError as e:
                 logger.warning("Failed to remove %s: %s", path, e)
+
+
+# ---------------------------------------------------------------------------
+# AgenticProgressiveFileSink
+# ---------------------------------------------------------------------------
+
+
+class AgenticProgressiveFileSink(ProgressiveFileSink):
+    """Progressive sink for agentic workspace benchmarks.
+
+    This sink keeps the standard JSONL + state resume machinery, adds readable
+    trace sidecars, and treats parser-stage failures with a usable answer trace
+    as resumable checkpoints. On resume those rows are exposed through
+    :meth:`iter_results` for answer-cache hydration, but omitted from
+    :meth:`completed_triples` so parsing can be retried.
+    """
+
+    def __init__(
+        self,
+        output_path: Path,
+        config: VerificationConfig,
+        benchmark_path: str,
+        global_rubric: Rubric | None = None,
+        *,
+        trace_output_dir: Path | None = None,
+        trace_layout: str = "question",
+        keep_progress_sidecars: bool = False,
+        write_partial_export: bool = True,
+    ) -> None:
+        super().__init__(
+            output_path=output_path,
+            config=config,
+            benchmark_path=benchmark_path,
+            global_rubric=global_rubric,
+        )
+        if trace_layout not in {"question", "result"}:
+            raise ValueError("trace_layout must be 'question' or 'result'")
+        self.trace_output_dir = trace_output_dir
+        self.trace_layout = trace_layout
+        self.keep_progress_sidecars = keep_progress_sidecars
+        self.write_partial_export = write_partial_export
+
+    @classmethod
+    def load_for_resume(
+        cls,
+        state_path: Path,
+        *,
+        global_rubric: Rubric | None = None,
+        trace_output_dir: Path | None = None,
+        trace_layout: str = "question",
+        keep_progress_sidecars: bool = False,
+        write_partial_export: bool = True,
+    ) -> AgenticProgressiveFileSink:
+        base = ProgressiveFileSink.load_for_resume(state_path, global_rubric=global_rubric)
+        sink = cls(
+            output_path=base.output_path,
+            config=base.config,
+            benchmark_path=base.benchmark_path,
+            global_rubric=base.global_rubric,
+            trace_output_dir=trace_output_dir,
+            trace_layout=trace_layout,
+            keep_progress_sidecars=keep_progress_sidecars,
+            write_partial_export=write_partial_export,
+        )
+        sink._manifest = base.task_manifest
+        sink._completed = set(base._completed)
+        sink._failed = set(base._failed)
+        sink._start_time = base._start_time
+        sink._config_hash = base._config_hash
+        sink._results = base.get_all_results()
+        return sink
+
+    def completed_triples(self) -> set[TripleKey]:
+        """Return only terminal completed triples.
+
+        Parser-stage failures are intentionally excluded so resume retries
+        parsing while :meth:`iter_results` still exposes their answer traces
+        for cache hydration.
+        """
+
+        latest_rows = _dedupe_latest_by_manifest_key(self._results, manifest=self._manifest)
+        retryable = {
+            _scenario_manifest_key(result, self._manifest)
+            for result in latest_rows
+            if _is_retryable_parser_failure(result)
+        }
+        out: set[TripleKey] = set()
+        for key in self._completed - retryable:
+            try:
+                ident = TaskIdentifier.from_key(key)
+            except ValueError:
+                logger.warning("Skipping malformed task key in sink: %r", key)
+                continue
+            out.add(
+                (
+                    ident.question_id,
+                    ident.answering_canonical_key,
+                    ident.parsing_canonical_key,
+                    ident.replicate,
+                )
+            )
+        return out
+
+    def on_result(self, result: VerificationResult) -> None:
+        if not is_completed_result(result):
+            return
+        super().on_result(result)
+        self._write_trace_sidecars(result)
+
+    def on_finalize(self, *, all_complete: bool) -> None:
+        effective_all_complete = all_complete and not self._has_retryable_parser_failures()
+        if effective_all_complete:
+            self.write_final_export(is_complete=True)
+            if not self.keep_progress_sidecars:
+                self._delete_sidecars()
+            logger.info("AgenticProgressiveFileSink finalized: full export at %s", self.output_path)
+            return
+
+        if self.write_partial_export:
+            self.write_final_export(is_complete=False)
+        self._save_state()
+        logger.info(
+            "AgenticProgressiveFileSink left state in place for resume: %d/%d complete",
+            len(self._completed),
+            len(self._manifest),
+        )
+
+    def get_latest_result_set(self) -> VerificationResultSet:
+        """Return one latest result per task key, matching final export rows."""
+
+        return VerificationResultSet(results=_dedupe_latest_by_manifest_key(self._results, manifest=self._manifest))
+
+    def write_final_export(self, output_path: Path | None = None, *, is_complete: bool | None = None) -> Path:
+        target = output_path or self.output_path
+        now = time.time()
+        rows = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
+        latest_rows = _dedupe_latest_by_manifest_key(rows, manifest=self._manifest)
+        successful_count, failed_count = _count_success_failure(latest_rows)
+        job = VerificationJob(
+            job_id=f"progressive-{int(self._start_time or now)}",
+            run_name="progressive",
+            status="completed",
+            config=self.config,
+            total_questions=self.total_tasks,
+            successful_count=successful_count,
+            failed_count=failed_count,
+            start_time=self._start_time,
+            end_time=now,
+        )
+        scenario_results = _reconstruct_scenario_results_for_export(latest_rows, manifest=self._manifest)
+        export_verification_results_json_stream(
+            job,
+            iter(latest_rows),
+            self.global_rubric,
+            is_complete=is_complete
+            if is_complete is not None
+            else not self._has_retryable_parser_failures(latest_rows),
+            scenario_results=scenario_results or None,
+            out_path=target,
+        )
+        return target
+
+    def _has_retryable_parser_failures(self, rows: Iterable[VerificationResult] | None = None) -> bool:
+        source = (
+            list(rows) if rows is not None else _dedupe_latest_by_manifest_key(self._results, manifest=self._manifest)
+        )
+        return any(_is_retryable_parser_failure(result) for result in source)
+
+    def _trace_dir_for_result(self, result: VerificationResult) -> Path | None:
+        if self.trace_output_dir is None:
+            return None
+        question = safe_path_component(result.metadata.question_id)
+        if self.trace_layout == "result":
+            result_id = safe_path_component(result.metadata.result_id)
+            return self.trace_output_dir / f"{question}__{result_id}"
+        return self.trace_output_dir / question
+
+    def _write_trace_sidecars(self, result: VerificationResult) -> None:
+        trace_dir = self._trace_dir_for_result(result)
+        template = result.template
+        if trace_dir is None or template is None:
+            return
+        trace_dir.mkdir(parents=True, exist_ok=True)
+        if template.raw_llm_response:
+            atomic_write(trace_dir / "answering_trace.txt", template.raw_llm_response)
+        if template.investigation_trace:
+            atomic_write(trace_dir / "investigation_trace.txt", template.investigation_trace)
 
 
 # ---------------------------------------------------------------------------

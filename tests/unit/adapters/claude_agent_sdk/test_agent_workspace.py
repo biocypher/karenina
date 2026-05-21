@@ -38,6 +38,14 @@ def patch_claude_agent_sdk(monkeypatch):
     yield
 
 
+@pytest.fixture
+def no_docker_preflight(monkeypatch):
+    monkeypatch.setattr(
+        "karenina.adapters.claude_agent_sdk.agent.preflight_docker_runtime",
+        lambda **_kwargs: None,
+    )
+
+
 @pytest.mark.unit
 class TestWorkspacePath:
     def _make_adapter(self):
@@ -125,6 +133,7 @@ class TestWorkspacePath:
         assert options.env["XDG_CACHE_HOME"] == str(workspace / ".cache")
         assert options.env["UV_PROJECT_ENVIRONMENT"] == str(workspace / ".venv")
 
+    @pytest.mark.usefixtures("no_docker_preflight")
     def test_docker_backend_uses_wrapper_and_disables_native_sandbox(self, tmp_path):
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -160,6 +169,36 @@ class TestWorkspacePath:
         assert options.permission_mode == "bypassPermissions"
         assert adapter.capabilities.uses_sandboxed_execution is True
 
+    def test_docker_backend_runs_preflight(self, tmp_path, monkeypatch):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        captured: dict[str, str | None] = {}
+        monkeypatch.setattr(
+            "karenina.adapters.claude_agent_sdk.agent.preflight_docker_runtime",
+            lambda *, image, **_kwargs: captured.update({"image": image}),
+        )
+        config = ModelConfig(
+            id="test",
+            model_name="claude-sonnet-4-20250514",
+            interface="claude_agent_sdk",
+            extra_kwargs={
+                "agent_runtime": {
+                    "backend": "docker",
+                    "docker_image": "karenina-bixbench-claude:latest",
+                }
+            },
+        )
+        adapter = ClaudeSDKAgentAdapter(config)
+
+        adapter._build_options(
+            system_prompt="test",
+            mcp_servers=None,
+            config=AgentConfig(workspace_path=workspace),
+        )
+
+        assert captured == {"image": "karenina-bixbench-claude:latest"}
+
+    @pytest.mark.usefixtures("no_docker_preflight")
     def test_zai_anthropic_endpoint_sets_auth_token_and_glm_mapping(self, tmp_path):
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -190,6 +229,7 @@ class TestWorkspacePath:
         assert options.env["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "glm-5.1"
         assert options.env["API_TIMEOUT_MS"] == "3000000"
 
+    @pytest.mark.usefixtures("no_docker_preflight")
     def test_docker_read_only_keeps_safe_permission_mode(self, tmp_path):
         workspace = tmp_path / "workspace"
         workspace.mkdir()

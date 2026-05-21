@@ -160,6 +160,61 @@ class TestDeepAgentsBackendConfiguration:
         assert not hasattr(backend, "execute")
 
     @pytest.mark.asyncio
+    async def test_docker_backend_runs_preflight_before_agent(self, deep_agents_model_config, tmp_path, monkeypatch):
+        """Docker-backed command execution should fail fast when host Docker is unavailable."""
+        from langchain_core.messages import AIMessage
+
+        captured_preflight: dict[str, str | None] = {}
+        captured_kwargs: dict = {}
+
+        def capture_preflight(*, image, **_kwargs):
+            captured_preflight["image"] = image
+
+        def capture_create(**kwargs):
+            captured_kwargs.update(kwargs)
+            return _mock_deep_agent(
+                {
+                    "messages": [AIMessage(content="ok")],
+                    "is_last_step": False,
+                }
+            )
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.docker_backend.preflight_docker_runtime",
+            capture_preflight,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",
+            capture_create,
+        )
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.agent.create_chat_model",
+            lambda _config, **_kw: MagicMock(),
+        )
+
+        workspace = tmp_path / "my_workspace"
+        workspace.mkdir()
+        docker_config = deep_agents_model_config.model_copy(
+            update={
+                "extra_kwargs": {
+                    "agent_runtime": {
+                        "backend": "docker",
+                        "docker_image": "karenina-bixbench:latest",
+                    }
+                }
+            }
+        )
+
+        adapter = DeepAgentsAgentAdapter(docker_config)
+        await adapter.arun(
+            messages=[Message.user("analyze data")],
+            config=AgentConfig(max_turns=2, workspace_path=workspace),
+        )
+
+        assert captured_preflight == {"image": "karenina-bixbench:latest"}
+        assert captured_kwargs["backend"].id.startswith("docker-")
+
+    @pytest.mark.asyncio
     async def test_backend_is_never_state_backend(self, deep_agents_model_config, monkeypatch):
         """StateBackend must never be used; it makes the agent blind to real files."""
         from deepagents.backends import StateBackend

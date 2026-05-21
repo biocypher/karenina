@@ -48,6 +48,11 @@ _INFRA_FAILURE_CATEGORIES: frozenset[FailureCategory] = frozenset(
     }
 )
 
+
+def _is_parser_stage(stage: str | None) -> bool:
+    return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate"}
+
+
 # Bound (seconds) on each adapter.aclose() call issued via the worker portal
 # before the portal is torn down. A stuck aclose must not wedge the finally
 # block. Mirrors the pattern in langchain/parser.py:297-312. Tests can
@@ -283,7 +288,7 @@ class VerificationExecutor:
 
             failure = result.metadata.failure
             if failure is not None:
-                if failure.category in _INFRA_FAILURE_CATEGORIES:
+                if failure.category in _INFRA_FAILURE_CATEGORIES and not _is_parser_stage(failure.stage):
                     skipped += 1
                     continue
                 if failure.stage == "TraceValidationAutoFail":

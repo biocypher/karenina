@@ -29,6 +29,7 @@ from karenina.adapters.agent_runtime import (
     get_agent_runtime_capabilities,
     get_agent_runtime_option,
     get_claude_sdk_backend,
+    preflight_docker_runtime,
 )
 from karenina.ports import (
     AdapterUnavailableError,
@@ -184,6 +185,7 @@ class ClaudeSDKAgentAdapter:
                 "agent_runtime docker_network must be 'bridge' or 'none'",
                 reason="invalid_claude_sdk_docker_network",
             )
+        preflight_docker_runtime(image=docker_image)
         env = {
             "KARENINA_CLAUDE_DOCKER_WORKSPACE": str(workspace_path.resolve()),
             "KARENINA_CLAUDE_DOCKER_IMAGE": docker_image,

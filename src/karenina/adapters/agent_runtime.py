@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +19,7 @@ SANDBOX_WORKSPACE_PATH = "/workspace"
 AGENT_RUNTIME_EXTRA_KEY = "agent_runtime"
 AGENT_RUNTIME_ACCESS_MODES = {"read_write", "read_only"}
 CLAUDE_SDK_BACKENDS = {"native", "docker"}
+DOCKER_PREFLIGHT_TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -129,6 +132,94 @@ def get_agent_runtime_option(
     if legacy_attr and hasattr(model_config, legacy_attr):
         return getattr(model_config, legacy_attr)
     return default
+
+
+def _docker_command_output(result: subprocess.CompletedProcess[str]) -> str:
+    """Return compact Docker command output for preflight errors."""
+
+    output = "\n".join(part.strip() for part in (result.stderr, result.stdout) if part and part.strip())
+    if not output:
+        output = f"Docker command exited with status {result.returncode}"
+    max_chars = 1_000
+    if len(output) > max_chars:
+        return f"{output[:max_chars]}..."
+    return output
+
+
+def preflight_docker_runtime(
+    *,
+    image: str | None,
+    timeout: int = DOCKER_PREFLIGHT_TIMEOUT_SECONDS,
+    check_image: bool = True,
+) -> None:
+    """Validate that the host Docker runtime is ready before starting an agent.
+
+    The agent-facing Docker backends execute shell commands by wrapping them in
+    ``docker run``. If the daemon or configured image is unavailable, failing
+    during backend setup prevents wasted model turns where the agent repeatedly
+    retries normal shell commands.
+    """
+
+    if shutil.which("docker") is None:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            "Docker is required for agent_runtime backend='docker', but the docker command was not found",
+            reason="docker_unavailable",
+        )
+
+    try:
+        info = subprocess.run(  # noqa: S603
+            ["docker", "info"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            f"Docker daemon preflight timed out after {timeout} seconds while running 'docker info'",
+            reason="docker_daemon_unavailable",
+        ) from e
+
+    if info.returncode != 0:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            "Docker daemon is not reachable for agent_runtime backend='docker'. "
+            f"'docker info' failed: {_docker_command_output(info)}",
+            reason="docker_daemon_unavailable",
+        )
+
+    if not check_image or not image:
+        return
+
+    try:
+        inspect = subprocess.run(  # noqa: S603
+            ["docker", "image", "inspect", image],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            f"Docker image preflight timed out after {timeout} seconds while checking image '{image}'",
+            reason="docker_image_unavailable",
+        ) from e
+
+    if inspect.returncode != 0:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            "Docker image required by agent_runtime backend='docker' is not available locally: "
+            f"{image}. 'docker image inspect {image}' failed: {_docker_command_output(inspect)}",
+            reason="docker_image_unavailable",
+        )
 
 
 def _deepagents_capabilities(model_config: ModelConfig) -> PortCapabilities:

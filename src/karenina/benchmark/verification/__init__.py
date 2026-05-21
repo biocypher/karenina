@@ -13,6 +13,7 @@ from .executor import (
 )
 from .extension import extend_template_run
 from .sinks import (
+    AgenticProgressiveFileSink,
     CompositeSink,
     DBSink,
     InMemorySink,
@@ -49,6 +50,7 @@ __all__ = [
     # Sinks
     "ResultSink",
     "ProgressiveFileSink",
+    "AgenticProgressiveFileSink",
     "CompositeSink",
     "DBSink",
     "InMemorySink",

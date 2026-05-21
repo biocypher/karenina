@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import uuid
 from pathlib import Path
@@ -12,6 +11,7 @@ from typing import cast
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.backends.protocol import ExecuteResponse, SandboxBackendProtocol
 
+from karenina.adapters.agent_runtime import preflight_docker_runtime
 from karenina.ports import AdapterUnavailableError
 
 SANDBOX_WORKSPACE_PATH = "/workspace"
@@ -39,18 +39,13 @@ class DockerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: 
                 "agent_runtime docker_network must be 'bridge' or 'none'",
                 reason="invalid_deepagents_docker_network",
             )
-        if shutil.which("docker") is None:
-            raise AdapterUnavailableError(
-                "Docker is required for agent_runtime backend='docker', but the docker command was not found",
-                reason="docker_unavailable",
-            )
-
         self._host_workspace = Path(root_dir).resolve()
         if not self._host_workspace.is_dir():
             raise AdapterUnavailableError(
                 f"Docker sandbox workspace does not exist: {self._host_workspace}",
                 reason="missing_workspace",
             )
+        preflight_docker_runtime(image=image)
 
         super().__init__(
             root_dir=self._host_workspace,
