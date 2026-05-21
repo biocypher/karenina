@@ -59,6 +59,11 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_SDK_READ_ONLY_TOOLS = ("Read", "Grep", "Glob", "LS")
 CLAUDE_SDK_DOCKER_WRAPPER = Path(__file__).with_name("docker_cli_wrapper.py")
+ZAI_ANTHROPIC_BASE_URL_MARKER = "api.z.ai/api/anthropic"
+
+
+def _is_zai_anthropic_endpoint(base_url: str | None) -> bool:
+    return bool(base_url and ZAI_ANTHROPIC_BASE_URL_MARKER in base_url)
 
 
 class ClaudeSDKAgentAdapter:
@@ -242,9 +247,16 @@ class ClaudeSDKAgentAdapter:
         elif self._config.system_prompt:
             options_kwargs["system_prompt"] = self._config.system_prompt
 
-        # Add model specification if provided
-        if self._config.model_name:
-            options_kwargs["model"] = self._config.model_name
+        # Add model specification if provided. Z.ai maps Claude Code's internal
+        # Sonnet/Opus model names to GLM through ANTHROPIC_DEFAULT_* env vars;
+        # passing glm-* directly to Claude Code is rejected before the endpoint
+        # can apply that mapping.
+        configured_model_name = self._config.model_name or ""
+        model_name = configured_model_name
+        if _is_zai_anthropic_endpoint(self._config.anthropic_base_url) and configured_model_name.startswith("glm-"):
+            model_name = str((config.extra or {}).get("claude_sdk_model_name", "claude-sonnet-4-5"))
+        if model_name:
+            options_kwargs["model"] = model_name
 
         # Add MCP servers if provided
         if mcp_servers:
@@ -301,6 +313,7 @@ class ClaudeSDKAgentAdapter:
                     "max_turns",
                     "mcp_servers",
                     "allowed_tools",
+                    "claude_sdk_model_name",
                 ):
                     options_kwargs[key] = value
 
@@ -310,8 +323,14 @@ class ClaudeSDKAgentAdapter:
         workspace_path = config.workspace_path
         if self._config.anthropic_api_key:
             env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
+            if _is_zai_anthropic_endpoint(self._config.anthropic_base_url):
+                env_vars["ANTHROPIC_AUTH_TOKEN"] = self._config.anthropic_api_key.get_secret_value()
         if self._config.anthropic_base_url:
             env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
+        if _is_zai_anthropic_endpoint(self._config.anthropic_base_url) and configured_model_name.startswith("glm-"):
+            env_vars.setdefault("ANTHROPIC_DEFAULT_SONNET_MODEL", configured_model_name)
+            env_vars.setdefault("ANTHROPIC_DEFAULT_OPUS_MODEL", configured_model_name)
+            env_vars.setdefault("API_TIMEOUT_MS", "3000000")
         env_vars.update(self._workspace_local_env(workspace_path))
         # Forward CLAUDE_CONFIG_DIR from the parent process so the subprocess does
         # not load the user's personal MCP servers from ~/.claude/. Combined with

@@ -36,6 +36,11 @@ def _forward_env_flags() -> list[str]:
     passthrough = [
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "API_TIMEOUT_MS",
         "CLAUDE_AGENT_SDK_VERSION",
         "CLAUDE_CODE_ENTRYPOINT",
         "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING",

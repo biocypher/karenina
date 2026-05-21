@@ -160,6 +160,36 @@ class TestWorkspacePath:
         assert options.permission_mode == "bypassPermissions"
         assert adapter.capabilities.uses_sandboxed_execution is True
 
+    def test_zai_anthropic_endpoint_sets_auth_token_and_glm_mapping(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        config = ModelConfig(
+            id="test",
+            model_name="glm-5.1",
+            interface="claude_agent_sdk",
+            anthropic_base_url="https://api.z.ai/api/anthropic",
+            anthropic_api_key="zai-key",
+            extra_kwargs={
+                "agent_runtime": {
+                    "backend": "docker",
+                    "docker_image": "karenina-bixbench-claude:latest",
+                }
+            },
+        )
+        adapter = ClaudeSDKAgentAdapter(config)
+
+        options = adapter._build_options(
+            system_prompt="test",
+            mcp_servers=None,
+            config=AgentConfig(workspace_path=workspace),
+        )
+
+        assert options.model == "claude-sonnet-4-5"
+        assert options.env["ANTHROPIC_AUTH_TOKEN"] == "zai-key"
+        assert options.env["ANTHROPIC_DEFAULT_SONNET_MODEL"] == "glm-5.1"
+        assert options.env["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "glm-5.1"
+        assert options.env["API_TIMEOUT_MS"] == "3000000"
+
     def test_docker_read_only_keeps_safe_permission_mode(self, tmp_path):
         workspace = tmp_path / "workspace"
         workspace.mkdir()
@@ -265,6 +295,9 @@ class TestDockerCliWrapper:
         monkeypatch.setenv("KARENINA_CLAUDE_DOCKER_ADD_HOSTS", "hl-codon-gpu-020:10.0.0.20")
         monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://hl-codon-gpu-020:8000")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "EMPTY")
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "zai-key")
+        monkeypatch.setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "glm-5.1")
+        monkeypatch.setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "glm-5.1")
 
         command = build_docker_command(["--version", "--settings", f'{{"cwd":"{workspace}"}}'])
 
@@ -276,6 +309,9 @@ class TestDockerCliWrapper:
         assert f"{workspace}:/workspace:rw" in command
         assert "ANTHROPIC_BASE_URL" in command
         assert "ANTHROPIC_API_KEY" in command
+        assert "ANTHROPIC_AUTH_TOKEN" in command
+        assert "ANTHROPIC_DEFAULT_SONNET_MODEL" in command
+        assert "ANTHROPIC_DEFAULT_OPUS_MODEL" in command
         assert "karenina-bixbench-claude:latest" in command
         assert "claude" in command
         assert str(workspace) not in command[-1]

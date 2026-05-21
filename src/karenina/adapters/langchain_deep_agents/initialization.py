@@ -23,10 +23,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _normalize_openai_endpoint_url(base_url: str) -> str:
-    """Normalize OpenAI-compatible endpoint URLs to include /v1."""
+def _normalize_openai_endpoint_url(base_url: str, *, mode: str = "auto_v1") -> str:
+    """Normalize OpenAI-compatible endpoint URLs.
+
+    Most local OpenAI-compatible servers expose ``/v1``. Some hosted APIs,
+    such as Z.ai's coding endpoint, use a provider-specific version segment
+    as the final OpenAI SDK base URL and must be passed through unchanged.
+    """
 
     url = base_url.rstrip("/")
+    if mode == "raw":
+        return url
+    if mode != "auto_v1":
+        raise AdapterUnavailableError(
+            "extra_kwargs['endpoint_base_url_mode'] must be 'auto_v1' or 'raw'",
+            reason="invalid_endpoint_base_url_mode",
+        )
     if url.endswith("/v1"):
         return url
     return f"{url}/v1"
@@ -71,7 +83,12 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
                 "endpoint_api_key is required when endpoint_base_url is set for langchain_deep_agents",
                 reason="missing_endpoint_api_key",
             )
-        model_kwargs["base_url"] = _normalize_openai_endpoint_url(model_config.endpoint_base_url)
+        extra_kwargs = model_config.extra_kwargs or {}
+        endpoint_base_url_mode = str(extra_kwargs.get("endpoint_base_url_mode", "auto_v1"))
+        model_kwargs["base_url"] = _normalize_openai_endpoint_url(
+            model_config.endpoint_base_url,
+            mode=endpoint_base_url_mode,
+        )
         endpoint_api_key = model_config.endpoint_api_key
         model_kwargs["api_key"] = (
             endpoint_api_key.get_secret_value() if isinstance(endpoint_api_key, SecretStr) else endpoint_api_key
