@@ -129,6 +129,11 @@ class Message:
     Attributes:
         role: The role of the message sender (system, user, assistant, tool).
         content: List of content blocks that make up the message.
+        usage_metadata: Optional per-call usage accounting (input_tokens,
+            output_tokens, and optional cache_read_input_tokens /
+            cache_creation_input_tokens). Populated by adapters from the
+            provider's per-message usage payload so per-turn token / cache
+            accounting survives into ``template.trace_messages``.
 
     Example:
         >>> msg = Message.user("Hello, world!")
@@ -143,6 +148,7 @@ class Message:
 
     role: Role
     content: list[Content]
+    usage_metadata: dict[str, Any] | None = None
 
     @property
     def text(self) -> str:
@@ -282,6 +288,11 @@ class Message:
                     thinking["signature"] = block.signature
                 result["thinking"] = thinking
                 break
+
+        # Add per-call usage metadata when present so per-turn token /
+        # cache accounting is preserved in template.trace_messages[*].
+        if self.usage_metadata is not None:
+            result["usage_metadata"] = self.usage_metadata
 
         return result
 
