@@ -233,6 +233,48 @@ def test_singularity_command_isolates_host_filesystem(tmp_path):
     assert command[image_idx + 1 :] == ["python", "-c", "import sys; print(sys.path)"]
 
 
+def test_singularity_sets_home_via_flag_not_env(tmp_path):
+    """Singularity refuses --env HOME=... with a noisy warning; HOME must
+    be set via --home instead. The caller's env dict can still carry HOME
+    (Docker uses it), and we must honour that value when building --home."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    image = tmp_path / "image.sif"
+    image.write_text("")
+
+    command = build_container_command(
+        config=ContainerRuntimeConfig(runtime="singularity", image=str(image)),
+        host_workspace=workspace,
+        argv=["/bin/true"],
+        env={"HOME": "/tmp", "UV_LINK_MODE": "copy"},
+    )
+
+    env_indices = [i for i, arg in enumerate(command) if arg == "--env"]
+    env_values = [command[i + 1] for i in env_indices]
+    assert not any(value.startswith("HOME=") for value in env_values), (
+        "HOME must not be passed via --env: Singularity rejects it with a warning"
+    )
+
+    assert "--home" in command, "missing --home: HOME would fall back to an unmounted host path"
+    assert command[command.index("--home") + 1] == "/tmp"
+
+
+def test_singularity_home_defaults_to_tmp_when_env_omits_it(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    image = tmp_path / "image.sif"
+    image.write_text("")
+
+    command = build_container_command(
+        config=ContainerRuntimeConfig(runtime="singularity", image=str(image)),
+        host_workspace=workspace,
+        argv=["/bin/true"],
+    )
+
+    assert "--home" in command
+    assert command[command.index("--home") + 1] == "/tmp"
+
+
 def test_apptainer_command_inherits_isolation_flags(tmp_path):
     """The same isolation flags apply when the runtime is apptainer."""
     workspace = tmp_path / "workspace"

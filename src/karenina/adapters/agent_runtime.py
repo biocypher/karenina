@@ -375,6 +375,13 @@ def _env_flags_for_docker(env: dict[str, str | None]) -> list[str]:
 def _env_flags_for_singularity(env: dict[str, str | None]) -> list[str]:
     flags: list[str] = []
     for name, value in env.items():
+        # Singularity manages HOME via --home / --no-home and refuses to
+        # override it through --env, emitting "Overriding HOME environment
+        # variable with SINGULARITYENV_HOME is not permitted" and silently
+        # dropping the value. The singularity branch in build_container_command
+        # honours HOME via --home instead.
+        if name == "HOME":
+            continue
         env_value = os.environ.get(name, "") if value is None else value
         flags.extend(["--env", f"{name}={env_value}"])
     return flags
@@ -431,14 +438,24 @@ def build_container_command(
     #                          explicit --bind below remains, so the model
     #                          cannot reach $HOME/.local/.../site-packages
     #                          either implicitly or via sys.path.insert.
+    #   --home <path>          sets HOME inside the container without binding
+    #                          anything (singularity blocks --env HOME=... with
+    #                          a warning, so this is the only clean override).
+    #                          Defaults to /tmp so tools that touch $HOME hit a
+    #                          writable tmpfs instead of the host path that
+    #                          --no-home + --no-mount bind-paths leaves
+    #                          unmounted. Caller-supplied env["HOME"] wins.
     #   PYTHONNOUSERSITE=1     belt-and-braces: ignore user-site even if a
     #                          future caller adds a bind that exposes one.
+    home_target = env.get("HOME") or "/tmp"
     command = [
         config.runtime,
         "exec",
         "--no-home",
         "--no-mount",
         "bind-paths",
+        "--home",
+        home_target,
         "--bind",
         f"{host_workspace}:{SANDBOX_WORKSPACE_PATH}:rw",
         "--pwd",
