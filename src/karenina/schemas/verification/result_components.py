@@ -144,7 +144,11 @@ class VerificationResultTemplate(BaseModel):
     )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
     field_verification_error: str | None = None  # Error from verify() exception (issue 146)
-    field_results: dict[str, bool] | None = None  # Per-field primitive verification results (issue 150)
+    # Per-field primitive verification results (issue 150). Values are
+    # tri-valued: True (pass), False (fail), or None (extractor returned
+    # null for that field, kept distinct from False so a null cannot
+    # silently match a False ground truth).
+    field_results: dict[str, bool | None] | None = None
     composition_strategy: str | None = (
         None  # Composition strategy used: "all_of", "any_of", "at_least_n(N)" (issue 151)
     )
