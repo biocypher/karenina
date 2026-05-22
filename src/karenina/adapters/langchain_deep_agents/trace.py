@@ -101,6 +101,10 @@ def deep_agents_messages_to_raw_trace(
             continue
 
         if isinstance(msg, AIMessage):
+            thinking = _extract_thinking_content(msg)
+            if thinking:
+                parts.append(f"--- Thinking ---\n{thinking}")
+
             text = _extract_ai_text(msg)
 
             if text:
@@ -118,6 +122,45 @@ def deep_agents_messages_to_raw_trace(
             parts.append(f"--- Tool Result ---\n{content}")
 
     return "\n\n".join(parts)
+
+
+def _extract_thinking_content(msg: Any) -> str:
+    """Extract reasoning / thinking content from a LangChain AIMessage.
+
+    LangChain has no single canonical location for chain-of-thought content
+    across providers. Check, in priority order:
+
+    1. ``additional_kwargs["reasoning_content"]`` — vLLM's OpenAI-compatible
+       endpoint emits ``delta.reasoning_content`` for thinking models
+       (qwen3, deepseek-r1, etc.); recent langchain_openai surfaces it here.
+    2. ``additional_kwargs["reasoning"]`` — alternate naming used by some
+       providers / older LangChain wrappers.
+    3. Anthropic-style content blocks with ``type == "thinking"`` inside
+       ``msg.content`` when the model is invoked through an Anthropic
+       wrapper. The ``thinking`` key holds the text.
+
+    Returns an empty string when none of these surface a reasoning trace,
+    so the caller can skip the ``--- Thinking ---`` section entirely.
+    """
+    additional = getattr(msg, "additional_kwargs", None) or {}
+    if isinstance(additional, dict):
+        for key in ("reasoning_content", "reasoning"):
+            value = additional.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+
+    content = getattr(msg, "content", None)
+    if isinstance(content, list):
+        thinking_parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "thinking":
+                text = block.get("thinking") or ""
+                if isinstance(text, str) and text.strip():
+                    thinking_parts.append(text)
+        if thinking_parts:
+            return "\n".join(thinking_parts)
+
+    return ""
 
 
 def _extract_ai_text(msg: Any) -> str:
@@ -194,6 +237,7 @@ def deep_agents_messages_to_trace_messages(
 
         if isinstance(msg, AIMessage):
             text = _extract_ai_text(msg)
+            thinking = _extract_thinking_content(msg)
             tool_calls: list[dict[str, Any]] = []
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
@@ -205,7 +249,7 @@ def deep_agents_messages_to_trace_messages(
                         }
                     )
 
-            if text or tool_calls:
+            if text or tool_calls or thinking:
                 trace_msg: dict[str, Any] = {
                     "role": "assistant",
                     "content": text,
@@ -214,6 +258,12 @@ def deep_agents_messages_to_trace_messages(
 
                 if tool_calls:
                     trace_msg["tool_calls"] = tool_calls
+
+                if thinking:
+                    # Mirror the CSDK structured-trace shape so downstream
+                    # consumers (frontend trace component, evaluators) can
+                    # treat reasoning identically across adapters.
+                    trace_msg["thinking"] = {"thinking": thinking}
 
                 usage_metadata = _extract_ai_usage_metadata(msg)
                 if usage_metadata is not None:
