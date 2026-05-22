@@ -84,6 +84,137 @@ def extract_sdk_usage(
     )
 
 
+def collapse_partial_assistant_messages(messages: list[Any]) -> list[Any]:
+    """Collapse multiple partial ``AssistantMessage`` events to one per turn.
+
+    The SDK emits one ``AssistantMessage`` per ``content_block_stop`` event,
+    not per LLM turn. A single turn that produces a thinking block plus a
+    text block plus a tool-use block will surface as three ``AssistantMessage``
+    objects, all sharing the same ``message_id`` and the same input-token
+    count. Each successive emission carries more content blocks than the
+    previous one (it accumulates progress), so the LAST emission for a given
+    ``message_id`` is the most complete representation of the turn.
+
+    Without this collapse:
+      * ``agent_metrics.iterations`` counts content blocks, not LLM turns
+        (a 22-turn run reports ~50 iterations).
+      * ``extract_sdk_usage_from_messages`` double- or triple-counts input
+        tokens on a wall-clock timeout where ``ResultMessage`` is absent.
+      * The raw trace shows the same turn split across multiple "AI Message"
+        sections.
+
+    AssistantMessages with no ``message_id`` and all non-``AssistantMessage``
+    entries are passed through unchanged in their original positions. The
+    relative order of distinct turns is preserved: each turn appears at the
+    position of its LAST partial emission, so the resulting sequence still
+    interleaves correctly with surrounding ``StreamEvent`` / ``UserMessage``
+    / ``ResultMessage`` records.
+
+    Args:
+        messages: Mixed collection from ``ClaudeSDKClient.receive_response()``.
+
+    Returns:
+        New list with at most one ``AssistantMessage`` per ``message_id``.
+    """
+    try:
+        from claude_agent_sdk import AssistantMessage
+    except ImportError:
+        return list(messages)
+
+    # First pass: find the index of the LAST occurrence for each message_id.
+    last_index_by_msgid: dict[str, int] = {}
+    for i, msg in enumerate(messages):
+        if isinstance(msg, AssistantMessage):
+            mid = getattr(msg, "message_id", None)
+            if mid is not None:
+                last_index_by_msgid[mid] = i
+
+    if not last_index_by_msgid:
+        return list(messages)
+
+    # Second pass: emit each entry, dropping earlier duplicates of any
+    # AssistantMessage that has a later occurrence with the same message_id.
+    result: list[Any] = []
+    for i, msg in enumerate(messages):
+        if isinstance(msg, AssistantMessage):
+            mid = getattr(msg, "message_id", None)
+            if mid is not None and last_index_by_msgid[mid] != i:
+                continue
+        result.append(msg)
+    return result
+
+
+def backfill_assistant_output_tokens(messages: list[Any]) -> None:
+    """Backfill ``output_tokens`` on ``AssistantMessage`` records in-place.
+
+    On backends where ``output_tokens`` is only finalised in the streaming
+    ``message_delta`` event (e.g. vLLM, sglang, and any non-canonical Anthropic
+    shim), ``AssistantMessage.usage`` reflects only ``message_start`` state and
+    reports ``output_tokens=0``. When the agent run is cancelled mid-stream
+    (wall-clock timeout) no ``ResultMessage`` is emitted, so per-message
+    aggregation is the only signal left — and it under-reports output tokens
+    to zero.
+
+    With ``ClaudeAgentOptions(include_partial_messages=True)`` the SDK exposes
+    the raw stream events as ``StreamEvent`` objects. This helper extracts the
+    final ``output_tokens`` from each ``message_delta`` event, correlates it
+    with the parent ``AssistantMessage`` by ``message_id``, and patches the
+    usage dict in place. Downstream consumers (trace conversion, aggregate
+    summation) see corrected per-call usage without further changes.
+
+    The patch is idempotent and never decreases a non-zero value: if the SDK
+    already reported a real output count (e.g. canonical Anthropic), the
+    delta value is ignored.
+
+    Args:
+        messages: Mixed collection of SDK message objects as collected from
+            ``ClaudeSDKClient.receive_response()``. ``StreamEvent`` objects
+            must be present for backfill to happen — that requires the
+            ``include_partial_messages=True`` option.
+    """
+    try:
+        from claude_agent_sdk import AssistantMessage, StreamEvent
+    except ImportError:
+        return
+
+    # Walk the event stream once to map message_id -> final output_tokens.
+    # In Anthropic's streaming protocol every message_delta belongs to the
+    # most recent message_start, so a single rolling pointer is enough.
+    delta_output_by_msgid: dict[str, int] = {}
+    current_msgid: str | None = None
+    for msg in messages:
+        if not isinstance(msg, StreamEvent):
+            continue
+        event = getattr(msg, "event", None) or {}
+        event_type = event.get("type")
+        if event_type == "message_start":
+            current_msgid = (event.get("message") or {}).get("id")
+        elif event_type == "message_delta" and current_msgid is not None:
+            usage = event.get("usage") or {}
+            output_tokens = usage.get("output_tokens")
+            if output_tokens is not None:
+                delta_output_by_msgid[current_msgid] = int(output_tokens)
+
+    if not delta_output_by_msgid:
+        return
+
+    for msg in messages:
+        if not isinstance(msg, AssistantMessage):
+            continue
+        msg_id = getattr(msg, "message_id", None)
+        if msg_id is None or msg_id not in delta_output_by_msgid:
+            continue
+        current_usage = msg.usage or {}
+        existing_output = int(current_usage.get("output_tokens", 0) or 0)
+        if existing_output != 0:
+            # Don't clobber a real non-zero value reported by canonical
+            # Anthropic endpoints.
+            continue
+        patched = dict(current_usage)
+        patched["output_tokens"] = delta_output_by_msgid[msg_id]
+        msg.usage = patched
+
+
 def extract_sdk_usage_from_messages(
     messages: list[Any],
     model: str | None = None,

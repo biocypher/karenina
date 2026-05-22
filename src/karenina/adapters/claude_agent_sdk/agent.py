@@ -50,7 +50,12 @@ from karenina.ports.capabilities import PortCapabilities
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
 from .trace import sdk_messages_to_raw_trace
-from .usage import extract_sdk_usage, extract_sdk_usage_from_messages
+from .usage import (
+    backfill_assistant_output_tokens,
+    collapse_partial_assistant_messages,
+    extract_sdk_usage,
+    extract_sdk_usage_from_messages,
+)
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -247,6 +252,13 @@ class ClaudeSDKAgentAdapter:
             ),
             # Map AgentConfig.max_turns to SDK
             "max_turns": config.max_turns,
+            # Emit raw stream events alongside AssistantMessage objects so the
+            # caller can recover per-turn output_tokens from message_delta
+            # events. AssistantMessage.usage reflects only message_start state
+            # (output_tokens=0 on backends that defer the count to the delta),
+            # so without partials we cannot account for output tokens on a
+            # wall-clock timeout where no ResultMessage is ever emitted.
+            "include_partial_messages": True,
         }
 
         # Add system prompt if provided
@@ -447,6 +459,17 @@ class ClaudeSDKAgentAdapter:
         timeout_reached: bool = False,
     ) -> AgentResult:
         """Build an AgentResult from completed or partial SDK messages."""
+
+        # Collapse partial AssistantMessages to one per turn (the SDK emits
+        # one per content-block-stop, all sharing a message_id) so iterations
+        # and per-message usage reflect real LLM calls rather than partial
+        # snapshots. Then backfill output_tokens from message_delta
+        # StreamEvents into the surviving AssistantMessage.usage dicts BEFORE
+        # downstream consumers run. Both the trace converter and the aggregate
+        # usage summer read AssistantMessage.usage, so a single in-place patch
+        # fixes both.
+        collected_messages = collapse_partial_assistant_messages(collected_messages)
+        backfill_assistant_output_tokens(collected_messages)
 
         raw_trace = self._build_raw_trace(collected_messages)
         if limit_reached:
