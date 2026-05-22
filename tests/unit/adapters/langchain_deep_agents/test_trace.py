@@ -20,7 +20,10 @@ class TestDeepAgentsTraceExtraction:
         assert "--- AI Message ---" in trace
         assert "Hello world" in trace
 
-    def test_tool_call_produces_tool_delimiter(self):
+    def test_tool_call_renders_inline_in_ai_message(self):
+        """DA now uses the canonical format shared with langchain / csdk /
+        manual: tool calls live inside the same ``--- AI Message ---`` as
+        the assistant text, and tool results use ``--- Tool Message (call_id: <id>) ---``."""
         from langchain_core.messages import AIMessage, ToolMessage
 
         messages = [
@@ -32,9 +35,14 @@ class TestDeepAgentsTraceExtraction:
         ]
         trace = deep_agents_messages_to_raw_trace(messages)
         assert "--- AI Message ---" in trace
-        assert "--- Tool Call ---" in trace
-        assert "--- Tool Result ---" in trace
-        assert "search" in trace
+        assert "Tool Calls:" in trace
+        assert "search (call_call_1)" in trace
+        assert "Call ID: call_1" in trace
+        assert "--- Tool Message (call_id: call_1) ---" in trace
+        assert "search result" in trace
+        # Old DA-only delimiters must NOT appear.
+        assert "--- Tool Call ---" not in trace
+        assert "--- Tool Result ---" not in trace
 
     def test_empty_messages_returns_empty_string(self):
         trace = deep_agents_messages_to_raw_trace([])

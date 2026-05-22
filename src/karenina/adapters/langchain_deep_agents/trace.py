@@ -11,7 +11,6 @@ preserves per-call usage_metadata on assistant entries.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -74,15 +73,21 @@ def deep_agents_messages_to_raw_trace(
 ) -> str:
     """Convert LangGraph messages to raw trace string format.
 
-    Produces delimited trace compatible with existing karenina infrastructure
-    (regex highlighting, database storage, backward compatibility).
+    Produces the canonical karenina trace format shared by the langchain,
+    claude_agent_sdk, and manual adapters: one ``--- AI Message ---``
+    section per turn carrying the text followed by an inline ``Tool Calls:``
+    block, and ``--- Tool Message (call_id: <id>) ---`` for each tool
+    result. Thinking content surfaces as a separate ``--- Thinking ---``
+    section before the AI Message for that turn.
 
     Args:
         messages: List of LangGraph BaseMessage objects.
         include_user_messages: If True, include HumanMessage in trace.
 
     Returns:
-        Formatted trace string with --- delimiters.
+        Formatted trace string with ``---`` delimiters compatible with
+        regex highlighting, database storage, and the trace-evaluation
+        infrastructure shared with the other adapters.
     """
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
@@ -106,20 +111,28 @@ def deep_agents_messages_to_raw_trace(
                 parts.append(f"--- Thinking ---\n{thinking}")
 
             text = _extract_ai_text(msg)
+            tool_calls = getattr(msg, "tool_calls", None) or []
 
-            if text:
-                parts.append(f"--- AI Message ---\n{text}")
-
-            if hasattr(msg, "tool_calls") and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    tool_name = tc.get("name", "unknown")
-                    tool_input = tc.get("args", {})
-                    input_str = json.dumps(tool_input, indent=2) if tool_input else "{}"
-                    parts.append(f"--- Tool Call ---\nTool: {tool_name}\nInput: {input_str}")
+            if text or tool_calls:
+                content_parts: list[str] = []
+                if text:
+                    content_parts.append(text)
+                if tool_calls:
+                    content_parts.append("\nTool Calls:")
+                    for tc in tool_calls:
+                        tool_name = tc.get("name", "unknown")
+                        tool_id = tc.get("id", "unknown")
+                        tool_args = tc.get("args", {})
+                        content_parts.append(f"  {tool_name} (call_{tool_id})")
+                        content_parts.append(f"   Call ID: {tool_id}")
+                        if tool_args:
+                            content_parts.append(f"   Args: {tool_args}")
+                parts.append("--- AI Message ---\n" + "\n".join(content_parts))
 
         elif isinstance(msg, ToolMessage):
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            parts.append(f"--- Tool Result ---\n{content}")
+            tool_call_id = getattr(msg, "tool_call_id", "unknown") or "unknown"
+            parts.append(f"--- Tool Message (call_id: {tool_call_id}) ---\n{content}")
 
     return "\n\n".join(parts)
 

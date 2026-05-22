@@ -350,8 +350,11 @@ class TestDeepAgentsAgentAdapter:
         )
 
         assert "answer is X" in result.final_response
-        assert "--- Tool Call ---" in result.raw_trace
-        assert "--- Tool Result ---" in result.raw_trace
+        # DA now emits the canonical inline-tool-calls + "Tool Message" format
+        # shared with langchain / csdk / manual.
+        assert "--- AI Message ---" in result.raw_trace
+        assert "Tool Calls:" in result.raw_trace
+        assert "--- Tool Message (call_id:" in result.raw_trace
         assert result.turns == 2  # Two AIMessages
 
     @pytest.mark.asyncio

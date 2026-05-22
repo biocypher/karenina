@@ -10,7 +10,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from karenina.ports import Content, Message, Role, TextContent, ToolResultContent, ToolUseContent
+from karenina.ports import (
+    Content,
+    Message,
+    Role,
+    TextContent,
+    ThinkingContent,
+    ToolResultContent,
+    ToolUseContent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +140,15 @@ class DeepAgentsMessageConverter:
     def _convert_ai_message(self, msg: Any) -> Message:
         """Convert a LangGraph AIMessage to a karenina Message.
 
-        Handles text content, structured content blocks, and tool calls.
+        Handles text content, structured content blocks, tool calls, and
+        chain-of-thought reasoning. Reasoning is sourced from the same
+        locations as ``trace.deep_agents_messages_to_raw_trace``:
+        ``additional_kwargs["reasoning_content"]``, ``additional_kwargs
+        ["reasoning"]``, or content-list entries with ``type == "thinking"``.
+        Putting it on the unified Message preserves parity with the CSDK
+        adapter, which already emits ``ThinkingContent`` here so downstream
+        consumers walking ``Message.content`` see reasoning identically
+        across adapters.
 
         Args:
             msg: LangGraph AIMessage instance.
@@ -141,6 +157,16 @@ class DeepAgentsMessageConverter:
             Karenina Message with Role.ASSISTANT.
         """
         content_blocks: list[Content] = []
+
+        # Place ThinkingContent first so the block order matches CSDK
+        # (thinking -> text -> tool_use), which downstream rendering relies on.
+        additional = getattr(msg, "additional_kwargs", None) or {}
+        if isinstance(additional, dict):
+            for key in ("reasoning_content", "reasoning"):
+                value = additional.get(key)
+                if isinstance(value, str) and value.strip():
+                    content_blocks.append(ThinkingContent(thinking=value))
+                    break
 
         if isinstance(msg.content, str) and msg.content:
             content_blocks.append(TextContent(text=msg.content))
@@ -159,6 +185,21 @@ class DeepAgentsMessageConverter:
                                 input=block.get("input", {}),
                             )
                         )
+                    elif block.get("type") == "thinking":
+                        thinking_text = block.get("thinking") or ""
+                        if isinstance(thinking_text, str) and thinking_text.strip():
+                            # Anthropic-style thinking block in content list:
+                            # prefer this over an additional_kwargs duplicate.
+                            content_blocks = [
+                                b for b in content_blocks if not isinstance(b, ThinkingContent)
+                            ]
+                            content_blocks.insert(
+                                0,
+                                ThinkingContent(
+                                    thinking=thinking_text,
+                                    signature=block.get("signature"),
+                                ),
+                            )
 
         if hasattr(msg, "tool_calls") and msg.tool_calls:
             for tc in msg.tool_calls:
