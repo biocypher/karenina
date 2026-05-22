@@ -44,14 +44,13 @@ from karenina.ports import (
     Message,
     Role,
     Tool,
-    UsageMetadata,
 )
 from karenina.ports.capabilities import PortCapabilities
 
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
 from .trace import sdk_messages_to_raw_trace
-from .usage import extract_sdk_usage
+from .usage import extract_sdk_usage, extract_sdk_usage_from_messages
 
 if TYPE_CHECKING:
     from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
@@ -462,16 +461,17 @@ class ClaudeSDKAgentAdapter:
         ]
 
         final_response = self._extract_final_response(collected_messages, result_message)
-        usage = (
-            extract_sdk_usage(result_message, model=self._config.model_name)
-            if result_message
-            else UsageMetadata(
-                input_tokens=0,
-                output_tokens=0,
-                total_tokens=0,
-                model=self._config.model_name,
+        # Prefer the SDK-aggregated usage on clean exit; fall back to summing
+        # per-AssistantMessage usage when no ResultMessage was emitted (e.g.
+        # mid-stream cancellation via asyncio.wait_for). Without the fallback,
+        # wall-clock timeouts lose all token accounting even though the
+        # collected messages still carry per-call usage.
+        if result_message:
+            usage = extract_sdk_usage(result_message, model=self._config.model_name)
+        else:
+            usage = extract_sdk_usage_from_messages(
+                collected_messages, model=self._config.model_name
             )
-        )
         turns = result_message.num_turns if result_message and hasattr(result_message, "num_turns") else 0
         actual_model = self._extract_actual_model(collected_messages) or self._config.model_name
         session_id = result_message.session_id if result_message and hasattr(result_message, "session_id") else None
