@@ -162,39 +162,55 @@ def _stream_event(event: dict) -> MagicMock:
 
 
 class TestCollapsePartialAssistantMessages:
-    """SDK emits one AssistantMessage per content_block_stop, all sharing a
-    message_id. Keep only the last (most complete) one per turn so iterations
-    and per-message input_tokens reflect real LLM calls."""
+    """The CLI subprocess emits one AssistantMessage per content_block_stop,
+    each carrying only the single block that just finished, all sharing a
+    message_id. Merge the content lists into one AssistantMessage per turn
+    so the trace keeps thinking + text + tool_use, and iterations / input
+    tokens reflect real LLM calls instead of per-block emissions."""
 
-    def test_drops_earlier_duplicates_keeping_last_per_message_id(self) -> None:
+    def test_merges_content_blocks_across_partials(self) -> None:
+        """Each partial carries ONE block; merge them all onto the last
+        emission, preserving source order (thinking, text, tool_use)."""
         partial_1 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
-        partial_1.content = ["thinking_only"]
+        partial_1.content = ["thinking_block"]
         partial_2 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
-        partial_2.content = ["thinking", "text", "tool_use"]
-        result = collapse_partial_assistant_messages([partial_1, partial_2])
+        partial_2.content = ["text_block"]
+        partial_3 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
+        partial_3.content = ["tool_use_block"]
+        result = collapse_partial_assistant_messages([partial_1, partial_2, partial_3])
         assert len(result) == 1
-        assert result[0] is partial_2  # the more complete one wins
+        assert result[0] is partial_3  # the last emission is the survivor
+        assert result[0].content == ["thinking_block", "text_block", "tool_use_block"]
 
     def test_preserves_distinct_message_ids(self) -> None:
         a1 = _assistant_message_with_id("msg_a", {"input_tokens": 50, "output_tokens": 0})
+        a1.content = ["a_thinking"]
         a2 = _assistant_message_with_id("msg_a", {"input_tokens": 50, "output_tokens": 0})
+        a2.content = ["a_tool_use"]
         b1 = _assistant_message_with_id("msg_b", {"input_tokens": 60, "output_tokens": 0})
+        b1.content = ["b_thinking"]
         b2 = _assistant_message_with_id("msg_b", {"input_tokens": 60, "output_tokens": 0})
+        b2.content = ["b_tool_use"]
         result = collapse_partial_assistant_messages([a1, a2, b1, b2])
         assert len(result) == 2
         assert result[0] is a2
+        assert result[0].content == ["a_thinking", "a_tool_use"]
         assert result[1] is b2
+        assert result[1].content == ["b_thinking", "b_tool_use"]
 
     def test_passes_through_non_assistant_messages(self) -> None:
         from claude_agent_sdk import StreamEvent
 
         a1 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
+        a1.content = ["block_1"]
         a2 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
+        a2.content = ["block_2"]
         se = MagicMock(spec=StreamEvent)
         user = _non_assistant_message()
         result = collapse_partial_assistant_messages([se, a1, user, a2])
-        # se and user stay; a1 dropped; a2 stays at its position
+        # se and user stay; a1 dropped; a2 stays at its position with merged content
         assert result == [se, user, a2]
+        assert a2.content == ["block_1", "block_2"]
 
     def test_keeps_messages_without_message_id(self) -> None:
         """Defensive: if the SDK ever returns AssistantMessages without an id,
@@ -213,11 +229,25 @@ class TestCollapsePartialAssistantMessages:
         """End-to-end: without collapse, two partials with same input_tokens=100
         would sum to 200. After collapse, sum is 100."""
         a1 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
+        a1.content = ["text_block"]
         a2 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 7})
+        a2.content = ["tool_use_block"]
         collapsed = collapse_partial_assistant_messages([a1, a2])
         usage = extract_sdk_usage_from_messages(collapsed)
         assert usage.input_tokens == 100
         assert usage.output_tokens == 7
+
+    def test_handles_empty_content_lists(self) -> None:
+        """A partial may carry an empty content list (e.g. for the initial
+        emission before any content_block_stop). It must still be merged
+        without raising and the merged content stays empty."""
+        a1 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
+        a1.content = []
+        a2 = _assistant_message_with_id("msg_a", {"input_tokens": 100, "output_tokens": 0})
+        a2.content = []
+        result = collapse_partial_assistant_messages([a1, a2])
+        assert len(result) == 1
+        assert result[0].content == []
 
 
 class TestBackfillAssistantOutputTokens:

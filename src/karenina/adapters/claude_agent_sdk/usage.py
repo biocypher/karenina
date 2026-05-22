@@ -85,61 +85,77 @@ def extract_sdk_usage(
 
 
 def collapse_partial_assistant_messages(messages: list[Any]) -> list[Any]:
-    """Collapse multiple partial ``AssistantMessage`` events to one per turn.
+    """Merge multiple partial ``AssistantMessage`` events into one per turn.
 
-    The SDK emits one ``AssistantMessage`` per ``content_block_stop`` event,
-    not per LLM turn. A single turn that produces a thinking block plus a
-    text block plus a tool-use block will surface as three ``AssistantMessage``
-    objects, all sharing the same ``message_id`` and the same input-token
-    count. Each successive emission carries more content blocks than the
-    previous one (it accumulates progress), so the LAST emission for a given
-    ``message_id`` is the most complete representation of the turn.
+    The CLI subprocess emits one ``AssistantMessage`` per ``content_block_stop``
+    event, not per LLM turn. A single turn that produces a thinking block plus
+    a text block plus a tool-use block surfaces as three ``AssistantMessage``
+    objects: each carrying only the single block that just finished, all
+    sharing the same ``message_id`` and the same ``message_start``-state usage
+    dict. The blocks do NOT accumulate across emissions — every emission
+    contains exactly one block.
 
-    Without this collapse:
-      * ``agent_metrics.iterations`` counts content blocks, not LLM turns
-        (a 22-turn run reports ~50 iterations).
+    Without merging:
+      * ``trace_messages`` (derived from the messages) has 2-3× the count
+        of real LLM turns; ``agent_metrics.iterations`` is inflated.
       * ``extract_sdk_usage_from_messages`` double- or triple-counts input
-        tokens on a wall-clock timeout where ``ResultMessage`` is absent.
-      * The raw trace shows the same turn split across multiple "AI Message"
-        sections.
+        tokens on a wall-clock timeout where ``ResultMessage`` is absent
+        (all emissions for one turn share the same input-token snapshot).
 
-    AssistantMessages with no ``message_id`` and all non-``AssistantMessage``
+    Naive de-duplication (keeping only the last per ``message_id``) would
+    drop the earlier blocks — typically losing thinking and text content
+    while preserving only the final tool-use block. To avoid that, this
+    helper merges all blocks for a given ``message_id`` into the LAST
+    emission's ``content`` list (preserving source order), then drops the
+    earlier emissions. The surviving emission keeps its own ``usage``,
+    ``model``, ``stop_reason``, etc. — these are stable across partials
+    sharing a ``message_id``.
+
+    AssistantMessages without a ``message_id`` and all non-``AssistantMessage``
     entries are passed through unchanged in their original positions. The
-    relative order of distinct turns is preserved: each turn appears at the
-    position of its LAST partial emission, so the resulting sequence still
-    interleaves correctly with surrounding ``StreamEvent`` / ``UserMessage``
-    / ``ResultMessage`` records.
+    relative order of distinct turns is preserved: each merged turn appears
+    at the position of its LAST partial emission, so the resulting sequence
+    still interleaves correctly with surrounding ``StreamEvent`` /
+    ``UserMessage`` / ``ResultMessage`` records.
 
     Args:
         messages: Mixed collection from ``ClaudeSDKClient.receive_response()``.
 
     Returns:
-        New list with at most one ``AssistantMessage`` per ``message_id``.
+        New list with at most one ``AssistantMessage`` per ``message_id``,
+        each carrying the concatenated content of all its partial emissions.
     """
     try:
         from claude_agent_sdk import AssistantMessage
     except ImportError:
         return list(messages)
 
-    # First pass: find the index of the LAST occurrence for each message_id.
+    # Pass 1: bucket content blocks by message_id and find the last
+    # emission's index for each id.
+    blocks_by_msgid: dict[str, list[Any]] = {}
     last_index_by_msgid: dict[str, int] = {}
     for i, msg in enumerate(messages):
-        if isinstance(msg, AssistantMessage):
-            mid = getattr(msg, "message_id", None)
-            if mid is not None:
-                last_index_by_msgid[mid] = i
+        if not isinstance(msg, AssistantMessage):
+            continue
+        mid = getattr(msg, "message_id", None)
+        if mid is None:
+            continue
+        blocks_by_msgid.setdefault(mid, []).extend(msg.content or [])
+        last_index_by_msgid[mid] = i
 
     if not last_index_by_msgid:
         return list(messages)
 
-    # Second pass: emit each entry, dropping earlier duplicates of any
-    # AssistantMessage that has a later occurrence with the same message_id.
+    # Pass 2: rewrite the last emission for each group with the merged
+    # block list, then emit each entry, dropping earlier partials.
     result: list[Any] = []
     for i, msg in enumerate(messages):
         if isinstance(msg, AssistantMessage):
             mid = getattr(msg, "message_id", None)
-            if mid is not None and last_index_by_msgid[mid] != i:
-                continue
+            if mid is not None:
+                if last_index_by_msgid[mid] != i:
+                    continue
+                msg.content = blocks_by_msgid[mid]
         result.append(msg)
     return result
 
