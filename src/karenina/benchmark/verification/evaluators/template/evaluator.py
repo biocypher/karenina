@@ -17,7 +17,11 @@ from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
 from karenina.benchmark.verification.utils import prepare_evaluation_input
-from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
+from karenina.benchmark.verification.utils.schema_builder import (
+    build_extraction_relaxed_class,
+    build_parsing_schema,
+    rebuild_strict_answer_with_null_fields,
+)
 from karenina.ports import LLMPort
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import BaseAnswer
@@ -311,9 +315,16 @@ class TemplateEvaluator:
                 },
             )
 
-            # 3. Parse via adapter (returns ParsePortResult with usage)
-            parse_port_result = self._parser.parse_to_pydantic(messages, self.answer_class)
-            parsed = parse_port_result.parsed
+            # 3. Parse via adapter (returns ParsePortResult with usage).
+            # Use a relaxed extraction class so a null verified field does not
+            # reject the whole record. The strict Answer instance tracks those
+            # fields via _null_fields for tri-valued field_results.
+            extraction_class = build_extraction_relaxed_class(self.answer_class)
+            parse_port_result = self._parser.parse_to_pydantic(messages, extraction_class)
+            parsed = rebuild_strict_answer_with_null_fields(
+                self.answer_class,
+                parse_port_result.parsed,
+            )
 
             if isinstance(parsed, self.answer_class):
                 result.parsed_answer = parsed

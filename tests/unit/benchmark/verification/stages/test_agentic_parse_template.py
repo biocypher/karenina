@@ -138,8 +138,12 @@ class TestAgenticParseTemplateStage:
         # Parser was called
         mock_parser.parse_to_pydantic.assert_called_once()
 
-        # Results stored
-        assert ctx.get_artifact(ArtifactKeys.PARSED_ANSWER) is parsed_answer
+        # Results stored. After Fix C the stage rebuilds the strict answer
+        # via model_construct, so identity is no longer preserved; match
+        # by class + field values instead.
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert isinstance(stored, MockAnswer)
+        assert stored.test_field is True
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED) is True
         assert ctx.get_artifact(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"
 

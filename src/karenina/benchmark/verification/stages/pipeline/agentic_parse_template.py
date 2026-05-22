@@ -13,7 +13,11 @@ from karenina.adapters import get_agent, get_parser
 from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
-from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
+from karenina.benchmark.verification.utils.schema_builder import (
+    build_extraction_relaxed_class,
+    build_parsing_schema,
+    rebuild_strict_answer_with_null_fields,
+)
 from karenina.ports import AgentConfig, UsageMetadata
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -301,8 +305,22 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         )
 
         try:
-            parse_result = parser.parse_to_pydantic(messages, answer_class)
-            return parse_result.parsed, parse_result.usage
+            # Parse against a relaxed sibling class where each VerifiedField is
+            # Optional[T] = None. This lets the LLM return null for individual
+            # sub-questions ("couldn't compute X") without the whole record
+            # failing pydantic validation. After parsing, we reconstruct the
+            # strict template via model_construct (skipping null fields) and
+            # carry the set of null fields as private metadata so downstream
+            # verification reports them as None rather than False, preventing
+            # accidental matches against a False ground truth.
+            extraction_class = build_extraction_relaxed_class(answer_class)
+            parse_result = parser.parse_to_pydantic(messages, extraction_class)
+            strict_instance = rebuild_strict_answer_with_null_fields(
+                answer_class,
+                parse_result.parsed,
+            )
+
+            return strict_instance, parse_result.usage
         finally:
             close_adapter(parser)
 
