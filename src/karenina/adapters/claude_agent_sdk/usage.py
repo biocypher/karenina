@@ -82,3 +82,75 @@ def extract_sdk_usage(
         cache_creation_tokens=int(cache_creation) if cache_creation is not None else None,
         model=model,
     )
+
+
+def extract_sdk_usage_from_messages(
+    messages: list[Any],
+    model: str | None = None,
+) -> UsageMetadata:
+    """Aggregate per-message usage from SDK AssistantMessage objects.
+
+    The SDK's ``ResultMessage`` is only emitted on a clean loop exit, so when
+    an agent run is cancelled mid-stream (e.g. ``asyncio.wait_for`` timeout)
+    no aggregate usage is available. Individual ``AssistantMessage`` objects
+    collected before the cancellation still carry their per-call ``usage``
+    dict though, so we can reconstruct the run-level totals by summing them.
+
+    This mirrors the per-message aggregation that
+    ``extract_deep_agents_usage`` performs for LangChain AIMessage objects.
+
+    Args:
+        messages: List of SDK message objects collected during the run.
+            Only ``AssistantMessage`` instances are considered; other types
+            (UserMessage, ResultMessage, etc.) are skipped.
+        model: Optional model name to record on the result.
+
+    Returns:
+        ``UsageMetadata`` with summed tokens. Cache fields are summed only
+        when at least one message reports them, otherwise left ``None``.
+
+    Notes:
+        Cost is intentionally NOT estimated here. SDK cost figures live on
+        the ``ResultMessage`` (``total_cost_usd``) which is absent in the
+        partial-trace scenarios this helper exists to handle.
+    """
+    try:
+        from claude_agent_sdk import AssistantMessage
+    except ImportError:
+        return UsageMetadata(model=model)
+
+    total_input = 0
+    total_output = 0
+    cache_read_total = 0
+    cache_creation_total = 0
+    saw_cache_read = False
+    saw_cache_creation = False
+
+    for msg in messages:
+        if not isinstance(msg, AssistantMessage):
+            continue
+        usage_data: dict[str, Any] | None = getattr(msg, "usage", None)
+        if not usage_data or not isinstance(usage_data, dict):
+            continue
+
+        total_input += int(usage_data.get("input_tokens", 0) or 0)
+        total_output += int(usage_data.get("output_tokens", 0) or 0)
+
+        cache_read = usage_data.get("cache_read_input_tokens")
+        if cache_read is not None:
+            cache_read_total += int(cache_read)
+            saw_cache_read = True
+
+        cache_creation = usage_data.get("cache_creation_input_tokens")
+        if cache_creation is not None:
+            cache_creation_total += int(cache_creation)
+            saw_cache_creation = True
+
+    return UsageMetadata(
+        input_tokens=total_input,
+        output_tokens=total_output,
+        total_tokens=total_input + total_output,
+        cache_read_tokens=cache_read_total if saw_cache_read else None,
+        cache_creation_tokens=cache_creation_total if saw_cache_creation else None,
+        model=model,
+    )

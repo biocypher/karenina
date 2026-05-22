@@ -54,6 +54,7 @@ __all__ = [
     "convert_mcp_config",
     # Usage extraction (sdk-007)
     "extract_sdk_usage",
+    "extract_sdk_usage_from_messages",
     # Trace utilities (sdk-008)
     "sdk_messages_to_raw_trace",
     "sdk_messages_to_trace_messages",
@@ -74,7 +75,10 @@ if TYPE_CHECKING:
         sdk_messages_to_raw_trace,
         sdk_messages_to_trace_messages,
     )
-    from karenina.adapters.claude_agent_sdk.usage import extract_sdk_usage
+    from karenina.adapters.claude_agent_sdk.usage import (
+        extract_sdk_usage,
+        extract_sdk_usage_from_messages,
+    )
 
 
 def __getattr__(name: str) -> Any:
@@ -117,6 +121,11 @@ def __getattr__(name: str) -> Any:
         from karenina.adapters.claude_agent_sdk.usage import extract_sdk_usage
 
         return extract_sdk_usage
+
+    if name == "extract_sdk_usage_from_messages":
+        from karenina.adapters.claude_agent_sdk.usage import extract_sdk_usage_from_messages
+
+        return extract_sdk_usage_from_messages
 
     if name == "sdk_messages_to_raw_trace":
         from karenina.adapters.claude_agent_sdk.trace import sdk_messages_to_raw_trace

@@ -535,7 +535,6 @@ class GenerateAnswerStage(BaseVerificationStage):
                 if result.timeout_reached:
                     if result.raw_trace:
                         self.set_artifact_and_result(context, "response_timeout_partial", True)
-                        self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
                         error_msg = (
                             f"Agent timed out with partial trace ({len(result.raw_trace)} chars, {result.turns} turns)"
                         )
