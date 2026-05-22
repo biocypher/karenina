@@ -71,3 +71,24 @@ class TestMessageToDictUsageMetadata:
     def test_default_usage_metadata_is_none(self) -> None:
         msg = Message.assistant("hi")
         assert msg.usage_metadata is None
+
+    def test_from_dict_preserves_usage_metadata(self) -> None:
+        data = {
+            "role": "assistant",
+            "content": "cached answer",
+            "block_index": 0,
+            "usage_metadata": {
+                "input_tokens": 50,
+                "output_tokens": 10,
+                "cache_read_input_tokens": 800,
+            },
+        }
+
+        msg = Message.from_dict(data)
+
+        assert msg.usage_metadata == {
+            "input_tokens": 50,
+            "output_tokens": 10,
+            "cache_read_input_tokens": 800,
+        }
+        assert msg.to_dict()["usage_metadata"] == data["usage_metadata"]

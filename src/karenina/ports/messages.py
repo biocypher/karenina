@@ -346,4 +346,8 @@ class Message:
                 )
             )
 
-        return cls(role=role, content=content_blocks)
+        return cls(
+            role=role,
+            content=content_blocks,
+            usage_metadata=data.get("usage_metadata"),
+        )
