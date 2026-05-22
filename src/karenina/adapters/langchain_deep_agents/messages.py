@@ -102,7 +102,17 @@ class DeepAgentsMessageConverter:
                 result.append(Message.user(msg.content if isinstance(msg.content, str) else str(msg.content)))
 
             elif isinstance(msg, AIMessage):
-                result.append(self._convert_ai_message(msg))
+                converted = self._convert_ai_message(msg)
+                # Attach per-call usage so it propagates into
+                # template.trace_messages[*].usage_metadata via to_dict().
+                # Reuse the extraction helper from trace.py to keep the two
+                # paths consistent.
+                from karenina.adapters.langchain_deep_agents.trace import (
+                    _extract_ai_usage_metadata,
+                )
+
+                converted.usage_metadata = _extract_ai_usage_metadata(msg)
+                result.append(converted)
 
             elif isinstance(msg, ToolMessage):
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)

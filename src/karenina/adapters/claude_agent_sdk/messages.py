@@ -169,6 +169,44 @@ class ClaudeSDKMessageConverter:
                 text_parts.append(block.text)
         return Message.user("\n".join(text_parts) if text_parts else "")
 
+    def _extract_assistant_usage(self, msg: AssistantMessage) -> dict[str, int] | None:
+        """Extract per-call usage metadata from an SDK AssistantMessage.
+
+        SDK AssistantMessage exposes an Anthropic-shaped usage dict with
+        input_tokens / output_tokens (always) and optional cache fields
+        (cache_read_input_tokens / cache_creation_input_tokens).
+
+        Mirrors the extraction logic in
+        ``claude_agent_sdk/trace.py::sdk_messages_to_trace_messages`` so the
+        Message-based production trace path carries the same per-turn
+        accounting as the direct-to-dict helper.
+
+        Args:
+            msg: SDK AssistantMessage instance.
+
+        Returns:
+            Dict with input_tokens / output_tokens (and any reported cache
+            fields), or None when no usage is reported (missing attribute
+            or empty/falsy dict).
+        """
+        usage_data = getattr(msg, "usage", None)
+        if not usage_data:
+            return None
+
+        per_call: dict[str, int] = {
+            "input_tokens": int(usage_data.get("input_tokens", 0) or 0),
+            "output_tokens": int(usage_data.get("output_tokens", 0) or 0),
+        }
+        # Only include cache fields when reported, so we can distinguish
+        # "not reported" from a real zero.
+        cache_read = usage_data.get("cache_read_input_tokens")
+        if cache_read is not None:
+            per_call["cache_read_input_tokens"] = int(cache_read)
+        cache_creation = usage_data.get("cache_creation_input_tokens")
+        if cache_creation is not None:
+            per_call["cache_creation_input_tokens"] = int(cache_creation)
+        return per_call
+
     def _convert_assistant_message(
         self,
         msg: AssistantMessage,
@@ -263,9 +301,18 @@ class ClaudeSDKMessageConverter:
             # Add tool calls
             content.extend(tool_calls)
 
+            # Extract per-call usage so it survives end-to-end into
+            # template.trace_messages[*].usage_metadata for both CSDK and
+            # DA interfaces.
+            usage_metadata = self._extract_assistant_usage(msg)
+
             result.insert(
                 0,
-                Message(role=Role.ASSISTANT, content=content),  # type: ignore[arg-type]
+                Message(
+                    role=Role.ASSISTANT,
+                    content=content,  # type: ignore[arg-type]
+                    usage_metadata=usage_metadata,
+                ),
             )
 
         return result
