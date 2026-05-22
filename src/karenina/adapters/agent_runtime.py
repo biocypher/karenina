@@ -423,13 +423,28 @@ def build_container_command(
         command.extend([config.image, *argv])
         return command
 
+    # Sandbox isolation: prevent the host filesystem from leaking host-installed
+    # Python packages into the model's sandbox.
+    #   --no-home              skips Singularity's default $HOME auto-mount
+    #   --no-mount bind-paths  drops system-default binds from singularity.conf
+    #                          (e.g. /homes, /hps/software, /nfs/*); only the
+    #                          explicit --bind below remains, so the model
+    #                          cannot reach $HOME/.local/.../site-packages
+    #                          either implicitly or via sys.path.insert.
+    #   PYTHONNOUSERSITE=1     belt-and-braces: ignore user-site even if a
+    #                          future caller adds a bind that exposes one.
     command = [
         config.runtime,
         "exec",
+        "--no-home",
+        "--no-mount",
+        "bind-paths",
         "--bind",
         f"{host_workspace}:{SANDBOX_WORKSPACE_PATH}:rw",
         "--pwd",
         SANDBOX_WORKSPACE_PATH,
+        "--env",
+        "PYTHONNOUSERSITE=1",
         *_env_flags_for_singularity(env),
         config.image,
         *argv,

@@ -193,6 +193,85 @@ def test_singularity_command_binds_workspace_and_sets_env(tmp_path):
     assert str(image) in command
 
 
+def test_singularity_command_isolates_host_filesystem(tmp_path):
+    """The constructed command must close the host-home leak path.
+
+    Without --no-home + --no-mount bind-paths, Singularity's site config can
+    auto-bind /homes, /hps/software, /nfs/* into the sandbox, exposing the
+    host user's ~/.local/.../site-packages to the model. PYTHONNOUSERSITE
+    is a defense-in-depth safeguard if a future caller adds a bind that
+    still exposes a user-site directory.
+    """
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    image = tmp_path / "image.sif"
+    image.write_text("")
+
+    command = build_container_command(
+        config=ContainerRuntimeConfig(runtime="singularity", image=str(image)),
+        host_workspace=workspace,
+        argv=["python", "-c", "import sys; print(sys.path)"],
+    )
+
+    assert "--no-home" in command, "missing --no-home: host $HOME would auto-mount"
+
+    no_mount_idx = command.index("--no-mount")
+    assert command[no_mount_idx + 1] == "bind-paths", (
+        "--no-mount must be followed by 'bind-paths' to drop system default binds"
+    )
+
+    env_indices = [i for i, arg in enumerate(command) if arg == "--env"]
+    env_values = {command[i + 1] for i in env_indices}
+    assert "PYTHONNOUSERSITE=1" in env_values, (
+        "missing PYTHONNOUSERSITE=1: user-site directories would still be picked up by Python"
+    )
+
+    # Image and argv still come after the isolation flags.
+    assert str(image) in command
+    image_idx = command.index(str(image))
+    assert image_idx > no_mount_idx
+    assert command[image_idx + 1 :] == ["python", "-c", "import sys; print(sys.path)"]
+
+
+def test_apptainer_command_inherits_isolation_flags(tmp_path):
+    """The same isolation flags apply when the runtime is apptainer."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    image = tmp_path / "image.sif"
+    image.write_text("")
+
+    command = build_container_command(
+        config=ContainerRuntimeConfig(runtime="apptainer", image=str(image)),
+        host_workspace=workspace,
+        argv=["/bin/true"],
+    )
+
+    assert command[0] == "apptainer"
+    assert "--no-home" in command
+    assert "--no-mount" in command
+    assert command[command.index("--no-mount") + 1] == "bind-paths"
+    env_values = {command[i + 1] for i, arg in enumerate(command) if arg == "--env"}
+    assert "PYTHONNOUSERSITE=1" in env_values
+
+
+def test_docker_command_does_not_carry_singularity_isolation_flags(tmp_path):
+    """Docker does not auto-mount $HOME, so the singularity-specific flags
+    must not appear in the docker command (they would be invalid flags)."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    command = build_container_command(
+        config=ContainerRuntimeConfig(runtime="docker", image="example:latest"),
+        host_workspace=workspace,
+        argv=["/bin/true"],
+    )
+
+    assert command[0] == "docker"
+    assert "--no-home" not in command
+    assert "--no-mount" not in command
+    assert "bind-paths" not in command
+
+
 def test_singularity_rejects_docker_only_add_hosts():
     config = ModelConfig(
         id="claude",
