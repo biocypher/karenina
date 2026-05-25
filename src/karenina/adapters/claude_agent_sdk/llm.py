@@ -31,6 +31,7 @@ from karenina.ports.llm import StreamingLLMResponse
 from karenina.utils.errors import ErrorRegistry
 from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
+from .auth import subscription_auth_env
 from .messages import ClaudeSDKMessageConverter
 from .usage import extract_sdk_usage
 
@@ -197,6 +198,8 @@ class ClaudeSDKLLMAdapter:
         env_vars: dict[str, str] = {}
         if self._config.anthropic_api_key:
             env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
+        else:
+            env_vars.update(subscription_auth_env())
         if self._config.anthropic_base_url:
             env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
 

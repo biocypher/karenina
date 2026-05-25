@@ -47,6 +47,7 @@ def _forward_env_dict() -> dict[str, str | None]:
         "CLAUDE_AGENT_SDK_VERSION",
         "CLAUDE_CODE_ENTRYPOINT",
         "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING",
+        "CLAUDE_CODE_OAUTH_TOKEN",
         "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT",
         "HTTP_PROXY",
         "HTTPS_PROXY",

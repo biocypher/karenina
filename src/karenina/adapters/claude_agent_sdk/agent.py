@@ -47,6 +47,7 @@ from karenina.ports import (
 )
 from karenina.ports.capabilities import PortCapabilities
 
+from .auth import subscription_auth_env
 from .mcp import convert_mcp_config
 from .messages import ClaudeSDKMessageConverter
 from .trace import sdk_messages_to_raw_trace
@@ -345,6 +346,8 @@ class ClaudeSDKAgentAdapter:
             env_vars["ANTHROPIC_API_KEY"] = self._config.anthropic_api_key.get_secret_value()
             if _is_zai_anthropic_endpoint(self._config.anthropic_base_url):
                 env_vars["ANTHROPIC_AUTH_TOKEN"] = self._config.anthropic_api_key.get_secret_value()
+        else:
+            env_vars.update(subscription_auth_env())
         if self._config.anthropic_base_url:
             env_vars["ANTHROPIC_BASE_URL"] = self._config.anthropic_base_url
         if _is_zai_anthropic_endpoint(self._config.anthropic_base_url) and configured_model_name.startswith("glm-"):
@@ -492,9 +495,7 @@ class ClaudeSDKAgentAdapter:
         if result_message:
             usage = extract_sdk_usage(result_message, model=self._config.model_name)
         else:
-            usage = extract_sdk_usage_from_messages(
-                collected_messages, model=self._config.model_name
-            )
+            usage = extract_sdk_usage_from_messages(collected_messages, model=self._config.model_name)
         turns = result_message.num_turns if result_message and hasattr(result_message, "num_turns") else 0
         actual_model = self._extract_actual_model(collected_messages) or self._config.model_name
         session_id = result_message.session_id if result_message and hasattr(result_message, "session_id") else None
