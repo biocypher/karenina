@@ -189,7 +189,7 @@ def backfill_assistant_output_tokens(messages: list[Any]) -> None:
             ``include_partial_messages=True`` option.
     """
     try:
-        from claude_agent_sdk import AssistantMessage, StreamEvent
+        from claude_agent_sdk import AssistantMessage, StreamEvent  # type: ignore[attr-defined]
     except ImportError:
         return
 
@@ -220,7 +220,7 @@ def backfill_assistant_output_tokens(messages: list[Any]) -> None:
         msg_id = getattr(msg, "message_id", None)
         if msg_id is None or msg_id not in delta_output_by_msgid:
             continue
-        current_usage = msg.usage or {}
+        current_usage = msg.usage or {}  # type: ignore[attr-defined]
         existing_output = int(current_usage.get("output_tokens", 0) or 0)
         if existing_output != 0:
             # Don't clobber a real non-zero value reported by canonical
@@ -228,7 +228,7 @@ def backfill_assistant_output_tokens(messages: list[Any]) -> None:
             continue
         patched = dict(current_usage)
         patched["output_tokens"] = delta_output_by_msgid[msg_id]
-        msg.usage = patched
+        msg.usage = patched  # type: ignore[attr-defined]
 
 
 def extract_sdk_usage_from_messages(
