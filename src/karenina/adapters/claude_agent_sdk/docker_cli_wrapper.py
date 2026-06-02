@@ -63,7 +63,13 @@ def _forward_env_dict() -> dict[str, str | None]:
             "CLAUDE_CONFIG_DIR": os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude-config"),
             "UV_LINK_MODE": "copy",
             "UV_CACHE_DIR": "/tmp/uv-cache",
-            "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            # /opt/renv/bin is appended last so a baked R env (when present in the
+            # image) exposes R/Rscript without shadowing the baked system python3 or
+            # the agent's own /workspace/.venv. R_LIBS_USER gives a writable target
+            # for BiocManager::install at run time. Both are inert for images that
+            # lack the baked profile.
+            "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/renv/bin",
+            "R_LIBS_USER": "/tmp/rlibs",
         }
     )
     return env
