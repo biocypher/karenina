@@ -186,6 +186,7 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         self,
         base_url: str,
         openai_api_key: str | SecretStr | None = None,
+        endpoint_base_url_mode: str = "auto_v1",
         **kwargs: Any,
     ) -> None:
         # Do NOT fallback to environment - require explicit API key
@@ -198,8 +199,16 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         if isinstance(openai_api_key, str):
             openai_api_key = SecretStr(openai_api_key)
 
-        # Normalize URL to ensure it ends with /v1
-        normalized_url = _normalize_openai_endpoint_url(base_url)
+        # Resolve the base URL. "auto_v1" (default) appends /v1 for the common
+        # OpenAI-compatible convention; "raw" uses the URL exactly as given, for
+        # endpoints whose OpenAI-compatible path is not at /v1 (for example the
+        # z.ai coding endpoint, served at .../v4/chat/completions).
+        if endpoint_base_url_mode not in {"auto_v1", "raw"}:
+            raise ValueError(f"endpoint_base_url_mode must be 'auto_v1' or 'raw', got {endpoint_base_url_mode!r}")
+        if endpoint_base_url_mode == "raw":
+            normalized_url = base_url.rstrip("/")
+        else:
+            normalized_url = _normalize_openai_endpoint_url(base_url)
 
         # Inject bounded httpx clients unless the caller already supplied them.
         # See _build_httpx_clients docstring and issue 194 for rationale.

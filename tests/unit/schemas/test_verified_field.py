@@ -12,6 +12,7 @@ from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedF
 from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
+    NumericGraded,
     NumericMaximum,
     NumericMinimum,
     NumericRange,
@@ -263,6 +264,48 @@ class TestBaseAnswerAutoVerifyGranular:
         answer = MyAnswer(a="x", b="wrong")
         assert answer.verify_granular() == 0.75  # 3 / 4
 
+    def test_graded_field_contributes_partial_credit(self):
+        class MyAnswer(BaseAnswer):
+            num: float = VerifiedField(
+                description="n",
+                ground_truth=42.0,
+                verify_with=NumericGraded(cutoff=0.25, mode="relative"),
+                weight=1.0,
+            )
+            flag: bool = VerifiedField(description="f", ground_truth=True, verify_with=BooleanMatch(), weight=1.0)
+
+        # near-miss numeric (46 vs 42 -> score 1 - (4/42)/0.25) + correct bool
+        answer = MyAnswer(num=46.0, flag=True)
+        expected_num_score = 1.0 - (4 / 42) / 0.25
+        assert answer.verify() is True  # numeric within cutoff, bool correct
+        assert answer.verify_granular() == pytest.approx((expected_num_score + 1.0) / 2)
+
+    def test_field_scores_exposes_per_field_credit(self):
+        class MyAnswer(BaseAnswer):
+            num: float = VerifiedField(
+                description="n",
+                ground_truth=42.0,
+                verify_with=NumericGraded(cutoff=0.25, mode="relative"),
+            )
+            flag: bool = VerifiedField(description="f", ground_truth=True, verify_with=BooleanMatch())
+
+        answer = MyAnswer(num=46.0, flag=False)
+        scores = answer._compute_field_scores()
+        assert scores["num"] == pytest.approx(1.0 - (4 / 42) / 0.25)
+        assert scores["flag"] == 0.0
+        # binary field_results stays binary alongside the graded scores
+        assert answer._compute_field_results() == {"num": True, "flag": False}
+
+    def test_non_graded_template_field_scores_are_binary(self):
+        class MyAnswer(BaseAnswer):
+            a: str = VerifiedField(description="a", ground_truth="x", verify_with=ExactMatch())
+            b: str = VerifiedField(description="b", ground_truth="y", verify_with=ExactMatch())
+
+        answer = MyAnswer(a="x", b="wrong")
+        # graded scores reduce to the binary image for non-graded primitives
+        assert answer._compute_field_scores() == {"a": 1.0, "b": 0.0}
+        assert answer.verify_granular() == 0.5
+
 
 @pytest.mark.unit
 class TestBaseAnswerAutoGroundTruth:
@@ -464,6 +507,26 @@ class TestVerifiedFieldGroundTruthMismatchWarning:
                 description="approved",
                 ground_truth=True,
                 verify_with=BooleanMatch(),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_graded_with_non_numeric_string_warns(self, caplog):
+        """NumericGraded with a non-numeric string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="ratio",
+                ground_truth="not-a-number",
+                verify_with=NumericGraded(cutoff=0.25),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_graded_with_valid_number_no_warning(self, caplog):
+        """NumericGraded with a float ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="ratio",
+                ground_truth=1.95,
+                verify_with=NumericGraded(cutoff=0.25),
             )
         assert not any("ground_truth" in r.message.lower() for r in caplog.records)
 

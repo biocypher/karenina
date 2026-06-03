@@ -13,6 +13,7 @@ from karenina.schemas.primitives import (
     ExactMatch,
     LiteralMatch,
     NumericExact,
+    NumericGraded,
     NumericMaximum,
     NumericMinimum,
     NumericRange,
@@ -189,6 +190,116 @@ class TestNumericTolerance:
         assert p_rel.mode == "relative"
         p_abs = NumericTolerance(tolerance=0.1, mode="absolute")
         assert p_abs.mode == "absolute"
+
+
+@pytest.mark.unit
+class TestNumericGraded:
+    """Test NumericGraded primitive (distance-graded gate + partial credit)."""
+
+    # --- Single-band (full_credit unset) ---
+
+    def test_single_band_exact_full_credit(self):
+        p = NumericGraded(cutoff=0.25, mode="relative")
+        assert p.check(42, 42) is True
+        assert p.score(42, 42) == 1.0
+
+    def test_single_band_relative_linear_decay(self):
+        p = NumericGraded(cutoff=0.25, mode="relative", decay="linear")
+        # d = 4/42 = 0.09524 ; r = d/0.25 ; score = 1 - r
+        assert p.check(46, 42) is True
+        assert p.score(46, 42) == pytest.approx(1.0 - (4 / 42) / 0.25)
+
+    def test_single_band_quadratic_decay(self):
+        p = NumericGraded(cutoff=0.25, mode="relative", decay="quadratic")
+        r = (4 / 42) / 0.25
+        assert p.score(46, 42) == pytest.approx(1.0 - r * r)
+
+    def test_single_band_absolute_mode(self):
+        p = NumericGraded(cutoff=2.0, mode="absolute")
+        assert p.check(43, 42) is True
+        assert p.score(43, 42) == pytest.approx(0.5)  # 1 - 1/2
+        assert p.check(45, 42) is False
+        assert p.score(45, 42) == 0.0
+
+    def test_single_band_at_cutoff_scores_zero_but_checks_true(self):
+        p = NumericGraded(cutoff=0.25, mode="relative")
+        # d exactly at cutoff: score 0.0 (d >= cutoff), but within the gate
+        assert p.score(52.5, 42) == 0.0
+        assert p.check(52.5, 42) is True
+
+    def test_single_band_beyond_cutoff(self):
+        p = NumericGraded(cutoff=0.25, mode="relative")
+        assert p.check(60, 42) is False
+        assert p.score(60, 42) == 0.0
+
+    def test_single_band_score_positive_implies_check(self):
+        p = NumericGraded(cutoff=0.25, mode="relative")
+        for extracted in (42, 43, 45, 48, 50, 51, 52, 55, 60):
+            if p.score(extracted, 42) > 0.0:
+                assert p.check(extracted, 42) is True
+
+    def test_zero_expected_relative_exact_only(self):
+        p = NumericGraded(cutoff=0.1, mode="relative")
+        assert p.check(0, 0) is True
+        assert p.score(0, 0) == 1.0
+        assert p.check(0.05, 0) is False
+        assert p.score(0.05, 0) == 0.0
+
+    # --- Double-band (full_credit set) ---
+
+    def test_double_band_plateau(self):
+        p = NumericGraded(cutoff=0.25, full_credit=0.01, mode="relative")
+        # d = 0.3/42 = 0.00714 < full_credit -> full credit, and within the gate
+        assert p.score(42.3, 42) == 1.0
+        assert p.check(42.3, 42) is True
+
+    def test_double_band_gate_is_inner(self):
+        p = NumericGraded(cutoff=0.25, full_credit=0.01, mode="relative")
+        # d = 4/42 = 0.0952 > full_credit -> beyond the gate, so check() False
+        assert p.check(46, 42) is False
+
+    def test_double_band_decay_between_inner_and_cutoff(self):
+        p = NumericGraded(cutoff=0.25, full_credit=0.01, mode="relative")
+        d = 4 / 42
+        r = (d - 0.01) / (0.25 - 0.01)
+        assert p.score(46, 42) == pytest.approx(1.0 - r)
+
+    def test_double_band_intended_divergence(self):
+        # In the decay region a near-miss is check() False but score() > 0.
+        p = NumericGraded(cutoff=0.25, full_credit=0.01, mode="relative")
+        assert p.check(46, 42) is False
+        assert p.score(46, 42) > 0.0
+
+    def test_double_band_beyond_cutoff(self):
+        p = NumericGraded(cutoff=0.25, full_credit=0.01, mode="relative")
+        assert p.check(60, 42) is False
+        assert p.score(60, 42) == 0.0
+
+    # --- Validation ---
+
+    def test_cutoff_must_be_positive(self):
+        with pytest.raises(ValidationError):
+            NumericGraded(cutoff=0.0)
+        with pytest.raises(ValidationError):
+            NumericGraded(cutoff=-0.1)
+
+    def test_full_credit_must_be_less_than_cutoff(self):
+        with pytest.raises(ValidationError):
+            NumericGraded(cutoff=0.1, full_credit=0.1)
+        with pytest.raises(ValidationError):
+            NumericGraded(cutoff=0.1, full_credit=0.2)
+
+    def test_full_credit_zero_is_valid(self):
+        p = NumericGraded(cutoff=0.25, full_credit=0.0)
+        assert p.full_credit == 0.0
+
+    def test_unknown_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            NumericGraded(cutoff=0.25, mode="bogus")
+
+    def test_unknown_decay_rejected(self):
+        with pytest.raises(ValidationError):
+            NumericGraded(cutoff=0.25, decay="bogus")
 
 
 @pytest.mark.unit
@@ -497,3 +608,18 @@ class TestPrimitiveSerializationRoundTrip:
         data = p.model_dump(mode="json")
         restored = NumericTolerance.model_validate(data)
         assert restored.check(5.2, 5.0) is True
+
+    def test_numeric_graded_single_band_round_trip(self):
+        p = NumericGraded(cutoff=0.25, mode="relative", decay="quadratic")
+        data = p.model_dump(mode="json")
+        restored = NumericGraded.model_validate(data)
+        assert restored.check(46, 42) is True
+        assert restored.score(46, 42) == p.score(46, 42)
+
+    def test_numeric_graded_double_band_round_trip(self):
+        p = NumericGraded(cutoff=0.25, full_credit=0.01, mode="absolute")
+        data = p.model_dump(mode="json")
+        restored = NumericGraded.model_validate(data)
+        assert restored.full_credit == 0.01
+        assert restored.score(46, 42) == p.score(46, 42)
+        assert restored.check(46, 42) == p.check(46, 42)

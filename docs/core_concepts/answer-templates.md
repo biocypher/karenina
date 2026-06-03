@@ -723,6 +723,7 @@ For complete parameter documentation and examples, see [Verification Primitives]
 | `SemanticMatch` | String | Embedding similarity check | `str` |
 | `NumericExact` | Numeric | Exact equality after float coercion | `int`, `float` |
 | `NumericTolerance` | Numeric | Within tolerance (relative or absolute) | `int`, `float` |
+| `NumericGraded` | Numeric | Distance-graded partial credit with a cutoff (see [verification primitives](verification-primitives.md)) | `int`, `float` |
 | `NumericRange` | Numeric | Within bounds | `int`, `float` |
 | `NumericMinimum` | Numeric | At least N | `int`, `float` |
 | `NumericMaximum` | Numeric | At most N | `int`, `float` |

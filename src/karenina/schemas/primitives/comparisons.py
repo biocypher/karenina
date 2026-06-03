@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from dateutil import parser as dateutil_parser
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from karenina.schemas.primitives.normalizers import (
     Normalizer,
@@ -46,6 +46,25 @@ class VerificationPrimitive(BaseModel):
             True if the values match according to this primitive's rules.
         """
         raise NotImplementedError
+
+    def score(self, extracted: Any, expected: Any) -> float:
+        """Graded credit in [0.0, 1.0] for this field.
+
+        This is the continuous companion to ``check()``. ``check()`` drives the
+        binary ``verify()`` gate; ``score()`` drives the continuous
+        ``verify_granular()`` channel. The default derives a 0/1 score from
+        ``check()``, so every primitive that does not override it stays binary
+        and ``verify_granular()`` is unchanged. Primitives that grade partial
+        credit (for example ``NumericGraded``) override this method.
+
+        Args:
+            extracted: Value extracted by the judge LLM.
+            expected: Ground truth value from VerifiedField.
+
+        Returns:
+            A score in [0.0, 1.0]; 1.0 if ``check()`` passes else 0.0 by default.
+        """
+        return 1.0 if self.check(extracted, expected) else 0.0
 
 
 # --- Boolean Primitives ---
@@ -239,6 +258,88 @@ class NumericMaximum(VerificationPrimitive):
         if self.exclusive:
             return val < threshold
         return val <= threshold
+
+
+@_register_primitive
+class NumericGraded(VerificationPrimitive):
+    """Distance-graded numeric primitive: a binary gate plus partial credit.
+
+    Unlike the other numeric primitives, this one contributes a continuous
+    score to ``verify_granular()`` based on how far the extracted value is from
+    the reference (``ground_truth``). ``verify()`` and the result's binary
+    fields stay binary: ``check()`` is a hard gate, ``score()`` is the graded
+    companion.
+
+    Single-band (``full_credit`` is None): ``cutoff`` is BOTH the binary gate
+    (``check()`` passes iff distance <= cutoff) AND the zero-credit distance.
+    ``score()`` decays from 1.0 at the reference to 0.0 at the cutoff.
+
+    Double-band (``full_credit`` set, 0 <= full_credit < cutoff): ``score()`` is
+    1.0 within ``full_credit`` (the plateau), decays from ``full_credit`` to 0.0
+    at ``cutoff``, and is 0.0 beyond. ``check()`` gates at the INNER band (passes
+    iff distance <= full_credit), so a tight binary-pass band (for example an
+    existing precision bin) is preserved while near-misses between ``full_credit``
+    and ``cutoff`` still earn partial credit. In this mode a near-miss is
+    intentionally ``check()`` False with ``score()`` > 0.
+
+    Distance modes:
+        - "relative": ``|extracted - expected| / |expected|`` (cutoff and
+          full_credit are fractions, e.g. 0.10 == 10 percent).
+        - "absolute": ``|extracted - expected|`` in raw units (percentage-points
+          when the reference is itself a percentage).
+
+    Decay shapes (credit between the inner band and the cutoff):
+        - "linear":    ``1 - r``
+        - "quadratic": ``1 - r ** 2``
+      where ``r = (d - full_credit) / (cutoff - full_credit)``.
+    """
+
+    cutoff: float
+    full_credit: float | None = None
+    mode: Literal["relative", "absolute"] = "relative"
+    decay: Literal["linear", "quadratic"] = "linear"
+
+    @model_validator(mode="after")
+    def _validate_bands(self) -> NumericGraded:
+        if self.cutoff <= 0:
+            raise ValueError("NumericGraded.cutoff must be > 0")
+        if self.full_credit is not None and not (0 <= self.full_credit < self.cutoff):
+            raise ValueError("NumericGraded.full_credit must satisfy 0 <= full_credit < cutoff")
+        return self
+
+    def _distance(self, extracted: Any, expected: Any) -> float | None:
+        """Distance to the reference, or None when undefined (relative, expected==0).
+
+        Mirrors NumericTolerance's expected==0 relative-mode behavior: an exact
+        match has distance 0, anything else is undefined (treated as infinitely
+        far by check()/score()).
+        """
+        d = abs(float(extracted) - float(expected))
+        if self.mode == "absolute":
+            return d
+        if float(expected) == 0:
+            return 0.0 if d == 0 else None
+        return d / abs(float(expected))
+
+    def _gate(self) -> float:
+        """Binary-pass boundary: the inner band in double-band mode, else cutoff."""
+        return self.cutoff if self.full_credit is None else self.full_credit
+
+    def check(self, extracted: Any, expected: Any) -> bool:
+        d = self._distance(extracted, expected)
+        return d is not None and d <= self._gate()
+
+    def score(self, extracted: Any, expected: Any) -> float:
+        d = self._distance(extracted, expected)
+        if d is None:
+            return 0.0
+        inner = self.full_credit or 0.0
+        if d <= inner:
+            return 1.0
+        if self.cutoff <= inner or d >= self.cutoff:
+            return 0.0
+        r = (d - inner) / (self.cutoff - inner)
+        return 1.0 - r * r if self.decay == "quadratic" else 1.0 - r
 
 
 # --- List Primitives ---

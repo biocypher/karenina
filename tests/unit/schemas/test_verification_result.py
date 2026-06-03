@@ -194,6 +194,28 @@ def test_template_construction() -> None:
 
 
 @pytest.mark.unit
+def test_template_field_scores_round_trip() -> None:
+    """Per-field graded scores survive a model_dump/model_validate round-trip."""
+    template = VerificationResultTemplate(
+        verify_result=False,
+        verify_granular_result=0.7,
+        field_results={"a": True, "b": False, "c": None},
+        field_scores={"a": 1.0, "b": 0.4, "c": None},
+    )
+    restored = VerificationResultTemplate.model_validate(template.model_dump())
+    assert restored.field_scores == {"a": 1.0, "b": 0.4, "c": None}
+    # field_results stays strictly binary/tri-valued alongside the graded scores
+    assert restored.field_results == {"a": True, "b": False, "c": None}
+
+
+@pytest.mark.unit
+def test_template_field_scores_default_none() -> None:
+    """field_scores defaults to None so legacy results load unchanged."""
+    template = VerificationResultTemplate(verify_result=True)
+    assert template.field_scores is None
+
+
+@pytest.mark.unit
 def test_template_with_embedding_check() -> None:
     """Test template with embedding check fields."""
     template = VerificationResultTemplate(

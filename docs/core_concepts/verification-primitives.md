@@ -186,7 +186,7 @@ Use trace primitives when the check is a pure pattern match or length constraint
 |-----------|-------------------|---------------------------|
 | `bool` | `BooleanMatch` | Always use `BooleanMatch` for parsed booleans |
 | `str` | `ExactMatch` | `ContainsAny`/`ContainsAll` for multiple acceptable answers; `RegexMatch` for format validation; `SemanticMatch` for meaning-based comparison |
-| `int`, `float` | `NumericExact` | `NumericTolerance` for measurements with acceptable variance; `NumericRange` when no single correct value exists; `NumericMinimum`/`NumericMaximum` for one-sided bounds |
+| `int`, `float` | `NumericExact` | `NumericTolerance` for measurements with acceptable variance; `NumericGraded` for distance-graded partial credit; `NumericRange` when no single correct value exists; `NumericMinimum`/`NumericMaximum` for one-sided bounds |
 | `list[str]` | `SetContainment` | `OrderedMatch` when element order matters |
 | `Literal[...]` | `LiteralMatch` | Always use `LiteralMatch` for Literal fields |
 | `str` (date) | `DateMatch` | `DateTolerance` for approximate dates; `DateRange` when any date in a window is acceptable |
@@ -202,6 +202,7 @@ Use trace primitives when the check is a pure pattern match or length constraint
 | Meaning is similar (requires embeddings) | `SemanticMatch` | `threshold` |
 | Exact number | `NumericExact` | (none) |
 | Number within tolerance | `NumericTolerance` | `tolerance`, `mode` |
+| Number graded by distance (partial credit) | `NumericGraded` | `cutoff`, `full_credit` |
 | Number in a range | `NumericRange` | `min`, `max` |
 | Number at least N | `NumericMinimum` | `minimum` |
 | Number at most N | `NumericMaximum` | `maximum` |
@@ -498,6 +499,28 @@ Pass if the extracted value does not exceed the `ground_truth` value (inclusive 
 | `exclusive` | `bool` | `False` | If `True`, use strict `<` instead of `<=` |
 
 **Applies to:** `int`, `float`
+
+---
+
+#### NumericGraded
+
+Score the extracted value by its distance from the `ground_truth`, giving partial credit that decays to zero at a cutoff. This is the one numeric primitive whose contribution to `verify_granular()` is **continuous** rather than 0/1: a near-miss earns a fractional score. `verify()` stays binary, driven by `check()` as for every primitive. The reference value is carried in `ground_truth` (as with `NumericTolerance`).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `cutoff` | `float` | required | Distance at which graded credit reaches 0. Must be `> 0` |
+| `full_credit` | `float \| None` | `None` | Optional inner band that earns full credit. When set, must satisfy `0 <= full_credit < cutoff` |
+| `mode` | `Literal["relative", "absolute"]` | `"relative"` | `"relative"`: distance is `\|extracted - expected\| / \|expected\|` (a fraction, e.g. `0.10` is 10%); `"absolute"`: raw difference (percentage-points when the reference is itself a percentage) |
+| `decay` | `Literal["linear", "quadratic"]` | `"linear"` | Shape of the decay between the inner band and the cutoff |
+
+**Applies to:** `int`, `float`
+
+There are two band shapes:
+
+- **Single-band** (`full_credit` unset): `cutoff` is both the binary gate and the zero-credit distance. `check()` passes anywhere within the cutoff, and the score decays from 1.0 at the reference to 0.0 at the cutoff.
+- **Double-band** (`full_credit` set): the score is 1.0 within the inner `full_credit` band, decays to 0.0 at the cutoff, and is 0.0 beyond. `check()` gates at the **inner** band, so the binary pass stays tight (for example at a known reporting precision) while a near-miss between `full_credit` and `cutoff` is `verify()` False yet still earns partial credit in `verify_granular()`.
+
+When the reference is zero in `"relative"` mode, only an exact match scores (mirroring `NumericTolerance`); use `"absolute"` mode whenever the reference can be zero. The per-field graded scores are surfaced alongside the binary results: see the `field_scores` field on the result and the `field_score` column in the [results DataFrame](../workflows/analyzing-results/dataframe-analysis.md).
 
 ---
 

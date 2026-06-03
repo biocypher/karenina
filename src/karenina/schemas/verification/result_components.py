@@ -149,6 +149,13 @@ class VerificationResultTemplate(BaseModel):
     # null for that field, kept distinct from False so a null cannot
     # silently match a False ground truth).
     field_results: dict[str, bool | None] | None = None
+    # Per-field graded scores in [0.0, 1.0] (or None for a null extraction).
+    # Companion to field_results: field_results is the binary check() outcome,
+    # field_scores is the continuous score() outcome. For non-graded primitives
+    # each value is exactly 1.0 (pass) or 0.0 (fail); graded primitives
+    # (NumericGraded) contribute partial credit. This is the per-field detail
+    # behind verify_granular_result.
+    field_scores: dict[str, float | None] | None = None
     composition_strategy: str | None = (
         None  # Composition strategy used: "all_of", "any_of", "at_least_n(N)" (issue 151)
     )
