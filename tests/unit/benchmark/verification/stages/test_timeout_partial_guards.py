@@ -19,6 +19,12 @@ GUARDED_STAGES = [
     VerifyTemplateStage,
 ]
 
+PARTIAL_SCORING_STAGES = [
+    ParseTemplateStage,
+    AgenticParseTemplateStage,
+    VerifyTemplateStage,
+]
+
 
 @pytest.fixture
 def mock_stage_context():
@@ -37,6 +43,8 @@ def mock_stage_context():
     ctx.abstention_enabled = True
     ctx.sufficiency_enabled = True
     ctx.agentic_parsing = True
+    ctx.allow_partial_trace_scoring = False
+    ctx.can_score_partial_timeout = MagicMock(return_value=False)
     return ctx
 
 
@@ -76,3 +84,21 @@ class TestTimeoutPartialGuards:
         # etc.) which are MagicMock truthy values, so we only verify the timeout
         # guard itself did not cause a skip: the result must be a bool.
         assert isinstance(result, bool)
+
+    @pytest.mark.parametrize("stage_cls", PARTIAL_SCORING_STAGES, ids=lambda c: c.__name__)
+    def test_partial_timeout_scoring_override_allows_template_stages(self, stage_cls, mock_stage_context):
+        """Template parsing/scoring stages can opt into partial timeout scoring."""
+
+        def get_artifact_side_effect(key, default=None):
+            if key == ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL:
+                return True
+            return default
+
+        mock_stage_context.error = "Agent timed out with partial trace"
+        mock_stage_context.allow_partial_trace_scoring = True
+        mock_stage_context.can_score_partial_timeout = MagicMock(return_value=True)
+        mock_stage_context.get_artifact = MagicMock(side_effect=get_artifact_side_effect)
+
+        stage = stage_cls()
+        result = stage.should_run(mock_stage_context)
+        assert result is True

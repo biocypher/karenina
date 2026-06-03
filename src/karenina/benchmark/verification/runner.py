@@ -88,6 +88,7 @@ def run_single_model_verification(
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
+    allow_partial_trace_scoring: bool = False,
     # Agentic parsing configuration
     agentic_parsing: bool = False,
     agentic_judge_context: str = "workspace_only",
@@ -214,6 +215,7 @@ def run_single_model_verification(
         # Trace Filtering Configuration (MCP Agent Evaluation)
         use_full_trace_for_template=use_full_trace_for_template,
         use_full_trace_for_rubric=use_full_trace_for_rubric,
+        allow_partial_trace_scoring=allow_partial_trace_scoring,
         # Answer Caching
         cached_answer_data=cached_answer_data,
         # Agentic Parsing

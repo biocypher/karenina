@@ -365,6 +365,9 @@ def execute_task(
             deep_judgment_rubric_search_tool=task.get("deep_judgment_rubric_search_tool", "tavily"),
             # Prompt configuration
             prompt_config=task.get("prompt_config"),
+            use_full_trace_for_template=task.get("use_full_trace_for_template", False),
+            use_full_trace_for_rubric=task.get("use_full_trace_for_rubric", True),
+            allow_partial_trace_scoring=task.get("allow_partial_trace_scoring", False),
             # Agentic parsing
             agentic_parsing=task.get("agentic_parsing", False),
             agentic_judge_context=task.get("agentic_judge_context", "workspace_only"),

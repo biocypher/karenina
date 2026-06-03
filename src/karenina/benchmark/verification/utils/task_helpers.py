@@ -323,6 +323,10 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "embedding_check_threshold": getattr(config, "embedding_check_threshold", None),
         # Prompt configuration
         "prompt_config": getattr(config, "prompt_config", None),
+        # Trace filtering configuration
+        "use_full_trace_for_template": getattr(config, "use_full_trace_for_template", False),
+        "use_full_trace_for_rubric": getattr(config, "use_full_trace_for_rubric", True),
+        "allow_partial_trace_scoring": getattr(config, "allow_partial_trace_scoring", False),
         # Agentic parsing configuration
         "agentic_parsing": getattr(config, "agentic_parsing", False),
         "agentic_judge_context": getattr(config, "agentic_judge_context", "workspace_only"),

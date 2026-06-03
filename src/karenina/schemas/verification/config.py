@@ -116,6 +116,14 @@ class VerificationConfig(BaseModel):
     # Note: The full trace is ALWAYS captured and stored in raw_llm_response regardless of these settings.
     # These flags only control what input is provided to the parsing/evaluation models.
     # If False and the trace doesn't end with an AI message, verification stage will fail with error.
+    allow_partial_trace_scoring: bool = Field(
+        default=False,
+        description=(
+            "When True, permit template parsing and scoring to run on responses "
+            "that were truncated by answer-generation timeout. Timeout metadata "
+            "is still preserved; this is intended for explicit salvage analyses."
+        ),
+    )
 
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection

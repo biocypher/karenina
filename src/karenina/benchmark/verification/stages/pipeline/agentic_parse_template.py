@@ -73,13 +73,16 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
     def should_run(self, context: VerificationContext) -> bool:
         """Run only when agentic parsing is enabled and no prior errors."""
-        if not super().should_run(context):
+        if not super().should_run(context) and not context.can_score_partial_timeout():
             return False
         if not context.agentic_parsing:
             return False
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
-        if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
+        if (
+            context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and not context.allow_partial_trace_scoring
+        ):
             return False
         if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False
