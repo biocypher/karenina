@@ -18,6 +18,7 @@ from karenina.benchmark.verification.utils.schema_builder import (
     build_parsing_schema,
     rebuild_strict_answer_with_null_fields,
 )
+from karenina.benchmark.verification.utils.trace_parsing import extract_final_ai_message
 from karenina.ports import AgentConfig, UsageMetadata
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -25,6 +26,8 @@ from karenina.schemas.verification.model_identity import ModelIdentity
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
+
+_MAX_EXTRACTION_REPORT_CHARS = 60_000
 
 
 class AgenticParseTemplateStage(BaseVerificationStage):
@@ -110,7 +113,10 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                 context, clean_schema
             )
         except Exception as e:
-            context.mark_error(f"Agentic investigation failed: {e}")
+            context.mark_error(
+                f"Agentic investigation failed: {e}",
+                category=context.error_registry.classify(e),
+            )
             return
 
         self._track_usage(
@@ -138,7 +144,10 @@ class AgenticParseTemplateStage(BaseVerificationStage):
                 clean_schema,
             )
         except Exception as e:
-            context.mark_error(f"Agentic extraction failed: {e}")
+            context.mark_error(
+                f"Agentic extraction failed: {e}",
+                category=context.error_registry.classify(e),
+            )
             return
 
         self._track_usage(
@@ -277,6 +286,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         """
         parser = get_parser(context.parsing_model)
         schema_json = json.dumps(clean_schema, indent=2)
+        extraction_input = self._prepare_extraction_input(investigation_trace)
 
         system_text = (
             "You are a structured data extraction assistant. "
@@ -284,7 +294,7 @@ class AgenticParseTemplateStage(BaseVerificationStage):
             "the exact JSON schema provided.\n\n"
             f"Schema:\n{schema_json}"
         )
-        user_text = f"Investigation report:\n\n{investigation_trace}"
+        user_text = f"Investigation report:\n\n{extraction_input}"
 
         # Assemble with adapter + user instructions
         assembler = PromptAssembler(
@@ -338,3 +348,37 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         usage_dict = usage.to_dict()
         if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
             usage_tracker.track_call(stage_name, model_str, usage_dict)
+
+    @staticmethod
+    def _prepare_extraction_input(investigation_trace: str) -> str:
+        """Prepare a compact investigation report for structured extraction.
+
+        The investigation trace can include large file reads and tool outputs.
+        The extractor only needs the investigator's final report, so prefer the
+        final AI message. If the trace ended on a tool call or timeout before a
+        final report was produced, fall back to a bounded head/tail excerpt so
+        the parser call remains inside provider context limits.
+        """
+        final_report, extraction_error = extract_final_ai_message(investigation_trace)
+        if final_report is not None and final_report.strip():
+            return AgenticParseTemplateStage._truncate_extraction_input(final_report)
+
+        logger.warning(
+            "Could not extract final investigation report for agentic parsing (%s); using bounded trace excerpt",
+            extraction_error,
+        )
+        return AgenticParseTemplateStage._truncate_extraction_input(investigation_trace)
+
+    @staticmethod
+    def _truncate_extraction_input(text: str, max_chars: int = _MAX_EXTRACTION_REPORT_CHARS) -> str:
+        """Bound extraction input with a middle-truncation marker."""
+        if len(text) <= max_chars:
+            return text
+
+        marker = f"\n\n[... investigation report truncated; omitted {len(text) - max_chars} characters ...]\n\n"
+        if len(marker) >= max_chars:
+            return text[:max_chars]
+
+        head_chars = max_chars // 3
+        tail_chars = max_chars - head_chars - len(marker)
+        return f"{text[:head_chars]}{marker}{text[-tail_chars:]}"
