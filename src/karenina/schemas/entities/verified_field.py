@@ -47,6 +47,8 @@ def _warn_ground_truth_mismatch(ground_truth: Any, verify_with: Any) -> None:
         NumericMaximum,
         NumericMinimum,
         NumericRange,
+        NumericRangeGraded,
+        NumericThresholdGraded,
         NumericTolerance,
     )
 
@@ -55,7 +57,14 @@ def _warn_ground_truth_mismatch(ground_truth: Any, verify_with: Any) -> None:
     # Check numeric primitives
     if isinstance(
         verify_with,
-        NumericTolerance | NumericExact | NumericRange | NumericMinimum | NumericMaximum | NumericGraded,
+        NumericTolerance
+        | NumericExact
+        | NumericRange
+        | NumericMinimum
+        | NumericMaximum
+        | NumericGraded
+        | NumericRangeGraded
+        | NumericThresholdGraded,
     ):
         if isinstance(ground_truth, int | float) and not isinstance(ground_truth, bool):
             return  # Already numeric, no mismatch

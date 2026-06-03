@@ -725,8 +725,10 @@ For complete parameter documentation and examples, see [Verification Primitives]
 | `NumericTolerance` | Numeric | Within tolerance (relative or absolute) | `int`, `float` |
 | `NumericGraded` | Numeric | Distance-graded partial credit with a cutoff (see [verification primitives](verification-primitives.md)) | `int`, `float` |
 | `NumericRange` | Numeric | Within bounds | `int`, `float` |
+| `NumericRangeGraded` | Numeric | Within bounds, with graded partial credit on a soft shoulder outside the band | `int`, `float` |
 | `NumericMinimum` | Numeric | At least N | `int`, `float` |
 | `NumericMaximum` | Numeric | At most N | `int`, `float` |
+| `NumericThresholdGraded` | Numeric | Past a one-sided bound, with graded partial credit just on the wrong side | `int`, `float` |
 | `SetContainment` | List | Set comparison (exact, subset, superset, overlap) | `list[str]` |
 | `OrderedMatch` | List | Element-by-element comparison | `list[str]` |
 | `LiteralMatch` | Categorical | Exact equality | `Literal[...]` |

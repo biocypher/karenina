@@ -16,6 +16,8 @@ from karenina.schemas.primitives import (
     NumericMaximum,
     NumericMinimum,
     NumericRange,
+    NumericRangeGraded,
+    NumericThresholdGraded,
     NumericTolerance,
     TraceRegex,
 )
@@ -305,6 +307,35 @@ class TestBaseAnswerAutoVerifyGranular:
         # graded scores reduce to the binary image for non-graded primitives
         assert answer._compute_field_scores() == {"a": 1.0, "b": 0.0}
         assert answer.verify_granular() == 0.5
+
+    def test_range_graded_field_surfaces_shoulder_credit(self):
+        class MyAnswer(BaseAnswer):
+            corr: float = VerifiedField(
+                description="correlation in an acceptance band",
+                ground_truth=0.021,
+                verify_with=NumericRangeGraded(min=0.001, max=0.09, margin=0.02, mode="absolute"),
+            )
+
+        # 0.10 is just above the band: outside the gate but in the soft shoulder
+        answer = MyAnswer(corr=0.10)
+        assert answer.verify() is False
+        assert answer._compute_field_scores()["corr"] == pytest.approx(0.5)
+        assert answer.verify_granular() == pytest.approx(0.5)
+
+    def test_threshold_graded_field_surfaces_shoulder_credit(self):
+        class MyAnswer(BaseAnswer):
+            pval: float = VerifiedField(
+                description="p-value that should sit below a significance bound",
+                ground_truth=1e-30,
+                verify_with=NumericThresholdGraded(direction="max", margin=1.0, mode="relative"),
+            )
+
+        # 1.5e-30 is just over the bound: gate fails, soft shoulder gives 0.5
+        answer = MyAnswer(pval=1.5e-30)
+        assert answer.verify() is False
+        assert answer._compute_field_scores()["pval"] == pytest.approx(0.5)
+        # a value far on the correct side scores full credit
+        assert MyAnswer(pval=1e-40)._compute_field_scores()["pval"] == 1.0
 
 
 @pytest.mark.unit

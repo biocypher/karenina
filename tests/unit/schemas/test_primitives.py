@@ -17,6 +17,8 @@ from karenina.schemas.primitives import (
     NumericMaximum,
     NumericMinimum,
     NumericRange,
+    NumericRangeGraded,
+    NumericThresholdGraded,
     NumericTolerance,
     OrderedMatch,
     RegexMatch,
@@ -300,6 +302,131 @@ class TestNumericGraded:
     def test_unknown_decay_rejected(self):
         with pytest.raises(ValidationError):
             NumericGraded(cutoff=0.25, decay="bogus")
+
+
+@pytest.mark.unit
+class TestNumericRangeGraded:
+    """Test NumericRangeGraded (acceptance band + soft-shoulder partial credit)."""
+
+    def test_inside_band_full_credit(self):
+        p = NumericRangeGraded(min=0.001, max=0.09, margin=0.02, mode="absolute")
+        for x in (0.001, 0.021, 0.09):
+            assert p.check(x, None) is True
+            assert p.score(x, None) == 1.0
+
+    def test_gate_matches_numeric_range(self):
+        # check() is the same hard gate as NumericRange: inside the band only.
+        graded = NumericRangeGraded(min=1.0, max=10.0, margin=2.0, mode="absolute")
+        plain = NumericRange(min=1.0, max=10.0)
+        for x in (0.0, 1.0, 5.0, 10.0, 11.0, 13.0):
+            assert graded.check(x, None) == plain.check(x, "ignored")
+
+    def test_shoulder_linear_decay_absolute(self):
+        p = NumericRangeGraded(min=0.001, max=0.09, margin=0.02, mode="absolute", decay="linear")
+        # x above max by 0.01 of a 0.02 shoulder -> 0.5
+        assert p.check(0.10, None) is False
+        assert p.score(0.10, None) == pytest.approx(0.5)
+        # below min by 0.005 of 0.02 -> 0.75
+        assert p.score(-0.004, None) == pytest.approx(0.75)
+
+    def test_shoulder_quadratic_decay_relative(self):
+        # relative margin is a fraction of band width (max - min)
+        p = NumericRangeGraded(min=0.0, max=0.1, margin=0.5, mode="relative", decay="quadratic")
+        shoulder = 0.5 * 0.1  # 0.05
+        gap = 0.0223
+        r = gap / shoulder
+        assert p.score(0.1 + gap, None) == pytest.approx(1.0 - r * r)
+
+    def test_beyond_shoulder_zero(self):
+        p = NumericRangeGraded(min=0.001, max=0.09, margin=0.02, mode="absolute")
+        assert p.score(0.11, None) == 0.0
+        assert p.score(-0.02, None) == 0.0
+
+    def test_intended_divergence_in_shoulder(self):
+        p = NumericRangeGraded(min=1.0, max=10.0, margin=2.0, mode="absolute")
+        # a near-miss just outside the band: check() False but score() > 0
+        assert p.check(11.0, None) is False
+        assert p.score(11.0, None) > 0.0
+
+    def test_exclusive_edges_affect_only_gate(self):
+        p = NumericRangeGraded(min=1.0, max=10.0, margin=2.0, mode="absolute", exclusive_max=True)
+        # exactly at max: gate rejects (exclusive), but the score plateau still holds
+        assert p.check(10.0, None) is False
+        assert p.score(10.0, None) == 1.0
+
+    def test_min_must_be_less_than_max(self):
+        with pytest.raises(ValidationError):
+            NumericRangeGraded(min=5.0, max=5.0, margin=1.0)
+        with pytest.raises(ValidationError):
+            NumericRangeGraded(min=6.0, max=5.0, margin=1.0)
+
+    def test_margin_must_be_positive(self):
+        with pytest.raises(ValidationError):
+            NumericRangeGraded(min=0.0, max=1.0, margin=0.0)
+        with pytest.raises(ValidationError):
+            NumericRangeGraded(min=0.0, max=1.0, margin=-0.1)
+
+
+@pytest.mark.unit
+class TestNumericThresholdGraded:
+    """Test NumericThresholdGraded (one-sided bound + soft-shoulder partial credit)."""
+
+    def test_max_correct_side_full_credit(self):
+        p = NumericThresholdGraded(direction="max", margin=1.0, mode="relative")
+        # any value at or below the threshold scores 1.0, however far below
+        assert p.check(1e-40, 1e-30) is True
+        assert p.score(1e-40, 1e-30) == 1.0
+        assert p.check(1e-30, 1e-30) is True
+        assert p.score(1e-30, 1e-30) == 1.0
+
+    def test_max_gate_matches_numeric_maximum(self):
+        graded = NumericThresholdGraded(direction="max", margin=1.0, mode="relative")
+        plain = NumericMaximum()
+        for x in (5.0, 9.999, 10.0, 10.001, 20.0):
+            assert graded.check(x, 10.0) == plain.check(x, 10.0)
+
+    def test_max_shoulder_relative_linear_decay(self):
+        p = NumericThresholdGraded(direction="max", margin=1.0, mode="relative", decay="linear")
+        thr = 1e-30
+        # 1.5e-30 is gap 0.5e-30 of a shoulder 1e-30 -> 0.5
+        assert p.check(1.5e-30, thr) is False
+        assert p.score(1.5e-30, thr) == pytest.approx(0.5)
+        assert p.score(2e-30, thr) == 0.0
+
+    def test_min_direction(self):
+        p = NumericThresholdGraded(direction="min", margin=0.2, mode="absolute", decay="linear")
+        assert p.check(12.0, 10.0) is True
+        assert p.score(12.0, 10.0) == 1.0
+        assert p.check(9.9, 10.0) is False
+        assert p.score(9.9, 10.0) == pytest.approx(0.5)
+        assert p.score(9.7, 10.0) == 0.0  # gap 0.3 is past the 0.2 shoulder
+
+    def test_min_gate_matches_numeric_minimum(self):
+        graded = NumericThresholdGraded(direction="min", margin=0.5, mode="absolute")
+        plain = NumericMinimum()
+        for x in (8.0, 9.999, 10.0, 10.001, 12.0):
+            assert graded.check(x, 10.0) == plain.check(x, 10.0)
+
+    def test_exclusive_gate(self):
+        p = NumericThresholdGraded(direction="max", margin=0.5, mode="absolute", exclusive=True)
+        assert p.check(10.0, 10.0) is False  # strict <
+        assert p.check(9.999, 10.0) is True
+
+    def test_relative_threshold_zero_scores_zero_on_wrong_side(self):
+        p = NumericThresholdGraded(direction="max", margin=1.0, mode="relative")
+        # threshold 0 with relative margin is undefined off-side -> 0.0 beyond
+        assert p.score(0.0, 0.0) == 1.0
+        assert p.score(0.5, 0.0) == 0.0
+
+    def test_margin_must_be_positive(self):
+        with pytest.raises(ValidationError):
+            NumericThresholdGraded(direction="max", margin=0.0)
+        with pytest.raises(ValidationError):
+            NumericThresholdGraded(direction="min", margin=-1.0)
+
+    def test_unknown_direction_rejected(self):
+        with pytest.raises(ValidationError):
+            NumericThresholdGraded(direction="sideways", margin=1.0)
 
 
 @pytest.mark.unit
@@ -623,3 +750,17 @@ class TestPrimitiveSerializationRoundTrip:
         assert restored.full_credit == 0.01
         assert restored.score(46, 42) == p.score(46, 42)
         assert restored.check(46, 42) == p.check(46, 42)
+
+    def test_numeric_range_graded_round_trip(self):
+        p = NumericRangeGraded(min=0.001, max=0.09, margin=0.02, mode="absolute", decay="quadratic")
+        data = p.model_dump(mode="json")
+        restored = NumericRangeGraded.model_validate(data)
+        assert restored.check(0.05, None) is True
+        assert restored.score(0.10, None) == p.score(0.10, None)
+
+    def test_numeric_threshold_graded_round_trip(self):
+        p = NumericThresholdGraded(direction="max", margin=1.0, mode="relative", decay="linear")
+        data = p.model_dump(mode="json")
+        restored = NumericThresholdGraded.model_validate(data)
+        assert restored.check(1e-40, 1e-30) is True
+        assert restored.score(1.5e-30, 1e-30) == p.score(1.5e-30, 1e-30)
