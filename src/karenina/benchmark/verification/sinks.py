@@ -95,6 +95,11 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     useful answer trace and workspace artifacts, so resume should rehydrate the
     answer cache and retry parsing/verification instead of rerunning the
     answerer or treating the task as terminal.
+
+    Timeout rows with a captured partial trace are handled the same way when a
+    later resume enables partial trace scoring: the answer trace is usable
+    parser input, so the task must not be skipped just because the timeout row
+    already exists in the JSONL sidecar.
     """
 
     failure = result.metadata.failure
@@ -103,6 +108,8 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
 
     category = _failure_attr(failure, "category")
     stage = _failure_attr(failure, "stage")
+    if stage == "GenerateAnswer" and category == FailureCategory.TIMEOUT.value:
+        return True
     return bool(category == FailureCategory.PARSING.value or _is_parser_stage(stage))
 
 
