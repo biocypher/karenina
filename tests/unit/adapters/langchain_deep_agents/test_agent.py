@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock
 
 import pytest
 
+from karenina.adapters.langchain_deep_agents import agent as agent_module
 from karenina.adapters.langchain_deep_agents.agent import DeepAgentsAgentAdapter
 from karenina.benchmark.verification.executor import set_async_portal
 from karenina.ports import AgentConfig, AgentResult, Message
+from karenina.ports.usage import UsageMetadata
 
 
 def _mock_deep_agent(result):
@@ -396,6 +399,62 @@ class TestDeepAgentsAgentAdapter:
             set_async_portal(None)
 
         assert result.final_response == "ok"
+
+    def test_run_salvages_timeout_partial_result_from_slow_async_return(self, deep_agents_model_config, monkeypatch):
+        """The sync wrapper should return checkpointed partial traces if async cleanup races it."""
+
+        partial_result = AgentResult(
+            final_response="[Agent stopped before producing a final response]",
+            raw_trace="--- AI Message ---\npartial\n\n[Note: Wall-clock timeout reached, partial response shown]",
+            trace_messages=[],
+            usage=UsageMetadata(model=deep_agents_model_config.model_name),
+            turns=1,
+            limit_reached=False,
+            actual_model=deep_agents_model_config.model_name,
+            timeout_reached=True,
+        )
+
+        async def slow_arun(
+            _messages,
+            _tools=None,
+            _mcp_servers=None,
+            _config=None,
+            _partial_result_store=None,
+        ):
+            _partial_result_store.set(partial_result)
+            await asyncio.sleep(0.2)
+            return AgentResult(
+                final_response="too late",
+                raw_trace="too late",
+                trace_messages=[],
+                usage=UsageMetadata(model=deep_agents_model_config.model_name),
+                turns=1,
+                limit_reached=False,
+            )
+
+        adapter = DeepAgentsAgentAdapter(deep_agents_model_config)
+        monkeypatch.setattr(adapter, "arun", slow_arun)
+        original_run_in_fresh_loop = agent_module._run_in_fresh_loop
+        monkeypatch.setattr(
+            agent_module,
+            "_run_in_fresh_loop",
+            lambda coro_func, *args, **kwargs: original_run_in_fresh_loop(
+                coro_func,
+                *args,
+                timeout=kwargs["timeout"],
+                timeout_grace=0.01,
+                timeout_result=kwargs["timeout_result"],
+            ),
+        )
+
+        result = adapter.run(
+            messages=[Message.user("test")],
+            config=AgentConfig(max_turns=2, timeout=0.01),
+        )
+
+        assert result is partial_result
+        assert result.timeout_reached is True
+        assert "partial" in result.raw_trace
 
     @pytest.mark.asyncio
     async def test_arun_enables_model_call_retries(self, deep_agents_model_config, monkeypatch):
