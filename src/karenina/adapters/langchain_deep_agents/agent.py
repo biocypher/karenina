@@ -147,6 +147,7 @@ class DeepAgentsAgentAdapter:
 
         backend = get_deepagents_backend(self._config)
         access_mode = get_agent_runtime_access_mode(self._config)
+        read_max_bytes = _runtime_int_option(self._config, "read_max_bytes", 0)
         if backend == CONTAINER_BACKEND:
             if workspace_path is None:
                 raise AdapterUnavailableError(
@@ -164,7 +165,7 @@ class DeepAgentsAgentAdapter:
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(container_backend)
+                return ReadOnlyBackend(container_backend, read_max_bytes=read_max_bytes)
             return container_backend
 
         if backend == "local_shell":
@@ -189,7 +190,7 @@ class DeepAgentsAgentAdapter:
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(local_backend)
+                return ReadOnlyBackend(local_backend, read_max_bytes=read_max_bytes)
             return local_backend
 
         from deepagents.backends import FilesystemBackend
@@ -200,7 +201,7 @@ class DeepAgentsAgentAdapter:
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(filesystem_backend)
+                return ReadOnlyBackend(filesystem_backend, read_max_bytes=read_max_bytes)
             return filesystem_backend
 
         logger.info("Using FilesystemBackend with default root (cwd)")
@@ -208,7 +209,7 @@ class DeepAgentsAgentAdapter:
         if access_mode == "read_only":
             from .read_only_backend import ReadOnlyBackend
 
-            return ReadOnlyBackend(filesystem_backend)
+            return ReadOnlyBackend(filesystem_backend, read_max_bytes=read_max_bytes)
         return filesystem_backend
 
     def _build_raw_trace(

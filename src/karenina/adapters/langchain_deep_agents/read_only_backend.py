@@ -22,8 +22,9 @@ class ReadOnlyBackend:
     should not construct a shell execution tool for this backend.
     """
 
-    def __init__(self, delegate: Any) -> None:
+    def __init__(self, delegate: Any, *, read_max_bytes: int | None = None) -> None:
         self.delegate = delegate
+        self.read_max_bytes = read_max_bytes if read_max_bytes and read_max_bytes > 0 else None
 
     def ls_info(self, path: str) -> list[FileInfo]:
         return cast(list[FileInfo], self.delegate.ls_info(path))
@@ -31,11 +32,36 @@ class ReadOnlyBackend:
     async def als_info(self, path: str) -> list[FileInfo]:
         return await asyncio.to_thread(self.ls_info, path)
 
-    def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
-        return cast(str, self.delegate.read(file_path, offset, limit))
+    def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> Any:
+        return self._truncate_read_result(self.delegate.read(file_path, offset, limit))
 
     async def aread(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
         return await asyncio.to_thread(self.read, file_path, offset, limit)
+
+    def _truncate_text(self, text: str) -> str:
+        if self.read_max_bytes is None:
+            return text
+        encoded = text.encode("utf-8")
+        if len(encoded) <= self.read_max_bytes:
+            return text
+        notice = (
+            f"\n\n... File read truncated at {self.read_max_bytes} bytes. "
+            "Use smaller offsets, targeted grep, or compact final result files.\n"
+        )
+        budget = max(0, self.read_max_bytes - len(notice.encode("utf-8")))
+        head = encoded[:budget].decode("utf-8", errors="ignore").rstrip()
+        return f"{head}{notice}"
+
+    def _truncate_read_result(self, result: Any) -> Any:
+        if isinstance(result, str):
+            return self._truncate_text(result)
+
+        file_data = getattr(result, "file_data", None)
+        if isinstance(file_data, dict):
+            content = file_data.get("content")
+            if isinstance(content, str):
+                file_data["content"] = self._truncate_text(content)
+        return result
 
     def grep_raw(
         self,
