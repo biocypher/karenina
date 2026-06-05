@@ -86,7 +86,9 @@ This stage replaces `ParseTemplateStage` (stage 7a) when `agentic_parsing=True` 
 
 ```python
 # orchestrator.py
-if agentic_parsing:
+if agentic_parsing and agentic_parsing_trigger == "dynamic":
+    stages.append(DynamicParseTemplateStage())
+elif agentic_parsing:
     stages.append(AgenticParseTemplateStage())
 else:
     stages.append(ParseTemplateStage())
@@ -96,12 +98,14 @@ Only one template parsing stage is ever present in a pipeline run; the classical
 
 When `agentic_parsing=True` and `agentic_parsing_trigger="dynamic"`, the orchestrator uses `DynamicParseTemplateStage` in the same template parsing slot. Dynamic parsing first attempts a direct final-message parse, then escalates to the same investigation/extraction helpers used by `AgenticParseTemplateStage` when needed.
 
-### Artifact Contract
+### AgenticParseTemplateStage Artifact Contract
 
 | Direction | Artifact Keys |
 |-----------|--------------|
 | **Requires** | `RAW_ANSWER`, `ANSWER`, `RAW_LLM_RESPONSE` |
 | **Produces** | `PARSED_ANSWER`, `PARSING_MODEL_STR`, `INVESTIGATION_TRACE`, `AGENTIC_PARSING_PERFORMED` |
+
+`DynamicParseTemplateStage` shares the same required inputs and final `PARSED_ANSWER` output. It also records `DYNAMIC_PARSING_PERFORMED`, `DYNAMIC_PARSE_DECISION`, and `DYNAMIC_DECISION_REASONING`; when it escalates, it records the same `INVESTIGATION_TRACE` and `AGENTIC_PARSING_PERFORMED` fields as `AgenticParseTemplateStage`.
 
 ### should_run() Conditions
 
@@ -186,10 +190,10 @@ Dynamic parsing adds result fields on `VerificationResultTemplate` and flattened
 
 Karenina creates result tables with `CREATE TABLE IF NOT EXISTS` and does not alter existing result tables. To write dynamic results to persistent storage, use a fresh database or manually add the three columns before writing dynamic results to an existing database.
 
-Replay and extension runs have two limitations:
+Template replay and extension runs have two limitations:
 
-- On `extend_template` and `extend_rubric`, answer generation is replayed before workspace resolution, so dynamic escalation may run without a workspace.
-- The decision call is judge-side and is not captured in replay entries, so extension runs regenerate the direct-versus-escalated decision.
+- On `extend_template` and other replayed template-parsing runs, answer generation is replayed before workspace resolution, so dynamic escalation may run without a workspace.
+- The decision call is judge-side and is not captured in replay entries, so replayed template-parsing runs regenerate the direct-versus-escalated decision. `extend_rubric` uses `rubric_only` and skips template parsing, so dynamic parsing does not run there.
 
 ### Result Storage
 
