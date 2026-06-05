@@ -64,6 +64,9 @@ class DynamicParseTemplateStage(BaseVerificationStage):
             ArtifactKeys.DYNAMIC_PARSING_PERFORMED,
             ArtifactKeys.DYNAMIC_PARSE_DECISION,
             ArtifactKeys.DYNAMIC_DECISION_REASONING,
+            ArtifactKeys.TEMPLATE_EVALUATOR,
+            ArtifactKeys.DEEP_JUDGMENT_PERFORMED,
+            ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -131,6 +134,7 @@ class DynamicParseTemplateStage(BaseVerificationStage):
                 context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
                 context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "replay (no LLM)")
                 context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+                context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, [])
                 context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
                 context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
                 context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
@@ -235,6 +239,7 @@ class DynamicParseTemplateStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, parsing_model_str)
         context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
         context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+        context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, [])
         context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
         self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_PARSE_DECISION, "direct")
 
@@ -359,6 +364,7 @@ class DynamicParseTemplateStage(BaseVerificationStage):
         self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_PARSING_PERFORMED, True)
         context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
         context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+        context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, [])
         context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
 
         logger.info("Dynamic escalated agentic parsing completed successfully")

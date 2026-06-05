@@ -352,6 +352,16 @@ class TestStageOrchestratorConfiguration:
         assert "AgenticParseTemplate" not in stage_names
         assert "ParseTemplate" not in stage_names
 
+    def test_dynamic_agentic_parsing_satisfies_deep_judgment_dependencies(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="dynamic",
+            deep_judgment_enabled=True,
+        )
+
+        assert orchestrator.validate_dependencies() == []
+
     def test_non_agentic_parsing_uses_classical_stage_when_trigger_default(self):
         orchestrator = StageOrchestrator.from_config(
             evaluation_mode="template_only",
