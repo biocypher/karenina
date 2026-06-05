@@ -84,6 +84,27 @@ class TestDynamicParseTemplateDirectPath:
 
         mock_close_adapter.assert_called_once_with(llm)
 
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.close_adapter")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.PromptAssembler")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_decision_adapter_is_closed_when_prompt_assembly_fails(
+        self,
+        mock_get_llm,
+        mock_prompt_assembler,
+        mock_close_adapter,
+    ):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        llm = _llm('{"reasoning":"direct","sufficient":true,"answer":{"solved":true}}')
+        mock_get_llm.return_value = llm
+        mock_prompt_assembler.return_value.assemble.side_effect = RuntimeError("prompt assembly failed")
+        ctx = _make_context()
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        assert "Dynamic parsing decision failed" in (ctx.error or "")
+        mock_close_adapter.assert_called_once_with(llm)
+
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
     def test_sufficient_verdict_stores_parsed_answer_without_agent(self, mock_get_llm, mock_run_investigation):

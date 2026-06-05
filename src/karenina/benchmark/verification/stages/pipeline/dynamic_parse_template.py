@@ -259,32 +259,32 @@ class DynamicParseTemplateStage(BaseVerificationStage):
     ) -> LLMResponse:
         """Run the direct parsing decision prompt."""
         llm = get_llm(context.parsing_model)
-        schema_json = json.dumps(clean_schema, indent=2)
-        user_text = DYNAMIC_PARSING_DECISION_USER.format(
-            question=context.question_text,
-            response=final_message,
-            schema=schema_json,
-        )
-        assembler = PromptAssembler(
-            task=PromptTask.AGENTIC_PARSING_DECISION,
-            interface=context.parsing_model.interface,
-            capabilities=llm.capabilities,
-        )
-        user_instructions = (
-            context.prompt_config.get_for_task(PromptTask.AGENTIC_PARSING_DECISION.value)
-            if context.prompt_config
-            else None
-        )
-        messages = assembler.assemble(
-            system_text=DYNAMIC_PARSING_DECISION_SYS,
-            user_text=user_text,
-            user_instructions=user_instructions,
-            instruction_context={
-                "json_schema": clean_schema,
-                "format_instructions": "",
-            },
-        )
         try:
+            schema_json = json.dumps(clean_schema, indent=2)
+            user_text = DYNAMIC_PARSING_DECISION_USER.format(
+                question=context.question_text,
+                response=final_message,
+                schema=schema_json,
+            )
+            assembler = PromptAssembler(
+                task=PromptTask.AGENTIC_PARSING_DECISION,
+                interface=context.parsing_model.interface,
+                capabilities=llm.capabilities,
+            )
+            user_instructions = (
+                context.prompt_config.get_for_task(PromptTask.AGENTIC_PARSING_DECISION.value)
+                if context.prompt_config
+                else None
+            )
+            messages = assembler.assemble(
+                system_text=DYNAMIC_PARSING_DECISION_SYS,
+                user_text=user_text,
+                user_instructions=user_instructions,
+                instruction_context={
+                    "json_schema": clean_schema,
+                    "format_instructions": "",
+                },
+            )
             return llm.invoke(messages)
         finally:
             close_adapter(llm)
