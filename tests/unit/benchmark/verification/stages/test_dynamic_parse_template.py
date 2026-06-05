@@ -332,3 +332,7 @@ class TestDynamicParseTemplateShouldRun:
         ctx = _make_context()
         ctx.set_artifact(ArtifactKeys.SUFFICIENCY_DETECTED, False)
         assert DynamicParseTemplateStage().should_run(ctx) is False
+
+        ctx = _make_context()
+        ctx.set_artifact(ArtifactKeys.SUFFICIENCY_DETECTED, True)
+        assert DynamicParseTemplateStage().should_run(ctx) is True
