@@ -287,14 +287,22 @@ class TestDynamicParseTemplateEscalation:
         mock_run_investigation.return_value = ("investigation trace", False, UsageMetadata())
         mock_run_extraction.return_value = (DynamicAnswer(solved=True), UsageMetadata())
         ctx = _make_context()
-        ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, [])
+        ctx.set_artifact(
+            ArtifactKeys.RAW_LLM_RESPONSE,
+            "--- AI Message ---\nI will inspect the file.\n\n--- Tool Message (call_id: call_1) ---\n{}",
+        )
 
         DynamicParseTemplateStage().execute(ctx)
 
         assert ctx.error is None
         assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "escalated"
+        assert "Last message in trace is not an AI message" in ctx.get_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR)
         mock_get_llm.assert_not_called()
         mock_run_investigation.assert_called_once()
+        assert (
+            "Last message in trace is not an AI message"
+            in mock_run_investigation.call_args.kwargs["screening_reasoning"]
+        )
 
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
     def test_decision_infra_error_marks_standard_failure(self, mock_get_llm):
