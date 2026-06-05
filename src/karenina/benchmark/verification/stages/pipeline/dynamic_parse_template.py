@@ -28,6 +28,7 @@ from karenina.benchmark.verification.utils.schema_builder import (
 )
 from karenina.benchmark.verification.utils.trace_parsing import prepare_evaluation_input
 from karenina.ports import LLMResponse, UsageMetadata
+from karenina.replay.exceptions import ReplayHydrationError
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.json_extraction import strip_markdown_fences
@@ -107,6 +108,34 @@ class DynamicParseTemplateStage(BaseVerificationStage):
         clean_schema = build_parsing_schema(answer_class)
 
         self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_PARSING_PERFORMED, True)
+
+        entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
+        if entry is not None and getattr(entry, "parsed_answer_fields", None) is not None:
+            try:
+                parsed_answer = answer_class.model_validate(entry.parsed_answer_fields)
+            except Exception as validation_error:  # noqa: BLE001
+                policy = context.replay_parse_on_hydration_mismatch
+                if policy == "strict":
+                    raise ReplayHydrationError(
+                        "Replay parsed_answer_fields failed validation",
+                        captured_fields=entry.parsed_answer_fields,
+                        inner=validation_error,
+                    ) from validation_error
+                logger.warning(
+                    "Replay parsed_answer_fields failed validation; falling through to dynamic parse",
+                    exc_info=True,
+                )
+            else:
+                logger.debug("Using injected parsed_answer_fields for dynamic template parsing")
+                context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
+                context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+                context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "replay (no LLM)")
+                context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+                context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+                context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
+                context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
+                self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_PARSE_DECISION, "replay")
+                return
 
         final_message, extraction_error = prepare_evaluation_input(raw_response, use_full_trace=False)
         context.set_result_field(ArtifactKeys.USED_FULL_TRACE, False)

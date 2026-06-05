@@ -7,6 +7,7 @@ import pytest
 
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
 from karenina.ports import LLMResponse, UsageMetadata
+from karenina.replay import ReplayEntry
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.verified_field import VerifiedField
@@ -125,3 +126,23 @@ class TestDynamicParseTemplateDirectPath:
         assert stored.__dict__.get("_null_fields") == {"solved"}
         assert stored._compute_field_results()["solved"] is None
         assert mock_run_investigation.call_count == 0
+
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_replay_parsed_fields_bypass_decision_call(self, mock_get_llm):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        ctx = _make_context()
+        ctx.set_artifact(
+            ArtifactKeys.REPLAY_ENTRY,
+            ReplayEntry(raw_trace="raw", parsed_answer_fields={"solved": True}),
+        )
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert isinstance(stored, DynamicAnswer)
+        assert stored.solved is True
+        assert ctx.get_artifact(ArtifactKeys.PARSING_MODEL_STR) == "replay (no LLM)"
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "replay"
+        mock_get_llm.assert_not_called()
