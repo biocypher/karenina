@@ -364,10 +364,10 @@ Agentic parsing affects several other stages:
 | Workspace resolution and answer generation | `benchmark/verification/stages/pipeline/generate_answer.py` |
 | Agentic parse stage (Stage 7b) | `benchmark/verification/stages/pipeline/agentic_parse_template.py` |
 | Classical parse stage (Stage 7a) | `benchmark/verification/stages/pipeline/parse_template.py` |
-| Stage orchestrator (selects 7a vs 7b) | `benchmark/verification/stages/core/orchestrator.py` |
+| Stage orchestrator (selects classical, always-agentic, or dynamic-agentic parsing) | `benchmark/verification/stages/core/orchestrator.py` |
 | ArtifactKeys and VerificationContext | `benchmark/verification/stages/core/base.py` |
 | Ground truth stripping | `schemas/entities/answer.py` |
-| Result components (investigation_trace field) | `schemas/verification/result_components.py` |
+| Result components (`investigation_trace` and dynamic parsing fields) | `schemas/verification/result_components.py` |
 | Workspace cleanup | `benchmark/verification/stages/pipeline/finalize_result.py` |
 | Feature flag extraction | `benchmark/verification/utils/task_helpers.py` |
 | JSON schema builder | `benchmark/verification/utils/schema_builder.py` |
