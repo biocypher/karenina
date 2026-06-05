@@ -31,6 +31,18 @@ from karenina.schemas import ModelConfig, VerificationConfig
 
 Templates answer "did the model get it right?" by parsing into a schema and running deterministic `verify()` code. Rubrics answer "was the response good?" by evaluating the raw response or trace with LLM, regex, callable, and metric traits. Evaluation mode decides whether a run activates one path or both.
 
+Dynamic agentic parsing is not an `evaluation_mode`. It is a trigger for template parsing inside `template_only` and `template_and_rubric`:
+
+```json
+{
+  "evaluation_mode": "template_only",
+  "agentic_parsing": true,
+  "agentic_parsing_trigger": "dynamic"
+}
+```
+
+`rubric_only` still skips template parsing and remains incompatible with `agentic_parsing`.
+
 Two litmus tests:
 
 - If you would struggle to write a defensible `verify()` method, prefer `rubric_only`.
