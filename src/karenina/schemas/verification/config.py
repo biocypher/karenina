@@ -227,6 +227,15 @@ class VerificationConfig(BaseModel):
             "independently verify artifacts before extracting structured data."
         ),
     )
+    agentic_parsing_trigger: Literal["always", "dynamic"] = Field(
+        default="always",
+        description=(
+            "When agentic_parsing=True, controls whether Stage 7b always runs "
+            "the agentic investigation or first tries a dynamic final-message parse. "
+            "'always' preserves existing behavior. 'dynamic' escalates to agentic "
+            "investigation only when the final response is insufficient or malformed."
+        ),
+    )
     agentic_judge_context: Literal["workspace_only", "trace_and_workspace", "trace_only"] = Field(
         default="workspace_only",
         description=(
@@ -565,6 +574,9 @@ class VerificationConfig(BaseModel):
                 )
 
         # Agentic parsing validation
+        if self.agentic_parsing_trigger == "dynamic" and not self.agentic_parsing:
+            raise ValueError("agentic_parsing_trigger='dynamic' requires agentic_parsing=True")
+
         if self.agentic_parsing:
             # Check parsing model interface supports AgentPort
             from karenina.adapters.registry import AdapterRegistry
@@ -593,6 +605,13 @@ class VerificationConfig(BaseModel):
                 logger.warning(
                     "agentic_parsing=True with agentic_judge_context='trace_only' "
                     "is equivalent to classical parsing (Stage 7a)."
+                )
+
+            if self.agentic_parsing_trigger == "dynamic" and self.agentic_judge_context == "trace_only":
+                logger.warning(
+                    "agentic_parsing_trigger='dynamic' with agentic_judge_context='trace_only' "
+                    "can only escalate to the same trace context that was already judged insufficient. "
+                    "Use agentic_judge_context='workspace_only' or 'trace_and_workspace' for workspace recovery."
                 )
 
             # materialize_trace needs a trace in the context

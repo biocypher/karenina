@@ -17,6 +17,7 @@ from ..pipeline.agentic_parse_template import AgenticParseTemplateStage
 from ..pipeline.agentic_rubric_evaluation import AgenticRubricEvaluationStage
 from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage
 from ..pipeline.deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
+from ..pipeline.dynamic_parse_template import DynamicParseTemplateStage
 from ..pipeline.embedding_check import EmbeddingCheckStage
 from ..pipeline.finalize_result import FinalizeResultStage
 from ..pipeline.generate_answer import GenerateAnswerStage
@@ -149,6 +150,7 @@ class StageOrchestrator:
         deep_judgment_enabled: bool = False,  # Whether any template deep-judgment mode is active
         evaluation_mode: str = "template_only",
         agentic_parsing: bool = False,
+        agentic_parsing_trigger: str = "always",
         dynamic_rubric: DynamicRubric | None = None,
     ) -> "StageOrchestrator":
         """
@@ -168,6 +170,8 @@ class StageOrchestrator:
                 - "rubric_only": Skip template, only evaluate rubrics
             agentic_parsing: Whether to use agentic parsing (Stage 7b) instead of
                 classical parsing (Stage 7a). Requires AgentPort support.
+            agentic_parsing_trigger: "always" preserves Stage 7b behavior; "dynamic"
+                runs DynamicParseTemplateStage when agentic_parsing is enabled.
             dynamic_rubric: Optional dynamic rubric whose traits are conditionally
                 evaluated based on concept presence in the response.
 
@@ -250,8 +254,10 @@ class StageOrchestrator:
             if sufficiency_enabled:
                 stages.append(SufficiencyCheckStage())
 
-            # Template parsing: classical or agentic
-            if agentic_parsing:
+            # Template parsing: classical, agentic, or dynamic agentic
+            if agentic_parsing and agentic_parsing_trigger == "dynamic":
+                stages.append(DynamicParseTemplateStage())
+            elif agentic_parsing:
                 stages.append(AgenticParseTemplateStage())
             else:
                 stages.append(ParseTemplateStage())

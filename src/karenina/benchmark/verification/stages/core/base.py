@@ -354,6 +354,7 @@ class VerificationContext:
 
     # Agentic Parsing Configuration
     agentic_parsing: bool = False
+    agentic_parsing_trigger: str = "always"
     agentic_judge_context: str = "workspace_only"
     agentic_parsing_max_turns: int = 15
     agentic_parsing_timeout: float = 120.0

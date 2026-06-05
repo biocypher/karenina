@@ -329,6 +329,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "allow_partial_trace_scoring": getattr(config, "allow_partial_trace_scoring", False),
         # Agentic parsing configuration
         "agentic_parsing": getattr(config, "agentic_parsing", False),
+        "agentic_parsing_trigger": getattr(config, "agentic_parsing_trigger", "always"),
         "agentic_judge_context": getattr(config, "agentic_judge_context", "workspace_only"),
         "agentic_parsing_max_turns": getattr(config, "agentic_parsing_max_turns", 15),
         "agentic_parsing_timeout": getattr(config, "agentic_parsing_timeout", 120.0),

@@ -566,6 +566,7 @@ class ScenarioManager:
             # Agentic parsing configuration (forwarded from VerificationConfig so
             # scenario nodes actually reach Stage 7b when agentic_parsing is set).
             agentic_parsing=config.agentic_parsing,
+            agentic_parsing_trigger=config.agentic_parsing_trigger,
             agentic_judge_context=config.agentic_judge_context,
             agentic_parsing_max_turns=config.agentic_parsing_max_turns,
             agentic_parsing_timeout=config.agentic_parsing_timeout,
@@ -619,6 +620,7 @@ class ScenarioManager:
             deep_judgment_enabled=False,  # Scenarios do not use template deep judgment
             evaluation_mode=evaluation_mode,
             agentic_parsing=config.agentic_parsing,
+            agentic_parsing_trigger=config.agentic_parsing_trigger,
         )
 
         vr = orchestrator.execute(context)

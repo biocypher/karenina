@@ -64,6 +64,26 @@ class TestAgenticParsingValidation:
                 agentic_parsing=True,
             )
 
+    def test_dynamic_trigger_requires_agentic_parsing(self):
+        with pytest.raises(ValueError, match="agentic_parsing_trigger='dynamic' requires agentic_parsing=True"):
+            VerificationConfig(
+                parsing_models=[_sdk_model()],
+                parsing_only=True,
+                agentic_parsing=False,
+                agentic_parsing_trigger="dynamic",
+            )
+
+    def test_dynamic_trigger_warns_on_trace_only(self, caplog):
+        config = VerificationConfig(
+            parsing_models=[_sdk_model()],
+            parsing_only=True,
+            agentic_parsing=True,
+            agentic_parsing_trigger="dynamic",
+            agentic_judge_context="trace_only",
+        )
+        assert config.agentic_parsing_trigger == "dynamic"
+        assert "workspace_only" in caplog.text or "trace_and_workspace" in caplog.text
+
     def test_materialize_trace_requires_trace_in_context(self):
         """materialize_trace=True with workspace_only is rejected.
 
