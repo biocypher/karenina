@@ -93,8 +93,8 @@ class TestAgenticParseTemplateStage:
         ctx.mark_error("previous error")
         assert stage.should_run(ctx) is False
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_execute_calls_agent_then_parser(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
             AgenticParseTemplateStage,
@@ -148,8 +148,8 @@ class TestAgenticParseTemplateStage:
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED) is True
         assert ctx.get_artifact(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_execute_tracks_agentic_parsing_usage_separately(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
             AgenticParseTemplateStage,
@@ -190,7 +190,7 @@ class TestAgenticParseTemplateStage:
         assert usage_metadata["total"]["output_tokens"] == 30
         assert usage_metadata["total"]["total_tokens"] == 160
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
     def test_execute_marks_error_on_agent_failure(self, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
             AgenticParseTemplateStage,
@@ -207,8 +207,8 @@ class TestAgenticParseTemplateStage:
         assert ctx.error is not None
         assert "agent failed" in ctx.error
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_execute_marks_error_on_extraction_failure(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
             AgenticParseTemplateStage,
@@ -241,8 +241,8 @@ class TestAgenticParseTemplateStage:
         # Investigation trace should still be stored
         assert ctx.get_artifact(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_extraction_uses_final_investigation_report_not_full_trace(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
             AgenticParseTemplateStage,
@@ -286,21 +286,21 @@ class TestAgenticParseTemplateStage:
         assert "RAW_CSV_LINE" not in user_text
 
     def test_extraction_input_falls_back_to_bounded_trace_excerpt(self):
-        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
-            AgenticParseTemplateStage,
+        from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+            prepare_extraction_input,
         )
 
         trace_without_final_report = (
             "--- AI Message ---\nTool Calls:\nread_file(...)\n--- Tool Message (call_id: read) ---\n" + ("x" * 120_000)
         )
 
-        prepared = AgenticParseTemplateStage._prepare_extraction_input(trace_without_final_report)
+        prepared = prepare_extraction_input(trace_without_final_report)
 
         assert len(prepared) <= 60_000
         assert "investigation report truncated" in prepared
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_extraction_connection_error_is_retryable_connection(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
             AgenticParseTemplateStage,

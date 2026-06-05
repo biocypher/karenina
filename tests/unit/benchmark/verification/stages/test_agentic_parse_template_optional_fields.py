@@ -86,8 +86,8 @@ def _make_context(answer_cls: type[BaseAnswer]) -> VerificationContext:
 class TestAgenticParseOptionalFields:
     """Null extractions surface as None in field_results, not False."""
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_null_field_does_not_fail_whole_record(self, mock_get_parser, mock_get_agent):
         """q1 + q3 score normally; q2 (null in extraction) is None."""
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
@@ -142,8 +142,8 @@ class TestAgenticParseOptionalFields:
         # Granular: n_true / n_total = 2 / 3
         assert stored.verify_granular() == pytest.approx(2 / 3)
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_null_extraction_with_false_ground_truth_stays_none(self, mock_get_parser, mock_get_agent):
         """CRITICAL: GT=False + extracted=None MUST yield None, not False.
 
