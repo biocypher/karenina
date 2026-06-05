@@ -71,6 +71,19 @@ def _llm(content: str, usage: UsageMetadata | None = None) -> MagicMock:
 
 @pytest.mark.unit
 class TestDynamicParseTemplateDirectPath:
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.close_adapter")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_decision_adapter_is_closed(self, mock_get_llm, mock_close_adapter):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        llm = _llm('{"reasoning":"direct","sufficient":true,"answer":{"solved":true}}')
+        mock_get_llm.return_value = llm
+        ctx = _make_context()
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        mock_close_adapter.assert_called_once_with(llm)
+
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
     def test_sufficient_verdict_stores_parsed_answer_without_agent(self, mock_get_llm, mock_run_investigation):

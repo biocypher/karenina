@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from karenina.adapters import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.parsing import (
     DYNAMIC_PARSING_DECISION_SYS,
@@ -67,6 +68,11 @@ class DynamicParseTemplateStage(BaseVerificationStage):
             ArtifactKeys.TEMPLATE_EVALUATOR,
             ArtifactKeys.DEEP_JUDGMENT_PERFORMED,
             ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS,
+            ArtifactKeys.TRACE_EXTRACTION_ERROR,
+            ArtifactKeys.PARSE_DECISION_MALFORMED,
+            ArtifactKeys.INVESTIGATION_TRACE,
+            ArtifactKeys.AGENTIC_PARSING_PERFORMED,
+            ArtifactKeys.USAGE_TRACKER,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -278,7 +284,10 @@ class DynamicParseTemplateStage(BaseVerificationStage):
                 "format_instructions": "",
             },
         )
-        return llm.invoke(messages)
+        try:
+            return llm.invoke(messages)
+        finally:
+            close_adapter(llm)
 
     @staticmethod
     def _parse_decision(content: str) -> dict[str, Any] | None:
