@@ -100,6 +100,7 @@ class ArtifactKeys:
     FIELD_RESULTS = "field_results"
     COMPOSITION_STRATEGY = "composition_strategy"
     FINAL_RESULT = "final_result"
+    PARSE_DECISION_MALFORMED = "parse_decision_malformed"
 
     # Regex Verification
     REGEX_VERIFICATION_RESULTS = "regex_verification_results"
@@ -228,6 +229,14 @@ class ArtifactKeys:
     INVESTIGATION_TRACE = "investigation_trace"
     WORKSPACE_PATH = "workspace_path"
     AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
+
+    # ==========================================================================
+    # Dynamic Parsing
+    # ==========================================================================
+
+    DYNAMIC_PARSING_PERFORMED = "dynamic_parsing_performed"
+    DYNAMIC_PARSE_DECISION = "dynamic_parse_decision"
+    DYNAMIC_DECISION_REASONING = "dynamic_decision_reasoning"
 
     # ==========================================================================
     # Agentic Rubric Evaluation

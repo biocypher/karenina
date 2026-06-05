@@ -187,6 +187,11 @@ class VerificationResultTemplate(BaseModel):
     )
     agentic_parsing_performed: bool = False  # Whether agentic parsing was used
 
+    # Dynamic parsing
+    dynamic_parsing_performed: bool = False
+    dynamic_parse_decision: str | None = None
+    dynamic_decision_reasoning: str | None = None
+
     # Abstention
     abstention_check_performed: bool = False  # Whether abstention check was attempted
     abstention_detected: bool | None = None  # Whether model refused/abstained from answering

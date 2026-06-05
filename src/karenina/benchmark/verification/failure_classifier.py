@@ -190,6 +190,8 @@ def collect_caveats(ctx: VerificationContext) -> list[Caveat]:
         caveats.append(Caveat.PARTIAL_CONTENT)
     if ctx.get_result_field(ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED):
         caveats.append(Caveat.EMBEDDING_OVERRIDE)
+    if ctx.get_result_field(ArtifactKeys.PARSE_DECISION_MALFORMED):
+        caveats.append(Caveat.PARSE_DECISION_MALFORMED)
     # RETRY_COUNTS lives in ``ctx.artifacts`` (orchestrator.set_artifact), not
     # in ``ctx.result_builder``. Reading via ``get_result_field`` returns None
     # silently and suppresses this caveat in production.

@@ -33,6 +33,9 @@ class PromptTask(str, Enum):
     AGENTIC_PARSING_EXTRACTION = "agentic_parsing_extraction"
     """Extracts structured answer from agentic investigation trace."""
 
+    AGENTIC_PARSING_DECISION = "agentic_parsing_decision"
+    """Combined dynamic parsing decision and direct extraction call."""
+
     # --- Trace-level quality checks ---
 
     ABSTENTION_DETECTION = "abstention_detection"

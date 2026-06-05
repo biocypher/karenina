@@ -11,6 +11,7 @@ class Caveat(str, Enum):
     PARTIAL_CONTENT = "partial_content"
     EMBEDDING_OVERRIDE = "embedding_override"
     RETRIES_USED = "retries_used"
+    PARSE_DECISION_MALFORMED = "parse_decision_malformed"
 
 
 __all__ = ["Caveat"]
