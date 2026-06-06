@@ -12,6 +12,7 @@ from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.verified_field import VerifiedField
 from karenina.schemas.primitives import BooleanMatch, NumericTolerance
+from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy, track_retries
 
 
 class DynamicAnswer(BaseAnswer):
@@ -57,6 +58,15 @@ def _make_context(answer_cls: type[BaseAnswer] = DynamicAnswer, **overrides) -> 
     ctx.set_artifact(ArtifactKeys.ANSWER, answer_cls)
     ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "Final answer: solved=true")
     return ctx
+
+
+def _zero_delay_retry_policy(max_attempts: int = 1) -> RetryPolicy:
+    return RetryPolicy(
+        connection=CategoryRetryConfig(max_attempts=max_attempts, backoff_min=0, backoff_max=0),
+        timeout=CategoryRetryConfig(max_attempts=max_attempts, backoff_min=0, backoff_max=0),
+        rate_limit=CategoryRetryConfig(max_attempts=max_attempts, backoff_min=0, backoff_max=0),
+        server_error=CategoryRetryConfig(max_attempts=max_attempts, backoff_min=0, backoff_max=0),
+    )
 
 
 def _llm(content: str, usage: UsageMetadata | None = None) -> MagicMock:
@@ -333,19 +343,114 @@ class TestDynamicParseTemplateEscalation:
             in mock_run_investigation.call_args.kwargs["screening_reasoning"]
         )
 
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
-    def test_decision_infra_error_marks_standard_failure(self, mock_get_llm):
+    def test_decision_connection_error_succeeds_after_retry_without_agentic_fallback(
+        self,
+        mock_get_llm,
+        mock_run_investigation,
+    ):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        mock_get_llm.side_effect = [
+            ConnectionError("Connection error."),
+            _llm('{"reasoning":"retry recovered","sufficient":true,"answer":{"solved":true}}'),
+        ]
+        policy = _zero_delay_retry_policy(max_attempts=1)
+        ctx = _make_context()
+        ctx.parsing_model = ctx.parsing_model.model_copy(update={"retry_policy": policy})
+
+        with track_retries(policy) as retry_counts:
+            DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None
+        assert mock_get_llm.call_count == 2
+        assert retry_counts["connection"] == {"used": 1, "budget": 1}
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "direct"
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_DECISION_REASONING) == "retry recovered"
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED, False) is False
+        assert ctx.get_artifact(ArtifactKeys.PARSED_ANSWER).solved is True
+        mock_run_investigation.assert_not_called()
+
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_extraction")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_decision_connection_error_exhaustion_escalates_to_agentic_fallback(
+        self,
+        mock_get_llm,
+        mock_run_investigation,
+        mock_run_extraction,
+    ):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        mock_get_llm.side_effect = ConnectionError("Connection error.")
+        mock_run_investigation.return_value = (
+            "investigation trace",
+            False,
+            UsageMetadata(input_tokens=20, output_tokens=7, total_tokens=27),
+        )
+        mock_run_extraction.return_value = (
+            DynamicAnswer(solved=True),
+            UsageMetadata(input_tokens=8, output_tokens=3, total_tokens=11),
+        )
+        policy = _zero_delay_retry_policy(max_attempts=1)
+        ctx = _make_context()
+        ctx.parsing_model = ctx.parsing_model.model_copy(update={"retry_policy": policy})
+
+        with track_retries(policy) as retry_counts:
+            DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None
+        assert mock_get_llm.call_count == 2
+        assert retry_counts["connection"] == {"used": 1, "budget": 1}
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "escalated"
+        assert "Dynamic parsing decision failed with retryable parser error" in ctx.get_result_field(
+            ArtifactKeys.DYNAMIC_DECISION_REASONING
+        )
+        assert any("Dynamic parsing decision failed with retryable parser error" in warning for warning in ctx.warnings)
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED) is True
+        assert ctx.get_result_field(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"
+        assert ctx.get_artifact(ArtifactKeys.PARSED_ANSWER).solved is True
+        mock_run_investigation.assert_called_once()
+        assert "Connection error" in mock_run_investigation.call_args.kwargs["screening_reasoning"]
+
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_decision_connection_error_fallback_preserves_investigation_failure(
+        self,
+        mock_get_llm,
+        mock_run_investigation,
+    ):
         from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
         from karenina.utils.errors import ErrorCategory
 
-        mock_get_llm.side_effect = TimeoutError("decision timed out")
+        mock_get_llm.side_effect = ConnectionError("Connection error.")
+        mock_run_investigation.side_effect = ConnectionError("parser unavailable")
+        policy = _zero_delay_retry_policy(max_attempts=0)
+        ctx = _make_context()
+        ctx.parsing_model = ctx.parsing_model.model_copy(update={"retry_policy": policy})
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is not None
+        assert "Dynamic agentic investigation failed" in ctx.error
+        assert ctx.error_category == ErrorCategory.CONNECTION
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "escalated"
+
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_decision_permanent_error_marks_standard_failure(self, mock_get_llm):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+        from karenina.utils.errors import ErrorCategory
+
+        mock_get_llm.side_effect = ValueError("bad prompt state")
         ctx = _make_context()
 
         DynamicParseTemplateStage().execute(ctx)
 
         assert ctx.error is not None
         assert "Dynamic parsing decision failed" in ctx.error
-        assert ctx.error_category == ErrorCategory.TIMEOUT
+        assert ctx.error_category == ErrorCategory.PERMANENT
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) is None
 
 
 @pytest.mark.unit

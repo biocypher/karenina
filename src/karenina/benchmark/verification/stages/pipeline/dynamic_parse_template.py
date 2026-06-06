@@ -7,7 +7,7 @@ and extraction flow.
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
 
@@ -35,6 +35,7 @@ from karenina.replay.exceptions import ReplayHydrationError
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.json_extraction import strip_markdown_fences
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -167,11 +168,33 @@ class DynamicParseTemplateStage(BaseVerificationStage):
             return
 
         try:
-            decision_response = self._run_decision(context, final_message, clean_schema)
+            decision_response = self._run_decision_with_retry(context, final_message, clean_schema)
         except Exception as e:
+            category = context.error_registry.classify(e)
+            if category.is_retryable():
+                fallback_reasoning = (
+                    "Dynamic parsing decision failed with retryable parser error "
+                    f"({category.value}): {e}; escalating to agentic parsing."
+                )
+                context.add_warning(fallback_reasoning)
+                self.set_artifact_and_result(
+                    context,
+                    ArtifactKeys.DYNAMIC_DECISION_REASONING,
+                    fallback_reasoning,
+                )
+                self._escalate(
+                    context,
+                    answer_class,
+                    clean_schema,
+                    parsing_model_str,
+                    usage_tracker,
+                    screening_reasoning=fallback_reasoning,
+                )
+                return
+
             context.mark_error(
                 f"Dynamic parsing decision failed: {e}",
-                category=context.error_registry.classify(e),
+                category=category,
             )
             return
 
@@ -185,7 +208,7 @@ class DynamicParseTemplateStage(BaseVerificationStage):
 
         decision = self._parse_decision(decision_response.content)
         reasoning = decision.get("reasoning") if isinstance(decision, dict) else None
-        screening_reasoning = reasoning if isinstance(reasoning, str) else None
+        screening_reasoning: str | None = reasoning if isinstance(reasoning, str) else None
         if screening_reasoning:
             self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_DECISION_REASONING, screening_reasoning)
 
@@ -290,6 +313,17 @@ class DynamicParseTemplateStage(BaseVerificationStage):
             return llm.invoke(messages)
         finally:
             close_adapter(llm)
+
+    def _run_decision_with_retry(
+        self,
+        context: VerificationContext,
+        final_message: str,
+        clean_schema: dict[str, Any],
+    ) -> LLMResponse:
+        """Run the dynamic decision prompt with category-aware transient retries."""
+        policy = context.parsing_model.retry_policy or RetryPolicy()
+        executor = RetryExecutor(policy, context.error_registry)
+        return cast(LLMResponse, executor.execute(self._run_decision, context, final_message, clean_schema))
 
     @staticmethod
     def _parse_decision(content: str) -> dict[str, Any] | None:
