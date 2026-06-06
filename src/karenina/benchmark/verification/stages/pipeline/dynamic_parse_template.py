@@ -19,9 +19,11 @@ from karenina.benchmark.verification.prompts.parsing import (
     DYNAMIC_PARSING_DECISION_USER,
 )
 from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+    recover_extraction_from_investigation,
     run_extraction,
     run_investigation,
 )
+from karenina.benchmark.verification.utils.parser_resilience import classify_parser_exception
 from karenina.benchmark.verification.utils.schema_builder import (
     build_extraction_relaxed_class,
     build_parsing_schema,
@@ -354,19 +356,25 @@ class DynamicParseTemplateStage(BaseVerificationStage):
                 clean_schema,
             )
         except Exception as e:
-            context.mark_error(
-                f"Dynamic agentic extraction failed: {e}",
-                category=context.error_registry.classify(e),
+            context.set_result_field(ArtifactKeys.AGENTIC_EXTRACTION_ERROR, str(e))
+            try:
+                parsed_answer = recover_extraction_from_investigation(answer_class, investigation_trace)
+            except Exception as recovery_error:
+                context.mark_error(
+                    f"Dynamic agentic extraction failed: {e}; local JSON recovery failed: {recovery_error}",
+                    category=classify_parser_exception(e, context.error_registry),
+                )
+                return
+            context.set_result_field(ArtifactKeys.AGENTIC_EXTRACTION_RECOVERY, "local_json")
+            context.add_warning(f"Dynamic agentic extraction recovered locally after parser error: {e}")
+        else:
+            self._track_usage(
+                usage_tracker,
+                "agentic_parsing_extraction",
+                parsing_model_str,
+                extraction_usage,
             )
-            return
-
-        self._track_usage(
-            usage_tracker,
-            "agentic_parsing_extraction",
-            parsing_model_str,
-            extraction_usage,
-        )
-        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
         context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
         context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, parsing_model_str)

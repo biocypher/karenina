@@ -14,6 +14,7 @@ from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.verified_field import VerifiedField
 from karenina.schemas.primitives import BooleanMatch
 from karenina.utils.errors import ErrorCategory
+from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
 
 
 class MockAnswer(BaseAnswer):
@@ -53,6 +54,15 @@ def _make_context(**overrides) -> VerificationContext:
     ctx.set_artifact(ArtifactKeys.ANSWER, MockAnswer)
     ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "test trace")
     return ctx
+
+
+def _zero_delay_retry_policy() -> RetryPolicy:
+    return RetryPolicy(
+        connection=CategoryRetryConfig(max_attempts=1, backoff_min=0, backoff_max=0),
+        timeout=CategoryRetryConfig(max_attempts=0, backoff_min=0, backoff_max=0),
+        rate_limit=CategoryRetryConfig(max_attempts=0, backoff_min=0, backoff_max=0),
+        server_error=CategoryRetryConfig(max_attempts=0, backoff_min=0, backoff_max=0),
+    )
 
 
 @pytest.mark.unit
@@ -306,6 +316,7 @@ class TestAgenticParseTemplateStage:
         mock_get_parser.return_value = mock_parser
 
         ctx = _make_context()
+        ctx.parsing_model = ctx.parsing_model.model_copy(update={"retry_policy": _zero_delay_retry_policy()})
         AgenticParseTemplateStage().execute(ctx)
 
         messages = mock_parser.parse_to_pydantic.call_args.args[0]
@@ -338,7 +349,40 @@ class TestAgenticParseTemplateStage:
         mock_agent = MagicMock()
         mock_agent.run.return_value = AgentResult(
             final_response='{"test_field": true}',
-            raw_trace='--- AI Message ---\n{"test_field": true}',
+            raw_trace="--- AI Message ---\nI could not find any final results.",
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=3,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.side_effect = RuntimeError("Connection error.")
+        mock_get_parser.return_value = mock_parser
+
+        ctx = _make_context()
+        ctx.parsing_model = ctx.parsing_model.model_copy(update={"retry_policy": _zero_delay_retry_policy()})
+        AgenticParseTemplateStage().execute(ctx)
+
+        assert ctx.error is not None
+        assert ctx.error_category == ErrorCategory.CONNECTION
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
+    def test_extraction_connection_error_recovers_from_investigation_json(self, mock_get_parser, mock_get_agent):
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        investigation_trace = (
+            '--- AI Message ---\nThe workspace contains final results.\n```json\n{"test_field": true}\n```'
+        )
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace=investigation_trace,
             trace_messages=[],
             usage=UsageMetadata(),
             turns=3,
@@ -353,5 +397,10 @@ class TestAgenticParseTemplateStage:
         ctx = _make_context()
         AgenticParseTemplateStage().execute(ctx)
 
-        assert ctx.error is not None
-        assert ctx.error_category == ErrorCategory.CONNECTION
+        assert ctx.error is None
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert isinstance(stored, MockAnswer)
+        assert stored.test_field is True
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED) is True
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_RECOVERY) == "local_json"
+        assert "Connection error" in ctx.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_ERROR)

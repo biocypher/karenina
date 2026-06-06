@@ -17,6 +17,7 @@ from karenina.adapters import get_agent, get_llm, get_parser
 from karenina.adapters.agent_runtime import map_path_for_prompt, workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
 from karenina.ports import AgentConfig, Message, PortCapabilities
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
@@ -291,17 +292,29 @@ class AgenticTraitEvaluator:
 
         try:
             if trait.kind == "boolean":
-                bool_result = parser.parse_to_pydantic(messages, SingleBooleanScore)
+                bool_result = parse_to_pydantic_resilient(
+                    parser,
+                    messages,
+                    SingleBooleanScore,
+                    retry_policy=self._model_config.retry_policy,
+                )
                 return bool_result.parsed.result
 
             if trait.kind == "score":
-                score_result = parser.parse_to_pydantic(messages, SingleNumericScore)
+                score_result = parse_to_pydantic_resilient(
+                    parser,
+                    messages,
+                    SingleNumericScore,
+                    retry_policy=self._model_config.retry_policy,
+                )
                 return score_result.parsed.score
 
             if trait.kind == "literal":
-                literal_result = parser.parse_to_pydantic(
+                literal_result = parse_to_pydantic_resilient(
+                    parser,
                     messages,
                     SingleLiteralClassification,
+                    retry_policy=self._model_config.retry_policy,
                 )
                 return self._resolve_literal_index(
                     literal_result.parsed.classification,
@@ -354,7 +367,12 @@ class AgenticTraitEvaluator:
 
         try:
             kind_class = cast(type[BaseModel], trait.kind)
-            parse_result = parser.parse_to_pydantic(messages, kind_class)
+            parse_result = parse_to_pydantic_resilient(
+                parser,
+                messages,
+                kind_class,
+                retry_policy=self._model_config.retry_policy,
+            )
             return parse_result.parsed.model_dump()
         finally:
             close_adapter(parser)

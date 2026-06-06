@@ -7,6 +7,7 @@ This package contains utility functions and export functionality:
 
 from .agentic_parse_helpers import (
     prepare_extraction_input,
+    recover_extraction_from_investigation,
     run_extraction,
     run_investigation,
     truncate_extraction_input,
@@ -28,6 +29,7 @@ __all__ = [
     "apply_deep_judgment_config_to_traits",
     # Agentic parse helpers
     "prepare_extraction_input",
+    "recover_extraction_from_investigation",
     "run_extraction",
     "run_investigation",
     "truncate_extraction_input",

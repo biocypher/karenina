@@ -9,6 +9,7 @@ from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
+from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
 from karenina.benchmark.verification.utils.schema_builder import (
     build_extraction_relaxed_class,
     rebuild_strict_answer_with_null_fields,
@@ -16,6 +17,7 @@ from karenina.benchmark.verification.utils.schema_builder import (
 from karenina.benchmark.verification.utils.trace_parsing import extract_final_ai_message
 from karenina.ports import AgentConfig, UsageMetadata
 from karenina.schemas.entities.answer import BaseAnswer
+from karenina.utils.json_extraction import strip_markdown_fences
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +191,13 @@ def run_extraction(
         # verification reports them as None rather than False, preventing
         # accidental matches against a False ground truth.
         extraction_class = build_extraction_relaxed_class(answer_class)
-        parse_result = parser.parse_to_pydantic(messages, extraction_class)
+        parse_result = parse_to_pydantic_resilient(
+            parser,
+            messages,
+            extraction_class,
+            retry_policy=context.parsing_model.retry_policy,
+            error_registry=context.error_registry,
+        )
         strict_instance = rebuild_strict_answer_with_null_fields(
             answer_class,
             parse_result.parsed,
@@ -198,6 +206,30 @@ def run_extraction(
         return strict_instance, parse_result.usage
     finally:
         close_adapter(parser)
+
+
+def recover_extraction_from_investigation(
+    answer_class: type[BaseAnswer],
+    investigation_trace: str,
+) -> BaseAnswer:
+    """Recover structured answers from machine-readable investigation output.
+
+    This is intentionally deterministic and local. It only runs after the
+    agentic investigation completed; it does not inspect the original answerer
+    trace or call another model.
+    """
+    extraction_input = prepare_extraction_input(investigation_trace)
+    cleaned = strip_markdown_fences(extraction_input)
+    if not cleaned:
+        raise ValueError("No JSON-like content found in investigation report")
+
+    data = json.loads(cleaned)
+    if not isinstance(data, dict):
+        raise ValueError(f"Recovered investigation JSON must be an object, got {type(data).__name__}")
+
+    extraction_class = build_extraction_relaxed_class(answer_class)
+    relaxed_instance = extraction_class.model_validate(data)
+    return rebuild_strict_answer_with_null_fields(answer_class, relaxed_instance)
 
 
 def prepare_extraction_input(investigation_trace: str) -> str:
@@ -236,6 +268,7 @@ def truncate_extraction_input(text: str, max_chars: int = _MAX_EXTRACTION_REPORT
 
 __all__ = [
     "prepare_extraction_input",
+    "recover_extraction_from_investigation",
     "run_extraction",
     "run_investigation",
     "truncate_extraction_input",

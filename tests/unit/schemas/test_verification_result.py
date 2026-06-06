@@ -677,6 +677,20 @@ def test_verification_result_with_trace_filtering() -> None:
 
 
 @pytest.mark.unit
+def test_template_result_records_agentic_extraction_recovery() -> None:
+    """Agentic parser recovery metadata is preserved in template results."""
+    template = VerificationResultTemplate(
+        raw_llm_response="trace",
+        investigation_trace='```json\n{"answer": true}\n```',
+        agentic_extraction_recovery="local_json",
+        agentic_extraction_error="Connection error.",
+    )
+
+    assert template.agentic_extraction_recovery == "local_json"
+    assert template.agentic_extraction_error == "Connection error."
+
+
+@pytest.mark.unit
 def test_verification_result_with_trace_extraction_error() -> None:
     """Test VerificationResult with trace extraction error."""
     result = VerificationResult(

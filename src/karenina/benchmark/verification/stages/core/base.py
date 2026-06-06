@@ -229,6 +229,8 @@ class ArtifactKeys:
     INVESTIGATION_TRACE = "investigation_trace"
     WORKSPACE_PATH = "workspace_path"
     AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
+    AGENTIC_EXTRACTION_RECOVERY = "agentic_extraction_recovery"
+    AGENTIC_EXTRACTION_ERROR = "agentic_extraction_error"
 
     # ==========================================================================
     # Dynamic Parsing

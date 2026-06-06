@@ -229,6 +229,35 @@ class TestDynamicParseTemplateEscalation:
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_extraction")
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_escalated_extraction_error_recovers_from_investigation_json(
+        self,
+        mock_get_llm,
+        mock_run_investigation,
+        mock_run_extraction,
+    ):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        mock_get_llm.return_value = _llm('{"reasoning":"needs workspace","sufficient":false}')
+        mock_run_investigation.return_value = (
+            '--- AI Message ---\n```json\n{"solved": true}\n```',
+            False,
+            UsageMetadata(input_tokens=20, output_tokens=7, total_tokens=27),
+        )
+        mock_run_extraction.side_effect = RuntimeError("Connection error.")
+        ctx = _make_context()
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert isinstance(stored, DynamicAnswer)
+        assert stored.solved is True
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_RECOVERY) == "local_json"
+        assert "Connection error" in ctx.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_ERROR)
+
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_extraction")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
     def test_malformed_decision_escalates_and_sets_caveat_flag(
         self,
         mock_get_llm,

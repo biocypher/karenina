@@ -186,6 +186,8 @@ class VerificationResultTemplate(BaseModel):
         description="Raw trace from the agentic judge investigation step, if agentic parsing was used.",
     )
     agentic_parsing_performed: bool = False  # Whether agentic parsing was used
+    agentic_extraction_recovery: str | None = None
+    agentic_extraction_error: str | None = None
 
     # Dynamic parsing
     dynamic_parsing_performed: bool = False

@@ -17,6 +17,7 @@ from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.parsing.parsing_instructions import TemplatePromptBuilder
 from karenina.benchmark.verification.utils import prepare_evaluation_input
+from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
 from karenina.benchmark.verification.utils.schema_builder import (
     build_extraction_relaxed_class,
     build_parsing_schema,
@@ -320,7 +321,12 @@ class TemplateEvaluator:
             # reject the whole record. The strict Answer instance tracks those
             # fields via _null_fields for tri-valued field_results.
             extraction_class = build_extraction_relaxed_class(self.answer_class)
-            parse_port_result = self._parser.parse_to_pydantic(messages, extraction_class)
+            parse_port_result = parse_to_pydantic_resilient(
+                self._parser,
+                messages,
+                extraction_class,
+                retry_policy=self.model_config.retry_policy,
+            )
             parsed = rebuild_strict_answer_with_null_fields(
                 self.answer_class,
                 parse_port_result.parsed,
