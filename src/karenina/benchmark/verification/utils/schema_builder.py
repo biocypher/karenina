@@ -115,6 +115,7 @@ def build_extraction_relaxed_class(answer_class: type[BaseAnswer]) -> type[BaseA
 def rebuild_strict_answer_with_null_fields(
     answer_class: type[BaseAnswer],
     relaxed_instance: Any,
+    unanswered_fields: set[str] | None = None,
 ) -> BaseAnswer:
     """Rebuild a strict Answer while preserving null verified fields.
 
@@ -127,8 +128,14 @@ def rebuild_strict_answer_with_null_fields(
     """
     extracted_dict = relaxed_instance.model_dump()
     verified_names = set(answer_class._get_verified_fields().keys())
+    raw_unanswered = extracted_dict.pop("_unanswered_fields", None)
     null_fields = {name for name, value in extracted_dict.items() if value is None and name in verified_names}
+    if isinstance(raw_unanswered, list):
+        null_fields.update(name for name in raw_unanswered if isinstance(name, str) and name in verified_names)
+    null_fields.update((unanswered_fields or set()) & verified_names)
     strict_payload = {name: value for name, value in extracted_dict.items() if value is not None}
+    for name in null_fields:
+        strict_payload.pop(name, None)
     strict_instance = answer_class.model_construct(**strict_payload)
     strict_instance.__dict__["_null_fields"] = null_fields
     return strict_instance

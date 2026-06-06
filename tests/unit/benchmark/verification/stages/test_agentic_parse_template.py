@@ -130,6 +130,9 @@ class TestAgenticParseTemplateStage:
         assert "file sizes" in prompt_text
         assert "context window" in prompt_text
         assert "Read large files carefully" in prompt_text
+        assert "use JSON null" in prompt_text
+        assert "_unanswered_fields" in prompt_text
+        assert "Do not use 0, false, empty strings, or empty lists as placeholders" in prompt_text
 
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
     def test_workspace_only_investigation_excludes_trace_for_non_timeout_answers(self, mock_get_agent):

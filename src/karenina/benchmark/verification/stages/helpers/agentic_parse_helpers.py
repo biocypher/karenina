@@ -93,8 +93,12 @@ def run_investigation(
         "recover final answers. Prefer targeted reads of final summaries and small "
         "machine-readable result files; when an artifact is large, inspect only "
         "headers, relevant rows, or concise excerpts needed to answer the schema. "
-        "If you cannot find a usable final-results artifact, report "
-        "that you could not verify the results.\n\n"
+        "If the answerer explicitly reported a value, extract that value. "
+        "If the answerer did not report a value for a field, use JSON null for that field. "
+        "Do not use 0, false, empty strings, or empty lists as placeholders for missing answers. "
+        "For boolean equivalence fields, use false only when the answerer reported an answer "
+        "and it is not equivalent to the ideal; use null when no answer was reported. "
+        "When any field is unanswered, also include an internal '_unanswered_fields' array listing those field names.\n\n"
         "Report your findings as a JSON object matching this schema:\n"
         f"{schema_json}"
     )
@@ -217,11 +221,14 @@ def run_extraction(
     parser = get_parser(context.parsing_model)
     schema_json = json.dumps(clean_schema, indent=2)
     extraction_input = prepare_extraction_input(investigation_trace)
+    unanswered_fields = extract_unanswered_fields_from_report(extraction_input, answer_class)
 
     system_text = (
         "You are a structured data extraction assistant. "
         "Extract the findings from the investigation report into "
-        "the exact JSON schema provided.\n\n"
+        "the exact JSON schema provided. If the investigation report lists "
+        "'_unanswered_fields', set those fields to JSON null in the schema output; "
+        "do not turn missing values into 0, false, empty strings, or empty lists.\n\n"
         f"Schema:\n{schema_json}"
     )
     user_text = f"Investigation report:\n\n{extraction_input}"
@@ -267,6 +274,7 @@ def run_extraction(
         strict_instance = rebuild_strict_answer_with_null_fields(
             answer_class,
             parse_result.parsed,
+            unanswered_fields=unanswered_fields,
         )
 
         return strict_instance, parse_result.usage
@@ -293,9 +301,39 @@ def recover_extraction_from_investigation(
     if not isinstance(data, dict):
         raise ValueError(f"Recovered investigation JSON must be an object, got {type(data).__name__}")
 
+    unanswered_fields = extract_unanswered_fields_from_data(data, answer_class)
     extraction_class = build_extraction_relaxed_class(answer_class)
     relaxed_instance = extraction_class.model_validate(data)
-    return rebuild_strict_answer_with_null_fields(answer_class, relaxed_instance)
+    return rebuild_strict_answer_with_null_fields(answer_class, relaxed_instance, unanswered_fields=unanswered_fields)
+
+
+def extract_unanswered_fields_from_report(
+    report: str,
+    answer_class: type[BaseAnswer],
+) -> set[str]:
+    """Extract verified field names explicitly marked as unanswered."""
+    cleaned = strip_markdown_fences(report)
+    if not cleaned:
+        return set()
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    return extract_unanswered_fields_from_data(data, answer_class)
+
+
+def extract_unanswered_fields_from_data(
+    data: dict[str, Any],
+    answer_class: type[BaseAnswer],
+) -> set[str]:
+    """Return verified names from an internal _unanswered_fields list."""
+    raw = data.get("_unanswered_fields")
+    if not isinstance(raw, list):
+        return set()
+    verified_names = set(answer_class._get_verified_fields().keys())
+    return {name for name in raw if isinstance(name, str) and name in verified_names}
 
 
 def prepare_extraction_input(investigation_trace: str) -> str:
@@ -356,6 +394,8 @@ def write_agentic_trace_file(
 __all__ = [
     "prepare_extraction_input",
     "recover_extraction_from_investigation",
+    "extract_unanswered_fields_from_data",
+    "extract_unanswered_fields_from_report",
     "run_extraction",
     "run_investigation",
     "truncate_extraction_input",
