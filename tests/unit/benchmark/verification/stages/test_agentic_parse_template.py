@@ -94,6 +94,34 @@ class TestAgenticParseTemplateStage:
         assert stage.should_run(ctx) is False
 
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    def test_investigation_prompt_warns_about_large_files(self, mock_get_agent):
+        from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+            run_investigation,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.capabilities.supports_code_execution = False
+        mock_agent.capabilities.supports_system_messages = True
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace='{"test_field": true}',
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=1,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        run_investigation(_make_context(), {"properties": {"test_field": {"type": "boolean"}}})
+
+        messages = mock_agent.run.call_args.kwargs["messages"]
+        prompt_text = "\n".join(str(message.content) for message in messages)
+        assert "file sizes" in prompt_text
+        assert "context window" in prompt_text
+        assert "Read large files carefully" in prompt_text
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_execute_calls_agent_then_parser(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (

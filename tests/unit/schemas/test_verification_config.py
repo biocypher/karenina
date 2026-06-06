@@ -77,6 +77,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     assert config.evaluation_mode == "template_only"
     assert config.use_full_trace_for_template is False
     assert config.use_full_trace_for_rubric is True
+    assert config.allow_partial_trace_scoring is True
     assert config.abstention_enabled is False
     assert config.embedding_check_enabled is False
     assert config.embedding_check_model == "all-MiniLM-L6-v2"

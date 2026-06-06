@@ -356,7 +356,7 @@ class VerificationContext:
     # Trace Filtering Configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False  # Whether to use full trace for template parsing
     use_full_trace_for_rubric: bool = True  # Whether to use full trace for rubric evaluation
-    allow_partial_trace_scoring: bool = False
+    allow_partial_trace_scoring: bool = True
 
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None

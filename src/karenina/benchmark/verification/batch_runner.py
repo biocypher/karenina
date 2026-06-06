@@ -367,7 +367,7 @@ def execute_task(
             prompt_config=task.get("prompt_config"),
             use_full_trace_for_template=task.get("use_full_trace_for_template", False),
             use_full_trace_for_rubric=task.get("use_full_trace_for_rubric", True),
-            allow_partial_trace_scoring=task.get("allow_partial_trace_scoring", False),
+            allow_partial_trace_scoring=task.get("allow_partial_trace_scoring", True),
             # Agentic parsing
             agentic_parsing=task.get("agentic_parsing", False),
             agentic_parsing_trigger=task.get("agentic_parsing_trigger", "always"),

@@ -326,7 +326,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         # Trace filtering configuration
         "use_full_trace_for_template": getattr(config, "use_full_trace_for_template", False),
         "use_full_trace_for_rubric": getattr(config, "use_full_trace_for_rubric", True),
-        "allow_partial_trace_scoring": getattr(config, "allow_partial_trace_scoring", False),
+        "allow_partial_trace_scoring": getattr(config, "allow_partial_trace_scoring", True),
         # Agentic parsing configuration
         "agentic_parsing": getattr(config, "agentic_parsing", False),
         "agentic_parsing_trigger": getattr(config, "agentic_parsing_trigger", "always"),

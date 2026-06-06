@@ -117,11 +117,11 @@ class VerificationConfig(BaseModel):
     # These flags only control what input is provided to the parsing/evaluation models.
     # If False and the trace doesn't end with an AI message, verification stage will fail with error.
     allow_partial_trace_scoring: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "When True, permit template parsing and scoring to run on responses "
-            "that were truncated by answer-generation timeout. Timeout metadata "
-            "is still preserved; this is intended for explicit salvage analyses."
+            "Permit template parsing and scoring to run on responses that were "
+            "truncated by answer-generation timeout. Timeout metadata is still "
+            "preserved separately so partial scores do not hide agent failures."
         ),
     )
 

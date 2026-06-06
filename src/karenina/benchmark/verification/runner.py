@@ -88,7 +88,7 @@ def run_single_model_verification(
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
-    allow_partial_trace_scoring: bool = False,
+    allow_partial_trace_scoring: bool = True,
     # Agentic parsing configuration
     agentic_parsing: bool = False,
     agentic_parsing_trigger: str = "always",
