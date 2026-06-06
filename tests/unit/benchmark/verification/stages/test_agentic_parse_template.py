@@ -132,6 +132,113 @@ class TestAgenticParseTemplateStage:
         assert "Read large files carefully" in prompt_text
 
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    def test_workspace_only_investigation_excludes_trace_for_non_timeout_answers(self, mock_get_agent):
+        from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+            run_investigation,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.capabilities.supports_code_execution = False
+        mock_agent.capabilities.supports_system_messages = True
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace='{"test_field": true}',
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=1,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        ctx = _make_context()
+        ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "answer trace evidence")
+
+        run_investigation(ctx, {"properties": {"test_field": {"type": "boolean"}}})
+
+        messages = mock_agent.run.call_args.kwargs["messages"]
+        prompt_text = "\n".join(message.text for message in messages)
+        assert "answer trace evidence" not in prompt_text
+        assert "Workspace directory:" in prompt_text
+        assert "ANSWERING AGENT TRACE" not in prompt_text
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    def test_workspace_only_investigation_materializes_trace_for_partial_timeout(self, mock_get_agent, tmp_path):
+        from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+            run_investigation,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.capabilities.supports_code_execution = False
+        mock_agent.capabilities.supports_system_messages = True
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace='{"test_field": true}',
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=1,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        raw_trace = "TRACE_HEAD_" + ("x" * 90_000) + "_TRACE_TAIL"
+        ctx = _make_context(workspace_path=tmp_path)
+        ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, raw_trace)
+        ctx.set_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, True)
+
+        run_investigation(ctx, {"properties": {"test_field": {"type": "boolean"}}})
+
+        messages = mock_agent.run.call_args.kwargs["messages"]
+        prompt_text = "\n".join(message.text for message in messages)
+        assert "ANSWERING AGENT TRACE FILE" in prompt_text
+        assert "wall-clock timeout" in prompt_text
+        assert "Use file tools" in prompt_text
+        assert "TRACE_HEAD_" not in prompt_text
+        assert "_TRACE_TAIL" not in prompt_text
+        trace_files = list((tmp_path / "traces").glob("q1_trace.txt"))
+        assert len(trace_files) == 1
+        assert trace_files[0].read_text(encoding="utf-8") == raw_trace
+        assert len(prompt_text) < 10_000
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    def test_trace_and_workspace_materialize_trace_uses_file_reference(self, mock_get_agent, tmp_path):
+        from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+            run_investigation,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.capabilities.supports_code_execution = False
+        mock_agent.capabilities.supports_system_messages = True
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace='{"test_field": true}',
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=1,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        ctx = _make_context(
+            workspace_path=tmp_path,
+            agentic_judge_context="trace_and_workspace",
+            agentic_parsing_materialize_trace=True,
+            agentic_parsing_persist_trace=True,
+        )
+        ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "full trace content")
+
+        run_investigation(ctx, {"properties": {"test_field": {"type": "boolean"}}})
+
+        messages = mock_agent.run.call_args.kwargs["messages"]
+        prompt_text = "\n".join(message.text for message in messages)
+        assert "The full answering agent trace is saved to:" in prompt_text
+        assert "full trace content" not in prompt_text
+        trace_file = tmp_path / "traces" / "q1_trace.txt"
+        assert trace_file.read_text(encoding="utf-8") == "full trace content"
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_execute_calls_agent_then_parser(self, mock_get_parser, mock_get_agent):
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (

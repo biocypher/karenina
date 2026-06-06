@@ -2,10 +2,13 @@
 
 import json
 import logging
+import re
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from karenina.adapters import get_agent, get_parser
-from karenina.adapters.agent_runtime import workspace_path_for_prompt
+from karenina.adapters.agent_runtime import map_path_for_prompt, workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
@@ -54,9 +57,31 @@ def run_investigation(
     else:
         execution_text = "You have access to file tools, but command execution is not available."
 
+    partial_timeout_trace_available = (
+        context.get_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+        and context.agentic_judge_context == "workspace_only"
+        and context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+    )
+    materialize_trace = partial_timeout_trace_available or (
+        context.agentic_parsing_materialize_trace and context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+    )
+    trace_file_path: Path | None = None
+
+    evidence_text = (
+        "You may inspect the workspace artifacts and the materialized answering trace file referenced in the prompt. "
+        "The answering agent hit a wall-clock timeout, so final results may appear only in the trace file, especially "
+        "in recent tool output, stdout, or partial final text. Treat both workspace artifacts and the trace file as "
+        "evidence of what the answerer reported; do not rerun code."
+        if partial_timeout_trace_available
+        else (
+            "You may inspect the workspace artifacts. If the prompt includes an answering trace, you may also use it "
+            "as evidence of what the answerer reported."
+        )
+    )
+
     system_text = (
         "You are a verification agent evaluating whether an AI coding "
-        f"assistant correctly completed a task. {execution_text}\n\n"
+        f"assistant correctly completed a task. {execution_text} {evidence_text}\n\n"
         "Be parsimonious. Look only for artifacts that appear to contain final "
         "reported results, such as result files, summaries, reports, tables, "
         "or final answer JSON/CSV/TXT/Markdown outputs. Read those artifacts "
@@ -85,7 +110,39 @@ def run_investigation(
         "trace_only",
     ):
         raw_trace = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
-        user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_trace}\n--- END TRACE ---")
+        if materialize_trace:
+            trace_file_path = write_agentic_trace_file(
+                workspace_path=context.workspace_path,
+                trace=raw_trace,
+                question_id=context.question_id,
+                scenario_turn=context.scenario_turn,
+            )
+            prompt_trace_path = map_path_for_prompt(context.parsing_model, trace_file_path, context.workspace_path)
+            trace_content = (
+                f"The full answering agent trace is saved to: {prompt_trace_path}\n"
+                "Use file tools (grep, search, read) to examine it carefully."
+            )
+        else:
+            trace_content = raw_trace
+        user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{trace_content}\n--- END TRACE ---")
+    elif partial_timeout_trace_available:
+        raw_trace = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        trace_file_path = write_agentic_trace_file(
+            workspace_path=context.workspace_path,
+            trace=raw_trace,
+            question_id=context.question_id,
+            scenario_turn=context.scenario_turn,
+        )
+        prompt_trace_path = map_path_for_prompt(context.parsing_model, trace_file_path, context.workspace_path)
+        user_parts.append(
+            "\n--- ANSWERING AGENT TRACE FILE (partial timeout) ---\n"
+            "The answerer hit a wall-clock timeout. The full trace has been materialized as a workspace file because "
+            "recent tool output or partial final text may contain results that were not persisted elsewhere.\n"
+            f"Trace file: {prompt_trace_path}\n"
+            "Use file tools (grep, search, read) to examine it carefully; do not load it wholesale if targeted reads "
+            "are enough.\n"
+            "--- END TRACE FILE ---"
+        )
 
     if context.workspace_path and context.agentic_judge_context != "trace_only":
         prompt_workspace = workspace_path_for_prompt(context.parsing_model, context.workspace_path)
@@ -128,6 +185,15 @@ def run_investigation(
         )
         return result.raw_trace, result.limit_reached, result.usage
     finally:
+        if (
+            trace_file_path is not None
+            and not context.agentic_parsing_persist_trace
+            and not partial_timeout_trace_available
+        ):
+            try:
+                trace_file_path.unlink(missing_ok=True)
+            except Exception:
+                logger.warning("Failed to clean up materialized trace file: %s", trace_file_path, exc_info=True)
         close_adapter(agent)
 
 
@@ -266,10 +332,32 @@ def truncate_extraction_input(text: str, max_chars: int = _MAX_EXTRACTION_REPORT
     return f"{text[:head_chars]}{marker}{text[-tail_chars:]}"
 
 
+def write_agentic_trace_file(
+    *,
+    workspace_path: Path | None,
+    trace: str,
+    question_id: str,
+    scenario_turn: int | None = None,
+) -> Path:
+    """Write an answering trace for file-tool access during agentic parsing."""
+    if workspace_path is None:
+        trace_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_"))
+    else:
+        trace_dir = Path(workspace_path) / "traces"
+    trace_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)
+    filename = f"{safe_id}_turn{scenario_turn}_trace.txt" if scenario_turn is not None else f"{safe_id}_trace.txt"
+    trace_path = trace_dir / filename
+    trace_path.write_text(trace, encoding="utf-8")
+    return trace_path
+
+
 __all__ = [
     "prepare_extraction_input",
     "recover_extraction_from_investigation",
     "run_extraction",
     "run_investigation",
     "truncate_extraction_input",
+    "write_agentic_trace_file",
 ]
