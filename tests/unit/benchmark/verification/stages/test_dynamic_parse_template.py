@@ -191,6 +191,27 @@ class TestDynamicParseTemplateDirectPath:
         assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "replay"
         mock_get_llm.assert_not_called()
 
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_replay_parsed_fields_preserve_null_verified_fields(self, mock_get_llm):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        ctx = _make_context(answer_cls=DynamicFalseGTAnswer)
+        ctx.set_artifact(
+            ArtifactKeys.REPLAY_ENTRY,
+            ReplayEntry(raw_trace="raw", parsed_answer_fields={"solved": None}),
+        )
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert isinstance(stored, DynamicFalseGTAnswer)
+        assert stored.__dict__.get("_null_fields") == {"solved"}
+        assert stored._compute_field_results()["solved"] is None
+        assert ctx.get_artifact(ArtifactKeys.PARSING_MODEL_STR) == "replay (no LLM)"
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "replay"
+        mock_get_llm.assert_not_called()
+
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
     @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
     def test_connection_only_answer_becomes_all_null_without_parser_call(

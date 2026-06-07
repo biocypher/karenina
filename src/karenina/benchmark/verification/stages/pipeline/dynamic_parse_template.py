@@ -138,7 +138,12 @@ class DynamicParseTemplateStage(BaseVerificationStage):
         entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
         if entry is not None and getattr(entry, "parsed_answer_fields", None) is not None:
             try:
-                parsed_answer = answer_class.model_validate(entry.parsed_answer_fields)
+                relaxed_class = build_extraction_relaxed_class(answer_class)
+                relaxed_instance = relaxed_class.model_validate(entry.parsed_answer_fields)
+                parsed_answer = rebuild_strict_answer_with_null_fields(
+                    answer_class,
+                    relaxed_instance,
+                )
             except Exception as validation_error:  # noqa: BLE001
                 policy = context.replay_parse_on_hydration_mismatch
                 if policy == "strict":
