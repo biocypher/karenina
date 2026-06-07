@@ -191,6 +191,37 @@ class TestDynamicParseTemplateDirectPath:
         assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "replay"
         mock_get_llm.assert_not_called()
 
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.run_investigation")
+    @patch("karenina.benchmark.verification.stages.pipeline.dynamic_parse_template.get_llm")
+    def test_connection_only_answer_becomes_all_null_without_parser_call(
+        self,
+        mock_get_llm,
+        mock_run_investigation,
+    ):
+        from karenina.benchmark.verification.stages.pipeline.dynamic_parse_template import DynamicParseTemplateStage
+
+        ctx = _make_context()
+        ctx.set_artifact(
+            ArtifactKeys.RAW_LLM_RESPONSE,
+            "--- AI Message ---\nAPI Error: Unable to connect to API (ConnectionRefused)",
+        )
+
+        DynamicParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert isinstance(stored, DynamicAnswer)
+        assert stored.__dict__.get("_null_fields") == {"solved"}
+        assert stored._compute_field_results()["solved"] is None
+        assert ctx.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION) == "answer_error_null"
+        assert "answerer produced only an API/connection error" in ctx.get_result_field(
+            ArtifactKeys.DYNAMIC_DECISION_REASONING
+        )
+        assert any("answerer produced only an API/connection error" in warning for warning in ctx.warnings)
+        assert ctx.get_artifact(ArtifactKeys.TEMPLATE_EVALUATOR) is None
+        mock_get_llm.assert_not_called()
+        mock_run_investigation.assert_not_called()
+
 
 @pytest.mark.unit
 class TestDynamicParseTemplateEscalation:

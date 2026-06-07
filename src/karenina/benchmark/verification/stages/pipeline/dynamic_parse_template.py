@@ -42,6 +42,20 @@ from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 logger = logging.getLogger(__name__)
 
 
+_ANSWERER_API_ERROR_PATTERNS = (
+    "api error: unable to connect to api",
+    "connectionrefused",
+)
+
+
+def _is_answerer_api_connection_error(final_message: str) -> bool:
+    """Return True when the answerer's final message is only an API connection error."""
+    normalized = " ".join(final_message.strip().lower().split())
+    if not normalized:
+        return False
+    return all(pattern in normalized for pattern in _ANSWERER_API_ERROR_PATTERNS)
+
+
 class DynamicParseTemplateStage(BaseVerificationStage):
     """Parse templates directly from the final message, escalating when needed."""
 
@@ -167,6 +181,14 @@ class DynamicParseTemplateStage(BaseVerificationStage):
             )
             return
 
+        if _is_answerer_api_connection_error(final_message):
+            self._record_answerer_connection_error_as_null_answer(
+                context,
+                answer_class,
+                parsing_model_str,
+            )
+            return
+
         try:
             decision_response = self._run_decision_with_retry(context, final_message, clean_schema)
         except Exception as e:
@@ -275,6 +297,38 @@ class DynamicParseTemplateStage(BaseVerificationStage):
         self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_PARSE_DECISION, "direct")
 
         logger.info("Dynamic direct parsing completed successfully")
+
+    def _record_answerer_connection_error_as_null_answer(
+        self,
+        context: VerificationContext,
+        answer_class: type[BaseAnswer],
+        parsing_model_str: str,
+    ) -> None:
+        """Create a scoreable all-null answer when the answerer only emitted an API error."""
+        verified_fields = set(answer_class._get_verified_fields().keys())
+        extraction_class = build_extraction_relaxed_class(answer_class)
+        relaxed_instance = extraction_class.model_construct(**dict.fromkeys(verified_fields, None))
+        parsed_answer = rebuild_strict_answer_with_null_fields(
+            answer_class,
+            relaxed_instance,
+            unanswered_fields=verified_fields,
+        )
+        reasoning = (
+            "The answerer produced only an API/connection error instead of task results; "
+            "all verified fields are marked unanswered so template verification can score the trial."
+        )
+
+        context.add_warning(reasoning)
+        context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
+        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, parsing_model_str)
+        context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+        context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+        context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, [])
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+        self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_PARSE_DECISION, "answer_error_null")
+        self.set_artifact_and_result(context, ArtifactKeys.DYNAMIC_DECISION_REASONING, reasoning)
+
+        logger.info("Dynamic parsing converted answerer API error into all-null parsed answer")
 
     def _run_decision(
         self,

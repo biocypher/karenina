@@ -77,7 +77,7 @@ def _is_content_failure(failure: Any) -> bool:
 
 
 def _is_parser_stage(stage: str | None) -> bool:
-    return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate"}
+    return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate", "DynamicParseTemplate"}
 
 
 def _has_usable_answer_trace(result: VerificationResult) -> bool:
