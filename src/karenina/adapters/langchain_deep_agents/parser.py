@@ -19,6 +19,7 @@ from karenina.ports import ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.parser import ParsePortResult
 from karenina.ports.usage import UsageMetadata
+from karenina.utils.json_extraction import extract_json_from_response
 
 from .initialization import create_chat_model
 from .messages import DeepAgentsMessageConverter
@@ -165,13 +166,7 @@ class DeepAgentsParserAdapter:
 
         # Try to extract JSON from the text
         try:
-            # Look for JSON in code blocks or raw JSON
-            json_str = content
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-
+            json_str = extract_json_from_response(content)
             data = json.loads(json_str)
             parsed = schema.model_validate(data)
             return ParsePortResult(parsed=parsed, usage=usage)

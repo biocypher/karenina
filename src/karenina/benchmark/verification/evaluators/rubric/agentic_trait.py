@@ -7,6 +7,7 @@ Two-step evaluation for agentic rubric traits:
 This mirrors the Stage 7b (AgenticParseTemplate) pattern.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, cast
@@ -17,6 +18,7 @@ from karenina.adapters import get_agent, get_llm, get_parser
 from karenina.adapters.agent_runtime import map_path_for_prompt, workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import prepare_extraction_input
 from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
 from karenina.ports import AgentConfig, Message, PortCapabilities
 from karenina.schemas.config.models import ModelConfig
@@ -27,8 +29,11 @@ from karenina.schemas.outputs.rubric import (
     SingleNumericScore,
 )
 from karenina.schemas.verification.prompt_config import PromptConfig
+from karenina.utils.json_extraction import extract_json_from_response
 
 logger = logging.getLogger(__name__)
+
+AgenticTraitExtractionMetadata = dict[str, str | None]
 
 
 class AgenticTraitEvaluator:
@@ -46,6 +51,7 @@ class AgenticTraitEvaluator:
     ) -> None:
         self._model_config = model_config
         self._prompt_config = prompt_config
+        self.last_extraction_metadata: AgenticTraitExtractionMetadata | None = None
 
     def evaluate_trait(
         self,
@@ -153,6 +159,15 @@ class AgenticTraitEvaluator:
             "After investigating, summarize your findings clearly. Your investigation "
             f"trace will be parsed into a {trait.kind} result."
         )
+        if trait.is_template_kind:
+            kind_class = cast(type[BaseModel], trait.kind)
+            schema_json = json.dumps(kind_class.model_json_schema(), indent=2)
+            system_text += (
+                "\n\nEnd your final response with a JSON object matching this schema. "
+                "Do not wrap the schema in another object and do not include placeholder values "
+                "for missing fields.\n"
+                f"{schema_json}"
+            )
 
         # Build user message based on context_mode
         user_parts: list[str] = [f"Question: {question_text}"]
@@ -267,6 +282,7 @@ class AgenticTraitEvaluator:
             The extracted score (bool for boolean traits, int for score/literal),
             or a dict for template kind traits.
         """
+        self.last_extraction_metadata = None
         if trait.is_template_kind:
             return self._extract_template(trait, investigation_trace)
 
@@ -339,8 +355,53 @@ class AgenticTraitEvaluator:
         Returns:
             Dict of extracted field values (model_dump of the parsed model).
         """
-        parser = get_parser(self._model_config)
+        kind_class = cast(type[BaseModel], trait.kind)
+        local_error: str | None = None
+        try:
+            parsed = self._extract_template_locally(kind_class, investigation_trace)
+        except Exception as exc:
+            local_error = str(exc)
+        else:
+            self.last_extraction_metadata = {
+                "method": "local_json",
+                "local_json_error": None,
+                "parser_error": None,
+            }
+            return parsed.model_dump()
 
+        parser = get_parser(self._model_config)
+        try:
+            return self._extract_template_with_parser(
+                investigation_trace,
+                kind_class,
+                parser,
+                local_error=local_error,
+            )
+        finally:
+            close_adapter(parser)
+
+    @staticmethod
+    def _extract_template_locally(
+        kind_class: type[BaseModel],
+        investigation_trace: str,
+    ) -> BaseModel:
+        """Recover template-kind findings from final investigation JSON locally."""
+        extraction_input = prepare_extraction_input(investigation_trace)
+        json_text = extract_json_from_response(extraction_input)
+        data = json.loads(json_text)
+        if not isinstance(data, dict):
+            raise ValueError(f"Recovered investigation JSON must be an object, got {type(data).__name__}")
+        return kind_class.model_validate(data)
+
+    def _extract_template_with_parser(
+        self,
+        investigation_trace: str,
+        kind_class: type[BaseModel],
+        parser: Any,
+        *,
+        local_error: str | None,
+    ) -> dict[str, Any]:
+        """Extract template findings with ParserPort after local recovery fails."""
         system_text = (
             "You are extracting structured findings from an investigation. "
             "Based on the investigation output below, fill in every field "
@@ -348,7 +409,6 @@ class AgenticTraitEvaluator:
         )
         user_text = investigation_trace
 
-        # Assemble with adapter + user instructions
         assembler = PromptAssembler(
             task=PromptTask.RUBRIC_AGENTIC_TRAIT_EXTRACTION,
             interface=self._model_config.interface,
@@ -366,16 +426,26 @@ class AgenticTraitEvaluator:
         )
 
         try:
-            kind_class = cast(type[BaseModel], trait.kind)
             parse_result = parse_to_pydantic_resilient(
                 parser,
                 messages,
                 kind_class,
                 retry_policy=self._model_config.retry_policy,
             )
-            return parse_result.parsed.model_dump()
-        finally:
-            close_adapter(parser)
+        except Exception as exc:
+            self.last_extraction_metadata = {
+                "method": "failed",
+                "local_json_error": local_error,
+                "parser_error": str(exc),
+            }
+            raise
+
+        self.last_extraction_metadata = {
+            "method": "parser_after_local_json_failed",
+            "local_json_error": local_error,
+            "parser_error": None,
+        }
+        return parse_result.parsed.model_dump()
 
     @staticmethod
     def _build_extraction_texts(

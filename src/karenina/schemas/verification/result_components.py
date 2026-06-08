@@ -271,6 +271,10 @@ class VerificationResultRubric(BaseModel):
         "Each trace is the raw agent investigation output string. "
         "Keyed by trait name.",
     )
+    agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
+        default=None,
+        description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",
+    )
 
     # Dynamic rubric metadata (populated when a DynamicRubric presence check runs)
     dynamic_rubric_skipped_traits: dict[str, str] | None = None  # Traits skipped with reasons

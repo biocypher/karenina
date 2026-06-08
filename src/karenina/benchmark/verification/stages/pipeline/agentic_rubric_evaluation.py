@@ -45,6 +45,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_rubric_evaluation_performed: True when this stage ran.
         agentic_trait_scores: Dict mapping trait name to score (or None on failure).
         agentic_trait_investigation_traces: Dict mapping trait name to investigation trace.
+        agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
     """
 
     @property
@@ -64,6 +65,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED,
             ArtifactKeys.AGENTIC_TRAIT_SCORES,
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -126,14 +128,14 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         try:
             strategy = context.agentic_rubric_strategy
             if strategy == "shared":
-                scores, traces = self._execute_shared(
+                scores, traces, extraction_metadata = self._execute_shared(
                     traits,
                     context,
                     raw_response,
                     workspace_path,
                 )
             else:
-                scores, traces = self._execute_individual(
+                scores, traces, extraction_metadata = self._execute_individual(
                     traits,
                     context,
                     raw_response,
@@ -155,6 +157,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
                 traces,
+            )
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
+                extraction_metadata,
             )
 
             evaluated = sum(1 for v in scores.values() if v is not None)
@@ -186,7 +193,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[dict[str, int | bool | dict[str, Any] | None], dict[str, str | None]]:
+    ) -> tuple[
+        dict[str, int | bool | dict[str, Any] | None],
+        dict[str, str | None],
+        dict[str, dict[str, str | None]],
+    ]:
         """Evaluate each trait with its own agent.
 
         Returns:
@@ -195,6 +206,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
         scores: dict[str, int | bool | dict[str, Any] | None] = {}
         traces: dict[str, str | None] = {}
+        extraction_metadata: dict[str, dict[str, str | None]] = {}
 
         for trait in traits:
             model = self._resolve_model(trait, context)
@@ -223,8 +235,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             else:
                 scores[trait.name] = score
             traces[trait.name] = trace
+            metadata = getattr(evaluator, "last_extraction_metadata", None)
+            if isinstance(metadata, dict):
+                extraction_metadata[trait.name] = metadata
 
-        return scores, traces
+        return scores, traces, extraction_metadata
 
     def _execute_shared(
         self,
@@ -232,7 +247,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[dict[str, int | bool | dict[str, Any] | None], dict[str, str | None]]:
+    ) -> tuple[
+        dict[str, int | bool | dict[str, Any] | None],
+        dict[str, str | None],
+        dict[str, dict[str, str | None]],
+    ]:
         """Evaluate all traits with a single shared agent.
 
         All traits must resolve to the same model (by interface, provider,
@@ -251,7 +270,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             logger.warning("No traits have agent support; all skipped")
             empty_scores: dict[str, int | bool | dict[str, Any] | None] = {t.name: None for t in traits}
             empty_traces: dict[str, str | None] = {t.name: None for t in traits}
-            return empty_scores, empty_traces
+            return empty_scores, empty_traces, {}
 
         # Check that all valid models match on interface + provider + model_name
         first_model = valid[0][1]
@@ -364,6 +383,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         # Per-trait extraction from the shared trace
         result_scores: dict[str, int | bool | dict[str, Any] | None] = {}
         result_traces: dict[str, str | None] = {}
+        extraction_metadata: dict[str, dict[str, str | None]] = {}
 
         for trait, model in resolved:
             if model is None:
@@ -379,6 +399,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                         result_scores[f"{trait.name}.{field_name}"] = value
                 else:
                     result_scores[trait.name] = extracted
+                metadata = getattr(evaluator, "last_extraction_metadata", None)
+                if isinstance(metadata, dict):
+                    extraction_metadata[trait.name] = metadata
             except Exception:
                 logger.warning(
                     "Extraction failed for trait '%s' in shared strategy",
@@ -386,8 +409,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                     exc_info=True,
                 )
                 result_scores[trait.name] = None
+                metadata = getattr(evaluator, "last_extraction_metadata", None)
+                if isinstance(metadata, dict):
+                    extraction_metadata[trait.name] = metadata
 
-        return result_scores, result_traces
+        return result_scores, result_traces, extraction_metadata
 
     # ------------------------------------------------------------------
     # Trace materialization

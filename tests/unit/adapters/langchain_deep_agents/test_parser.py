@@ -108,6 +108,30 @@ class TestDeepAgentsParserAdapter:
 
         assert result.parsed.value == "fallback"
 
+    @pytest.mark.asyncio
+    async def test_aparse_fallback_extracts_json_from_mixed_text(self, deep_agents_model_config, monkeypatch):
+        """Fallback extraction should reuse shared mixed-text JSON parsing."""
+        from langchain_core.messages import AIMessage
+
+        mock_text_response = AIMessage(content='Reasoning first. Final: {"value": "fallback"}')
+
+        mock_model = MagicMock()
+        mock_model.with_structured_output = MagicMock(side_effect=Exception("Not supported"))
+        mock_model.ainvoke = AsyncMock(return_value=mock_text_response)
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.parser.create_chat_model",
+            lambda _config, **_kw: mock_model,
+        )
+
+        adapter = DeepAgentsParserAdapter(deep_agents_model_config)
+        result = await adapter.aparse_to_pydantic(
+            [Message.user("Parse this")],
+            SimpleAnswer,
+        )
+
+        assert result.parsed.value == "fallback"
+
     def test_capabilities_supports_structured_output(self, deep_agents_model_config):
         """Capabilities should declare structured output support."""
         adapter = DeepAgentsParserAdapter(deep_agents_model_config)
