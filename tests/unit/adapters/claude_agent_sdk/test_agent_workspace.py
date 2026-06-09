@@ -353,7 +353,11 @@ class TestDockerCliWrapper:
         assert "ANTHROPIC_DEFAULT_SONNET_MODEL" in command
         assert "ANTHROPIC_DEFAULT_OPUS_MODEL" in command
         assert "karenina-bixbench-claude:latest" in command
-        assert "claude" in command
+        image_index = command.index("karenina-bixbench-claude:latest")
+        # The CLI is launched through a login shell so /etc/profile provisioning
+        # (per-task scratch root in the BixBench images) applies to claude and
+        # every Bash tool subshell it spawns.
+        assert command[image_index + 1 : image_index + 5] == ["/bin/sh", "-lc", 'exec claude "$@"', "claude"]
         assert str(workspace) not in command[-1]
         assert "/workspace" in command[-1]
 
@@ -375,7 +379,8 @@ class TestDockerCliWrapper:
         assert "--pwd" in command
         assert command[command.index("--pwd") + 1] == "/workspace"
         assert str(image) in command
-        assert "claude" in command
+        image_index = command.index(str(image))
+        assert command[image_index + 1 : image_index + 5] == ["/bin/sh", "-lc", 'exec claude "$@"', "claude"]
         assert str(workspace) not in command[-1]
         assert "/workspace" in command[-1]
 

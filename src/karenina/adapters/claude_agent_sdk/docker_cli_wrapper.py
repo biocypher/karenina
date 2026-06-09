@@ -67,7 +67,9 @@ def _forward_env_dict() -> dict[str, str | None]:
             # image) exposes R/Rscript without shadowing the baked system python3 or
             # the agent's own /workspace/.venv. R_LIBS_USER gives a writable target
             # for BiocManager::install at run time. Both are inert for images that
-            # lack the baked profile.
+            # lack the baked profile. These are fallbacks: the CLI is launched
+            # through a login shell (see build_container_command), so an image's
+            # /etc/profile can override them with task-scoped values.
             "PATH": "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/renv/bin",
             "R_LIBS_USER": "/tmp/rlibs",
         }
@@ -153,10 +155,25 @@ def build_container_command(argv: list[str] | None = None) -> list[str]:
             add_hosts=tuple(add_hosts),
         )
 
+    # Launch the CLI through a login shell so the image's /etc/profile runs once
+    # before claude starts. The DeepAgents backend already wraps every sandbox
+    # command in `/bin/sh -lc`; without this, claude's Bash tool spawns non-login
+    # shells and never sees profile-provisioned state. In the BixBench sandbox
+    # images, /etc/profile keys a private scratch root to the /workspace mount
+    # inode (R library, uv/conda caches, HOME), so concurrent capsules on a node
+    # stop sharing /tmp/rlibs and the R 00LOCK contention disappears. The profile
+    # exports are inherited by every Bash tool subshell. `exec` keeps claude as
+    # the direct child for stdio and signal handling.
     return build_runtime_container_command(
         config=config,
         host_workspace=host_workspace,
-        argv=["claude", *_rewrite_workspace_args(argv, host_workspace)],
+        argv=[
+            "/bin/sh",
+            "-lc",
+            'exec claude "$@"',
+            "claude",
+            *_rewrite_workspace_args(argv, host_workspace),
+        ],
         env=_forward_env_dict(),
         interactive=True,
     )
