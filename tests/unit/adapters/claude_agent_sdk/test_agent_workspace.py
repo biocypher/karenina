@@ -451,6 +451,30 @@ class TestBuildOptionsIsolation:
         env = getattr(options, "env", None) or {}
         assert env.get("CLAUDE_CONFIG_DIR") is None
 
+    def test_build_options_disallows_skill_tool_by_default(self):
+        # Claude Code >= 2.1.170 advertises bundled skills via a system-role
+        # message inside the messages array, which OpenAI-compatible Anthropic
+        # endpoints (vLLM /v1/messages) reject with HTTP 400. Disallowing the
+        # Skill tool suppresses that message.
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(),
+            tools=None,
+        )
+        assert options.disallowed_tools == ["Skill"]
+
+    def test_build_options_skill_disallow_overridable_via_extra(self):
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(extra={"disallowed_tools": []}),
+            tools=None,
+        )
+        assert options.disallowed_tools == []
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
