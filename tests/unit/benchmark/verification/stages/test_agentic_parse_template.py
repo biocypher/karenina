@@ -166,7 +166,7 @@ class TestAgenticParseTemplateStage:
         assert "ANSWERING AGENT TRACE" not in prompt_text
 
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
-    def test_workspace_only_investigation_materializes_trace_for_partial_timeout(self, mock_get_agent, tmp_path):
+    def test_workspace_only_investigation_excludes_trace_for_partial_timeout(self, mock_get_agent, tmp_path):
         from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
             run_investigation,
         )
@@ -194,14 +194,14 @@ class TestAgenticParseTemplateStage:
 
         messages = mock_agent.run.call_args.kwargs["messages"]
         prompt_text = "\n".join(message.text for message in messages)
-        assert "ANSWERING AGENT TRACE FILE" in prompt_text
-        assert "wall-clock timeout" in prompt_text
-        assert "Use file tools" in prompt_text
+        assert "hit a wall-clock timeout" in prompt_text
+        assert "partial workspace outputs" in prompt_text
+        assert "trace file" not in prompt_text
+        assert "ANSWERING AGENT TRACE" not in prompt_text
         assert "TRACE_HEAD_" not in prompt_text
         assert "_TRACE_TAIL" not in prompt_text
         trace_files = list((tmp_path / "traces").glob("q1_trace.txt"))
-        assert len(trace_files) == 1
-        assert trace_files[0].read_text(encoding="utf-8") == raw_trace
+        assert trace_files == []
         assert len(prompt_text) < 10_000
 
     @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
@@ -231,11 +231,14 @@ class TestAgenticParseTemplateStage:
             agentic_parsing_persist_trace=True,
         )
         ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "full trace content")
+        ctx.set_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, True)
 
         run_investigation(ctx, {"properties": {"test_field": {"type": "boolean"}}})
 
         messages = mock_agent.run.call_args.kwargs["messages"]
         prompt_text = "\n".join(message.text for message in messages)
+        assert "hit a wall-clock timeout" in prompt_text
+        assert "materialized answering trace file referenced in the prompt" in prompt_text
         assert "The full answering agent trace is saved to:" in prompt_text
         assert "full trace content" not in prompt_text
         trace_file = tmp_path / "traces" / "q1_trace.txt"

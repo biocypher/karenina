@@ -57,27 +57,42 @@ def run_investigation(
     else:
         execution_text = "You have access to file tools, but command execution is not available."
 
-    partial_timeout_trace_available = (
+    partial_timeout_response = bool(
         context.get_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
-        and context.agentic_judge_context == "workspace_only"
         and context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
     )
-    materialize_trace = partial_timeout_trace_available or (
-        context.agentic_parsing_materialize_trace and context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+    trace_in_context = context.agentic_judge_context in (
+        "trace_and_workspace",
+        "trace_only",
+    )
+    materialize_trace = context.agentic_parsing_materialize_trace and context.has_artifact(
+        ArtifactKeys.RAW_LLM_RESPONSE
     )
     trace_file_path: Path | None = None
 
-    evidence_text = (
-        "You may inspect the workspace artifacts and the materialized answering trace file referenced in the prompt. "
-        "The answering agent hit a wall-clock timeout, so final results may appear only in the trace file, especially "
-        "in recent tool output, stdout, or partial final text. Treat both workspace artifacts and the trace file as "
-        "evidence of what the answerer reported; do not rerun code."
-        if partial_timeout_trace_available
-        else (
+    if partial_timeout_response and trace_in_context:
+        trace_location = (
+            "materialized answering trace file referenced in the prompt"
+            if materialize_trace
+            else "answering trace included in the prompt"
+        )
+        evidence_text = (
+            f"You may inspect the workspace artifacts and the {trace_location}. "
+            "The answering agent hit a wall-clock timeout, so final results may appear only in the trace, especially "
+            "in recent tool output, stdout, or partial final text. Treat both workspace artifacts and the trace as "
+            "evidence of what the answerer reported; do not rerun code."
+        )
+    elif partial_timeout_response:
+        evidence_text = (
+            "You may inspect the workspace artifacts. The answering agent hit a wall-clock timeout, so final results "
+            "may be incomplete and may appear only in partial workspace outputs produced before the timeout. Treat "
+            "those artifacts as evidence of what the answerer reported; do not rerun code."
+        )
+    else:
+        evidence_text = (
             "You may inspect the workspace artifacts. If the prompt includes an answering trace, you may also use it "
             "as evidence of what the answerer reported."
         )
-    )
 
     system_text = (
         "You are a verification agent evaluating whether an AI coding "
@@ -129,24 +144,6 @@ def run_investigation(
         else:
             trace_content = raw_trace
         user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{trace_content}\n--- END TRACE ---")
-    elif partial_timeout_trace_available:
-        raw_trace = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
-        trace_file_path = write_agentic_trace_file(
-            workspace_path=context.workspace_path,
-            trace=raw_trace,
-            question_id=context.question_id,
-            scenario_turn=context.scenario_turn,
-        )
-        prompt_trace_path = map_path_for_prompt(context.parsing_model, trace_file_path, context.workspace_path)
-        user_parts.append(
-            "\n--- ANSWERING AGENT TRACE FILE (partial timeout) ---\n"
-            "The answerer hit a wall-clock timeout. The full trace has been materialized as a workspace file because "
-            "recent tool output or partial final text may contain results that were not persisted elsewhere.\n"
-            f"Trace file: {prompt_trace_path}\n"
-            "Use file tools (grep, search, read) to examine it carefully; do not load it wholesale if targeted reads "
-            "are enough.\n"
-            "--- END TRACE FILE ---"
-        )
 
     if context.workspace_path and context.agentic_judge_context != "trace_only":
         prompt_workspace = workspace_path_for_prompt(context.parsing_model, context.workspace_path)
@@ -189,11 +186,7 @@ def run_investigation(
         )
         return result.raw_trace, result.limit_reached, result.usage
     finally:
-        if (
-            trace_file_path is not None
-            and not context.agentic_parsing_persist_trace
-            and not partial_timeout_trace_available
-        ):
+        if trace_file_path is not None and not context.agentic_parsing_persist_trace:
             try:
                 trace_file_path.unlink(missing_ok=True)
             except Exception:
