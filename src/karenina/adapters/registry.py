@@ -219,16 +219,28 @@ async def cleanup_all_adapters() -> None:
         _active_adapters.clear()
 
     closed_count = 0
+    failed_count = 0
     for adapter in adapters:
         if hasattr(adapter, "aclose"):
             try:
                 await adapter.aclose()
                 closed_count += 1
-            except Exception as e:
-                logger.debug(f"Error closing adapter {type(adapter).__name__}: {e}")
+            except Exception:
+                failed_count += 1
+                logger.warning(
+                    "Error closing adapter %s",
+                    type(adapter).__name__,
+                    exc_info=True,
+                )
 
+    if failed_count > 0:
+        logger.warning(
+            "Adapter cleanup finished with %d failure(s) out of %d adapter(s)",
+            failed_count,
+            closed_count + failed_count,
+        )
     if closed_count > 0:
-        logger.debug(f"Closed {closed_count} adapter(s)")
+        logger.debug("Closed %d adapter(s)", closed_count)
 
 
 @dataclass

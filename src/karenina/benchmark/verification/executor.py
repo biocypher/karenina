@@ -5,7 +5,9 @@ tasks either sequentially or in parallel using ThreadPoolExecutor with asyncio
 BlockingPortal for proper async event loop management.
 
 The thread-local portal storage allows worker threads to share async execution
-context without passing the portal through all function signatures.
+context without passing the portal through all function signatures. The portal
+storage, the global LLM semaphore, and the pre-teardown aclose bound live in
+the async_lifecycle leaf module and are re-exported here for back-compat.
 """
 
 from __future__ import annotations
@@ -30,9 +32,31 @@ from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from karenina.utils.answer_cache import AnswerTraceCache
 
-logger = logging.getLogger(__name__)
+# Async lifecycle primitives moved to the async_lifecycle leaf module.
+# Re-exported here (with explicit aliases) so that
+# karenina.benchmark.verification.executor.<name> remains a valid import path
+# and monkeypatch target for existing callers and tests.
+from .async_lifecycle import (
+    _SENTINEL as _SENTINEL,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    PRE_TEARDOWN_ACLOSE_TIMEOUT as PRE_TEARDOWN_ACLOSE_TIMEOUT,  # noqa: PLC0414
+)
+from .async_lifecycle import aclose_portal_adapters
+from .async_lifecycle import (
+    get_async_portal as get_async_portal,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    get_global_llm_semaphore as get_global_llm_semaphore,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    set_async_portal as set_async_portal,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    set_global_llm_semaphore as set_global_llm_semaphore,  # noqa: PLC0414
+)
 
-_SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
+logger = logging.getLogger(__name__)
 
 # Failure categories whose answerer trace is generally not worth hydrating into
 # the workspace cache. Timeout rows are a special case below: when the adapter
@@ -51,81 +75,6 @@ _INFRA_FAILURE_CATEGORIES: frozenset[FailureCategory] = frozenset(
 
 def _is_parser_stage(stage: str | None) -> bool:
     return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate"}
-
-
-# Bound (seconds) on each adapter.aclose() call issued via the worker portal
-# before the portal is torn down. A stuck aclose must not wedge the finally
-# block. Mirrors the pattern in langchain/parser.py:297-312. Tests can
-# monkey-patch this to a shorter value to exercise the timeout branch.
-PRE_TEARDOWN_ACLOSE_TIMEOUT = 5.0
-
-# ============================================================================
-# Thread-Local Portal Storage
-# ============================================================================
-
-_portal_storage = threading.local()
-
-
-def get_async_portal() -> BlockingPortal | None:
-    """Get the current async portal for running async code from threads.
-
-    Each worker thread has its own thread-local portal reference.
-    Returns None (and clears the stale reference) if the portal's event loop
-    has ended, allowing callers to fall back to asyncio.run().
-
-    Returns:
-        The BlockingPortal if one is active for this thread, None otherwise
-    """
-    portal = getattr(_portal_storage, "portal", None)
-    if portal is not None:
-        thread_id = getattr(portal, "_event_loop_thread_id", _SENTINEL)
-        if thread_id is None:
-            logger.warning("Clearing stale portal reference (event loop thread ended)")
-            _portal_storage.portal = None
-            return None
-    return portal
-
-
-def set_async_portal(portal: BlockingPortal | None) -> None:
-    """Set the async portal for the current thread.
-
-    Args:
-        portal: The BlockingPortal to use, or None to clear
-    """
-    _portal_storage.portal = portal
-
-
-# ============================================================================
-# Global LLM Semaphore
-# ============================================================================
-
-_global_llm_semaphore: threading.Semaphore | None = None
-
-
-def get_global_llm_semaphore() -> threading.Semaphore | None:
-    """Get the global LLM request semaphore.
-
-    Module-level (not thread-local) because the semaphore must be visible
-    from any thread, including the BlockingPortal event loop thread.
-    The semaphore itself is thread-safe.
-
-    Returns:
-        The active Semaphore if set, None otherwise.
-    """
-    return _global_llm_semaphore
-
-
-def set_global_llm_semaphore(sem: threading.Semaphore | None) -> None:
-    """Set the global LLM request semaphore.
-
-    Called by ScenarioExecutor before spawning workers and cleared after
-    all workers finish.
-
-    Args:
-        sem: The Semaphore to use, or None to clear.
-    """
-    global _global_llm_semaphore  # noqa: PLW0603
-    _global_llm_semaphore = sem
 
 
 # ============================================================================
@@ -445,16 +394,12 @@ class VerificationExecutor:
                     if progress_callback:
                         progress_callback(idx, total, result)
             finally:
-                # Drop per-portal adapter tracking so a sequential run does
-                # not leak entries into the module-global map across batches.
-                # The shared portal is about to be torn down by the enclosing
-                # `with` statement, and downstream cleanup_resources() will
-                # still close the adapters (on its own fresh loop). Sequential
-                # mode was never affected by the parallel teardown ordering
-                # bug, so there is no need to pre-close here.
-                from karenina.adapters.registry import clear_portal_adapter_refs
-
-                clear_portal_adapter_refs(portal)
+                # Pre-teardown aclose: close portal-pinned adapter clients on
+                # the shared portal's live loop and drop the per-portal
+                # tracking BEFORE the enclosing `with` tears the portal down.
+                # Downstream cleanup_resources() runs on a different loop and
+                # cannot safely close httpx transports pinned to this one.
+                aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
                 set_async_portal(None)
 
         # Log cache statistics
@@ -688,39 +633,10 @@ class VerificationExecutor:
             # Without this, the downstream cleanup_resources() call in
             # batch_runner runs on a fresh loop and httpx raises
             # "Event loop is closed" because its transports are pinned to
-            # the dead portal loop. Bounded timeout mirrors the
-            # start_task_soon + future.result pattern in
-            # langchain/parser.py:297-312 to avoid wedging the finally
-            # block on a stuck aclose.
-            from karenina.adapters.registry import (
-                clear_portal_adapter_refs,
-                snapshot_adapters_for_portal,
-            )
-
+            # the dead portal loop. The bounded dispatch pattern lives in
+            # async_lifecycle.aclose_portal_adapters.
             for _cm, portal in _portal_resources:
-                for adapter in snapshot_adapters_for_portal(portal):
-                    if not hasattr(adapter, "aclose"):
-                        continue
-                    future = portal.start_task_soon(adapter.aclose)
-                    try:
-                        future.result(timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
-                    except TimeoutError:
-                        # Cancel the abandoned coroutine so the portal's loop
-                        # does not block the context manager's __exit__
-                        # waiting for it to finish.
-                        future.cancel()
-                        logger.warning(
-                            "Pre-teardown aclose timed out on %s (>%ss); proceeding with portal teardown",
-                            type(adapter).__name__,
-                            PRE_TEARDOWN_ACLOSE_TIMEOUT,
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Pre-teardown aclose failed on %s: %s",
-                            type(adapter).__name__,
-                            exc,
-                        )
-                clear_portal_adapter_refs(portal)
+                aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
 
             # Clean up worker portals (event loops) only after workers have
             # fully exited, so no worker can still be using a portal when

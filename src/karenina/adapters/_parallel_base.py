@@ -23,6 +23,12 @@ import os
 from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, TypeVar
 
+# Leaf module import (stdlib-only at module level), hoisted out of the
+# per-invoke wrapper body. The semaphore lookup point for monkeypatching is
+# now this module's global name: karenina.adapters._parallel_base.
+# get_global_llm_semaphore.
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_semaphore
+
 from ..schemas.verification.config import DEFAULT_ASYNC_ENABLED, DEFAULT_ASYNC_MAX_WORKERS
 
 if TYPE_CHECKING:
@@ -82,8 +88,6 @@ def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
 
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> T:
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
-
         sem = get_global_llm_semaphore()
         if sem is not None:
             sem.acquire()

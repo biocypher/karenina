@@ -32,7 +32,13 @@ from karenina.schemas.scenario.state import ScenarioExecutionResult
 from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from karenina.utils.answer_cache import AnswerTraceCache
 
-from .executor import get_async_portal, set_async_portal, set_global_llm_semaphore
+from .async_lifecycle import (
+    PRE_TEARDOWN_ACLOSE_TIMEOUT,
+    aclose_portal_adapters,
+    get_async_portal,
+    set_async_portal,
+    set_global_llm_semaphore,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -218,15 +224,13 @@ class ScenarioExecutor:
                         if progress_callback:
                             progress_callback(idx, total, exec_result)
                 finally:
-                    # Drop per-portal adapter tracking so a sequential run
-                    # does not leak entries into the module-global map across
-                    # batches. Sequential mode was never affected by the
-                    # parallel teardown ordering bug, so there is no need to
-                    # pre-close adapters here (cleanup_resources still handles
-                    # it on the shared portal's live loop).
-                    from karenina.adapters.registry import clear_portal_adapter_refs
-
-                    clear_portal_adapter_refs(portal)
+                    # Pre-teardown aclose: close portal-pinned adapter
+                    # clients on the shared portal's live loop and drop the
+                    # per-portal tracking BEFORE the enclosing `with` tears
+                    # the portal down. Downstream cleanup_resources() runs
+                    # on a different loop (NOT this portal's loop), so it
+                    # cannot safely close httpx transports pinned here.
+                    aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
                     set_async_portal(None)
         finally:
             set_global_llm_semaphore(None)
@@ -445,39 +449,10 @@ class ScenarioExecutor:
                 # down. Without this, the downstream cleanup_resources() call
                 # runs on a fresh loop and httpx raises "Event loop is closed"
                 # because its transports are pinned to the dead portal loop.
-                # Bounded timeout mirrors langchain/parser.py:297-312 to avoid
-                # wedging the finally block on a stuck aclose.
-                from karenina.adapters.registry import (
-                    clear_portal_adapter_refs,
-                    snapshot_adapters_for_portal,
-                )
-
-                from .executor import PRE_TEARDOWN_ACLOSE_TIMEOUT
-
+                # The bounded dispatch pattern lives in
+                # async_lifecycle.aclose_portal_adapters.
                 for _cm, portal in _portal_resources:
-                    for adapter in snapshot_adapters_for_portal(portal):
-                        if not hasattr(adapter, "aclose"):
-                            continue
-                        future = portal.start_task_soon(adapter.aclose)
-                        try:
-                            future.result(timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
-                        except TimeoutError:
-                            # Cancel the abandoned coroutine so the portal's
-                            # loop does not block its context manager's
-                            # __exit__ waiting for it to finish.
-                            future.cancel()
-                            logger.warning(
-                                "Pre-teardown aclose timed out on %s (>%ss); proceeding with portal teardown",
-                                type(adapter).__name__,
-                                PRE_TEARDOWN_ACLOSE_TIMEOUT,
-                            )
-                        except Exception as exc:
-                            logger.warning(
-                                "Pre-teardown aclose failed on %s: %s",
-                                type(adapter).__name__,
-                                exc,
-                            )
-                    clear_portal_adapter_refs(portal)
+                    aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
 
                 # Clean up worker portals (event loops) only after workers
                 # have fully exited, so no worker can still be using a portal
