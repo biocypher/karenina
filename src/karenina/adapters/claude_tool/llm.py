@@ -21,14 +21,16 @@ Retry Logic:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
 from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
+from karenina.adapters._timeouts import compute_sync_wrapper_timeout
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -38,7 +40,7 @@ from karenina.utils.messages import append_error_feedback
 from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
-from .usage import extract_usage_from_response
+from .usage import extract_usage, extract_usage_from_response, merge_stream_usage
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +359,11 @@ class ClaudeToolLLMAdapter:
             asyncio.get_running_loop()
             # Fresh thread with the caller's context propagated, so
             # track_retries telemetry survives the dispatch.
-            return run_coro_in_thread(self.ainvoke, messages, timeout=300)
+            thread_timeout = compute_sync_wrapper_timeout(
+                self._config.request_timeout,
+                retry_policy=self._config.retry_policy,
+            )
+            return run_coro_in_thread(self.ainvoke, messages, timeout=thread_timeout)
 
         except RuntimeError:
             return asyncio.run(self.ainvoke(messages))
@@ -389,42 +395,131 @@ class ClaudeToolLLMAdapter:
 
         return kwargs
 
-    @asynccontextmanager
-    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+    async def _aenter_stream(self, kwargs: dict[str, Any], *, timeout: float | None = None) -> tuple[Any, Any]:
+        """Open a fresh SDK stream context (one establishment attempt).
+
+        Called by RetryExecutor so transient connection-setup failures
+        retry with per-category budgets. Each attempt creates a brand-new
+        stream manager. The established stream itself is never retried
+        mid-flight.
+
+        Args:
+            kwargs: Keyword arguments for ``client.messages.stream``.
+            timeout: Optional wall-clock bound on establishment, escalated
+                by RetryExecutor on TIMEOUT retries.
+
+        Returns:
+            Tuple of (manager, stream) where manager is the SDK context
+            manager (its ``__aexit__`` must be awaited by the caller) and
+            stream is the entered AsyncMessageStream.
+        """
+        client = self._get_async_client()
+        manager = client.messages.stream(**kwargs)
+        try:
+            if timeout is None:
+                stream = await manager.__aenter__()
+            else:
+                stream = await asyncio.wait_for(manager.__aenter__(), timeout=timeout)
+        except BaseException:
+            # Best-effort close of the half-opened manager (for example
+            # when wait_for cancels __aenter__ mid-handshake) so no
+            # unclosed-stream debris is left behind.
+            with contextlib.suppress(Exception):
+                await manager.__aexit__(None, None, None)
+            raise
+        return manager, stream
+
+    def astream(self, messages: list[Message]) -> AbstractAsyncContextManager[StreamingLLMResponse]:
         """Stream LLM response, accumulating tokens as they arrive.
 
         Uses Anthropic SDK's ``client.messages.stream()`` for native streaming.
         On timeout, the StreamingLLMResponse contains whatever content
         was received before the interruption.
 
-        Note: this bare streaming path applies NO transient retries. The
-        SDK client runs with max_retries=0 (design decision D1) and stream
-        establishment is not wrapped by RetryExecutor here, so a transient
-        connection error during setup surfaces immediately. Use
-        ``stream_invoke`` as the retry-covered streaming entry point.
-        Wrapping stream establishment itself is T7 scope.
+        Stream ESTABLISHMENT (entering the SDK stream context) routes
+        through RetryExecutor, so transient connection-setup failures
+        retry with per-category budgets even though the SDK client runs
+        with max_retries=0 (design decision D1). The established stream
+        is never retried mid-flight.
+
+        Usage is captured inline as streaming events arrive:
+        ``message_start`` carries input tokens (and cache fields),
+        ``message_delta`` carries cumulative output tokens. A mid-stream
+        timeout therefore still leaves whatever usage arrived before the
+        interruption. ``get_final_message()`` remains the success-path
+        enrichment and overrides the inline snapshot with final values.
 
         Args:
             messages: List of unified Message objects.
 
-        Yields:
-            StreamingLLMResponse that can be iterated for text chunks.
+        Returns:
+            Async context manager yielding a StreamingLLMResponse that
+            can be iterated for text chunks.
         """
-        client = self._get_async_client()
+        return self._astream_impl(messages, establishment_retry=True)
+
+    @asynccontextmanager
+    async def _astream_impl(
+        self,
+        messages: list[Message],
+        *,
+        establishment_retry: bool,
+    ) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN202
+        """Shared astream body with switchable establishment retries.
+
+        The public astream keeps establishment retries on. The
+        stream_invoke path (via _astream_with_timeout) turns them off
+        because its outer RetryExecutor already retries the whole
+        attempt, and nesting the two would amplify worst-case connection
+        attempts multiplicatively.
+        """
         kwargs = self._build_invoke_kwargs(messages)
         response = StreamingLLMResponse()
 
-        async with client.messages.stream(**kwargs) as stream:
-            response._set_chunk_source(stream.text_stream)
+        if establishment_retry:
+            manager, stream = await self._retry_executor.aexecute_with_timeout(
+                self._aenter_stream,
+                kwargs,
+                timeout=self._config.request_timeout,
+            )
+        else:
+            manager, stream = await self._aenter_stream(kwargs, timeout=self._config.request_timeout)
+
+        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
+            """Yield text deltas while capturing usage from stream events inline."""
+            async for event in stream:
+                event_type = getattr(event, "type", None)
+                if event_type == "text":
+                    yield event.text
+                elif event_type == "message_start":
+                    message_usage = getattr(getattr(event, "message", None), "usage", None)
+                    if message_usage is not None:
+                        response.usage = merge_stream_usage(response.usage, message_usage, self._config.model_name)
+                elif event_type == "message_delta":
+                    delta_usage = getattr(event, "usage", None)
+                    if delta_usage is not None:
+                        response.usage = merge_stream_usage(response.usage, delta_usage, self._config.model_name)
+
+        try:
+            response._set_chunk_source(_chunk_generator())
             try:
                 yield response
             finally:
-                # Best-effort usage extraction from the stream's final message
+                # Success-path enrichment: the final message carries the
+                # authoritative usage. On failure the inline snapshot
+                # captured from stream events is kept.
                 try:
                     final_message = await stream.get_final_message()
-                    response.usage = extract_usage_from_response(final_message, model=self._config.model_name)
+                    final_usage = getattr(final_message, "usage", None)
+                    if final_usage is not None:
+                        response.usage = extract_usage(final_usage, model=self._config.model_name)
                 except Exception:
-                    logger.warning("Could not extract usage from stream", exc_info=True)
+                    logger.warning(
+                        "Could not extract usage from stream final message, keeping inline streamed usage",
+                        exc_info=True,
+                    )
+        finally:
+            await manager.__aexit__(None, None, None)
         response.is_complete = True
 
     async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
@@ -440,7 +535,10 @@ class ClaudeToolLLMAdapter:
         Raises:
             StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
         """
-        async with self.astream(messages) as sr:
+        # Establishment retries are off: the caller (stream_invoke) wraps
+        # this whole attempt in RetryExecutor, so a single retry layer
+        # covers connection-setup failures.
+        async with self._astream_impl(messages, establishment_retry=False) as sr:
             try:
                 async with asyncio.timeout(timeout):
                     async for _chunk in sr:
@@ -467,6 +565,10 @@ class ClaudeToolLLMAdapter:
         timeout. Returns the same LLMResponse type as invoke(). Retries via
         RetryExecutor on transient errors (including StreamingTimeoutError
         with zero content, classified as RATE_LIMIT for queue congestion).
+        The inner stream-establishment retry used by the bare astream path
+        is disabled on this path, so this outer executor is the single
+        retry layer and connection attempts are not amplified
+        multiplicatively.
 
         Args:
             messages: List of unified Message objects.

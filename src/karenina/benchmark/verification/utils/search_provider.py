@@ -286,6 +286,9 @@ def _invoke_tool(
                 with contextlib.suppress(RuntimeError):
                     asyncio.set_event_loop(None)
 
-        # Submit to thread pool and wait for result
+        from karenina.adapters._timeouts import SEARCH_PROVIDER_FLOOR, compute_sync_wrapper_timeout
+
+        # Submit to thread pool and wait for result. No model config is
+        # available here, so the bound is the historical search floor.
         future = executor.submit(run_async_in_thread)
-        return future.result(timeout=60)  # 60 second timeout for search
+        return future.result(timeout=compute_sync_wrapper_timeout(None, floor=SEARCH_PROVIDER_FLOOR))

@@ -17,14 +17,16 @@ Retry Logic:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
+from karenina.adapters._timeouts import DEEP_AGENTS_SYNC_WRAPPER_FLOOR, compute_sync_wrapper_timeout
 from karenina.adapters.langchain.usage import extract_usage_from_chunk
 from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
@@ -233,7 +235,12 @@ class DeepAgentsLLMAdapter:
             asyncio.get_running_loop()
             # Fresh thread with the caller's context propagated, so
             # track_retries telemetry survives the dispatch.
-            return run_coro_in_thread(self.ainvoke, messages, timeout=600)
+            thread_timeout = compute_sync_wrapper_timeout(
+                self._config.request_timeout,
+                floor=DEEP_AGENTS_SYNC_WRAPPER_FLOOR,
+                retry_policy=self._config.retry_policy,
+            )
+            return run_coro_in_thread(self.ainvoke, messages, timeout=thread_timeout)
 
         except RuntimeError:
             return asyncio.run(self.ainvoke(messages))
@@ -249,7 +256,11 @@ class DeepAgentsLLMAdapter:
         Args:
             schema: A Pydantic model class defining the output structure.
             max_retries: Not supported by this adapter. A warning is emitted
-                if a non-None value is provided.
+                if a non-None value is provided. See
+                karenina.ports.llm.LLMPort.with_structured_output for the
+                cross-adapter contract (LangChain and Claude Tool respect
+                max_retries, this adapter and claude_agent_sdk warn and
+                ignore).
 
         Returns:
             A new DeepAgentsLLMAdapter configured with the schema.
@@ -266,15 +277,39 @@ class DeepAgentsLLMAdapter:
             _structured_schema=schema,
         )
 
-    @asynccontextmanager
-    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+    def astream(self, messages: list[Message]) -> AbstractAsyncContextManager[StreamingLLMResponse]:
         """Stream LLM response using LangChain's cross-provider astream.
+
+        Stream ESTABLISHMENT (opening the LangChain astream and fetching
+        the first chunk) routes through RetryExecutor, so transient
+        connection-setup failures (including langchain-openai's cross
+        event loop pooled-connection errors) retry with per-category
+        budgets. Each retry recreates the stream from scratch. Once
+        established, the stream is never retried mid-flight.
 
         Args:
             messages: List of unified Message objects.
 
-        Yields:
-            StreamingLLMResponse that can be iterated for text chunks.
+        Returns:
+            Async context manager yielding a StreamingLLMResponse that
+            can be iterated for text chunks.
+        """
+        return self._astream_impl(messages, establishment_retry=True)
+
+    @asynccontextmanager
+    async def _astream_impl(
+        self,
+        messages: list[Message],
+        *,
+        establishment_retry: bool,
+    ) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN202
+        """Shared astream body with switchable establishment retries.
+
+        The public astream keeps establishment retries on. The
+        stream_invoke path (via _astream_with_timeout) turns them off
+        because its outer RetryExecutor already retries the whole
+        attempt, and nesting the two would amplify worst-case connection
+        attempts multiplicatively.
         """
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -291,14 +326,52 @@ class DeepAgentsLLMAdapter:
         chat_model = create_chat_model(self._config)
         response = StreamingLLMResponse()
 
+        async def _establish(*, timeout: float | None = None) -> tuple[AsyncIterator[Any], Any | None]:
+            """One stream-establishment attempt: open astream, await the first chunk."""
+            iterator = chat_model.astream(lc_messages).__aiter__()
+            try:
+                if timeout is None:
+                    first = await iterator.__anext__()
+                else:
+                    first = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
+            except StopAsyncIteration:
+                return iterator, None
+            except BaseException:
+                # Close the half-opened stream before surfacing the failure
+                # (or cancellation) so no "async generator was never closed"
+                # debris is left behind.
+                aclose = getattr(iterator, "aclose", None)
+                if aclose is not None:
+                    with contextlib.suppress(Exception):
+                        await aclose()
+                raise
+            return iterator, first
+
+        if establishment_retry:
+            iterator, first_chunk = await self._retry_executor.aexecute_with_timeout(
+                _establish,
+                timeout=self._config.request_timeout,
+            )
+        else:
+            iterator, first_chunk = await _establish(timeout=self._config.request_timeout)
+
+        def _handle_chunk(chunk: Any) -> str:
+            """Extract text and capture usage metadata from a chunk."""
+            text = chunk.content if isinstance(chunk.content, str) else ""
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+            return text
+
         async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
             """Yield text chunks from LangChain's astream, extracting usage from final chunk."""
-            async for chunk in chat_model.astream(lc_messages):
-                text = chunk.content if isinstance(chunk.content, str) else ""
+            if first_chunk is not None:
+                text = _handle_chunk(first_chunk)
                 if text:
                     yield text
-                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
-                    response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+            async for chunk in iterator:
+                text = _handle_chunk(chunk)
+                if text:
+                    yield text
 
         response._set_chunk_source(_chunk_generator())
         yield response
@@ -306,6 +379,14 @@ class DeepAgentsLLMAdapter:
 
     async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
         """Stream with wall-clock timeout, returning accumulated content.
+
+        The timeout window covers stream ESTABLISHMENT as well as the
+        drain: the stream is opened inside asyncio.timeout, so an
+        establishment stall surfaces as StreamingTimeoutError (with empty
+        partial content) within about ``timeout`` seconds even when
+        request_timeout is unset. Establishment retries are disabled here
+        because the caller (stream_invoke) already wraps each attempt in
+        RetryExecutor.
 
         Args:
             messages: List of unified Message objects.
@@ -315,20 +396,27 @@ class DeepAgentsLLMAdapter:
             LLMResponse with accumulated content.
 
         Raises:
-            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
+            StreamingTimeoutError: If establishment plus drain exceed the
+                wall-clock timeout.
         """
-        async with self.astream(messages) as sr:
+        from karenina.exceptions import StreamingTimeoutError
+
+        stream_cm = self._astream_impl(messages, establishment_retry=False)
+        sr: StreamingLLMResponse | None = None
+        try:
             try:
                 async with asyncio.timeout(timeout):
+                    sr = await stream_cm.__aenter__()
                     async for _chunk in sr:
                         pass
             except TimeoutError:
-                from karenina.exceptions import StreamingTimeoutError
-
                 raise StreamingTimeoutError(
                     f"Streaming timed out after {timeout}s",
-                    partial_content=sr.accumulated_content,
+                    partial_content=sr.accumulated_content if sr is not None else "",
                 ) from None
+        finally:
+            if sr is not None:
+                await stream_cm.__aexit__(None, None, None)
 
         return LLMResponse(
             content=sr.accumulated_content,
@@ -344,6 +432,10 @@ class DeepAgentsLLMAdapter:
         timeout. Returns the same LLMResponse type as invoke(). Retries via
         RetryExecutor on transient errors (including StreamingTimeoutError
         with zero content, classified as RATE_LIMIT for queue congestion).
+        The inner stream-establishment retry used by the bare astream path
+        is disabled on this path, so this outer executor is the single
+        retry layer and connection attempts are not amplified
+        multiplicatively.
 
         Args:
             messages: List of unified Message objects.

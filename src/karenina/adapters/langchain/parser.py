@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, TypeVar
 from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import run_coro_in_thread
+from karenina.adapters._timeouts import PARSE_INTERNAL_CALL_SEQUENCES, compute_sync_wrapper_timeout
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.errors import ErrorRegistry
@@ -318,7 +319,12 @@ class LangChainParserAdapter:
 
             # Use a fresh thread (with the caller's context propagated, so
             # track_retries telemetry survives) to avoid nested loop issues
-            return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=300)
+            thread_timeout = compute_sync_wrapper_timeout(
+                self._llm_adapter._config.request_timeout,
+                retry_policy=self._llm_adapter._retry_policy,
+                internal_call_sequences=PARSE_INTERNAL_CALL_SEQUENCES,
+            )
+            return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=thread_timeout)
 
         except RuntimeError:
             # No event loop running
@@ -330,48 +336,23 @@ class LangChainParserAdapter:
         Returns None when ``request_timeout`` is unset, in which case the
         caller should not impose a bound (preserves the prior behavior).
 
-        The bound covers the worst case across the up to 4 internal LLM
-        call sequences inside ``aparse_to_pydantic`` (native structured,
-        fallback, null-feedback retry, format-feedback retry), each with
-        ``timeout_max_attempts + 1`` attempts plus inter-attempt backoff.
-
-        When ``RetryPolicy.timeout_escalation`` is configured, the per-attempt
-        timeout grows on each TIMEOUT retry. The bound sums the escalated
-        per-attempt timeouts for the worst case rather than assuming a
-        constant per-attempt budget.
+        Delegates the math to ``compute_sync_wrapper_timeout`` with 4
+        internal LLM call sequences (native structured, fallback,
+        null-feedback retry, format-feedback retry) plus the shared grace
+        period. When ``RetryPolicy.timeout_escalation`` is configured, the
+        per-attempt timeout grows on each TIMEOUT retry and the bound sums
+        the escalated per-attempt timeouts for the worst case rather than
+        assuming a constant per-attempt budget.
         """
         request_timeout = self._llm_adapter._config.request_timeout
         if request_timeout is None:
             return None
 
-        retry_policy = self._llm_adapter._retry_policy
-        if retry_policy is None:
-            from karenina.utils.retry_policy import RetryPolicy
-
-            retry_policy = RetryPolicy()
-
-        from karenina.utils.retry_policy import compute_escalated_timeout
-
-        timeout_max_attempts = retry_policy.timeout.max_attempts
-        escalation = retry_policy.timeout_escalation
-        attempts = timeout_max_attempts + 1  # initial + retries
-
-        # Sum the worst-case per-attempt timeouts. When escalation is None,
-        # this collapses to request_timeout * attempts.
-        per_call_timeouts = sum(
-            compute_escalated_timeout(
-                base_timeout=request_timeout,
-                timeout_attempt=n,
-                config=escalation,
-                max_attempts=timeout_max_attempts,
-            )
-            or request_timeout
-            for n in range(attempts)
+        return compute_sync_wrapper_timeout(
+            request_timeout,
+            retry_policy=self._llm_adapter._retry_policy,
+            internal_call_sequences=PARSE_INTERNAL_CALL_SEQUENCES,
         )
-        backoff_max = retry_policy.timeout.backoff_max
-        per_call = per_call_timeouts + backoff_max * timeout_max_attempts
-        # 4 internal LLM call sequences, plus a 30s grace.
-        return per_call * 4 + 30.0
 
     # -------------------------------------------------------------------------
     # Parsing Logic

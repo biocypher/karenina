@@ -297,33 +297,13 @@ def counted_async(
     return wrapper
 
 
-# ---------------------------------------------------------------------------
-# Streaming-only workaround: langchain-openai global client cache (deep_agents)
-# ---------------------------------------------------------------------------
-
-
-def reset_langchain_openai_client_cache() -> None:
-    """Clear langchain-openai's module-global cached httpx clients.
-
-    Library bug (documented in the daily note): langchain-openai caches one
-    async httpx client per (base_url, timeout) in
-    ``chat_models/_client_utils.py``. The deep_agents adapter does not
-    inject per-model clients (the langchain adapter does), so two
-    deep_agents calls on different event loops within httpx's keepalive
-    window (about 5 seconds) reuse a pooled TCP connection bound to the
-    first, already-closed loop and fail with ``RuntimeError: Event loop is
-    closed`` surfacing as APIConnectionError.
-
-    After T1 the ainvoke and parser paths retry that APIConnectionError via
-    RetryExecutor, so B1/B4/B5 no longer need this reset (verified live).
-    The bare ``astream`` context manager has no retry layer, so B3
-    deep_agents still needs it. Revisit when streaming gains retry or usage
-    parity work lands (T7/T8).
-    """
-    from langchain_openai.chat_models import _client_utils
-
-    _client_utils._cached_sync_httpx_client.cache_clear()
-    _client_utils._cached_async_httpx_client.cache_clear()
+# The reset_langchain_openai_client_cache workaround that used to live here
+# was deleted at T7. The underlying library bug (langchain-openai's
+# module-global httpx client cache binding pooled connections to a closed
+# event loop, surfacing as APIConnectionError) is now absorbed by retry
+# layers in the adapters: ainvoke and parser paths retry via RetryExecutor
+# (T1), and stream establishment retries via RetryExecutor (T7). Verified
+# with two consecutive live B3 runs without the reset.
 
 
 # ---------------------------------------------------------------------------

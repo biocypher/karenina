@@ -28,6 +28,7 @@ The fix tasks (T1/T2/T3) flip those flags as deliberate test edits.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gc
 import json
 import logging
@@ -61,7 +62,6 @@ from ._async_live_helpers import (
     find_teardown_problems,
     openai_model,
     require_adapter,
-    reset_langchain_openai_client_cache,
     tight_retry_policy,
     zero_retry_policy,
 )
@@ -312,11 +312,10 @@ def test_b3_streaming_with_usage(interface: str, make_model, expect_usage: bool)
     llm = get_llm(make_model(), auto_fallback=False)
     messages = [Message.user(SIMPLE_QUESTION)]
 
-    # Still required for deep_agents streaming after T1: the bare astream
-    # context manager has no retry layer, so the cross-loop client cache
-    # bug is not absorbed by RetryExecutor here (it is on the ainvoke and
-    # parser paths, which dropped this reset at T1).
-    reset_langchain_openai_client_cache()
+    # The client-cache reset workaround was removed at T7: deep_agents
+    # stream establishment now routes through RetryExecutor, so the
+    # cross-loop pooled-connection APIConnectionError is absorbed by the
+    # establishment retry instead of needing a cache reset.
 
     async def drive():
         async with llm.astream(messages) as streaming_response:
@@ -334,9 +333,9 @@ def test_b3_streaming_with_usage(interface: str, make_model, expect_usage: bool)
 def test_b3_mid_stream_timeout_exception_shape() -> None:
     """B3 sub-case: a mid-stream wall-clock timeout raises StreamingTimeoutError.
 
-    Baseline asserts only the exception shape (type and partial_content
-    attribute). Tightens after T7/T8 when usage capture on partial streams
-    lands. Zero retry budgets keep the test to a single attempt.
+    Asserts the exception shape (type and partial_content attribute).
+    Zero retry budgets keep the test to a single attempt. The usage-on-
+    partial tightening from T7 lives in the claude_tool sub-case below.
     """
     model = openai_model(retry_policy=zero_retry_policy())
     llm = get_llm(model, auto_fallback=False)
@@ -347,6 +346,30 @@ def test_b3_mid_stream_timeout_exception_shape() -> None:
 
     assert hasattr(excinfo.value, "partial_content")
     assert isinstance(excinfo.value.partial_content, str)
+
+
+def test_b3_mid_stream_timeout_claude_tool_partial_usage() -> None:
+    """B3 sub-case (tightened at T7): partial usage survives a mid-stream timeout.
+
+    claude_tool captures usage inline from streaming events
+    (message_start carries input tokens before any text arrives), so a
+    wall-clock timeout in the middle of the stream must still leave a
+    usage snapshot on the StreamingLLMResponse.
+    """
+    require_adapter("claude_tool")
+    llm = get_llm(claude_tool_model(retry_policy=zero_retry_policy()), auto_fallback=False)
+    messages = [Message.user("Write a detailed 500 word essay about the history of the sea.")]
+
+    async def drive():
+        async with llm.astream(messages) as streaming_response:
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(1.0):
+                    async for _chunk in streaming_response:
+                        pass
+        return streaming_response
+
+    streamed = asyncio.run(drive())
+    assert streamed.usage.input_tokens > 0
 
 
 # ---------------------------------------------------------------------------

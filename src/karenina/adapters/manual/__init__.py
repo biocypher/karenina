@@ -32,6 +32,8 @@ Note:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
@@ -48,6 +50,7 @@ from karenina.ports import (
     UsageMetadata,
 )
 from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import StreamingLLMResponse
 
 # Import exceptions from dedicated module to avoid circular imports
 from .exceptions import ManualInterfaceError, ManualTraceError, ManualTraceNotFoundError
@@ -207,6 +210,15 @@ class ManualAgentAdapter:
         """Close underlying resources (no-op for manual adapter)."""
 
 
+def _raise_manual_astream_error() -> None:
+    """Raise ManualInterfaceError for astream.
+
+    Kept outside the generator body so the trailing yield (required to make
+    astream an async generator) stays statically reachable for linters.
+    """
+    raise ManualInterfaceError("llm.astream()")
+
+
 class ManualLLMAdapter:
     """No-op LLMPort implementation for manual interface.
 
@@ -247,9 +259,16 @@ class ManualLLMAdapter:
         """Raises ManualInterfaceError - manual interface cannot invoke LLM."""
         raise ManualInterfaceError("llm.with_structured_output()")
 
-    def astream(self, messages: list[Message]) -> Any:  # noqa: ARG002
-        """Raises ManualInterfaceError - manual interface cannot stream."""
-        raise ManualInterfaceError("llm.astream()")
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201, ARG002
+        """Raises ManualInterfaceError on enter - manual interface cannot stream.
+
+        The signature matches the LLMPort protocol shape (an async context
+        manager yielding StreamingLLMResponse), so callers can open the
+        context uniformly. The error is raised when the context is entered.
+        """
+        _raise_manual_astream_error()
+        yield StreamingLLMResponse()  # pragma: no cover - never runs, makes this a generator
 
     def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:  # noqa: ARG002
         """Raises ManualInterfaceError - manual interface cannot stream."""

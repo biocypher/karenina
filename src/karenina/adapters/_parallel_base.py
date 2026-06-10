@@ -277,7 +277,11 @@ def sync_invoke_via_portal(
         def _call() -> Coroutine[Any, Any, T]:
             return async_fn(*args, **kwargs)
 
-        return run_coro_in_thread(_call, timeout=600)  # 10 minute timeout
+        from karenina.adapters._timeouts import PORTAL_DISPATCH_FLOOR, compute_sync_wrapper_timeout
+
+        # No model config is available here, so the bound is the historical
+        # floor for the generic portal dispatch path (10 minutes).
+        return run_coro_in_thread(_call, timeout=compute_sync_wrapper_timeout(None, floor=PORTAL_DISPATCH_FLOOR))
 
     except RuntimeError:
         # No event loop running, safe to use asyncio.run

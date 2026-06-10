@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
-from ._parallel_base import get_max_workers, read_async_config, sync_invoke_via_portal
+from ._parallel_base import get_max_workers, read_async_config, run_with_semaphore, sync_invoke_via_portal
 from .registry import aclose_adapter
 
 if TYPE_CHECKING:
@@ -131,44 +131,12 @@ class LLMParallelInvoker:
             - response: LLMResponse with content and usage metadata, or None if error
             - error: Exception if the task failed, or None if success
         """
-        if not tasks:
-            return []
-
-        total = len(tasks)
-        progress_lock = asyncio.Lock()
-        completed_count = 0
-        semaphore = asyncio.Semaphore(self.max_workers)
-
-        async def execute_task(
-            index: int,
-        ) -> tuple[int, LLMResponse | None, Exception | None]:
-            """Execute a single task and return (index, response, error)."""
-            nonlocal completed_count
-
-            messages = tasks[index]
-
-            async with semaphore:
-                try:
-                    response = await self.llm.ainvoke(messages)
-                    return index, response, None
-                except Exception as e:
-                    logger.debug(f"LLMParallelInvoker: Task {index} failed: {e}")
-                    return index, None, e
-                finally:
-                    if progress_callback:
-                        async with progress_lock:
-                            completed_count += 1
-                            progress_callback(completed_count, total)
-
-        task_coroutines = [execute_task(i) for i in range(total)]
-        raw_results = await asyncio.gather(*task_coroutines, return_exceptions=False)
-
-        # Build ordered results list
-        results: list[tuple[LLMResponse | None, Exception | None]] = [(None, None)] * total
-        for index, response, error in raw_results:
-            results[index] = (response, error)
-
-        return results
+        # Delegates to the shared run_with_semaphore helper (T9): same
+        # ordering guarantee, same (result, error) tuples, same per-task
+        # isolation, and the progress callback fires in a finally block
+        # while the semaphore is held, exactly as the inlined loop did.
+        coroutines = [self.llm.ainvoke(messages) for messages in tasks]
+        return await run_with_semaphore(coroutines, self.max_workers, progress_callback)
 
     def invoke_batch(
         self,
@@ -217,6 +185,10 @@ class LLMParallelInvoker:
             - usage_metadata: Dict of usage info from LLMResponse.usage, or None
             - error: Exception if the task failed, or None if success
         """
+        # NOT consolidated onto run_with_semaphore (see ainvoke_batch): this
+        # variant returns 3-tuples with usage metadata and must aclose the
+        # per-task structured adapter in its finally block, which the shared
+        # helper's (result, error) contract cannot express.
         if not tasks:
             return []
 

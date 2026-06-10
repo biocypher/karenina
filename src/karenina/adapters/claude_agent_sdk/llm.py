@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
+from karenina.adapters._timeouts import compute_sync_wrapper_timeout
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -221,6 +222,14 @@ class ClaudeSDKLLMAdapter:
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously.
 
+        When ModelConfig.request_timeout is set, the whole query() drain is
+        wrapped in asyncio.wait_for so the call has a hard wall-clock bound.
+        The guard bounds only the wall clock seen by the caller: the SDK
+        subprocess behind query() may linger until garbage collection after
+        the timeout fires. A fired timeout raises a stock asyncio.TimeoutError
+        (the builtin TimeoutError), which the ErrorRegistry classifies as
+        TIMEOUT, matching what the langchain adapter surfaces.
+
         Args:
             messages: List of unified Message objects.
 
@@ -229,6 +238,7 @@ class ClaudeSDKLLMAdapter:
 
         Raises:
             PortError: If the invocation fails.
+            TimeoutError: If the call exceeds ModelConfig.request_timeout.
         """
         from claude_agent_sdk import ResultMessage, query
 
@@ -239,12 +249,18 @@ class ClaudeSDKLLMAdapter:
         # Build options
         options = self._build_options(system_prompt)
 
-        # Execute query and collect result
-        result: ResultMessage | None = None
+        async def _drain_query() -> ResultMessage | None:
+            collected: ResultMessage | None = None
+            async for message in query(prompt=prompt_string, options=options):
+                if isinstance(message, ResultMessage):
+                    collected = message
+            return collected
 
-        async for message in query(prompt=prompt_string, options=options):
-            if isinstance(message, ResultMessage):
-                result = message
+        # Execute query and collect result
+        if self._config.request_timeout is not None:
+            result = await asyncio.wait_for(_drain_query(), timeout=self._config.request_timeout)
+        else:
+            result = await _drain_query()
 
         if result is None:
             from karenina.ports.errors import AgentResponseError
@@ -295,7 +311,11 @@ class ClaudeSDKLLMAdapter:
         Raises:
             PortError: If the invocation fails.
         """
-        return _run_in_fresh_loop(self.ainvoke, messages, timeout=300)
+        thread_timeout = compute_sync_wrapper_timeout(
+            self._config.request_timeout,
+            retry_policy=self._config.retry_policy,
+        )
+        return _run_in_fresh_loop(self.ainvoke, messages, timeout=thread_timeout)
 
     def with_structured_output(
         self,
@@ -318,7 +338,10 @@ class ClaudeSDKLLMAdapter:
                 Default is 2 (minimum needed for structured output).
             max_retries: Not supported by this adapter. A warning is emitted
                 if a non-None value is provided. The SDK handles retries
-                autonomously via max_turns.
+                autonomously via max_turns. See
+                karenina.ports.llm.LLMPort.with_structured_output for the
+                cross-adapter contract (LangChain and Claude Tool respect
+                max_retries, this adapter and Deep Agents warn and ignore).
 
         Returns:
             A new ClaudeSDKLLMAdapter instance configured for structured output.
@@ -353,6 +376,15 @@ class ClaudeSDKLLMAdapter:
         AssistantMessage objects as the response is built. Text deltas
         are computed by tracking previously seen content.
 
+        Usage capture: partial AssistantMessages do NOT carry usage in the
+        SDK, the authoritative usage arrives only on the final
+        ResultMessage. With include_partial_messages=True the SDK also
+        exposes raw StreamEvent payloads, whose ``message_start`` and
+        ``message_delta`` events DO carry usage, so this method captures
+        those inline as they arrive. A mid-stream interruption therefore
+        still leaves whatever usage was streamed before the cut, and the
+        ResultMessage overrides the inline snapshot on the success path.
+
         Args:
             messages: List of unified Message objects.
 
@@ -361,6 +393,11 @@ class ClaudeSDKLLMAdapter:
         """
         from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, query
 
+        try:
+            from claude_agent_sdk import StreamEvent  # type: ignore[attr-defined]
+        except ImportError:
+            StreamEvent = None
+
         prompt_string = self._converter.to_prompt_string(messages)
         system_prompt = self._converter.extract_system_prompt(messages)
 
@@ -368,6 +405,26 @@ class ClaudeSDKLLMAdapter:
         options.include_partial_messages = True
 
         response = StreamingLLMResponse()
+
+        def _capture_stream_event_usage(usage_dict: dict[str, Any]) -> None:
+            """Overlay a raw stream-event usage dict onto the inline snapshot."""
+            from karenina.ports.usage import UsageMetadata
+
+            current = response.usage
+            input_tokens = usage_dict.get("input_tokens")
+            output_tokens = usage_dict.get("output_tokens")
+            cache_read = usage_dict.get("cache_read_input_tokens")
+            cache_creation = usage_dict.get("cache_creation_input_tokens")
+            merged_input = input_tokens if input_tokens is not None else current.input_tokens
+            merged_output = output_tokens if output_tokens is not None else current.output_tokens
+            response.usage = UsageMetadata(
+                input_tokens=merged_input,
+                output_tokens=merged_output,
+                total_tokens=(merged_input or 0) + (merged_output or 0),
+                cache_read_tokens=cache_read if cache_read is not None else current.cache_read_tokens,
+                cache_creation_tokens=cache_creation if cache_creation is not None else current.cache_creation_tokens,
+                model=self._config.model_name,
+            )
 
         async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
             """Yield text deltas from SDK partial AssistantMessages."""
@@ -384,8 +441,15 @@ class ClaudeSDKLLMAdapter:
                         emitted_length = len(full_text)
                         yield delta
                 elif isinstance(message, ResultMessage):
-                    # Final message carries usage data
+                    # Final message carries the authoritative usage data
                     response.usage = extract_sdk_usage(message, model=self._config.model_name)
+                elif StreamEvent is not None and isinstance(message, StreamEvent):
+                    event = getattr(message, "event", None) or {}
+                    event_type = event.get("type")
+                    if event_type == "message_start":
+                        _capture_stream_event_usage((event.get("message") or {}).get("usage") or {})
+                    elif event_type == "message_delta":
+                        _capture_stream_event_usage(event.get("usage") or {})
 
         response._set_chunk_source(_chunk_generator())
         yield response

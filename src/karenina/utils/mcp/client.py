@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mcp import ClientSession
@@ -79,62 +79,3 @@ async def connect_mcp_session(
     logger.debug(f"Successfully connected to MCP server at {url}")
 
     return session
-
-
-async def connect_all_mcp_servers(
-    exit_stack: AsyncExitStack,
-    mcp_servers: dict[str, MCPServerConfig],
-) -> dict[str, ClientSession]:
-    """Connect to all configured MCP servers.
-
-    Args:
-        exit_stack: AsyncExitStack for managing session lifecycles.
-        mcp_servers: Dict mapping server names to their configurations.
-
-    Returns:
-        Dict mapping server names to initialized ClientSession objects.
-
-    Raises:
-        ValueError: If any server config is invalid.
-        ImportError: If mcp package is not installed.
-    """
-    sessions: dict[str, ClientSession] = {}
-
-    for name, config in mcp_servers.items():
-        try:
-            session = await connect_mcp_session(exit_stack, config)
-            sessions[name] = session
-            logger.info(f"Connected to MCP server '{name}'")
-        except Exception as e:
-            logger.error(f"Failed to connect to MCP server '{name}': {e}")
-            raise
-
-    return sessions
-
-
-async def get_all_mcp_tools(sessions: dict[str, Any]) -> list[tuple[str, Any, Any]]:
-    """Get all tools from connected MCP sessions.
-
-    Args:
-        sessions: Dict mapping server names to ClientSession objects.
-
-    Returns:
-        List of tuples (server_name, session, mcp_tool) for each tool.
-    """
-    all_tools: list[tuple[str, Any, Any]] = []
-
-    for server_name, session in sessions.items():
-        try:
-            tools_response = await session.list_tools()
-            mcp_tools = tools_response.tools
-
-            for tool in mcp_tools:
-                all_tools.append((server_name, session, tool))
-
-            logger.debug(f"MCP server '{server_name}' provides {len(mcp_tools)} tools: {[t.name for t in mcp_tools]}")
-
-        except Exception as e:
-            logger.error(f"Failed to list tools from MCP server '{server_name}': {e}")
-            raise
-
-    return all_tools

@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ValidationError
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
+from karenina.adapters._timeouts import compute_sync_wrapper_timeout
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -240,7 +241,11 @@ class LangChainLLMAdapter:
             # We're in an async context - use a fresh thread (with the
             # caller's context propagated, so track_retries telemetry
             # survives the dispatch) to avoid nested event loop issues
-            return run_coro_in_thread(self.ainvoke, messages, timeout=300)  # 5 minute timeout
+            thread_timeout = compute_sync_wrapper_timeout(
+                self._config.request_timeout,
+                retry_policy=self._retry_policy,
+            )
+            return run_coro_in_thread(self.ainvoke, messages, timeout=thread_timeout)
 
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
