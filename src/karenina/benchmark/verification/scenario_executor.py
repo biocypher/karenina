@@ -36,8 +36,8 @@ from .async_lifecycle import (
     PRE_TEARDOWN_ACLOSE_TIMEOUT,
     aclose_portal_adapters,
     get_async_portal,
+    get_global_llm_limiter,
     set_async_portal,
-    set_global_llm_semaphore,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,9 @@ class ScenarioExecutorConfig:
 
     Attributes:
         max_workers: Maximum number of parallel worker threads.
-        max_concurrent_requests: Global LLM semaphore permits. None disables the semaphore.
+        max_concurrent_requests: GlobalLLMLimiter capacity entered for the
+            duration of the batch (process-wide cap on concurrent LLM
+            request setups). None leaves the limiter unconfigured.
         enable_cache: Whether to enable node-level answer caching.
         timeout_seconds: Maximum wall-clock seconds for a parallel batch. Set
             to None (the default) to disable the batch-level timeout; the
@@ -175,65 +177,62 @@ class ScenarioExecutor:
             Tuple of (results, errors).
         """
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
-        sem = (
-            threading.Semaphore(self.config.max_concurrent_requests)
-            if self.config.max_concurrent_requests is not None
-            else None
-        )
 
         results: list[ScenarioExecutionResult] = []
         errors: list[tuple[str, BaseException]] = []
         total = len(combos)
 
-        set_global_llm_semaphore(sem)
-        try:
-            with start_blocking_portal(backend="asyncio") as portal:
-                set_async_portal(portal)
-                try:
-                    for idx, (scenario_def, ans_model, parse_model, replicate) in enumerate(combos, 1):
-                        combo_desc = (
-                            f"Scenario '{scenario_def.name}' with "
-                            f"{ans_model.model_name}/{parse_model.model_name}"
-                            + (f" rep={replicate}" if replicate is not None else "")
+        # Ref-counted enable of the process-wide LLM concurrency cap for
+        # the duration of the batch. The adapters' async leaves borrow
+        # permits, and with capacity None this is a no-op enable.
+        with (
+            get_global_llm_limiter().configure(self.config.max_concurrent_requests),
+            start_blocking_portal(backend="asyncio") as portal,
+        ):
+            set_async_portal(portal)
+            try:
+                for idx, (scenario_def, ans_model, parse_model, replicate) in enumerate(combos, 1):
+                    combo_desc = (
+                        f"Scenario '{scenario_def.name}' with "
+                        f"{ans_model.model_name}/{parse_model.model_name}"
+                        + (f" rep={replicate}" if replicate is not None else "")
+                    )
+
+                    # Progress callback before starting (result=None)
+                    if progress_callback:
+                        progress_callback(idx, total, None)
+
+                    try:
+                        manager = ScenarioManager()
+                        exec_result = manager.run(
+                            scenario=scenario_def,
+                            config=config,
+                            base_answering_model=ans_model,
+                            base_parsing_model=parse_model,
+                            run_name=run_name,
+                            global_rubric=global_rubric,
+                            answer_cache=answer_cache,
+                            workspace_root=workspace_root,
+                            replicate=replicate,
                         )
+                        results.append(exec_result)
+                    except Exception as e:
+                        logger.error("Sequential scenario failed: %s: %s", combo_desc, e)
+                        errors.append((combo_desc, e))
+                        continue
 
-                        # Progress callback before starting (result=None)
-                        if progress_callback:
-                            progress_callback(idx, total, None)
-
-                        try:
-                            manager = ScenarioManager()
-                            exec_result = manager.run(
-                                scenario=scenario_def,
-                                config=config,
-                                base_answering_model=ans_model,
-                                base_parsing_model=parse_model,
-                                run_name=run_name,
-                                global_rubric=global_rubric,
-                                answer_cache=answer_cache,
-                                workspace_root=workspace_root,
-                                replicate=replicate,
-                            )
-                            results.append(exec_result)
-                        except Exception as e:
-                            logger.error("Sequential scenario failed: %s: %s", combo_desc, e)
-                            errors.append((combo_desc, e))
-                            continue
-
-                        # Progress callback after completion (with result)
-                        if progress_callback:
-                            progress_callback(idx, total, exec_result)
-                finally:
-                    # Pre-teardown aclose: close portal-pinned adapter
-                    # clients on the shared portal's live loop and drop the
-                    # per-portal tracking BEFORE the enclosing `with` tears
-                    # the portal down. Downstream cleanup_resources() runs
-                    # on a different loop (NOT this portal's loop), so it
-                    # cannot safely close httpx transports pinned here.
-                    aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
-                    set_async_portal(None)
-        finally:
-            set_global_llm_semaphore(None)
+                    # Progress callback after completion (with result)
+                    if progress_callback:
+                        progress_callback(idx, total, exec_result)
+            finally:
+                # Pre-teardown aclose: close portal-pinned adapter
+                # clients on the shared portal's live loop and drop the
+                # per-portal tracking BEFORE the enclosing `with` tears
+                # the portal down. Downstream cleanup_resources() runs
+                # on a different loop (NOT this portal's loop), so it
+                # cannot safely close httpx transports pinned here.
+                aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
+                set_async_portal(None)
 
         return results, errors
 
@@ -266,11 +265,6 @@ class ScenarioExecutor:
         logger.info("Parallel scenario execution: %d combos with %d workers", len(combos), max_workers)
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
-        sem = (
-            threading.Semaphore(self.config.max_concurrent_requests)
-            if self.config.max_concurrent_requests is not None
-            else None
-        )
 
         total = len(combos)
         partial_progress: dict[int, dict[str, Any]] = {}
@@ -337,8 +331,9 @@ class ScenarioExecutor:
         results_by_index: dict[int, ScenarioExecutionResult] = {}
         failed_tasks: list[tuple[str, BaseException]] = []
 
-        set_global_llm_semaphore(sem)
-        try:
+        # Ref-counted enable of the process-wide LLM concurrency cap for
+        # the duration of the batch (see _run_sequential).
+        with get_global_llm_limiter().configure(self.config.max_concurrent_requests):
             pool = ThreadPoolExecutor(max_workers=max_workers)
             try:
                 # Submit all combos
@@ -462,8 +457,6 @@ class ScenarioExecutor:
                         cm.__exit__(None, None, None)
                     except Exception:
                         logger.debug("Portal cleanup error", exc_info=True)
-        finally:
-            set_global_llm_semaphore(None)
 
         # Restore original order
         results: list[ScenarioExecutionResult] = []

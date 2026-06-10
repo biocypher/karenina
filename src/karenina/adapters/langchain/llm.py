@@ -24,13 +24,14 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.adapters._timeouts import compute_sync_wrapper_timeout
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -203,6 +204,10 @@ class LangChainLLMAdapter:
             PortError: If the invocation fails after all retries.
             ValidationError: If structured output parsing fails.
         """
+        # GlobalLLMLimiter gating happens per attempt inside
+        # _ainvoke_with_timeout, so retry backoff never holds a permit.
+        # Sync invoke() reaches the wire only through this method (portal
+        # or thread dispatch), so it is covered without a sync acquire.
         # For structured output mode, try native first then fallback
         if self._structured_schema is not None:
             return await self._ainvoke_structured(messages)
@@ -258,6 +263,11 @@ class LangChainLLMAdapter:
         Uses LangChain's cross-provider ``.astream()`` method which yields
         ``AIMessageChunk`` objects uniformly across providers.
 
+        Stream ESTABLISHMENT (opening the stream and fetching the first
+        chunk) holds one GlobalLLMLimiter permit, released before the
+        first chunk is yielded: ``max_concurrent_requests`` caps
+        concurrent request setups, not concurrent open streams.
+
         Args:
             messages: List of unified Message objects.
 
@@ -267,24 +277,68 @@ class LangChainLLMAdapter:
         lc_messages = self._converter.to_provider(messages)
         response = StreamingLLMResponse()
 
-        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
-            """Yield text chunks from LangChain's astream, extracting usage from final chunk.
+        def _handle_chunk(chunk: Any) -> str:
+            """Extract text and capture usage metadata from a chunk.
 
             Chunk content may be a ``str`` or a ``list`` of block dicts
             (Anthropic extended thinking, vision, tool_use). The helper
-            extracts only text blocks; non-text blocks stay internal.
+            extracts only text blocks, and non-text blocks stay internal.
+            Usage metadata typically arrives on the final chunk.
             """
-            async for chunk in self._model.astream(lc_messages):
-                text = extract_text_from_lc_content(chunk.content)
+            text = extract_text_from_lc_content(chunk.content)
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+            return text
+
+        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
+            """Yield text chunks from LangChain's astream."""
+            async with get_global_llm_limiter().borrow():
+                iterator, first_chunk = await self._establish_stream(lc_messages)
+            if first_chunk is not None:
+                text = _handle_chunk(first_chunk)
                 if text:
                     yield text
-                # Usage metadata typically arrives on the final chunk
-                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
-                    response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+            async for chunk in iterator:
+                text = _handle_chunk(chunk)
+                if text:
+                    yield text
 
         response._set_chunk_source(_chunk_generator())
         yield response
         response.is_complete = True
+
+    async def _establish_stream(self, lc_messages: list[Any]) -> tuple[AsyncIterator[Any], Any | None]:
+        """One stream-establishment attempt: open astream, await the first chunk.
+
+        Runs under the GlobalLLMLimiter borrow taken by the astream chunk
+        generator, so concurrent establishments count against
+        ``max_concurrent_requests``. LangChain streams start lazily: the
+        wire request fires inside the first ``__anext__``, which is why
+        establishment must include the first chunk fetch to put any wire
+        activity under the permit.
+
+        Args:
+            lc_messages: Provider-formatted messages to send.
+
+        Returns:
+            Tuple of (iterator, first_chunk). first_chunk is None when the
+            stream ends without yielding any chunk.
+        """
+        iterator = self._model.astream(lc_messages).__aiter__()
+        try:
+            first = await iterator.__anext__()
+        except StopAsyncIteration:
+            return iterator, None
+        except BaseException:
+            # Close the half-opened stream before surfacing the failure
+            # (or cancellation) so no "async generator was never closed"
+            # debris is left behind.
+            aclose = getattr(iterator, "aclose", None)
+            if aclose is not None:
+                with suppress(Exception):
+                    await aclose()
+            raise
+        return iterator, first
 
     async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
         """Stream with wall-clock timeout, returning accumulated content.
@@ -472,6 +526,41 @@ class LangChainLLMAdapter:
         When ``timeout`` is None, falls back to ``self._config.request_timeout``.
         When that is also None, the call is made without any wrapper to
         preserve the previous behavior.
+
+        Each attempt holds one GlobalLLMLimiter permit for the wire call
+        only (uniform per-attempt policy), so retry backoff sleeps never
+        hold a permit. The permit wait itself is NOT bounded by the
+        attempt timeout: a saturated limiter delays the attempt rather
+        than timing it out, matching the legacy semaphore semantics.
+
+        Args:
+            model: The LangChain model exposing ``ainvoke``.
+            lc_messages: Provider-formatted messages to send.
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+
+        Returns:
+            The raw model response object.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        async with get_global_llm_limiter().borrow():
+            return await self._ainvoke_attempt(model, lc_messages, timeout=timeout)
+
+    async def _ainvoke_attempt(
+        self,
+        model: Any,
+        lc_messages: list[Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """One bounded wire call, running strictly inside the limiter permit.
+
+        Split out of _ainvoke_with_timeout so observers (the live B6
+        concurrency test) can hook a seam that is guaranteed to sit
+        inside the GlobalLLMLimiter borrow, observing post-permit wire
+        activity only.
 
         Args:
             model: The LangChain model exposing ``ainvoke``.

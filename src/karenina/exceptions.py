@@ -21,6 +21,7 @@ Exception hierarchy::
     │   ├── McpClientError
     │   └── McpConfigValidationError
     ├── StreamingTimeoutError        # LLM streaming timeout (also inherits TimeoutError)
+    ├── GlobalLimiterTimeoutError    # GlobalLLMLimiter borrow acquisition timeout
     ├── VerificationBatchError       # Partial-failure batch verification errors
     ├── BenchmarkConversionError     # Benchmark conversion errors
     ├── ReplayError                  # Replay layer errors (see replay/exceptions.py)
@@ -113,6 +114,18 @@ class StreamingTimeoutError(KareninaError, TimeoutError):
     def __init__(self, message: str, partial_content: str = "") -> None:
         super().__init__(message)
         self.partial_content = partial_content
+
+
+class GlobalLimiterTimeoutError(KareninaError, TimeoutError):
+    """Raised when a GlobalLLMLimiter borrow cannot acquire a permit in time.
+
+    Inherits from both KareninaError (karenina exception hierarchy) and
+    TimeoutError (for adapter retry classification as TIMEOUT category).
+    Raised only when an opt-in acquire timeout was set on the limiter
+    constructor (the default acquire is unbounded). Surfacing this error
+    means the global concurrency cap stayed saturated for the whole
+    acquire timeout, usually because a wedged endpoint is holding permits.
+    """
 
 
 class VerificationBatchError(KareninaError):

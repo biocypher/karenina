@@ -27,6 +27,7 @@ from karenina.adapters._timeouts import (
     PARSE_INTERNAL_CALL_SEQUENCES,
     compute_sync_wrapper_timeout,
 )
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 from karenina.ports import ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.parser import ParsePortResult
@@ -129,6 +130,10 @@ class DeepAgentsParserAdapter:
             # returns only the parsed dict/model, losing the AIMessage.response_metadata
             # where token counts live.
             structured_model = chat_model.with_structured_output(schema, include_raw=True)
+            # This parser calls the raw LangChain model directly (it does
+            # not delegate to an LLM adapter ainvoke), so it borrows its
+            # own GlobalLLMLimiter permit per attempt inside
+            # _ainvoke_with_timeout.
             raw_response = await self._retry_executor.aexecute_with_timeout(
                 self._ainvoke_with_timeout,
                 structured_model,
@@ -194,6 +199,12 @@ class DeepAgentsParserAdapter:
         pinned at ``request_timeout`` from construction, so the SDK may
         cut the request before an escalated guard fires.
 
+        Each attempt holds one GlobalLLMLimiter permit for the wire call
+        only (uniform per-attempt policy), so retry backoff sleeps never
+        hold a permit. The permit wait itself is NOT bounded by the
+        attempt timeout: a saturated limiter delays the attempt rather
+        than timing it out, matching the legacy semaphore semantics.
+
         Args:
             model: The LangChain model (plain or structured) exposing
                 ``ainvoke``.
@@ -208,11 +219,12 @@ class DeepAgentsParserAdapter:
         Raises:
             asyncio.TimeoutError: If the call exceeds the effective timeout.
         """
-        if timeout is None:
-            timeout = self._config.request_timeout
-        if timeout is None:
-            return await model.ainvoke(lc_messages)
-        return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
+        async with get_global_llm_limiter().borrow():
+            if timeout is None:
+                timeout = self._config.request_timeout
+            if timeout is None:
+                return await model.ainvoke(lc_messages)
+            return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
 
     def _extract_from_text(self, response: Any, schema: type[T]) -> ParsePortResult[T]:
         """Extract structured data from a text response (fallback path).

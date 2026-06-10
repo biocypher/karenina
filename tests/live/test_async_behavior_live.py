@@ -464,22 +464,29 @@ def test_b5_parse_to_pydantic(interface: str, make_model, supported_on_vllm: boo
 
 
 def _install_counter(monkeypatch: pytest.MonkeyPatch) -> InFlightCounter:
-    """Patch the langchain adapter async leaves with an in-flight counter.
+    """Patch the langchain adapter leaves that run INSIDE the limiter borrow.
 
-    Generation goes through stream_invoke -> _astream_with_timeout and
-    parsing goes through structured ainvoke, so both are wrapped. The
+    T13 deliberate edit: the GlobalLLMLimiter permit is acquired per
+    attempt, inside _ainvoke_with_timeout (around _ainvoke_attempt) and
+    inside the astream chunk generator (around _establish_stream).
+    Counting at those seams observes only post-permit wire activity, so
+    ``max_observed <= cap`` proves the limiter gates generation stream
+    setups and parse requests alike. Counting at ainvoke itself (the
+    pre-T13 hook) would also count callers waiting on the permit. The
+    drain of an established stream is deliberately not counted: the cap
+    bounds concurrent request setups, not concurrent open streams. The
     wrapper sleeps briefly before delegating to force overlap.
     """
     counter = InFlightCounter()
     monkeypatch.setattr(
         LangChainLLMAdapter,
-        "ainvoke",
-        counted_async(LangChainLLMAdapter.ainvoke, counter),
+        "_ainvoke_attempt",
+        counted_async(LangChainLLMAdapter._ainvoke_attempt, counter),
     )
     monkeypatch.setattr(
         LangChainLLMAdapter,
-        "_astream_with_timeout",
-        counted_async(LangChainLLMAdapter._astream_with_timeout, counter),
+        "_establish_stream",
+        counted_async(LangChainLLMAdapter._establish_stream, counter),
     )
     return counter
 
@@ -487,15 +494,16 @@ def _install_counter(monkeypatch: pytest.MonkeyPatch) -> InFlightCounter:
 def test_b6_concurrency_cap_scenario_batch(scenario_benchmark: Benchmark, monkeypatch: pytest.MonkeyPatch) -> None:
     """B6a: scenario batch with max_concurrent_requests=2 stays within the cap.
 
-    On the baseline the cap is enforced by the threading.Semaphore around
-    the sync invoke wrappers plus the worker-thread bound. Gates T13 (the
-    GlobalLLMLimiter must keep max_observed <= cap).
+    Since T13 the cap is enforced by the GlobalLLMLimiter borrowed at the
+    adapter async leaves (the legacy threading.Semaphore is no longer set
+    by production code). Same assertion as on the baseline.
     """
     counter = _install_counter(monkeypatch)
     config = _scenario_config(max_workers=2, max_concurrent_requests=2)
 
     result_set = scenario_benchmark.run_verification(config=config, run_name="live-b6-scenario")
 
+    print(f"b6a scenario cap=2 workers=2: max_observed={counter.max_observed} total_calls={counter.total_calls}")
     assert len(result_set) > 0
     assert counter.total_calls >= 2
     assert counter.max_observed <= 2
@@ -504,17 +512,35 @@ def test_b6_concurrency_cap_scenario_batch(scenario_benchmark: Benchmark, monkey
 def test_b6_concurrency_cap_qa_batch(qa_subset: Benchmark, monkeypatch: pytest.MonkeyPatch) -> None:
     """B6b: QA batch with async_max_workers=2 stays within the worker bound.
 
-    On the baseline max_concurrent_requests is dead on the QA path, so the
-    enforced bound is the worker count. After T13 this test gains a
-    parametrization with async_max_workers > max_concurrent_requests to
-    prove the limiter (not the thread pool) is what caps in-flight calls.
-    Gates T13.
+    No max_concurrent_requests is set here, so the limiter is a no-op and
+    the enforced bound is the worker count (the pre-T13 QA behavior,
+    preserved). The cap-driven QA case is B6c below.
     """
     counter = _install_counter(monkeypatch)
     config = _qa_config(max_workers=2)
 
     result_set = qa_subset.run_verification(config=config, run_name="live-b6-qa")
 
+    print(f"b6b qa workers=2 (no cap): max_observed={counter.max_observed} total_calls={counter.total_calls}")
+    assert len(result_set) == 3
+    assert counter.total_calls >= 3
+    assert counter.max_observed <= 2
+
+
+def test_b6_concurrency_cap_qa_batch_limiter(qa_subset: Benchmark, monkeypatch: pytest.MonkeyPatch) -> None:
+    """B6c: QA batch where the limiter, not the worker pool, is the bound.
+
+    async_max_workers=4 with max_concurrent_requests=2: only the
+    GlobalLLMLimiter can keep in-flight request setups at <= 2. This is
+    the flip-ledger parametrization promised at T13 (cap < workers). On
+    the baseline max_concurrent_requests was dead on the QA path.
+    """
+    counter = _install_counter(monkeypatch)
+    config = _qa_config(max_workers=4, max_concurrent_requests=2)
+
+    result_set = qa_subset.run_verification(config=config, run_name="live-b6-qa-limiter")
+
+    print(f"b6c qa cap=2 workers=4: max_observed={counter.max_observed} total_calls={counter.total_calls}")
     assert len(result_set) == 3
     assert counter.total_calls >= 3
     assert counter.max_observed <= 2

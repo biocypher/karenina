@@ -72,9 +72,15 @@ def read_async_config() -> tuple[bool, int]:
 def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
     """Wrap a sync LLM invoke() call with global semaphore acquisition.
 
-    When a global LLM semaphore is active (set by ScenarioExecutor or
-    VerificationExecutor), this decorator acquires one permit before calling
-    the wrapped function and releases it after (including on exception).
+    Deprecated: production code no longer sets the global semaphore (the
+    executors enter ``GlobalLLMLimiter.configure`` instead and the adapters
+    borrow at their async leaves), so in production this decorator is a
+    passthrough. Kept fully functional for direct callers that still set
+    the legacy semaphore and for existing tests.
+
+    When a global LLM semaphore is active, this decorator acquires one
+    permit before calling the wrapped function and releases it after
+    (including on exception).
 
     When no global semaphore is set, the function is called directly with
     no overhead.

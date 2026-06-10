@@ -564,9 +564,16 @@ def run_verification_batch(
 
     from karenina.exceptions import VerificationBatchError
 
+    from .async_lifecycle import get_global_llm_limiter
+
     all_complete = True
     try:
-        results = executor.run_batch(task_queue, progress_callback, prior_results=prior_results)
+        # Ref-counted enable of the process-wide LLM concurrency cap for
+        # the duration of the batch. The adapters' async leaves borrow
+        # permits, and with max_concurrent_requests None this is a no-op
+        # enable, so concurrency stays bounded by the worker count only.
+        with get_global_llm_limiter().configure(config.max_concurrent_requests):
+            results = executor.run_batch(task_queue, progress_callback, prior_results=prior_results)
     except VerificationBatchError as exc:
         # Preserve partial results so the sink-enabled path can still write
         # a partial export and keep resume state. Without a sink, re-raise

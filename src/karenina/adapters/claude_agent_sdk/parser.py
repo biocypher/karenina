@@ -35,6 +35,7 @@ from pydantic import BaseModel, ValidationError
 
 from karenina.adapters._parallel_base import run_coro_in_thread
 from karenina.adapters._timeouts import PARSE_INTERNAL_CALL_SEQUENCES, compute_sync_wrapper_timeout
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.errors import ErrorRegistry
@@ -260,6 +261,10 @@ class ClaudeSDKParserAdapter:
             kwargs["temperature"] = self._config.temperature
 
         try:
+            # This parser calls the Anthropic SDK directly (it does not
+            # delegate to an LLM adapter ainvoke), so it borrows its own
+            # GlobalLLMLimiter permit per attempt inside
+            # _acall_with_timeout.
             response = await self._retry_executor.aexecute_with_timeout(
                 self._acall_with_timeout,
                 client.messages.create,
@@ -324,6 +329,8 @@ class ClaudeSDKParserAdapter:
             kwargs["temperature"] = self._config.temperature
 
         try:
+            # Direct OpenAI SDK call: borrows its own permit per attempt
+            # inside _acall_with_timeout (see the Anthropic path above).
             response = await self._retry_executor.aexecute_with_timeout(
                 self._acall_with_timeout,
                 client.chat.completions.create,
@@ -378,14 +385,21 @@ class ClaudeSDKParserAdapter:
         Returns:
             The raw SDK response object.
 
+        Each attempt holds one GlobalLLMLimiter permit for the wire call
+        only (uniform per-attempt policy), so retry backoff sleeps never
+        hold a permit. The permit wait itself is NOT bounded by the
+        attempt timeout: a saturated limiter delays the attempt rather
+        than timing it out, matching the legacy semaphore semantics.
+
         Raises:
             asyncio.TimeoutError: If the call exceeds the effective timeout.
         """
-        if timeout is None:
-            timeout = self._config.request_timeout
-        if timeout is None:
-            return await call(**call_kwargs)
-        return await asyncio.wait_for(call(**call_kwargs), timeout=timeout)
+        async with get_global_llm_limiter().borrow():
+            if timeout is None:
+                timeout = self._config.request_timeout
+            if timeout is None:
+                return await call(**call_kwargs)
+            return await asyncio.wait_for(call(**call_kwargs), timeout=timeout)
 
     def _validate_json_response(
         self,

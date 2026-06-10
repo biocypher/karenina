@@ -49,6 +49,12 @@ class LLMParallelInvoker:
     need to be made. By running these calls in parallel, we achieve significant
     speedup.
 
+    Global concurrency cap: this invoker takes NO GlobalLLMLimiter borrow of
+    its own. Each task calls ``self.llm.ainvoke``, which acquires the permit
+    itself. Borrowing here too would double-acquire per logical request and
+    deadlock at cap=1. The local ``max_workers`` semaphore remains as the
+    per-invoker fan-out bound on top of the process-wide cap.
+
     Provides two separate methods for clean type separation:
 
     1. `invoke_batch()` - Plain text mode (answer generation):

@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.adapters._timeouts import compute_sync_wrapper_timeout
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -178,6 +179,10 @@ class ClaudeToolLLMAdapter:
         Raises:
             PortError: If the invocation fails.
         """
+        # GlobalLLMLimiter gating happens per attempt inside
+        # _acall_with_timeout, so retry backoff never holds a permit.
+        # Sync invoke() reaches the wire only through this method, so it
+        # is covered without a sync acquire.
         if self._structured_schema is not None:
             return await self._ainvoke_structured(messages)
         return await self._ainvoke_text(messages)
@@ -327,14 +332,21 @@ class ClaudeToolLLMAdapter:
         Returns:
             The raw SDK response object.
 
+        Each attempt holds one GlobalLLMLimiter permit for the wire call
+        only (uniform per-attempt policy), so retry backoff sleeps never
+        hold a permit. The permit wait itself is NOT bounded by the
+        attempt timeout: a saturated limiter delays the attempt rather
+        than timing it out, matching the legacy semaphore semantics.
+
         Raises:
             asyncio.TimeoutError: If the call exceeds the effective timeout.
         """
-        if timeout is None:
-            timeout = self._config.request_timeout
-        if timeout is None:
-            return await call(**call_kwargs)
-        return await asyncio.wait_for(call(**call_kwargs), timeout=timeout)
+        async with get_global_llm_limiter().borrow():
+            if timeout is None:
+                timeout = self._config.request_timeout
+            if timeout is None:
+                return await call(**call_kwargs)
+            return await asyncio.wait_for(call(**call_kwargs), timeout=timeout)
 
     @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
@@ -403,6 +415,12 @@ class ClaudeToolLLMAdapter:
         stream manager. The established stream itself is never retried
         mid-flight.
 
+        Each attempt holds one GlobalLLMLimiter permit for the
+        establishment only, released before the stream is consumed:
+        ``max_concurrent_requests`` caps concurrent request setups, not
+        concurrent open streams. Borrowing per attempt (instead of around
+        the retry loop) releases the permit during retry backoff.
+
         Args:
             kwargs: Keyword arguments for ``client.messages.stream``.
             timeout: Optional wall-clock bound on establishment, escalated
@@ -413,21 +431,22 @@ class ClaudeToolLLMAdapter:
             manager (its ``__aexit__`` must be awaited by the caller) and
             stream is the entered AsyncMessageStream.
         """
-        client = self._get_async_client()
-        manager = client.messages.stream(**kwargs)
-        try:
-            if timeout is None:
-                stream = await manager.__aenter__()
-            else:
-                stream = await asyncio.wait_for(manager.__aenter__(), timeout=timeout)
-        except BaseException:
-            # Best-effort close of the half-opened manager (for example
-            # when wait_for cancels __aenter__ mid-handshake) so no
-            # unclosed-stream debris is left behind.
-            with contextlib.suppress(Exception):
-                await manager.__aexit__(None, None, None)
-            raise
-        return manager, stream
+        async with get_global_llm_limiter().borrow():
+            client = self._get_async_client()
+            manager = client.messages.stream(**kwargs)
+            try:
+                if timeout is None:
+                    stream = await manager.__aenter__()
+                else:
+                    stream = await asyncio.wait_for(manager.__aenter__(), timeout=timeout)
+            except BaseException:
+                # Best-effort close of the half-opened manager (for example
+                # when wait_for cancels __aenter__ mid-handshake) so no
+                # unclosed-stream debris is left behind.
+                with contextlib.suppress(Exception):
+                    await manager.__aexit__(None, None, None)
+                raise
+            return manager, stream
 
     def astream(self, messages: list[Message]) -> AbstractAsyncContextManager[StreamingLLMResponse]:
         """Stream LLM response, accumulating tokens as they arrive.

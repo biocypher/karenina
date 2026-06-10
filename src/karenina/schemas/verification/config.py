@@ -147,7 +147,17 @@ class VerificationConfig(BaseModel):
     max_concurrent_requests: int | None = Field(
         default=None,
         ge=1,
-        description="Global cap on concurrent LLM requests across all workers. "
+        description="Global cap on concurrent LLM request setups across all "
+        "workers, enforced process-wide by the GlobalLLMLimiter on both the "
+        "QA and scenario paths. Gates the adapters' single-turn LLM calls "
+        "(ainvoke, and the sync wrappers that dispatch to it), stream "
+        "establishment (the cap bounds concurrent request setups, not "
+        "concurrent open streams), parser-side direct API calls, and "
+        "per-model-call requests inside langchain agent loops (via "
+        "build_agent_middleware). The claude_tool, claude_agent_sdk, and "
+        "langchain_deep_agents agent loops make their own internal model "
+        "calls and are not gated (deep_agents is langchain-based but does "
+        "not use build_agent_middleware). "
         "None means no global limit (concurrency bounded by max_workers only). "
         "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
     )

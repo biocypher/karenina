@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.adapters._timeouts import DEEP_AGENTS_SYNC_WRAPPER_FLOOR, compute_sync_wrapper_timeout
 from karenina.adapters.langchain.usage import extract_usage_from_chunk
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -133,7 +134,11 @@ class DeepAgentsLLMAdapter:
         if self._structured_schema is not None:
             chat_model = chat_model.with_structured_output(self._structured_schema)
 
-        # Invoke through RetryExecutor with a wall-clock guard per attempt
+        # Invoke through RetryExecutor with a wall-clock guard per attempt.
+        # GlobalLLMLimiter gating happens per attempt inside
+        # _ainvoke_with_timeout, so retry backoff never holds a permit.
+        # Sync invoke() reaches the wire only through this method, so it
+        # is covered without a sync acquire.
         response = await self._retry_executor.aexecute_with_timeout(
             self._ainvoke_with_timeout,
             chat_model,
@@ -197,6 +202,12 @@ class DeepAgentsLLMAdapter:
         When ``timeout`` is None, falls back to ``self._config.request_timeout``.
         When that is also None, the call is made without any wrapper.
 
+        Each attempt holds one GlobalLLMLimiter permit for the wire call
+        only (uniform per-attempt policy), so retry backoff sleeps never
+        hold a permit. The permit wait itself is NOT bounded by the
+        attempt timeout: a saturated limiter delays the attempt rather
+        than timing it out, matching the legacy semaphore semantics.
+
         Args:
             model: The LangChain model exposing ``ainvoke``.
             lc_messages: Provider-formatted messages to send.
@@ -209,11 +220,12 @@ class DeepAgentsLLMAdapter:
         Raises:
             asyncio.TimeoutError: If the call exceeds the effective timeout.
         """
-        if timeout is None:
-            timeout = self._config.request_timeout
-        if timeout is None:
-            return await model.ainvoke(lc_messages)
-        return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
+        async with get_global_llm_limiter().borrow():
+            if timeout is None:
+                timeout = self._config.request_timeout
+            if timeout is None:
+                return await model.ainvoke(lc_messages)
+            return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
 
     @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
@@ -327,25 +339,33 @@ class DeepAgentsLLMAdapter:
         response = StreamingLLMResponse()
 
         async def _establish(*, timeout: float | None = None) -> tuple[AsyncIterator[Any], Any | None]:
-            """One stream-establishment attempt: open astream, await the first chunk."""
-            iterator = chat_model.astream(lc_messages).__aiter__()
-            try:
-                if timeout is None:
-                    first = await iterator.__anext__()
-                else:
-                    first = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
-            except StopAsyncIteration:
-                return iterator, None
-            except BaseException:
-                # Close the half-opened stream before surfacing the failure
-                # (or cancellation) so no "async generator was never closed"
-                # debris is left behind.
-                aclose = getattr(iterator, "aclose", None)
-                if aclose is not None:
-                    with contextlib.suppress(Exception):
-                        await aclose()
-                raise
-            return iterator, first
+            """One stream-establishment attempt: open astream, await the first chunk.
+
+            Each attempt holds one GlobalLLMLimiter permit for the
+            establishment only, released before the stream is consumed:
+            max_concurrent_requests caps concurrent request setups, not
+            concurrent open streams. Borrowing per attempt (instead of
+            around the retry loop) releases the permit during backoff.
+            """
+            async with get_global_llm_limiter().borrow():
+                iterator = chat_model.astream(lc_messages).__aiter__()
+                try:
+                    if timeout is None:
+                        first = await iterator.__anext__()
+                    else:
+                        first = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
+                except StopAsyncIteration:
+                    return iterator, None
+                except BaseException:
+                    # Close the half-opened stream before surfacing the failure
+                    # (or cancellation) so no "async generator was never closed"
+                    # debris is left behind.
+                    aclose = getattr(iterator, "aclose", None)
+                    if aclose is not None:
+                        with contextlib.suppress(Exception):
+                            await aclose()
+                    raise
+                return iterator, first
 
         if establishment_retry:
             iterator, first_chunk = await self._retry_executor.aexecute_with_timeout(

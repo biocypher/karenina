@@ -42,9 +42,15 @@ from .async_lifecycle import (
 from .async_lifecycle import (
     PRE_TEARDOWN_ACLOSE_TIMEOUT as PRE_TEARDOWN_ACLOSE_TIMEOUT,  # noqa: PLC0414
 )
+from .async_lifecycle import (
+    GlobalLLMLimiter as GlobalLLMLimiter,  # noqa: PLC0414
+)
 from .async_lifecycle import aclose_portal_adapters
 from .async_lifecycle import (
     get_async_portal as get_async_portal,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    get_global_llm_limiter as get_global_llm_limiter,  # noqa: PLC0414
 )
 from .async_lifecycle import (
     get_global_llm_semaphore as get_global_llm_semaphore,  # noqa: PLC0414

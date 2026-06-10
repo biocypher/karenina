@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.adapters._timeouts import compute_sync_wrapper_timeout
+from karenina.benchmark.verification.async_lifecycle import gate_stream_establishment, get_global_llm_limiter
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -256,11 +257,16 @@ class ClaudeSDKLLMAdapter:
                     collected = message
             return collected
 
-        # Execute query and collect result
-        if self._config.request_timeout is not None:
-            result = await asyncio.wait_for(_drain_query(), timeout=self._config.request_timeout)
-        else:
-            result = await _drain_query()
+        # Execute query and collect result. One GlobalLLMLimiter permit
+        # held for the whole query() drain. This path has no retry loop,
+        # so the borrow is already per-attempt (uniform policy). Sync
+        # invoke() reaches the wire only through this method, so it is
+        # covered without a sync acquire.
+        async with get_global_llm_limiter().borrow():
+            if self._config.request_timeout is not None:
+                result = await asyncio.wait_for(_drain_query(), timeout=self._config.request_timeout)
+            else:
+                result = await _drain_query()
 
         if result is None:
             from karenina.ports.errors import AgentResponseError
@@ -429,7 +435,12 @@ class ClaudeSDKLLMAdapter:
         async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
             """Yield text deltas from SDK partial AssistantMessages."""
             emitted_length = 0
-            async for message in query(prompt=prompt_string, options=options):
+            # The SDK query() starts lazily on first iteration, so the
+            # first message fetch is the request establishment: it holds
+            # one GlobalLLMLimiter permit, released before the first chunk
+            # is yielded (the cap bounds concurrent stream setups, not
+            # concurrent open streams).
+            async for message in gate_stream_establishment(query(prompt=prompt_string, options=options)):
                 if isinstance(message, AssistantMessage):
                     # Extract full text from content blocks
                     full_text = "".join(

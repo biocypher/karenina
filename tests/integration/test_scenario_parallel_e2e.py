@@ -1,8 +1,13 @@
 """End-to-end integration tests for parallel scenario execution.
 
 Verifies that the full parallel scenario flow works correctly, including
-semaphore lifecycle, cache behavior, and error handling. Mocks at the
-ScenarioManager level (the boundary between executor and pipeline internals).
+the GlobalLLMLimiter lifecycle, cache behavior, and error handling. Mocks
+at the ScenarioManager level (the boundary between executor and pipeline
+internals).
+
+T13 deliberate flip: the limiter tests here previously pinned the legacy
+set_global_llm_semaphore production wiring, which the GlobalLLMLimiter
+supersedes. The legacy accessors stay covered by test_global_semaphore.py.
 """
 
 from __future__ import annotations
@@ -13,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from karenina.benchmark.verification.executor import get_global_llm_semaphore
+from karenina.benchmark.verification.executor import get_global_llm_limiter
 from karenina.benchmark.verification.scenario_executor import (
     ScenarioExecutor,
     ScenarioExecutorConfig,
@@ -48,18 +53,18 @@ def _make_result(name: str):
 class TestScenarioParallelE2E:
     """End-to-end tests for ScenarioExecutor parallel and sequential execution."""
 
-    def test_semaphore_is_set_during_execution(self):
-        """Global LLM semaphore should be active during run_batch."""
+    def test_limiter_is_configured_during_execution(self):
+        """The GlobalLLMLimiter should be active during run_batch."""
         combos = [_make_combo("s1"), _make_combo("s2")]
-        semaphore_was_set = [False]
+        limiter_was_configured = [False]
 
-        def check_semaphore(**kwargs):
-            if get_global_llm_semaphore() is not None:
-                semaphore_was_set[0] = True
+        def check_limiter(**kwargs):
+            if get_global_llm_limiter().capacity == 4:
+                limiter_was_configured[0] = True
             return _make_result(kwargs["scenario"].name)
 
         with patch("karenina.benchmark.verification.scenario_executor.ScenarioManager") as MockManager:
-            MockManager.return_value.run.side_effect = check_semaphore
+            MockManager.return_value.run.side_effect = check_limiter
 
             executor = ScenarioExecutor(
                 parallel=True,
@@ -69,12 +74,12 @@ class TestScenarioParallelE2E:
             config.request_timeout = None
             results, errors = executor.run_batch(combos, config)
 
-        assert semaphore_was_set[0], "Global LLM semaphore should be set during execution"
+        assert limiter_was_configured[0], "GlobalLLMLimiter should be configured during execution"
         assert len(results) == 2
         assert len(errors) == 0
 
-    def test_semaphore_cleared_after_execution(self):
-        """Global LLM semaphore should be None after run_batch completes."""
+    def test_limiter_deconfigured_after_execution(self):
+        """The GlobalLLMLimiter should be inactive after run_batch completes."""
         combos = [_make_combo("s1")]
 
         with patch("karenina.benchmark.verification.scenario_executor.ScenarioManager") as MockManager:
@@ -88,10 +93,10 @@ class TestScenarioParallelE2E:
             config.request_timeout = None
             executor.run_batch(combos, config)
 
-        assert get_global_llm_semaphore() is None
+        assert get_global_llm_limiter().capacity is None
 
-    def test_semaphore_cleared_on_error(self):
-        """Global LLM semaphore should be cleaned up even when a scenario fails."""
+    def test_limiter_deconfigured_on_error(self):
+        """The GlobalLLMLimiter should be cleaned up even when a scenario fails."""
         combos = [_make_combo("s1")]
 
         with patch("karenina.benchmark.verification.scenario_executor.ScenarioManager") as MockManager:
@@ -105,7 +110,7 @@ class TestScenarioParallelE2E:
             config.request_timeout = None
             executor.run_batch(combos, config)
 
-        assert get_global_llm_semaphore() is None
+        assert get_global_llm_limiter().capacity is None
 
     def test_parallel_with_multiple_workers(self):
         """Full flow: multiple combos with parallel execution, semaphore, and caching."""
@@ -141,4 +146,4 @@ class TestScenarioParallelE2E:
         assert len(results) == 4
         assert len(errors) == 0
         assert max_active[0] >= 2
-        assert get_global_llm_semaphore() is None
+        assert get_global_llm_limiter().capacity is None
