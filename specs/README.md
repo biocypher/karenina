@@ -26,13 +26,13 @@ Rules of the suite:
 |---|---|---|---|
 | SPEC-000 | This document | Coordination, status, cross-spec tensions | Living |
 | SPEC-001 | [Constitution](SPEC-001-constitution.md) | Final wording of the principles destined for `karenina/docs/` | Draft for review |
-| SPEC-002 | Public API and tiered interface | Nouns, verbs, signatures, five-line path, disclosure rules | To write |
+| SPEC-002 | [Public API and tiered interface](SPEC-002-public-api.md) | Nouns, verbs, signatures, five-line path, disclosure rules | Draft for review |
 | SPEC-003 | [Execution model](SPEC-003-execution-model.md) | DAG task model, driver, concurrency, async core, sync facade | Draft for review |
 | SPEC-004 | [Configuration layering](SPEC-004-configuration.md) | Core vs escape hatch, field lifecycle, parity enforcement | Draft for review |
 | SPEC-005 | [Failure and observability](SPEC-005-failure-observability.md) | Failure taxonomy, no-silent-degradation rules, error quality | Draft for review |
 | SPEC-006 | [Results durability and interchange](SPEC-006-durability-interchange.md) | Sinks, resume semantics, replay, format versioning, shareable benchmarks | Draft for review |
-| SPEC-007 | Testing and feedback harness | Three tiers, engine-health scoreboard, cull rubric, conformance suites | To write |
-| SPEC-008 | Knowledge layer and agent tier | ADR process, extension guides, packaged skills, introspection API, example gamma | To write |
+| SPEC-007 | [Testing and feedback harness](SPEC-007-testing-feedback.md) | Three tiers, engine-health scoreboard, cull rubric, conformance suites | Draft for review |
+| SPEC-008 | [Knowledge layer and agent tier](SPEC-008-knowledge-agent-tier.md) | ADR process, extension guides, packaged skills, introspection API, example gamma | Draft for review |
 | SPEC-009 | [Audit methodology and backlog](SPEC-009-audit-methodology.md) | Phase 0 process, finding schema, disposition workflow | Draft for review |
 
 Specs may be merged or split as drafting reveals their true size. Merges and splits are recorded here.
@@ -164,8 +164,8 @@ Drafting order: 001 and 009 first (they unblock Phase 0), then 003 (the architec
 | T3 | Async-native vs migration risk | 003, 009 | Open: gated on the Phase 0 spike (SPEC-009 Q5 defines the gate) |
 | T4 | Five-line happy path vs no-silent-degradation | 002, 005 | Resolved: SPEC-005 §3 joint rule (silent on clean runs, one-line warning plus run summary on degraded ones) |
 | T7 | Replay opt-in vs P6 "every interaction captured" | 001, 006 | Resolved: P6 amended, capture is opt-in and results state whether they support extension |
-| T5 | Skills in-package vs monorepo skill ecosystem | 008 | Open: single source with sync mechanism to be chosen |
-| T6 | Streaming workloads vs sink/resume design | 003, 006 | Open: sink v2 must not assume finite task sets; concrete hooks TBD in 006 |
+| T5 | Skills in-package vs monorepo skill ecosystem | 008 | Resolved: single source in karenina `skills/`, monorepo becomes a sync target (SPEC-008 §3) |
+| T6 | Streaming workloads vs sink/resume design | 003, 006 | Resolved: streaming-shaped driver core, sink v2 `on_start` carries no finite count (SPEC-006 §2) |
 
 New tensions discovered during drafting are added here, never resolved silently inside one spec.
 
@@ -178,3 +178,4 @@ New tensions discovered during drafting are added here, never resolved silently 
 - 2026-06-10: SPEC-001 and SPEC-009 drafted. Decisions: constitution as one page with P1-P8 numbering and ADR-gated amendments. Audit dispositions made autonomously by agents per decision rules, user spot-checks flagged items plus a 10% sample.
 - 2026-06-10: SPEC-003 drafted. Decisions: driver public-but-experimental (`karenina.experimental.engine`), streaming-shaped core from the start, TaskEval fully projected onto the driver. Single `TaskId` identity, AdapterGateway as the one concurrency chokepoint, sync facade via a background-loop bridge module.
 - 2026-06-10: SPEC-004, SPEC-005, SPEC-006 drafted. Decisions: composable sub-configs, binding agent-actionable error anatomy, cross-adapter error harmonization via ErrorRegistry mapping tables plus a conformance error battery, auto-retry of transient failures on resume, replay capture opt-in (P6 amended). Tensions T4 and T7 resolved.
+- 2026-06-10: SPEC-002, SPEC-007, SPEC-008 drafted. Decisions: Benchmark-centric five-line path, default judge equals the answering model with a warning, CI gating contracts-on-PR / goldens-on-merge / live-manual, skills single-sourced in this repo. Tensions T5 and T6 resolved. **All nine specs drafted, suite complete pending user review.**
