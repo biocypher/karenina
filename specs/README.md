@@ -25,7 +25,7 @@ Rules of the suite:
 | ID | Spec | Owns | Status |
 |---|---|---|---|
 | SPEC-000 | This document | Coordination, status, cross-spec tensions | Living |
-| SPEC-001 | Constitution | Final wording of the principles destined for `karenina/docs/` | To write |
+| SPEC-001 | [Constitution](SPEC-001-constitution.md) | Final wording of the principles destined for `karenina/docs/` | Draft for review |
 | SPEC-002 | Public API and tiered interface | Nouns, verbs, signatures, five-line path, disclosure rules | To write |
 | SPEC-003 | Execution model | DAG task model, driver, concurrency, async core, sync facade | To write |
 | SPEC-004 | Configuration layering | Core vs escape hatch, field lifecycle, parity enforcement | To write |
@@ -33,7 +33,7 @@ Rules of the suite:
 | SPEC-006 | Results durability and interchange | Sinks, resume semantics, replay, format versioning, shareable benchmarks | To write |
 | SPEC-007 | Testing and feedback harness | Three tiers, engine-health scoreboard, cull rubric, conformance suites | To write |
 | SPEC-008 | Knowledge layer and agent tier | ADR process, extension guides, packaged skills, introspection API, example gamma | To write |
-| SPEC-009 | Audit methodology and backlog | Phase 0 process, finding schema, disposition workflow | To write |
+| SPEC-009 | [Audit methodology and backlog](SPEC-009-audit-methodology.md) | Phase 0 process, finding schema, disposition workflow | Draft for review |
 
 Specs may be merged or split as drafting reveals their true size. Merges and splits are recorded here.
 
@@ -174,3 +174,4 @@ New tensions discovered during drafting are added here, never resolved silently 
 
 - 2026-06-10: Suite created with charters for SPEC-001 through SPEC-009. Master design approved.
 - 2026-06-10: Suite relocated from the monorepo planning folder into `karenina/specs/`, versioned with the library.
+- 2026-06-10: SPEC-001 and SPEC-009 drafted. Decisions: constitution as one page with P1-P8 numbering and ADR-gated amendments. Audit dispositions made autonomously by agents per decision rules, user spot-checks flagged items plus a 10% sample.
