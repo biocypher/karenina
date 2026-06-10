@@ -179,9 +179,9 @@ def tight_retry_policy() -> RetryPolicy:
     """Small retry budgets with zero backoff so dead-port tests fail fast.
 
     Connection gets 2 attempts so a recorded retry count of >= 1 is
-    unambiguous. The other categories are minimal. ``derive_sdk_max_retries``
-    over this policy is 2, which bounds the internal SDK retries of the
-    adapters that still delegate retrying to their SDK on the baseline.
+    unambiguous. The other categories are minimal. Since T1/T2 every
+    adapter under test owns its retries via RetryExecutor (SDK clients at
+    max_retries=0), so these budgets bound the observed attempts directly.
     """
     return RetryPolicy(
         connection=CategoryRetryConfig(max_attempts=2, backoff_min=0.0, backoff_max=0.0),
@@ -298,27 +298,27 @@ def counted_async(
 
 
 # ---------------------------------------------------------------------------
-# Baseline workaround: langchain-openai global client cache (deep_agents)
+# Streaming-only workaround: langchain-openai global client cache (deep_agents)
 # ---------------------------------------------------------------------------
 
 
 def reset_langchain_openai_client_cache() -> None:
     """Clear langchain-openai's module-global cached httpx clients.
 
-    Baseline bug (documented in the daily note, surfaced while authoring
-    this suite): langchain-openai caches one async httpx client per
-    (base_url, timeout) in ``chat_models/_client_utils.py``. The
-    deep_agents adapter does not inject per-model clients (the langchain
-    adapter does), so two deep_agents calls on different event loops within
-    httpx's keepalive window (about 5 seconds) reuse a pooled TCP
-    connection bound to the first, already-closed loop and fail with
-    ``RuntimeError: Event loop is closed`` surfacing as APIConnectionError.
+    Library bug (documented in the daily note): langchain-openai caches one
+    async httpx client per (base_url, timeout) in
+    ``chat_models/_client_utils.py``. The deep_agents adapter does not
+    inject per-model clients (the langchain adapter does), so two
+    deep_agents calls on different event loops within httpx's keepalive
+    window (about 5 seconds) reuse a pooled TCP connection bound to the
+    first, already-closed loop and fail with ``RuntimeError: Event loop is
+    closed`` surfacing as APIConnectionError.
 
-    Clearing the cache before entering a fresh event loop makes the
-    deep_agents tests deterministic on the unmodified baseline. T1 (retry
-    routing through RetryExecutor) makes production robust to this because
-    the connection error becomes retryable, after which this workaround can
-    be dropped from the flipped tests.
+    After T1 the ainvoke and parser paths retry that APIConnectionError via
+    RetryExecutor, so B1/B4/B5 no longer need this reset (verified live).
+    The bare ``astream`` context manager has no retry layer, so B3
+    deep_agents still needs it. Revisit when streaming gains retry or usage
+    parity work lands (T7/T8).
     """
     from langchain_openai.chat_models import _client_utils
 

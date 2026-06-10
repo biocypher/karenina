@@ -16,7 +16,6 @@ Key differences from LangChain:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -24,7 +23,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
-from karenina.adapters._parallel_base import with_llm_semaphore
+from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -69,6 +68,10 @@ def _run_in_fresh_loop(
     underlying async calls (httpx, LangChain ainvoke) do not create anyio
     cancel scopes.
 
+    The caller's contextvars are propagated into the fresh thread (via
+    run_coro_in_thread), so context-bound state such as the track_retries
+    telemetry tracker survives the dispatch.
+
     Args:
         coro_func: Async function to call.
         *args: Positional arguments forwarded to coro_func.
@@ -82,13 +85,7 @@ def _run_in_fresh_loop(
             within the timeout.
         Exception: Any exception raised by the coroutine is re-raised.
     """
-
-    def _target() -> _T:
-        return asyncio.run(coro_func(*args))
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future: concurrent.futures.Future[_T] = executor.submit(_target)
-        return future.result(timeout=timeout)
+    return run_coro_in_thread(coro_func, *args, timeout=timeout)
 
 
 class ClaudeSDKLLMAdapter:

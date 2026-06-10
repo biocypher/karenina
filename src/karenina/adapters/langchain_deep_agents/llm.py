@@ -5,12 +5,18 @@ using LangChain's init_chat_model for simple single-turn LLM calls.
 
 For single-turn calls, the adapter uses the LangChain model directly (not
 create_deep_agent), since no agent loop or tool calling is needed.
+
+Retry Logic:
+    ainvoke() routes through RetryExecutor with per-category retry budgets
+    for transient errors (connection errors, timeouts, rate limits, 5xx
+    errors). The underlying SDK clients run with max_retries=0 (see
+    initialization.create_chat_model), so RetryExecutor is the sole retry
+    layer and retry telemetry via track_retries() is accurate.
 """
 
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -18,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
-from karenina.adapters._parallel_base import with_llm_semaphore
+from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.adapters.langchain.usage import extract_usage_from_chunk
 from karenina.ports import LLMResponse, Message
 from karenina.ports.capabilities import PortCapabilities
@@ -87,16 +93,22 @@ class DeepAgentsLLMAdapter:
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
-        """Invoke the LLM asynchronously.
+        """Invoke the LLM asynchronously with automatic retry for transient errors.
 
-        Converts karenina Messages to LangChain format, invokes the model,
-        and converts the response back.
+        Converts karenina Messages to LangChain format, invokes the model
+        through RetryExecutor (per-category retry budgets for connection,
+        timeout, rate limit, and server errors), and converts the response
+        back.
 
         Args:
             messages: List of messages forming the conversation.
 
         Returns:
             LLMResponse containing the generated content and usage metadata.
+
+        Raises:
+            The last transient exception if all retries are exhausted, or
+            immediately for permanent errors.
         """
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -111,15 +123,21 @@ class DeepAgentsLLMAdapter:
             elif msg.role.value == "assistant":
                 lc_messages.append(AIMessage(content=text))
 
-        # Create model
+        # Create the model once, outside the retried callable, so that
+        # retries repeat the API call rather than model construction.
         chat_model = create_chat_model(self._config)
 
         # Apply structured output if configured
         if self._structured_schema is not None:
             chat_model = chat_model.with_structured_output(self._structured_schema)
 
-        # Invoke
-        response = await chat_model.ainvoke(lc_messages)
+        # Invoke through RetryExecutor with a wall-clock guard per attempt
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._ainvoke_with_timeout,
+            chat_model,
+            lc_messages,
+            timeout=self._config.request_timeout,
+        )
 
         # Extract content
         if self._structured_schema is not None:
@@ -151,6 +169,50 @@ class DeepAgentsLLMAdapter:
 
         return LLMResponse(content=content, usage=usage, raw=response)
 
+    async def _ainvoke_with_timeout(
+        self,
+        model: Any,
+        lc_messages: list[Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """Call ``model.ainvoke`` under a wall-clock timeout as a guardrail.
+
+        LangChain's ``ainvoke`` can stall internally without ever raising,
+        and the httpx ``request_timeout`` does not catch every such case,
+        so this karenina-layer ``asyncio.wait_for`` enforces a hard
+        per-attempt wall-clock budget. Mirrors the langchain adapter.
+
+        A fired timeout raises a stock ``asyncio.TimeoutError``, which
+        ``ErrorRegistry`` classifies as ``TIMEOUT`` via the built-in MRO
+        check. The configured timeout retry budget then applies inside
+        ``RetryExecutor.aexecute_with_timeout``. Note that
+        ``RetryPolicy.timeout_escalation`` only extends this guard on
+        TIMEOUT retries. The underlying SDK client's own timeout stays
+        pinned at ``request_timeout`` from construction, so the SDK may
+        cut the request before an escalated guard fires.
+
+        When ``timeout`` is None, falls back to ``self._config.request_timeout``.
+        When that is also None, the call is made without any wrapper.
+
+        Args:
+            model: The LangChain model exposing ``ainvoke``.
+            lc_messages: Provider-formatted messages to send.
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+
+        Returns:
+            The raw model response object.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        if timeout is None:
+            timeout = self._config.request_timeout
+        if timeout is None:
+            return await model.ainvoke(lc_messages)
+        return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
+
     @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
@@ -169,13 +231,9 @@ class DeepAgentsLLMAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self.ainvoke(messages))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=600)
+            # Fresh thread with the caller's context propagated, so
+            # track_retries telemetry survives the dispatch.
+            return run_coro_in_thread(self.ainvoke, messages, timeout=600)
 
         except RuntimeError:
             return asyncio.run(self.ainvoke(messages))
@@ -198,8 +256,9 @@ class DeepAgentsLLMAdapter:
         """
         if max_retries is not None:
             logger.warning(
-                "max_retries=%d ignored by langchain_deep_agents adapter; "
-                "retry behavior is managed internally by LangChain",
+                "max_retries=%d ignored by langchain_deep_agents adapter. "
+                "Validation-feedback retries are not implemented here. "
+                "Transient errors are retried via RetryExecutor regardless.",
                 max_retries,
             )
         return DeepAgentsLLMAdapter(
@@ -313,13 +372,12 @@ class DeepAgentsLLMAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self._astream_with_timeout(messages, timeout))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=(timeout or 300) + 30)
+            return run_coro_in_thread(
+                self._astream_with_timeout,
+                messages,
+                timeout,
+                timeout=(timeout or 300) + 30,
+            )
 
         except RuntimeError:
             return asyncio.run(self._astream_with_timeout(messages, timeout))

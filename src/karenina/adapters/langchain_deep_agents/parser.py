@@ -3,23 +3,32 @@
 This module provides the DeepAgentsParserAdapter class that implements
 ParserPort using LangChain's with_structured_output() for extracting
 structured data from LLM responses.
+
+Retry Logic:
+    aparse_to_pydantic() routes its LLM calls (structured and text fallback)
+    through RetryExecutor with per-category retry budgets for transient
+    errors. The underlying SDK clients run with max_retries=0 (see
+    initialization.create_chat_model), so RetryExecutor is the sole retry
+    layer and retry telemetry via track_retries() is accurate.
 """
 
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import json
 import logging
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel
 
+from karenina.adapters._parallel_base import run_coro_in_thread
 from karenina.ports import ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.parser import ParsePortResult
 from karenina.ports.usage import UsageMetadata
+from karenina.utils.errors import ErrorRegistry
 from karenina.utils.json_extraction import extract_json_from_response
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .initialization import create_chat_model
 from .messages import DeepAgentsMessageConverter
@@ -56,6 +65,9 @@ class DeepAgentsParserAdapter:
         """
         self._config = model_config
         self._converter = DeepAgentsMessageConverter()
+
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
 
     @property
     def capabilities(self) -> PortCapabilities:
@@ -102,7 +114,8 @@ class DeepAgentsParserAdapter:
             elif msg.role.value == "assistant":
                 lc_messages.append(AIMessage(content=text))
 
-        # Create model with structured output
+        # Create the model once, outside the retried callable, so that
+        # retries repeat the API call rather than model construction.
         chat_model = create_chat_model(self._config)
 
         try:
@@ -111,10 +124,27 @@ class DeepAgentsParserAdapter:
             # returns only the parsed dict/model, losing the AIMessage.response_metadata
             # where token counts live.
             structured_model = chat_model.with_structured_output(schema, include_raw=True)
-            raw_response = await structured_model.ainvoke(lc_messages)
+            raw_response = await self._retry_executor.aexecute_with_timeout(
+                self._ainvoke_with_timeout,
+                structured_model,
+                lc_messages,
+                timeout=self._config.request_timeout,
+            )
         except Exception as e:
+            if ErrorRegistry().classify(e).is_retryable():
+                # A transient error here means the structured attempt
+                # already exhausted its retry budget inside RetryExecutor.
+                # Re-raise instead of paying a second budget on the text
+                # fallback: a transient outage is not a missing
+                # structured-output capability.
+                raise
             logger.warning("Structured output failed, falling back to text extraction: %s", e)
-            response = await chat_model.ainvoke(lc_messages)
+            response = await self._retry_executor.aexecute_with_timeout(
+                self._ainvoke_with_timeout,
+                chat_model,
+                lc_messages,
+                timeout=self._config.request_timeout,
+            )
             return self._extract_from_text(response, schema)
 
         # include_raw=True returns {"raw": AIMessage, "parsed": dict/model, "parsing_error": ...}
@@ -140,6 +170,44 @@ class DeepAgentsParserAdapter:
                 raise ParseError(f"Failed to convert structured output to target schema: {e}") from e
 
         raise ParseError(f"Unexpected response type from structured output: {type(parsed_output).__name__}")
+
+    async def _ainvoke_with_timeout(
+        self,
+        model: Any,
+        lc_messages: list[Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """Call ``model.ainvoke`` under a wall-clock timeout as a guardrail.
+
+        Mirrors the langchain adapter's helper: a fired timeout raises a
+        stock ``asyncio.TimeoutError``, which ``ErrorRegistry`` classifies
+        as ``TIMEOUT``, so the timeout retry budget applies inside
+        ``RetryExecutor.aexecute_with_timeout``. Note that
+        ``RetryPolicy.timeout_escalation`` only extends this guard on
+        TIMEOUT retries. The underlying SDK client's own timeout stays
+        pinned at ``request_timeout`` from construction, so the SDK may
+        cut the request before an escalated guard fires.
+
+        Args:
+            model: The LangChain model (plain or structured) exposing
+                ``ainvoke``.
+            lc_messages: Provider-formatted messages to send.
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+                When that is also None, the call is made without a wrapper.
+
+        Returns:
+            The raw model response object.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        if timeout is None:
+            timeout = self._config.request_timeout
+        if timeout is None:
+            return await model.ainvoke(lc_messages)
+        return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
 
     def _extract_from_text(self, response: Any, schema: type[T]) -> ParsePortResult[T]:
         """Extract structured data from a text response (fallback path).
@@ -217,13 +285,9 @@ class DeepAgentsParserAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> ParsePortResult[T]:
-                return asyncio.run(self.aparse_to_pydantic(messages, schema))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=600)
+            # Fresh thread with the caller's context propagated, so
+            # track_retries telemetry survives the dispatch.
+            return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=600)
 
         except RuntimeError:
             return asyncio.run(self.aparse_to_pydantic(messages, schema))

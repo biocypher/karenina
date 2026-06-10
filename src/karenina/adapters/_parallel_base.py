@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import contextvars
 import functools
 import logging
 import os
@@ -93,6 +94,53 @@ def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
                 sem.release()
 
     return wrapper
+
+
+def run_coro_in_thread(
+    coro_func: Callable[..., Coroutine[Any, Any, T]],
+    *args: Any,
+    timeout: float | None,
+) -> T:
+    """Run an async function in a fresh thread, propagating contextvars.
+
+    Shared helper for the adapters' sync-wrapper ThreadPoolExecutor
+    fallbacks (sync invoke called while an event loop is already running
+    in the calling thread). A plain ``executor.submit(asyncio.run, ...)``
+    would run the coroutine without the caller's context, silently losing
+    context-bound state such as the ``track_retries`` telemetry tracker.
+    This helper captures the caller's context with
+    ``contextvars.copy_context()`` and re-enters it in the worker thread,
+    so the coroutine (and every retry decision inside it) sees the same
+    contextvars as the caller.
+
+    Args:
+        coro_func: Async function to call.
+        *args: Positional arguments forwarded to coro_func.
+        timeout: Wall-clock bound for the thread result in seconds.
+            None waits indefinitely.
+
+    Returns:
+        The return value of the coroutine.
+
+    Raises:
+        concurrent.futures.TimeoutError: If the thread does not finish
+            within the timeout.
+        Exception: Any exception raised by the coroutine is re-raised.
+    """
+    ctx = contextvars.copy_context()
+
+    def _create_and_run() -> T:
+        # Both coroutine creation and asyncio.run happen inside ctx, so a
+        # sync prelude in coro_func sees the caller's contextvars too, and
+        # the task created by asyncio.run copies ctx for the async body.
+        return asyncio.run(coro_func(*args))
+
+    def _target() -> T:
+        return ctx.run(_create_and_run)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_target)
+        return future.result(timeout=timeout)
 
 
 def get_max_workers(override: int | None = None) -> int:
@@ -222,16 +270,14 @@ def sync_invoke_via_portal(
     # No portal available - check if we're already in an async context
     try:
         asyncio.get_running_loop()
-        # We're in an async context - use ThreadPoolExecutor to avoid
-        # nested event loop issues
+        # We're in an async context - use a fresh thread (with the caller's
+        # context propagated) to avoid nested event loop issues
         logger.debug("sync_invoke_via_portal: Running in async context, using ThreadPoolExecutor")
 
-        def run_in_thread() -> T:
-            return asyncio.run(async_fn(*args, **kwargs))
+        def _call() -> Coroutine[Any, Any, T]:
+            return async_fn(*args, **kwargs)
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(run_in_thread)
-            return future.result(timeout=600)  # 10 minute timeout
+        return run_coro_in_thread(_call, timeout=600)  # 10 minute timeout
 
     except RuntimeError:
         # No event loop running, safe to use asyncio.run

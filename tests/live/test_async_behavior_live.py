@@ -243,16 +243,14 @@ def test_b1_invoke_and_ainvoke(interface: str, make_model) -> None:
     llm = get_llm(make_model(), auto_fallback=False)
     messages = [Message.user(SIMPLE_QUESTION)]
 
-    # Baseline workaround for the deep_agents cross-loop client cache bug
-    # (see reset_langchain_openai_client_cache). Harmless for openai_endpoint,
-    # which injects per-model clients. T1 makes this unnecessary.
-    reset_langchain_openai_client_cache()
+    # The baseline needed a langchain-openai client-cache reset here for
+    # deep_agents (cross-loop pooled connection bug). Removed at T1: the
+    # resulting APIConnectionError is now retried by RetryExecutor.
     sync_response = llm.invoke(messages)
     assert sync_response.content.strip()
     assert "paris" in sync_response.content.lower()
     assert sync_response.usage.total_tokens > 0
 
-    reset_langchain_openai_client_cache()
     async_response = asyncio.run(llm.ainvoke(messages))
     assert async_response.content.strip()
     assert "paris" in async_response.content.lower()
@@ -314,7 +312,10 @@ def test_b3_streaming_with_usage(interface: str, make_model, expect_usage: bool)
     llm = get_llm(make_model(), auto_fallback=False)
     messages = [Message.user(SIMPLE_QUESTION)]
 
-    # Baseline workaround for the deep_agents cross-loop client cache bug.
+    # Still required for deep_agents streaming after T1: the bare astream
+    # context manager has no retry layer, so the cross-loop client cache
+    # bug is not absorbed by RetryExecutor here (it is on the ainvoke and
+    # parser paths, which dropped this reset at T1).
     reset_langchain_openai_client_cache()
 
     async def drive():
@@ -380,9 +381,6 @@ def test_b4_structured_output(interface: str, make_model, supported_on_vllm: boo
     require_adapter(interface)
     llm = get_llm(make_model(), auto_fallback=False)
 
-    # Baseline workaround for the deep_agents cross-loop client cache bug.
-    reset_langchain_openai_client_cache()
-
     if not supported_on_vllm:
         # max_retries=0 keeps the documented failure to a single attempt.
         structured = llm.with_structured_output(CapitalAnswer, max_retries=0)
@@ -430,12 +428,9 @@ def test_b5_parse_to_pydantic(interface: str, make_model, supported_on_vllm: boo
             parser.parse_to_pydantic(messages, CapitalAnswer)
         return
 
-    # Baseline workaround for the deep_agents cross-loop client cache bug.
-    reset_langchain_openai_client_cache()
     sync_result = parser.parse_to_pydantic(messages, CapitalAnswer)
     assert "paris" in sync_result.parsed.city.lower()
 
-    reset_langchain_openai_client_cache()
     async_result = asyncio.run(parser.aparse_to_pydantic(messages, CapitalAnswer))
     assert "paris" in async_result.parsed.city.lower()
 
@@ -568,19 +563,22 @@ def test_b8_scenario_run_clean_teardown(scenario_benchmark: Benchmark, caplog: p
 #     kept as a regression guard: T3 must keep it True.
 #   - langchain-sync-thread-fallback: invoke() called while an event loop
 #     runs in the calling thread dispatches to a fresh ThreadPoolExecutor
-#     thread, which does not inherit the context, so telemetry is lost on
-#     the baseline. Flips at T3.
-#   - claude-tool-async: retries happen inside the Anthropic SDK on the
-#     baseline, RetryExecutor never sees them. Flips at T2.
-#   - deep-agents-async: ainvoke has no retry layer at all on the baseline
-#     (the confirmed zero-retry bug). Flips at T1.
+#     thread. On the baseline that thread did not inherit the context and
+#     telemetry was lost. Flipped to True at T3: the fallback re-enters a
+#     copy of the caller's context (run_coro_in_thread).
+#   - claude-tool-async: retries happened inside the Anthropic SDK on the
+#     baseline, RetryExecutor never saw them. Flipped to True at T2: the
+#     SDK clients run with max_retries=0 and RetryExecutor owns retries.
+#   - deep-agents-async: ainvoke had no retry layer on the baseline (the
+#     confirmed zero-retry bug). Flipped to True at T1: ainvoke now routes
+#     through RetryExecutor.
 B9_LLM_CASES = [
     pytest.param("openai_endpoint", "async", True, id="langchain-async"),
     pytest.param("openai_endpoint", "sync", True, id="langchain-sync-no-portal"),
     pytest.param("openai_endpoint", "sync_portal", True, id="langchain-sync-in-portal"),  # T3 keeps this True
-    pytest.param("openai_endpoint", "sync_thread_fallback", False, id="langchain-sync-thread-fallback"),  # flips at T3
-    pytest.param("claude_tool", "async", False, id="claude-tool-async"),  # flips at T2
-    pytest.param("langchain_deep_agents", "async", False, id="deep-agents-async"),  # flips at T1
+    pytest.param("openai_endpoint", "sync_thread_fallback", True, id="langchain-sync-thread-fallback"),  # flipped at T3
+    pytest.param("claude_tool", "async", True, id="claude-tool-async"),  # flipped at T2
+    pytest.param("langchain_deep_agents", "async", True, id="deep-agents-async"),  # flipped at T1
 ]
 
 
@@ -638,12 +636,13 @@ def test_b9_retry_telemetry_dead_port(interface: str, mode: str, expect_recorded
 
 
 def test_b9_retry_telemetry_claude_sdk_parser_dead_port() -> None:
-    """B9: claude_agent_sdk parser against a dead port records zero retries.
+    """B9: claude_agent_sdk parser against a dead port records retries.
 
     The parser talks to the endpoint directly (AsyncOpenAI for custom base
-    URLs, no CLI subprocess), with retries delegated to the SDK client on
-    the baseline, so track_retries observes nothing. Flips to >= 1 at T2
-    when the parser routes through RetryExecutor.
+    URLs, no CLI subprocess). Since T2 it routes API calls through
+    RetryExecutor (SDK clients at max_retries=0), so track_retries observes
+    the connection retries while the public contract still raises
+    ParseError.
     """
     require_adapter("claude_agent_sdk")
     parser = get_parser(dead_port_model("claude_agent_sdk"), auto_fallback=False)
@@ -653,7 +652,7 @@ def test_b9_retry_telemetry_claude_sdk_parser_dead_port() -> None:
         asyncio.run(parser.aparse_to_pydantic(messages, CapitalAnswer))
 
     recorded = sum(entry["used"] for entry in tracker.values())
-    assert recorded == 0, f"baseline expects zero recorded retries, tracker={tracker}"  # flips at T2
+    assert recorded >= 1, f"expected recorded retries after T2, tracker={tracker}"
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel
 
+from karenina.adapters._parallel_base import run_coro_in_thread
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.utils.errors import ErrorRegistry
@@ -315,13 +316,9 @@ class LangChainParserAdapter:
         try:
             asyncio.get_running_loop()
 
-            # Use ThreadPoolExecutor to avoid nested event loop issues
-            def run_in_thread() -> ParsePortResult[T]:
-                return asyncio.run(self.aparse_to_pydantic(messages, schema))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=300)
+            # Use a fresh thread (with the caller's context propagated, so
+            # track_retries telemetry survives) to avoid nested loop issues
+            return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=300)
 
         except RuntimeError:
             # No event loop running

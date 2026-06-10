@@ -7,13 +7,20 @@ Key features:
 - Uses Anthropic's native Python SDK for efficient API calls
 - Supports structured output via client.beta.messages.parse() with Pydantic
 - Implements prompt caching for efficiency
-- Derives SDK max_retries from RetryPolicy for consistent retry budgets
+
+Retry Logic:
+    API calls route through RetryExecutor with per-category retry budgets
+    for transient errors (connection errors, timeouts, rate limits, 5xx
+    errors). The SDK clients run with max_retries=0 so RetryExecutor is
+    the sole retry layer and retry telemetry via track_retries() is
+    accurate. The structured-output validation retry loop (error feedback
+    to the model) stays outside the transient executor so validation
+    failures do not consume transient budgets.
 """
 
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -21,7 +28,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from karenina.adapters._parallel_base import with_llm_semaphore
+from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -48,9 +55,9 @@ class ClaudeToolLLMAdapter:
     - Structured output via client.beta.messages.parse() with Pydantic
     - Prompt caching for efficiency
 
-    Note: Transient error retries are handled by the Anthropic SDK. The max_retries
-    parameter is derived from the model's RetryPolicy so retry budgets stay consistent
-    across all adapters.
+    Note: Transient error retries are handled by RetryExecutor at the
+    adapter layer (per-category budgets from the model's RetryPolicy).
+    The SDK clients are constructed with max_retries=0.
 
     Example:
         >>> from karenina.schemas.config import ModelConfig
@@ -111,9 +118,11 @@ class ClaudeToolLLMAdapter:
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
 
-            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
-            retry_policy = self._config.retry_policy or RetryPolicy()
-            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+            # Suppress SDK-level retries. RetryExecutor is the sole retry
+            # layer (design decision D1). Known cost: the SDK's honoring of
+            # server retry-after headers is dropped. Deliberate deferred
+            # follow-up for first-party Anthropic endpoints.
+            kwargs["max_retries"] = 0
 
             self._client = Anthropic(**kwargs)
         return self._client
@@ -132,9 +141,10 @@ class ClaudeToolLLMAdapter:
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
 
-            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
-            retry_policy = self._config.retry_policy or RetryPolicy()
-            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+            # Suppress SDK-level retries. RetryExecutor is the sole retry
+            # layer (design decision D1, see _get_client for the deferred
+            # retry-after follow-up).
+            kwargs["max_retries"] = 0
 
             self._async_client = AsyncAnthropic(**kwargs)
         return self._async_client
@@ -171,10 +181,15 @@ class ClaudeToolLLMAdapter:
         return await self._ainvoke_text(messages)
 
     async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
-        """Invoke LLM for regular text output."""
+        """Invoke LLM for regular text output with automatic transient retry."""
         client = self._get_async_client()
         kwargs = self._build_invoke_kwargs(messages)
-        response = await client.messages.create(**kwargs)
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._acall_with_timeout,
+            client.messages.create,
+            timeout=self._config.request_timeout,
+            **kwargs,
+        )
 
         # Extract text content
         content = ""
@@ -242,8 +257,14 @@ class ClaudeToolLLMAdapter:
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
 
-        # Use beta.messages.parse for structured output
-        response = await client.beta.messages.parse(
+        # Use beta.messages.parse for structured output. Transient errors
+        # are retried here by RetryExecutor. The validation retry loop in
+        # _ainvoke_structured stays outside so validation failures do not
+        # consume transient budgets.
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._acall_with_timeout,
+            client.beta.messages.parse,
+            timeout=self._config.request_timeout,
             output_format=self._structured_schema,
             **kwargs,
         )
@@ -270,6 +291,49 @@ class ClaudeToolLLMAdapter:
             raw=parsed_output,
         )
 
+    async def _acall_with_timeout(
+        self,
+        call: Any,
+        *,
+        timeout: float | None = None,
+        **call_kwargs: Any,
+    ) -> Any:
+        """Run an async SDK call under a wall-clock timeout as a guardrail.
+
+        The SDK client already carries an httpx-level timeout from
+        ``request_timeout``, but that does not catch every stall, so this
+        karenina-layer ``asyncio.wait_for`` enforces a hard per-attempt
+        wall-clock budget (mirrors the langchain adapter's helper).
+
+        A fired timeout raises a stock ``asyncio.TimeoutError``, which
+        ``ErrorRegistry`` classifies as ``TIMEOUT`` via the built-in MRO
+        check, so the timeout retry budget applies inside
+        ``RetryExecutor.aexecute_with_timeout``. Note that
+        ``RetryPolicy.timeout_escalation`` only extends this guard on
+        TIMEOUT retries. The SDK client's own timeout stays pinned at
+        ``request_timeout`` from construction, so the SDK may cut the
+        request before an escalated guard fires.
+
+        Args:
+            call: The bound async SDK method to invoke (for example
+                ``client.messages.create``).
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+                When that is also None, the call is made without a wrapper.
+            **call_kwargs: Keyword arguments forwarded to ``call``.
+
+        Returns:
+            The raw SDK response object.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        if timeout is None:
+            timeout = self._config.request_timeout
+        if timeout is None:
+            return await call(**call_kwargs)
+        return await asyncio.wait_for(call(**call_kwargs), timeout=timeout)
+
     @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
@@ -291,13 +355,9 @@ class ClaudeToolLLMAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self.ainvoke(messages))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=300)
+            # Fresh thread with the caller's context propagated, so
+            # track_retries telemetry survives the dispatch.
+            return run_coro_in_thread(self.ainvoke, messages, timeout=300)
 
         except RuntimeError:
             return asyncio.run(self.ainvoke(messages))
@@ -336,6 +396,13 @@ class ClaudeToolLLMAdapter:
         Uses Anthropic SDK's ``client.messages.stream()`` for native streaming.
         On timeout, the StreamingLLMResponse contains whatever content
         was received before the interruption.
+
+        Note: this bare streaming path applies NO transient retries. The
+        SDK client runs with max_retries=0 (design decision D1) and stream
+        establishment is not wrapped by RetryExecutor here, so a transient
+        connection error during setup surfaces immediately. Use
+        ``stream_invoke`` as the retry-covered streaming entry point.
+        Wrapping stream establishment itself is T7 scope.
 
         Args:
             messages: List of unified Message objects.
@@ -428,13 +495,12 @@ class ClaudeToolLLMAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self._astream_with_timeout(messages, timeout))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=(timeout or 300) + 30)
+            return run_coro_in_thread(
+                self._astream_with_timeout,
+                messages,
+                timeout,
+                timeout=(timeout or 300) + 30,
+            )
 
         except RuntimeError:
             return asyncio.run(self._astream_with_timeout(messages, timeout))

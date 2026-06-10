@@ -21,7 +21,6 @@ Module Organization:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -30,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
-from karenina.adapters._parallel_base import with_llm_semaphore
+from karenina.adapters._parallel_base import run_coro_in_thread, with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
 from karenina.ports.llm import StreamingLLMResponse
@@ -238,15 +237,10 @@ class LangChainLLMAdapter:
         # No portal available - check if we're already in an async context
         try:
             asyncio.get_running_loop()
-            # We're in an async context - use ThreadPoolExecutor to avoid
-            # nested event loop issues
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self.ainvoke(messages))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=300)  # 5 minute timeout
+            # We're in an async context - use a fresh thread (with the
+            # caller's context propagated, so track_retries telemetry
+            # survives the dispatch) to avoid nested event loop issues
+            return run_coro_in_thread(self.ainvoke, messages, timeout=300)  # 5 minute timeout
 
         except RuntimeError:
             # No event loop running, safe to use asyncio.run
@@ -355,13 +349,12 @@ class LangChainLLMAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> LLMResponse:
-                return asyncio.run(self._astream_with_timeout(messages, timeout))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=(timeout or 300) + 30)
+            return run_coro_in_thread(
+                self._astream_with_timeout,
+                messages,
+                timeout,
+                timeout=(timeout or 300) + 30,
+            )
 
         except RuntimeError:
             return asyncio.run(self._astream_with_timeout(messages, timeout))
