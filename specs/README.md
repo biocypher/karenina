@@ -27,7 +27,7 @@ Rules of the suite:
 | SPEC-000 | This document | Coordination, status, cross-spec tensions | Living |
 | SPEC-001 | [Constitution](SPEC-001-constitution.md) | Final wording of the principles destined for `karenina/docs/` | Draft for review |
 | SPEC-002 | Public API and tiered interface | Nouns, verbs, signatures, five-line path, disclosure rules | To write |
-| SPEC-003 | Execution model | DAG task model, driver, concurrency, async core, sync facade | To write |
+| SPEC-003 | [Execution model](SPEC-003-execution-model.md) | DAG task model, driver, concurrency, async core, sync facade | Draft for review |
 | SPEC-004 | Configuration layering | Core vs escape hatch, field lifecycle, parity enforcement | To write |
 | SPEC-005 | Failure and observability | Failure taxonomy, no-silent-degradation rules, error quality | To write |
 | SPEC-006 | Results durability and interchange | Sinks, resume semantics, replay, format versioning, shareable benchmarks | To write |
@@ -175,3 +175,4 @@ New tensions discovered during drafting are added here, never resolved silently 
 - 2026-06-10: Suite created with charters for SPEC-001 through SPEC-009. Master design approved.
 - 2026-06-10: Suite relocated from the monorepo planning folder into `karenina/specs/`, versioned with the library.
 - 2026-06-10: SPEC-001 and SPEC-009 drafted. Decisions: constitution as one page with P1-P8 numbering and ADR-gated amendments. Audit dispositions made autonomously by agents per decision rules, user spot-checks flagged items plus a 10% sample.
+- 2026-06-10: SPEC-003 drafted. Decisions: driver public-but-experimental (`karenina.experimental.engine`), streaming-shaped core from the start, TaskEval fully projected onto the driver. Single `TaskId` identity, AdapterGateway as the one concurrency chokepoint, sync facade via a background-loop bridge module.
