@@ -161,6 +161,20 @@ class VerificationConfig(BaseModel):
         "None means no global limit (concurrency bounded by max_workers only). "
         "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
     )
+    batch_timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description="Wall-clock ceiling in seconds for an entire parallel "
+        "verification batch (QA and scenario paths). When the ceiling is "
+        "reached, in-flight work is drained or cancelled and every result "
+        "completed so far is kept. The QA path then raises "
+        "VerificationBatchError carrying the partial results, and the "
+        "scenario path returns the partial (results, errors) tuple with a "
+        "timeout entry appended to the failed tasks. None (the default) "
+        "disables the batch-level timeout: the run executes until all tasks "
+        "finish, exactly as before. Sequential (async_enabled=False) runs "
+        "are not bounded by this knob.",
+    )
 
     # Task ordering strategy for queue generation
     task_ordering: Literal[

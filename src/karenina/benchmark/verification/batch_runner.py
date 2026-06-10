@@ -22,6 +22,13 @@ from karenina.schemas.verification import (
 from karenina.schemas.verification.config import DEFAULT_ASYNC_ENABLED
 from karenina.utils.answer_cache import AnswerTraceCache
 
+from .model_stamping import stamp_pipeline_defaults
+
+# Back-compat aliases: the stamping helpers moved to model_stamping (T16) so
+# the QA and scenario paths share one implementation. The old private names
+# stay importable because existing tests target them.
+from .model_stamping import stamp_request_timeout as _apply_request_timeout  # noqa: F401
+from .model_stamping import stamp_retry_policy as _apply_retry_config  # noqa: F401
 from .utils.cache_helpers import (
     extract_answer_data_from_result,
     generate_answer_cache_key,
@@ -38,29 +45,9 @@ from .utils.task_helpers import (
 logger = logging.getLogger(__name__)
 
 
-def _apply_request_timeout(model: Any, pipeline_timeout: float | None) -> Any:
-    """Stamp pipeline-level request_timeout onto a ModelConfig if not already set.
-
-    Returns the original model if no change is needed, or a copy with the timeout applied.
-    """
-    if pipeline_timeout is not None and model.request_timeout is None:
-        return model.model_copy(update={"request_timeout": pipeline_timeout})
-    return model
-
-
 # ============================================================================
 # Config Helpers
 # ============================================================================
-
-
-def _apply_retry_config(model: Any, retry_policy: Any | None) -> Any:
-    """Stamp pipeline-level retry_policy onto a ModelConfig if not already set.
-
-    Returns the original model if no change is needed, or a copy with the policy applied.
-    """
-    if retry_policy is not None and model.retry_policy is None:
-        return model.model_copy(update={"retry_policy": retry_policy})
-    return model
 
 
 def _normalize_answerer_limits(
@@ -194,12 +181,18 @@ def generate_task_queue(
         # Expand over model combinations
         for ans_model_raw in config.answering_models:
             for parse_model_raw in config.parsing_models:
-                # Stamp pipeline-level request_timeout onto models that don't have their own
-                ans_model = _apply_request_timeout(ans_model_raw, config.request_timeout)
-                parse_model = _apply_request_timeout(parse_model_raw, config.request_timeout)
-                # Stamp pipeline-level retry_policy onto models that don't have their own
-                ans_model = _apply_retry_config(ans_model, config.retry_policy)
-                parse_model = _apply_retry_config(parse_model, config.retry_policy)
+                # Stamp pipeline-level request_timeout and retry_policy onto
+                # models that don't carry their own (shared helper, T16).
+                ans_model = stamp_pipeline_defaults(
+                    ans_model_raw,
+                    request_timeout=config.request_timeout,
+                    retry_policy=config.retry_policy,
+                )
+                parse_model = stamp_pipeline_defaults(
+                    parse_model_raw,
+                    request_timeout=config.request_timeout,
+                    retry_policy=config.retry_policy,
+                )
                 # Expand over replicates
                 for rep in range(1, config.replicate_count + 1):
                     # For single replicate, don't include replicate numbers
@@ -557,6 +550,7 @@ def run_verification_batch(
         parallel=async_enabled,
         config=ExecutorConfig(
             max_workers=max_workers,
+            timeout_seconds=config.batch_timeout_seconds,
             max_requeue_count=config.max_requeue_count,
             answerer_concurrency_limits=answerer_limits,
         ),

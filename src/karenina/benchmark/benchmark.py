@@ -1100,6 +1100,7 @@ class Benchmark:
         Returns:
             VerificationResultSet containing all per-turn results.
         """
+        from ..benchmark.verification.model_stamping import stamp_pipeline_defaults
         from ..benchmark.verification.scenario_executor import ScenarioCombo, ScenarioExecutor, ScenarioExecutorConfig
         from ..benchmark.verification.utils.task_helpers import stamp_agentic_trait_overrides
         from ..schemas.scenario.types import ModelOverride, ScenarioNode
@@ -1113,18 +1114,18 @@ class Benchmark:
         # override fields already set).
         global_rubric = stamp_agentic_trait_overrides(global_rubric, config)
 
-        def _apply_timeout(model: Any) -> Any:
-            if config.request_timeout is not None and model.request_timeout is None:
-                return model.model_copy(update={"request_timeout": config.request_timeout})
-            return model
-
-        def _apply_retry(model: Any) -> Any:
-            if config.retry_policy is not None and model.retry_policy is None:
-                return model.model_copy(update={"retry_policy": config.retry_policy})
-            return model
-
         def _prepare_model(model: Any) -> Any:
-            return _apply_retry(_apply_timeout(model))
+            """Stamp pipeline-level request_timeout and retry_policy when unset.
+
+            Delegates to the shared stamping helper so the scenario path
+            matches the QA task-queue expansion exactly (only-when-unset,
+            original instance preserved when nothing changes).
+            """
+            return stamp_pipeline_defaults(
+                model,
+                request_timeout=config.request_timeout,
+                retry_policy=config.retry_policy,
+            )
 
         def _prepare_override(override: ModelOverride | None) -> ModelOverride | None:
             """Stamp pipeline-level timeout and retry policy onto a node override.
@@ -1275,6 +1276,7 @@ class Benchmark:
                 max_workers=config.async_max_workers,
                 max_concurrent_requests=config.max_concurrent_requests,
                 enable_cache=True,
+                timeout_seconds=config.batch_timeout_seconds,
             ),
         )
 

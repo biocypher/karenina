@@ -158,6 +158,9 @@ class VerificationExecutor:
         self.config = config or ExecutorConfig()
         self._endpoint_semaphores: dict[str, threading.Semaphore] = {}
         self._endpoint_semaphores_lock = threading.Lock()
+        # Answerer ids already logged as running without a configured cap,
+        # so the debug line fires once per id instead of once per task.
+        self._uncapped_answerer_ids_logged: set[str] = set()
 
     def _get_endpoint_semaphore(self, ans_id: str, limit: int) -> threading.Semaphore:
         """Return the semaphore for ``ans_id``, creating it on first access.
@@ -176,6 +179,36 @@ class VerificationExecutor:
                 self._endpoint_semaphores[ans_id] = existing
             return existing
 
+    def _resolve_endpoint_semaphore(self, task: dict[str, Any]) -> threading.Semaphore | None:
+        """Resolve the per-answerer cap semaphore for ``task``, if any.
+
+        Returns ``None`` when caps are disabled or when the task's answerer
+        has no configured cap. The no-cap-for-this-id case logs once per
+        answerer id at DEBUG so operators can see that a configured limits
+        dict silently lets some answerers run unthrottled (typically an id
+        typo or a model added after the limits were written).
+        """
+        limits = self.config.answerer_concurrency_limits
+        if not limits:
+            return None
+
+        ans_id: str | None = getattr(task["answering_model"], "id", None)
+        limit = limits.get(ans_id) if ans_id else None
+        if limit is None or ans_id is None:
+            label = ans_id if ans_id is not None else "<missing id>"
+            with self._endpoint_semaphores_lock:
+                should_log = label not in self._uncapped_answerer_ids_logged
+                if should_log:
+                    self._uncapped_answerer_ids_logged.add(label)
+            if should_log:
+                logger.debug(
+                    "answerer_concurrency_limits is configured but answerer id %s has no cap, running unthrottled",
+                    label,
+                )
+            return None
+
+        return self._get_endpoint_semaphore(ans_id, limit)
+
     def _execute_task_with_cap(
         self,
         task: dict[str, Any],
@@ -185,20 +218,17 @@ class VerificationExecutor:
     ) -> tuple[str, VerificationResult]:
         """Run ``execute_task`` with optional per-answerer concurrency capping.
 
-        Imports ``execute_task`` lazily to avoid circular imports.
+        Imports ``execute_task`` lazily to avoid circular imports. The
+        parallel cache-requeue loop manages the same semaphore manually (it
+        must release the permit while waiting on another worker's
+        IN_PROGRESS entry). This helper serves the simpler call sites
+        (sequential, cache disabled, and the force-fresh fallback).
         """
         from .batch_runner import execute_task
 
-        limits = self.config.answerer_concurrency_limits
-        if not limits:
+        sem = self._resolve_endpoint_semaphore(task)
+        if sem is None:
             return execute_task(task, answer_cache, cache_status, cached_answer_data)
-
-        ans_id: str | None = getattr(task["answering_model"], "id", None)
-        limit = limits.get(ans_id) if ans_id else None
-        if limit is None or ans_id is None:
-            return execute_task(task, answer_cache, cache_status, cached_answer_data)
-
-        sem = self._get_endpoint_semaphore(ans_id, limit)
         with sem:
             return execute_task(task, answer_cache, cache_status, cached_answer_data)
 
@@ -470,39 +500,52 @@ class VerificationExecutor:
         retry_wait = self.config.retry_wait_seconds
 
         def execute_task_with_retry(_idx: int, task: dict[str, Any]) -> tuple[str, VerificationResult]:
-            """Execute a single verification task with cache retry."""
+            """Execute a single verification task with cache retry.
+
+            The per-answerer cap permit wraps the cache reservation AND the
+            execution: a surplus worker blocked on the cap must not reserve
+            an IN_PROGRESS cache entry while merely waiting for a permit.
+            The wait-for-another-worker branch (someone else owns the
+            IN_PROGRESS reservation) deliberately does NOT hold the permit
+            while sleeping, so a capped answerer's permits stay available to
+            workers that can actually make progress.
+            """
+            from .batch_runner import execute_task
+
             if not answer_cache:
                 return self._execute_task_with_cap(task, answer_cache, None, None)
 
+            sem = self._resolve_endpoint_semaphore(task)
             cache_key = generate_answer_cache_key(task)
             for attempt in range(max_requeue + 1):
-                status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                if sem is not None:
+                    sem.acquire()
+                try:
+                    status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                    if status != "IN_PROGRESS":
+                        # MISS or HIT: reserve-and-execute under the permit.
+                        return execute_task(task, answer_cache, status, cached_answer_data)
+                finally:
+                    if sem is not None:
+                        sem.release()
 
-                if status == "IN_PROGRESS":
-                    if attempt == 0:
-                        logger.debug(
-                            "Task %s in progress (retry=%d), retrying immediately",
-                            cache_key,
-                            attempt,
-                        )
-                        continue
-
-                    completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
-                    if not completed:
-                        logger.debug(
-                            "Task %s still in progress after %ss, retrying",
-                            cache_key,
-                            retry_wait,
-                        )
+                # IN_PROGRESS: another worker owns the reservation. Wait
+                # for it WITHOUT holding the permit.
+                if attempt == 0:
+                    logger.debug(
+                        "Task %s in progress (retry=%d), retrying immediately",
+                        cache_key,
+                        attempt,
+                    )
                     continue
 
-                # MISS or HIT: execute
-                return self._execute_task_with_cap(
-                    task,
-                    answer_cache,
-                    status,
-                    cached_answer_data,
-                )
+                completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
+                if not completed:
+                    logger.debug(
+                        "Task %s still in progress after %ss, retrying",
+                        cache_key,
+                        retry_wait,
+                    )
 
             # Exceeded max requeue: force reset, generate fresh
             logger.warning(

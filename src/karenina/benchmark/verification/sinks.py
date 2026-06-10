@@ -20,6 +20,16 @@ Four implementations live here:
 
 The protocol itself is duck-typed (see CLAUDE.md §8): adapters do not
 inherit from :class:`ResultSink`.
+
+Thread safety and lock hierarchy (T17): every sink whose lifecycle methods
+mutate shared state holds an internal lock, so sink correctness does not
+depend on the executors' progress-lock serialization (which remains in place
+as belt and suspenders). The sink lock is INNERMOST: code holding a sink
+lock must never call back into executor code or acquire another sink's lock,
+with one sanctioned exception: :class:`CompositeSink` holds its own RLock
+while fanning out to its children, which then take their own locks. That
+one-level ordering (composite lock, then child lock) is the only permitted
+nesting; children never call back into the composite.
 """
 
 from __future__ import annotations
@@ -27,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -351,6 +362,11 @@ class ProgressiveFileSink:
         # In-memory mirror of JSONL content, built from appends and from
         # load_for_resume so finalize() can reassemble without re-reading.
         self._results: list[VerificationResult] = []
+        # Internal sink lock guarding the JSONL append, the state rewrite,
+        # and the completed/failed bookkeeping. Reentrant so subclass
+        # overrides (AgenticProgressiveFileSink) can hold it around a
+        # super() call. Innermost lock: never call executor code while held.
+        self._lock = threading.RLock()
 
     # -- Resume ------------------------------------------------------------
 
@@ -424,32 +440,35 @@ class ProgressiveFileSink:
         already tracked are skipped. Does not require :meth:`on_start` to
         have run first; the JSONL file is created on demand.
         """
-        added = 0
-        manifest_set = set(self._manifest)
-        for row in prior_results.results:
-            if not is_completed_result(row):
-                continue
-            task_id = _scenario_manifest_key(row, self._manifest)
-            if task_id in self._completed:
-                continue
-            _append_jsonl_line(self.jsonl_path, row.model_dump_json())
-            self._results.append(row)
-            self._completed.add(task_id)
-            self._failed.discard(task_id)
-            if task_id not in manifest_set:
-                self._manifest.append(task_id)
-                manifest_set.add(task_id)
-            added += 1
-        if added:
-            self._save_state()
-            logger.info("ProgressiveFileSink seeded with %d prior rows", added)
+        with self._lock:
+            added = 0
+            manifest_set = set(self._manifest)
+            for row in prior_results.results:
+                if not is_completed_result(row):
+                    continue
+                task_id = _scenario_manifest_key(row, self._manifest)
+                if task_id in self._completed:
+                    continue
+                _append_jsonl_line(self.jsonl_path, row.model_dump_json())
+                self._results.append(row)
+                self._completed.add(task_id)
+                self._failed.discard(task_id)
+                if task_id not in manifest_set:
+                    self._manifest.append(task_id)
+                    manifest_set.add(task_id)
+                added += 1
+            if added:
+                self._save_state()
+                logger.info("ProgressiveFileSink seeded with %d prior rows", added)
 
     # -- ResultSink protocol ----------------------------------------------
 
     def completed_triples(self) -> set[TripleKey]:
         """Return already-persisted triples for ``config.skip_triples``."""
+        with self._lock:
+            completed_snapshot = set(self._completed)
         out: set[TripleKey] = set()
-        for key in self._completed:
+        for key in completed_snapshot:
             try:
                 ident = TaskIdentifier.from_key(key)
             except ValueError:
@@ -475,28 +494,29 @@ class ProgressiveFileSink:
         :meth:`seed_prior_results`, provided holds the new-task keys
         from :func:`generate_task_queue`). Repeated keys are dropped.
         """
-        if not self._manifest:
-            self._manifest = list(manifest)
-        else:
-            existing = set(self._manifest)
-            for key in manifest:
-                if key not in existing:
-                    self._manifest.append(key)
-                    existing.add(key)
+        with self._lock:
+            if not self._manifest:
+                self._manifest = list(manifest)
+            else:
+                existing = set(self._manifest)
+                for key in manifest:
+                    if key not in existing:
+                        self._manifest.append(key)
+                        existing.add(key)
 
-        # Always refresh config + hash: a resume may pass a config that was
-        # rehydrated from the state, but we keep whatever the caller handed
-        # us so later callers get the current object identity.
-        self.config = config
-        if not self._config_hash:
-            self._config_hash = _compute_config_hash(config)
-        if self._start_time is None:
-            self._start_time = time.time()
+            # Always refresh config + hash: a resume may pass a config that
+            # was rehydrated from the state, but we keep whatever the caller
+            # handed us so later callers get the current object identity.
+            self.config = config
+            if not self._config_hash:
+                self._config_hash = _compute_config_hash(config)
+            if self._start_time is None:
+                self._start_time = time.time()
 
-        self._save_state()
-        # Touch the JSONL so readers can rely on its existence.
-        if not self.jsonl_path.exists():
-            self.jsonl_path.touch()
+            self._save_state()
+            # Touch the JSONL so readers can rely on its existence.
+            if not self.jsonl_path.exists():
+                self.jsonl_path.touch()
 
     def on_result(self, result: VerificationResult) -> None:
         """Append a completed result to the JSONL and refresh the state.
@@ -511,13 +531,14 @@ class ProgressiveFileSink:
         if not is_completed_result(result):
             return
 
-        task_id = _scenario_manifest_key(result, self._manifest)
-        _append_jsonl_line(self.jsonl_path, result.model_dump_json())
-        self._results.append(result)
-        if task_id not in self._completed:
-            self._completed.add(task_id)
-            self._failed.discard(task_id)
-        self._save_state()
+        with self._lock:
+            task_id = _scenario_manifest_key(result, self._manifest)
+            _append_jsonl_line(self.jsonl_path, result.model_dump_json())
+            self._results.append(result)
+            if task_id not in self._completed:
+                self._completed.add(task_id)
+                self._failed.discard(task_id)
+            self._save_state()
 
     def mark_failed(self, task_id: str) -> None:
         """Record a task that was attempted but did not produce a result.
@@ -526,10 +547,11 @@ class ProgressiveFileSink:
         be preserved across resumes. Not part of the :class:`ResultSink`
         protocol.
         """
-        if task_id in self._completed:
-            return
-        self._failed.add(task_id)
-        self._save_state()
+        with self._lock:
+            if task_id in self._completed:
+                return
+            self._failed.add(task_id)
+            self._save_state()
 
     def on_finalize(self, *, all_complete: bool) -> None:
         """Handle terminal state.
@@ -538,54 +560,63 @@ class ProgressiveFileSink:
         :attr:`output_path` and remove the sidecars. On partial completion,
         keep the sidecars intact so ``resume`` can continue.
         """
-        if all_complete:
-            self.write_final_export()
-            self._delete_sidecars()
-            logger.info("ProgressiveFileSink finalized: full export at %s", self.output_path)
-        else:
-            # Preserve sidecars so a later `--resume` can continue. Refresh
-            # the state one last time so the last batch's activity lands.
-            self._save_state()
-            logger.info(
-                "ProgressiveFileSink left state in place for resume: %d/%d complete",
-                len(self._completed),
-                len(self._manifest),
-            )
+        with self._lock:
+            if all_complete:
+                self.write_final_export()
+                self._delete_sidecars()
+                logger.info("ProgressiveFileSink finalized: full export at %s", self.output_path)
+            else:
+                # Preserve sidecars so a later `--resume` can continue.
+                # Refresh the state one last time so the last batch's
+                # activity lands.
+                self._save_state()
+                logger.info(
+                    "ProgressiveFileSink left state in place for resume: %d/%d complete",
+                    len(self._completed),
+                    len(self._manifest),
+                )
 
     # -- Accessors used by CLI / tests ------------------------------------
 
     @property
     def completed_count(self) -> int:
         """Number of completed tasks."""
-        return len(self._completed)
+        with self._lock:
+            return len(self._completed)
 
     @property
     def total_tasks(self) -> int:
         """Total tasks in the manifest."""
-        return len(self._manifest)
+        with self._lock:
+            return len(self._manifest)
 
     @property
     def task_manifest(self) -> list[str]:
         """Task manifest keys recorded for this run."""
-        return list(self._manifest)
+        with self._lock:
+            return list(self._manifest)
 
     def get_all_results(self) -> list[VerificationResult]:
         """Return a shallow copy of buffered completed results."""
-        return list(self._results)
+        with self._lock:
+            return list(self._results)
 
     def iter_results(self) -> Iterable[VerificationResult]:
-        """Iterate over buffered completed results without copying.
+        """Iterate over a snapshot of buffered completed results.
 
         Used by the batch runner to hydrate the workspace
         :class:`AnswerTraceCache` on resume so new parser variants for
         already-completed answerer triples reuse the prior trace instead
-        of regenerating it.
+        of regenerating it. The snapshot is taken under the sink lock so
+        the iterator stays valid even if results land concurrently.
         """
-        return iter(self._results)
+        with self._lock:
+            return iter(list(self._results))
 
     def get_result_set(self) -> VerificationResultSet:
         """Return buffered results as a :class:`VerificationResultSet`."""
-        return VerificationResultSet(results=list(self._results))
+        with self._lock:
+            return VerificationResultSet(results=list(self._results))
 
     def set_global_rubric(self, rubric: Rubric | None) -> None:
         """Attach a global rubric used by the final export."""
@@ -622,36 +653,37 @@ class ProgressiveFileSink:
         Returns:
             The path the export was written to.
         """
-        target = output_path or self.output_path
-        now = time.time()
-        results = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
-        latest_rows = _dedupe_latest_by_manifest_key(results, manifest=self._manifest)
-        successful_count, failed_count = _count_success_failure(latest_rows)
-        job = VerificationJob(
-            job_id=f"progressive-{int(self._start_time or now)}",
-            run_name="progressive",
-            status="completed",
-            config=self.config,
-            total_questions=self.total_tasks,
-            successful_count=successful_count,
-            failed_count=failed_count,
-            start_time=self._start_time,
-            end_time=now,
-        )
-        # Stream from the JSONL sidecar if it exists. write_final_export may be
-        # called before any on_result (e.g. the empty-run case), in which case
-        # jsonl_path was never created; guard is mandatory because
-        # _read_jsonl_results opens the path unconditionally.
-        scenario_results = _reconstruct_scenario_results_for_export(results, manifest=self._manifest)
-        export_verification_results_json_stream(
-            job,
-            iter(results),
-            self.global_rubric,
-            is_complete=True,
-            scenario_results=scenario_results or None,
-            out_path=target,
-        )
-        return target
+        with self._lock:
+            target = output_path or self.output_path
+            now = time.time()
+            results = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
+            latest_rows = _dedupe_latest_by_manifest_key(results, manifest=self._manifest)
+            successful_count, failed_count = _count_success_failure(latest_rows)
+            job = VerificationJob(
+                job_id=f"progressive-{int(self._start_time or now)}",
+                run_name="progressive",
+                status="completed",
+                config=self.config,
+                total_questions=self.total_tasks,
+                successful_count=successful_count,
+                failed_count=failed_count,
+                start_time=self._start_time,
+                end_time=now,
+            )
+            # Stream from the JSONL sidecar if it exists. write_final_export
+            # may be called before any on_result (e.g. the empty-run case),
+            # in which case jsonl_path was never created; guard is mandatory
+            # because _read_jsonl_results opens the path unconditionally.
+            scenario_results = _reconstruct_scenario_results_for_export(results, manifest=self._manifest)
+            export_verification_results_json_stream(
+                job,
+                iter(results),
+                self.global_rubric,
+                is_complete=True,
+                scenario_results=scenario_results or None,
+                out_path=target,
+            )
+            return target
 
     def _delete_sidecars(self) -> None:
         """Remove the ``.state`` and ``.results.jsonl`` files."""
@@ -741,14 +773,16 @@ class AgenticProgressiveFileSink(ProgressiveFileSink):
         for cache hydration.
         """
 
-        latest_rows = _dedupe_latest_by_manifest_key(self._results, manifest=self._manifest)
-        retryable = {
-            _scenario_manifest_key(result, self._manifest)
-            for result in latest_rows
-            if _is_retryable_parser_failure(result)
-        }
+        with self._lock:
+            latest_rows = _dedupe_latest_by_manifest_key(self._results, manifest=self._manifest)
+            retryable = {
+                _scenario_manifest_key(result, self._manifest)
+                for result in latest_rows
+                if _is_retryable_parser_failure(result)
+            }
+            remaining = self._completed - retryable
         out: set[TripleKey] = set()
-        for key in self._completed - retryable:
+        for key in remaining:
             try:
                 ident = TaskIdentifier.from_key(key)
             except ValueError:
@@ -767,61 +801,68 @@ class AgenticProgressiveFileSink(ProgressiveFileSink):
     def on_result(self, result: VerificationResult) -> None:
         if not is_completed_result(result):
             return
-        super().on_result(result)
-        self._write_trace_sidecars(result)
+        # The inherited RLock is held across both the base bookkeeping and
+        # the trace sidecar write so concurrent on_result calls cannot
+        # interleave between the two.
+        with self._lock:
+            super().on_result(result)
+            self._write_trace_sidecars(result)
 
     def on_finalize(self, *, all_complete: bool) -> None:
-        effective_all_complete = all_complete and not self._has_retryable_parser_failures()
-        if effective_all_complete:
-            self.write_final_export(is_complete=True)
-            if not self.keep_progress_sidecars:
-                self._delete_sidecars()
-            logger.info("AgenticProgressiveFileSink finalized: full export at %s", self.output_path)
-            return
+        with self._lock:
+            effective_all_complete = all_complete and not self._has_retryable_parser_failures()
+            if effective_all_complete:
+                self.write_final_export(is_complete=True)
+                if not self.keep_progress_sidecars:
+                    self._delete_sidecars()
+                logger.info("AgenticProgressiveFileSink finalized: full export at %s", self.output_path)
+                return
 
-        if self.write_partial_export:
-            self.write_final_export(is_complete=False)
-        self._save_state()
-        logger.info(
-            "AgenticProgressiveFileSink left state in place for resume: %d/%d complete",
-            len(self._completed),
-            len(self._manifest),
-        )
+            if self.write_partial_export:
+                self.write_final_export(is_complete=False)
+            self._save_state()
+            logger.info(
+                "AgenticProgressiveFileSink left state in place for resume: %d/%d complete",
+                len(self._completed),
+                len(self._manifest),
+            )
 
     def get_latest_result_set(self) -> VerificationResultSet:
         """Return one latest result per task key, matching final export rows."""
 
-        return VerificationResultSet(results=_dedupe_latest_by_manifest_key(self._results, manifest=self._manifest))
+        with self._lock:
+            return VerificationResultSet(results=_dedupe_latest_by_manifest_key(self._results, manifest=self._manifest))
 
     def write_final_export(self, output_path: Path | None = None, *, is_complete: bool | None = None) -> Path:
-        target = output_path or self.output_path
-        now = time.time()
-        rows = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
-        latest_rows = _dedupe_latest_by_manifest_key(rows, manifest=self._manifest)
-        successful_count, failed_count = _count_success_failure(latest_rows)
-        job = VerificationJob(
-            job_id=f"progressive-{int(self._start_time or now)}",
-            run_name="progressive",
-            status="completed",
-            config=self.config,
-            total_questions=self.total_tasks,
-            successful_count=successful_count,
-            failed_count=failed_count,
-            start_time=self._start_time,
-            end_time=now,
-        )
-        scenario_results = _reconstruct_scenario_results_for_export(latest_rows, manifest=self._manifest)
-        export_verification_results_json_stream(
-            job,
-            iter(latest_rows),
-            self.global_rubric,
-            is_complete=is_complete
-            if is_complete is not None
-            else not self._has_retryable_parser_failures(latest_rows),
-            scenario_results=scenario_results or None,
-            out_path=target,
-        )
-        return target
+        with self._lock:
+            target = output_path or self.output_path
+            now = time.time()
+            rows = list(_read_jsonl_results(self.jsonl_path)) if self.jsonl_path.exists() else []
+            latest_rows = _dedupe_latest_by_manifest_key(rows, manifest=self._manifest)
+            successful_count, failed_count = _count_success_failure(latest_rows)
+            job = VerificationJob(
+                job_id=f"progressive-{int(self._start_time or now)}",
+                run_name="progressive",
+                status="completed",
+                config=self.config,
+                total_questions=self.total_tasks,
+                successful_count=successful_count,
+                failed_count=failed_count,
+                start_time=self._start_time,
+                end_time=now,
+            )
+            scenario_results = _reconstruct_scenario_results_for_export(latest_rows, manifest=self._manifest)
+            export_verification_results_json_stream(
+                job,
+                iter(latest_rows),
+                self.global_rubric,
+                is_complete=is_complete
+                if is_complete is not None
+                else not self._has_retryable_parser_failures(latest_rows),
+                scenario_results=scenario_results or None,
+                out_path=target,
+            )
+            return target
 
     def _has_retryable_parser_failures(self, rows: Iterable[VerificationResult] | None = None) -> bool:
         source = (
@@ -862,6 +903,15 @@ class CompositeSink:
     is conservative (if any sink reports a triple as complete, it is
     skipped) and matches the semantics callers expect: resuming with
     partial persistence should not redo work either store already has.
+
+    Thread safety: every fan-out holds the composite's RLock for its full
+    iteration, so two threads cannot interleave their child dispatches.
+    Children take their own internal locks underneath. This composite-then-
+    child nesting is the one sanctioned lock ordering (see the module
+    docstring) and children never call back into the composite. A child
+    exception propagates to the caller (per-child isolation is deferred to
+    the clean-core redesign), but the ``with`` block guarantees the RLock is
+    released, so the composite stays usable for subsequent events.
     """
 
     def __init__(self, sinks: Iterable[ResultSink]) -> None:
@@ -871,6 +921,9 @@ class CompositeSink:
             sinks: Child sinks, called in iteration order on every event.
         """
         self._sinks: list[ResultSink] = list(sinks)
+        # Reentrant: a fan-out method may be invoked while another composite
+        # method on the same thread already holds the lock.
+        self._lock = threading.RLock()
 
     @property
     def sinks(self) -> list[ResultSink]:
@@ -880,8 +933,9 @@ class CompositeSink:
     def completed_triples(self) -> set[TripleKey]:
         """Union of completed triples across all children."""
         out: set[TripleKey] = set()
-        for sink in self._sinks:
-            out.update(sink.completed_triples())
+        with self._lock:
+            for sink in self._sinks:
+                out.update(sink.completed_triples())
         return out
 
     def iter_results(self) -> Iterable[VerificationResult]:
@@ -892,33 +946,44 @@ class CompositeSink:
         runner to hydrate the workspace cache on resume; duplicate rows
         across children are tolerated because cache hydration is idempotent
         per cache key.
+
+        The child list is snapshotted under the lock, but the lock is NOT
+        held while yielding: holding the RLock across consumer code would
+        invert the sanctioned lock ordering whenever the consumer touches
+        sinks.
         """
-        for sink in self._sinks:
+        with self._lock:
+            sinks = list(self._sinks)
+        for sink in sinks:
             iterator = getattr(sink, "iter_results", None)
             if callable(iterator):
                 yield from iterator()
 
     def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
         """Forward ``seed_prior_results`` to each child that implements it."""
-        for sink in self._sinks:
-            seeder = getattr(sink, "seed_prior_results", None)
-            if callable(seeder):
-                seeder(prior_results)
+        with self._lock:
+            for sink in self._sinks:
+                seeder = getattr(sink, "seed_prior_results", None)
+                if callable(seeder):
+                    seeder(prior_results)
 
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:
         """Forward ``on_start`` to each child."""
-        for sink in self._sinks:
-            sink.on_start(manifest, config)
+        with self._lock:
+            for sink in self._sinks:
+                sink.on_start(manifest, config)
 
     def on_result(self, result: VerificationResult) -> None:
         """Forward ``on_result`` to each child."""
-        for sink in self._sinks:
-            sink.on_result(result)
+        with self._lock:
+            for sink in self._sinks:
+                sink.on_result(result)
 
     def on_finalize(self, *, all_complete: bool) -> None:
         """Forward ``on_finalize`` to each child."""
-        for sink in self._sinks:
-            sink.on_finalize(all_complete=all_complete)
+        with self._lock:
+            for sink in self._sinks:
+                sink.on_finalize(all_complete=all_complete)
 
 
 # ---------------------------------------------------------------------------
@@ -967,6 +1032,11 @@ class DBSink:
         # Buffer of prior rows accepted before on_start. Flushed on on_start
         # once _initialized flips and the config snapshot is available.
         self._pending_seed: list[VerificationResult] = []
+        # Internal sink lock guarding the seed buffer and init bookkeeping.
+        # on_result deliberately stays outside it: it only reads the
+        # _initialized flag and each DB write is independent. Innermost
+        # lock: never call executor code while held.
+        self._lock = threading.Lock()
 
     def completed_triples(self) -> set[TripleKey]:
         """Always empty; DB-based resume is out of scope for this sink."""
@@ -981,12 +1051,18 @@ class DBSink:
         runs, using the same :func:`save_verification_results` path as
         ``on_result``.
         """
-        for row in prior_results.results:
-            if is_completed_result(row):
-                self._pending_seed.append(row)
+        with self._lock:
+            for row in prior_results.results:
+                if is_completed_result(row):
+                    self._pending_seed.append(row)
 
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:  # noqa: ARG002
-        """Seed the benchmark row if missing; cache the config snapshot."""
+        """Seed the benchmark row if missing and cache the config snapshot."""
+        with self._lock:
+            self._on_start_locked(config)
+
+    def _on_start_locked(self, config: VerificationConfig) -> None:
+        """Body of :meth:`on_start`. The caller holds ``self._lock``."""
         self._config_dict = config.model_dump(mode="json")
         try:
             from karenina.benchmark import Benchmark
@@ -1077,11 +1153,16 @@ class InMemorySink:
         self.manifest: list[str] = []
         self.finalized_all_complete: bool | None = None
         self.started: bool = False
+        # Internal sink lock guarding the results/manifest mutation.
+        # Innermost lock: never call executor code while held.
+        self._lock = threading.Lock()
 
     def completed_triples(self) -> set[TripleKey]:
         """Derive triples from buffered results."""
+        with self._lock:
+            snapshot = list(self.results)
         out: set[TripleKey] = set()
-        for result in self.results:
+        for result in snapshot:
             ident = TaskIdentifier.from_result(result)
             out.add(
                 (
@@ -1103,40 +1184,44 @@ class InMemorySink:
 
     def seed_prior_results(self, prior_results: VerificationResultSet) -> None:
         """Append prior rows and their task keys, skipping duplicates."""
-        existing_keys: set[str] = {TaskIdentifier.from_result(r).to_key() for r in self.results}
-        manifest_set = set(self.manifest)
-        for row in prior_results.results:
-            if not is_completed_result(row):
-                continue
-            task_id = TaskIdentifier.from_result(row).to_key()
-            if task_id in existing_keys:
-                continue
-            self.results.append(row)
-            existing_keys.add(task_id)
-            if task_id not in manifest_set:
-                self.manifest.append(task_id)
-                manifest_set.add(task_id)
+        with self._lock:
+            existing_keys: set[str] = {TaskIdentifier.from_result(r).to_key() for r in self.results}
+            manifest_set = set(self.manifest)
+            for row in prior_results.results:
+                if not is_completed_result(row):
+                    continue
+                task_id = TaskIdentifier.from_result(row).to_key()
+                if task_id in existing_keys:
+                    continue
+                self.results.append(row)
+                existing_keys.add(task_id)
+                if task_id not in manifest_set:
+                    self.manifest.append(task_id)
+                    manifest_set.add(task_id)
 
     def on_start(self, manifest: list[str], config: VerificationConfig) -> None:  # noqa: ARG002
         """Record the manifest and mark started. Unions with any seeded keys."""
-        if not self.manifest:
-            self.manifest = list(manifest)
-        else:
-            existing = set(self.manifest)
-            for key in manifest:
-                if key not in existing:
-                    self.manifest.append(key)
-                    existing.add(key)
-        self.started = True
+        with self._lock:
+            if not self.manifest:
+                self.manifest = list(manifest)
+            else:
+                existing = set(self.manifest)
+                for key in manifest:
+                    if key not in existing:
+                        self.manifest.append(key)
+                        existing.add(key)
+            self.started = True
 
     def on_result(self, result: VerificationResult) -> None:
         """Append completed results, skipping previews."""
         if is_completed_result(result):
-            self.results.append(result)
+            with self._lock:
+                self.results.append(result)
 
     def on_finalize(self, *, all_complete: bool) -> None:
         """Record the terminal state."""
-        self.finalized_all_complete = all_complete
+        with self._lock:
+            self.finalized_all_complete = all_complete
 
 
 # ---------------------------------------------------------------------------
