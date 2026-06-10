@@ -16,7 +16,6 @@ import logging
 import os
 import threading
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -24,8 +23,6 @@ from anyio.from_thread import start_blocking_portal
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-    from anyio.from_thread import BlockingPortal
 
 from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationResult
@@ -61,6 +58,7 @@ from .async_lifecycle import (
 from .async_lifecycle import (
     set_global_llm_semaphore as set_global_llm_semaphore,  # noqa: PLC0414
 )
+from .portal_pool import ExecutionTuning, run_in_portal_pool, sequential_portal
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +114,20 @@ class ExecutorConfig:
     timeout_seconds: float | None = None
     max_requeue_count: int = 5
     answerer_concurrency_limits: dict[str, int] | None = None
+
+    def to_tuning(self) -> ExecutionTuning:
+        """Derive the shared :class:`ExecutionTuning` for the portal pool.
+
+        ``enable_cache`` stays QA-executor-local (it shapes the worker
+        callable, not the pool).
+        """
+        return ExecutionTuning(
+            max_workers=self.max_workers,
+            timeout_seconds=self.timeout_seconds,
+            retry_wait_seconds=self.retry_wait_seconds,
+            max_requeue_count=self.max_requeue_count,
+            answerer_concurrency_limits=self.answerer_concurrency_limits,
+        )
 
 
 # ============================================================================
@@ -343,11 +355,16 @@ class VerificationExecutor:
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
         prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
-        """Execute tasks one at a time.
+        """Execute tasks one at a time on a shared BlockingPortal.
 
         On failure, logs the error, records it, and continues processing the
         remaining tasks. If any tasks failed, raises VerificationBatchError
-        with partial results after the loop completes.
+        with partial results after the loop completes. The portal lifecycle
+        (shared event loop plus pre-teardown adapter aclose) comes from
+        :func:`sequential_portal`; the factory and sweep closures resolve
+        ``start_blocking_portal`` / ``aclose_portal_adapters`` /
+        ``PRE_TEARDOWN_ACLOSE_TIMEOUT`` from this module's globals at call
+        time so existing monkeypatch targets keep working.
 
         Args:
             tasks: List of task dictionaries
@@ -374,39 +391,28 @@ class VerificationExecutor:
         errors: list[tuple[str, BaseException]] = []
         total = len(tasks)
 
-        # Use a shared BlockingPortal so that sync invoke() calls reuse the
-        # same event loop instead of creating/destroying one per call via
-        # asyncio.run(). This prevents httpx connection pool errors caused
-        # by closed event loops.
-        with start_blocking_portal(backend="asyncio") as portal:
-            set_async_portal(portal)
-            try:
-                for idx, task in enumerate(tasks, 1):
-                    # Call progress callback BEFORE starting task (with preview result)
-                    if progress_callback:
-                        preview_result = create_preview_result(task)
-                        progress_callback(idx, total, preview_result)
+        with sequential_portal(
+            portal_factory=lambda: start_blocking_portal(backend="asyncio"),
+            pre_teardown=lambda portal: aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT),
+        ):
+            for idx, task in enumerate(tasks, 1):
+                # Call progress callback BEFORE starting task (with preview result)
+                if progress_callback:
+                    preview_result = create_preview_result(task)
+                    progress_callback(idx, total, preview_result)
 
-                    try:
-                        # Execute the task with answer cache
-                        result_key, result = self._execute_task_with_cap(task, answer_cache, None, None)
-                        results[result_key] = result
-                    except Exception as e:
-                        logger.error("Sequential task %s failed: %s", task["question_id"], e)
-                        errors.append((task["question_id"], e))
-                        continue
+                try:
+                    # Execute the task with answer cache
+                    result_key, result = self._execute_task_with_cap(task, answer_cache, None, None)
+                    results[result_key] = result
+                except Exception as e:
+                    logger.error("Sequential task %s failed: %s", task["question_id"], e)
+                    errors.append((task["question_id"], e))
+                    continue
 
-                    # Call progress callback AFTER completion (with actual result)
-                    if progress_callback:
-                        progress_callback(idx, total, result)
-            finally:
-                # Pre-teardown aclose: close portal-pinned adapter clients on
-                # the shared portal's live loop and drop the per-portal
-                # tracking BEFORE the enclosing `with` tears the portal down.
-                # Downstream cleanup_resources() runs on a different loop and
-                # cannot safely close httpx transports pinned to this one.
-                aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
-                set_async_portal(None)
+                # Call progress callback AFTER completion (with actual result)
+                if progress_callback:
+                    progress_callback(idx, total, result)
 
         # Log cache statistics
         if answer_cache:
@@ -427,11 +433,14 @@ class VerificationExecutor:
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
         prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
-        """Execute tasks in parallel using ThreadPoolExecutor.
+        """Execute tasks in parallel via the shared portal pool.
 
-        Each task is submitted as a separate Future with its own BlockingPortal.
-        Cache retry logic runs internally within each callable. Every submission
-        produces a Future, so no task can be silently lost.
+        The pooled skeleton (per-worker portals, timeout sweep,
+        post-shutdown drain, drop detection, pre-teardown aclose, progress
+        serialization) lives in :func:`run_in_portal_pool`. This method
+        keeps the QA specifics: the cache requeue loop, per-answerer
+        concurrency caps, cache hydration, the preview callback, and the
+        ``VerificationBatchError`` contract.
 
         Args:
             tasks: List of task dictionaries
@@ -451,8 +460,7 @@ class VerificationExecutor:
         from .utils.cache_helpers import generate_answer_cache_key, log_cache_stats
         from .utils.task_helpers import create_preview_result
 
-        max_workers = self.config.max_workers
-        logger.info("Parallel execution: %d tasks with %d workers", len(tasks), max_workers)
+        logger.info("Parallel execution: %d tasks with %d workers", len(tasks), self.config.max_workers)
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
         if answer_cache is not None and prior_results is not None:
@@ -461,44 +469,10 @@ class VerificationExecutor:
         max_requeue = self.config.max_requeue_count
         retry_wait = self.config.retry_wait_seconds
 
-        # Thread-safe progress tracking
-        progress_lock = threading.Lock()
-        completed_count = [0]
-
-        # Per-worker portal management: each worker thread creates one portal
-        # that is reused across all tasks on that thread. This preserves httpx
-        # connection pools and avoids "Event loop is closed" errors from rapid
-        # portal churn.
-        #
-        # Each entry is (context_manager, portal). The portal reference is
-        # kept separately so the finally block can look up adapters tracked
-        # against that portal in the registry and call their aclose() on the
-        # portal's own event loop BEFORE the portal is torn down.
-        _portal_resources: list[tuple[Any, BlockingPortal]] = []
-        _portal_init_lock = threading.Lock()
-
-        def _ensure_worker_portal() -> None:
-            """Lazily create a BlockingPortal for this worker thread."""
-            if get_async_portal() is not None:
-                return
-            cm = start_blocking_portal(backend="asyncio")
-            portal = cm.__enter__()
-            set_async_portal(portal)
-            with _portal_init_lock:
-                _portal_resources.append((cm, portal))
-
-        def execute_task_with_retry(idx: int, task: dict[str, Any]) -> tuple[int, tuple[str, VerificationResult]]:
+        def execute_task_with_retry(_idx: int, task: dict[str, Any]) -> tuple[str, VerificationResult]:
             """Execute a single verification task with cache retry."""
-            _ensure_worker_portal()
-
-            # Call preview progress callback
-            if progress_callback:
-                preview_result = create_preview_result(task)
-                with progress_lock:
-                    progress_callback(completed_count[0] + 1, total, preview_result)
-
             if not answer_cache:
-                return idx, self._execute_task_with_cap(task, answer_cache, None, None)
+                return self._execute_task_with_cap(task, answer_cache, None, None)
 
             cache_key = generate_answer_cache_key(task)
             for attempt in range(max_requeue + 1):
@@ -523,7 +497,7 @@ class VerificationExecutor:
                     continue
 
                 # MISS or HIT: execute
-                return idx, self._execute_task_with_cap(
+                return self._execute_task_with_cap(
                     task,
                     answer_cache,
                     status,
@@ -537,135 +511,53 @@ class VerificationExecutor:
                 max_requeue,
             )
             answer_cache.force_reset(cache_key)
-            return idx, self._execute_task_with_cap(task, answer_cache, None, None)
+            return self._execute_task_with_cap(task, answer_cache, None, None)
 
-        # Preserve incoming order (ordering is controlled by task_ordering config)
-        indexed_tasks = list(enumerate(tasks))
+        # Progress hooks. The preview fires from the worker thread before
+        # the task runs; the completion hook fires from the collector. Both
+        # are serialized under the pool's single progress lock.
+        on_item_start: Callable[[int, int, dict[str, Any]], None] | None = None
+        on_progress: Callable[[int, int, tuple[str, VerificationResult]], None] | None = None
+        if progress_callback is not None:
+            caller_progress = progress_callback
 
-        results_by_index: dict[int, tuple[str, VerificationResult]] = {}
-        failed_tasks: list[tuple[str, BaseException]] = []
+            def _preview(current: int, total_: int, task: dict[str, Any]) -> None:
+                caller_progress(current, total_, create_preview_result(task))
 
-        pool = ThreadPoolExecutor(max_workers=max_workers)
-        try:
-            # Submit all tasks
-            future_to_meta: dict[Future[tuple[int, tuple[str, VerificationResult]]], tuple[int, str]] = {}
-            for idx, task in indexed_tasks:
-                future = pool.submit(execute_task_with_retry, idx, task)
-                future_to_meta[future] = (idx, task["question_id"])
+            def _completed(current: int, total_: int, value: tuple[str, VerificationResult]) -> None:
+                caller_progress(current, total_, value[1])
 
-            # Collect results as they complete
-            collected: set[Future[tuple[int, tuple[str, VerificationResult]]]] = set()
-            timed_out = False
-            try:
-                for future in as_completed(future_to_meta, timeout=self.config.timeout_seconds):
-                    collected.add(future)
-                    idx, question_id = future_to_meta[future]
-                    try:
-                        result_idx, (result_key, verification_result) = future.result()
-                        results_by_index[result_idx] = (result_key, verification_result)
+            on_item_start = _preview
+            on_progress = _completed
 
-                        if progress_callback:
-                            with progress_lock:
-                                completed_count[0] += 1
-                                progress_callback(completed_count[0], total, verification_result)
-                    except BaseException as e:
-                        logger.error("Parallel task %s failed: %s", question_id, e)
-                        failed_tasks.append((question_id, e))
-            except TimeoutError:
-                timed_out = True
-                # Sweep futures that completed between last yield and timeout
-                for future, (_idx, question_id) in future_to_meta.items():
-                    if future.done() and future not in collected:
-                        collected.add(future)
-                        try:
-                            result_idx, (result_key, verification_result) = future.result()
-                            results_by_index[result_idx] = (result_key, verification_result)
-                        except BaseException as e:
-                            failed_tasks.append((question_id, e))
-        finally:
-            # Always wait for pool workers to finish before tearing down
-            # worker portals. With wait=False, in-flight workers could
-            # outlive their portals and crash on callback dispatch with
-            # "cannot schedule new futures after shutdown", or set Future
-            # results that are never harvested (silent drop).
-            pool.shutdown(wait=True, cancel_futures=timed_out)
-
-            # Post-shutdown sweep: after wait=True returns, every future is
-            # in a terminal state. Harvest any futures that finished while
-            # the pool was draining, so in-flight tasks are reflected in
-            # partial_results or errors instead of being silently dropped.
-            if timed_out:
-                for future, (_idx, question_id) in future_to_meta.items():
-                    if future in collected:
-                        continue
-                    if future.cancelled():
-                        failed_tasks.append(
-                            (
-                                question_id,
-                                TimeoutError(f"Task cancelled before start: {question_id}"),
-                            )
-                        )
-                        collected.add(future)
-                        continue
-                    try:
-                        result_idx, (result_key, verification_result) = future.result()
-                        results_by_index[result_idx] = (result_key, verification_result)
-                    except BaseException as e:
-                        failed_tasks.append((question_id, e))
-                    collected.add(future)
-
-            # Drop-detection invariant. After pool.shutdown(wait=True) every
-            # future must be in a terminal state, so the sweeps above should
-            # have covered everything. If this fires, the shutdown race has
-            # reopened and tasks were being lost.
-            uncollected = [(future, meta) for future, meta in future_to_meta.items() if future not in collected]
-            if uncollected:
-                logger.error(
-                    "Parallel executor dropped %d tasks after pool.shutdown(wait=True). "
-                    "Emitting synthetic failure entries.",
-                    len(uncollected),
-                )
-                for future, (_idx, question_id) in uncollected:
-                    failed_tasks.append(
-                        (
-                            question_id,
-                            TimeoutError(f"Task left uncollected by parallel executor: {question_id}"),
-                        )
-                    )
-                    collected.add(future)
-
-            # Pre-teardown aclose: close adapter-owned httpx clients on the
-            # portal loop that opened them, BEFORE the portal is torn down.
-            # Without this, the downstream cleanup_resources() call in
-            # batch_runner runs on a fresh loop and httpx raises
-            # "Event loop is closed" because its transports are pinned to
-            # the dead portal loop. The bounded dispatch pattern lives in
-            # async_lifecycle.aclose_portal_adapters.
-            for _cm, portal in _portal_resources:
-                aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
-
-            # Clean up worker portals (event loops) only after workers have
-            # fully exited, so no worker can still be using a portal when
-            # its context manager exits.
-            for cm, _portal in _portal_resources:
-                try:
-                    cm.__exit__(None, None, None)
-                except Exception:
-                    logger.debug("Portal cleanup error", exc_info=True)
+        outcome = run_in_portal_pool(
+            tasks,
+            execute_task_with_retry,
+            tuning=self.config.to_tuning(),
+            on_progress=on_progress,
+            on_item_start=on_item_start,
+            describe=lambda _idx, task: str(task["question_id"]),
+            # Closures over this module's globals so monkeypatches on
+            # executor.start_blocking_portal / executor.aclose_portal_adapters
+            # / executor.PRE_TEARDOWN_ACLOSE_TIMEOUT keep working.
+            portal_factory=lambda: start_blocking_portal(backend="asyncio"),
+            pre_teardown=lambda portal: aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT),
+            item_noun="Task",
+        )
 
         # Restore original order and convert to dictionary
         results: dict[str, VerificationResult] = {}
-        for idx in sorted(results_by_index.keys()):
-            result_key, verification_result = results_by_index[idx]
+        for idx in sorted(outcome.results_by_index.keys()):
+            result_key, verification_result = outcome.results_by_index[idx]
             results[result_key] = verification_result
 
         # Log cache statistics
         if answer_cache:
             log_cache_stats(answer_cache, mode="parallel mode")
 
-        # Handle timeout. as_completed only raises TimeoutError when a finite
+        # Handle timeout. The pool only sets timed_out when a finite
         # timeout was passed, so timeout_seconds is guaranteed non-None here.
-        if timed_out:
+        if outcome.timed_out:
             timeout_label = (
                 f"{self.config.timeout_seconds:.0f} seconds"
                 if self.config.timeout_seconds is not None
@@ -674,15 +566,15 @@ class VerificationExecutor:
             raise VerificationBatchError(
                 f"Parallel batch timed out after {timeout_label} ({len(results)} of {total} tasks completed)",
                 partial_results=results,
-                errors=failed_tasks,
+                errors=outcome.failed_items,
             )
 
         # Handle partial failures
-        if failed_tasks:
+        if outcome.failed_items:
             raise VerificationBatchError(
-                f"{len(failed_tasks)} of {total} verification tasks failed",
+                f"{len(outcome.failed_items)} of {total} verification tasks failed",
                 partial_results=results,
-                errors=failed_tasks,
+                errors=outcome.failed_items,
             )
 
         return results

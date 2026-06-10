@@ -265,6 +265,62 @@ class TestSequentialProgressCallback:
 
 
 # ============================================================================
+# Sequential: per-turn progress callback (T14 deliberate change)
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestSequentialPerTurnCallback:
+    """Sequential mode wires the per-turn progress callback into manager.run.
+
+    T14 deliberate change: previously only parallel mode passed a per-turn
+    ``progress_callback`` into ``ScenarioManager.run`` (sequential dropped
+    it). Sequential now mirrors the parallel wiring, recording turn/node
+    progress per combo under the shared progress lock.
+    """
+
+    @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
+    def test_sequential_passes_turn_callback_to_manager(self, mock_manager_cls: MagicMock) -> None:
+        """manager.run receives a callable per-turn callback per combo."""
+        captured_callbacks: list = []
+
+        def mock_run(**kwargs):
+            cb = kwargs.get("progress_callback")
+            assert cb is not None, "sequential mode must wire the per-turn callback"
+            assert callable(cb)
+            # The callback must accept the per-turn kwargs the manager emits.
+            cb(
+                scenario_id=kwargs["scenario"].name,
+                scenario_turn=2,
+                scenario_node="n2",
+                verify_result=MagicMock(),
+                next_node="exit",
+            )
+            captured_callbacks.append(cb)
+            return _make_exec_result(kwargs["scenario"].name)
+
+        mock_manager_cls.return_value.run.side_effect = mock_run
+
+        config = MagicMock()
+        # Stay on the normal return path: a bare MagicMock would satisfy the
+        # workspace-capture condition and route through the compaction
+        # guard's swallow-and-warn branch.
+        config.workspace_output_mode = "none"
+        config.workspace_output_dir = None
+        executor = ScenarioExecutor(
+            parallel=False,
+            config=ScenarioExecutorConfig(enable_cache=False),
+        )
+        results, errors = executor.run_batch([_make_combo("s1"), _make_combo("s2")], config)
+
+        assert errors == []
+        assert len(results) == 2
+        assert len(captured_callbacks) == 2
+        # Each combo gets its own closure (per-combo index and scenario name).
+        assert captured_callbacks[0] is not captured_callbacks[1]
+
+
+# ============================================================================
 # Sequential: global limiter lifecycle
 # ============================================================================
 
