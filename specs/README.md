@@ -28,9 +28,9 @@ Rules of the suite:
 | SPEC-001 | [Constitution](SPEC-001-constitution.md) | Final wording of the principles destined for `karenina/docs/` | Draft for review |
 | SPEC-002 | Public API and tiered interface | Nouns, verbs, signatures, five-line path, disclosure rules | To write |
 | SPEC-003 | [Execution model](SPEC-003-execution-model.md) | DAG task model, driver, concurrency, async core, sync facade | Draft for review |
-| SPEC-004 | Configuration layering | Core vs escape hatch, field lifecycle, parity enforcement | To write |
-| SPEC-005 | Failure and observability | Failure taxonomy, no-silent-degradation rules, error quality | To write |
-| SPEC-006 | Results durability and interchange | Sinks, resume semantics, replay, format versioning, shareable benchmarks | To write |
+| SPEC-004 | [Configuration layering](SPEC-004-configuration.md) | Core vs escape hatch, field lifecycle, parity enforcement | Draft for review |
+| SPEC-005 | [Failure and observability](SPEC-005-failure-observability.md) | Failure taxonomy, no-silent-degradation rules, error quality | Draft for review |
+| SPEC-006 | [Results durability and interchange](SPEC-006-durability-interchange.md) | Sinks, resume semantics, replay, format versioning, shareable benchmarks | Draft for review |
 | SPEC-007 | Testing and feedback harness | Three tiers, engine-health scoreboard, cull rubric, conformance suites | To write |
 | SPEC-008 | Knowledge layer and agent tier | ADR process, extension guides, packaged skills, introspection API, example gamma | To write |
 | SPEC-009 | [Audit methodology and backlog](SPEC-009-audit-methodology.md) | Phase 0 process, finding schema, disposition workflow | Draft for review |
@@ -162,7 +162,8 @@ Drafting order: 001 and 009 first (they unblock Phase 0), then 003 (the architec
 | T1 | Format stability vs delete-over-deprecate | 006, 001 | Resolved in master §8: breakage allowed until harmonized format ships with version field |
 | T2 | DAG generality vs simplicity | 003 | Resolved by recorded workload pressure (master §3.1); ADR-001 records fallback conditions |
 | T3 | Async-native vs migration risk | 003, 009 | Open: gated on the Phase 0 spike (SPEC-009 Q5 defines the gate) |
-| T4 | Five-line happy path vs no-silent-degradation | 002, 005 | Open: defaults must be quiet enough for tier 1 yet hide nothing; needs a joint rule |
+| T4 | Five-line happy path vs no-silent-degradation | 002, 005 | Resolved: SPEC-005 §3 joint rule (silent on clean runs, one-line warning plus run summary on degraded ones) |
+| T7 | Replay opt-in vs P6 "every interaction captured" | 001, 006 | Resolved: P6 amended, capture is opt-in and results state whether they support extension |
 | T5 | Skills in-package vs monorepo skill ecosystem | 008 | Open: single source with sync mechanism to be chosen |
 | T6 | Streaming workloads vs sink/resume design | 003, 006 | Open: sink v2 must not assume finite task sets; concrete hooks TBD in 006 |
 
@@ -176,3 +177,4 @@ New tensions discovered during drafting are added here, never resolved silently 
 - 2026-06-10: Suite relocated from the monorepo planning folder into `karenina/specs/`, versioned with the library.
 - 2026-06-10: SPEC-001 and SPEC-009 drafted. Decisions: constitution as one page with P1-P8 numbering and ADR-gated amendments. Audit dispositions made autonomously by agents per decision rules, user spot-checks flagged items plus a 10% sample.
 - 2026-06-10: SPEC-003 drafted. Decisions: driver public-but-experimental (`karenina.experimental.engine`), streaming-shaped core from the start, TaskEval fully projected onto the driver. Single `TaskId` identity, AdapterGateway as the one concurrency chokepoint, sync facade via a background-loop bridge module.
+- 2026-06-10: SPEC-004, SPEC-005, SPEC-006 drafted. Decisions: composable sub-configs, binding agent-actionable error anatomy, cross-adapter error harmonization via ErrorRegistry mapping tables plus a conformance error battery, auto-retry of transient failures on resume, replay capture opt-in (P6 amended). Tensions T4 and T7 resolved.

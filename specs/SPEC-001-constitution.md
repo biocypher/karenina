@@ -46,7 +46,7 @@ A single driver owns scheduling, concurrency, sinks, retries, and resume. Entry 
 
 ### P6: Results are durable artifacts
 
-Every run is resumable at task granularity, every result self-describing, every LLM interaction captured for replay. Interruption never loses completed work. Re-running downstream stages never requires regenerating answers.
+Every run is resumable at task granularity and every result is self-describing. Interruption never loses completed work. When replay capture is enabled, every LLM interaction is preserved so downstream stages re-run without regenerating answers, and a result always states whether it supports such extension.
 
 ### P7: Delete over deprecate
 
