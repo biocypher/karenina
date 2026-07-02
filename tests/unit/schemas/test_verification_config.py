@@ -77,6 +77,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     assert config.evaluation_mode == "template_only"
     assert config.use_full_trace_for_template is False
     assert config.use_full_trace_for_rubric is True
+    assert config.allow_partial_trace_scoring is True
     assert config.abstention_enabled is False
     assert config.embedding_check_enabled is False
     assert config.embedding_check_model == "all-MiniLM-L6-v2"
@@ -89,6 +90,8 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     assert config.deep_judgment_excerpt_retry_attempts == 2
     assert config.deep_judgment_search_enabled is False
     assert config.deep_judgment_search_tool == "tavily"
+    assert config.agentic_parsing is False
+    assert config.agentic_parsing_trigger == "always"
 
 
 @pytest.mark.unit
@@ -1674,6 +1677,16 @@ class TestTaskOrdering:
                 parsing_only=True,
                 task_ordering="invalid",
             )
+
+
+@pytest.mark.unit
+def test_agentic_parsing_trigger_rejects_invalid_value() -> None:
+    with pytest.raises(ValidationError):
+        VerificationConfig(
+            parsing_models=[ModelConfig(id="parser", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            agentic_parsing_trigger="sometimes",
+        )
 
 
 # =============================================================================

@@ -298,8 +298,76 @@ class _TestFindings(BaseModel):
     items: list[str] = Field(description="Items")
 
 
+class _TraceFractions(BaseModel):
+    included_message_count: int = Field(description="Included messages")
+    environment_setup: float = Field(description="Environment setup fraction")
+
+
 @pytest.mark.unit
 class TestExtractTemplate:
+    def test_extract_template_uses_local_json_without_parser(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Template extraction validates final investigation JSON locally."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="trace_category_fractions_v4",
+            description="Test.",
+            kind=_TraceFractions,
+            higher_is_better=None,
+            context_mode="trace_only",
+        )
+
+        parser = MagicMock()
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: parser)
+
+        trace = (
+            "--- AI Message ---\n"
+            "Final classification:\n"
+            "```json\n"
+            '{"included_message_count": 3, "environment_setup": 0.25}\n'
+            "```\n"
+        )
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        result = evaluator.run_extraction(trait, trace)
+
+        assert result == {"included_message_count": 3, "environment_setup": 0.25}
+        parser.parse_to_pydantic.assert_not_called()
+
+    def test_extract_template_falls_back_to_parser_for_prose_report(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Parser remains a backstop for collected prose/table investigations."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        trait = AgenticRubricTrait(
+            name="trace_category_fractions_v4",
+            description="Test.",
+            kind=_TraceFractions,
+            higher_is_better=None,
+            context_mode="trace_only",
+        )
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = _make_parse_result(
+            _TraceFractions(included_message_count=23, environment_setup=0.1304)
+        )
+
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        result = evaluator.run_extraction(
+            trait,
+            "## Investigation Summary\n\nincluded messages: 23\nenvironment_setup: 0.1304\n",
+        )
+
+        assert result == {"included_message_count": 23, "environment_setup": 0.1304}
+        mock_parser.parse_to_pydantic.assert_called_once()
+
     def test_extract_template_returns_model_dump(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Template extraction returns the Pydantic model_dump dict."""
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait

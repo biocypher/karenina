@@ -186,6 +186,13 @@ class VerificationResultTemplate(BaseModel):
         description="Raw trace from the agentic judge investigation step, if agentic parsing was used.",
     )
     agentic_parsing_performed: bool = False  # Whether agentic parsing was used
+    agentic_extraction_recovery: str | None = None
+    agentic_extraction_error: str | None = None
+
+    # Dynamic parsing
+    dynamic_parsing_performed: bool = False
+    dynamic_parse_decision: str | None = None
+    dynamic_decision_reasoning: str | None = None
 
     # Abstention
     abstention_check_performed: bool = False  # Whether abstention check was attempted
@@ -263,6 +270,10 @@ class VerificationResultRubric(BaseModel):
         description="Investigation traces from agentic rubric traits. "
         "Each trace is the raw agent investigation output string. "
         "Keyed by trait name.",
+    )
+    agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
+        default=None,
+        description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",
     )
 
     # Dynamic rubric metadata (populated when a DynamicRubric presence check runs)

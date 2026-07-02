@@ -330,6 +330,48 @@ class TestStageOrchestratorConfiguration:
         assert "RubricEvaluation" in stage_names
         assert "FinalizeResult" in stage_names
 
+    def test_agentic_parsing_always_uses_agentic_stage(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="always",
+        )
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "AgenticParseTemplate" in stage_names
+        assert "DynamicParseTemplate" not in stage_names
+        assert "ParseTemplate" not in stage_names
+
+    def test_agentic_parsing_dynamic_uses_dynamic_stage(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="dynamic",
+        )
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "DynamicParseTemplate" in stage_names
+        assert "AgenticParseTemplate" not in stage_names
+        assert "ParseTemplate" not in stage_names
+
+    def test_dynamic_agentic_parsing_satisfies_deep_judgment_dependencies(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="dynamic",
+            deep_judgment_enabled=True,
+        )
+
+        assert orchestrator.validate_dependencies() == []
+
+    def test_non_agentic_parsing_uses_classical_stage_when_trigger_default(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=False,
+        )
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "ParseTemplate" in stage_names
+        assert "DynamicParseTemplate" not in stage_names
+        assert "AgenticParseTemplate" not in stage_names
+
     def test_abstention_enabled_adds_stage(self):
         """Verify abstention_enabled=True adds AbstentionCheckStage."""
         orchestrator = StageOrchestrator.from_config(

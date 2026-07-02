@@ -100,6 +100,7 @@ class ArtifactKeys:
     FIELD_RESULTS = "field_results"
     COMPOSITION_STRATEGY = "composition_strategy"
     FINAL_RESULT = "final_result"
+    PARSE_DECISION_MALFORMED = "parse_decision_malformed"
 
     # Regex Verification
     REGEX_VERIFICATION_RESULTS = "regex_verification_results"
@@ -228,6 +229,16 @@ class ArtifactKeys:
     INVESTIGATION_TRACE = "investigation_trace"
     WORKSPACE_PATH = "workspace_path"
     AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
+    AGENTIC_EXTRACTION_RECOVERY = "agentic_extraction_recovery"
+    AGENTIC_EXTRACTION_ERROR = "agentic_extraction_error"
+
+    # ==========================================================================
+    # Dynamic Parsing
+    # ==========================================================================
+
+    DYNAMIC_PARSING_PERFORMED = "dynamic_parsing_performed"
+    DYNAMIC_PARSE_DECISION = "dynamic_parse_decision"
+    DYNAMIC_DECISION_REASONING = "dynamic_decision_reasoning"
 
     # ==========================================================================
     # Agentic Rubric Evaluation
@@ -236,6 +247,7 @@ class ArtifactKeys:
     AGENTIC_RUBRIC_EVALUATION_PERFORMED = "agentic_rubric_evaluation_performed"
     AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
     AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
+    AGENTIC_TRAIT_EXTRACTION_METADATA = "agentic_trait_extraction_metadata"
 
     # ==========================================================================
     # Dynamic Rubric Presence Check
@@ -347,13 +359,14 @@ class VerificationContext:
     # Trace Filtering Configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False  # Whether to use full trace for template parsing
     use_full_trace_for_rubric: bool = True  # Whether to use full trace for rubric evaluation
-    allow_partial_trace_scoring: bool = False
+    allow_partial_trace_scoring: bool = True
 
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None
 
     # Agentic Parsing Configuration
     agentic_parsing: bool = False
+    agentic_parsing_trigger: str = "always"
     agentic_judge_context: str = "workspace_only"
     agentic_parsing_max_turns: int = 15
     agentic_parsing_timeout: float = 120.0

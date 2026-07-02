@@ -293,6 +293,11 @@ class FinalizeResultStage(BaseVerificationStage):
             # Agentic parsing
             investigation_trace=context.get_result_field(ArtifactKeys.INVESTIGATION_TRACE),
             agentic_parsing_performed=context.get_result_field(ArtifactKeys.AGENTIC_PARSING_PERFORMED, False),
+            agentic_extraction_recovery=context.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_RECOVERY),
+            agentic_extraction_error=context.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_ERROR),
+            dynamic_parsing_performed=context.get_result_field(ArtifactKeys.DYNAMIC_PARSING_PERFORMED, False),
+            dynamic_parse_decision=context.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION),
+            dynamic_decision_reasoning=context.get_result_field(ArtifactKeys.DYNAMIC_DECISION_REASONING),
             abstention_check_performed=context.get_result_field(ArtifactKeys.ABSTENTION_CHECK_PERFORMED, False),
             abstention_detected=context.get_result_field(ArtifactKeys.ABSTENTION_DETECTED),
             abstention_override_applied=context.get_result_field(ArtifactKeys.ABSTENTION_OVERRIDE_APPLIED, False),
@@ -367,6 +372,7 @@ class FinalizeResultStage(BaseVerificationStage):
             # Get agentic trait evaluation results (populated by Stage 11b)
             agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
             agentic_trait_traces_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+            agentic_trait_extraction_metadata = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
             # Filter out None traces from failed investigations to satisfy dict[str, str] schema
             agentic_trait_traces = (
                 {k: v for k, v in agentic_trait_traces_raw.items() if v is not None}
@@ -389,6 +395,7 @@ class FinalizeResultStage(BaseVerificationStage):
                 metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
                 agentic_trait_scores=agentic_trait_scores,
                 agentic_trait_investigation_traces=agentic_trait_traces,
+                agentic_trait_extraction_metadata=agentic_trait_extraction_metadata,
                 dynamic_rubric_skipped_traits=dynamic_skipped,
                 dynamic_rubric_promoted_traits=dynamic_promoted,
                 trait_provenance=context.trait_provenance,

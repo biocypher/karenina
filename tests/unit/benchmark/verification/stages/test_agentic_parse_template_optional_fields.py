@@ -63,6 +63,21 @@ class FalseGTAnswer(BaseAnswer):
     )
 
 
+class DefaultValueAnswer(BaseAnswer):
+    """Template where 0/False can be either real answers or missing placeholders."""
+
+    count: int = VerifiedField(
+        description="Reported count.",
+        ground_truth=3,
+        verify_with=NumericTolerance(tolerance=0.1),
+    )
+    matched: bool = VerifiedField(
+        description="Whether reported answer matched the ideal.",
+        ground_truth=False,
+        verify_with=BooleanMatch(),
+    )
+
+
 def _make_context(answer_cls: type[BaseAnswer]) -> VerificationContext:
     """Minimal VerificationContext for agentic-parse stage tests."""
     ctx = VerificationContext(
@@ -86,8 +101,8 @@ def _make_context(answer_cls: type[BaseAnswer]) -> VerificationContext:
 class TestAgenticParseOptionalFields:
     """Null extractions surface as None in field_results, not False."""
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_null_field_does_not_fail_whole_record(self, mock_get_parser, mock_get_agent):
         """q1 + q3 score normally; q2 (null in extraction) is None."""
         from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
@@ -142,8 +157,8 @@ class TestAgenticParseOptionalFields:
         # Granular: n_true / n_total = 2 / 3
         assert stored.verify_granular() == pytest.approx(2 / 3)
 
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
-    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
     def test_null_extraction_with_false_ground_truth_stays_none(self, mock_get_parser, mock_get_agent):
         """CRITICAL: GT=False + extracted=None MUST yield None, not False.
 
@@ -198,3 +213,116 @@ class TestAgenticParseOptionalFields:
 
         # verify() rejects None at the leaf (soft-False)
         assert stored.verify() is False
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
+    def test_unanswered_fields_force_default_values_to_null(self, mock_get_parser, mock_get_agent):
+        """Explicit unanswered metadata turns placeholder 0/False into null fields."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.benchmark.verification.utils.schema_builder import (
+            build_extraction_relaxed_class,
+        )
+        from karenina.ports import AgentResult, ParsePortResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response="ok",
+            raw_trace="investigation trace",
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=2,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        relaxed_cls = build_extraction_relaxed_class(DefaultValueAnswer)
+        relaxed_instance = relaxed_cls(
+            count=0,
+            matched=False,
+            _unanswered_fields=["count", "matched"],
+        )
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = ParsePortResult(
+            parsed=relaxed_instance,
+            usage=UsageMetadata(),
+        )
+        mock_get_parser.return_value = mock_parser
+
+        ctx = _make_context(DefaultValueAnswer)
+        AgenticParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None, ctx.error
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert stored.__dict__.get("_null_fields") == {"count", "matched"}
+
+        field_results = stored._compute_field_results()
+        assert field_results["count"] is None
+        assert field_results["matched"] is None
+
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_agent")
+    @patch("karenina.benchmark.verification.stages.helpers.agentic_parse_helpers.get_parser")
+    def test_default_values_without_unanswered_metadata_remain_real_answers(self, mock_get_parser, mock_get_agent):
+        """Explicit 0/False answers remain scoreable when not marked unanswered."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.benchmark.verification.utils.schema_builder import (
+            build_extraction_relaxed_class,
+        )
+        from karenina.ports import AgentResult, ParsePortResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response="ok",
+            raw_trace="investigation trace",
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=2,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        relaxed_cls = build_extraction_relaxed_class(DefaultValueAnswer)
+        relaxed_instance = relaxed_cls(count=0, matched=False)
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = ParsePortResult(
+            parsed=relaxed_instance,
+            usage=UsageMetadata(),
+        )
+        mock_get_parser.return_value = mock_parser
+
+        ctx = _make_context(DefaultValueAnswer)
+        AgenticParseTemplateStage().execute(ctx)
+
+        assert ctx.error is None, ctx.error
+        stored = ctx.get_artifact(ArtifactKeys.PARSED_ANSWER)
+        assert stored.__dict__.get("_null_fields") == set()
+
+        field_results = stored._compute_field_results()
+        assert field_results["count"] is False
+        assert field_results["matched"] is True
+
+    def test_local_json_recovery_respects_unanswered_fields(self):
+        """Parser-failure recovery also treats explicit unanswered metadata as null."""
+        from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import (
+            recover_extraction_from_investigation,
+        )
+
+        investigation_trace = (
+            "--- AI Message ---\n"
+            "The answerer did not report these values.\n"
+            "```json\n"
+            '{"count": 0, "matched": false, "_unanswered_fields": ["count", "matched"]}\n'
+            "```"
+        )
+
+        recovered = recover_extraction_from_investigation(DefaultValueAnswer, investigation_trace)
+
+        assert recovered.__dict__.get("_null_fields") == {"count", "matched"}
+        field_results = recovered._compute_field_results()
+        assert field_results["count"] is None
+        assert field_results["matched"] is None

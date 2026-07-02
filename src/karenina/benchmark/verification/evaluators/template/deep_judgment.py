@@ -31,17 +31,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from karenina.benchmark.verification.prompts.assembler import PromptAssembler
-from karenina.benchmark.verification.prompts.task_types import PromptTask
-from karenina.ports import LLMPort, ParserPort
-from karenina.ports.capabilities import PortCapabilities
-from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import BaseAnswer
-from karenina.schemas.shared import SearchResultItem
-from karenina.schemas.verification import VerificationConfig
-from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
-
-if TYPE_CHECKING:
-    from karenina.schemas.verification.prompt_config import PromptConfig
 from karenina.benchmark.verification.prompts.deep_judgment.template import (
     build_assessment_system_prompt,
     build_assessment_user_prompt,
@@ -54,6 +43,8 @@ from karenina.benchmark.verification.prompts.deep_judgment.template.reasoning_on
     build_reasoning_only_system_prompt,
     build_reasoning_only_user_prompt,
 )
+from karenina.benchmark.verification.prompts.task_types import PromptTask
+from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
 from karenina.benchmark.verification.utils.search_provider import create_search_tool
 from karenina.benchmark.verification.utils.template_parsing_helpers import (
     _extract_attribute_descriptions,
@@ -63,6 +54,16 @@ from karenina.benchmark.verification.utils.template_parsing_helpers import (
     format_reasoning_for_parsing,
 )
 from karenina.benchmark.verification.utils.trace_fuzzy_match import fuzzy_match_excerpt
+from karenina.ports import LLMPort, ParserPort
+from karenina.ports.capabilities import PortCapabilities
+from karenina.schemas.config import ModelConfig
+from karenina.schemas.entities import BaseAnswer
+from karenina.schemas.shared import SearchResultItem
+from karenina.schemas.verification import VerificationConfig
+from karenina.utils.json_extraction import strip_markdown_fences as _strip_markdown_fences
+
+if TYPE_CHECKING:
+    from karenina.schemas.verification.prompt_config import PromptConfig
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +189,12 @@ Reasoning Traces (explaining how the response informs each attribute value):
         instruction_context={"json_schema": RawAnswer.model_json_schema()},
     )
 
-    parse_port_result = parser.parse_to_pydantic(stage2_messages, RawAnswer)
+    parse_port_result = parse_to_pydantic_resilient(
+        parser,
+        stage2_messages,
+        RawAnswer,
+        retry_policy=parsing_model.retry_policy,
+    )
     parsed_answer = parse_port_result.parsed
     model_calls += 1
 
@@ -754,7 +760,12 @@ Reasoning Traces (explaining how excerpts inform each attribute value):
     )
 
     # Use ParserPort for parsing - it handles LLM call, JSON parsing, and retry logic internally
-    parse_port_result = parser.parse_to_pydantic(stage3_messages, RawAnswer)
+    parse_port_result = parse_to_pydantic_resilient(
+        parser,
+        stage3_messages,
+        RawAnswer,
+        retry_policy=parsing_model.retry_policy,
+    )
     parsed_answer = parse_port_result.parsed
     model_calls += 1  # ParserPort makes at least one LLM call
 

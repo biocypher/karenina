@@ -86,20 +86,26 @@ This stage replaces `ParseTemplateStage` (stage 7a) when `agentic_parsing=True` 
 
 ```python
 # orchestrator.py
-if agentic_parsing:
+if agentic_parsing and agentic_parsing_trigger == "dynamic":
+    stages.append(DynamicParseTemplateStage())
+elif agentic_parsing:
     stages.append(AgenticParseTemplateStage())
 else:
     stages.append(ParseTemplateStage())
 ```
 
-Only one of stage 7a or 7b is ever present in a pipeline run; they are never both instantiated.
+Only one template parsing stage is ever present in a pipeline run; the classical, always-agentic, and dynamic-agentic stages are mutually exclusive.
 
-### Artifact Contract
+When `agentic_parsing=True` and `agentic_parsing_trigger="dynamic"`, the orchestrator uses `DynamicParseTemplateStage` in the same template parsing slot. Dynamic parsing first attempts a direct final-message parse, then escalates to the same investigation/extraction helpers used by `AgenticParseTemplateStage` when needed.
+
+### AgenticParseTemplateStage Artifact Contract
 
 | Direction | Artifact Keys |
 |-----------|--------------|
 | **Requires** | `RAW_ANSWER`, `ANSWER`, `RAW_LLM_RESPONSE` |
 | **Produces** | `PARSED_ANSWER`, `PARSING_MODEL_STR`, `INVESTIGATION_TRACE`, `AGENTIC_PARSING_PERFORMED` |
+
+`DynamicParseTemplateStage` shares the same required inputs and final `PARSED_ANSWER` output. It also records `DYNAMIC_PARSING_PERFORMED`, `DYNAMIC_PARSE_DECISION`, and `DYNAMIC_DECISION_REASONING`; when it escalates, it records the same `INVESTIGATION_TRACE` and `AGENTIC_PARSING_PERFORMED` fields as `AgenticParseTemplateStage`.
 
 ### should_run() Conditions
 
@@ -140,6 +146,54 @@ Calls `ParserPort.parse_to_pydantic()` (via `get_parser(context.parsing_model)`)
 - **Target schema**: the answer template class (same Pydantic `BaseAnswer` subclass that classical stage 7a would use)
 
 The return value is a parsed answer instance, identical in type to what `ParseTemplateStage` would produce. All downstream stages (VerifyTemplate, EmbeddingCheck, etc.) work identically regardless of which parse stage ran.
+
+### Dynamic Agentic Parsing
+
+Classic agentic template parsing runs the investigation step for every item. Dynamic mode adds a cheaper screening step first: it asks the parsing model to inspect only the final AI message and return exactly one JSON object. If the final message contains enough information to populate the relaxed template schema, the decision response is used directly.
+
+Sufficient final-message responses must use this shape:
+
+```json
+{"reasoning": "why the final message supports the fields", "sufficient": true, "answer": {"field": "value"}}
+```
+
+Insufficient final-message responses must use this shape:
+
+```json
+{"reasoning": "what is missing and where it likely lives", "sufficient": false}
+```
+
+Enable dynamic parsing with both fields:
+
+```json
+{
+  "agentic_parsing": true,
+  "agentic_parsing_trigger": "dynamic"
+}
+```
+
+`agentic_parsing_trigger` accepts `"always"` and `"dynamic"`. `"always"` is the default and preserves existing agentic parsing behavior: the investigation/extraction flow runs for every item. `"dynamic"` runs the decision call first and escalates to the same investigation/extraction flow when the final message is insufficient, malformed, or cannot validate against the relaxed template schema.
+
+Dynamic parsing still requires a deep-agent parsing interface such as `claude_agent_sdk` or `langchain_deep_agents`. The decision call itself uses the plain LLM port. On `claude_agent_sdk`, that plain LLM port may still spawn a Claude CLI subprocess per item, so the cost win comes from skipping the investigation/extraction session for final messages that are already sufficient, not from making the first call free.
+
+Temperature handling is best effort. Interfaces that honor `ModelConfig.temperature` should apply it to the decision call; the `claude_agent_sdk` plain LLM port currently ignores temperature, so dynamic parsing does not promise cross-interface determinism.
+
+Dynamic recovery works best with `agentic_judge_context="workspace_only"` or `"trace_and_workspace"`. With `agentic_judge_context="trace_only"`, escalation re-reads the trace context after the final message was already judged insufficient, so it cannot recover by inspecting workspace artifacts.
+
+Dynamic parsing adds result fields on `VerificationResultTemplate` and flattened storage columns:
+
+| Result field | Storage column |
+|--------------|----------------|
+| `dynamic_parsing_performed` | `template_dynamic_parsing_performed` |
+| `dynamic_parse_decision` | `template_dynamic_parse_decision` |
+| `dynamic_decision_reasoning` | `template_dynamic_decision_reasoning` |
+
+Karenina creates result tables with `CREATE TABLE IF NOT EXISTS` and does not alter existing result tables. To write dynamic results to persistent storage, use a fresh database or manually add the three columns before writing dynamic results to an existing database.
+
+Template replay and extension runs have two limitations:
+
+- On `extend_template` and other replayed template-parsing runs, answer generation is replayed before workspace resolution, so dynamic escalation may run without a workspace.
+- The decision call is judge-side and is not captured in replay entries, so replayed template-parsing runs regenerate the direct-versus-escalated decision. `extend_rubric` uses `rubric_only` and skips template parsing, so dynamic parsing does not run there.
 
 ### Result Storage
 
@@ -256,15 +310,16 @@ Benchmark.workspace_root
       -> generate_task_queue(workspace_root=..., ...)
         -> task dict["workspace_root"]  (overrides config value)
         -> task dict includes extract_feature_flags(config):
-             agentic_parsing, agentic_judge_context, agentic_parsing_max_turns,
-             agentic_parsing_timeout, workspace_copy, workspace_cleanup
+             agentic_parsing, agentic_parsing_trigger, agentic_judge_context,
+             agentic_parsing_max_turns, agentic_parsing_timeout,
+             workspace_copy, workspace_cleanup
       -> _run_single_task(task)
         -> run_single_model_verification(workspace_root=..., ...)
           -> VerificationContext(workspace_root=..., agentic_parsing=..., ...)
             -> GenerateAnswer._resolve_workspace()
 ```
 
-`VerificationConfig` fields (`agentic_parsing`, `workspace_copy`, `workspace_cleanup`, `agentic_judge_context`, `agentic_parsing_max_turns`, `agentic_parsing_timeout`) flow via `extract_feature_flags(config)` into each task dict. The `workspace_root` is provided separately by the `Benchmark` facade and overrides any value in the config at the task queue generation step.
+`VerificationConfig` fields (`agentic_parsing`, `agentic_parsing_trigger`, `workspace_copy`, `workspace_cleanup`, `agentic_judge_context`, `agentic_parsing_max_turns`, `agentic_parsing_timeout`) flow via `extract_feature_flags(config)` into each task dict. The `workspace_root` is provided separately by the `Benchmark` facade and overrides any value in the config at the task queue generation step.
 
 ### VerificationContext Fields
 
@@ -273,6 +328,7 @@ The following `VerificationContext` fields (in `stages/core/base.py`) control ag
 | Field | Type | Default | Source |
 |-------|------|---------|--------|
 | `agentic_parsing` | `bool` | `False` | `VerificationConfig` via `extract_feature_flags` |
+| `agentic_parsing_trigger` | `str` | `"always"` | `VerificationConfig` via `extract_feature_flags` |
 | `agentic_judge_context` | `str` | `"workspace_only"` | `VerificationConfig` via `extract_feature_flags` |
 | `agentic_parsing_max_turns` | `int` | `15` | `VerificationConfig` via `extract_feature_flags` |
 | `agentic_parsing_timeout` | `float` | `120.0` | `VerificationConfig` via `extract_feature_flags` |
@@ -291,13 +347,13 @@ Agentic parsing affects several other stages:
 |-------|------------|
 | **ValidateTemplate** (1) | Unaffected. Runs identically; produces the `ANSWER` and `RAW_ANSWER` artifacts that Stage 7b requires. |
 | **GenerateAnswer** (2) | Resolves workspace when `agentic_parsing=True`. Also uses `AgentPort` when `agent_tier=="deep_agent"`. |
-| **RecursionLimitAutoFail** (3) | If the answering agent hit the recursion limit, Stage 7b skips itself. |
-| **AbstentionCheck** (5) | If abstention is detected, Stage 7b skips itself. |
-| **SufficiencyCheck** (6) | If the response is insufficient, Stage 7b skips itself. |
-| **VerifyTemplate** (8) | Unaffected. Receives the same `PARSED_ANSWER` artifact regardless of whether Stage 7a or 7b produced it. |
+| **RecursionLimitAutoFail** (3) | If the answering agent hit the recursion limit, agentic template parsing skips itself. |
+| **AbstentionCheck** (5) | If abstention is detected, agentic template parsing skips itself. |
+| **SufficiencyCheck** (6) | If the response is insufficient, agentic template parsing skips itself. |
+| **VerifyTemplate** (8) | Unaffected. Receives the same `PARSED_ANSWER` artifact regardless of whether Stage 7a, Stage 7b, or dynamic parsing produced it. |
 | **EmbeddingCheck** (9) | Unaffected. Checks `field_verification_result` produced by Stage 8. |
-| **DeepJudgmentAutoFail** (10) | Skips itself when agentic parsing was used, because Stage 7b sets `DEEP_JUDGMENT_PERFORMED` to `False`. |
-| **FinalizeResult** (13) | Reads `INVESTIGATION_TRACE` and `AGENTIC_PARSING_PERFORMED` from the result builder. Handles workspace cleanup. |
+| **DeepJudgmentAutoFail** (10) | Skips itself when agentic parsing was used, because agentic template parsing sets `DEEP_JUDGMENT_PERFORMED` to `False`. |
+| **FinalizeResult** (13) | Reads agentic parsing result fields such as `INVESTIGATION_TRACE`, `AGENTIC_PARSING_PERFORMED`, and dynamic parsing decision metadata from the result builder. Handles workspace cleanup. |
 
 ## 10. Key File Reference
 
@@ -308,10 +364,10 @@ Agentic parsing affects several other stages:
 | Workspace resolution and answer generation | `benchmark/verification/stages/pipeline/generate_answer.py` |
 | Agentic parse stage (Stage 7b) | `benchmark/verification/stages/pipeline/agentic_parse_template.py` |
 | Classical parse stage (Stage 7a) | `benchmark/verification/stages/pipeline/parse_template.py` |
-| Stage orchestrator (selects 7a vs 7b) | `benchmark/verification/stages/core/orchestrator.py` |
+| Stage orchestrator (selects classical, always-agentic, or dynamic-agentic parsing) | `benchmark/verification/stages/core/orchestrator.py` |
 | ArtifactKeys and VerificationContext | `benchmark/verification/stages/core/base.py` |
 | Ground truth stripping | `schemas/entities/answer.py` |
-| Result components (investigation_trace field) | `schemas/verification/result_components.py` |
+| Result components (`investigation_trace` and dynamic parsing fields) | `schemas/verification/result_components.py` |
 | Workspace cleanup | `benchmark/verification/stages/pipeline/finalize_result.py` |
 | Feature flag extraction | `benchmark/verification/utils/task_helpers.py` |
 | JSON schema builder | `benchmark/verification/utils/schema_builder.py` |

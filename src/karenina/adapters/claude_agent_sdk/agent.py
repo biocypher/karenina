@@ -338,6 +338,20 @@ class ClaudeSDKAgentAdapter:
                 ):
                     options_kwargs[key] = value
 
+        # Deny Claude Code's bundled Skill tool by default. Newer CLIs
+        # (>= 2.1.170, observed against 2.1.146 which does not) advertise their
+        # bundled skills by appending a system-role message to the messages
+        # array of every API request. That message contaminates benchmark
+        # conversations with skill listings, and OpenAI-compatible Anthropic
+        # endpoints such as vLLM's /v1/messages reject it with HTTP 400 because
+        # only user/assistant roles are accepted inside messages. Disallowing
+        # the Skill tool suppresses the system-role message entirely (verified
+        # empirically against Claude Code 2.1.170). Callers can re-enable
+        # skills via AgentConfig(extra={"disallowed_tools": []}); the extra
+        # loop above already applied any caller-provided value, so setdefault
+        # respects it.
+        options_kwargs.setdefault("disallowed_tools", ["Skill"])
+
         # Build env dict for Anthropic settings (api_key, base_url).
         # The Claude Agent SDK reads ANTHROPIC_API_KEY and ANTHROPIC_BASE_URL from env.
         env_vars: dict[str, str] = dict(options_kwargs.get("env") or {})

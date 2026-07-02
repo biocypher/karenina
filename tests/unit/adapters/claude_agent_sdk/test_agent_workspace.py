@@ -353,7 +353,11 @@ class TestDockerCliWrapper:
         assert "ANTHROPIC_DEFAULT_SONNET_MODEL" in command
         assert "ANTHROPIC_DEFAULT_OPUS_MODEL" in command
         assert "karenina-bixbench-claude:latest" in command
-        assert "claude" in command
+        image_index = command.index("karenina-bixbench-claude:latest")
+        # The CLI is launched through a login shell so /etc/profile provisioning
+        # (per-task scratch root in the BixBench images) applies to claude and
+        # every Bash tool subshell it spawns.
+        assert command[image_index + 1 : image_index + 5] == ["/bin/sh", "-lc", 'exec claude "$@"', "claude"]
         assert str(workspace) not in command[-1]
         assert "/workspace" in command[-1]
 
@@ -375,7 +379,8 @@ class TestDockerCliWrapper:
         assert "--pwd" in command
         assert command[command.index("--pwd") + 1] == "/workspace"
         assert str(image) in command
-        assert "claude" in command
+        image_index = command.index(str(image))
+        assert command[image_index + 1 : image_index + 5] == ["/bin/sh", "-lc", 'exec claude "$@"', "claude"]
         assert str(workspace) not in command[-1]
         assert "/workspace" in command[-1]
 
@@ -445,6 +450,30 @@ class TestBuildOptionsIsolation:
         # env may still exist for ANTHROPIC_* keys but should not fabricate CLAUDE_CONFIG_DIR
         env = getattr(options, "env", None) or {}
         assert env.get("CLAUDE_CONFIG_DIR") is None
+
+    def test_build_options_disallows_skill_tool_by_default(self):
+        # Claude Code >= 2.1.170 advertises bundled skills via a system-role
+        # message inside the messages array, which OpenAI-compatible Anthropic
+        # endpoints (vLLM /v1/messages) reject with HTTP 400. Disallowing the
+        # Skill tool suppresses that message.
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(),
+            tools=None,
+        )
+        assert options.disallowed_tools == ["Skill"]
+
+    def test_build_options_skill_disallow_overridable_via_extra(self):
+        adapter = self._adapter()
+        options = adapter._build_options(
+            system_prompt=None,
+            mcp_servers=None,
+            config=AgentConfig(extra={"disallowed_tools": []}),
+            tools=None,
+        )
+        assert options.disallowed_tools == []
 
 
 @pytest.mark.unit

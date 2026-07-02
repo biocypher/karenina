@@ -88,9 +88,10 @@ def run_single_model_verification(
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
-    allow_partial_trace_scoring: bool = False,
+    allow_partial_trace_scoring: bool = True,
     # Agentic parsing configuration
     agentic_parsing: bool = False,
+    agentic_parsing_trigger: str = "always",
     agentic_judge_context: str = "workspace_only",
     agentic_parsing_max_turns: int = 15,
     agentic_parsing_timeout: float = 120.0,
@@ -220,6 +221,7 @@ def run_single_model_verification(
         cached_answer_data=cached_answer_data,
         # Agentic Parsing
         agentic_parsing=agentic_parsing,
+        agentic_parsing_trigger=agentic_parsing_trigger,
         agentic_judge_context=agentic_judge_context,
         agentic_parsing_max_turns=agentic_parsing_max_turns,
         agentic_parsing_timeout=agentic_parsing_timeout,
@@ -294,6 +296,7 @@ def run_single_model_verification(
         deep_judgment_enabled=deep_judgment_mode != "disabled",
         evaluation_mode=evaluation_mode,
         agentic_parsing=agentic_parsing,
+        agentic_parsing_trigger=agentic_parsing_trigger,
     )
 
     # Execute verification pipeline

@@ -3,6 +3,7 @@
 import pytest
 
 from karenina.benchmark.verification.failure_classifier import collect_caveats
+from karenina.benchmark.verification.stages.core.base import ArtifactKeys
 from karenina.schemas.results.caveat import Caveat
 from tests.unit.benchmark.verification.stages.core._context_factory import make_context
 
@@ -40,3 +41,8 @@ class TestCollectCaveats:
         # Matches the None-safety fix in classify_failure (Task 5 follow-up).
         ctx = make_context(retry_counts={"timeout": {"used": None, "budget": 3}})
         assert Caveat.RETRIES_USED not in collect_caveats(ctx)
+
+    def test_parse_decision_malformed(self):
+        ctx = make_context()
+        ctx.set_result_field(ArtifactKeys.PARSE_DECISION_MALFORMED, True)
+        assert Caveat.PARSE_DECISION_MALFORMED in collect_caveats(ctx)

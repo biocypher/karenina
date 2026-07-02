@@ -366,6 +366,21 @@ class TestAgenticProgressiveFileSink:
         assert sink.completed_triples() == set()
         assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
 
+    def test_dynamic_parser_failure_is_not_a_completed_triple_but_remains_hydratable(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(
+            category=FailureCategory.CONNECTION,
+            stage="DynamicParseTemplate",
+            reason="connection retries exhausted",
+        )
+        result = _result("q1", failure=failure, raw_llm_response="usable answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert sink.completed_triples() == set()
+        assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
+
     def test_timeout_partial_trace_is_not_a_completed_triple_but_remains_hydratable(self, tmp_path: Path):
         sink = self._fresh(tmp_path)
         failure = Failure(

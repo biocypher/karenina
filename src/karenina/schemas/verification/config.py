@@ -117,11 +117,11 @@ class VerificationConfig(BaseModel):
     # These flags only control what input is provided to the parsing/evaluation models.
     # If False and the trace doesn't end with an AI message, verification stage will fail with error.
     allow_partial_trace_scoring: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "When True, permit template parsing and scoring to run on responses "
-            "that were truncated by answer-generation timeout. Timeout metadata "
-            "is still preserved; this is intended for explicit salvage analyses."
+            "Permit template parsing and scoring to run on responses that were "
+            "truncated by answer-generation timeout. Timeout metadata is still "
+            "preserved separately so partial scores do not hide agent failures."
         ),
     )
 
@@ -225,6 +225,15 @@ class VerificationConfig(BaseModel):
         description=(
             "Enable agentic parsing (Stage 7b). The judge uses tools to "
             "independently verify artifacts before extracting structured data."
+        ),
+    )
+    agentic_parsing_trigger: Literal["always", "dynamic"] = Field(
+        default="always",
+        description=(
+            "When agentic_parsing=True, controls whether Stage 7b always runs "
+            "the agentic investigation or first tries a dynamic final-message parse. "
+            "'always' preserves existing behavior. 'dynamic' escalates to agentic "
+            "investigation only when the final response is insufficient or malformed."
         ),
     )
     agentic_judge_context: Literal["workspace_only", "trace_and_workspace", "trace_only"] = Field(
@@ -565,6 +574,9 @@ class VerificationConfig(BaseModel):
                 )
 
         # Agentic parsing validation
+        if self.agentic_parsing_trigger == "dynamic" and not self.agentic_parsing:
+            raise ValueError("agentic_parsing_trigger='dynamic' requires agentic_parsing=True")
+
         if self.agentic_parsing:
             # Check parsing model interface supports AgentPort
             from karenina.adapters.registry import AdapterRegistry
@@ -593,6 +605,13 @@ class VerificationConfig(BaseModel):
                 logger.warning(
                     "agentic_parsing=True with agentic_judge_context='trace_only' "
                     "is equivalent to classical parsing (Stage 7a)."
+                )
+
+            if self.agentic_parsing_trigger == "dynamic" and self.agentic_judge_context == "trace_only":
+                logger.warning(
+                    "agentic_parsing_trigger='dynamic' with agentic_judge_context='trace_only' "
+                    "can only escalate to the same trace context that was already judged insufficient. "
+                    "Use agentic_judge_context='workspace_only' or 'trace_and_workspace' for workspace recovery."
                 )
 
             # materialize_trace needs a trace in the context

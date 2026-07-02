@@ -130,6 +130,7 @@ class TestAgenticRubricEvaluationProperties:
         assert ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED in stage.produces
         assert ArtifactKeys.AGENTIC_TRAIT_SCORES in stage.produces
         assert ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES in stage.produces
+        assert ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA in stage.produces
 
 
 @pytest.mark.unit
@@ -161,8 +162,43 @@ class TestAgenticRubricEvaluationExecute:
         assert "code_quality" in traces
         assert traces["code_quality"] == "investigation trace"
 
+        metadata = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
+        assert metadata == {}
+
         performed = ctx.get_artifact(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED)
         assert performed is True
+
+    def test_execute_individual_strategy_stores_extraction_metadata(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = (True, "investigation trace")
+        fake_evaluator.last_extraction_metadata = {
+            "method": "local_json",
+            "local_json_error": None,
+            "parser_error": None,
+        }
+
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        stage = mod.AgenticRubricEvaluationStage()
+        stage.execute(ctx)
+
+        metadata = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
+        assert metadata == {
+            "code_quality": {
+                "method": "local_json",
+                "local_json_error": None,
+                "parser_error": None,
+            }
+        }
 
     def test_execute_failed_trait_stores_none(self, monkeypatch):
         from karenina.benchmark.verification.stages.pipeline import (
