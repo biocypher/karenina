@@ -48,6 +48,9 @@ def build_config_from_cli_args(
     embedding_model: str | None,
     async_execution: bool,
     async_workers: int | None,
+    workspace_output_mode: str | None = None,
+    workspace_output_dir: Path | None = None,
+    workspace_output_exclude_patterns: list[str] | None = None,
     preset_config: VerificationConfig | None = None,
     manual_traces_obj: object | None = None,
 ) -> VerificationConfig:
@@ -86,6 +89,9 @@ def build_config_from_cli_args(
         embedding_model: Model to use for embedding similarity.
         async_execution: Whether to run verification asynchronously.
         async_workers: Number of async workers.
+        workspace_output_mode: Workspace sidecar capture mode.
+        workspace_output_dir: Directory for workspace sidecars.
+        workspace_output_exclude_patterns: Additional workspace sidecar excludes.
         preset_config: Optional preset configuration to use as base.
         manual_traces_obj: Optional pre-loaded manual traces object.
 
@@ -149,6 +155,9 @@ def build_config_from_cli_args(
         deep_judgment_rubric_search=deep_judgment_rubric_search,
         deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
         deep_judgment_rubric_config=rubric_config_obj,
+        workspace_output_mode=workspace_output_mode,  # type: ignore[arg-type]
+        workspace_output_dir=workspace_output_dir,
+        workspace_output_exclude_patterns=workspace_output_exclude_patterns,
     )
 
 
@@ -303,6 +312,9 @@ def build_config_non_interactive(
     embedding_model: str | None,
     async_execution: bool,
     async_workers: int | None,
+    workspace_output_mode: str | None,
+    workspace_output_dir: Path | None,
+    workspace_output_exclude_patterns: list[str] | None,
     manual_traces: Path | None,
     benchmark: Benchmark,
     progressive_save: bool,
@@ -375,6 +387,9 @@ def build_config_non_interactive(
             embedding_model=embedding_model,
             async_execution=async_execution,
             async_workers=async_workers,
+            workspace_output_mode=workspace_output_mode,
+            workspace_output_dir=workspace_output_dir,
+            workspace_output_exclude_patterns=workspace_output_exclude_patterns,
             preset_config=preset_config,
             manual_traces_obj=manual_traces_obj,
         )
@@ -398,6 +413,9 @@ def build_config_non_interactive(
                     embedding_model,
                     async_execution,
                     async_workers,
+                    workspace_output_mode,
+                    workspace_output_dir,
+                    workspace_output_exclude_patterns,
                 ]
             )
             if has_cli_overrides:

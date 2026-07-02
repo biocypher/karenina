@@ -10,6 +10,7 @@ import pytest
 
 from karenina.benchmark.verification.sinks import (
     STATE_FORMAT_VERSION,
+    AgenticProgressiveFileSink,
     CompositeSink,
     InMemorySink,
     ProgressiveFileSink,
@@ -17,10 +18,12 @@ from karenina.benchmark.verification.sinks import (
     is_completed_result,
 )
 from karenina.schemas.config import ModelConfig
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationConfig,
     VerificationResult,
     VerificationResultMetadata,
+    VerificationResultTemplate,
 )
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.progressive_save import TaskIdentifier
@@ -52,6 +55,9 @@ def _result(
     replicate: int | None = None,
     *,
     completed: bool = True,
+    failure: Failure | None = None,
+    raw_llm_response: str = "",
+    investigation_trace: str | None = None,
 ) -> VerificationResult:
     answering = ModelIdentity(interface="openai_endpoint", model_name=answering_name)
     parsing = ModelIdentity(interface="openai_endpoint", model_name=parsing_name)
@@ -75,6 +81,11 @@ def _result(
             replicate=replicate,
             result_id=result_id,
             run_name="test_run",
+            failure=failure,
+        ),
+        template=VerificationResultTemplate(
+            raw_llm_response=raw_llm_response,
+            investigation_trace=investigation_trace,
         ),
     )
 
@@ -313,6 +324,157 @@ class TestProgressiveFileSink:
         sink.on_start(["k1", "k2"], sink.config)
         sink.on_start(["k2"], sink.config)
         assert sink.total_tasks == 2
+
+
+@pytest.mark.unit
+class TestAgenticProgressiveFileSink:
+    def _fresh(self, tmp_path: Path, *, keep_sidecars: bool = False) -> AgenticProgressiveFileSink:
+        return AgenticProgressiveFileSink(
+            output_path=tmp_path / "results.json",
+            config=_config(),
+            benchmark_path="bench.jsonld",
+            trace_output_dir=tmp_path / "traces",
+            keep_progress_sidecars=keep_sidecars,
+        )
+
+    def test_writes_readable_trace_sidecars_on_result(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        result = _result(
+            "q1",
+            raw_llm_response="answer trace",
+            investigation_trace="investigation trace",
+        )
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert (tmp_path / "traces" / "q1" / "answering_trace.txt").read_text() == "answer trace"
+        assert (tmp_path / "traces" / "q1" / "investigation_trace.txt").read_text() == "investigation trace"
+
+    def test_parser_failure_is_not_a_completed_triple_but_remains_hydratable(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(
+            category=FailureCategory.PARSING,
+            stage="AgenticParseTemplate",
+            reason="structured extraction failed",
+        )
+        result = _result("q1", failure=failure, raw_llm_response="usable answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert sink.completed_triples() == set()
+        assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
+
+    def test_success_after_parser_failure_becomes_terminal_and_export_dedupes(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        parser_failure = Failure(
+            category=FailureCategory.PARSING,
+            stage="AgenticParseTemplate",
+            reason="structured extraction failed",
+        )
+        failed = _result("q1", failure=parser_failure, raw_llm_response="old trace")
+        passed = _result("q1", raw_llm_response="new trace")
+        manifest_key = TaskIdentifier.from_result(failed).to_key()
+        sink.on_start([manifest_key], sink.config)
+
+        sink.on_result(failed)
+        sink.on_result(passed)
+        sink.on_finalize(all_complete=True)
+
+        assert len(sink.completed_triples()) == 1
+        export = json.loads((tmp_path / "results.json").read_text())
+        assert len(export["results"]) == 1
+        assert export["results"][0]["template"]["raw_llm_response"] == "new trace"
+        assert not sink.state_path.exists()
+        assert not sink.jsonl_path.exists()
+
+    def test_parser_failure_keeps_resume_sidecars_even_when_batch_completed(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(
+            category=FailureCategory.PARSING,
+            stage="parse_template",
+            reason="parse failed",
+        )
+        result = _result("q1", failure=failure, raw_llm_response="answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+        sink.on_result(result)
+
+        sink.on_finalize(all_complete=True)
+
+        assert sink.output_path.exists()
+        assert sink.state_path.exists()
+        assert sink.jsonl_path.exists()
+        export = json.loads(sink.output_path.read_text())
+        assert export["metadata"]["job_summary"]["is_complete"] is False
+
+    def test_batch_partial_export_is_marked_incomplete_without_parser_failures(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        result = _result("q1", raw_llm_response="answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key(), "pending"], sink.config)
+        sink.on_result(result)
+
+        sink.on_finalize(all_complete=False)
+
+        export = json.loads(sink.output_path.read_text())
+        assert export["metadata"]["job_summary"]["is_complete"] is False
+        assert sink.state_path.exists()
+
+    def test_keep_sidecars_preserves_state_after_success(self, tmp_path: Path):
+        sink = self._fresh(tmp_path, keep_sidecars=True)
+        result = _result("q1", raw_llm_response="answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+        sink.on_result(result)
+
+        sink.on_finalize(all_complete=True)
+
+        assert sink.output_path.exists()
+        assert sink.state_path.exists()
+        assert sink.jsonl_path.exists()
+
+    def test_final_export_summary_counts_content_failures_as_failed(self, tmp_path: Path):
+        sink = self._fresh(tmp_path, keep_sidecars=True)
+        passed = _result("q1", raw_llm_response="answer trace")
+        failed = _result(
+            "q2",
+            failure=Failure(
+                category=FailureCategory.CONTENT,
+                stage="verify_template",
+                reason="verify_template returned False",
+            ),
+            raw_llm_response="answer trace",
+        )
+        sink.on_start(_manifest_from_results([passed, failed]), sink.config)
+        sink.on_result(passed)
+        sink.on_result(failed)
+
+        sink.on_finalize(all_complete=True)
+
+        export = json.loads(sink.output_path.read_text())
+        summary = export["metadata"]["job_summary"]
+        assert summary["successful_count"] == 1
+        assert summary["failed_count"] == 1
+        assert summary["is_complete"] is True
+
+    def test_final_export_summary_uses_latest_row_when_retry_succeeds(self, tmp_path: Path):
+        sink = self._fresh(tmp_path, keep_sidecars=True)
+        failure = Failure(
+            category=FailureCategory.PARSING,
+            stage="AgenticParseTemplate",
+            reason="structured extraction failed",
+        )
+        failed = _result("q1", failure=failure, raw_llm_response="old trace")
+        passed = _result("q1", raw_llm_response="new trace")
+        sink.on_start([TaskIdentifier.from_result(failed).to_key()], sink.config)
+        sink.on_result(failed)
+        sink.on_result(passed)
+
+        sink.on_finalize(all_complete=True)
+
+        export = json.loads(sink.output_path.read_text())
+        summary = export["metadata"]["job_summary"]
+        assert summary["successful_count"] == 1
+        assert summary["failed_count"] == 0
 
 
 # ---------------------------------------------------------------------------

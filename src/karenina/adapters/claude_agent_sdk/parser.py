@@ -87,6 +87,14 @@ def _derive_openai_base_url(anthropic_base_url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}/v1"
 
 
+def _configured_openai_base_url(model_config: ModelConfig) -> str | None:
+    """Return an explicit OpenAI-compatible parser endpoint override, if configured."""
+
+    extra_kwargs = getattr(model_config, "extra_kwargs", None) or {}
+    value = extra_kwargs.get("claude_sdk_parser_openai_base_url")
+    return str(value) if value else None
+
+
 class ClaudeSDKParserAdapter:
     """Parser adapter using direct API calls for structured output.
 
@@ -156,7 +164,9 @@ class ClaudeSDKParserAdapter:
         if self._openai_client is None:
             from openai import AsyncOpenAI
 
-            base_url = _derive_openai_base_url(self._config.anthropic_base_url)  # type: ignore[arg-type]
+            base_url = _configured_openai_base_url(self._config) or _derive_openai_base_url(
+                self._config.anthropic_base_url  # type: ignore[arg-type]
+            )
             api_key = self._config.anthropic_api_key.get_secret_value() if self._config.anthropic_api_key else "EMPTY"
             kwargs: dict[str, Any] = {
                 "api_key": api_key,

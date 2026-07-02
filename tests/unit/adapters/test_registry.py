@@ -226,6 +226,30 @@ class TestRegistrationBehavior:
         assert result is not None
         assert result.description == "Second adapter"
 
+    def test_registration_installs_runtime_profile(self) -> None:
+        """AdapterSpec runtime profiles should integrate extension adapters."""
+        from karenina.adapters.agent_runtime import AgentRuntimeProfile, get_agent_runtime_capabilities
+        from karenina.adapters.registry import AdapterRegistry, AdapterSpec
+        from karenina.ports.capabilities import PortCapabilities
+        from karenina.schemas.config import ModelConfig
+
+        profile = AgentRuntimeProfile(
+            capabilities=lambda _config: PortCapabilities(
+                supports_system_prompt=True,
+                supports_file_tools=True,
+            )
+        )
+        AdapterRegistry.register(
+            AdapterSpec(
+                interface="test_unique_interface_runtime_profile",
+                description="Runtime profile test adapter",
+                runtime_profile=profile,
+            )
+        )
+        config = ModelConfig.model_construct(interface="test_unique_interface_runtime_profile")
+
+        assert get_agent_runtime_capabilities(config).supports_file_tools is True
+
 
 class TestManualAdapterSpec:
     """Tests specifically for manual adapter registration."""

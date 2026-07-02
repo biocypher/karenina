@@ -27,7 +27,9 @@ class TestTraceFormatConformance:
         assert "--- AI Message ---" in trace
 
     def test_tool_call_uses_standard_delimiter(self):
-        """raw_trace must use '--- Tool Call ---' for tool invocations."""
+        """raw_trace must place tool calls inline inside ``--- AI Message ---``
+        with a ``Tool Calls:`` block, matching the canonical format used by
+        the langchain, claude_agent_sdk, and manual adapters."""
         from langchain_core.messages import AIMessage
 
         messages = [
@@ -37,15 +39,20 @@ class TestTraceFormatConformance:
             ),
         ]
         trace = deep_agents_messages_to_raw_trace(messages)
-        assert "--- Tool Call ---" in trace
+        assert "--- AI Message ---" in trace
+        assert "Tool Calls:" in trace
+        # No standalone --- Tool Call --- section; everything stays in the AI Message
+        assert "--- Tool Call ---" not in trace
 
     def test_tool_result_uses_standard_delimiter(self):
-        """raw_trace must use '--- Tool Result ---' for tool outputs."""
+        """raw_trace must use ``--- Tool Message (call_id: <id>) ---`` for
+        tool outputs, matching the canonical format used by the other adapters."""
         from langchain_core.messages import ToolMessage
 
         messages = [ToolMessage(content="result data", tool_call_id="c1")]
         trace = deep_agents_messages_to_raw_trace(messages)
-        assert "--- Tool Result ---" in trace
+        assert "--- Tool Message (call_id: c1) ---" in trace
+        assert "--- Tool Result ---" not in trace
 
     def test_empty_messages_produce_empty_trace(self):
         """Empty message list must produce empty string, not an error."""

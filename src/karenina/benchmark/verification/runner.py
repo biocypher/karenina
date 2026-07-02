@@ -98,6 +98,9 @@ def run_single_model_verification(
     workspace_root: Path | None = None,
     workspace_copy: bool = True,
     workspace_cleanup: bool = True,
+    workspace_output_mode: str = "none",
+    workspace_output_dir: Path | None = None,
+    workspace_output_exclude_patterns: list[str] | None = None,
     question_workspace_path: str | None = None,
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
@@ -224,6 +227,9 @@ def run_single_model_verification(
         workspace_root=workspace_root,
         workspace_copy=workspace_copy,
         workspace_cleanup=workspace_cleanup,
+        workspace_output_mode=workspace_output_mode,
+        workspace_output_dir=workspace_output_dir,
+        workspace_output_exclude_patterns=workspace_output_exclude_patterns or [],
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,

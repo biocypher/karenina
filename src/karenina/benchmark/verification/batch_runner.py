@@ -375,6 +375,9 @@ def execute_task(
             workspace_root=task.get("workspace_root"),
             workspace_copy=task.get("workspace_copy", True),
             workspace_cleanup=task.get("workspace_cleanup", True),
+            workspace_output_mode=task.get("workspace_output_mode", "none"),
+            workspace_output_dir=task.get("workspace_output_dir"),
+            workspace_output_exclude_patterns=task.get("workspace_output_exclude_patterns"),
             question_workspace_path=task.get("question_workspace_path"),
             # Agentic rubric evaluation
             agentic_rubric_strategy=task.get("agentic_rubric_strategy", "individual"),
@@ -598,6 +601,15 @@ def run_verification_batch(
             sink.on_finalize(all_complete=all_complete)
         except Exception:  # noqa: BLE001
             logger.warning("Sink on_finalize raised; continuing", exc_info=True)
+
+    workspace_output_dir: Path | None = config.workspace_output_dir
+    if all_complete and config.workspace_output_mode != "none" and workspace_output_dir is not None:
+        from karenina.benchmark.verification.workspace_capture import compact_manifest
+
+        try:
+            compact_manifest(workspace_output_dir)
+        except Exception:  # noqa: BLE001
+            logger.warning("Workspace capture manifest compaction raised; continuing", exc_info=True)
 
     # Convert dict to VerificationResultSet
     result_list = list(results.values())

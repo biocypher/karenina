@@ -213,6 +213,27 @@ def sdk_messages_to_trace_messages(
                 if hasattr(msg, "model") and msg.model:
                     trace_msg["model"] = msg.model
 
+                # Add per-call usage metadata if present so post-hoc audit of
+                # token usage / cache hits per turn is preserved. SDK
+                # AssistantMessage exposes Anthropic-shaped usage dict with
+                # input_tokens / output_tokens (always) and optional cache
+                # fields (cache_read_input_tokens / cache_creation_input_tokens).
+                if hasattr(msg, "usage") and msg.usage:
+                    usage_data = msg.usage
+                    per_call_usage: dict[str, int] = {
+                        "input_tokens": int(usage_data.get("input_tokens", 0) or 0),
+                        "output_tokens": int(usage_data.get("output_tokens", 0) or 0),
+                    }
+                    # Only include cache fields when reported, so we can
+                    # distinguish "not reported" from a real zero.
+                    cache_read = usage_data.get("cache_read_input_tokens")
+                    if cache_read is not None:
+                        per_call_usage["cache_read_input_tokens"] = int(cache_read)
+                    cache_creation = usage_data.get("cache_creation_input_tokens")
+                    if cache_creation is not None:
+                        per_call_usage["cache_creation_input_tokens"] = int(cache_creation)
+                    trace_msg["usage_metadata"] = per_call_usage
+
                 result.append(trace_msg)
                 block_index += 1
 

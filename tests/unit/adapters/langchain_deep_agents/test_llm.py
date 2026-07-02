@@ -8,6 +8,7 @@ import pytest
 
 from karenina.adapters.langchain_deep_agents.llm import DeepAgentsLLMAdapter
 from karenina.ports import LLMResponse, Message
+from karenina.schemas.config import ModelConfig
 
 
 @pytest.mark.unit
@@ -99,3 +100,80 @@ class TestDeepAgentsSDKRetrySuppression:
         create_chat_model(deep_agents_model_config)
 
         assert captured_kwargs.get("max_retries") == 0
+
+    def test_create_chat_model_allows_explicit_max_retries_override(self, deep_agents_model_config, monkeypatch):
+        """Agent loops can opt into SDK model-call retries without changing LLM/parser defaults."""
+        captured_kwargs: dict = {}
+
+        def _capture_init(*, model, model_provider, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.initialization.init_chat_model",
+            _capture_init,
+        )
+
+        from karenina.adapters.langchain_deep_agents.initialization import create_chat_model
+
+        create_chat_model(deep_agents_model_config, max_retries=3)
+
+        assert captured_kwargs.get("max_retries") == 3
+
+
+@pytest.mark.unit
+class TestDeepAgentsEndpointBaseUrlMode:
+    def test_create_chat_model_normalizes_endpoint_to_v1_by_default(self, monkeypatch):
+        captured_kwargs: dict = {}
+
+        def _capture_init(*, model, model_provider, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.initialization.init_chat_model",
+            _capture_init,
+        )
+
+        from karenina.adapters.langchain_deep_agents.initialization import create_chat_model
+
+        create_chat_model(
+            ModelConfig(
+                id="qwen",
+                model_name="qwen",
+                model_provider="openai",
+                interface="langchain_deep_agents",
+                endpoint_base_url="http://localhost:8000",
+                endpoint_api_key="EMPTY",
+            )
+        )
+
+        assert captured_kwargs["base_url"] == "http://localhost:8000/v1"
+
+    def test_create_chat_model_can_use_raw_endpoint_base_url(self, monkeypatch):
+        captured_kwargs: dict = {}
+
+        def _capture_init(*, model, model_provider, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.initialization.init_chat_model",
+            _capture_init,
+        )
+
+        from karenina.adapters.langchain_deep_agents.initialization import create_chat_model
+
+        create_chat_model(
+            ModelConfig(
+                id="glm-5.1",
+                model_name="glm-5.1",
+                model_provider="openai",
+                interface="langchain_deep_agents",
+                endpoint_base_url="https://api.z.ai/api/coding/paas/v4",
+                endpoint_api_key="EMPTY",
+                extra_kwargs={"endpoint_base_url_mode": "raw"},
+            )
+        )
+
+        assert captured_kwargs["base_url"] == "https://api.z.ai/api/coding/paas/v4"

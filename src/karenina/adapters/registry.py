@@ -268,6 +268,9 @@ class AdapterSpec:
         availability_checker: Function to check if this adapter is available.
         fallback_interface: Interface to fall back to if this one is unavailable.
         routes_to: If set, this interface routes to another (e.g., "openrouter" -> "langchain").
+        runtime_profile: Optional runtime behavior profile for shared agent
+            prompt/capability helpers. External adapters can provide this to
+            integrate with sandbox path mapping without changing core code.
 
     Example:
         >>> spec = AdapterSpec(
@@ -294,6 +297,10 @@ class AdapterSpec:
 
     # Routing (for interfaces that delegate to another)
     routes_to: str | None = None
+
+    # Optional runtime behavior extension hook. Kept as Any to avoid coupling
+    # the adapter registry to agent-only helper types at import time.
+    runtime_profile: Any | None = None
 
     # Additional metadata
     supports_mcp: bool = False
@@ -368,6 +375,10 @@ class AdapterRegistry:
             logger.warning(f"Overwriting existing adapter spec for interface: {spec.interface}")
 
         cls._specs[spec.interface] = spec
+        if spec.runtime_profile is not None:
+            from karenina.adapters.agent_runtime import register_agent_runtime_profile
+
+            register_agent_runtime_profile(spec.interface, spec.runtime_profile, force=force)
         logger.debug(f"Registered adapter: {spec.interface} ({spec.description})")
         return spec
 

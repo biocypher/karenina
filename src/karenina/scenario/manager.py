@@ -580,6 +580,9 @@ class ScenarioManager:
             workspace_is_copy=turn_workspace_path is not None,
             workspace_copy=config.workspace_copy,
             workspace_cleanup=config.workspace_cleanup,
+            workspace_output_mode=config.workspace_output_mode,
+            workspace_output_dir=config.workspace_output_dir,
+            workspace_output_exclude_patterns=config.workspace_output_exclude_patterns,
             question_workspace_path=getattr(node.question, "workspace_path", None),
             # Replay fields: copied from config onto the per-turn context.
             # scenario_node_visit_index is read from the current ScenarioState

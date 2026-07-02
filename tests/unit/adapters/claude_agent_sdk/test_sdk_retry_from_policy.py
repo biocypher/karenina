@@ -19,6 +19,7 @@ def _make_config(
     *,
     retry_policy: RetryPolicy | None = None,
     anthropic_base_url: str | None = None,
+    extra_kwargs: dict | None = None,
 ) -> ModelConfig:
     """Create a ModelConfig for claude_agent_sdk parser tests."""
     return ModelConfig(
@@ -29,6 +30,7 @@ def _make_config(
         max_tokens=1024,
         retry_policy=retry_policy,
         anthropic_base_url=anthropic_base_url,
+        extra_kwargs=extra_kwargs,
     )
 
 
@@ -136,3 +138,20 @@ class TestClaudeSDKParserOpenAIRetry:
 
             _, kwargs = mock_cls.call_args
             assert kwargs["max_retries"] == 0
+
+    def test_openai_client_uses_explicit_parser_base_url_override(self) -> None:
+        """Z.ai-style endpoint layouts can override the OpenAI parser base URL."""
+        config = _make_config(
+            anthropic_base_url="https://api.z.ai/api/anthropic",
+            extra_kwargs={
+                "claude_sdk_parser_openai_base_url": "https://api.z.ai/api/coding/paas/v4",
+            },
+        )
+        parser = ClaudeSDKParserAdapter(config)
+
+        with patch("openai.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            parser._get_openai_client()
+
+            _, kwargs = mock_cls.call_args
+            assert kwargs["base_url"] == "https://api.z.ai/api/coding/paas/v4"

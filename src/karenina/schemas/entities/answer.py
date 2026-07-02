@@ -249,7 +249,7 @@ class BaseAnswer(BaseModel):
         self.__dict__.pop("_field_results", None)
         self.__dict__.pop("_resolved_ground_truths", None)
 
-    def _compute_field_results(self) -> dict[str, bool]:
+    def _compute_field_results(self) -> dict[str, bool | None]:
         """Evaluate all VerifiedField checks and cache in _field_results.
 
         Results are cached in self.__dict__["_field_results"] after the first
@@ -265,22 +265,31 @@ class BaseAnswer(BaseModel):
         check_trace() result against bool(meta.ground_truth). For parsed
         fields, calls primitive.check(extracted, ground_truth).
 
+        Tri-valued results:
+            - True: field extracted and matches ground truth.
+            - False: field extracted and does NOT match ground truth.
+            - None: field returned null by the extractor (i.e., the field
+              name is present in ``self._null_fields``). This is kept
+              distinct from False so a null extraction cannot silently match
+              a False ground truth. Populated by the agentic-parse stage.
+
         Returns:
-            Mapping of field name to pass/fail boolean.
+            Mapping of field name to True / False / None.
 
         Raises:
             ValueError: If a trace field is used but _raw_trace is not set.
         """
         cached = self.__dict__.get("_field_results")
         if cached is not None:
-            return cast(dict[str, bool], cached)
+            return cast(dict[str, bool | None], cached)
 
         from karenina.schemas.entities.conditional import _resolve_conditional
         from karenina.schemas.primitives import TracePrimitive
         from karenina.schemas.primitives.registry import _reconstruct_primitive
 
         verified = self.__class__._get_verified_fields()
-        results: dict[str, bool] = {}
+        null_fields: set[str] = self.__dict__.get("_null_fields") or set()
+        results: dict[str, bool | None] = {}
         resolved_gts: dict[str, Any] = {}
 
         for name, meta in verified.items():
@@ -297,6 +306,12 @@ class BaseAnswer(BaseModel):
 
             resolved_gts[name] = ground_truth
 
+            # If the extractor returned null for this field, surface None so
+            # downstream scoring can distinguish "not answered" from "False".
+            if name in null_fields:
+                results[name] = None
+                continue
+
             if isinstance(primitive, TracePrimitive):
                 raw_trace = getattr(self, "_raw_trace", None)
                 if raw_trace is None:
@@ -304,7 +319,7 @@ class BaseAnswer(BaseModel):
                 trace_result = primitive.check_trace(raw_trace)
                 results[name] = trace_result == bool(ground_truth)
             else:
-                extracted = getattr(self, name)
+                extracted = getattr(self, name, None)
                 results[name] = primitive.check(extracted, ground_truth)
 
         self.__dict__["_field_results"] = results
@@ -356,7 +371,10 @@ class BaseAnswer(BaseModel):
             if strategy is not None:
                 return evaluate_strategy(strategy, field_results)
 
-        return all(field_results.values())
+        # Tri-valued results: only True counts as pass. None (null extraction)
+        # is treated as not-satisfied here, but remains distinguishable from
+        # False in the cached field_results dict.
+        return all(v is True for v in field_results.values())
 
     def _auto_verify_granular(self) -> float:
         """Auto-generated verify_granular() for VerifiedField templates.
@@ -389,12 +407,16 @@ class BaseAnswer(BaseModel):
         if strategy is not None:
             return self._composition_aware_granular(strategy, field_results, verified)
 
-        # Default AllOf behavior: flat weighted average
+        # Default AllOf behavior: flat weighted average.
+        # None (null extraction) is treated as not-satisfied here: it does NOT
+        # contribute to weighted_sum but still counts toward total_weight, so
+        # the score is n_true / n_total, distinguishing nulls from False only
+        # in field_results, not in the granular score.
         total_weight = 0.0
         weighted_sum = 0.0
         for name, meta in verified.items():
             total_weight += meta.weight
-            if field_results.get(name, False):
+            if field_results.get(name) is True:
                 weighted_sum += meta.weight
 
         if total_weight == 0.0:
@@ -404,14 +426,16 @@ class BaseAnswer(BaseModel):
     @staticmethod
     def _composition_aware_granular(
         strategy: Any,
-        field_results: dict[str, bool],
+        field_results: dict[str, bool | None],
         verified: dict[str, Any],
     ) -> float:
         """Compute granular score honoring composition strategy.
 
         Args:
             strategy: Composition strategy node (AllOf, AnyOf, AtLeastN).
-            field_results: Per-field pass/fail booleans.
+            field_results: Per-field tri-valued result (True / False / None).
+                None denotes a null extraction; treated as not-satisfied
+                here but distinguishable from False in field_results.
             verified: Per-field VerificationMeta (for weights).
 
         Returns:
@@ -424,7 +448,7 @@ class BaseAnswer(BaseModel):
             return 0.0
 
         passing_weights: list[float] = sorted(
-            [verified[name].weight for name, passed in field_results.items() if passed],
+            [verified[name].weight for name, passed in field_results.items() if passed is True],
             reverse=True,
         )
 

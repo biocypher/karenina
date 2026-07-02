@@ -618,6 +618,30 @@ def test_sanitize_model_config_includes_max_retries() -> None:
 
 
 @pytest.mark.unit
+def test_sanitize_model_config_preserves_agent_runtime_extra_kwargs() -> None:
+    """Adapter runtime settings should remain modular under extra_kwargs."""
+    model = {
+        "id": "deep-agent",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet-4-20250514",
+        "temperature": 0.0,
+        "interface": "langchain_deep_agents",
+        "system_prompt": "test",
+        "extra_kwargs": {
+            "agent_runtime": {
+                "backend": "docker",
+                "docker_image": "python:3.13-slim",
+                "docker_network": "none",
+            }
+        },
+    }
+
+    result = VerificationConfig.sanitize_model_config(model)
+
+    assert result["extra_kwargs"] == model["extra_kwargs"]
+
+
+@pytest.mark.unit
 def test_sanitize_model_config_openai_endpoint_includes_endpoint_fields() -> None:
     """Test sanitize_model_config includes endpoint fields for openai_endpoint."""
     model = {

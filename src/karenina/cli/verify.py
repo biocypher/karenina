@@ -248,6 +248,21 @@ def verify(
     async_workers: Annotated[
         int | None, typer.Option(help="Number of async workers (default: 2 or KARENINA_ASYNC_MAX_WORKERS)")
     ] = None,
+    workspace_output_mode: Annotated[
+        str,
+        typer.Option(help="Workspace sidecar capture mode (none/full/produced)"),
+    ] = "none",
+    workspace_output_dir: Annotated[
+        Path | None,
+        typer.Option(help="Directory for captured workspace sidecars. Defaults to OUTPUT.parent/workspaces for JSON."),
+    ] = None,
+    workspace_output_exclude: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--workspace-output-exclude",
+            help="Additional fnmatch-style pattern to exclude from workspace capture. Repeatable.",
+        ),
+    ] = None,
     # Manual trace support
     manual_traces: Annotated[
         Path | None,
@@ -396,6 +411,9 @@ def verify(
                 embedding_model=embedding_model,
                 async_execution=async_execution,
                 async_workers=async_workers,
+                workspace_output_mode=workspace_output_mode,
+                workspace_output_dir=workspace_output_dir,
+                workspace_output_exclude_patterns=workspace_output_exclude,
                 manual_traces=manual_traces,
                 benchmark=benchmark,
                 progressive_save=progressive_save,
@@ -413,6 +431,11 @@ def verify(
 
             console.print(f"[dim]Loading replay store from {replay}[/dim]")
             config = config.model_copy(update={"replay_store": ReplayStore.load(replay)})
+
+        if config.workspace_output_mode != "none" and config.workspace_output_dir is None:
+            if output is None or output_format != "json":
+                cli_error("--workspace-output-dir is required when workspace capture is enabled without JSON output")
+            config = config.model_copy(update={"workspace_output_dir": output.parent / "workspaces"})
 
         # Step 5: Get and filter templates
         ids_filter = None

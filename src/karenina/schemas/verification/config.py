@@ -289,6 +289,23 @@ class VerificationConfig(BaseModel):
             "directories."
         ),
     )
+    workspace_output_mode: Literal["none", "full", "produced"] = Field(
+        default="none",
+        description=(
+            "Whether to capture runtime workspaces as sidecar artifacts. "
+            "'none' preserves existing behavior. 'full' copies the complete "
+            "final workspace. 'produced' copies new or content-modified files "
+            "relative to the prepared workspace baseline."
+        ),
+    )
+    workspace_output_dir: Path | None = Field(
+        default=None,
+        description="Directory where captured workspaces are written when workspace_output_mode is not 'none'.",
+    )
+    workspace_output_exclude_patterns: list[str] = Field(
+        default_factory=list,
+        description="Additional fnmatch-style exclude patterns for workspace capture.",
+    )
 
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
@@ -808,6 +825,9 @@ class VerificationConfig(BaseModel):
         deep_judgment_rubric_search: bool | None = None,
         deep_judgment_rubric_search_tool: str | None = None,
         deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | dict[str, Any] | None = None,
+        workspace_output_mode: Literal["none", "full", "produced"] | None = None,
+        workspace_output_dir: Path | None = None,
+        workspace_output_exclude_patterns: list[str] | None = None,
     ) -> "VerificationConfig":
         """
         Create a VerificationConfig by applying overrides to an optional base config.
@@ -851,6 +871,9 @@ class VerificationConfig(BaseModel):
             deep_judgment_rubric_search: Override for rubric search flag.
             deep_judgment_rubric_search_tool: Override for rubric search tool.
             deep_judgment_rubric_config: Override for rubric config dict.
+            workspace_output_mode: Override for workspace sidecar capture mode.
+            workspace_output_dir: Override for workspace sidecar output directory.
+            workspace_output_exclude_patterns: Additional workspace sidecar exclude patterns.
 
         Returns:
             A new VerificationConfig with overrides applied.
@@ -913,6 +936,14 @@ class VerificationConfig(BaseModel):
             config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
         if deep_judgment_rubric_config is not None:
             config_dict["deep_judgment_rubric_config"] = deep_judgment_rubric_config
+
+        # Workspace output capture
+        if workspace_output_mode is not None:
+            config_dict["workspace_output_mode"] = workspace_output_mode
+        if workspace_output_dir is not None:
+            config_dict["workspace_output_dir"] = workspace_output_dir
+        if workspace_output_exclude_patterns is not None:
+            config_dict["workspace_output_exclude_patterns"] = workspace_output_exclude_patterns
 
         # --- Model configuration ---
         # Determine the unified interface (answering and parsing may differ)

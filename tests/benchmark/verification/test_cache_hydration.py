@@ -309,6 +309,28 @@ class TestCacheHydration:
         status, _data = cache.get_or_reserve(key)
         assert status == "MISS"
 
+    def test_hydration_keeps_parser_stage_unexpected_failures(self, tmp_path: Path) -> None:
+        """Parser-stage unexpected errors still carry reusable answer traces."""
+        parser_failure = _make_result(
+            question_id="q_parser_unexpected",
+            failure=Failure(
+                category=FailureCategory.UNEXPECTED_ERROR,
+                stage="AgenticParseTemplate",
+                reason="structured extraction crashed",
+            ),
+            raw_llm_response="--- AI Message ---\nanswer already generated",
+        )
+        sink = _persist_and_resume(tmp_path, [parser_failure])
+        cache = AnswerTraceCache()
+
+        VerificationExecutor._hydrate_cache_from_results(cache, sink.iter_results())
+
+        key = _expected_cache_key(parser_failure)
+        status, data = cache.get_or_reserve(key)
+        assert status == "HIT"
+        assert data is not None
+        assert data["raw_llm_response"] == "--- AI Message ---\nanswer already generated"
+
     def test_hydration_keys_per_replicate(self, tmp_path: Path) -> None:
         """Replicate=1 and replicate=2 hydrate to independent cache entries.
 

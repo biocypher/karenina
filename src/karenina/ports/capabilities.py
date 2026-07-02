@@ -17,8 +17,14 @@ class PortCapabilities:
             If False, system text is prepended to user text.
         supports_structured_output: Whether the adapter supports structured output
             (e.g., JSON schema enforcement).
+        supports_file_tools: Whether an agent adapter can inspect workspace files.
+        supports_code_execution: Whether an agent adapter can execute shell commands.
+        uses_sandboxed_execution: Whether command execution is isolated from the host.
     """
 
     supports_system_prompt: bool = True
     supports_structured_output: bool = False
     supports_streaming: bool = False
+    supports_file_tools: bool = False
+    supports_code_execution: bool = False
+    uses_sandboxed_execution: bool = False

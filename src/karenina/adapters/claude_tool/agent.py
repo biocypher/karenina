@@ -104,7 +104,11 @@ class ClaudeToolAgentAdapter:
         Returns:
             PortCapabilities with system_prompt=True.
         """
-        return PortCapabilities(supports_system_prompt=True)
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_file_tools=True,
+            supports_code_execution=True,
+        )
 
     def _get_async_client(self) -> Any:
         """Get or create the async Anthropic client."""

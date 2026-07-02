@@ -258,10 +258,10 @@ class TestAgentTimeoutPath:
         ):
             stage.execute(ctx)
 
-    def test_agent_timeout_with_trace_sets_partial_and_usage_unavailable(self) -> None:
+    def test_agent_timeout_with_trace_and_no_usage_sets_usage_unavailable(self) -> None:
         """When agent times out but has a partial trace, RESPONSE_TIMEOUT_PARTIAL
-        and USAGE_UNAVAILABLE should be set, the trace stored, and the context
-        marked as an error (transient timeout)."""
+        and USAGE_UNAVAILABLE should be set if usage is missing, the trace
+        stored, and the context marked as an error (transient timeout)."""
         ctx = _make_context()
         result = _make_agent_result(
             timeout_reached=True,
@@ -282,6 +282,39 @@ class TestAgentTimeoutPath:
         assert "Partial response from agent" in raw
 
         # Partial timeout is an error (timeout category)
+        assert ctx.completed_without_errors is False
+        assert ctx.error_category.value == "timeout"
+        assert "timed out" in ctx.error.lower()
+
+    def test_agent_timeout_with_recovered_usage_does_not_mark_unavailable(self) -> None:
+        """A partial agent timeout can still carry trustworthy recovered usage.
+
+        The Claude Agent SDK may omit the final ResultMessage on wall-clock
+        timeout while still reporting per-assistant-message input tokens. In
+        that case the run should remain marked partial, but usage should not be
+        classified as unavailable.
+        """
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=True,
+            raw_trace="--- AI Message ---\nPartial response from agent",
+            turns=3,
+        )
+        result.usage = UsageMetadata(
+            input_tokens=606_981,
+            output_tokens=0,
+            total_tokens=606_981,
+        )
+
+        self._run_agent_stage(ctx, result)
+
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is True
+        assert ctx.get_result_field("response_timeout_partial") is True
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is None
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is None
+
+        raw = ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        assert "Partial response from agent" in raw
         assert ctx.completed_without_errors is False
         assert ctx.error_category.value == "timeout"
         assert "timed out" in ctx.error.lower()

@@ -18,6 +18,7 @@ Utilities:
     - convert_mcp_to_tools: Convert MCPServerConfig to LangChain tools
     - extract_deep_agents_usage: Extract UsageMetadata from agent results
     - deep_agents_messages_to_raw_trace: Format messages as raw trace string
+    - deep_agents_messages_to_trace_messages: Structured trace_messages with per-call usage
 """
 
 from typing import TYPE_CHECKING, Any
@@ -31,6 +32,7 @@ __all__ = [
     "convert_mcp_to_tools",
     "extract_deep_agents_usage",
     "deep_agents_messages_to_raw_trace",
+    "deep_agents_messages_to_trace_messages",
     "wrap_deep_agents_error",
 ]
 
@@ -42,7 +44,10 @@ if TYPE_CHECKING:
     from karenina.adapters.langchain_deep_agents.mcp import convert_mcp_to_tools
     from karenina.adapters.langchain_deep_agents.messages import DeepAgentsMessageConverter
     from karenina.adapters.langchain_deep_agents.parser import DeepAgentsParserAdapter
-    from karenina.adapters.langchain_deep_agents.trace import deep_agents_messages_to_raw_trace
+    from karenina.adapters.langchain_deep_agents.trace import (
+        deep_agents_messages_to_raw_trace,
+        deep_agents_messages_to_trace_messages,
+    )
     from karenina.adapters.langchain_deep_agents.usage import extract_deep_agents_usage
 
 
@@ -57,6 +62,7 @@ def __getattr__(name: str) -> Any:
         "convert_mcp_to_tools": "karenina.adapters.langchain_deep_agents.mcp",
         "extract_deep_agents_usage": "karenina.adapters.langchain_deep_agents.usage",
         "deep_agents_messages_to_raw_trace": "karenina.adapters.langchain_deep_agents.trace",
+        "deep_agents_messages_to_trace_messages": "karenina.adapters.langchain_deep_agents.trace",
         "wrap_deep_agents_error": "karenina.adapters.langchain_deep_agents.errors",
     }
 

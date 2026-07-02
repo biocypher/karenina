@@ -10,17 +10,25 @@ import os
 import shutil
 import time
 import traceback
+from pathlib import Path
 from typing import Any
 
 from karenina.adapters import get_agent, get_llm
+from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
 from karenina.benchmark.verification.utils.usage_helpers import should_mark_usage_unavailable
+from karenina.benchmark.verification.workspace_capture import (
+    DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
+    safe_path_component,
+    snapshot_workspace,
+)
 from karenina.ports import AgentConfig, AgentPort, LLMPort, Message, Role
 from karenina.replay.exceptions import ReplayMissError
 from karenina.replay.ports_message_hydration import hydrate_trace_messages
+from karenina.schemas.verification import VerificationResultMetadata
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.utils.errors import ErrorCategory
 
@@ -192,6 +200,8 @@ class GenerateAnswerStage(BaseVerificationStage):
         if root is None:
             raise RuntimeError("workspace_root must be set when agentic_parsing is True")
 
+        output_workspace = self._output_workspace_path(context)
+
         # Build unique suffix (replicate-safe for parallel execution)
         timestamp = time.strftime("%Y%m%dT%H%M%S")
         suffix = f"run_{timestamp}_pid{os.getpid()}"
@@ -208,10 +218,13 @@ class GenerateAnswerStage(BaseVerificationStage):
                 )
 
             if context.workspace_copy:
-                working = root / f"{context.question_workspace_path}_{suffix}"
+                working = output_workspace or root / f"{context.question_workspace_path}_{suffix}"
+                if working.exists():
+                    shutil.rmtree(working)
+                working.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(source, working)
                 context.workspace_path = working
-                context.workspace_is_copy = True
+                context.workspace_is_copy = output_workspace is None
                 logger.info("Copied workspace %s to %s", source, working)
             else:
                 context.workspace_path = source
@@ -219,11 +232,40 @@ class GenerateAnswerStage(BaseVerificationStage):
                 logger.info("Using workspace in place: %s", source)
         else:
             # No pre-existing workspace; create empty directory
-            working = root / f"{context.question_id}_{suffix}"
+            working = output_workspace or root / f"{context.question_id}_{suffix}"
+            if working.exists():
+                shutil.rmtree(working)
             working.mkdir(parents=True, exist_ok=True)
             context.workspace_path = working
-            context.workspace_is_copy = True
+            context.workspace_is_copy = output_workspace is None
             logger.info("Created workspace: %s", working)
+
+    @staticmethod
+    def _output_workspace_path(context: VerificationContext) -> Path | None:
+        """Return the direct output workspace path for full capture mode."""
+
+        if context.workspace_output_mode != "full" or context.workspace_output_dir is None:
+            return None
+
+        answering_identity = context.get_artifact(ArtifactKeys.ANSWERING_MODEL_IDENTITY)
+        parsing_identity = context.get_artifact(ArtifactKeys.PARSING_MODEL_IDENTITY)
+        if answering_identity is None:
+            answering_identity = ModelIdentity.from_model_config(context.answering_model, role="answering")
+        if parsing_identity is None:
+            parsing_identity = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+        timestamp = context.get_result_field(ArtifactKeys.TIMESTAMP, "")
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=context.question_id,
+            answering=answering_identity,
+            parsing=parsing_identity,
+            timestamp=timestamp,
+            replicate=context.replicate,
+            scenario_id=context.scenario_id,
+            scenario_node=context.scenario_node,
+            scenario_turn=context.scenario_turn,
+        )
+        folder = f"{safe_path_component(context.question_id)}__{safe_path_component(result_id)}"
+        return context.workspace_output_dir / folder
 
     def execute(self, context: VerificationContext) -> None:
         """
@@ -271,6 +313,16 @@ class GenerateAnswerStage(BaseVerificationStage):
 
         # Resolve workspace for agentic parsing (before any LLM calls)
         self._resolve_workspace(context)
+        if (
+            context.workspace_output_mode == "produced"
+            and context.workspace_output_baseline is None
+            and context.workspace_path is not None
+        ):
+            exclude_patterns = [
+                *DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
+                *context.workspace_output_exclude_patterns,
+            ]
+            context.workspace_output_baseline = snapshot_workspace(context.workspace_path, exclude_patterns)
 
         # Check if cached answer data is available
         if context.cached_answer_data is not None:
@@ -428,11 +480,20 @@ class GenerateAnswerStage(BaseVerificationStage):
             # knows where its files are instead of searching the filesystem.
             user_prompt = constructed_prompt
             if context.workspace_path:
+                prompt_workspace = workspace_path_for_prompt(answering_model, context.workspace_path)
                 user_prompt += (
-                    f"\n\nWorkspace directory: {context.workspace_path}\n"
+                    f"\n\nWorkspace directory: {prompt_workspace}\n"
                     "All input data files are in this directory. "
                     "Save any output files here as well."
                 )
+                if use_agent and answering_agent is not None:
+                    capabilities = answering_agent.capabilities
+                    if capabilities.supports_code_execution and capabilities.uses_sandboxed_execution:
+                        user_prompt += " You can execute commands in this sandboxed workspace."
+                    elif capabilities.supports_code_execution:
+                        user_prompt += " You can execute commands in the configured local workspace."
+                    elif capabilities.supports_file_tools:
+                        user_prompt += " You can inspect files, but command execution is not available."
             adapter_messages.append(Message.user(user_prompt))
 
             # Store the full conversation input for curation trace display
@@ -474,7 +535,6 @@ class GenerateAnswerStage(BaseVerificationStage):
                 if result.timeout_reached:
                     if result.raw_trace:
                         self.set_artifact_and_result(context, "response_timeout_partial", True)
-                        self.set_artifact_and_result(context, ArtifactKeys.USAGE_UNAVAILABLE, True)
                         error_msg = (
                             f"Agent timed out with partial trace ({len(result.raw_trace)} chars, {result.turns} turns)"
                         )

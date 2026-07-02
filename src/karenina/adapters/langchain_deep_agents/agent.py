@@ -17,20 +17,29 @@ import asyncio
 import concurrent.futures
 import logging
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from karenina.adapters.agent_runtime import (
+    CONTAINER_BACKEND,
+    get_agent_runtime_access_mode,
+    get_agent_runtime_capabilities,
+    get_agent_runtime_option,
+    get_container_runtime_config,
+    get_deepagents_backend,
+)
 from karenina.ports import (
+    AdapterUnavailableError,
     AgentConfig,
     AgentExecutionError,
     AgentResponseError,
     AgentResult,
-    AgentTimeoutError,
     MCPServerConfig,
     Message,
     Tool,
     UsageMetadata,
 )
 from karenina.ports.capabilities import PortCapabilities
+from karenina.utils.retry_policy import RetryPolicy
 
 from .errors import wrap_deep_agents_error
 from .initialization import create_chat_model
@@ -46,6 +55,42 @@ if TYPE_CHECKING:
 _create_deep_agent = None
 
 logger = logging.getLogger(__name__)
+
+
+def _run_in_fresh_loop(
+    coro_func: Any,
+    *args: Any,
+    timeout: float = 600,
+) -> Any:
+    """Run an async callable in a dedicated thread with a fresh event loop.
+
+    DeepAgents runs a LangGraph async task graph backed by LangChain chat
+    models. Some OpenAI-compatible async transports are loop-affine; running
+    multiple DeepAgents calls through Karenina's shared BlockingPortal can
+    surface httpcore errors such as "Event is bound to a different event loop".
+    Keeping each synchronous DeepAgents invocation on its own loop avoids
+    sharing loop-bound SDK state across answerer/judge calls.
+    """
+
+    def _target() -> Any:
+        return asyncio.run(coro_func(*args))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future: concurrent.futures.Future[Any] = executor.submit(_target)
+        # The coroutine enforces the user-facing agent timeout with
+        # asyncio.wait_for and can return a partial trace. Give that inner
+        # timeout a short grace period so this wrapper does not race it and
+        # replace the partial result with a bare concurrent.futures.TimeoutError.
+        return future.result(timeout=timeout + 30)
+
+
+def _runtime_int_option(model_config: ModelConfig, key: str, default: int) -> int:
+    """Read an integer runtime option from ModelConfig.extra_kwargs."""
+
+    raw_value = get_agent_runtime_option(model_config, key, default)
+    if isinstance(raw_value, int | float | str):
+        return int(raw_value)
+    raise TypeError(f"agent_runtime option '{key}' must be an integer-compatible value")
 
 
 class DeepAgentsAgentAdapter:
@@ -93,9 +138,105 @@ class DeepAgentsAgentAdapter:
         """Declare adapter capabilities.
 
         Returns:
-            PortCapabilities with system_prompt=True.
+            PortCapabilities implied by the configured DeepAgents backend.
         """
-        return PortCapabilities(supports_system_prompt=True)
+        return get_agent_runtime_capabilities(self._config)
+
+    def _build_backend(self, workspace_path: Any) -> Any:
+        """Create the DeepAgents backend configured for this model."""
+
+        backend = get_deepagents_backend(self._config)
+        access_mode = get_agent_runtime_access_mode(self._config)
+        if backend == CONTAINER_BACKEND:
+            if workspace_path is None:
+                raise AdapterUnavailableError(
+                    "agent_runtime backend='container' requires an AgentConfig.workspace_path",
+                    reason="missing_workspace",
+                )
+            from .docker_backend import ContainerSandboxBackend
+
+            container_backend = ContainerSandboxBackend(
+                root_dir=workspace_path,
+                container_config=get_container_runtime_config(self._config),
+                timeout=_runtime_int_option(self._config, "execute_timeout", 120),
+                max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
+            )
+            if access_mode == "read_only":
+                from .read_only_backend import ReadOnlyBackend
+
+                return ReadOnlyBackend(container_backend)
+            return container_backend
+
+        if backend == "local_shell":
+            if workspace_path is None:
+                raise AdapterUnavailableError(
+                    "agent_runtime backend='local_shell' requires an AgentConfig.workspace_path",
+                    reason="missing_workspace",
+                )
+            from deepagents.backends import LocalShellBackend
+
+            logger.warning(
+                "Using unsafe DeepAgents LocalShellBackend with root_dir=%s",
+                workspace_path,
+            )
+            local_backend = LocalShellBackend(
+                root_dir=str(workspace_path),
+                virtual_mode=True,
+                timeout=_runtime_int_option(self._config, "execute_timeout", 120),
+                max_output_bytes=_runtime_int_option(self._config, "execute_max_output_bytes", 100_000),
+                inherit_env=True,
+            )
+            if access_mode == "read_only":
+                from .read_only_backend import ReadOnlyBackend
+
+                return ReadOnlyBackend(local_backend)
+            return local_backend
+
+        from deepagents.backends import FilesystemBackend
+
+        if workspace_path:
+            logger.info("Using FilesystemBackend with root_dir=%s", workspace_path)
+            filesystem_backend = FilesystemBackend(root_dir=str(workspace_path), virtual_mode=True)
+            if access_mode == "read_only":
+                from .read_only_backend import ReadOnlyBackend
+
+                return ReadOnlyBackend(filesystem_backend)
+            return filesystem_backend
+
+        logger.info("Using FilesystemBackend with default root (cwd)")
+        filesystem_backend = FilesystemBackend(virtual_mode=True)
+        if access_mode == "read_only":
+            from .read_only_backend import ReadOnlyBackend
+
+            return ReadOnlyBackend(filesystem_backend)
+        return filesystem_backend
+
+    def _build_raw_trace(
+        self,
+        lc_messages: list[Any],
+        subgraph_results: dict[tuple[Any, ...], dict[str, Any]],
+        *,
+        limit_reached: bool,
+        timeout_reached: bool,
+    ) -> str:
+        """Build a raw trace, including any streamed subgraph state."""
+
+        raw_trace = deep_agents_messages_to_raw_trace(lc_messages) if lc_messages else ""
+        subgraph_trace_parts = []
+        for namespace, subgraph_result in subgraph_results.items():
+            subgraph_messages = subgraph_result.get("messages", [])
+            subgraph_trace = deep_agents_messages_to_raw_trace(subgraph_messages)
+            if subgraph_trace:
+                namespace_text = " / ".join(str(part) for part in namespace)
+                subgraph_trace_parts.append(f"--- Subgraph Trace: {namespace_text} ---\n{subgraph_trace}")
+        if subgraph_trace_parts:
+            parts = [part for part in [raw_trace, *subgraph_trace_parts] if part]
+            raw_trace = "\n\n".join(parts).strip()
+        if limit_reached:
+            raw_trace += "\n\n[Note: Recursion limit reached, partial response shown]"
+        if timeout_reached:
+            raw_trace += "\n\n[Note: Wall-clock timeout reached, partial response shown]"
+        return raw_trace.strip()
 
     def _extract_final_response(self, lc_messages: list[Any]) -> str:
         """Extract final text response from the last AIMessage.
@@ -178,29 +319,20 @@ class DeepAgentsAgentAdapter:
         elif not system_prompt and self._config.system_prompt:
             system_prompt = self._config.system_prompt
 
-        # Initialize model
-        chat_model = create_chat_model(self._config)
+        # Initialize model. Agent loops need SDK-level retries at the model
+        # call boundary; retrying the whole agent can repeat workspace writes.
+        retry_policy = self._config.retry_policy or RetryPolicy()
+        chat_model = create_chat_model(
+            self._config,
+            max_retries=retry_policy.derive_sdk_max_retries(),
+        )
 
         # Build agent kwargs
         agent_kwargs: dict[str, Any] = {"model": chat_model}
         if system_prompt:
             agent_kwargs["system_prompt"] = system_prompt
 
-        # Configure backend for real filesystem access when workspace is available
-        workspace_path = config.workspace_path
-        if workspace_path:
-            from deepagents.backends import FilesystemBackend
-
-            agent_kwargs["backend"] = FilesystemBackend(root_dir=str(workspace_path))
-            logger.info("Using FilesystemBackend with root_dir=%s", workspace_path)
-        else:
-            # Default: use FilesystemBackend rooted at cwd for real filesystem access.
-            # StateBackend (virtual/in-memory) is NOT suitable for benchmarking because
-            # the agent cannot see real files on disk.
-            from deepagents.backends import FilesystemBackend
-
-            agent_kwargs["backend"] = FilesystemBackend()
-            logger.info("Using FilesystemBackend with default root (cwd)")
+        agent_kwargs["backend"] = self._build_backend(config.workspace_path)
 
         # Pass through extra config to create_deep_agent
         if config.extra:
@@ -219,7 +351,9 @@ class DeepAgentsAgentAdapter:
         # cleanup can wrap errors in ExceptionGroup if an exception propagates
         # through the exit stack.
         result: dict[str, Any] = {}
+        subgraph_results: dict[tuple[Any, ...], dict[str, Any]] = {}
         limit_reached = False
+        timeout_reached = False
         deferred_error: Exception | None = None
 
         async with AsyncExitStack() as exit_stack:
@@ -261,8 +395,23 @@ class DeepAgentsAgentAdapter:
 
                 # Execute agent
                 async def execute_agent() -> None:
-                    nonlocal result, limit_reached
-                    result = await agent.ainvoke(invoke_input, config=langgraph_config)
+                    nonlocal result, subgraph_results, limit_reached
+                    async for chunk in agent.astream(
+                        invoke_input,
+                        config=langgraph_config,
+                        stream_mode="values",
+                        subgraphs=True,
+                    ):
+                        namespace: tuple[Any, ...] = ()
+                        state = chunk
+                        if isinstance(chunk, tuple) and len(chunk) == 2:
+                            namespace_raw, state = chunk
+                            namespace = tuple(namespace_raw)
+                        if isinstance(state, dict):
+                            if namespace:
+                                subgraph_results[namespace] = state
+                            else:
+                                result = state
                     if result.get("is_last_step", False):
                         limit_reached = True
 
@@ -272,9 +421,9 @@ class DeepAgentsAgentAdapter:
                     else:
                         await execute_agent()
 
-                except TimeoutError as e:
-                    deferred_error = AgentTimeoutError(f"Agent execution timed out after {config.timeout}s")
-                    deferred_error.__cause__ = e
+                except TimeoutError:
+                    timeout_reached = True
+                    logger.warning("Agent timed out after %ss; returning partial trace", config.timeout)
                 except Exception as e:
                     mapped_error, was_limit = wrap_deep_agents_error(e)
                     if was_limit:
@@ -292,26 +441,36 @@ class DeepAgentsAgentAdapter:
         # Extract messages from result
         lc_messages: list[Any] = result.get("messages", [])
 
-        if not lc_messages and not limit_reached:
+        if not lc_messages and not limit_reached and not timeout_reached:
             raise AgentResponseError("No messages received from Deep Agents")
 
         # If limit was reached but no messages, return a partial result
-        if not lc_messages and limit_reached:
+        if not lc_messages and (limit_reached or timeout_reached):
+            raw_trace = self._build_raw_trace(
+                lc_messages,
+                subgraph_results,
+                limit_reached=limit_reached,
+                timeout_reached=timeout_reached,
+            )
             return AgentResult(
-                final_response="[Agent hit recursion limit before producing a response]",
-                raw_trace="[Note: Recursion limit reached, no response produced]",
+                final_response="[Agent stopped before producing a final response]",
+                raw_trace=raw_trace or "[Note: Agent stopped before producing trace messages]",
                 trace_messages=[],
                 usage=UsageMetadata(model=self._config.model_name),
                 turns=0,
-                limit_reached=True,
+                limit_reached=limit_reached,
                 session_id=None,
                 actual_model=self._config.model_name,
+                timeout_reached=timeout_reached,
             )
 
         # Build raw_trace (legacy string format)
-        raw_trace = deep_agents_messages_to_raw_trace(lc_messages)
-        if limit_reached:
-            raw_trace += "\n\n[Note: Recursion limit reached, partial response shown]"
+        raw_trace = self._build_raw_trace(
+            lc_messages,
+            subgraph_results,
+            limit_reached=limit_reached,
+            timeout_reached=timeout_reached,
+        )
 
         # Build trace_messages (structured format)
         trace_messages = self._converter.from_provider(lc_messages)
@@ -337,6 +496,7 @@ class DeepAgentsAgentAdapter:
             limit_reached=limit_reached,
             session_id=None,
             actual_model=actual_model,
+            timeout_reached=timeout_reached,
         )
 
     def run(
@@ -362,29 +522,18 @@ class DeepAgentsAgentAdapter:
             AgentTimeoutError: If execution exceeds the timeout.
             AgentResponseError: If the response is malformed or invalid.
         """
-        from karenina.benchmark.verification.executor import get_async_portal
-
-        portal = get_async_portal()
-
-        if portal is not None:
-            return portal.call(self.arun, messages, tools, mcp_servers, config)
-
-        # No portal: check if we're in an async context
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context: use ThreadPoolExecutor
-
-            def run_in_thread() -> AgentResult:
-                return asyncio.run(self.arun(messages, tools, mcp_servers, config))
-
-            timeout = config.timeout if config and config.timeout else 600
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=timeout)
-
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
+        timeout = config.timeout if config and config.timeout else 600
+        return cast(
+            AgentResult,
+            _run_in_fresh_loop(
+                self.arun,
+                messages,
+                tools,
+                mcp_servers,
+                config,
+                timeout=timeout,
+            ),
+        )
 
     async def aclose(self) -> None:
         """Close underlying resources.

@@ -106,6 +106,7 @@ class TestRubricEvaluationWarnings:
             (),
             {
                 "evaluate_rubric": lambda _self, **_kw: ({"clarity": 1.0}, {"clarity": "yes"}, []),
+                "close": lambda _self: None,
             },
         )()
         with patch(

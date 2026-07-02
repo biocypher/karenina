@@ -72,3 +72,66 @@ class TestDeepAgentsMessageConverter:
         result = self.converter.from_provider(lc_messages)
         assert len(result) == 1
         assert result[0].role.value == "assistant"
+
+    def test_from_provider_ai_with_reasoning_content_emits_thinking_block(self):
+        """Parity with CSDK: reasoning surfaces as a ``ThinkingContent`` block
+        in the unified Message content list, not just in the raw_trace string."""
+        from langchain_core.messages import AIMessage
+
+        from karenina.ports import TextContent, ThinkingContent, ToolUseContent
+
+        lc_messages = [
+            AIMessage(
+                content="The answer is 42.",
+                additional_kwargs={"reasoning_content": "Computed via 2+40."},
+                tool_calls=[{"name": "submit", "args": {"a": 1}, "id": "call_x"}],
+            )
+        ]
+        result = self.converter.from_provider(lc_messages)
+        assert len(result) == 1
+        msg = result[0]
+        # Block order matches CSDK: thinking, text, tool_use.
+        kinds = [type(b).__name__ for b in msg.content]
+        assert kinds == ["ThinkingContent", "TextContent", "ToolUseContent"]
+        assert isinstance(msg.content[0], ThinkingContent)
+        assert msg.content[0].thinking == "Computed via 2+40."
+        assert isinstance(msg.content[1], TextContent)
+        assert isinstance(msg.content[2], ToolUseContent)
+
+    def test_from_provider_ai_anthropic_style_thinking_block(self):
+        """Content-list ``type='thinking'`` should also produce a ThinkingContent."""
+        from langchain_core.messages import AIMessage
+
+        from karenina.ports import ThinkingContent
+
+        lc_messages = [
+            AIMessage(
+                content=[
+                    {"type": "thinking", "thinking": "Reasoning step.", "signature": "sig"},
+                    {"type": "text", "text": "Answer."},
+                ],
+            )
+        ]
+        result = self.converter.from_provider(lc_messages)
+        assert len(result) == 1
+        msg = result[0]
+        assert isinstance(msg.content[0], ThinkingContent)
+        assert msg.content[0].thinking == "Reasoning step."
+        assert msg.content[0].signature == "sig"
+
+    def test_from_provider_ai_blank_reasoning_is_ignored(self):
+        """Whitespace-only reasoning must NOT produce an empty ThinkingContent."""
+        from langchain_core.messages import AIMessage
+
+        from karenina.ports import ThinkingContent
+
+        lc_messages = [
+            AIMessage(
+                content="Answer.",
+                additional_kwargs={"reasoning_content": "   "},
+            )
+        ]
+        result = self.converter.from_provider(lc_messages)
+        assert len(result) == 1
+        kinds = [type(b).__name__ for b in result[0].content]
+        assert "ThinkingContent" not in kinds

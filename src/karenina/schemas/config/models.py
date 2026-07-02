@@ -566,7 +566,8 @@ class ModelConfig(BaseModel):
     # Anthropic-specific configuration (for claude_tool and claude_agent_sdk interfaces)
     anthropic_base_url: str | None = None  # Custom Anthropic API endpoint (for proxies, self-hosted)
     anthropic_api_key: SecretStr | None = None  # Override ANTHROPIC_API_KEY env var
-    # Extra keyword arguments to pass to the underlying model interface
+    # Extra keyword arguments to pass to the underlying model interface.
+    # Adapter runtime settings can live under extra_kwargs["agent_runtime"].
     # Useful for passing vendor-specific API keys, custom parameters, etc.
     extra_kwargs: dict[str, Any] | None = None
     # Manual interface configuration
