@@ -50,7 +50,7 @@ class TestWorkspaceAccessConformance:
         Captures the kwargs passed to create_deep_agent to inspect the backend.
         """
         import asyncio
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         try:
             from deepagents.backends import FilesystemBackend, StateBackend
@@ -69,12 +69,14 @@ class TestWorkspaceAccessConformance:
         def capture_create(**kwargs):
             captured_kwargs.update(kwargs)
             mock_agent = MagicMock()
-            mock_agent.ainvoke = AsyncMock(
-                return_value={
+
+            async def astream(*_args, **_kwargs):
+                yield {
                     "messages": [AIMessage(content="ok")],
                     "is_last_step": False,
                 }
-            )
+
+            mock_agent.astream = astream
             return mock_agent
 
         agent_module._create_deep_agent = capture_create
