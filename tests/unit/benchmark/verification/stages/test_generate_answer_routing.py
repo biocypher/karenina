@@ -1,183 +1,180 @@
 """Tests for GenerateAnswerStage routing logic.
 
-Verifies that the generate_answer stage correctly routes to AgentPort
-or LLMPort based on the model configuration, particularly for manual
-interface models.
+Verifies that the generate_answer stage routes to AgentPort or LLMPort
+based on the model configuration. Routing is driven by the real
+``use_agent`` decision in ``GenerateAnswerStage.execute``:
+
+    use_agent = bool(mcp_urls) or spec.agent_tier == "deep_agent" or interface == "manual"
+
+These tests exercise that decision against the real ``VerificationContext``
+by patching ``get_agent`` / ``get_llm`` at the module where the stage looks
+them up, then asserting which factory was called. The manual path is
+especially load-bearing: ``ManualLLMAdapter`` raises
+``ManualInterfaceError``, so a routing regression would silently send
+manual runs to the wrong adapter.
 """
 
-import contextlib
-import inspect
-from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 import karenina.benchmark.verification.stages.pipeline.generate_answer as gen_mod
 from karenina.adapters.registry import AdapterRegistry, AdapterSpec
+from karenina.benchmark.verification.stages.core.base import VerificationContext
+from karenina.benchmark.verification.stages.pipeline.generate_answer import GenerateAnswerStage
+from karenina.schemas.config import ModelConfig
 
 
-def _make_context(interface, model_provider=None, model_name="test"):
-    """Build a minimal VerificationContext stand-in via SimpleNamespace."""
-    model = SimpleNamespace(
-        id=model_name,
+def _make_context(
+    *,
+    interface: str,
+    mcp_urls_dict: dict | None = None,
+) -> VerificationContext:
+    """Build a minimal real VerificationContext for routing tests.
+
+    Uses the real context class (not a SimpleNamespace stand-in) so that
+    earlier sections of execute() — replay lookup, workspace resolution,
+    cache check — do not short-circuit or raise before the routing branch
+    under test is reached.
+    """
+    extra: dict = {}
+    if interface == "manual":
+        # ModelConfig validates that interface="manual" carries a non-None,
+        # non-bool manual_traces. A sentinel object satisfies the validator
+        # without forcing us to build a real ManualTraces (which needs a
+        # Benchmark). The routing branch under test never inspects it.
+        extra["manual_traces"] = object()
+    model = ModelConfig(
+        id="m1",
+        model_name="test-model",
+        model_provider="openai" if interface != "manual" else None,
         interface=interface,
-        mcp_urls_dict=None,
-        system_prompt=None,
-        agent_middleware=None,
-        agent_timeout=180,
-        model_provider=model_provider,
-        model_name=model_name,
+        system_prompt="You are helpful.",
+        request_timeout=30.0,
+        mcp_urls_dict=mcp_urls_dict,
+        **extra,
     )
-    artifacts = {}
-    context = SimpleNamespace(
-        answering_model=model,
-        question_text="What is 2+2?",
-        few_shot_examples=[],
-        few_shot_enabled=False,
-        workspace_path=None,
-        agentic_parsing=False,
-        cached_answer_data=None,
+    return VerificationContext(
         question_id="q1",
-        error=None,
-        completed_without_errors=True,
+        template_id="t1",
+        question_text="What is 2+2?",
+        template_code="class Answer(BaseAnswer): value: str",
+        answering_model=model,
+        parsing_model=model,
     )
-    context.get_artifact = lambda key: artifacts.get(key)
-    context.set_artifact = lambda key, value: artifacts.__setitem__(key, value)
-    context.mark_error = lambda msg: setattr(context, "error", msg)
-    return context
+
+
+def _install_factories(monkeypatch: pytest.MonkeyPatch) -> tuple[MagicMock, MagicMock]:
+    """Patch get_agent/get_llm with call-tracking mocks and return them.
+
+    Both mocks return a sentinel adapter so the routing branch is observable
+    via ``call_count`` regardless of what execute() does afterwards. The
+    downstream invocation may fail; we wrap execute() in ``suppress`` so the
+    test only asserts on which factory was selected.
+    """
+    agent_factory = MagicMock(return_value=MagicMock(name="FakeAgent"))
+    llm_factory = MagicMock(return_value=MagicMock(name="FakeLLM"))
+    monkeypatch.setattr(gen_mod, "get_agent", agent_factory)
+    monkeypatch.setattr(gen_mod, "get_llm", llm_factory)
+    return agent_factory, llm_factory
+
+
+def _force_spec(monkeypatch: pytest.MonkeyPatch, spec: AdapterSpec) -> None:
+    monkeypatch.setattr(AdapterRegistry, "get_spec", staticmethod(lambda _iface: spec))
 
 
 @pytest.mark.unit
 class TestGenerateAnswerRouting:
     """Tests for the use_agent routing decision in GenerateAnswerStage."""
 
-    def test_source_routes_manual_to_agent(self):
-        """The execute() source must contain a manual interface check.
+    def test_manual_interface_routes_to_agent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Manual interface must route to AgentPort (ManualAgentAdapter).
 
-        Inspects the source of GenerateAnswerStage.execute() to verify that
-        manual interface routing is present. The routing expression must
-        include a check for interface == "manual" so that manual models use
-        AgentPort (ManualAgentAdapter) instead of LLMPort
-        (ManualLLMAdapter, which raises ManualInterfaceError).
+        ManualLLMAdapter raises ManualInterfaceError, so a regression that
+        drops the ``interface == "manual"`` clause would silently break every
+        manual run. The manual spec here uses agent_tier="tool_loop" to prove
+        it is the manual-interface clause — not the agent_tier clause — that
+        forces the agent path.
         """
-        source = inspect.getsource(gen_mod.GenerateAnswerStage.execute)
-
-        assert 'interface == "manual"' in source, (
-            "GenerateAnswerStage.execute() must contain a check for "
-            'interface == "manual" in the use_agent routing logic. '
-            "Without this, manual models are sent to ManualLLMAdapter "
-            "which raises ManualInterfaceError."
+        agent_factory, llm_factory = _install_factories(monkeypatch)
+        _force_spec(
+            monkeypatch,
+            AdapterSpec(
+                interface="manual",
+                description="Manual interface for pre-recorded traces",
+                supports_mcp=False,
+                supports_tools=False,
+                requires_provider=False,
+                agent_tier="tool_loop",
+            ),
         )
 
-    def test_manual_get_agent_called(self, monkeypatch):
-        """Verify GenerateAnswerStage calls get_agent (not get_llm) for manual.
+        stage = GenerateAnswerStage()
+        stage.execute(_make_context(interface="manual"))
 
-        Patches get_agent and get_llm at the module level and runs execute()
-        to confirm that the manual interface routes through the agent path.
+        assert agent_factory.call_count == 1
+        assert llm_factory.call_count == 0
+
+    def test_langchain_without_mcp_routes_to_llm(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Standard LangChain model without MCP routes to LLMPort.
+
+        agent_tier is "tool_loop" (not "deep_agent"), no MCP URLs, and the
+        interface is not manual — so none of the use_agent clauses fire and
+        the stage must use LLMPort.
         """
-        agent_called = False
-        llm_called = False
-
-        class FakeAgent:
-            """Stub AgentPort for tracking calls."""
-
-            async def run(self, *_args, **_kwargs):
-                from karenina.ports import Message
-
-                return [Message.ai("fake")]
-
-        class FakeLLM:
-            """Stub LLMPort for tracking calls."""
-
-            async def ainvoke(self, *_args, **_kwargs):
-                from karenina.ports import Message
-
-                return Message.ai("fake")
-
-        def fake_get_agent(_model_config, auto_fallback=False):
-            nonlocal agent_called
-            agent_called = True
-            return FakeAgent()
-
-        def fake_get_llm(_model_config, auto_fallback=False):
-            nonlocal llm_called
-            llm_called = True
-            return FakeLLM()
-
-        monkeypatch.setattr(gen_mod, "get_agent", fake_get_agent)
-        monkeypatch.setattr(gen_mod, "get_llm", fake_get_llm)
-
-        manual_spec = AdapterSpec(
-            interface="manual",
-            description="Manual interface for pre-recorded traces",
-            supports_mcp=False,
-            supports_tools=False,
-            requires_provider=False,
-            agent_tier="tool_loop",
-        )
-        monkeypatch.setattr(
-            AdapterRegistry,
-            "get_spec",
-            staticmethod(lambda _iface: manual_spec),
+        agent_factory, llm_factory = _install_factories(monkeypatch)
+        _force_spec(
+            monkeypatch,
+            AdapterSpec(
+                interface="langchain",
+                description="LangChain adapter",
+                agent_tier="tool_loop",
+            ),
         )
 
-        context = _make_context("manual")
-        stage = gen_mod.GenerateAnswerStage()
+        stage = GenerateAnswerStage()
+        stage.execute(_make_context(interface="langchain"))
 
-        # execute() will call get_agent then fail at the stub invocation.
-        # We only care which factory was called.
-        with contextlib.suppress(Exception):
-            stage.execute(context)
+        assert llm_factory.call_count == 1
+        assert agent_factory.call_count == 0
 
-        assert agent_called is True, (
-            "Expected get_agent() to be called for manual interface, "
-            "but it was not called. The routing logic did not recognize "
-            "manual as requiring AgentPort."
-        )
-        assert llm_called is False, (
-            "get_llm() should not be called for manual interface. ManualLLMAdapter raises ManualInterfaceError."
-        )
+    def test_deep_agent_tier_routes_to_agent_without_mcp(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A deep-agent spec (e.g. Claude Code) uses AgentPort even with no MCP.
 
-    def test_langchain_without_mcp_routes_to_llm(self, monkeypatch):
-        """Standard LangChain model without MCP should route to LLMPort."""
-        agent_called = False
-        llm_called = False
-
-        class FakeLLM:
-            """Stub LLMPort."""
-
-            async def ainvoke(self, *_args, **_kwargs):
-                from karenina.ports import Message
-
-                return Message.ai("fake")
-
-        def fake_get_agent(_model_config, auto_fallback=False):
-            nonlocal agent_called
-            agent_called = True
-
-        def fake_get_llm(_model_config, auto_fallback=False):
-            nonlocal llm_called
-            llm_called = True
-            return FakeLLM()
-
-        monkeypatch.setattr(gen_mod, "get_agent", fake_get_agent)
-        monkeypatch.setattr(gen_mod, "get_llm", fake_get_llm)
-
-        langchain_spec = AdapterSpec(
-            interface="langchain",
-            description="LangChain adapter",
-            agent_tier="tool_loop",
-        )
-        monkeypatch.setattr(
-            AdapterRegistry,
-            "get_spec",
-            staticmethod(lambda _iface: langchain_spec),
+        Deep-agent runtimes execute tools internally; the LLMPort path would
+        lose the tool-call trace. This pins the agent_tier clause of use_agent
+        independently of the manual clause.
+        """
+        agent_factory, llm_factory = _install_factories(monkeypatch)
+        _force_spec(
+            monkeypatch,
+            AdapterSpec(
+                interface="langchain",
+                description="Deep agent runtime",
+                agent_tier="deep_agent",
+            ),
         )
 
-        context = _make_context("langchain", model_provider="anthropic", model_name="claude-sonnet-4-20250514")
-        stage = gen_mod.GenerateAnswerStage()
+        stage = GenerateAnswerStage()
+        stage.execute(_make_context(interface="langchain"))
 
-        with contextlib.suppress(Exception):
-            stage.execute(context)
+        assert agent_factory.call_count == 1
+        assert llm_factory.call_count == 0
 
-        assert llm_called is True, "Standard langchain model without MCP should route to LLMPort."
-        assert agent_called is False, "get_agent() should not be called for standard langchain model."
+    def test_mcp_urls_force_agent_regardless_of_tier(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MCP-attached models route to AgentPort even with a tool_loop tier."""
+        agent_factory, llm_factory = _install_factories(monkeypatch)
+        _force_spec(
+            monkeypatch,
+            AdapterSpec(
+                interface="langchain",
+                description="LangChain adapter",
+                agent_tier="tool_loop",
+            ),
+        )
+
+        stage = GenerateAnswerStage()
+        stage.execute(_make_context(interface="langchain", mcp_urls_dict={"brave-search": "http://x/mcp"}))
+
+        assert agent_factory.call_count == 1
+        assert llm_factory.call_count == 0

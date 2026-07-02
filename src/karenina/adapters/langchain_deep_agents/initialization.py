@@ -114,8 +114,7 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
             budget = _ANTHROPIC_EFFORT_BUDGET_TOKENS.get(effort)
             if budget is None:
                 raise AdapterUnavailableError(
-                    f"unknown effort {effort!r}; expected one of "
-                    f"{sorted(_ANTHROPIC_EFFORT_BUDGET_TOKENS)}",
+                    f"unknown effort {effort!r}; expected one of {sorted(_ANTHROPIC_EFFORT_BUDGET_TOKENS)}",
                     reason="invalid_effort",
                 )
             # Anthropic requires max_tokens > thinking.budget_tokens.

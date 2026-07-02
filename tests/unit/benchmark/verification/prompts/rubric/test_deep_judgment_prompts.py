@@ -343,9 +343,33 @@ class TestScoreExtractionPrompts:
         assert "## Anti-patterns" in prompt
         assert "## Output handoff" in prompt
 
-    def test_boolean_system_prompt_warns_against_default_true(self) -> None:
-        prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_boolean()
-        assert "default to false" in prompt.lower()
+    def test_boolean_score_prompts_route_hedged_reasoning_by_conclusion(self, boolean_trait: LLMRubricTrait) -> None:
+        """Regression: hedged reasoning with a negative conclusion must not default true.
+
+        The score-extraction stage only sees the reasoning text plus these
+        prompts. A realistic failure is a reasoning stage that acknowledges
+        partial support but concludes the criteria are not met; boolean judges
+        tend to over-reward the hedge unless the system prompt tells them to
+        mirror the Conclusion line and avoid directional defaults.
+        """
+        builder = DeepJudgmentPromptBuilder()
+        system_prompt = builder.build_score_extraction_system_prompt_boolean()
+        user_prompt = builder.build_score_extraction_user_prompt(
+            trait=boolean_trait,
+            reasoning=(
+                "Evidence: The answer cites one source but leaves the main claim unsupported.\n"
+                "Interpretation: The evidence is mixed and the response sounds confident.\n"
+                "Conclusion: the criteria are not met."
+            ),
+        )
+
+        anti_patterns = system_prompt.split("## Anti-patterns", 1)[1].split("## Output handoff", 1)[0]
+        assert "The verdict must follow logically from the reasoning's Conclusion." in system_prompt
+        assert "Biasing toward true or false when the reasoning is hedged or balanced" in anti_patterns
+        assert "verdict should mirror the Conclusion line" in anti_patterns
+        assert "directional default" in anti_patterns
+        assert "Conclusion: the criteria are not met." in user_prompt
+        assert "otherwise false" in user_prompt
 
     def test_numeric_system_prompt_has_four_sections(self) -> None:
         prompt = DeepJudgmentPromptBuilder().build_score_extraction_system_prompt_numeric()
