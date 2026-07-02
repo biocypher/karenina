@@ -165,12 +165,22 @@ def test_fuzzy_match_newlines_and_tabs() -> None:
 
 @pytest.mark.unit
 def test_fuzzy_match_case_sensitive() -> None:
-    """Test that fuzzy matching is case-sensitive."""
-    trace = "The drug targets BCL2"
-    excerpt = "the drug targets bcl2"
+    """Fuzzy matching is case-sensitive: opposite-case text must not match.
+
+    ``fuzzy_match_excerpt`` normalizes whitespace but never case. With every
+    alphabetic character flipped to the opposite case, the longest
+    case-sensitive contiguous match shrinks to just the spaces between
+    words, so the similarity drops well below the 0.75 match threshold and
+    ``match_found`` is False. A regression that lowercased either side
+    (e.g. an over-eager normalization) would push similarity back to 1.0
+    and flip ``match_found`` to True.
+    """
+    trace = "the drug targets bcl2"
+    excerpt = "THE DRUG TARGETS BCL2"
 
     match_found, similarity = fuzzy_match_excerpt(excerpt, trace)
 
-    # Case differences should reduce similarity
-    # But exact match of normalized text should still work
-    assert similarity < 1.0 or match_found is True
+    assert match_found is False, (
+        f"Case-sensitive matching regressed: matched at {similarity:.2f} on a fully opposite-case excerpt."
+    )
+    assert similarity < 0.5

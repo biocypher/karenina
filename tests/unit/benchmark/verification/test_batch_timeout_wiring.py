@@ -23,6 +23,9 @@ from karenina.schemas.verification import FinishedTemplate, VerificationConfig, 
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import VerificationResultMetadata
 
+BATCH_TIMEOUT_SECONDS = 0.6
+SLOW_TASK_SECONDS = 0.8
+
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -89,25 +92,15 @@ def _make_config(**overrides) -> VerificationConfig:
 class TestBatchTimeoutFieldValidation:
     """batch_timeout_seconds accepts None and positive floats only."""
 
-    def test_default_is_none(self) -> None:
-        config = _make_config()
-        assert config.batch_timeout_seconds is None
+    @pytest.mark.parametrize("value", [None, 1.0, 10.5], ids=["none", "int_seconds", "fractional"])
+    def test_accepts_none_or_positive_float(self, value: float | None) -> None:
+        config = _make_config(batch_timeout_seconds=value)
+        assert config.batch_timeout_seconds == value
 
-    def test_positive_float_accepted(self) -> None:
-        config = _make_config(batch_timeout_seconds=10.5)
-        assert config.batch_timeout_seconds == 10.5
-
-    def test_explicit_none_accepted(self) -> None:
-        config = _make_config(batch_timeout_seconds=None)
-        assert config.batch_timeout_seconds is None
-
-    def test_zero_rejected(self) -> None:
+    @pytest.mark.parametrize("value", [0, -1.0], ids=["zero", "negative"])
+    def test_rejects_non_positive(self, value: float) -> None:
         with pytest.raises(ValidationError):
-            _make_config(batch_timeout_seconds=0)
-
-    def test_negative_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            _make_config(batch_timeout_seconds=-1.0)
+            _make_config(batch_timeout_seconds=value)
 
 
 # ============================================================================
@@ -211,7 +204,7 @@ class TestQABatchTimeoutEndToEnd:
 
         def mock_execute_task(task, answer_cache=None, cache_status=None, cached_answer_data=None):
             if task["question_id"] == "q2":
-                block.wait(timeout=10.0)
+                block.wait(timeout=SLOW_TASK_SECONDS)
             return (f"key_{task['question_id']}", _make_result(task["question_id"]))
 
         monkeypatch.setattr(
@@ -219,18 +212,15 @@ class TestQABatchTimeoutEndToEnd:
             mock_execute_task,
         )
 
-        config = _make_config(batch_timeout_seconds=1.0)
+        config = _make_config(batch_timeout_seconds=BATCH_TIMEOUT_SECONDS)
 
-        try:
-            with pytest.raises(VerificationBatchError) as exc_info:
-                run_verification_batch(
-                    templates,
-                    config,
-                    async_enabled=True,
-                    max_workers=2,
-                )
-        finally:
-            block.set()
+        with pytest.raises(VerificationBatchError) as exc_info:
+            run_verification_batch(
+                templates,
+                config,
+                async_enabled=True,
+                max_workers=2,
+            )
 
         err = exc_info.value
         assert "timed out" in str(err)
@@ -299,7 +289,7 @@ class TestScenarioBatchTimeoutEndToEnd:
             result.status = "completed"
             result.turn_results = []
             if name == "slow":
-                block.wait(timeout=10.0)
+                block.wait(timeout=SLOW_TASK_SECONDS)
             return result
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -310,12 +300,8 @@ class TestScenarioBatchTimeoutEndToEnd:
             "slow": _make_scenario_mock("slow"),
         }
 
-        config = _make_config(batch_timeout_seconds=1.0, async_max_workers=2)
-
-        try:
-            result_set = benchmark._run_scenario_verification(config, async_enabled=True)
-        finally:
-            block.set()
+        config = _make_config(batch_timeout_seconds=BATCH_TIMEOUT_SECONDS, async_max_workers=2)
+        result_set = benchmark._run_scenario_verification(config, async_enabled=True)
 
         assert result_set.errors is not None
         timeout_errors = [(desc, exc) for desc, exc in result_set.errors if isinstance(exc, TimeoutError)]

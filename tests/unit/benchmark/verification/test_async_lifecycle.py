@@ -24,23 +24,27 @@ def _clean_portal():
 
 @pytest.mark.unit
 class TestExecutorReExports:
-    """The executor module must re-export the leaf's objects by identity."""
+    """The executor module re-exports the leaf module's objects by identity.
 
-    def test_get_global_llm_semaphore_identity(self) -> None:
-        assert executor.get_global_llm_semaphore is async_lifecycle.get_global_llm_semaphore
+    This is the leaf-module invariant: async_lifecycle owns the canonical
+    state, executor merely re-exports. A single parametrized identity check
+    documents the surface; the behavioral test_shared_semaphore_state below
+    then proves the re-exports actually share underlying state.
+    """
 
-    def test_set_global_llm_semaphore_identity(self) -> None:
-        assert executor.set_global_llm_semaphore is async_lifecycle.set_global_llm_semaphore
-
-    def test_portal_accessors_identity(self) -> None:
-        assert executor.get_async_portal is async_lifecycle.get_async_portal
-        assert executor.set_async_portal is async_lifecycle.set_async_portal
-
-    def test_sentinel_identity(self) -> None:
-        assert executor._SENTINEL is async_lifecycle._SENTINEL
-
-    def test_pre_teardown_timeout_re_exported(self) -> None:
-        assert executor.PRE_TEARDOWN_ACLOSE_TIMEOUT == async_lifecycle.PRE_TEARDOWN_ACLOSE_TIMEOUT
+    @pytest.mark.parametrize(
+        ("executor_attr", "leaf_attr"),
+        [
+            ("get_global_llm_semaphore", "get_global_llm_semaphore"),
+            ("set_global_llm_semaphore", "set_global_llm_semaphore"),
+            ("get_async_portal", "get_async_portal"),
+            ("set_async_portal", "set_async_portal"),
+            ("_SENTINEL", "_SENTINEL"),
+            ("PRE_TEARDOWN_ACLOSE_TIMEOUT", "PRE_TEARDOWN_ACLOSE_TIMEOUT"),
+        ],
+    )
+    def test_reexport_identity(self, executor_attr: str, leaf_attr: str) -> None:
+        assert getattr(executor, executor_attr) is getattr(async_lifecycle, leaf_attr)
 
     def test_shared_semaphore_state(self) -> None:
         """Setting via the executor path is visible via the leaf path."""
