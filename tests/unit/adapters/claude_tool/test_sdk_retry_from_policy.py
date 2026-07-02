@@ -1,7 +1,9 @@
-"""Tests for Claude Tool adapter SDK retry configuration from RetryPolicy.
+"""Tests for Claude Tool adapter SDK retry suppression (design decision D1).
 
-Verifies that ClaudeToolLLMAdapter derives max_retries from RetryPolicy
-and passes it to the Anthropic/AsyncAnthropic SDK constructors.
+Since T2, transient retries are owned by RetryExecutor at the adapter layer
+and the Anthropic/AsyncAnthropic SDK clients are constructed with
+max_retries=0 regardless of the configured RetryPolicy. See
+test_retry_routing.py for the RetryExecutor routing itself.
 """
 
 from __future__ import annotations
@@ -28,11 +30,11 @@ def _make_config(*, retry_policy: RetryPolicy | None = None) -> ModelConfig:
 
 
 @pytest.mark.unit
-class TestClaudeToolSDKRetryFromPolicy:
-    """Verify max_retries is derived from RetryPolicy and passed to SDK clients."""
+class TestClaudeToolSDKRetrySuppression:
+    """SDK clients always receive max_retries=0 (RetryExecutor owns retries)."""
 
-    def test_sync_client_receives_default_max_retries(self) -> None:
-        """Default RetryPolicy yields max_retries=3 (rate_limit and connection)."""
+    def test_sync_client_receives_zero_max_retries(self) -> None:
+        """Default RetryPolicy still yields SDK max_retries=0."""
         config = _make_config()
         adapter = ClaudeToolLLMAdapter(config)
 
@@ -41,11 +43,10 @@ class TestClaudeToolSDKRetryFromPolicy:
             adapter._get_client()
 
             _, kwargs = mock_cls.call_args
-            # Default policy: connection=3, timeout=1, rate_limit=3, server=2 -> max=3
-            assert kwargs["max_retries"] == 5
+            assert kwargs["max_retries"] == 0
 
-    def test_async_client_receives_default_max_retries(self) -> None:
-        """Default RetryPolicy yields max_retries=3 for async client too."""
+    def test_async_client_receives_zero_max_retries(self) -> None:
+        """Default RetryPolicy still yields SDK max_retries=0 for async client."""
         config = _make_config()
         adapter = ClaudeToolLLMAdapter(config)
 
@@ -54,45 +55,12 @@ class TestClaudeToolSDKRetryFromPolicy:
             adapter._get_async_client()
 
             _, kwargs = mock_cls.call_args
-            assert kwargs["max_retries"] == 5
+            assert kwargs["max_retries"] == 0
 
-    def test_custom_policy_max_retries_propagated(self) -> None:
-        """Custom RetryPolicy with high connection attempts propagates to SDK."""
+    def test_custom_policy_does_not_leak_into_sdk(self) -> None:
+        """A generous RetryPolicy budget never re-enables SDK retries."""
         policy = RetryPolicy(
             connection=CategoryRetryConfig(max_attempts=7),
-        )
-        config = _make_config(retry_policy=policy)
-        adapter = ClaudeToolLLMAdapter(config)
-
-        with patch("anthropic.Anthropic") as mock_cls:
-            mock_cls.return_value = MagicMock()
-            adapter._get_client()
-
-            _, kwargs = mock_cls.call_args
-            assert kwargs["max_retries"] == 7
-
-    def test_custom_policy_async_client_propagated(self) -> None:
-        """Custom RetryPolicy propagates to async client."""
-        policy = RetryPolicy(
-            connection=CategoryRetryConfig(max_attempts=7),
-        )
-        config = _make_config(retry_policy=policy)
-        adapter = ClaudeToolLLMAdapter(config)
-
-        with patch("anthropic.AsyncAnthropic") as mock_cls:
-            mock_cls.return_value = MagicMock()
-            adapter._get_async_client()
-
-            _, kwargs = mock_cls.call_args
-            assert kwargs["max_retries"] == 7
-
-    def test_zero_retry_policy_propagated(self) -> None:
-        """All-zero retry policy passes max_retries=0 to SDK."""
-        policy = RetryPolicy(
-            connection=CategoryRetryConfig(max_attempts=0),
-            timeout=CategoryRetryConfig(max_attempts=0),
-            rate_limit=CategoryRetryConfig(max_attempts=0),
-            server_error=CategoryRetryConfig(max_attempts=0),
         )
         config = _make_config(retry_policy=policy)
         adapter = ClaudeToolLLMAdapter(config)
@@ -104,8 +72,23 @@ class TestClaudeToolSDKRetryFromPolicy:
             _, kwargs = mock_cls.call_args
             assert kwargs["max_retries"] == 0
 
-    def test_none_retry_policy_uses_defaults(self) -> None:
-        """When retry_policy is None, default RetryPolicy is used."""
+    def test_custom_policy_async_client_not_leaked(self) -> None:
+        """Custom RetryPolicy never re-enables async SDK retries either."""
+        policy = RetryPolicy(
+            connection=CategoryRetryConfig(max_attempts=7),
+        )
+        config = _make_config(retry_policy=policy)
+        adapter = ClaudeToolLLMAdapter(config)
+
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            adapter._get_async_client()
+
+            _, kwargs = mock_cls.call_args
+            assert kwargs["max_retries"] == 0
+
+    def test_none_retry_policy_still_zero(self) -> None:
+        """When retry_policy is None, the SDK clients still get max_retries=0."""
         config = _make_config(retry_policy=None)
         adapter = ClaudeToolLLMAdapter(config)
 
@@ -114,5 +97,4 @@ class TestClaudeToolSDKRetryFromPolicy:
             adapter._get_client()
 
             _, kwargs = mock_cls.call_args
-            # Default: max(connection=3, timeout=1, rate_limit=3, server=2) = 3
-            assert kwargs["max_retries"] == 5
+            assert kwargs["max_retries"] == 0

@@ -329,23 +329,29 @@ class TestParallelTimeout:
 
 
 # ============================================================================
-# Parallel: semaphore lifecycle
+# Parallel: global limiter lifecycle
 # ============================================================================
 
 
 @pytest.mark.unit
 class TestParallelSemaphoreLifecycle:
-    """Global LLM semaphore is set before workers and cleared after."""
+    """GlobalLLMLimiter is configured before workers and dropped after.
+
+    T13 deliberate flip: these tests previously pinned the legacy
+    set_global_llm_semaphore production wiring, which the GlobalLLMLimiter
+    supersedes. The legacy accessors stay covered by
+    test_global_semaphore.py.
+    """
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
-    def test_semaphore_active_during_parallel_run(self, mock_manager_cls: MagicMock) -> None:
-        """When max_concurrent_requests is set, semaphore is active during worker execution."""
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
+    def test_limiter_active_during_parallel_run(self, mock_manager_cls: MagicMock) -> None:
+        """When max_concurrent_requests is set, the limiter is active during worker execution."""
+        from karenina.benchmark.verification.executor import get_global_llm_limiter
 
         captured: list = []
 
         def mock_run(**kwargs):
-            captured.append(get_global_llm_semaphore())
+            captured.append(get_global_llm_limiter().capacity)
             return _make_exec_result("s1")
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -361,15 +367,14 @@ class TestParallelSemaphoreLifecycle:
         )
         executor.run_batch([_make_combo("s1")], config)
 
-        assert len(captured) == 1
-        assert captured[0] is not None
-        # After run_batch, semaphore is cleared
-        assert get_global_llm_semaphore() is None
+        assert captured == [5]
+        # After run_batch, the limiter is deconfigured
+        assert get_global_llm_limiter().capacity is None
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
-    def test_semaphore_cleared_after_parallel_run(self, mock_manager_cls: MagicMock) -> None:
-        """Semaphore is cleared even when combos fail."""
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
+    def test_limiter_deconfigured_after_parallel_run(self, mock_manager_cls: MagicMock) -> None:
+        """The limiter is deconfigured even when combos fail."""
+        from karenina.benchmark.verification.executor import get_global_llm_limiter
 
         mock_manager_cls.return_value.run.side_effect = RuntimeError("fail")
 
@@ -384,7 +389,7 @@ class TestParallelSemaphoreLifecycle:
         )
         executor.run_batch([_make_combo("s1")], config)
 
-        assert get_global_llm_semaphore() is None
+        assert get_global_llm_limiter().capacity is None
 
 
 # ============================================================================

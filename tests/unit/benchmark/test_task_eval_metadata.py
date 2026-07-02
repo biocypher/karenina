@@ -19,28 +19,60 @@ from karenina.schemas.verification.result_components import (
 
 @pytest.mark.unit
 class TestTaskEvalInterface:
-    """Issue 166: taskeval interface registration."""
+    """Issue 166: the taskeval interface must be registered in AdapterRegistry.
 
-    def test_taskeval_interface_registered(self):
-        """ModelConfig with interface='taskeval' should not raise."""
-        config = ModelConfig(
-            id="user-provided",
-            model_name="user-provided",
-            model_provider="user-provided",
-            interface="taskeval",
-        )
-        assert config.interface == "taskeval"
+    The previous version of this test only round-tripped ``interface='taskeval'``
+    through ``ModelConfig`` and asserted the value came back out — a tautology
+    since Pydantic always echoes its inputs. That test would have stayed green
+    even if the registration module were deleted and TaskEval evaluations
+    started failing at adapter construction. These tests instead verify the
+    behavior that actually matters downstream: the ``taskeval`` interface is
+    registered in ``AdapterRegistry`` (via the import side-effect in
+    ``karenina.adapters.taskeval.registration``) and is reported as available.
+    """
 
-    def test_taskeval_sentinel_fields(self):
-        """Sentinel model has expected field values."""
-        config = ModelConfig(
-            id="user-provided",
-            model_name="user-provided",
-            model_provider="user-provided",
-            interface="taskeval",
+    def test_taskeval_interface_is_registered(self):
+        """AdapterRegistry must expose the taskeval interface spec.
+
+        If the registration module is deleted, the spec goes unregistered, or
+        the entry-point discovery chain stops importing it, this assertion
+        fails — surfacing the breakage before any TaskEval evaluation runs.
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        spec = AdapterRegistry.get_spec("taskeval")
+        assert spec is not None, "taskeval interface is not registered with AdapterRegistry"
+        assert spec.interface == "taskeval"
+
+    def test_taskeval_interface_is_available(self):
+        """check_availability must mark taskeval as available (no provider required).
+
+        TaskEval always uses pre-collected outputs, so the interface must be
+        available regardless of environment / credentials. A regression that
+        adds an availability gate (e.g. requiring a provider) would break
+        every TaskEval evaluation; this test catches that.
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        availability = AdapterRegistry.check_availability("taskeval")
+        assert availability.available is True, (
+            f"taskeval must always be available; got available=False ({availability.reason!r})"
         )
-        assert config.model_name == "user-provided"
-        assert config.model_provider == "user-provided"
+
+    def test_taskeval_interface_does_not_route_or_fallback(self):
+        """taskeval is a terminal interface (no fallback / no routing).
+
+        If someone adds ``fallback_interface='langchain'`` to the spec, the
+        framework would silently substitute langchain for taskeval when an
+        adapter is built — corrupting TaskEval's no-LLM-invocation contract.
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        spec = AdapterRegistry.get_spec("taskeval")
+        assert spec is not None
+        assert spec.fallback_interface is None, f"taskeval must not declare a fallback; got {spec.fallback_interface!r}"
+        assert spec.routes_to is None, f"taskeval must not route to another interface; got {spec.routes_to!r}"
+        assert spec.requires_provider is False, "taskeval must not require a provider (outputs are pre-collected)"
 
 
 @pytest.mark.unit

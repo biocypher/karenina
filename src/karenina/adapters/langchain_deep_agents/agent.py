@@ -149,6 +149,12 @@ class DeepAgentsAgentAdapter:
     - Usage metadata extraction from AIMessage response_metadata
     - Recursion limit detection from LangGraph state
 
+    Global concurrency cap: ``max_concurrent_requests`` (GlobalLLMLimiter)
+    gates single-turn LLM adapter calls and langchain-based agent model
+    calls only. This agent's internal model calls run outside that cap.
+    They were never semaphore-gated, so this is the honest current state
+    rather than a regression.
+
     Example:
         >>> config = ModelConfig(
         ...     id="test",

@@ -1,4 +1,10 @@
-"""Tests for with_llm_semaphore decorator in _parallel_base.py."""
+"""Tests for with_llm_semaphore decorator in _parallel_base.py.
+
+The semaphore getter is hoisted to _parallel_base module scope (imported
+from the async_lifecycle leaf module), so the monkeypatch target is
+karenina.adapters._parallel_base.get_global_llm_semaphore: the name the
+wrapper actually resolves at call time.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +24,7 @@ class TestWithLlmSemaphore:
     def test_passthrough_when_no_semaphore(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When no global semaphore is set, the function runs directly."""
         monkeypatch.setattr(
-            "karenina.benchmark.verification.executor.get_global_llm_semaphore",
+            "karenina.adapters._parallel_base.get_global_llm_semaphore",
             lambda: None,
         )
 
@@ -32,7 +38,7 @@ class TestWithLlmSemaphore:
         """When a global semaphore is active, it is acquired before and released after the call."""
         sem = MagicMock(spec=threading.Semaphore)
         monkeypatch.setattr(
-            "karenina.benchmark.verification.executor.get_global_llm_semaphore",
+            "karenina.adapters._parallel_base.get_global_llm_semaphore",
             lambda: sem,
         )
 
@@ -50,7 +56,7 @@ class TestWithLlmSemaphore:
         """Semaphore is released even when the wrapped function raises."""
         sem = MagicMock(spec=threading.Semaphore)
         monkeypatch.setattr(
-            "karenina.benchmark.verification.executor.get_global_llm_semaphore",
+            "karenina.adapters._parallel_base.get_global_llm_semaphore",
             lambda: sem,
         )
 
@@ -68,7 +74,7 @@ class TestWithLlmSemaphore:
         """With a real semaphore of 1 permit, concurrent calls are serialized."""
         sem = threading.Semaphore(1)
         monkeypatch.setattr(
-            "karenina.benchmark.verification.executor.get_global_llm_semaphore",
+            "karenina.adapters._parallel_base.get_global_llm_semaphore",
             lambda: sem,
         )
 
@@ -129,7 +135,7 @@ class TestWithLlmSemaphore:
     def test_passes_args_and_kwargs(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Arguments and keyword arguments are forwarded correctly."""
         monkeypatch.setattr(
-            "karenina.benchmark.verification.executor.get_global_llm_semaphore",
+            "karenina.adapters._parallel_base.get_global_llm_semaphore",
             lambda: None,
         )
 

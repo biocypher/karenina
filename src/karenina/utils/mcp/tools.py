@@ -68,15 +68,21 @@ async def afetch_tool_descriptions(
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
 
+    from karenina.adapters._timeouts import MCP_CONNECT_TIMEOUT
+
     descriptions: dict[str, str] = {}
 
     async with AsyncExitStack() as stack:
         for server_name, url in mcp_urls_dict.items():
             try:
-                # Connect to MCP server
+                # Connect to MCP server. The inner per-server bound is
+                # derived from the same source as the outer dispatch bound
+                # in fetch_tool_descriptions and fires first for a single
+                # server. With multiple servers the per-server bounds sum,
+                # so the outer dispatch bound may fire first instead.
                 http_transport = await asyncio.wait_for(
                     stack.enter_async_context(streamablehttp_client(url)),
-                    timeout=30.0,
+                    timeout=MCP_CONNECT_TIMEOUT,
                 )
                 read_stream, write_stream, _ = http_transport
 
@@ -102,9 +108,9 @@ async def afetch_tool_descriptions(
 
             except TimeoutError as e:
                 raise McpTimeoutError(
-                    f"MCP server '{server_name}' connection timed out after 30 seconds.",
+                    f"MCP server '{server_name}' connection timed out after {MCP_CONNECT_TIMEOUT:.0f} seconds.",
                     server_name=server_name,
-                    timeout_seconds=30,
+                    timeout_seconds=int(MCP_CONNECT_TIMEOUT),
                 ) from e
             except Exception as e:
                 logger.error(f"Failed to fetch tools from MCP server '{server_name}': {e}")
@@ -131,13 +137,34 @@ def fetch_tool_descriptions(
     Returns:
         Dict mapping tool names to their descriptions
     """
+    from karenina.adapters._timeouts import MCP_TOOL_FETCH_FLOOR, compute_sync_wrapper_timeout
+
+    # No model config is available here, so the dispatch bound is the
+    # historical floor for MCP tool description fetches. The inner
+    # per-server connect bound (MCP_CONNECT_TIMEOUT) is derived from the
+    # same source and fires first for a single server. With multiple
+    # servers the per-server bounds sum, so this dispatch bound may fire
+    # first instead.
+    fetch_timeout = compute_sync_wrapper_timeout(None, floor=MCP_TOOL_FETCH_FLOOR)
+
     # Try to use the shared portal if available (from parallel verification)
     try:
         from karenina.benchmark.verification.executor import get_async_portal
 
         portal = get_async_portal()
         if portal is not None:
-            return portal.call(afetch_tool_descriptions, mcp_urls_dict, tool_filter)
+            # Bound the portal dispatch so a stalled coroutine inside the
+            # portal's event loop cannot wedge the worker thread forever
+            # (mirrors the langchain parser's bounded portal dispatch).
+            portal_future = portal.start_task_soon(afetch_tool_descriptions, mcp_urls_dict, tool_filter)
+            try:
+                return portal_future.result(timeout=fetch_timeout)
+            except concurrent.futures.TimeoutError as e:
+                portal_future.cancel()
+                raise McpTimeoutError(
+                    f"Fetch tool descriptions timed out after {fetch_timeout:.0f} seconds",
+                    timeout_seconds=int(fetch_timeout),
+                ) from e
     except ImportError:
         pass
 
@@ -152,11 +179,11 @@ def fetch_tool_descriptions(
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(run_in_thread)
             try:
-                return future.result(timeout=45)
+                return future.result(timeout=fetch_timeout)
             except TimeoutError as e:
                 raise McpTimeoutError(
-                    "Fetch tool descriptions timed out after 45 seconds",
-                    timeout_seconds=45,
+                    f"Fetch tool descriptions timed out after {fetch_timeout:.0f} seconds",
+                    timeout_seconds=int(fetch_timeout),
                 ) from e
     except RuntimeError:
         pass

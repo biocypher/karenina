@@ -16,11 +16,18 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import contextvars
 import functools
 import logging
 import os
 from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, TypeVar
+
+# Leaf module import (stdlib-only at module level), hoisted out of the
+# per-invoke wrapper body. The semaphore lookup point for monkeypatching is
+# now this module's global name: karenina.adapters._parallel_base.
+# get_global_llm_semaphore.
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_semaphore
 
 from ..schemas.verification.config import DEFAULT_ASYNC_ENABLED, DEFAULT_ASYNC_MAX_WORKERS
 
@@ -65,9 +72,15 @@ def read_async_config() -> tuple[bool, int]:
 def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
     """Wrap a sync LLM invoke() call with global semaphore acquisition.
 
-    When a global LLM semaphore is active (set by ScenarioExecutor or
-    VerificationExecutor), this decorator acquires one permit before calling
-    the wrapped function and releases it after (including on exception).
+    Deprecated: production code no longer sets the global semaphore (the
+    executors enter ``GlobalLLMLimiter.configure`` instead and the adapters
+    borrow at their async leaves), so in production this decorator is a
+    passthrough. Kept fully functional for direct callers that still set
+    the legacy semaphore and for existing tests.
+
+    When a global LLM semaphore is active, this decorator acquires one
+    permit before calling the wrapped function and releases it after
+    (including on exception).
 
     When no global semaphore is set, the function is called directly with
     no overhead.
@@ -81,8 +94,6 @@ def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
 
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> T:
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
-
         sem = get_global_llm_semaphore()
         if sem is not None:
             sem.acquire()
@@ -93,6 +104,53 @@ def with_llm_semaphore(fn: Callable[..., T]) -> Callable[..., T]:
                 sem.release()
 
     return wrapper
+
+
+def run_coro_in_thread(
+    coro_func: Callable[..., Coroutine[Any, Any, T]],
+    *args: Any,
+    timeout: float | None,
+) -> T:
+    """Run an async function in a fresh thread, propagating contextvars.
+
+    Shared helper for the adapters' sync-wrapper ThreadPoolExecutor
+    fallbacks (sync invoke called while an event loop is already running
+    in the calling thread). A plain ``executor.submit(asyncio.run, ...)``
+    would run the coroutine without the caller's context, silently losing
+    context-bound state such as the ``track_retries`` telemetry tracker.
+    This helper captures the caller's context with
+    ``contextvars.copy_context()`` and re-enters it in the worker thread,
+    so the coroutine (and every retry decision inside it) sees the same
+    contextvars as the caller.
+
+    Args:
+        coro_func: Async function to call.
+        *args: Positional arguments forwarded to coro_func.
+        timeout: Wall-clock bound for the thread result in seconds.
+            None waits indefinitely.
+
+    Returns:
+        The return value of the coroutine.
+
+    Raises:
+        concurrent.futures.TimeoutError: If the thread does not finish
+            within the timeout.
+        Exception: Any exception raised by the coroutine is re-raised.
+    """
+    ctx = contextvars.copy_context()
+
+    def _create_and_run() -> T:
+        # Both coroutine creation and asyncio.run happen inside ctx, so a
+        # sync prelude in coro_func sees the caller's contextvars too, and
+        # the task created by asyncio.run copies ctx for the async body.
+        return asyncio.run(coro_func(*args))
+
+    def _target() -> T:
+        return ctx.run(_create_and_run)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_target)
+        return future.result(timeout=timeout)
 
 
 def get_max_workers(override: int | None = None) -> int:
@@ -222,16 +280,18 @@ def sync_invoke_via_portal(
     # No portal available - check if we're already in an async context
     try:
         asyncio.get_running_loop()
-        # We're in an async context - use ThreadPoolExecutor to avoid
-        # nested event loop issues
+        # We're in an async context - use a fresh thread (with the caller's
+        # context propagated) to avoid nested event loop issues
         logger.debug("sync_invoke_via_portal: Running in async context, using ThreadPoolExecutor")
 
-        def run_in_thread() -> T:
-            return asyncio.run(async_fn(*args, **kwargs))
+        def _call() -> Coroutine[Any, Any, T]:
+            return async_fn(*args, **kwargs)
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(run_in_thread)
-            return future.result(timeout=600)  # 10 minute timeout
+        from karenina.adapters._timeouts import PORTAL_DISPATCH_FLOOR, compute_sync_wrapper_timeout
+
+        # No model config is available here, so the bound is the historical
+        # floor for the generic portal dispatch path (10 minutes).
+        return run_coro_in_thread(_call, timeout=compute_sync_wrapper_timeout(None, floor=PORTAL_DISPATCH_FLOOR))
 
     except RuntimeError:
         # No event loop running, safe to use asyncio.run

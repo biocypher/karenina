@@ -265,23 +265,85 @@ class TestSequentialProgressCallback:
 
 
 # ============================================================================
-# Sequential: semaphore lifecycle
+# Sequential: per-turn progress callback (T14 deliberate change)
+# ============================================================================
+
+
+@pytest.mark.unit
+class TestSequentialPerTurnCallback:
+    """Sequential mode wires the per-turn progress callback into manager.run.
+
+    T14 deliberate change: previously only parallel mode passed a per-turn
+    ``progress_callback`` into ``ScenarioManager.run`` (sequential dropped
+    it). Sequential now mirrors the parallel wiring, recording turn/node
+    progress per combo under the shared progress lock.
+    """
+
+    @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
+    def test_sequential_passes_turn_callback_to_manager(self, mock_manager_cls: MagicMock) -> None:
+        """manager.run receives a callable per-turn callback per combo."""
+        captured_callbacks: list = []
+
+        def mock_run(**kwargs):
+            cb = kwargs.get("progress_callback")
+            assert cb is not None, "sequential mode must wire the per-turn callback"
+            assert callable(cb)
+            # The callback must accept the per-turn kwargs the manager emits.
+            cb(
+                scenario_id=kwargs["scenario"].name,
+                scenario_turn=2,
+                scenario_node="n2",
+                verify_result=MagicMock(),
+                next_node="exit",
+            )
+            captured_callbacks.append(cb)
+            return _make_exec_result(kwargs["scenario"].name)
+
+        mock_manager_cls.return_value.run.side_effect = mock_run
+
+        config = MagicMock()
+        # Stay on the normal return path: a bare MagicMock would satisfy the
+        # workspace-capture condition and route through the compaction
+        # guard's swallow-and-warn branch.
+        config.workspace_output_mode = "none"
+        config.workspace_output_dir = None
+        executor = ScenarioExecutor(
+            parallel=False,
+            config=ScenarioExecutorConfig(enable_cache=False),
+        )
+        results, errors = executor.run_batch([_make_combo("s1"), _make_combo("s2")], config)
+
+        assert errors == []
+        assert len(results) == 2
+        assert len(captured_callbacks) == 2
+        # Each combo gets its own closure (per-combo index and scenario name).
+        assert captured_callbacks[0] is not captured_callbacks[1]
+
+
+# ============================================================================
+# Sequential: global limiter lifecycle
 # ============================================================================
 
 
 @pytest.mark.unit
 class TestSequentialSemaphoreLifecycle:
-    """Global LLM semaphore is set before execution and cleared after."""
+    """GlobalLLMLimiter is configured before execution and dropped after.
+
+    T13 deliberate flip: these tests previously pinned the legacy
+    set_global_llm_semaphore production wiring, which the GlobalLLMLimiter
+    supersedes. The legacy accessors stay covered by
+    test_global_semaphore.py.
+    """
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
-    def test_semaphore_set_when_configured(self, mock_manager_cls: MagicMock) -> None:
-        """When max_concurrent_requests is set, global semaphore is active during run."""
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
+    def test_limiter_configured_when_set(self, mock_manager_cls: MagicMock) -> None:
+        """When max_concurrent_requests is set, the limiter is active during run."""
+        from karenina.benchmark.verification.executor import get_global_llm_limiter
 
         captured: list = []
 
         def mock_run(**kwargs):
-            captured.append(get_global_llm_semaphore())
+            captured.append(get_global_llm_limiter().capacity)
             return _make_exec_result("s1")
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -293,20 +355,19 @@ class TestSequentialSemaphoreLifecycle:
         )
         executor.run_batch([_make_combo("s1")], config)
 
-        assert len(captured) == 1
-        assert captured[0] is not None
-        # After run_batch, semaphore is cleared
-        assert get_global_llm_semaphore() is None
+        assert captured == [5]
+        # After run_batch, the limiter is deconfigured
+        assert get_global_llm_limiter().capacity is None
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
-    def test_semaphore_none_when_not_configured(self, mock_manager_cls: MagicMock) -> None:
-        """When max_concurrent_requests is None, global semaphore stays None."""
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
+    def test_limiter_unconfigured_when_not_set(self, mock_manager_cls: MagicMock) -> None:
+        """When max_concurrent_requests is None, the limiter stays uncapped."""
+        from karenina.benchmark.verification.executor import get_global_llm_limiter
 
         captured: list = []
 
         def mock_run(**kwargs):
-            captured.append(get_global_llm_semaphore())
+            captured.append(get_global_llm_limiter().capacity)
             return _make_exec_result("s1")
 
         mock_manager_cls.return_value.run.side_effect = mock_run
@@ -321,9 +382,9 @@ class TestSequentialSemaphoreLifecycle:
         assert captured[0] is None
 
     @patch("karenina.benchmark.verification.scenario_executor.ScenarioManager")
-    def test_semaphore_cleared_on_error(self, mock_manager_cls: MagicMock) -> None:
-        """Semaphore is cleared even when all combos fail."""
-        from karenina.benchmark.verification.executor import get_global_llm_semaphore
+    def test_limiter_deconfigured_on_error(self, mock_manager_cls: MagicMock) -> None:
+        """The limiter is deconfigured even when all combos fail."""
+        from karenina.benchmark.verification.executor import get_global_llm_limiter
 
         mock_manager_cls.return_value.run.side_effect = RuntimeError("boom")
 
@@ -334,7 +395,7 @@ class TestSequentialSemaphoreLifecycle:
         )
         executor.run_batch([_make_combo("s1")], config)
 
-        assert get_global_llm_semaphore() is None
+        assert get_global_llm_limiter().capacity is None
 
 
 # ============================================================================

@@ -147,9 +147,33 @@ class VerificationConfig(BaseModel):
     max_concurrent_requests: int | None = Field(
         default=None,
         ge=1,
-        description="Global cap on concurrent LLM requests across all workers. "
+        description="Global cap on concurrent LLM request setups across all "
+        "workers, enforced process-wide by the GlobalLLMLimiter on both the "
+        "QA and scenario paths. Gates the adapters' single-turn LLM calls "
+        "(ainvoke, and the sync wrappers that dispatch to it), stream "
+        "establishment (the cap bounds concurrent request setups, not "
+        "concurrent open streams), parser-side direct API calls, and "
+        "per-model-call requests inside langchain agent loops (via "
+        "build_agent_middleware). The claude_tool, claude_agent_sdk, and "
+        "langchain_deep_agents agent loops make their own internal model "
+        "calls and are not gated (deep_agents is langchain-based but does "
+        "not use build_agent_middleware). "
         "None means no global limit (concurrency bounded by max_workers only). "
         "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
+    )
+    batch_timeout_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        description="Wall-clock ceiling in seconds for an entire parallel "
+        "verification batch (QA and scenario paths). When the ceiling is "
+        "reached, in-flight work is drained or cancelled and every result "
+        "completed so far is kept. The QA path then raises "
+        "VerificationBatchError carrying the partial results, and the "
+        "scenario path returns the partial (results, errors) tuple with a "
+        "timeout entry appended to the failed tasks. None (the default) "
+        "disables the batch-level timeout: the run executes until all tasks "
+        "finish, exactly as before. Sequential (async_enabled=False) runs "
+        "are not bounded by this knob.",
     )
 
     # Task ordering strategy for queue generation

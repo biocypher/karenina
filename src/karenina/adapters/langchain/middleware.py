@@ -338,6 +338,65 @@ class PerCallTimeoutMiddleware(_get_agent_middleware_base()):  # type: ignore[mi
             raise
 
 
+class GlobalLimiterMiddleware(_get_agent_middleware_base()):  # type: ignore[misc]
+    """Middleware gating each model call in the agent loop through the GlobalLLMLimiter.
+
+    Single-turn LLM calls acquire a GlobalLLMLimiter permit inside the
+    adapters' ainvoke leaves, but LangGraph agent loops call the raw
+    LangChain model directly, bypassing those leaves. This middleware puts
+    every model call that ``_execute_model_async`` makes inside the agent
+    loop under ``async with limiter.borrow()``, so agent model calls count
+    against ``max_concurrent_requests`` like single-turn calls do.
+
+    The borrow is a near-zero-cost no-op while no verification batch has
+    configured the limiter, which is why this middleware is attached
+    unconditionally. It is appended last in build_agent_middleware
+    (innermost wrap), so the permit is held only for the wire call itself,
+    not for retry backoff or per-call-timeout bookkeeping in the outer
+    middleware layers.
+
+    Because the borrow sits INSIDE PerCallTimeoutMiddleware, the permit
+    wait counts against the per-call timeout budget. A saturated limiter
+    therefore surfaces as per-attempt timeouts on this path, which the
+    outer ModelRetryMiddleware retries with backoff while holding no
+    permit. This differs from the adapter single-turn path, where the
+    permit wait is unbounded and not charged to the attempt timeout.
+
+    The sync wrap_model_call path is a passthrough: karenina's agent
+    adapter only ever runs async, and the async borrow cannot be awaited
+    from a sync hook. Mirrors the PerCallTimeoutMiddleware stance.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the limiter middleware (no configuration needed)."""
+        super().__init__()
+        self.tools: list[Any] = []  # no extra tools registered
+
+    def wrap_model_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Any],
+    ) -> Any:
+        """Sync passthrough: the agent adapter is async-only in karenina.
+
+        See class docstring: the async borrow cannot be awaited here. This
+        method exists only so the middleware does not raise
+        NotImplementedError if LangGraph ever routes a sync call through it.
+        """
+        return handler(request)
+
+    async def awrap_model_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Awaitable[Any]],
+    ) -> Any:
+        """Run a single async model call under a GlobalLLMLimiter permit."""
+        from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
+
+        async with get_global_llm_limiter().borrow():
+            return await handler(request)
+
+
 def build_agent_middleware(
     config: AgentMiddlewareConfig | None,
     max_context_tokens: int | None = None,
@@ -510,5 +569,13 @@ def build_agent_middleware(
             f"Summarization middleware enabled (InvokeSummarizationMiddleware): model={model_info}, "
             f"{trigger_info}, keep_messages={config.summarization.keep_messages}"
         )
+
+    # 6. Global LLM limiter (always attached). borrow() is a zero-cost
+    # no-op unless a verification batch has configured
+    # max_concurrent_requests, in which case each model call inside the
+    # agent loop counts against the process-wide cap. Appended last so the
+    # permit wraps only the innermost wire call, not retry backoff or the
+    # per-call timeout bookkeeping of the outer layers.
+    middleware.append(GlobalLimiterMiddleware())
 
     return middleware

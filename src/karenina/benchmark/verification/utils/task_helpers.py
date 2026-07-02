@@ -87,8 +87,8 @@ def stamp_agentic_trait_overrides(
     in from ``config`` (mirroring how the top-level answering and parsing
     models are stamped). Existing values on the override are preserved: only
     ``None`` fields are populated, matching the ``is None`` guard used by
-    :func:`_apply_request_timeout` and :func:`_apply_retry_config` in
-    :mod:`karenina.benchmark.verification.batch_runner`.
+    the shared stamping helpers in
+    :mod:`karenina.benchmark.verification.model_stamping`.
 
     The original rubric instance is returned unchanged when no traits need
     stamping (no agentic traits, none with ``model_override``, or all override

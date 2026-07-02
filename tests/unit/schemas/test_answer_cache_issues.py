@@ -83,8 +83,45 @@ class TestFieldResultsCacheInvalidation:
         result = answer._compute_field_results()
         assert result == {"name": True}
 
-    def test_docstring_documents_caching(self) -> None:
-        """The _compute_field_results docstring should mention caching behavior."""
-        docstring = BaseAnswer._compute_field_results.__doc__
-        assert docstring is not None
-        assert "cache" in docstring.lower() or "Cache" in docstring
+    def test_clear_cache_invalidates_scores_and_ground_truths_too(self) -> None:
+        """Clearing the results cache must also drop the companion caches.
+
+        ``_compute_field_results`` populates three caches at once
+        (``_field_results``, ``_field_scores``, ``_resolved_ground_truths``).
+        If ``_clear_verification_cache`` only cleared one of them, a stale
+        graded score or stale ground-truth dict could survive a field mutation
+        and diverge from the recomputed binary results.
+        """
+        cls = self._make_answer_class()
+        answer = cls(name="alice")
+
+        # Populate all three caches.
+        answer._compute_field_results()
+        assert "_field_results" in answer.__dict__
+        assert "_field_scores" in answer.__dict__
+        assert "_resolved_ground_truths" in answer.__dict__
+
+        answer._clear_verification_cache()
+        assert "_field_results" not in answer.__dict__
+        assert "_field_scores" not in answer.__dict__
+        assert "_resolved_ground_truths" not in answer.__dict__
+
+    def test_results_and_scores_stay_consistent_after_recompute(self) -> None:
+        """After mutation + clear, binary results and graded scores agree.
+
+        ``verify_granular`` reads ``_field_scores`` and ``verify`` reads
+        ``_field_results``; the two maps are computed together so they must
+        never disagree after a cache clear + recompute.
+        """
+        cls = self._make_answer_class()
+        answer = cls(name="alice")
+        assert answer.verify() is True
+        assert answer.verify_granular() == 1.0
+
+        answer.name = "bob"
+        answer._clear_verification_cache()
+
+        assert answer.verify() is False
+        assert answer.verify_granular() == 0.0
+        # The two caches were repopulated together by the same call.
+        assert set(answer._compute_field_results()) == set(answer._compute_field_scores())
