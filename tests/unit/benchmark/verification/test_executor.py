@@ -16,9 +16,10 @@ import pytest
 
 from karenina.benchmark.verification.executor import ExecutorConfig, VerificationExecutor
 from karenina.exceptions import KareninaError, VerificationBatchError
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
-from karenina.schemas.verification.result_components import VerificationResultMetadata
+from karenina.schemas.verification.result_components import VerificationResultMetadata, VerificationResultTemplate
 
 # ============================================================================
 # Helpers
@@ -48,6 +49,28 @@ def _make_result(question_id: str = "q1") -> VerificationResult:
             timestamp="2026-01-01T00:00:00",
             result_id="abcdef1234567890",
         )
+    )
+
+
+def _make_timeout_partial_result(question_id: str = "q1") -> VerificationResult:
+    return VerificationResult(
+        metadata=VerificationResultMetadata(
+            question_id=question_id,
+            template_id="test_template",
+            answering=_make_identity("answering"),
+            parsing=_make_identity("parsing"),
+            failure=Failure(
+                category=FailureCategory.TIMEOUT,
+                stage="GenerateAnswer",
+                reason="timeout retries exhausted",
+            ),
+            caveats=[],
+            question_text="Test question",
+            execution_time=0.1,
+            timestamp="2026-01-01T00:00:00",
+            result_id="abcdef1234567890",
+        ),
+        template=VerificationResultTemplate(raw_llm_response="usable partial trace"),
     )
 
 
@@ -569,6 +592,22 @@ class TestForceResetOnRequeueLimit:
         cache.force_reset("key1")
         status, _ = cache.get_or_reserve("key1")
         assert status == "MISS"
+
+
+@pytest.mark.unit
+class TestExecutorCacheHydration:
+    def test_timeout_partial_trace_hydrates_answer_cache(self) -> None:
+        from karenina.utils.answer_cache import AnswerTraceCache
+
+        cache = AnswerTraceCache()
+        executor = VerificationExecutor(parallel=False, config=ExecutorConfig())
+
+        executor._hydrate_cache_from_results(cache, [_make_timeout_partial_result("q1")])
+
+        status, data = cache.get_or_reserve("q1_langchain:answering:")
+        assert status == "HIT"
+        assert data is not None
+        assert data["raw_llm_response"] == "usable partial trace"
 
 
 # ============================================================================

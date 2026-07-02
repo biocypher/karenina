@@ -288,10 +288,13 @@ print(f"Embedding similarity score:  {tmpl.embedding_similarity_score}")
 | `trace_messages` | `list[dict]` | Structured message trace (for MCP agent runs) |
 | `parsed_llm_response` | `dict \| None` | Fields extracted by the Judge LLM |
 | `parsed_gt_response` | `dict \| None` | Ground truth parsed into the same template fields |
-| `verify_granular_result` | `Any \| None` | Per-field verification detail (if `verify_granular()` is implemented) |
+| `verify_granular_result` | `Any \| None` | Aggregate graded score in `[0, 1]` (if `verify_granular()` is implemented) |
 | `field_verification_error` | `str \| None` | Error message if `verify()` raised an exception (non-fatal) |
-| `field_results` | `dict[str, bool] \| None` | Per-field primitive verification results (from `_compute_field_results()`) |
+| `field_results` | `dict[str, bool \| None] \| None` | Per-field binary primitive results (from `_compute_field_results()`) |
+| `field_scores` | `dict[str, float \| None] \| None` | Per-field graded scores in `[0, 1]` (from `_compute_field_scores()`); the per-field detail behind `verify_granular_result` |
 | `composition_strategy` | `str \| None` | Composition strategy used: `"all_of"`, `"any_of"`, or `"at_least_n(N)"` |
+
+`field_results` and `field_scores` are companions. `field_results` is the binary `check()` outcome per field (the basis for `verify()`); `field_scores` is the continuous `score()` outcome per field (the basis for `verify_granular()`). For every primitive except the [graded numeric primitives](verification-primitives.md), each field score is exactly `1.0` (pass) or `0.0` (fail), so `verify_granular_result` is the weighted fraction of passing fields. With a graded numeric primitive, a numeric field earns partial credit: `verify()` stays binary (gated at the cutoff or the band edge) while `field_scores` and `verify_granular_result` carry the graded value. There are three: `NumericGraded` grades the distance from a single reference point, `NumericRangeGraded` grades the distance outside an acceptance band, and `NumericThresholdGraded` grades the distance past a one-sided bound. The per-field scores are also exposed as the `field_score` column in the template [DataFrame](../workflows/analyzing-results/dataframe-analysis.md).
 
 ### 3.3. Optional Check Results
 

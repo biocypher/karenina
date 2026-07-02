@@ -34,10 +34,10 @@ logger = logging.getLogger(__name__)
 
 _SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
 
-# Failure categories whose answerer trace is not worth hydrating into the
-# workspace cache: the trace either never produced real content or was
-# truncated by an infra fault. Mirrors the hard-infra subset of the
-# operational purge_infra_failures filter.
+# Failure categories whose answerer trace is generally not worth hydrating into
+# the workspace cache. Timeout rows are a special case below: when the adapter
+# captured a non-empty partial trace, a partial-trace-scoring resume can use it
+# as parser input and should not regenerate the answerer.
 _INFRA_FAILURE_CATEGORIES: frozenset[FailureCategory] = frozenset(
     {
         FailureCategory.CONNECTION,
@@ -288,7 +288,14 @@ class VerificationExecutor:
 
             failure = result.metadata.failure
             if failure is not None:
-                if failure.category in _INFRA_FAILURE_CATEGORIES and not _is_parser_stage(failure.stage):
+                is_timeout_partial_trace = failure.category == FailureCategory.TIMEOUT and bool(
+                    (template.raw_llm_response or "").strip()
+                )
+                if (
+                    failure.category in _INFRA_FAILURE_CATEGORIES
+                    and not _is_parser_stage(failure.stage)
+                    and not is_timeout_partial_trace
+                ):
                     skipped += 1
                     continue
                 if failure.stage == "TraceValidationAutoFail":

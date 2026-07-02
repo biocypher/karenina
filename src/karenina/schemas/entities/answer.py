@@ -247,6 +247,7 @@ class BaseAnswer(BaseModel):
         _compute_field_results() to reflect the updated state.
         """
         self.__dict__.pop("_field_results", None)
+        self.__dict__.pop("_field_scores", None)
         self.__dict__.pop("_resolved_ground_truths", None)
 
     def _compute_field_results(self) -> dict[str, bool | None]:
@@ -290,6 +291,11 @@ class BaseAnswer(BaseModel):
         verified = self.__class__._get_verified_fields()
         null_fields: set[str] = self.__dict__.get("_null_fields") or set()
         results: dict[str, bool | None] = {}
+        # Per-field graded scores computed in the SAME loop so the binary and
+        # graded maps share one resolution source and never diverge. Values are
+        # floats in [0,1] (or None for a null extraction). For non-graded
+        # primitives the score is exactly 1.0/0.0 tracking results[name].
+        scores: dict[str, float | None] = {}
         resolved_gts: dict[str, Any] = {}
 
         for name, meta in verified.items():
@@ -310,6 +316,7 @@ class BaseAnswer(BaseModel):
             # downstream scoring can distinguish "not answered" from "False".
             if name in null_fields:
                 results[name] = None
+                scores[name] = None
                 continue
 
             if isinstance(primitive, TracePrimitive):
@@ -317,14 +324,46 @@ class BaseAnswer(BaseModel):
                 if raw_trace is None:
                     raise ValueError(f"Field {name!r} uses a TracePrimitive but requires _raw_trace to be set")
                 trace_result = primitive.check_trace(raw_trace)
-                results[name] = trace_result == bool(ground_truth)
+                passed = trace_result == bool(ground_truth)
+                results[name] = passed
+                scores[name] = 1.0 if passed else 0.0
             else:
                 extracted = getattr(self, name, None)
-                results[name] = primitive.check(extracted, ground_truth)
+                passed = primitive.check(extracted, ground_truth)
+                results[name] = passed
+                # Graded companion. Defaults to 1.0/0.0 for non-graded
+                # primitives; NumericGraded returns partial credit. Clamp to
+                # [0,1] defensively and fall back to the binary result if a
+                # primitive's score() raises.
+                try:
+                    raw_score = float(primitive.score(extracted, ground_truth))
+                except Exception:  # noqa: BLE001 - degrade to the binary outcome
+                    raw_score = 1.0 if passed else 0.0
+                scores[name] = min(1.0, max(0.0, raw_score))
 
         self.__dict__["_field_results"] = results
+        self.__dict__["_field_scores"] = scores
         self.__dict__["_resolved_ground_truths"] = resolved_gts
         return results
+
+    def _compute_field_scores(self) -> dict[str, float | None]:
+        """Per-field graded scores in [0,1] (None for a null extraction).
+
+        Companion to _compute_field_results(): same fields, same conditional /
+        null / trace resolution, but each value is the primitive's score()
+        (continuous) rather than check() (binary). For non-graded primitives the
+        score is exactly 1.0/0.0 and tracks the boolean result; graded primitives
+        (NumericGraded) contribute partial credit. Computed and cached together
+        with _compute_field_results() so the two maps never diverge.
+
+        Returns:
+            Mapping of field name to a float in [0,1], or None for a null field.
+        """
+        cached = self.__dict__.get("_field_scores")
+        if cached is not None:
+            return cast(dict[str, float | None], cached)
+        self._compute_field_results()
+        return cast(dict[str, float | None], self.__dict__.get("_field_scores", {}))
 
     def _get_resolved_ground_truths(self) -> dict[str, Any]:
         """Return the resolved ground truth values for all VerifiedFields.
@@ -380,11 +419,18 @@ class BaseAnswer(BaseModel):
         """Auto-generated verify_granular() for VerifiedField templates.
 
         For AllOf (default, no VerificationStrategy): computes a flat weighted
-        average over all VerifiedField results.
+        average over the per-field graded scores.
 
-        For AnyOf: returns the max passing field weight divided by total weight.
-        For AtLeastN: returns the sum of the top-N passing field weights
-        divided by total weight.
+        For AnyOf: returns the best single field contribution (weight times
+        score) divided by total weight.
+        For AtLeastN: returns the sum of the top-N field contributions divided
+        by total weight.
+
+        Each field contributes ``meta.weight * score`` where ``score`` is the
+        primitive's graded score in [0,1]. For non-graded primitives the score
+        is exactly 1.0 (pass) or 0.0 (fail), so this reduces term-for-term to
+        the prior passing-weight arithmetic; graded primitives (NumericGraded)
+        add partial credit.
 
         Returns:
             Score between 0.0 and 1.0.
@@ -398,26 +444,26 @@ class BaseAnswer(BaseModel):
                 "No VerifiedField fields found. Define verify_granular() manually for classic templates."
             )
 
-        field_results = self._compute_field_results()
+        field_scores = self._compute_field_scores()
 
         # Check for VerificationStrategy inner class (issue 133)
         strategy_cls = getattr(self.__class__, "VerificationStrategy", None)
         strategy = getattr(strategy_cls, "verify_strategy", None) if strategy_cls else None
 
         if strategy is not None:
-            return self._composition_aware_granular(strategy, field_results, verified)
+            return self._composition_aware_granular(strategy, field_scores, verified)
 
-        # Default AllOf behavior: flat weighted average.
+        # Default AllOf behavior: flat weighted average of per-field scores.
         # None (null extraction) is treated as not-satisfied here: it does NOT
-        # contribute to weighted_sum but still counts toward total_weight, so
-        # the score is n_true / n_total, distinguishing nulls from False only
-        # in field_results, not in the granular score.
+        # contribute to weighted_sum but still counts toward total_weight, so a
+        # null distinguishes from False only in field_results, not in the score.
         total_weight = 0.0
         weighted_sum = 0.0
         for name, meta in verified.items():
             total_weight += meta.weight
-            if field_results.get(name) is True:
-                weighted_sum += meta.weight
+            score = field_scores.get(name)
+            if score is not None:
+                weighted_sum += meta.weight * score
 
         if total_weight == 0.0:
             return 0.0
@@ -426,16 +472,16 @@ class BaseAnswer(BaseModel):
     @staticmethod
     def _composition_aware_granular(
         strategy: Any,
-        field_results: dict[str, bool | None],
+        field_scores: dict[str, float | None],
         verified: dict[str, Any],
     ) -> float:
         """Compute granular score honoring composition strategy.
 
         Args:
             strategy: Composition strategy node (AllOf, AnyOf, AtLeastN).
-            field_results: Per-field tri-valued result (True / False / None).
-                None denotes a null extraction; treated as not-satisfied
-                here but distinguishable from False in field_results.
+            field_scores: Per-field graded score in [0,1], or None for a null
+                extraction (treated as a 0 contribution here, but distinguishable
+                from a 0.0 score in field_scores).
             verified: Per-field VerificationMeta (for weights).
 
         Returns:
@@ -447,24 +493,27 @@ class BaseAnswer(BaseModel):
         if total_weight == 0.0:
             return 0.0
 
-        passing_weights: list[float] = sorted(
-            [verified[name].weight for name, passed in field_results.items() if passed is True],
+        # Per-field contribution = weight * score. For non-graded primitives the
+        # score is 1.0/0.0, so a contribution is the field's weight (passing) or
+        # 0 (failing), reproducing the prior passing-weight behavior exactly.
+        contributions: list[float] = sorted(
+            (verified[name].weight * (score or 0.0) for name, score in field_scores.items()),
             reverse=True,
         )
 
         if isinstance(strategy, AnyOf):
-            # AnyOf: best single passing field
-            if passing_weights:
-                return float(max(passing_weights)) / total_weight
+            # AnyOf: best single field contribution
+            if contributions:
+                return float(max(contributions)) / total_weight
             return 0.0
 
         if isinstance(strategy, AtLeastN):
-            # AtLeastN: sum of top-N passing weights
-            top_n = passing_weights[: strategy.n]
+            # AtLeastN: sum of top-N contributions
+            top_n = contributions[: strategy.n]
             return float(sum(top_n)) / total_weight
 
         # AllOf or unknown: flat weighted average
-        return float(sum(passing_weights)) / total_weight
+        return float(sum(contributions)) / total_weight
 
     def verify_regex(self, raw_trace: str) -> dict[str, Any]:
         """Verify regex patterns against the raw LLM response trace.

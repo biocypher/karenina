@@ -190,9 +190,7 @@ class DeepAgentsMessageConverter:
                         if isinstance(thinking_text, str) and thinking_text.strip():
                             # Anthropic-style thinking block in content list:
                             # prefer this over an additional_kwargs duplicate.
-                            content_blocks = [
-                                b for b in content_blocks if not isinstance(b, ThinkingContent)
-                            ]
+                            content_blocks = [b for b in content_blocks if not isinstance(b, ThinkingContent)]
                             content_blocks.insert(
                                 0,
                                 ThinkingContent(

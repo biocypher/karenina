@@ -16,8 +16,10 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import threading
+from collections.abc import Callable
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from karenina.adapters.agent_runtime import (
     CONTAINER_BACKEND,
@@ -56,11 +58,31 @@ _create_deep_agent = None
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
+
+class _PartialResultStore:
+    """Thread-safe handoff for timeout partial results."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._result: AgentResult | None = None
+
+    def set(self, result: AgentResult) -> None:
+        with self._lock:
+            self._result = result
+
+    def get(self) -> AgentResult | None:
+        with self._lock:
+            return self._result
+
 
 def _run_in_fresh_loop(
     coro_func: Any,
     *args: Any,
     timeout: float = 600,
+    timeout_grace: float = 30,
+    timeout_result: Callable[[], T | None] | None = None,
 ) -> Any:
     """Run an async callable in a dedicated thread with a fresh event loop.
 
@@ -75,13 +97,31 @@ def _run_in_fresh_loop(
     def _target() -> Any:
         return asyncio.run(coro_func(*args))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future: concurrent.futures.Future[Any] = executor.submit(_target)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    shutdown_started = False
+    future: concurrent.futures.Future[Any] = executor.submit(_target)
+    try:
         # The coroutine enforces the user-facing agent timeout with
         # asyncio.wait_for and can return a partial trace. Give that inner
-        # timeout a short grace period so this wrapper does not race it and
-        # replace the partial result with a bare concurrent.futures.TimeoutError.
-        return future.result(timeout=timeout + 30)
+        # timeout a grace period so this wrapper does not race it and replace
+        # the partial result with a bare concurrent.futures.TimeoutError.
+        return future.result(timeout=timeout + timeout_grace)
+    except concurrent.futures.TimeoutError:
+        if timeout_result is not None:
+            partial_result = timeout_result()
+            if partial_result is not None:
+                logger.warning(
+                    "DeepAgents sync wrapper timed out after %ss but salvaged a partial result",
+                    timeout + timeout_grace,
+                )
+                future.cancel()
+                shutdown_started = True
+                executor.shutdown(wait=False, cancel_futures=True)
+                return partial_result
+        raise
+    finally:
+        if not shutdown_started:
+            executor.shutdown(wait=future.done(), cancel_futures=True)
 
 
 def _runtime_int_option(model_config: ModelConfig, key: str, default: int) -> int:
@@ -147,6 +187,7 @@ class DeepAgentsAgentAdapter:
 
         backend = get_deepagents_backend(self._config)
         access_mode = get_agent_runtime_access_mode(self._config)
+        read_max_bytes = _runtime_int_option(self._config, "read_max_bytes", 0)
         if backend == CONTAINER_BACKEND:
             if workspace_path is None:
                 raise AdapterUnavailableError(
@@ -164,7 +205,7 @@ class DeepAgentsAgentAdapter:
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(container_backend)
+                return ReadOnlyBackend(container_backend, read_max_bytes=read_max_bytes)
             return container_backend
 
         if backend == "local_shell":
@@ -189,7 +230,7 @@ class DeepAgentsAgentAdapter:
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(local_backend)
+                return ReadOnlyBackend(local_backend, read_max_bytes=read_max_bytes)
             return local_backend
 
         from deepagents.backends import FilesystemBackend
@@ -200,7 +241,7 @@ class DeepAgentsAgentAdapter:
             if access_mode == "read_only":
                 from .read_only_backend import ReadOnlyBackend
 
-                return ReadOnlyBackend(filesystem_backend)
+                return ReadOnlyBackend(filesystem_backend, read_max_bytes=read_max_bytes)
             return filesystem_backend
 
         logger.info("Using FilesystemBackend with default root (cwd)")
@@ -208,7 +249,7 @@ class DeepAgentsAgentAdapter:
         if access_mode == "read_only":
             from .read_only_backend import ReadOnlyBackend
 
-            return ReadOnlyBackend(filesystem_backend)
+            return ReadOnlyBackend(filesystem_backend, read_max_bytes=read_max_bytes)
         return filesystem_backend
 
     def _build_raw_trace(
@@ -284,6 +325,7 @@ class DeepAgentsAgentAdapter:
         tools: list[Tool] | None = None,
         mcp_servers: dict[str, MCPServerConfig] | None = None,
         config: AgentConfig | None = None,
+        _partial_result_store: _PartialResultStore | None = None,
     ) -> AgentResult:
         """Execute an agent loop with optional tools and MCP servers.
 
@@ -424,6 +466,39 @@ class DeepAgentsAgentAdapter:
                 except TimeoutError:
                     timeout_reached = True
                     logger.warning("Agent timed out after %ss; returning partial trace", config.timeout)
+                    if _partial_result_store is not None:
+                        partial_lc_messages = result.get("messages", [])
+                        raw_trace = self._build_raw_trace(
+                            partial_lc_messages,
+                            subgraph_results,
+                            limit_reached=limit_reached,
+                            timeout_reached=True,
+                        )
+                        if partial_lc_messages:
+                            partial_result = AgentResult(
+                                final_response=self._extract_final_response(partial_lc_messages),
+                                raw_trace=raw_trace,
+                                trace_messages=self._converter.from_provider(partial_lc_messages),
+                                usage=extract_deep_agents_usage(partial_lc_messages, model=self._config.model_name),
+                                turns=self._count_turns(partial_lc_messages),
+                                limit_reached=limit_reached,
+                                session_id=None,
+                                actual_model=extract_actual_model(partial_lc_messages) or self._config.model_name,
+                                timeout_reached=True,
+                            )
+                        else:
+                            partial_result = AgentResult(
+                                final_response="[Agent stopped before producing a final response]",
+                                raw_trace=raw_trace or "[Note: Agent stopped before producing trace messages]",
+                                trace_messages=[],
+                                usage=UsageMetadata(model=self._config.model_name),
+                                turns=0,
+                                limit_reached=limit_reached,
+                                session_id=None,
+                                actual_model=self._config.model_name,
+                                timeout_reached=True,
+                            )
+                        _partial_result_store.set(partial_result)
                 except Exception as e:
                     mapped_error, was_limit = wrap_deep_agents_error(e)
                     if was_limit:
@@ -523,6 +598,7 @@ class DeepAgentsAgentAdapter:
             AgentResponseError: If the response is malformed or invalid.
         """
         timeout = config.timeout if config and config.timeout else 600
+        partial_result_store = _PartialResultStore()
         return cast(
             AgentResult,
             _run_in_fresh_loop(
@@ -531,7 +607,9 @@ class DeepAgentsAgentAdapter:
                 tools,
                 mcp_servers,
                 config,
+                partial_result_store,
                 timeout=timeout,
+                timeout_result=partial_result_store.get,
             ),
         )
 

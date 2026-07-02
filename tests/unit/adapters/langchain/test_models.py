@@ -80,6 +80,42 @@ class TestChatOpenAIEndpoint:
         secrets = model.lc_secrets
         assert secrets == {}
 
+    def test_endpoint_base_url_mode_auto_v1_appends_v1(self) -> None:
+        """Default mode normalizes the base URL to end with /v1."""
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        model = ChatOpenAIEndpoint(
+            base_url="https://api.z.ai/api/coding/paas/v4",
+            openai_api_key="k",
+        )
+        assert str(model.openai_api_base).rstrip("/").endswith("/v4/v1")
+
+    def test_endpoint_base_url_mode_raw_preserves_url(self) -> None:
+        """raw mode uses the base URL as given (no /v1 append).
+
+        Needed for OpenAI-compatible endpoints not served at /v1, such as the
+        z.ai coding endpoint at .../v4.
+        """
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        model = ChatOpenAIEndpoint(
+            base_url="https://api.z.ai/api/coding/paas/v4",
+            openai_api_key="k",
+            endpoint_base_url_mode="raw",
+        )
+        assert str(model.openai_api_base).rstrip("/") == "https://api.z.ai/api/coding/paas/v4"
+
+    def test_endpoint_base_url_mode_invalid_rejected(self) -> None:
+        """An unknown endpoint_base_url_mode is rejected."""
+        from karenina.adapters.langchain.models import ChatOpenAIEndpoint
+
+        with pytest.raises(ValueError, match="endpoint_base_url_mode"):
+            ChatOpenAIEndpoint(
+                base_url="http://localhost:8000",
+                openai_api_key="k",
+                endpoint_base_url_mode="bogus",
+            )
+
 
 def _assert_bounded_httpx_client(client: httpx.AsyncClient | httpx.Client) -> None:
     """Assert that an httpx client has bounded limits and a pool timeout.

@@ -366,6 +366,21 @@ class TestAgenticProgressiveFileSink:
         assert sink.completed_triples() == set()
         assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
 
+    def test_timeout_partial_trace_is_not_a_completed_triple_but_remains_hydratable(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(
+            category=FailureCategory.TIMEOUT,
+            stage="GenerateAnswer",
+            reason="timeout retries exhausted",
+        )
+        result = _result("q1", failure=failure, raw_llm_response="usable partial trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert sink.completed_triples() == set()
+        assert list(sink.iter_results())[0].template.raw_llm_response == "usable partial trace"
+
     def test_success_after_parser_failure_becomes_terminal_and_export_dedupes(self, tmp_path: Path):
         sink = self._fresh(tmp_path)
         parser_failure = Failure(

@@ -347,6 +347,7 @@ class VerificationContext:
     # Trace Filtering Configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False  # Whether to use full trace for template parsing
     use_full_trace_for_rubric: bool = True  # Whether to use full trace for rubric evaluation
+    allow_partial_trace_scoring: bool = False
 
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None
@@ -478,6 +479,14 @@ class VerificationContext:
             self.warnings.append(message)
         elif len(self.warnings) == 50:
             self.warnings.append("(additional warnings truncated)")
+
+    def can_score_partial_timeout(self) -> bool:
+        """Whether downstream scoring may run on a timeout-truncated response."""
+        return (
+            self.allow_partial_trace_scoring
+            and self.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and (self.error is None or self.error_category == ErrorCategory.TIMEOUT)
+        )
 
 
 class VerificationStage(Protocol):

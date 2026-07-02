@@ -186,7 +186,7 @@ Use trace primitives when the check is a pure pattern match or length constraint
 |-----------|-------------------|---------------------------|
 | `bool` | `BooleanMatch` | Always use `BooleanMatch` for parsed booleans |
 | `str` | `ExactMatch` | `ContainsAny`/`ContainsAll` for multiple acceptable answers; `RegexMatch` for format validation; `SemanticMatch` for meaning-based comparison |
-| `int`, `float` | `NumericExact` | `NumericTolerance` for measurements with acceptable variance; `NumericRange` when no single correct value exists; `NumericMinimum`/`NumericMaximum` for one-sided bounds |
+| `int`, `float` | `NumericExact` | `NumericTolerance` for measurements with acceptable variance; `NumericGraded` for distance-graded partial credit; `NumericRange` when no single correct value exists; `NumericMinimum`/`NumericMaximum` for one-sided bounds; `NumericRangeGraded` and `NumericThresholdGraded` for the graded versions of a band and a one-sided bound |
 | `list[str]` | `SetContainment` | `OrderedMatch` when element order matters |
 | `Literal[...]` | `LiteralMatch` | Always use `LiteralMatch` for Literal fields |
 | `str` (date) | `DateMatch` | `DateTolerance` for approximate dates; `DateRange` when any date in a window is acceptable |
@@ -202,9 +202,12 @@ Use trace primitives when the check is a pure pattern match or length constraint
 | Meaning is similar (requires embeddings) | `SemanticMatch` | `threshold` |
 | Exact number | `NumericExact` | (none) |
 | Number within tolerance | `NumericTolerance` | `tolerance`, `mode` |
+| Number graded by distance (partial credit) | `NumericGraded` | `cutoff`, `full_credit` |
 | Number in a range | `NumericRange` | `min`, `max` |
+| Number in a range, graded outside it | `NumericRangeGraded` | `min`, `max`, `margin` |
 | Number at least N | `NumericMinimum` | `minimum` |
 | Number at most N | `NumericMaximum` | `maximum` |
+| Number past a one-sided bound, graded near it | `NumericThresholdGraded` | `direction`, `margin` |
 | Set membership | `SetContainment` | `mode` |
 | Ordered list equality | `OrderedMatch` | `normalize` |
 | Fixed category match | `LiteralMatch` | (none) |
@@ -498,6 +501,64 @@ Pass if the extracted value does not exceed the `ground_truth` value (inclusive 
 | `exclusive` | `bool` | `False` | If `True`, use strict `<` instead of `<=` |
 
 **Applies to:** `int`, `float`
+
+---
+
+#### NumericGraded
+
+Score the extracted value by its distance from the `ground_truth`, giving partial credit that decays to zero at a cutoff. This is the one numeric primitive whose contribution to `verify_granular()` is **continuous** rather than 0/1: a near-miss earns a fractional score. `verify()` stays binary, driven by `check()` as for every primitive. The reference value is carried in `ground_truth` (as with `NumericTolerance`).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `cutoff` | `float` | required | Distance at which graded credit reaches 0. Must be `> 0` |
+| `full_credit` | `float \| None` | `None` | Optional inner band that earns full credit. When set, must satisfy `0 <= full_credit < cutoff` |
+| `mode` | `Literal["relative", "absolute"]` | `"relative"` | `"relative"`: distance is `\|extracted - expected\| / \|expected\|` (a fraction, e.g. `0.10` is 10%); `"absolute"`: raw difference (percentage-points when the reference is itself a percentage) |
+| `decay` | `Literal["linear", "quadratic"]` | `"linear"` | Shape of the decay between the inner band and the cutoff |
+
+**Applies to:** `int`, `float`
+
+There are two band shapes:
+
+- **Single-band** (`full_credit` unset): `cutoff` is both the binary gate and the zero-credit distance. `check()` passes anywhere within the cutoff, and the score decays from 1.0 at the reference to 0.0 at the cutoff.
+- **Double-band** (`full_credit` set): the score is 1.0 within the inner `full_credit` band, decays to 0.0 at the cutoff, and is 0.0 beyond. `check()` gates at the **inner** band, so the binary pass stays tight (for example at a known reporting precision) while a near-miss between `full_credit` and `cutoff` is `verify()` False yet still earns partial credit in `verify_granular()`.
+
+When the reference is zero in `"relative"` mode, only an exact match scores (mirroring `NumericTolerance`); use `"absolute"` mode whenever the reference can be zero. The per-field graded scores are surfaced alongside the binary results: see the `field_scores` field on the result and the `field_score` column in the [results DataFrame](../workflows/analyzing-results/dataframe-analysis.md).
+
+---
+
+#### NumericRangeGraded
+
+Score the extracted value against an acceptance band `[min, max]` with soft shoulders, giving partial credit that decays to zero outside the band. This is the graded companion to `NumericRange`: `check()` passes only inside the band (the same hard gate), and `score()` additionally awards decaying credit to values that fall just outside, out to a margin. The band is carried in the `min` and `max` parameters, so `ground_truth` is not used for scoring.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `min` | `float` | required | Lower edge of the full-credit band |
+| `max` | `float` | required | Upper edge of the full-credit band. Must satisfy `min < max` |
+| `margin` | `float` | required | Shoulder width. Must be `> 0` |
+| `mode` | `Literal["relative", "absolute"]` | `"absolute"` | `"absolute"`: the shoulder is `margin` raw units wide on each side; `"relative"`: the shoulder is `margin` times the band width `(max - min)` |
+| `decay` | `Literal["linear", "quadratic"]` | `"linear"` | Shape of the decay across a shoulder |
+
+**Applies to:** `int`, `float`
+
+A value inside `[min, max]` scores 1.0. Outside, credit decays from 1.0 at the nearer edge to 0.0 at that edge plus or minus the shoulder, and is 0.0 beyond. `check()` stays binary at the band edges, so a near-miss just outside the band is `verify()` False yet still earns partial credit in `verify_granular()`. Use this when the intended answer is genuinely an interval where any value inside is equally correct. When a single reference point exists, prefer `NumericGraded` centered on that point.
+
+---
+
+#### NumericThresholdGraded
+
+Score the extracted value against a one-sided bound with a soft shoulder, giving full credit anywhere on the correct side and decaying partial credit just past the bound. This is the graded companion to `NumericMinimum` and `NumericMaximum`: the threshold is carried in `ground_truth` (the same convention), and `direction` selects the side.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `direction` | `Literal["max", "min"]` | required | `"max"`: pass iff `extracted <= threshold`; `"min"`: pass iff `extracted >= threshold` |
+| `margin` | `float` | required | Shoulder width past the threshold. Must be `> 0` |
+| `mode` | `Literal["relative", "absolute"]` | `"relative"` | `"relative"`: the shoulder is `margin` times `\|threshold\|`; `"absolute"`: raw units |
+| `decay` | `Literal["linear", "quadratic"]` | `"linear"` | Shape of the decay across the shoulder |
+| `exclusive` | `bool` | `False` | If `True`, the binary gate uses a strict inequality at the threshold |
+
+**Applies to:** `int`, `float`
+
+Unlike `NumericGraded`, which is symmetric around a point, a value far on the correct side of the threshold still scores 1.0. A value on the wrong side earns decaying credit out to the margin, then 0.0. `check()` matches `NumericMaximum` or `NumericMinimum` exactly, so converting a one-sided bound to this primitive preserves the binary pass while adding partial credit for near-misses.
 
 ---
 

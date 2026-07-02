@@ -170,6 +170,18 @@ class TemplateDataFrameBuilder:
                 # Fallback to naive comparison for backward compatibility
                 field_match = False if gt_exists != llm_exists else self._compare_values(gt_value, llm_value)
 
+        # Per-field graded score (continuous companion to field_match). 1.0/0.0
+        # for non-graded primitives; partial credit for NumericGraded. None when
+        # not available (e.g. legacy results without field_scores).
+        field_score = None
+        if (
+            field_name is not None
+            and result.template
+            and result.template.field_scores
+            and field_name in result.template.field_scores
+        ):
+            field_score = result.template.field_scores[field_name]
+
         # Determine field type
         field_type = None
         if gt_value is not None:
@@ -205,6 +217,7 @@ class TemplateDataFrameBuilder:
             "gt_value": gt_value,
             "llm_value": llm_value,
             "field_match": field_match,
+            "field_score": field_score,
             "field_type": field_type,
             # === Verification Checks ===
             "verify_result": template.verify_result if template else None,

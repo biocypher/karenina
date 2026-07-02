@@ -111,13 +111,16 @@ class ParseTemplateStage(BaseVerificationStage):
 
         Inherits error-checking from BaseVerificationStage.
         """
-        if not super().should_run(context):
+        if not super().should_run(context) and not context.can_score_partial_timeout():
             return False
         # Skip parsing if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
             return False
         # Skip parsing if response was truncated by streaming timeout
-        if context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False):
+        if (
+            context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and not context.allow_partial_trace_scoring
+        ):
             return False
         entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
         if (

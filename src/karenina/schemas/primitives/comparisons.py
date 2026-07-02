@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from dateutil import parser as dateutil_parser
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from karenina.schemas.primitives.normalizers import (
     Normalizer,
@@ -46,6 +46,25 @@ class VerificationPrimitive(BaseModel):
             True if the values match according to this primitive's rules.
         """
         raise NotImplementedError
+
+    def score(self, extracted: Any, expected: Any) -> float:
+        """Graded credit in [0.0, 1.0] for this field.
+
+        This is the continuous companion to ``check()``. ``check()`` drives the
+        binary ``verify()`` gate; ``score()`` drives the continuous
+        ``verify_granular()`` channel. The default derives a 0/1 score from
+        ``check()``, so every primitive that does not override it stays binary
+        and ``verify_granular()`` is unchanged. Primitives that grade partial
+        credit (for example ``NumericGraded``) override this method.
+
+        Args:
+            extracted: Value extracted by the judge LLM.
+            expected: Ground truth value from VerifiedField.
+
+        Returns:
+            A score in [0.0, 1.0]; 1.0 if ``check()`` passes else 0.0 by default.
+        """
+        return 1.0 if self.check(extracted, expected) else 0.0
 
 
 # --- Boolean Primitives ---
@@ -239,6 +258,224 @@ class NumericMaximum(VerificationPrimitive):
         if self.exclusive:
             return val < threshold
         return val <= threshold
+
+
+@_register_primitive
+class NumericGraded(VerificationPrimitive):
+    """Distance-graded numeric primitive: a binary gate plus partial credit.
+
+    Unlike the other numeric primitives, this one contributes a continuous
+    score to ``verify_granular()`` based on how far the extracted value is from
+    the reference (``ground_truth``). ``verify()`` and the result's binary
+    fields stay binary: ``check()`` is a hard gate, ``score()`` is the graded
+    companion.
+
+    Single-band (``full_credit`` is None): ``cutoff`` is BOTH the binary gate
+    (``check()`` passes iff distance <= cutoff) AND the zero-credit distance.
+    ``score()`` decays from 1.0 at the reference to 0.0 at the cutoff.
+
+    Double-band (``full_credit`` set, 0 <= full_credit < cutoff): ``score()`` is
+    1.0 within ``full_credit`` (the plateau), decays from ``full_credit`` to 0.0
+    at ``cutoff``, and is 0.0 beyond. ``check()`` gates at the INNER band (passes
+    iff distance <= full_credit), so a tight binary-pass band (for example an
+    existing precision bin) is preserved while near-misses between ``full_credit``
+    and ``cutoff`` still earn partial credit. In this mode a near-miss is
+    intentionally ``check()`` False with ``score()`` > 0.
+
+    Distance modes:
+        - "relative": ``|extracted - expected| / |expected|`` (cutoff and
+          full_credit are fractions, e.g. 0.10 == 10 percent).
+        - "absolute": ``|extracted - expected|`` in raw units (percentage-points
+          when the reference is itself a percentage).
+
+    Decay shapes (credit between the inner band and the cutoff):
+        - "linear":    ``1 - r``
+        - "quadratic": ``1 - r ** 2``
+      where ``r = (d - full_credit) / (cutoff - full_credit)``.
+    """
+
+    cutoff: float
+    full_credit: float | None = None
+    mode: Literal["relative", "absolute"] = "relative"
+    decay: Literal["linear", "quadratic"] = "linear"
+
+    @model_validator(mode="after")
+    def _validate_bands(self) -> NumericGraded:
+        if self.cutoff <= 0:
+            raise ValueError("NumericGraded.cutoff must be > 0")
+        if self.full_credit is not None and not (0 <= self.full_credit < self.cutoff):
+            raise ValueError("NumericGraded.full_credit must satisfy 0 <= full_credit < cutoff")
+        return self
+
+    def _distance(self, extracted: Any, expected: Any) -> float | None:
+        """Distance to the reference, or None when undefined (relative, expected==0).
+
+        Mirrors NumericTolerance's expected==0 relative-mode behavior: an exact
+        match has distance 0, anything else is undefined (treated as infinitely
+        far by check()/score()).
+        """
+        d = abs(float(extracted) - float(expected))
+        if self.mode == "absolute":
+            return d
+        if float(expected) == 0:
+            return 0.0 if d == 0 else None
+        return d / abs(float(expected))
+
+    def _gate(self) -> float:
+        """Binary-pass boundary: the inner band in double-band mode, else cutoff."""
+        return self.cutoff if self.full_credit is None else self.full_credit
+
+    def check(self, extracted: Any, expected: Any) -> bool:
+        d = self._distance(extracted, expected)
+        return d is not None and d <= self._gate()
+
+    def score(self, extracted: Any, expected: Any) -> float:
+        d = self._distance(extracted, expected)
+        if d is None:
+            return 0.0
+        inner = self.full_credit or 0.0
+        if d <= inner:
+            return 1.0
+        if self.cutoff <= inner or d >= self.cutoff:
+            return 0.0
+        r = (d - inner) / (self.cutoff - inner)
+        return 1.0 - r * r if self.decay == "quadratic" else 1.0 - r
+
+
+@_register_primitive
+class NumericRangeGraded(VerificationPrimitive):
+    """Acceptance band with soft shoulders: a binary gate plus partial credit.
+
+    The graded companion to NumericRange. check() passes iff the value is inside
+    the band [min, max], the same hard gate as NumericRange, and score() also
+    awards decaying partial credit to values that fall just outside the band, out
+    to a margin, then 0.0 beyond.
+
+    The band [min, max] is the full-credit plateau. Outside it, credit decays from
+    1.0 at the nearer edge to 0.0 at edge plus or minus the shoulder width. A value
+    past the shoulder scores 0.0. check() stays binary at the band edges, so a
+    near-miss just outside the band is intentionally check() False with score() > 0.
+
+    Margin modes:
+        - "absolute": ``margin`` is in raw units; the shoulder spans
+          ``[min - margin, min]`` below and ``[max, max + margin]`` above.
+        - "relative": ``margin`` is a fraction of the band width ``(max - min)``;
+          the shoulder spans ``margin * (max - min)`` on each side.
+
+    Decay shapes (credit across a shoulder):
+        - "linear":    ``1 - r``
+        - "quadratic": ``1 - r ** 2``
+      where ``r`` is the fraction of the shoulder already traversed.
+    """
+
+    min: float
+    max: float
+    margin: float
+    mode: Literal["relative", "absolute"] = "absolute"
+    decay: Literal["linear", "quadratic"] = "linear"
+    exclusive_min: bool = False
+    exclusive_max: bool = False
+
+    @model_validator(mode="after")
+    def _validate_band(self) -> NumericRangeGraded:
+        if self.min >= self.max:
+            raise ValueError("NumericRangeGraded requires min < max")
+        if self.margin <= 0:
+            raise ValueError("NumericRangeGraded.margin must be > 0")
+        return self
+
+    def _shoulder(self) -> float:
+        """Shoulder width in raw units."""
+        return self.margin if self.mode == "absolute" else self.margin * (self.max - self.min)
+
+    def check(self, extracted: Any, _expected: Any) -> bool:
+        val = float(extracted)
+        below = val <= self.min if self.exclusive_min else val < self.min
+        above = val >= self.max if self.exclusive_max else val > self.max
+        return not (below or above)
+
+    def score(self, extracted: Any, _expected: Any) -> float:
+        val = float(extracted)
+        if self.min <= val <= self.max:
+            return 1.0
+        gap = (self.min - val) if val < self.min else (val - self.max)
+        shoulder = self._shoulder()
+        if shoulder <= 0 or gap >= shoulder:
+            return 0.0
+        r = gap / shoulder
+        return 1.0 - r * r if self.decay == "quadratic" else 1.0 - r
+
+
+@_register_primitive
+class NumericThresholdGraded(VerificationPrimitive):
+    """One-sided threshold with a soft shoulder: a binary gate plus partial credit.
+
+    The graded companion to NumericMaximum and NumericMinimum. The threshold is
+    the field's ground_truth, supplied through ``expected`` (the same convention
+    as NumericMaximum and NumericMinimum). ``direction`` selects the side:
+
+        - "max": the answer should not exceed the threshold. check() passes iff
+          ``extracted <= threshold``; score() gives full credit on the correct
+          side and decays for values just above the threshold, out to a margin.
+        - "min": the answer should be at least the threshold. check() passes iff
+          ``extracted >= threshold``; score() decays for values just below it.
+
+    The correct side of the threshold is the full-credit region, so a value far on
+    the correct side still scores 1.0. This is the difference from NumericGraded,
+    which is symmetric around a point. A value on the wrong side earns decaying
+    partial credit out to ``margin``, then 0.0.
+
+    Margin modes:
+        - "absolute": ``margin`` is in raw units past the threshold.
+        - "relative": ``margin`` is a fraction of ``|threshold|``.
+
+    Decay shapes follow NumericGraded: "linear" gives ``1 - r``, "quadratic" gives
+    ``1 - r ** 2``, where ``r`` is the fraction of the shoulder already traversed.
+    """
+
+    direction: Literal["max", "min"]
+    margin: float
+    mode: Literal["relative", "absolute"] = "relative"
+    decay: Literal["linear", "quadratic"] = "linear"
+    exclusive: bool = False
+
+    @model_validator(mode="after")
+    def _validate_threshold(self) -> NumericThresholdGraded:
+        if self.margin <= 0:
+            raise ValueError("NumericThresholdGraded.margin must be > 0")
+        return self
+
+    def _shoulder(self, threshold: float) -> float | None:
+        """Shoulder width in raw units, or None when undefined (relative, threshold==0)."""
+        if self.mode == "absolute":
+            return self.margin
+        if threshold == 0:
+            return None
+        return self.margin * abs(threshold)
+
+    def check(self, extracted: Any, expected: Any) -> bool:
+        val = float(extracted)
+        threshold = float(expected)
+        if self.direction == "max":
+            return val < threshold if self.exclusive else val <= threshold
+        return val > threshold if self.exclusive else val >= threshold
+
+    def score(self, extracted: Any, expected: Any) -> float:
+        val = float(extracted)
+        threshold = float(expected)
+        if self.direction == "max":
+            if val <= threshold:
+                return 1.0
+            gap = val - threshold
+        else:
+            if val >= threshold:
+                return 1.0
+            gap = threshold - val
+        shoulder = self._shoulder(threshold)
+        if shoulder is None or shoulder <= 0 or gap >= shoulder:
+            return 0.0
+        r = gap / shoulder
+        return 1.0 - r * r if self.decay == "quadratic" else 1.0 - r
 
 
 # --- List Primitives ---

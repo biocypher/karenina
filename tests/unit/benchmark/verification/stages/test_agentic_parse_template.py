@@ -13,6 +13,7 @@ from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.verified_field import VerifiedField
 from karenina.schemas.primitives import BooleanMatch
+from karenina.utils.errors import ErrorCategory
 
 
 class MockAnswer(BaseAnswer):
@@ -239,3 +240,90 @@ class TestAgenticParseTemplateStage:
         assert "extraction failed" in ctx.error.lower()
         # Investigation trace should still be stored
         assert ctx.get_artifact(ArtifactKeys.INVESTIGATION_TRACE) == "investigation trace"
+
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    def test_extraction_uses_final_investigation_report_not_full_trace(self, mock_get_parser, mock_get_agent):
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import AgentResult, ParsePortResult, UsageMetadata
+
+        huge_tool_output = "RAW_CSV_LINE," * 20_000
+        final_report = '```json\n{"test_field": true}\n```'
+        investigation_trace = (
+            "--- AI Message ---\nTool Calls:\nread_file(...)\n"
+            "--- Tool Message (call_id: read) ---\n"
+            f"{huge_tool_output}\n"
+            "--- AI Message ---\n"
+            f"{final_report}"
+        )
+
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response=final_report,
+            raw_trace=investigation_trace,
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=3,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.return_value = ParsePortResult(
+            parsed=MockAnswer(test_field=True),
+            usage=UsageMetadata(),
+        )
+        mock_get_parser.return_value = mock_parser
+
+        ctx = _make_context()
+        AgenticParseTemplateStage().execute(ctx)
+
+        messages = mock_parser.parse_to_pydantic.call_args.args[0]
+        user_text = next(message.text for message in messages if message.role.value == "user")
+        assert final_report in user_text
+        assert "RAW_CSV_LINE" not in user_text
+
+    def test_extraction_input_falls_back_to_bounded_trace_excerpt(self):
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+
+        trace_without_final_report = (
+            "--- AI Message ---\nTool Calls:\nread_file(...)\n--- Tool Message (call_id: read) ---\n" + ("x" * 120_000)
+        )
+
+        prepared = AgenticParseTemplateStage._prepare_extraction_input(trace_without_final_report)
+
+        assert len(prepared) <= 60_000
+        assert "investigation report truncated" in prepared
+
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_agent")
+    @patch("karenina.benchmark.verification.stages.pipeline.agentic_parse_template.get_parser")
+    def test_extraction_connection_error_is_retryable_connection(self, mock_get_parser, mock_get_agent):
+        from karenina.benchmark.verification.stages.pipeline.agentic_parse_template import (
+            AgenticParseTemplateStage,
+        )
+        from karenina.ports import AgentResult, UsageMetadata
+
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AgentResult(
+            final_response='{"test_field": true}',
+            raw_trace='--- AI Message ---\n{"test_field": true}',
+            trace_messages=[],
+            usage=UsageMetadata(),
+            turns=3,
+            limit_reached=False,
+        )
+        mock_get_agent.return_value = mock_agent
+
+        mock_parser = MagicMock()
+        mock_parser.parse_to_pydantic.side_effect = RuntimeError("Connection error.")
+        mock_get_parser.return_value = mock_parser
+
+        ctx = _make_context()
+        AgenticParseTemplateStage().execute(ctx)
+
+        assert ctx.error is not None
+        assert ctx.error_category == ErrorCategory.CONNECTION

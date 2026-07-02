@@ -100,6 +100,7 @@ class FinalizeResultStage(BaseVerificationStage):
         parsed_gt_response = None
         parsed_llm_response = None
         field_results_dict = None
+        field_scores_dict = None
         composition_strategy_str = None
         parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
         if parsed_answer is not None:
@@ -114,6 +115,13 @@ class FinalizeResultStage(BaseVerificationStage):
                     computed = parsed_answer._compute_field_results()
                     if computed:
                         field_results_dict = computed
+                    # Per-field graded scores (companion to field_results). For
+                    # non-graded primitives these are 1.0/0.0; NumericGraded
+                    # contributes partial credit. Computed in the same pass.
+                    if hasattr(parsed_answer, "_compute_field_scores"):
+                        computed_scores = parsed_answer._compute_field_scores()
+                        if computed_scores:
+                            field_scores_dict = computed_scores
                     # Merge resolved ground truths (including conditional) into
                     # parsed_gt_response so downstream consumers see all fields
                     resolved_gts = parsed_answer._get_resolved_ground_truths()
@@ -268,6 +276,7 @@ class FinalizeResultStage(BaseVerificationStage):
             verify_granular_result=context.get_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT),
             field_verification_error=context.get_result_field(ArtifactKeys.FIELD_VERIFICATION_ERROR),
             field_results=field_results_dict,
+            field_scores=field_scores_dict,
             composition_strategy=composition_strategy_str,
             embedding_check_performed=context.get_result_field(ArtifactKeys.EMBEDDING_CHECK_PERFORMED, False),
             embedding_similarity_score=context.get_result_field(ArtifactKeys.EMBEDDING_SIMILARITY_SCORE),
