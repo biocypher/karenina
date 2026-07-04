@@ -298,7 +298,7 @@ The facade adds the `store: bool = True` flag (which writes the merged set into 
 
 ## 12. Validation Reference
 
-Every `ValueError` raised by `extend_template` and `extend_rubric` in one place. All checks run before the pipeline starts, so a validation failure leaves the prior result set untouched.
+Every `ValueError` raised by `extend_template` and `extend_rubric` in one place. `extend_template`'s checks all run before the pipeline starts, so a validation failure leaves the prior result set untouched. `extend_rubric` runs its input checks up front as well, but its trait-collision and shape-corruption checks fire at merge time, after the rubric-only pipeline has already executed (spending tokens and time).
 
 ### `extend_template`
 
@@ -327,7 +327,8 @@ Every `ValueError` raised by `extend_template` and `extend_rubric` in one place.
 | `config.replicate_count` does not equal the observed fan-out | "config.replicate_count=... does not match the replicate fan-out observed in prior_results" |
 | No rubric attached anywhere on the benchmark for any prior question | "benchmark has no rubric attached (global or per-question) for any question in prior_results" |
 | Attached rubric contains metric traits | "Metric traits are not supported by extend_rubric in v1" |
-| Same-name trait collision during merge | "extend_rubric: trait collision on '<name>' in '<bucket>'" |
+| Same-name trait collision during merge | "extend_rubric: trait name collision in <bucket> for traits [...]" |
+| Rubric-only pipeline produced duplicate rows for a prior triple | "extend_rubric: rubric-only run produced duplicate rows for triple ...; shape corruption" |
 | Rubric-only pipeline failed to produce a row for a prior triple | "extend_rubric: no rubric-only row produced for prior triple ...; shape corruption" |
 
 The first two raises in each table protect the engine from degenerate inputs. The middle block enforces the shape contract that lets the merge step align rows. The final block guards the rubric-specific invariants. Match the exact message text in tests via substring matches; the format string parameters carry the diagnostic detail.

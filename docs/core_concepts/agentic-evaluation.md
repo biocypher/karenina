@@ -205,7 +205,7 @@ class AdapterSpec:
 
 When `agent_tier="deep_agent"`, `GenerateAnswerStage` (Stage 2) automatically selects the `AgentPort` path even when no MCP servers are configured. This is the same path used for MCP-enabled answering models; the tier simply makes it the default for adapters that need it.
 
-Currently, `claude_agent_sdk` is the only adapter that sets `agent_tier="deep_agent"`.
+Two built-in adapters set `agent_tier="deep_agent"`: `claude_agent_sdk` and `langchain_deep_agents` (the latter available only when the `deepagents` package is installed). Both can run their tools directly on the host or inside a sandbox or container. See [Sandboxed Runtime Backends](#10-sandboxed-runtime-backends).
 
 ## 4. Two-Step Agentic Judging (Stage 7b)
 
@@ -292,7 +292,7 @@ The principle: benchmark data (where things live) belongs on `Benchmark` and `Qu
 
 `VerificationConfig` enforces several constraints when `agentic_parsing=True`:
 
-1. **AgentPort support required**: Every parsing model's interface must have an `agent_factory` registered in the [adapter registry](adapters.md). If the interface does not support `AgentPort`, validation raises a `ValueError`.
+1. **Deep agent interface required**: Every parsing model's interface must have `agent_tier="deep_agent"` in the [adapter registry](adapters.md), meaning `claude_agent_sdk` or `langchain_deep_agents`. An interface whose registered spec has only a `tool_loop` agent factory (for example `langchain`) raises a `ValueError`, even though it does support `AgentPort`.
 
 2. **Incompatible with `rubric_only`**: Agentic parsing operates on the template path (Stages 7 and 8). In `rubric_only` mode, template stages are omitted entirely, so enabling `agentic_parsing` raises a `ValueError`.
 
@@ -354,7 +354,92 @@ This is particularly powerful for coding benchmarks where quality signals live i
 
 See [Agentic Rubric Traits](rubrics/agentic-traits.md) for trait definition and usage, and [Stage 11b Internals](../../advanced-pipeline/agentic-rubric-evaluation.md) for the pipeline mechanics.
 
-## 10. Next Steps
+## 10. Sandboxed Runtime Backends
+
+By default a [deep agent adapter](#3-deep-agent-vs-tool-loop-adapters) executes its shell and file tools directly on the host, rooted at the question [workspace](#2-workspaces). For untrusted code or reproducible environments, both deep agent adapters can instead run the agent inside a sandbox or a container. The runtime is configured through a single structured sub-dictionary on `ModelConfig.extra_kwargs` under the key `agent_runtime`, so the shared [ModelConfig](../reference/configuration/model-config/) schema does not grow a field for every adapter.
+
+```python
+from karenina.schemas.config import ModelConfig
+
+docker_agent_config = ModelConfig(
+    id="coder",
+    model_name="claude-sonnet-4-20250514",
+    interface="claude_agent_sdk",
+    extra_kwargs={
+        "agent_runtime": {
+            "backend": "container",
+            "container_runtime": "docker",
+            "container_image": "karenina-bio:latest",
+        }
+    },
+)
+```
+
+### 10.1. Runtime Options
+
+Every key lives under `extra_kwargs["agent_runtime"]`:
+
+| Key | Type | Default | Applies to | Meaning |
+|-----|------|---------|------------|---------|
+| `backend` | `str` | `native` (claude_agent_sdk), `filesystem` (langchain_deep_agents) | both | Execution backend (per-adapter values below). `"docker"` is accepted as a legacy alias for `"container"`. |
+| `access_mode` | `str` | `"read_write"` | both | `"read_write"` lets the agent execute commands and modify files. `"read_only"` wraps the backend so the agent can inspect files but cannot write or run code. |
+| `sandbox_enabled` | `bool` | `True` | claude_agent_sdk `native` only | Toggle Claude Code's native Bash sandbox. Ignored for the container backend, where the container itself is the execution boundary. |
+| `container_runtime` | `str` | `"docker"` | container backend | Container engine: `"docker"`, `"singularity"`, or `"apptainer"`. |
+| `container_image` | `str \| None` | `None` | container backend | Docker image name (for `docker`) or a path to a local `.sif` file (for `singularity`/`apptainer`). Required when the backend is `container`. |
+| `container_network` | `str` | `"bridge"` | Docker only | `"bridge"` or `"none"`. Any other value, or setting it at all for singularity/apptainer, raises an error. |
+| `container_add_hosts` | `str \| list[str]` | `()` | Docker only | Extra `host:ip` entries passed as `--add-host`. Rejected for singularity/apptainer. |
+
+### 10.2. Per-Adapter Backends
+
+`claude_agent_sdk`:
+
+- `"native"` (default): the agent runs on the host. Bash commands are isolated by Claude Code's own sandbox when `sandbox_enabled` is true.
+- `"container"`: every Bash command is wrapped so it runs inside the configured container image.
+
+`langchain_deep_agents`:
+
+- `"filesystem"` (default): file tools operate on the workspace through DeepAgents' `FilesystemBackend`. No shell execution.
+- `"container"`: file and shell tools run inside the container image through the sandbox backend.
+- `"local_shell"`: file and shell tools run directly on the host through DeepAgents' `LocalShellBackend`. This is not isolated (the agent can run arbitrary host commands), so it is logged as unsafe.
+
+When `access_mode="read_only"`, whichever backend is selected is wrapped so writes and command execution are blocked. For the container and `local_shell` backends this is what turns command execution off. The `filesystem` backend never executes commands to begin with.
+
+The capabilities the [adapter](adapters.md) reports for a model follow from these choices: `supports_code_execution` is true only when the backend can run commands and `access_mode` is not `read_only`, and `uses_sandboxed_execution` is true for the container backend (and for the claude_agent_sdk native backend when its sandbox is enabled).
+
+### 10.3. The Workspace Mount and Host Isolation
+
+For the container backend the working [workspace](#2-workspaces) is bind-mounted into the container at `/workspace`, which becomes the working directory. Workspace paths shown to the model in prompts are rewritten to this `/workspace` root, so the agent sees a stable location regardless of where the host copy lives.
+
+Docker runs are pre-flighted (the daemon and the image must be reachable), execute as the invoking user, and carry a process limit. Singularity and Apptainer runs are additionally isolated from the host Python environment so host-installed packages cannot leak into the sandbox:
+
+- `--no-home` skips the automatic `$HOME` mount.
+- `--no-mount bind-paths` drops the system-default binds from `singularity.conf` (for example `/homes`, shared software trees, network filesystems), leaving only the explicit workspace bind.
+- `--home /tmp` points `HOME` at a writable tmpfs instead of the unmounted host path (a caller-supplied `HOME` in the runtime env wins).
+- `PYTHONNOUSERSITE=1` makes Python ignore any user site-packages even if a future bind exposed one.
+
+For singularity and apptainer the `container_image` must be an existing local `.sif` file. There is no implicit pull.
+
+### 10.4. Example: Singularity on an HPC Node
+
+```python
+singularity_config = ModelConfig(
+    id="coder-hpc",
+    model_name="claude-sonnet-4-20250514",
+    interface="claude_agent_sdk",
+    extra_kwargs={
+        "agent_runtime": {
+            "backend": "container",
+            "container_runtime": "singularity",
+            "container_image": "/data/images/karenina-bio.sif",
+            "access_mode": "read_write",
+        }
+    },
+)
+```
+
+The same `agent_runtime` block works for `interface="langchain_deep_agents"`. Only the default backend name differs (`filesystem` instead of `native`).
+
+## 11. Next Steps
 
 - [Verification Pipeline](verification-pipeline.md): The 13-stage engine (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) that hosts both classical and agentic parsing
 - [Answer Templates](answer-templates.md): Writing the schemas that both classical and agentic judges fill in

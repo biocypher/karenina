@@ -1,6 +1,6 @@
 # Adapters
 
-Adapters are the implementations behind Karenina's LLM backend abstraction. They translate port protocol calls into provider-specific API calls so the [verification pipeline](../../../advanced-pipeline/) never talks to an LLM provider directly. It calls a port, and the adapter handles the rest.
+Adapters are the implementations behind Karenina's LLM backend abstraction. They translate port protocol calls into provider-specific API calls so the [verification pipeline](../../advanced-pipeline/) never talks to an LLM provider directly. It calls a port, and the adapter handles the rest.
 
 ## 1. What Are Adapters?
 
@@ -31,10 +31,10 @@ What adapters handle:
 
 What adapters do **not** handle:
 
-- Prompt construction (handled by the [PromptAssembler](../../../advanced-pipeline/prompt-assembly/))
-- Pipeline stage sequencing (handled by the [StageOrchestrator](../../../advanced-pipeline/))
+- Prompt construction (handled by the [PromptAssembler](../../advanced-pipeline/prompt-assembly/))
+- Pipeline stage sequencing (handled by the [StageOrchestrator](../../advanced-pipeline/))
 - Result storage (handled by the results manager)
-- Which models to use (configured via [ModelConfig](../../../reference/configuration/verification-config/))
+- Which models to use (configured via [ModelConfig](../../reference/configuration/verification-config/))
 
 ### 1.3. Duck Typing
 
@@ -69,14 +69,14 @@ All three follow an async-first design: the primary methods are `async` (`ainvok
 
 ### Capabilities
 
-LLM and Parser adapters expose a `capabilities` property that the [PromptAssembler](../../../advanced-pipeline/prompt-assembly/) reads when formatting prompts:
+LLM and Parser adapters expose a `capabilities` property that the [PromptAssembler](../../advanced-pipeline/prompt-assembly/) reads when formatting prompts:
 
 | Capability | Meaning | Effect When `False` |
 |------------|---------|---------------------|
 | `supports_system_prompt` | Adapter handles separate system messages | System text is prepended to the user message instead |
 | `supports_structured_output` | Adapter enforces JSON schema natively (parser only) | JSON schema instructions are added to the prompt text and the text response is parsed manually |
 
-For complete method signatures and detailed protocol documentation, see [Port Types](../../../advanced-adapters/ports/).
+For complete method signatures and detailed protocol documentation, see [Port Types](../../advanced-adapters/ports/).
 
 ## 3. Available Interfaces
 
@@ -94,7 +94,7 @@ Karenina ships with seven interfaces, configured via the `interface` field on `M
 
 The **"Parser: Native Structured Output"** column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via `with_structured_output()`.
 
-The **"Agent Tier"** column indicates the adapter's agent architecture. Adapters with `agent_tier="deep_agent"` wrap a runtime that is itself an agent with built-in tools (e.g. Claude Code); the pipeline always uses `AgentPort` to capture the full tool call trace, because `LLMPort` would lose intermediate tool calls that the runtime handles internally. Adapters with `agent_tier="tool_loop"` orchestrate each tool call turn explicitly. See [Agentic Evaluation](agentic-evaluation.md) for the full picture.
+The **"Agent Tier"** column indicates the adapter's agent architecture. Adapters with `agent_tier="deep_agent"` wrap a runtime that is itself an agent with built-in tools (e.g. Claude Code); the pipeline always uses `AgentPort` to capture the full tool call trace, because `LLMPort` would lose intermediate tool calls that the runtime handles internally. Adapters with `agent_tier="tool_loop"` orchestrate each tool call turn explicitly. See [Agentic Evaluation](../../notebooks/core_concepts/agentic-evaluation/) for the full picture.
 
 ### 3.1. Interface Categories
 
@@ -106,7 +106,7 @@ The seven interfaces fall into three categories.
 - **`langchain_deep_agents`**: Uses LangChain Deep Agents (`create_deep_agent`) for natively agentic evaluation with built-in planning, context management, and subagent orchestration. Supports all LangChain-compatible providers. Operates at the `deep_agent` tier. Requires: `pip install deepagents langchain-mcp-adapters`.
 - **`claude_agent_sdk`**: Uses the Claude CLI (`claude` binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.
 - **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
-- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](../manual-interface/).
+- **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](../../notebooks/core_concepts/manual-interface/).
 
 **Routing interfaces** share the `langchain` adapter implementation with interface-specific configuration:
 
@@ -216,8 +216,8 @@ Adapters are configured through `ModelConfig`. The `interface` field selects the
 ```python
 from karenina.schemas.config import ModelConfig
 
-# Default: LangChain with Anthropic (langchain is the only interface
-# that requires model_provider)
+# Default: LangChain with Anthropic (langchain and langchain_deep_agents
+# are the interfaces that require model_provider)
 config = ModelConfig(
     id="haiku",
     model_name="claude-haiku-4-5",
@@ -271,7 +271,7 @@ All three functions:
 3. Check adapter availability via the registry
 4. Fall back automatically if the preferred adapter is unavailable
 5. Return a port implementation (never `None`)
-6. Call `register_adapter(adapter)` so the registry can run `aclose()` at shutdown (see [Adapter Lifecycle and Cleanup Tracking](../../../advanced-adapters/writing-adapters/#adapter-lifecycle-and-cleanup-tracking))
+6. Call `register_adapter(adapter)` so the registry can run `aclose()` at shutdown (see [Adapter Lifecycle and Cleanup Tracking](../../advanced-adapters/writing-adapters/#adapter-lifecycle-and-cleanup-tracking))
 
 In normal usage, you do not call these functions directly. The verification pipeline calls them based on your `VerificationConfig`.
 
@@ -308,7 +308,7 @@ Most user code does not call `build_llm_kwargs` directly; pipeline stages and th
 
 ## 7. How Adapters Connect to the Pipeline
 
-The pipeline creates and invokes adapters based on the model roles in your [VerificationConfig](../../../reference/configuration/verification-config/). Each role can use a different interface:
+The pipeline creates and invokes adapters based on the model roles in your [VerificationConfig](../../reference/configuration/verification-config/). Each role can use a different interface:
 
 ```
 VerificationConfig
@@ -322,19 +322,19 @@ For example, you might generate answers with `claude_agent_sdk` (for tool use an
 
 ## 8. Adapter Instructions
 
-Each adapter family can register **adapter instructions** that customize the prompts the [PromptAssembler](../../../advanced-pipeline/prompt-assembly/) builds. For example:
+Each adapter family can register **adapter instructions** that customize the prompts the [PromptAssembler](../../advanced-pipeline/prompt-assembly/) builds. For example:
 
 - The `claude_tool` and `claude_agent_sdk` adapters strip JSON schema instructions from parsing prompts because their native structured output handles schema enforcement automatically
 - The `langchain` adapter adds explicit JSON formatting instructions since it parses the LLM's text response manually
 
-This mechanism keeps adapters as pure executors: they receive pre-assembled messages and do not build prompts internally. Adapter-specific prompt tuning is declarative and registered at import time. For the complete prompt assembly system, see [Prompt Assembly](../../../advanced-pipeline/prompt-assembly/).
+This mechanism keeps adapters as pure executors: they receive pre-assembled messages and do not build prompts internally. Adapter-specific prompt tuning is declarative and registered at import time. For the complete prompt assembly system, see [Prompt Assembly](../../advanced-pipeline/prompt-assembly/).
 
 ## 9. Next Steps
 
-- [Port Types](../../../advanced-adapters/ports/): Complete protocol signatures for LLMPort, ParserPort, and AgentPort
-- [Available Adapters](../../../advanced-adapters/available-adapters/): Per-adapter features, configuration, and capabilities
-- [Writing Custom Adapters](../../../advanced-adapters/writing-adapters/): Implementing and registering new adapters
-- [MCP Overview](../mcp-overview/): Tool-augmented evaluation with MCP servers
-- [Manual Interface](../manual-interface/): Pre-recorded traces for offline evaluation
-- [Evaluation Modes](../evaluation-modes/): Controlling which evaluation units run
-- [Running Verification](../../../workflows/running-verification/): End-to-end verification workflow
+- [Port Types](../../advanced-adapters/ports/): Complete protocol signatures for LLMPort, ParserPort, and AgentPort
+- [Available Adapters](../../advanced-adapters/available-adapters/): Per-adapter features, configuration, and capabilities
+- [Writing Custom Adapters](../../advanced-adapters/writing-adapters/): Implementing and registering new adapters
+- [MCP Overview](../../notebooks/core_concepts/mcp-overview/): Tool-augmented evaluation with MCP servers
+- [Manual Interface](../../notebooks/core_concepts/manual-interface/): Pre-recorded traces for offline evaluation
+- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes/): Controlling which evaluation units run
+- [Running Verification](../../workflows/running-verification/): End-to-end verification workflow

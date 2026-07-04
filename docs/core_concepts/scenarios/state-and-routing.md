@@ -500,13 +500,25 @@ Missing keys return `None`, except `node_visits.<node_id>`, which returns `0`.
 | Field | Type | Description |
 |---|---|---|
 | `scenario_id` | `str` | Identifier for the scenario |
-| `status` | `"completed" \| "limit_reached" \| "error" \| "timeout"` | How execution terminated (`"timeout"` is set when the scenario hits the runner's wall-clock timeout) |
+| `status` | `"completed" \| "limit_reached" \| "error" \| "timeout"` | How execution terminated. `ScenarioManager` only ever emits `"completed"`, `"limit_reached"`, or `"error"`. `"timeout"` is a reserved schema value that the manager does not currently produce. |
 | `path` | `list[str]` | Ordered list of node ids visited |
 | `turn_count` | `int` | Total number of turns executed |
 | `history` | `list[TurnRecord]` | Full turn history |
 | `turn_results` | `list[VerificationResult]` | Per-turn verification result objects |
 | `final_state` | `ScenarioState` | State as of the last turn |
 | `outcome_results` | `dict[str, bool \| int \| float]` | Evaluated outcome criteria, keyed by name |
+| `terminal_failure` | `ScenarioTerminalFailure \| None` | Populated only when `status="error"`, otherwise `None`. Carries the structured reason the run stopped early. |
+
+When a scenario stops with `status="error"`, `terminal_failure` holds a `ScenarioTerminalFailure` describing why. It is a small dataclass exported from `karenina.schemas.scenario` with four fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `node_id` | `str` | The node whose turn raised the terminal failure |
+| `category` | `str` | Failure category (the classified failure kind) |
+| `stage` | `str` | Pipeline stage where the failure surfaced |
+| `reason` | `str` | Human-readable explanation of the stop |
+
+A `"completed"` or `"limit_reached"` run leaves `terminal_failure` as `None`, so checking it is the reliable way to distinguish a real error from a normal stop.
 
 ### Turn limit
 
@@ -543,7 +555,7 @@ Both helpers are useful in tests and when prototyping conditions outside a full 
 
 ## 7. Next Steps
 
-- [Sycophancy Tutorial](../../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses state-driven routing
+- [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses state-driven routing
 - [Handover](handover.md): per-edge context routing fired when a matched edge carries a `handover` setting; documents `TaggedMessage`, transcript strategies, and callable handovers
 - [Execution](execution.md): the `ScenarioExecutor` and `ScenarioExecutorConfig` that host scenario runs, parallel/sequential modes, replicates, and SchemaOrg checkpoint persistence
 - Scenario Internals: contributor-level detail on the execution engine is in the karenina-guide skill reference at `references/advanced/scenario-internals.md`, not a separate docs page

@@ -168,7 +168,7 @@ All five trait types (LLM, regex, callable, metric, agentic) support an optional
 ### How It Works
 
 1. The `DynamicRubric` is attached to a question (or globally to the benchmark).
-2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
+2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11a-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
 3. The LLM returns a structured `ConceptPresenceResult` indicating which concepts are present.
 4. Traits with `present=True` are promoted into `context.rubric` and evaluated by the standard rubric evaluators.
 5. Traits with `present=False` are recorded in `dynamic_rubric_skipped_traits` with the reason `"concept not present in response"`.

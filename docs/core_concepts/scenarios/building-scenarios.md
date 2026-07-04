@@ -525,4 +525,4 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 
 - [Outcome Criteria](outcome-criteria.md): declarative assertions evaluated after the scenario completes
 - [State and Routing](state-and-routing.md): how runtime state accumulates and how edges are resolved
-- [Sycophancy Tutorial](../../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough building a sycophancy resistance scenario
+- [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough building a sycophancy resistance scenario

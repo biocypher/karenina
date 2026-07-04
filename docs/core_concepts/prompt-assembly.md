@@ -263,7 +263,7 @@ Every distinct LLM call in the pipeline is identified by a `PromptTask` enum val
 ```python
 from karenina.benchmark.verification.prompts.task_types import PromptTask
 
-# All 22 prompt task values, grouped by category
+# All 24 prompt task values, grouped by category
 for task in PromptTask:
     print(f"  {task.value:<40} ({task.name})")
 ```
@@ -276,6 +276,7 @@ The full mapping from task to pipeline stage:
 | **Parsing** | `parsing` | ParseTemplate | Judge LLM parses response into template schema |
 | **Agentic parsing** | `agentic_parsing_investigation` | AgenticParseTemplate | Investigation agent examines workspace/trace |
 | | `agentic_parsing_extraction` | AgenticParseTemplate | Extracts structured answer from investigation trace |
+| | `agentic_parsing_decision` | AgenticParseTemplate | Combined dynamic parsing decision and direct extraction call |
 | **Trace checks** | `abstention_detection` | AbstentionCheck | Detects model refusal or evasion |
 | | `sufficiency_detection` | SufficiencyCheck | Checks response completeness for template |
 | **Rubric evaluation** | `rubric_llm_trait_batch` | RubricEvaluation | All boolean/score LLM traits in one call |
@@ -296,7 +297,7 @@ The full mapping from task to pipeline stage:
 | | `dj_rubric_reasoning` | DeepJudgmentRubric | Generate trait evaluation reasoning |
 | | `dj_rubric_score_extraction` | DeepJudgmentRubric | Extract final score from reasoning |
 
-22 distinct LLM call types. Each one can have its own adapter instructions and user instructions.
+24 distinct LLM call types. Each one can have its own adapter instructions and user instructions.
 
 ## 6. Customizing Prompts via PromptConfig
 

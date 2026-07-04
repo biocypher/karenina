@@ -327,7 +327,7 @@ Both mechanisms evaluate pre-recorded text, but they serve different workflows.
 
 ## 8. Next Steps
 
-- [Manual Interface Workflow](../../running-verification/manual-interface-workflow/): Step-by-step walkthrough with executable examples
+- [Manual Interface Workflow](../../workflows/running-verification/manual-interface-workflow/): Step-by-step walkthrough with executable examples
 - [Adapters](../../../core_concepts/adapters/): How the manual interface fits into the port/adapter architecture
 - [TaskEval](../task-eval/): Evaluating free text without a benchmark
 - [Running Verification](../../../workflows/running-verification/): Overview of all verification methods

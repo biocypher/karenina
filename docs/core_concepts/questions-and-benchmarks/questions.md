@@ -27,7 +27,7 @@ Think of a Question object as a self-contained package that carries:
 3.  **The Verification (`answer_template`)**: The machine-readable logic required for evaluation (see [Answer Templates](../../answer-templates/)).
 4.  **The Rubric (`question_rubric`)**: Optional question-specific traits to augment benchmark-level quality checks (see [Rubrics](../../../../core_concepts/rubrics/)).
 5.  **The Context**: Metadata like keywords, sources, and authorship for organization and audit trails.
-6.  **The Workspace (`workspace_path`)**: For [agentic tasks](../agentic-evaluation/), an optional relative path to the directory containing starter code, tests, or data files that the answering agent will operate on.
+6.  **The Workspace (`workspace_path`)**: For [agentic tasks](../../agentic-evaluation/), an optional relative path to the directory containing starter code, tests, or data files that the answering agent will operate on.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -115,15 +115,15 @@ While rubrics are typically defined at the benchmark level to evaluate all quest
 
 When you run a benchmark, each question follows a predictable path through the [Verification Pipeline](../../verification-pipeline/):
 
-1.  **Generation**: The `question` text is sent to the answering LLM to produce a response. For [agentic tasks](../agentic-evaluation/), the answering model can run as an agent with tool access in the question's [workspace](#23-workspace-path-for-agentic-tasks), reading files, writing code, and executing scripts.
-2.  **Parsing**: A "Judge" LLM receives a package of context: the original `question`, the model's response, the template's JSON schema, and internal parsing instructions. It extracts specific data points from the response into the structured schema. When [agentic parsing](../agentic-evaluation/#4-two-step-agentic-judging-stage-7b) is enabled separately, the judge instead runs as an agent that independently inspects workspace artifacts before extraction. Agentic answering and agentic parsing are independently configurable: an agentic answering model can be paired with a classical parser, or vice versa.
+1.  **Generation**: The `question` text is sent to the answering LLM to produce a response. For [agentic tasks](../../agentic-evaluation/), the answering model can run as an agent with tool access in the question's [workspace](#23-workspace-path-for-agentic-tasks), reading files, writing code, and executing scripts.
+2.  **Parsing**: A "Judge" LLM receives a package of context: the original `question`, the model's response, the template's JSON schema, and internal parsing instructions. It extracts specific data points from the response into the structured schema. When [agentic parsing](../../agentic-evaluation/#4-two-step-agentic-judging-stage-7b) is enabled separately, the judge instead runs as an agent that independently inspects workspace artifacts before extraction. Agentic answering and agentic parsing are independently configurable: an agentic answering model can be paired with a classical parser, or vice versa.
 3.  **Verification**: The extracted data is checked against the programmatic "Ground Truth" (derived from your `raw_answer`) using the template's `verify()` logic.
 4.  **Rubric Evaluation**: If enabled, the `question` is passed to rubric evaluators along with the model's response to assess qualities like safety, conciseness, or citation style.
 5.  **Finalization**: The result, Pass or Fail along with any rubric scores, is saved alongside the question's metadata.
 
 ### 2.3. Workspace Path for Agentic Tasks
 
-For coding and data analysis tasks evaluated with the [agentic workflow](../agentic-evaluation/), a question can specify a `workspace_path`: a relative path from the benchmark's `workspace_root` to the directory containing starter code, test files, or data for that question.
+For coding and data analysis tasks evaluated with the [agentic workflow](../../agentic-evaluation/), a question can specify a `workspace_path`: a relative path from the benchmark's `workspace_root` to the directory containing starter code, test files, or data for that question.
 
 ```python
 # workspace_path resolves to workspace_root / "task_01"
@@ -215,7 +215,7 @@ class Answer(BaseAnswer):
 *   **`few_shot_examples`**: A list of example question-answer pairs. When enabled in [VerificationConfig](../../../../reference/configuration/verification-config/), these are prepended to the question to guide the answering model's format or level of detail. They are not sent to the Judge during parsing (see [Few-Shot](../../few-shot/)).
 *   **`answer_template`**: The Python code (subclass of `BaseAnswer`) that defines the parsing schema and `verify()` logic for this specific question.
 *   **`question_rubric`**: Question-specific rubric traits that augment the benchmark-level rubric.
-*   **`workspace_path`**: For [agentic tasks](../agentic-evaluation/), the relative path from the benchmark's `workspace_root` to this question's workspace directory. See [Section 2.3](#23-workspace-path-for-agentic-tasks).
+*   **`workspace_path`**: For [agentic tasks](../../agentic-evaluation/), the relative path from the benchmark's `workspace_root` to this question's workspace directory. See [Section 2.3](#23-workspace-path-for-agentic-tasks).
 
 ### 5.3. Field Reference Table
 
@@ -231,7 +231,7 @@ class Answer(BaseAnswer):
 | `author` | `dict \| None` | `None` | Author information. |
 | `sources` | `list[dict] \| None` | `None` | Source documents or references. |
 | `answer_template` | `str \| None` | `None` | Required for evaluation; defines parsing and verification logic. |
-| `workspace_path` | `str \| None` | `None` | Relative path from `workspace_root` to this question's workspace directory (for [agentic tasks](../agentic-evaluation/)). |
+| `workspace_path` | `str \| None` | `None` | Relative path from `workspace_root` to this question's workspace directory (for [agentic tasks](../../agentic-evaluation/)). |
 | `question_rubric` | `dict \| None` | `None` | Question-specific rubric traits. |
 | `custom_metadata` | `dict \| None` | `None` | Arbitrary key-value pairs. |
 
@@ -244,5 +244,5 @@ class Answer(BaseAnswer):
 *   [Benchmarks](../benchmarks/): How questions are grouped into packages.
 *   [Answer Templates](../../answer-templates/): Writing the `verify()` logic for your questions.
 *   [Evaluation Modes](../../evaluation-modes/): How `finished` status and templates drive the pipeline.
-*   [Agentic Evaluation](../agentic-evaluation/): Workspace-based evaluation for coding and data analysis tasks.
+*   [Agentic Evaluation](../../agentic-evaluation/): Workspace-based evaluation for coding and data analysis tasks.
 *   [Benchmark Operations](../../../../workflows/creating-benchmarks/benchmark-operations/): Adding, searching, and managing questions at scale.

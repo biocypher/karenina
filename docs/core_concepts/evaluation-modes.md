@@ -192,7 +192,7 @@ So in `rubric_only`, treat rubric scores as the primary output and `verify_resul
 
 ### Low-level runner behavior
 
-At the low-level `run_single_model_verification(...)` API, passing a non-empty rubric while leaving `evaluation_mode="template_only"` causes the runner to upgrade internally to `template_and_rubric`. `VerificationConfig` does not do that silently; it validates consistency up front.
+At the low-level `run_single_model_verification(...)` API, passing a non-empty rubric while leaving `evaluation_mode="template_only"` does not upgrade the mode. The runner logs a warning (`Rubric traits were provided but evaluation_mode='template_only'. Rubric evaluation will be skipped.`) and runs the template-only pipeline unchanged, so no [rubric evaluation](../../../core_concepts/rubrics/) stage is added and the rubric is ignored. Set `evaluation_mode="template_and_rubric"` to score the rubric.
 
 ### TaskEval behavior
 

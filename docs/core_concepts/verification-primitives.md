@@ -155,11 +155,11 @@ print(f"Wrong:    pair_count=46  -> verify(): {parsed_wrong.verify()}")
 
 ## 3. Two Categories: Parsed vs Trace
 
-Karenina provides 19 primitives in two categories:
+Karenina provides 23 primitives in two categories:
 
 | Category | Count | Operates on | Included in judge schema? | Method |
 |----------|-------|-------------|--------------------------|--------|
-| **Parsed** | 16 | Judge-extracted field value + ground truth | Yes | `check(extracted, expected)` |
+| **Parsed** | 20 | Judge-extracted field value + ground truth | Yes | `check(extracted, expected)` |
 | **Trace** | 3 | Raw LLM response text | No (field excluded from schema) | `check_trace(raw_trace)` |
 
 **Parsed primitives** are the default. The Judge LLM sees the field in the JSON schema, extracts a value, and the primitive compares that value against `ground_truth`. Most evaluation uses parsed primitives.
@@ -539,6 +539,8 @@ Score the extracted value against an acceptance band `[min, max]` with soft shou
 | `margin` | `float` | required | Shoulder width. Must be `> 0` |
 | `mode` | `Literal["relative", "absolute"]` | `"absolute"` | `"absolute"`: the shoulder is `margin` raw units wide on each side; `"relative"`: the shoulder is `margin` times the band width `(max - min)` |
 | `decay` | `Literal["linear", "quadratic"]` | `"linear"` | Shape of the decay across a shoulder |
+| `exclusive_min` | `bool` | `False` | If `True`, the binary gate treats the lower edge as exclusive: a value exactly at `min` fails `check()`. `score()` is unaffected (a value on the edge still earns full credit) |
+| `exclusive_max` | `bool` | `False` | If `True`, the binary gate treats the upper edge as exclusive: a value exactly at `max` fails `check()`. `score()` is unaffected |
 
 **Applies to:** `int`, `float`
 
@@ -891,7 +893,7 @@ for value in ["BCL2", "Bcl-2", "B-cell lymphoma 2", "KRAS"]:
 
 ## 8. Writing Custom Primitives
 
-When none of the 18 built-in primitives fit your verification need, you can write a custom one. Both base classes are in `karenina.schemas.primitives`.
+When none of the 23 built-in primitives fit your verification need, you can write a custom one. Both base classes are in `karenina.schemas.primitives`.
 
 ### Custom Parsed Primitive
 

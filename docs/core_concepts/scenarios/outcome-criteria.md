@@ -731,5 +731,5 @@ These complement the wider sugar surface listed in the `Sugar Functions` table a
 ## 7. Next Steps
 
 - [State and Routing](state-and-routing.md): how runtime state accumulates and how edges are resolved
-- [Sycophancy Tutorial](../../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses outcome criteria
-- [Verification Primitives](../../verification-primitives.md): the `verify_with` primitives used in check nodes
+- [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses outcome criteria
+- [Verification Primitives](../verification-primitives.md): the `verify_with` primitives used in check nodes

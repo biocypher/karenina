@@ -197,7 +197,7 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `replicate` | `int \| None` | Replicate number (1, 2, 3, ...) for repeated runs |
 | `keywords` | `list[str] \| None` | Keywords associated with the question |
 | `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason`. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md) for the full taxonomy |
-| `caveats` | `list[Caveat]` | Informational flags attached to the run, orthogonal to pass/fail. Three values: `partial_content` (streaming response truncated), `embedding_override` (similarity fallback flipped a verdict), `retries_used` (at least one retry attempt was made). A passing result can carry caveats. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md#5-caveat-3-informational-flags) for trigger conditions |
+| `caveats` | `list[Caveat]` | Informational flags attached to the run, orthogonal to pass/fail. Four values: `partial_content` (streaming response truncated), `embedding_override` (similarity fallback flipped a verdict), `retries_used` (at least one retry attempt was made), `parse_decision_malformed` (a parse-decision call returned unparseable output). A passing result can carry caveats. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) for trigger conditions |
 | `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
 | `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
 | `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |
@@ -226,7 +226,7 @@ Models are identified by a composite `ModelIdentity` object, not a plain string.
 
 | Field | Description |
 |-------|-------------|
-| `interface` | The adapter interface (e.g., `"langchain"`, `"claude_sdk"`) |
+| `interface` | The adapter interface (e.g., `"langchain"`, `"claude_agent_sdk"`) |
 | `model_name` | The model name (e.g., `"claude-sonnet-4-6"`) |
 | `tools` | Sorted list of MCP server names (answering models only; always `[]` for parsing) |
 
@@ -332,7 +332,7 @@ The `rubric` sub-object (`VerificationResultRubric`) is present whenever rubric 
 | `llm_trait_scores` | `dict[str, Any] \| None` | LLM-evaluated traits. Scalar kinds (boolean, score, literal) store an `int`/`bool` value; template-kind traits inject dotted-key entries (`trait.field`) whose values follow the user-defined schema (string, list, dict, numeric, bool) |
 | `llm_trait_labels` | `dict[str, str] \| None` | Class labels for literal-kind LLM traits (index-to-name mapping) |
 | `regex_trait_scores` | `dict[str, bool] \| None` | Regex trait pass/fail results |
-| `callable_trait_scores` | `dict[str, bool \| int] \| None` | Callable trait results |
+| `callable_trait_scores` | `dict[str, bool \| int \| float] \| None` | Callable trait results (score may be a float in `[min_score, max_score]`) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric trait metrics (precision, recall, F1, etc.) |
 | `metric_trait_confusion_lists` | `dict[str, dict[str, list[str]]] \| None` | Per-metric confusion lists (tp, tn, fp, fn containing excerpts) |
 | `rubric_evaluation_strategy` | `str \| None` | `"batch"` or `"sequential"` |
@@ -530,8 +530,9 @@ print(df[["question_id", "field_name", "gt_value", "llm_value", "field_match", "
 | `"llm_binary"` | LLM traits with boolean scores |
 | `"llm_literal"` | LLM traits with categorical classification |
 | `"regex"` | Regex traits (boolean) |
-| `"callable"` | Callable traits (boolean or integer) |
+| `"callable"` | Callable traits (boolean, integer, or float) |
 | `"metric"` | Metric traits (exploded by metric name) |
+| `"agentic"` | Agentic traits (boolean or score) |
 
 Key columns: `trait_name`, `trait_score`, `trait_label` (for literal kinds), `trait_type`, `metric_name` (for metrics), `confusion_tp`/`fp`/`fn`/`tn` (for metrics).
 

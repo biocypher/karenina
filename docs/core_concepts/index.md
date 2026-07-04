@@ -158,6 +158,7 @@ The pipeline produces a **`VerificationResult`** per question containing templat
 | Interface | Description |
 |-----------|-------------|
 | `langchain` | Default adapter — supports all LLMs via LangChain |
+| `langchain_deep_agents` | LangChain Deep Agents (natively agentic, routes through LangChain providers) |
 | `openrouter` | OpenRouter API (routes through LangChain) |
 | `openai_endpoint` | OpenAI-compatible endpoints (routes through LangChain) |
 | `claude_agent_sdk` | Native Anthropic Agent SDK |
@@ -180,7 +181,7 @@ The **manual interface** allows you to evaluate pre-recorded LLM traces instead 
 
 ### ADeLe
 
-**ADeLe** (Annotated Demand Levels; [Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and answer format. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
+**ADeLe** (Annotated Demand Levels; [Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and metacognitive demand. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
 
 [Read more about ADeLe →](../notebooks/core_concepts/adele.ipynb)
 

@@ -1247,7 +1247,7 @@ def verify(self) -> bool:
 
 ## 11. Next Steps
 
-- [Verification Primitives](verification-primitives.md): Full reference for all 19 verification primitives, including parameters and examples
+- [Verification Primitives](verification-primitives.md): Full reference for all 23 verification primitives, including parameters and examples
 - [Rubrics](../../../core_concepts/rubrics/): Assess response quality beyond correctness
 - [Evaluation Modes](../evaluation-modes/): Choose between template-only, rubric-only, or both
 - [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/): Step-by-step implementation of these patterns in a benchmark

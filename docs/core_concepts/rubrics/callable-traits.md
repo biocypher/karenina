@@ -156,7 +156,8 @@ They work well for explicit pass/fail rules such as:
 repetition_trait = CallableRubricTrait.from_callable(
     name="No Excessive Repetition",
     description="Response should not repeat the same sentence excessively",
-    func=lambda text: len(set(text.split(". "))) < len(text.split(". ")) * 0.5,
+    func=lambda text: len({s.strip() for s in text.split(".") if s.strip()})
+    < len([s.strip() for s in text.split(".") if s.strip()]) * 0.5,
     kind="boolean",
     invert_result=True,
     higher_is_better=True,
