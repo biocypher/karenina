@@ -200,7 +200,7 @@ Rubrics support five trait types (LLM traits have three sub-kinds: boolean, scor
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (score) | `int` | Yes | Numeric rating within a configurable range |
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (literal) | `int` | Yes | Classification into ordered categories (e.g., tone: formal/casual/technical) |
 | **[RegexRubricTrait](docs/core_concepts/rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
-| **[CallableRubricTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
+| **[CallableRubricTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool`, `int`, or `float` | No | Custom Python logic (word count, readability, structure checks) |
 | **[MetricRubricTrait](docs/core_concepts/rubrics/metric-traits.md)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
 | **[AgenticRubricTrait](docs/core_concepts/agentic-evaluation.md#9-agentic-rubric-evaluation)** | `bool` or `int` | Yes | Agent investigates workspace artifacts before scoring (code quality, test coverage) |
 
@@ -242,7 +242,7 @@ Together, templates and rubrics give you both a correctness verdict and a qualit
 | Evaluates | Correctness against ground truth | Observable qualities of the response |
 | Operates on | Parsed, structured data (Pydantic schema) | Raw response trace (full text) |
 | Requires ground truth | Yes (`self.correct`) | No (judges by reading the response alone) |
-| Method | Judge LLM parses into schema, then `verify()` checks | Trait evaluators assess the raw text (LLM, regex, callable, or metric) |
+| Method | Judge LLM parses into schema, then `verify()` checks | Trait evaluators assess the raw text (LLM, regex, callable, metric, or agentic) |
 | Output | Pass/fail | Boolean, integer score, or metrics dict |
 
 [Answer Templates](docs/core_concepts/answer-templates.md) | [Rubrics](docs/core_concepts/rubrics/index.md) | [Templates vs Rubrics](docs/core_concepts/template-vs-rubric.md)
@@ -419,7 +419,7 @@ export GOOGLE_API_KEY="AI..."
 export OPENROUTER_API_KEY="sk-or-..."  # Required for openrouter interface
 ```
 
-Alternatively, use `karenina init` to generate a `.env` template with all supported variables. See the [Configuration Guide](docs/reference/configuration/index.md) for the full configuration hierarchy.
+Alternatively, use `karenina init` to generate a `.env` template with common configuration settings and placeholders for the core provider keys (OpenAI, Anthropic, Google). See the [Configuration Guide](docs/reference/configuration/index.md) for the full configuration hierarchy.
 
 ### Verify Installation
 
