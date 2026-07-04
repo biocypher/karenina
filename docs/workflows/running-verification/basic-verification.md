@@ -375,7 +375,7 @@ for result in results:
         print(f"Error in {result.metadata.question_id}: {result.metadata.failure.reason if result.metadata.failure else None}")
 ```
 
-In parallel mode, `VerificationBatchError` is also raised if the batch exceeds the configured timeout (`ExecutorConfig.timeout_seconds`, default 600 seconds). The `partial_results` attribute contains whichever questions completed before the timeout.
+The parallel executor also supports a batch-level timeout, but it is disabled by default. `ExecutorConfig.timeout_seconds` defaults to `None`, and the standard `run_verification` path does not set it, so the executor runs until every question finishes rather than aborting on a wall-clock ceiling. When a positive `timeout_seconds` is configured and the batch exceeds it, `VerificationBatchError` is raised and its `partial_results` attribute holds whichever questions completed before the timeout.
 
 | Exception | When |
 |-----------|------|
@@ -417,7 +417,7 @@ Also configurable via `KARENINA_ASYNC_ENABLED` and `KARENINA_ASYNC_MAX_WORKERS` 
 - [Multi-Model Comparison](multi-model-comparison.ipynb) — Compare models side-by-side
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All configuration fields
 - [CLI Reference: verify](../../reference/cli/verify.md) — Full CLI options
-- [Analyzing Results](../analyzing-results/index.md) — DataFrame analysis and export
+- [Analyzing Results](../../workflows/analyzing-results/index.md) — DataFrame analysis and export
 
 ```python tags=["hide-cell"]
 # Cleanup

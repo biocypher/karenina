@@ -306,7 +306,7 @@ print(f"Progress:        {benchmark.get_progress()}%")
 # Preview a question
 q = benchmark.get_question(q1_id)
 print(f"\nQ1: {q['question'][:60]}...")
-print(f"Has template: {q.get('finished', False)}")
+print(f"Has template: {benchmark.has_template(q1_id)}")
 ```
 
 ---

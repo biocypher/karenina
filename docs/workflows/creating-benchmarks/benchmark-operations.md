@@ -201,7 +201,7 @@ Apply a single template to all questions that do not yet have one:
 # applied_ids = benchmark.apply_global_template(template_code)
 ```
 
-`apply_global_template()` only applies to questions without an existing template. Questions that already have one (even a default placeholder) are skipped.
+`apply_global_template()` applies to every question that lacks a real template, as reported by `has_template()`. Questions holding only the default placeholder count as template-less and do receive the global template. Only questions that already have a real, non-default template are skipped.
 
 ### Default Templates
 
@@ -250,7 +250,7 @@ print(f"Global rubric set: {benchmark.get_global_rubric() is not None}")
 
 ### Question-specific traits
 
-Question-specific traits apply to a single question. When both global and question-specific traits exist, they merge. If a question-specific trait has the same name as a global trait, the question-specific one takes precedence.
+Question-specific traits apply to a single question. When both global and question-specific traits exist, they merge. There is no precedence or override: if a global and a question-specific trait of the same type share a name, merging the two rubrics raises a `ValueError`. Trait names must be unique across the global and question-specific scopes.
 
 ```python
 benchmark.add_question_rubric_trait(
@@ -482,7 +482,7 @@ Slicing is also supported: `benchmark[0:2]` returns a list of `SchemaOrgQuestion
 | `is_complete` returns `False` | Some questions lack real templates or are not marked finished | Check `benchmark.get_unfinished_questions()` and `benchmark.get_missing_templates()` |
 | `check_readiness()` says ready but verification returns no results | Questions have templates but are not marked `finished` | Call `benchmark.mark_finished(question_id)` for each question |
 | `validate_templates()` reports errors | Template code has syntax errors or missing imports | Review template code; ensure it inherits from `BaseAnswer` |
-| Global template does not appear on a question | `apply_global_template()` only applies to questions without templates | Questions that already have a template (even a default) may need explicit `add_answer_template()` |
+| Global template does not appear on a question | `apply_global_template()` skips questions that already hold a real, non-default template | Overwrite it explicitly with `add_answer_template()` |
 | Rubric trait name collision raises `ValueError` | A question-specific trait has the same name as a global trait of the same type | Same-type collisions are rejected at merge time; rename one of the traits so each name is unique within its type. Cross-type duplicates are also rejected by the `Rubric` constructor. |
 | Ambiguous `raw_answer` leads to poor parsing | The Judge LLM lacks context to extract the right value | Use descriptive `raw_answer` values: `"BCL2 (B-cell lymphoma 2)"` not just `"BCL2"` |
 | Same question text produces different IDs across benchmarks | Comparing custom IDs vs auto-generated IDs, or text differs in whitespace | Use consistent text or explicit `question_id` values |

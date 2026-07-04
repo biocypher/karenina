@@ -171,8 +171,10 @@ KARENINA_EXPOSE_GROUND_TRUTH=true  # Debugging only
 
 Environment variables that accept boolean values recognize these truthy strings (case-insensitive):
 
-- **True**: `true`, `1`, `yes`, `on`
+- **True**: `true`, `1`, `yes` (recognized by every boolean variable)
 - **False**: anything else (including `false`, `0`, `no`, `off`)
+
+A few variables (`EMBEDDING_CHECK`, `KARENINA_EXPOSE_GROUND_TRUTH`) also treat `on` as truthy, but most do not. Use `true`, `1`, or `yes` for values that behave consistently across every variable.
 
 ---
 

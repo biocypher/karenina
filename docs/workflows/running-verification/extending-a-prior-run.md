@@ -17,7 +17,7 @@ jupyter:
 
 This tutorial walks through the full extension lifecycle end-to-end: run a benchmark, save it with a [`ProgressiveFileSink`](../../reference/api/sinks.md), load it back, attach a [rubric](../../core_concepts/rubrics/), and call [`extend_rubric`](../../core_concepts/extending-runs.md) to score the prior traces against the new rubric. The same pattern carries over to [`extend_template`](../../core_concepts/extending-runs.md) when you want to add new judges, new answerers, or new replicates instead.
 
-For the conceptual surface (validation rules, merge semantics, the [ReplayStore](../../advanced-pipeline/replay-store.md) the engines build internally), see [Extending Runs](../../core_concepts/extending-runs.md). For the sink internals that make the extension resumable, see [Progressive Save and Resume](./progressive-save.md) and the [Sinks reference](../../reference/api/sinks.md).
+For the conceptual surface (validation rules, merge semantics, the [ReplayStore](../../advanced-pipeline/replay-store.md) the engines build internally), see [Extending Runs](../../core_concepts/extending-runs.md). For the sink internals that make the extension resumable, see [Progressive Save and Resume](./progressive-save.ipynb) and the [Sinks reference](../../reference/api/sinks.md).
 
 **What you'll learn:**
 
@@ -144,7 +144,7 @@ print("Final export exists:", output_path.exists())
 print("Sidecars cleaned up:", not (output_path.with_suffix(".json.state").exists()))
 ```
 
-`output_path` now holds the canonical export, and the `.state` / `.results.jsonl` sidecars have been removed because the run completed cleanly. If the run had been interrupted, the sidecars would have remained so [`Benchmark.resume_verification`](./progressive-save.md) could pick up where it stopped.
+`output_path` now holds the canonical export, and the `.state` / `.results.jsonl` sidecars have been removed because the run completed cleanly. If the run had been interrupted, the sidecars would have remained so [`Benchmark.resume_verification`](./progressive-save.ipynb) could pick up where it stopped.
 
 ---
 
@@ -321,6 +321,6 @@ shutil.rmtree(work_dir, ignore_errors=True)
 ## Next Steps
 
 - [Extending Runs](../../core_concepts/extending-runs.md): conceptual reference, validation rules, merge semantics
-- [Progressive Save and Resume](./progressive-save.md): sink internals, resume mechanics, partial-failure handling
+- [Progressive Save and Resume](./progressive-save.ipynb): sink internals, resume mechanics, partial-failure handling
 - [Replay Store](../../advanced-pipeline/replay-store.md): the cache layer the extensions build internally
 - [Sinks reference](../../reference/api/sinks.md): `ResultSink` Protocol, `ProgressiveFileSink`, `CompositeSink`, `DBSink`

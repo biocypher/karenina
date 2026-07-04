@@ -225,7 +225,7 @@ print("Extension-with-sink pattern shown in comments above")
 
 The pattern composes with `CompositeSink`: pair a `ProgressiveFileSink` with a `DBSink` to get both an on-disk extension and a SQLite extension that survive a crash mid-run. All four in-tree sinks (`ProgressiveFileSink`, `DBSink`, `CompositeSink`, `InMemorySink`) implement `seed_prior_results`, so the prior rows make it into every persistence path. Third-party sinks that omit `seed_prior_results` are silently tolerated; the extension still completes, but the sink's final export contains only the new rows.
 
-For the full extension surface, see the [Extending a Prior Run tutorial](./extending-a-prior-run.md).
+For the full extension surface, see the [Extending a Prior Run tutorial](./extending-a-prior-run.ipynb).
 
 ---
 

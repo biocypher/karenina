@@ -39,6 +39,7 @@ from unittest.mock import MagicMock, patch
 from karenina import Benchmark
 from karenina.schemas.entities.question import Question
 from karenina.benchmark.authoring.answers.builder import AnswerBuilder
+from karenina.benchmark.benchmark_helpers import TemplateProgressEvent
 
 # Realistic generated template code (matches actual generator output format)
 _GENERATED_CODE = '''from karenina.schemas.entities import BaseAnswer, VerifiedField
@@ -71,9 +72,21 @@ def _mock_generate_all_templates(self, **kwargs):
         else:
             results[qid] = {"success": True, "skipped": True}
         if kwargs.get("progress_callback"):
+            processed = len(results)
+            total = len(self.get_question_ids())
             kwargs["progress_callback"](
-                len(results) / len(self.get_question_ids()) * 100,
-                f"Generated {len(results)}/{len(self.get_question_ids())}",
+                TemplateProgressEvent(
+                    event="task_completed",
+                    question_id=qid,
+                    processed_count=processed,
+                    total_count=total,
+                    successful_count=processed,
+                    failed_count=0,
+                    percentage=processed / total * 100,
+                    error=None,
+                    template_code=None,
+                    task_duration=None,
+                )
             )
     return results
 ```
@@ -309,7 +322,7 @@ with patch.object(type(benchmark), "generate_all_templates", _mock_generate_all_
         model="claude-haiku-4-5",
         model_provider="anthropic",
         only_missing=True,
-        progress_callback=lambda pct, msg: print(f"  {pct:.0f}%: {msg}"),
+        progress_callback=lambda event: print(f"  {event.percentage:.0f}%: {event.event}"),
     )
 
 generated = sum(1 for r in results.values() if r["success"] and not r.get("skipped"))
@@ -319,7 +332,7 @@ print(f"Skipped (already had template): {skipped}")
 print(f"Progress: {benchmark.get_progress()}%")
 ```
 
-The `progress_callback` receives a percentage (0 to 100) and a status message, useful for displaying progress in scripts or the GUI. For production use, pass a real model and provider; the function calls `generate_answer_template()` internally for each question.
+On each invocation the `progress_callback` receives a single `TemplateProgressEvent` (from `karenina.benchmark.benchmark_helpers`). Read fields like `event.percentage` (0 to 100), `event.event` (the event type, such as `task_completed`), and the per-question counts to display progress in scripts or the GUI. For production use, pass a real model and provider. The function calls `generate_answer_template()` internally for each question.
 
 ---
 

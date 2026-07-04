@@ -48,12 +48,19 @@ def _make_result(
     rid = VerificationResultMetadata.compute_result_id(
         qid, answering, _parsing, _ts, replicate
     )
+    _gt = parsed_gt or {"answer": response}
+    _llm = parsed_llm or {"answer": response}
+    # Per-field graded score. Non-graded primitives (used here) record exactly
+    # 1.0 on a match and 0.0 on a miss, mirroring the binary field_match. The
+    # graded numeric primitives instead record fractional partial credit.
+    field_scores = {name: (1.0 if _gt.get(name) == _llm.get(name) else 0.0) for name in _llm}
     template = VerificationResultTemplate(
         raw_llm_response=response,
         verify_result=verified,
         template_verification_performed=True,
-        parsed_gt_response=parsed_gt or {"answer": response},
-        parsed_llm_response=parsed_llm or {"answer": response},
+        parsed_gt_response=_gt,
+        parsed_llm_response=_llm,
+        field_scores=field_scores,
     )
     rubric = None
     if rubric_scores or regex_scores or callable_scores:
@@ -161,8 +168,10 @@ df = template_results.to_dataframe()
 
 # Key columns for field-level analysis
 print("Field comparison columns:")
-print(df[["question_id", "answering_model", "field_name", "gt_value", "llm_value", "field_match"]].to_string(index=False))
+print(df[["question_id", "answering_model", "field_name", "gt_value", "llm_value", "field_match", "field_score"]].to_string(index=False))
 ```
+
+The `field_score` column is the continuous companion to the binary `field_match`. For every non-graded primitive it is exactly `1.0` (pass) or `0.0` (fail), so it mirrors `field_match` exactly. The graded numeric primitives ([`NumericGraded`](../../core_concepts/verification-primitives.md#numericgraded), [`NumericRangeGraded`](../../core_concepts/verification-primitives.md#numericrangegraded), and [`NumericThresholdGraded`](../../core_concepts/verification-primitives.md#numericthresholdgraded)) instead record fractional partial credit in `[0, 1]` for near-misses, which is how a `field_match` of `False` can sit next to a positive `field_score`. The column is `None` for results saved without per-field scores (for example legacy runs that predate `field_scores`).
 
 ### Pass Rate by Model
 
@@ -222,7 +231,7 @@ Every Template, Rubric, and Judgment DataFrame includes six columns that summari
 | `failure_group` | `str | None` | The aggregation [`FailureGroup`](../../reference/api/failure-and-caveats.md#4-failuregroup-5-aggregation-buckets) string value (one of `content`, `autofail`, `retry`, `abstained`, `system`); `None` on success |
 | `failure_stage` | `str | None` | The pipeline stage that originated the failure (e.g. `"verify_template"`, `"parse_template"`); `None` on success |
 | `failure_reason` | `str | None` | Trimmed reason string capped at 500 characters; `None` on success |
-| `caveats` | `str` | Comma-joined list of [`Caveat`](../../reference/api/failure-and-caveats.md#5-caveat-3-informational-flags) string values; empty string when no caveats fired |
+| `caveats` | `str` | Comma-joined list of [`Caveat`](../../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) string values; empty string when no caveats fired |
 
 ```python
 template_df = results.get_template_results().to_dataframe()

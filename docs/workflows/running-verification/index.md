@@ -16,13 +16,14 @@ Choose the scenario that matches your evaluation needs, or work through them in 
 | [Agentic Evaluation](../../notebooks/running-verification/agentic-evaluation.ipynb) | Workspace-based agents | Agentic parsing, investigation judge, `VerifiedField` primitives, agentic rubric traits, context modes |
 | [Manual Interface](../../notebooks/running-verification/manual-interface-workflow.ipynb) | Pre-recorded traces | Offline evaluation with pre-recorded responses, template iteration, parsing model comparison |
 | [Progressive Save](../../notebooks/running-verification/progressive-save.ipynb) | Resumable runs | Checkpoint progress incrementally, resume interrupted runs, `.state` + `.results.jsonl` sidecars, `ProgressiveFileSink` |
+| [Extending a Prior Run](../../notebooks/running-verification/extending-a-prior-run.ipynb) | Reusing prior traces | Add judges, answerers, replicates, or rubrics to a saved run with `extend_template` / `extend_rubric`, replaying stored traces without regenerating answers |
 | [Few-Shot Configuration](../../notebooks/running-verification/few-shot-configuration.ipynb) | Example injection | Global modes (all, k-shot, custom, none), per-question overrides, `FewShotConfig`, example resolution |
 
 ---
 
 ## Common Workflow
 
-All nine scenarios follow this general pattern:
+All ten scenarios follow this general pattern:
 
 ```
 Load benchmark

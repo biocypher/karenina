@@ -63,7 +63,8 @@ karenina verify checkpoint.jsonld \
     --interface langchain \
     --answering-model claude-haiku-4-5 \
     --parsing-model claude-haiku-4-5 \
-    --provider anthropic \
+    --answering-provider anthropic \
+    --parsing-provider anthropic \
     --async-workers 4 \
     --deep-judgment
 ```

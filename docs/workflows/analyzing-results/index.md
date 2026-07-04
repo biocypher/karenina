@@ -141,6 +141,8 @@ benchmark.export_verification_results_to_file(Path("results.csv"))
 df.to_csv("template_analysis.csv", index=False)
 ```
 
+The `Benchmark.export_verification_results()` and `export_verification_results_to_file()` methods are deprecated in favor of `ResultsStore.export()` and `ResultsStore.export_to_file()`. See [Export results](exporting.md) for the current API.
+
 [Export results →](exporting.md)
 
 ### 6. Iterate on Your Benchmark

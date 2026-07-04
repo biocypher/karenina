@@ -15,7 +15,7 @@ jupyter:
 
 # Choosing the Right Rubric Trait Type
 
-Karenina offers five trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) that cover seven distinct evaluation needs. This tutorial is organized by **need**: "I need to check X; which trait type solves it?" For each need, you will create a trait, attach it to a benchmark, and learn when to prefer one type over another.
+Karenina offers six trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) that cover seven distinct evaluation needs. This tutorial is organized by **need**: "I need to check X. Which trait type solves it?" For each need, you will create a trait, attach it to a benchmark, and learn when to prefer one type over another.
 
 This complements the build-focused tutorials ([Full Evaluation Benchmark](full-evaluation-benchmark.ipynb), [Quality Assessment](quality-assessment-benchmark.ipynb)) by providing a decision framework for trait selection.
 

@@ -134,7 +134,6 @@ Convenience properties:
 |-------|------|-------------|
 | `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success |
 | `caveats` | `list[Caveat]` | Informational flags on the run |
-| `error` | `str \| None` | Error message if verification failed |
 | `execution_time` | `float` | Execution time in seconds |
 | `timestamp` | `str` | ISO timestamp of when verification was run |
 
@@ -238,7 +237,7 @@ if result.template and result.template.parsed_llm_response:
 | `verify_result` | `bool \| None` | Template verification result (`True`/`False`, or `None` if skipped) |
 | `verify_granular_result` | `Any \| None` | Granular verification result from `verify_granular()` (e.g., `0.67` for partial credit) |
 | `field_verification_error` | `str \| None` | Error message captured when `verify()` raised an exception |
-| `field_results` | `dict[str, bool] \| None` | Per-field primitive verification outcomes |
+| `field_results` | `dict[str, bool \| None] \| None` | Per-field primitive verification outcomes (`True` pass, `False` fail, `None` when the extractor returned null, kept distinct from `False`) |
 | `composition_strategy` | `str \| None` | Composition strategy used to combine field results (`"all_of"`, `"any_of"`, `"at_least_n(N)"`) |
 
 ### Embedding Check
@@ -284,6 +283,18 @@ if result.template and result.template.parsed_llm_response:
 |-------|------|-------------|
 | `agentic_parsing_performed` | `bool` | Whether the agentic parsing variant ran (stage 7b) instead of standard judge parsing |
 | `investigation_trace` | `str \| None` | Raw trace from the agentic judge investigation step, if agentic parsing was used |
+| `agentic_extraction_recovery` | `str \| None` | `"local_json"` when the parser extraction failed but a structured answer was recovered from a JSON block in the investigation trace, otherwise `None` |
+| `agentic_extraction_error` | `str \| None` | The parser error string when agentic extraction failed, otherwise `None` |
+
+### Dynamic Parsing
+
+Populated only when `agentic_parsing=True` with `agentic_parsing_trigger="dynamic"` (see [agentic evaluation internals](../../advanced-pipeline/agentic-evaluation.md)). Dynamic parsing first tries a direct final-message parse and escalates to the full agentic investigation only when that decision is insufficient or malformed.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dynamic_parsing_performed` | `bool` | Whether the dynamic parse stage ran (the direct final-message decision path was attempted) |
+| `dynamic_parse_decision` | `str \| None` | The decision outcome that routed the parse (the direct-parse verdict or an escalation marker) |
+| `dynamic_decision_reasoning` | `str \| None` | The decision model's reasoning for using the final message directly or escalating to investigation |
 
 ### MCP and Agent Metrics
 
@@ -348,10 +359,11 @@ Scores are split by trait type for type-safe access:
 | `llm_trait_scores` | `dict[str, Any] \| None` | LLM-evaluated traits. Scalar kinds use boolean (`True`/`False`) for boolean kind, integer score for score kind, class index (`int`, or `-1` for invalid classification) for literal kind. Template-kind LLM traits contribute multiple dotted-key entries (`trait.field`) whose values follow the user-defined Pydantic schema, so the value type is widened to `Any`. |
 | `llm_trait_labels` | `dict[str, str] \| None` | Human-readable class names for literal kind traits (e.g., `{"tone": "Professional"}`) |
 | `regex_trait_scores` | `dict[str, bool] \| None` | Regex-based traits (boolean pass/fail) |
-| `callable_trait_scores` | `dict[str, bool \| int] \| None` | Callable-based traits (boolean or integer score) |
+| `callable_trait_scores` | `dict[str, bool \| int \| float] \| None` | Callable-based traits (boolean, or a score that may be an integer or a float within the trait's score range) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric traits with nested metrics (e.g., `{"extraction": {"precision": 1.0, "recall": 0.8, "f1": 0.89}}`) |
 | `agentic_trait_scores` | `dict[str, int \| bool \| float \| str \| list[Any] \| None] \| None` | Agentic rubric trait scores, keyed by trait name. Value type matches the underlying trait kind (boolean, integer score, class index for literal kind, or any value emitted by a template-kind agentic trait). |
 | `agentic_trait_investigation_traces` | `dict[str, str] \| None` | Raw investigation traces from agentic trait agents, keyed by trait name. Each trace is the full text of the agent's investigation session. |
+| `agentic_trait_extraction_metadata` | `dict[str, dict[str, str \| None]] \| None` | Per-trait extraction provenance, keyed by base trait name. Each entry records `method` (`local_json`, `parser_after_local_json_failed`, or `failed`), plus `local_json_error` and `parser_error`. |
 
 ### Metric Trait Details
 
