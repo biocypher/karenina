@@ -50,10 +50,12 @@ The `config` key contains a `VerificationConfig` dictionary. All fields are docu
 
 | Field | Reason |
 |-------|--------|
-| `manual_traces` | Runtime-specific; must be provided via `--manual-traces` or Python API |
-| `db_config` | Environment-specific database configuration |
-| `replay_store` | Runtime-only object (can hold large captured traces); excluded from serialization |
-| `skip_triples` | Internal plumbing for `Benchmark.extend_template`; never user-facing |
+| `manual_traces` | Runtime-specific, must be provided via `--manual-traces` or Python API |
+| `replay_store` | Runtime-only object (can hold large captured traces), excluded from serialization via `Field(exclude=True)` |
+| `skip_triples` | Internal plumbing for `Benchmark.extend_template`, never user-facing, excluded via `Field(exclude=True)` |
+
+!!! warning "`db_config` is not field-excluded"
+    Unlike `replay_store` and `skip_triples`, the `db_config` field has no `Field(exclude=True)`, so `save_preset()` writes it into the serialized `config` (as `null` by default, since it defaults to `None`). It is not intended to be persisted in a preset: it is environment-specific database configuration. A preset that stores a populated `db_config` fails to reload, because the `db_config` validator rejects a plain dict (it accepts only a `DBConfig` instance or `None`).
 
 ---
 

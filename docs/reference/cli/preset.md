@@ -115,7 +115,7 @@ The command displays four sections:
 | Abstention enabled | Whether abstention detection is on |
 | Sufficiency enabled | Whether sufficiency checking is on |
 | Embedding check enabled | Whether embedding similarity check is on |
-| Deep judgment enabled | Whether deep judgment is on |
+| Deep judgment mode | The template deep-judgment mode (`disabled`/`reasoning_only`/`full`) |
 
 ### Name Resolution
 

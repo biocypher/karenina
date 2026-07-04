@@ -49,6 +49,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 |-------|------|---------|-------------|
 | `use_full_trace_for_template` | `bool` | `False` | If `True`, the judge sees the full agent trace when parsing the template and when running the abstention/sufficiency checks. If `False`, the judge sees only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
 | `use_full_trace_for_rubric` | `bool` | `True` | If `True`, pass full agent trace to rubric evaluation. If `False`, extract only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
+| `allow_partial_trace_scoring` | `bool` | `True` | If `True`, template parsing and scoring still run on responses that were truncated by an answer-generation timeout. Timeout metadata is preserved separately so partial scores do not hide agent failures. If `False`, truncated traces are not scored. |
 
 !!! note
     If `use_full_trace_for_template=False` and the trace doesn't end with an AI message, the trace validation stage will fail with an error.
@@ -88,7 +89,7 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 | `max_concurrent_requests` | `int \| None` | `None` | `KARENINA_MAX_CONCURRENT_LLM_REQUESTS` | Global cap on concurrent LLM requests across all workers. `None` means no global limit (concurrency bounded by `async_max_workers` only). Set to 16-64 for self-hosted inference servers (vLLM, SGLang). |
 | `task_ordering` | `Literal["auto", "prefix_cache", "distribute_answerers", "generation_order", "random"]` | `"auto"` | — | Task queue ordering strategy. `auto` picks `distribute_answerers` when answerers span more than one identity, else `prefix_cache`. `prefix_cache` groups by answering model for KV cache hits. `distribute_answerers` round-robins across answerer identities. `generation_order` preserves template-first loop order. `random` shuffles tasks. |
 | `answerer_concurrency_limits` | `int \| dict[str, int] \| None` | `None` | — | Per-answerer concurrency cap, enforced at task start. Pass an `int` to apply the same cap to every entry in `answering_models` (keyed by `ModelConfig.id`). Pass a `dict` keyed by `ModelConfig.id` for per-model caps; answerers not in the dict run uncapped. `None` disables caps. |
-| `request_timeout` | `float \| None` | `120.0` | — | HTTP request timeout (seconds) for all LLM calls in the pipeline (answer generation, parsing, rubric evaluation, guardrail calls). Set to `None` to use provider SDK defaults. |
+| `request_timeout` | `float` | `120.0` | — | HTTP request timeout (seconds) for all LLM calls in the pipeline (answer generation, parsing, rubric evaluation, guardrail calls). Must be a number: `None` is rejected. The per-model `ModelConfig.request_timeout` is `float \| None`, where `None` means the provider SDK default. |
 
 Both sequential and parallel execution modes collect per-question errors without aborting. If any questions fail (or the parallel batch exceeds its timeout), `VerificationBatchError` is raised with `partial_results` and `errors` attributes so callers can recover partial progress. See [Basic Verification: Error Handling](../../notebooks/running-verification/basic-verification.ipynb) for usage examples.
 
@@ -164,6 +165,7 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `agentic_parsing` | `bool` | `False` | Enable agentic parsing (Stage 7b). The judge uses tools to independently verify artifacts before extracting structured data. Requires a parsing model with `agent_tier='deep_agent'`. |
+| `agentic_parsing_trigger` | `Literal["always", "dynamic"]` | `"always"` | When `agentic_parsing=True`, controls whether Stage 7b always runs the agentic investigation. `"always"` runs it unconditionally. `"dynamic"` first tries a final-message parse and escalates to agentic investigation only when the response is insufficient or malformed. `"dynamic"` requires `agentic_parsing=True`. |
 | `agentic_judge_context` | `Literal["workspace_only", "trace_and_workspace", "trace_only"]` | `"workspace_only"` | What context the investigation agent receives. `workspace_only`: question + workspace path. `trace_and_workspace`: answering agent trace + workspace path. `trace_only`: equivalent to classical Stage 7a parsing. |
 | `agentic_parsing_max_turns` | `int` | `15` | Max turns for the investigation agent. Must be >= 1. |
 | `agentic_parsing_timeout` | `float` | `120.0` | Timeout in seconds for the investigation agent. Must be >= 0.0. |
@@ -178,6 +180,9 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 |-------|------|---------|-------------|
 | `workspace_copy` | `bool` | `True` | When `True`, pre-existing question workspaces are copied to a sibling working directory before execution, protecting the original for re-runs. When `False`, the pipeline works directly in the original directory (destructive). |
 | `workspace_cleanup` | `bool` | `True` | Whether to delete working copies after the run. Only applies to copied or auto-created workspaces, never to original source directories. |
+| `workspace_output_mode` | `Literal["none", "full", "produced"]` | `"none"` | Whether to capture runtime workspaces as sidecar artifacts. `"none"`: no capture. `"full"`: copy the complete final workspace. `"produced"`: copy only new or content-modified files relative to the prepared workspace baseline. |
+| `workspace_output_dir` | `Path \| None` | `None` | Directory where captured workspaces are written when `workspace_output_mode` is not `"none"`. |
+| `workspace_output_exclude_patterns` | `list[str]` | `[]` | Additional fnmatch-style exclude patterns applied during workspace capture. |
 
 The `workspace_root` directory is configured on `Benchmark`, not on `VerificationConfig`.
 

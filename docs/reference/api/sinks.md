@@ -1,6 +1,6 @@
 # Result Sinks
 
-`ResultSink` is the Protocol that streams [`VerificationResult`](../../core_concepts/results-and-scoring.md) instances out of the executor as a verification run progresses. Sinks are the single extension point for progressive save, crash recovery, incremental database writes, and any other per-result persistence the caller may need. Karenina ships four implementations covering the common cases.
+`ResultSink` is the Protocol that streams [`VerificationResult`](../../core_concepts/results-and-scoring.md) instances out of the executor as a verification run progresses. Sinks are the single extension point for progressive save, crash recovery, incremental database writes, and any other per-result persistence the caller may need. Karenina ships four implementations covering the common cases, plus `AgenticProgressiveFileSink`, a `ProgressiveFileSink` subclass specialized for agentic workspace benchmarks (see section 3.5).
 
 For the user-facing tutorial covering `--progressive-save`, `--resume`, `verify-status`, and the typical CLI flow, see [Progressive Save and Resume](../../notebooks/running-verification/progressive-save.ipynb). For how sinks interact with `extend_template` / `extend_rubric`, see [Extending Runs](../../core_concepts/extending-runs.md). For inspecting `.state` sidecars from the terminal, see the [`verify-status` CLI reference](../cli/verify-status.md).
 
@@ -133,6 +133,31 @@ sink = InMemorySink()
 
 `InMemorySink` implements `iter_results`, `seed_prior_results`, and the full Protocol; it never touches disk.
 
+### 3.5 `AgenticProgressiveFileSink`
+
+A `ProgressiveFileSink` subclass used by agentic workspace benchmarks. It keeps the standard JSONL plus `.state` resume machinery, and adds two behaviors on top:
+
+- **Readable trace sidecars.** For every completed result it writes a human-readable trace file under `trace_output_dir`, laid out per question (`trace_layout="question"`) or per result (`trace_layout="result"`).
+- **Parser-failure retry semantics.** A parser-stage failure that still carries a usable answer trace is treated as a resumable checkpoint rather than a terminal result. Those rows are exposed through `iter_results` for answer-cache hydration but excluded from `completed_triples()`, so a resume retries only the parsing step instead of regenerating the answer. Correspondingly, `on_finalize(all_complete=True)` writes the final export and deletes the sidecars only when no retryable parser failures remain. Otherwise it retains state for resume.
+
+```python
+from pathlib import Path
+from karenina.benchmark.verification.sinks import AgenticProgressiveFileSink
+
+sink = AgenticProgressiveFileSink(
+    output_path=Path("results.json"),
+    config=verification_config,
+    benchmark_path="checkpoint.jsonld",
+    global_rubric=None,
+    trace_output_dir=Path("traces/"),      # where readable trace sidecars go
+    trace_layout="question",               # "question" or "result"
+    keep_progress_sidecars=False,          # keep JSONL/.state after a full export
+    write_partial_export=True,             # write a partial export when resuming
+)
+```
+
+`load_for_resume` accepts the same extra keyword arguments so a resumed agentic run keeps its trace-sidecar configuration.
+
 ## 4. JSONL Line Format
 
 Each line in `<output>.results.jsonl` is the output of `VerificationResult.model_dump_json()`: a single self-contained JSON object with no surrounding array or wrapper. Append is atomic (`write` + `flush` + `os.fsync`) but a crash mid-write can leave a partial trailing line. `_read_jsonl_results` tolerates that: malformed final lines are logged and skipped, the rest of the file is still loadable.
@@ -157,18 +182,18 @@ These helpers underlie the file-sidecar machinery and are useful when you want t
 
 ### `inspect_state_file(state_path: Path) -> ProgressiveJobStatus`
 
-Read-only view of a `.state` file. Returns a `ProgressiveJobStatus` dataclass with `total_tasks`, `completed_count`, `pending_count`, `completed_task_ids`, `pending_task_ids`, `created_at`, `last_updated_at`, `start_time`, `answering_models`, `parsing_models`, `replicate_count`, `tmp_file_exists`, `tmp_file_size`, plus computed `progress_percent`, `elapsed_time`, `completed_question_ids`, `pending_question_ids`. Used by [`karenina verify-status`](../cli/verify-status.md).
+Read-only view of a `.state` file. Returns a `ProgressiveJobStatus` dataclass with `state_file_path`, `output_path`, `benchmark_path`, `total_tasks`, `completed_count`, `pending_count`, `completed_task_ids`, `pending_task_ids`, `created_at`, `last_updated_at`, `start_time`, `answering_models`, `parsing_models`, `replicate_count`, `tmp_file_exists`, `tmp_file_size`, plus computed `progress_percent`, `elapsed_time`, `completed_question_ids`, `pending_question_ids`. Used by [`karenina verify-status`](../cli/verify-status.md).
 
 ### `TaskIdentifier`
 
 Dataclass that maps between the four-tuple the executor uses and the tab-separated string keys persisted in the `.state` manifest:
 
-| Class method | Returns | Purpose |
-|--------------|---------|---------|
-| `from_result(result: VerificationResult)` | `TaskIdentifier` | Build the identifier from a completed result. For scenario turn results (`metadata.scenario_id` non-`None`), slot 0 holds the scenario id so every turn in the same combo shares one task key. For QA results it holds `metadata.question_id`. |
-| `from_task_dict(task: dict)` | `TaskIdentifier` | Build the identifier from a `generate_task_queue` dict. |
-| `from_key(key: str)` | `TaskIdentifier` | Parse a tab-separated key string back into the dataclass; raises `ValueError` on malformed input. |
-| `to_key()` | `str` | Serialize to the canonical tab-separated form used in `.state` manifests. |
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `from_result(result: VerificationResult)` (classmethod) | `TaskIdentifier` | Build the identifier from a completed result. For scenario turn results (`metadata.scenario_id` non-`None`), slot 0 holds the scenario id so every turn in the same combo shares one task key. For QA results it holds `metadata.question_id`. |
+| `from_task_dict(task: dict)` (classmethod) | `TaskIdentifier` | Build the identifier from a `generate_task_queue` dict. |
+| `from_key(key: str)` (classmethod) | `TaskIdentifier` | Parse a tab-separated key string back into the dataclass; raises `ValueError` on malformed input. |
+| `to_key()` (instance method) | `str` | Serialize to the canonical tab-separated form used in `.state` manifests. |
 
 The four-tuple shape persisted by `completed_triples()` and consumed by `VerificationConfig.skip_triples` is:
 

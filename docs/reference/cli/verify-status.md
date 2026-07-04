@@ -36,7 +36,7 @@ Without any flags, the command displays a Rich-formatted summary with five secti
 2. **Progress bar** — Visual completion indicator with percentage and counts
 3. **Summary table** — State file path, output path, benchmark path, completed/pending/total counts, timing
 4. **Configuration table** — Answering models, parsing models, replicate count
-5. **Files table** — Whether `.results.jsonl` and `.state` sidecar files exist, with file sizes (v1-format runs report a `.tmp` file instead)
+5. **Files table** — The results-file row is always labeled `Results file (.tmp)` and shows an exists/missing status with a size (for v2 runs the size reported is that of the `.results.jsonl` sidecar, even though the label reads `.tmp`). The state-file row shows only `exists` without a size.
 
 If the job is incomplete, a resume hint is shown:
 
@@ -113,8 +113,10 @@ The `.state` file is a JSON file created by `karenina verify --progressive-save`
 | `config` | `object` | Full VerificationConfig as JSON |
 | `task_manifest` | `array` | All task IDs for the job |
 | `completed_task_ids` | `array` | Task IDs that have finished |
+| `failed_task_ids` | `array` | Task IDs that failed |
 | `total_tasks` | `integer` | Total number of tasks |
 | `completed_count` | `integer` | Number of completed tasks |
+| `failed_count` | `integer` | Number of failed tasks |
 | `start_time` | `float` | Unix timestamp when the job started |
 
 The `.state` file is created alongside the output file (e.g., `results.json.state` for `results.json`).

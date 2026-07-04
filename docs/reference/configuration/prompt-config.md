@@ -37,23 +37,25 @@ The 7 fields fall into two categories:
 
 **Fallback fields** (3) — each covers multiple sub-tasks within a pipeline stage:
 
-- `rubric_evaluation` — covers 7 rubric evaluation sub-tasks
-- `agentic_parsing` — covers 2 agentic template parsing sub-tasks
-- `deep_judgment` — covers 7 deep judgment sub-tasks
+- `rubric_evaluation` — covers 9 rubric evaluation sub-tasks
+- `agentic_parsing` — covers 3 agentic template parsing sub-tasks
+- `deep_judgment` — covers 8 deep judgment sub-tasks
 
 ### Rubric Evaluation Sub-Tasks
 
-The `rubric_evaluation` field serves as a fallback for these 7 `PromptTask` values:
+The `rubric_evaluation` field serves as a fallback for these 9 `PromptTask` values:
 
 | Sub-Task | Description |
 |----------|-------------|
 | `rubric_llm_trait_batch` | Evaluates all boolean/score LLM rubric traits in a single batched call |
 | `rubric_llm_trait_single` | Evaluates a single boolean/score LLM rubric trait sequentially |
+| `rubric_llm_trait_template` | Evaluates a template-kind LLM rubric trait: the LLM fills a Pydantic schema from the response |
 | `rubric_literal_trait_batch` | Evaluates all literal (categorical) rubric traits in a single batched call |
 | `rubric_literal_trait_single` | Evaluates a single literal (categorical) rubric trait sequentially |
 | `rubric_metric_trait` | Evaluates a metric rubric trait via confusion matrix extraction |
 | `rubric_agentic_trait_investigation` | Agent investigates response/workspace to evaluate an agentic rubric trait |
 | `rubric_agentic_trait_extraction` | Extracts the final score from an agentic rubric investigation trace |
+| `rubric_dynamic_presence_check` | Batch presence check for dynamic rubric trait concepts |
 
 Which sub-tasks run depends on the `rubric_evaluation_strategy` setting in `VerificationConfig`:
 
@@ -62,24 +64,26 @@ Which sub-tasks run depends on the `rubric_evaluation_strategy` setting in `Veri
 
 ### Agentic Parsing Sub-Tasks
 
-The `agentic_parsing` field serves as a fallback for these 2 `PromptTask` values:
+The `agentic_parsing` field serves as a fallback for these 3 `PromptTask` values:
 
 | Sub-Task | Description |
 |----------|-------------|
 | `agentic_parsing_investigation` | Investigation agent examines workspace/trace to evaluate answer template attributes |
 | `agentic_parsing_extraction` | Extracts structured answer from the agentic investigation trace |
+| `agentic_parsing_decision` | Combined dynamic parsing decision and direct extraction call |
 
 These sub-tasks run only when `agentic_parsing=True` on `VerificationConfig`. The investigation step uses an `AgentPort` with tool access to verify workspace artifacts; the extraction step uses a `ParserPort` to produce the final structured answer.
 
 ### Deep Judgment Sub-Tasks
 
-The `deep_judgment` field serves as a fallback for these 7 `PromptTask` values:
+The `deep_judgment` field serves as a fallback for these 8 `PromptTask` values:
 
 | Sub-Task | Flow | Description |
 |----------|------|-------------|
 | `dj_template_excerpt_extraction` | Template | Extracts verbatim excerpts from the response per template attribute |
 | `dj_template_hallucination` | Template | Assesses hallucination risk for extracted excerpts via web search |
 | `dj_template_reasoning` | Template | Generates reasoning mapping excerpts to template attributes |
+| `dj_template_reasoning_only` | Template | Generates per-attribute reasoning directly from the response with no excerpts |
 | `dj_rubric_excerpt_extraction` | Rubric | Extracts excerpts supporting deep-judgment-enabled rubric traits |
 | `dj_rubric_hallucination` | Rubric | Assesses per-excerpt hallucination risk using search results |
 | `dj_rubric_reasoning` | Rubric | Generates reasoning explaining trait evaluation based on excerpts |
@@ -107,7 +111,7 @@ get_for_task("unknown_task")                  → None                      (no 
 
 ## All PromptTask Values
 
-The complete list of 21 `PromptTask` enum values recognized by the pipeline, grouped by the PromptConfig field that covers them:
+The complete list of 24 `PromptTask` enum values recognized by the pipeline, grouped by the PromptConfig field that covers them:
 
 | PromptConfig Field | PromptTask Values |
 |--------------------|-------------------|
@@ -115,9 +119,9 @@ The complete list of 21 `PromptTask` enum values recognized by the pipeline, gro
 | `parsing` | `parsing` |
 | `abstention_detection` | `abstention_detection` |
 | `sufficiency_detection` | `sufficiency_detection` |
-| `rubric_evaluation` | `rubric_llm_trait_batch`, `rubric_llm_trait_single`, `rubric_literal_trait_batch`, `rubric_literal_trait_single`, `rubric_metric_trait`, `rubric_agentic_trait_investigation`, `rubric_agentic_trait_extraction` |
-| `agentic_parsing` | `agentic_parsing_investigation`, `agentic_parsing_extraction` |
-| `deep_judgment` | `dj_template_excerpt_extraction`, `dj_template_hallucination`, `dj_template_reasoning`, `dj_rubric_excerpt_extraction`, `dj_rubric_hallucination`, `dj_rubric_reasoning`, `dj_rubric_score_extraction` |
+| `rubric_evaluation` | `rubric_llm_trait_batch`, `rubric_llm_trait_single`, `rubric_llm_trait_template`, `rubric_literal_trait_batch`, `rubric_literal_trait_single`, `rubric_metric_trait`, `rubric_agentic_trait_investigation`, `rubric_agentic_trait_extraction`, `rubric_dynamic_presence_check` |
+| `agentic_parsing` | `agentic_parsing_investigation`, `agentic_parsing_extraction`, `agentic_parsing_decision` |
+| `deep_judgment` | `dj_template_excerpt_extraction`, `dj_template_hallucination`, `dj_template_reasoning`, `dj_template_reasoning_only`, `dj_rubric_excerpt_extraction`, `dj_rubric_hallucination`, `dj_rubric_reasoning`, `dj_rubric_score_extraction` |
 
 **Source:** `karenina.benchmark.verification.prompts.task_types.PromptTask`
 

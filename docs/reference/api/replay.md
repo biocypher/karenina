@@ -58,6 +58,8 @@ The captured payload itself. Pydantic v2 with `extra="forbid"`.
 | `raw_trace` | `str` | Captured response text. Always present. May be empty. |
 | `parsed_answer_fields` | `dict \| None` | Pre-parsed Answer fields. When present, the parsing judge is bypassed entirely. |
 | `trace_messages` | `list[dict] \| None` | Captured agent trace as `Message.to_dict()` outputs. Rehydrated via `hydrate_trace_messages` before being threaded into downstream stages. |
+| `verify_result` | `bool \| None` | Captured template verdict. Enables verdict-only replay for rows whose raw trace cannot be reparsed. |
+| `usage_metadata` | `dict \| None` | Captured usage summary, rehydrated into the replayed result so token accounting survives replay. |
 | `agent_metrics` | `dict \| None` | Per-turn agent telemetry. The replay path only consumes `limit_reached`, which propagates to `recursion_limit_reached` and feeds the recursion-limit autofail stage. |
 | `captured_model_id` | `str \| None` | Canonical display string of the model that produced the entry. Provenance only. |
 | `captured_at` | `str \| None` | ISO timestamp of capture. Provenance only. |
@@ -101,7 +103,7 @@ Keyed store of `(key, entry)` pairs with specificity-based lookup. The `entries`
 |---|---|---|
 | `save` | `(path: str \| Path) -> None` | Serialize to JSON; thin wrapper around `dump`. |
 
-The JSON file is a versioned wrapper around a list of `(key, entry)` pairs sorted by key for diff-friendliness. Writes go through tempfile + `os.replace` rename; partial writes never reach the visible file.
+The JSON file is a versioned wrapper around a list of `(key, entry)` pairs emitted in store order (the order in which they were registered). Diff-friendliness comes from `json.dump(..., sort_keys=True, indent=2)`, which sorts the keys inside each JSON object and pretty-prints, not from sorting the entries list by key. Writes go through tempfile plus `os.replace` rename, so partial writes never reach the visible file.
 
 ## 4. Capture Entry Points
 
@@ -148,7 +150,7 @@ capture_from_scenario_result(
 ) -> ReplayStore
 ```
 
-Walk a single `ScenarioExecutionResult`. `answering_model_id` is required because a `ScenarioExecutionResult` does not carry per-turn model identity. `scenario_id` defaults to the scenario's `name` field. `nodes` is an optional allow-list of node ids.
+Walk a single `ScenarioExecutionResult`. `answering_model_id` is required because a `ScenarioExecutionResult` does not carry per-turn model identity. `scenario_id` defaults to `scenario_result.scenario_id` when not supplied. `nodes` is an optional allow-list of node ids.
 
 ## 5. Persistence Free Functions
 
@@ -167,8 +169,8 @@ load(path: str | Path, *, miss_policy: ReplayMissPolicy | None = None) -> Replay
 
 | Method | Signature | Behavior |
 |---|---|---|
-| `__init__` | `(benchmark: Benchmark, *, config: VerificationConfig, miss_policy: ReplayMissPolicy = "fall_through")` | Bind the builder to a benchmark and a default config (used for projections that omit `config=`). |
-| `add_qa` | `(qa_store: ReplayStore, *, target_nodes: list[str], scenarios: list[str] \| None = None, config: VerificationConfig \| None = None) -> None` | Stage a projection. Requires `qa_store` captured with `replicate_selector="first"` or `"last"` (which emit `replicate=None`); `"all"` is rejected. |
+| `__init__` | `(benchmark: Benchmark, *, config: VerificationConfig, miss_policy: ReplayMissPolicy = "strict")` | Bind the builder to a benchmark and a default config (used for projections that omit `config=`). `miss_policy` is written onto the produced `ReplayStore`, so the default raises `ReplayMissError` on a miss rather than falling through. |
+| `add_qa` | `(qa_store: ReplayStore, *, target_nodes: list[str], scenarios: list[str] \| None = None, config: VerificationConfig \| None = None) -> ScenarioReplayBuilder` | Stage a projection and return `self` for chaining. Requires `qa_store` captured with `replicate_selector="first"` or `"last"` (which emit `replicate=None`); `"all"` is rejected. |
 | `validate` | `() -> ProjectionReport` | Walk all staged projections without mutation. |
 | `build` | `(*, strict: bool = False) -> ReplayStore` | Run `validate`, then register matched entries into a fresh store. `strict=True` raises `ProjectionError` on any unmatched or duplicate target. `strict=False` emits a warning and returns whatever it matched. |
 

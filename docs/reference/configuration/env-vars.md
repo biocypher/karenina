@@ -15,6 +15,8 @@ This is the exhaustive reference for every environment variable recognized by ka
 |----------|------|---------|-------------|
 | `OPENAI_API_KEY` | `str` | — | OpenAI API key. Required when using the `langchain` interface with OpenAI models. |
 | `ANTHROPIC_API_KEY` | `str` | — | Anthropic API key. Required when using `claude_agent_sdk`, `claude_tool`, or `langchain` with Anthropic models. Loaded via `dotenv` in Claude adapters. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `str` | — | Claude subscription OAuth token (created by `claude setup-token`). When neither `ANTHROPIC_API_KEY` nor a model-level `anthropic_api_key` is configured, the `claude_agent_sdk` adapter forwards this from the host environment to the SDK subprocess, so the agent can authenticate through a Claude subscription instead of an API key. |
+| `ANTHROPIC_AUTH_TOKEN` | `str` | — | Alternative Anthropic auth token forwarded alongside `CLAUDE_CODE_OAUTH_TOKEN` by the `claude_agent_sdk` adapter when no API key is configured. |
 | `GOOGLE_API_KEY` | `str` | — | Google AI API key. Required when using the `langchain` interface with Google models (e.g., `google_genai` provider). |
 | `OPENROUTER_API_KEY` | `str` | — | OpenRouter API key. Required when using the `openrouter` interface. Read via `os.environ.get()` in the OpenRouter model factory. |
 | `TAVILY_API_KEY` | `str` | — | Tavily search API key. Required when deep judgment web search is enabled (`search_enabled=True`). Used by the Tavily search utility. |
@@ -49,7 +51,7 @@ This is the exhaustive reference for every environment variable recognized by ka
 |----------|------|---------|-------------|
 | `AUTOSAVE_DATABASE` | `bool` | `true` | Automatically save verification results to the SQLite database after each run. Disable to keep results in-memory only. |
 | `KARENINA_EXPOSE_GROUND_TRUTH` | `bool` | `false` | Include ground truth values in the judge LLM prompt during template evaluation. **Debugging only** — enabling this biases the judge and invalidates benchmark results. |
-| `KARENINA_TRACE_TRUNCATION_THRESHOLD` | `int` | (module default) | Maximum number of characters retained per trace when materializing failure cases for error analysis or scenario trace materialization. Read by `benchmark/error_analysis/case_renderer.py`, `benchmark/error_analysis/materializer.py`, and `scenario/trace_materialization.py`. The `analyze-errors` CLI accepts `--max-trace-chars` as an explicit override. Invalid values fall back to the module default. |
+| `KARENINA_TRACE_TRUNCATION_THRESHOLD` | `int` | (module default) | Maximum number of characters retained per trace when materializing failure cases for error analysis or scenario trace materialization. Read by `benchmark/error_analysis/case_renderer.py` and `scenario/trace_materialization.py`. (`benchmark/error_analysis/materializer.py` forwards a `max_trace_chars` override but does not read the env var itself: the actual read happens in `case_renderer.py`.) The `analyze-errors` CLI accepts `--max-trace-chars` as an explicit override. Invalid values fall back to the module default. |
 | `CLAUDE_CONFIG_DIR` | `str` | — | Forwarded by the `claude_agent_sdk` agent adapter to the spawned Claude CLI subprocess. When set on the parent process, the child inherits the same Claude config directory; otherwise the SDK falls back to its own resolution. |
 
 ---
@@ -58,10 +60,12 @@ This is the exhaustive reference for every environment variable recognized by ka
 
 ### Boolean Variables
 
-Boolean environment variables recognize these truthy strings (case-insensitive):
+There is no single shared boolean parser. The exact truthy set depends on the read site (all comparisons are case-insensitive):
 
-- **True**: `true`, `1`, `yes`, `on`
-- **False**: anything else (including `false`, `0`, `no`, `off`, or unset)
+- **Most variables** (`EMBEDDING_CHECK` and `KARENINA_ASYNC_ENABLED` as read by `VerificationConfig.__init__()`, and `AUTOSAVE_DATABASE`) accept `true`, `1`, `yes`.
+- **`EMBEDDING_CHECK`** (via the embedding-check utility read) and **`KARENINA_EXPOSE_GROUND_TRUTH`** additionally accept `on`.
+- **`KARENINA_ASYNC_ENABLED`** as read by `batch_runner` accepts exactly `true` (nothing else counts as true at that read point).
+- **False**: anything not in the accepted set (including `false`, `0`, `no`, `off`, or unset).
 
 ### VerificationConfig Integration
 
@@ -96,6 +100,8 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 |----------|----------------------|
 | `OPENAI_API_KEY` | LangChain/LiteLLM (via provider SDK) |
 | `ANTHROPIC_API_KEY` | `adapters/claude_tool/`, `adapters/claude_agent_sdk/` (via dotenv) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `adapters/claude_agent_sdk/auth.py`, `adapters/claude_agent_sdk/llm.py`, `adapters/claude_agent_sdk/agent.py` |
+| `ANTHROPIC_AUTH_TOKEN` | `adapters/claude_agent_sdk/auth.py`, `adapters/claude_agent_sdk/llm.py`, `adapters/claude_agent_sdk/agent.py` |
 | `GOOGLE_API_KEY` | LangChain/LiteLLM (via provider SDK) |
 | `OPENROUTER_API_KEY` | `adapters/langchain/models.py` |
 | `TAVILY_API_KEY` | `benchmark/verification/utils/search_tavily.py` |
@@ -110,7 +116,7 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 | `MCP_PRESETS_DIR` | `cli/serve.py` |
 | `AUTOSAVE_DATABASE` | `benchmark/verification/batch_runner.py` |
 | `KARENINA_EXPOSE_GROUND_TRUTH` | `benchmark/verification/evaluators/template/evaluator.py` |
-| `KARENINA_TRACE_TRUNCATION_THRESHOLD` | `benchmark/error_analysis/case_renderer.py`, `benchmark/error_analysis/materializer.py`, `scenario/trace_materialization.py` |
+| `KARENINA_TRACE_TRUNCATION_THRESHOLD` | `benchmark/error_analysis/case_renderer.py`, `scenario/trace_materialization.py` |
 | `CLAUDE_CONFIG_DIR` | `adapters/claude_agent_sdk/agent.py` |
 
 ---
@@ -119,12 +125,12 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 
 | Category | Count |
 |----------|-------|
-| API Keys | 5 |
+| API Keys | 7 |
 | Embedding Check | 3 |
 | Async Execution | 3 |
 | Path Configuration | 3 |
 | Other Settings | 4 |
-| **Total** | **18** |
+| **Total** | **20** |
 
 ---
 

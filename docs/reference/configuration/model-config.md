@@ -28,7 +28,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `temperature` | `float` | `0.1` | Sampling temperature. Lower values (0.0–0.3) produce more deterministic output; higher values (0.7–1.0) increase creativity. |
-| `max_tokens` | `int` | `8192` | Maximum tokens for model response. |
+| `max_tokens` | `int` | `16384` | Maximum tokens for model response. |
 | `system_prompt` | `str \| None` | `None` | Custom system prompt. When `None`, a default is applied based on context: answering models get an expert assistant prompt, parsing models get a validation assistant prompt. |
 | `max_retries` | `int` | `2` | Maximum retry attempts for model calls during template generation. |
 
@@ -130,7 +130,7 @@ Automatically summarizes conversation history when approaching token limits.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `True` | Enable automatic summarization (default: `True` for MCP agents). |
-| `model` | `str \| None` | `None` | Model for summarization (defaults to a lightweight model like claude-haiku-4-5). |
+| `model` | `str \| None` | `None` | Model for summarization. When unset, the middleware reuses the agent's own base model. |
 | `trigger_fraction` | `float` | `0.8` | Fraction of context window that triggers summarization (0.0–1.0). |
 | `trigger_tokens` | `int \| None` | `None` | Number of tokens that triggers summarization (overrides `trigger_fraction`). |
 | `keep_messages` | `int` | `20` | Number of recent messages to preserve after summarization. |
@@ -176,7 +176,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific API keys, custom parameters, or provider-specific settings not covered by other fields. |
+| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific API keys, custom parameters, or provider-specific settings not covered by other fields. Recognized keys include the `agent_runtime` sub-dict that configures [sandboxed agent runtimes](../../notebooks/core_concepts/agentic-evaluation.ipynb#10-sandboxed-runtime-backends) (`backend`, `access_mode`, `container_runtime`, `container_image`, `container_network`, `container_add_hosts`, `sandbox_enabled`) for the `claude_agent_sdk` and `langchain_deep_agents` interfaces, `endpoint_base_url_mode` (`"auto_v1"` / `"raw"`) for the `openai_endpoint` and `langchain_deep_agents` interfaces, `claude_sdk_parser_openai_base_url` (explicit OpenAI-compatible parser endpoint for `claude_agent_sdk`), and `effort` (extended-thinking tier) for Anthropic `langchain_deep_agents` models. See [Available Adapters](../../advanced-adapters/available-adapters.md). |
 
 ---
 

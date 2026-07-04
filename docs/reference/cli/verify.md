@@ -104,6 +104,24 @@ Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` d
 | `--no-async` | flag | `False` | Disable async execution (run sequentially) |
 | `--async-workers` | `INTEGER` | `2` or `KARENINA_ASYNC_MAX_WORKERS` | Number of async workers |
 
+### Workspace Capture
+
+For agentic and workspace benchmarks, `verify` can save each run's final [workspace](../../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) as a sidecar artifact next to the results.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--workspace-output-mode` | `TEXT` | `none` | What to capture: `none` (nothing), `full` (the complete final workspace), or `produced` (only files that are new or whose content changed relative to the prepared workspace baseline). |
+| `--workspace-output-dir` | `PATH` | — | Directory where captured workspaces are written. When `--output` is a `.json` file and this is omitted, it defaults to a `workspaces/` directory beside the output file. |
+| `--workspace-output-exclude` | `TEXT` | — | Extra fnmatch-style pattern to exclude from capture, added on top of the built-in excludes (`.venv/`, `venv/`, `__pycache__/`, and other cache directories). Repeatable. |
+
+When `--workspace-output-mode` is not `none`, a destination must be resolvable: either pass `--workspace-output-dir`, or write JSON output with `--output results.json` (so the default `workspaces/` directory applies). Otherwise the command exits with an error:
+
+```
+--workspace-output-dir is required when workspace capture is enabled without JSON output
+```
+
+Inside the output directory, each captured run is written to a `<question_id>__<result_id>/` folder, indexed by a `manifest.jsonl` file that is compacted into `manifest.json` when the run completes. Progressive agentic runs stream results through [`AgenticProgressiveFileSink`](../api/sinks.md). See [Agentic Evaluation](../../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) for what a workspace is and the `workspace_output_*` fields in the [VerificationConfig reference](../configuration/verification-config.md).
+
 ### Manual Traces
 
 | Option | Type | Default | Description |
@@ -135,13 +153,13 @@ See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page fo
 | `1` | Error: no templates found, invalid arguments, benchmark load failure, partial batch failure (`VerificationBatchError`), or unexpected error |
 | `130` | Interrupted by user (Ctrl+C) |
 
-If some questions fail while others succeed, the executor raises `VerificationBatchError` with both `partial_results` and `errors`. The CLI catches this, writes any partial results to the output file, and exits with code `1`. In parallel mode, a timeout also triggers `VerificationBatchError`.
+If some questions fail while others succeed, the executor raises `VerificationBatchError` with both `partial_results` and `errors`. In parallel mode, a timeout also triggers `VerificationBatchError`. How this is handled depends on whether progressive save is active. With `--progressive-save`, `run_verification_batch` catches the error, keeps the partial results (the sidecar files are retained so `--resume` picks up only the failed triples), and the run finishes normally with exit code `0`. Without progressive save, the error reaches the generic handler, which prints an unexpected-error message and exits with code `1` without writing partial results.
 
 When interrupted with Ctrl+C during a progressive save run, the command prints a resume hint:
 
 ```
 Interrupted by user.
-To resume: karenina verify --resume results.json
+To resume: karenina verify --resume results.json.state
 ```
 
 ---
@@ -263,6 +281,15 @@ karenina verify checkpoint.jsonld --preset default.json \
 
 # Resume after interruption
 karenina verify --resume results.json.state
+```
+
+### Capture agent workspaces
+
+```bash
+karenina verify checkpoint.jsonld --preset agentic.json \
+  --output results.json \
+  --workspace-output-mode produced \
+  --workspace-output-exclude '*.log'
 ```
 
 ### Model comparison (multiple runs)

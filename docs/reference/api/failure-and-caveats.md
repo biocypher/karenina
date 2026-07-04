@@ -58,15 +58,16 @@ f = Failure(category=FailureCategory.PARSING, group="content", stage="parse_temp
 assert f.group is FailureGroup.SYSTEM  # not CONTENT
 ```
 
-## 5. Caveat: 3 Informational Flags
+## 5. Caveat: 4 Informational Flags
 
 | Enum | String | Trigger |
 |------|--------|---------|
 | `PARTIAL_CONTENT` | `partial_content` | The `RESPONSE_TIMEOUT_PARTIAL` artifact is set on the context (typically because a streaming response was cut short and the truncated payload was preserved in `metadata.partial_content`) |
 | `EMBEDDING_OVERRIDE` | `embedding_override` | The `EMBEDDING_OVERRIDE_APPLIED` artifact is set, meaning the [embedding-similarity fallback](../../core_concepts/verification-pipeline.md) flipped at least one field's verdict |
+| `PARSE_DECISION_MALFORMED` | `parse_decision_malformed` | The `PARSE_DECISION_MALFORMED` result field is set, meaning the Judge's structured parse decision came back malformed |
 | `RETRIES_USED` | `retries_used` | Any entry in the `RETRY_COUNTS` artifact has `used > 0` (a retry attempt was made for some `ErrorCategory`, regardless of whether the run ultimately passed) |
 
-Caveats are emitted by `collect_caveats(ctx)` in append-only order: `PARTIAL_CONTENT`, `EMBEDDING_OVERRIDE`, `RETRIES_USED`. The result is stored as `metadata.caveats: list[Caveat]`. In CSV exports and DataFrame columns the list is rendered as a comma-joined string of the enum values (empty string when no caveats fired).
+Caveats are emitted by `collect_caveats(ctx)` in append-only order: `PARTIAL_CONTENT`, `EMBEDDING_OVERRIDE`, `PARSE_DECISION_MALFORMED`, `RETRIES_USED`. The result is stored as `metadata.caveats: list[Caveat]`. In CSV exports and DataFrame columns the list is rendered as a comma-joined string of the enum values (empty string when no caveats fired).
 
 ## 6. Classifier Priority: 8 Rules
 
