@@ -62,6 +62,10 @@ ReplayEntry.model_fields.keys()
 
 `ReplayKey` is frozen, which means two keys with the same field values are equal and hashable. This is what makes the lookup index O(1) and the deduplication inside `register()` deterministic.
 
+### Thread-safety invariant
+
+`ReplayStore.register()` rebuilds the internal lookup indexes after every mutation and is *not* safe to call concurrently with pipeline execution. The contract is one-writer, many-readers: build (or load) the store before the run starts, then treat it as read-only while `Benchmark.run_verification` (or any other consumer) is active. `lookup()` and `has_any_for()` are safe to call concurrently. This is enforced by convention, not by an internal lock; calling `register()` mid-run can produce inconsistent index reads with no warning.
+
 ```python
 key_a = ReplayKey(question_id="urn:uuid:question-q1-12345678")
 key_b = ReplayKey(question_id="urn:uuid:question-q1-12345678")
@@ -125,7 +129,9 @@ The second group is the optional structured payload. Setting these makes the rep
 
 - `parsed_answer_fields`: a `dict` suitable for `Answer.model_validate(...)`. When present, the parsing judge is bypassed entirely and the parsed answer is hydrated directly from the dict.
 - `trace_messages`: a `list[dict]` of `Message.to_dict()` outputs, used to reconstruct an agent trace with tool calls.
-- `agent_metrics`: a `dict` carrying the per-turn agent telemetry. The only key the replay path actually consumes is `limit_reached` (used to populate `recursion_limit_reached` on the result).
+- `verify_result`: a `bool` (or `None`). The captured template verdict. When set, the replay path can reconstruct a verdict-only row whose `raw_trace` can no longer be reparsed, so the recorded pass or fail survives replay even when the [parsing judge](../../core_concepts/verification-pipeline/) would no longer reproduce it from the trace.
+- `usage_metadata`: a `dict` (or `None`). The captured token-usage summary from the original template result. On replay it is rehydrated into the replayed result so token accounting survives replay instead of coming back empty.
+- `agent_metrics`: a `dict` carrying the per-turn agent telemetry. The only key the replay path actually consumes is `limit_reached`. Setting `agent_metrics={"limit_reached": True}` on a captured entry is load-bearing: the replay short-circuit propagates the flag to `recursion_limit_reached` on the result, which feeds the pipeline's [recursion-limit autofail stage](../../core_concepts/verification-pipeline/) so the replayed turn is marked as a recursion-limited failure (not a successful response). This is how a captured agent run that hit its iteration cap stays a failure under replay rather than being silently re-graded as a clean answer. A captured `False` (or absence of the key) leaves the replayed turn as a normal success.
 
 The third group is provenance metadata, useful for diagnostics but not consumed by the pipeline.
 
@@ -177,7 +183,10 @@ hit.raw_trace, miss
 ```
 
 ```python
-store.has_any_for(question_id="urn:uuid:question-paris-abcdef12"), store.has_any_for(question_id="urn:uuid:question-not-here")
+(
+    store.has_any_for(question_id="urn:uuid:question-paris-abcdef12"),
+    store.has_any_for(question_id="urn:uuid:question-not-here"),
+)
 ```
 
 ### Miss policies: strict vs fall_through
@@ -280,15 +289,37 @@ len(captured.entries), len(hand.entries)
 
 The `capture_from_result_set` function takes several filters: `include_parsed` controls whether the parsed Pydantic instance is captured, `include_agent_traces` controls whether the structured trace messages are captured, `only_successful` drops turns whose pipeline did not produce a verifiable output (retry exhaustion, autofail, abstention, parsing or system errors), and `answering_model_ids` / `scenario_ids` are allow-lists by canonical model display string and scenario id respectively. Content failures (pipeline ran cleanly, answer did not pass `verify()`) are retained under `only_successful=True` because the captured trace and parsed fields faithfully describe what the model produced; pass `only_successful=False` to keep every turn regardless of failure state. The scenario filter only applies to scenario turns, so QA turns pass through unaffected when the filter is set.
 
+#### `replicate_selector` semantics
+
+The `replicate_selector` argument controls how multi-replicate runs collapse into key entries:
+
+| Value | Behavior | Resulting `ReplayKey.replicate` |
+|---|---|---|
+| `"all"` (default) | Emit one entry per replicate index. Every captured row produces a distinct entry keyed by its replicate. | The original integer (0, 1, 2, ...) |
+| `"first"` | Emit a single entry per `(question_id, answering_model_id)` pair, taking the first replicate observed. | `None` (wildcard across replicates) |
+| `"last"` | Emit a single entry per `(question_id, answering_model_id)` pair, taking the last replicate observed. | `None` (wildcard across replicates) |
+
+Use `"all"` when the prior run will be replayed at the same fan-out: each replicate replays its own captured trace. Use `"first"` or `"last"` when you want one canonical answer to serve every replicate of a downstream run, including a downstream run with a different `replicate_count`. Note that `ScenarioReplayBuilder` requires `"first"` or `"last"` (see [Replicate canonicalization](#replicate-canonicalization)).
+
 ```python
 from karenina.replay.capture import capture_from_scenario_result  # noqa: F401  # imported to show the alternative entry point for single scenarios
 ```
 
 For a single scenario you can use `capture_from_scenario_result(scenario_result, answering_model_id=..., ...)`, which is preferable when you only have one `ScenarioExecutionResult` rather than a full `VerificationResultSet`. The `answering_model_id` argument is required because a `ScenarioExecutionResult` does not carry per-turn model identity.
 
+## `ReplayMissPolicy` literal
+
+The `miss_policy` argument is a `typing.Literal["fall_through", "strict"]` exported as `ReplayMissPolicy` from `karenina.replay`. The same alias is the type of `ReplayStore(miss_policy=...)` and `karenina.replay.persistence.load(path, miss_policy=...)`. It is also the type used for the closely-related but distinct `VerificationConfig.replay_parse_on_hydration_mismatch` (see [Hydration mismatch policy](#hydration-mismatch-policy)). Outside of these knobs the literal does not appear in the public API.
+
+```python
+from karenina.replay import ReplayMissPolicy  # Literal["fall_through", "strict"]
+```
+
 ## Persistence
 
-Stores serialize to JSON via `save()` / `load()` (or the equivalent free functions `dump()` / `load()` in `karenina.replay.persistence`). The on-disk format is a versioned wrapper around a list of `(key, entry)` pairs and is sorted by key for diff-friendliness. Writes go through a tempfile + `os.replace` rename so a crash mid-write never leaves a half-written file in place.
+Stores serialize to JSON via `save()` / `load()` (or the equivalent free functions `dump()` / `load()` in `karenina.replay.persistence`). The methods are the canonical entry points: they exist precisely so library code does not need to import the persistence module. The free functions exist for symmetry (one importable pair that takes a store as the first argument) and for discoverability when reading code that pre-dates the methods. Both routes are bit-for-bit equivalent. Use the methods when you have a `ReplayStore` instance in hand, the free functions when the symmetry of `dump(store, path)` / `load(path)` reads more naturally in the calling context.
+
+The on-disk format is a versioned wrapper around a list of `(key, entry)` pairs and is sorted by key for diff-friendliness. Writes go through a tempfile + `os.replace` rename so a crash mid-write never leaves a half-written file in place.
 
 ```python
 import json
@@ -320,6 +351,18 @@ with tempfile.TemporaryDirectory() as tmpdir:
     strict = load_store(path, miss_policy="strict")
     print("loaded miss_policy:", strict.miss_policy)
 ```
+
+### Public constructors and capture entry points
+
+| Symbol | Purpose |
+|---|---|
+| `ReplayStore(miss_policy=..., entries=...)` | Default constructor. Takes the miss policy and an optional pre-built list of `(key, entry)` pairs. |
+| `ReplayStore.load(path, *, miss_policy=None)` | Load from a JSON file; symmetric with `save()`. |
+| `ReplayStore.from_manual_traces(manual_traces, benchmark, *, miss_policy="strict")` | Build a store from a legacy `ManualTraces` instance. Emits one wildcard entry per registered trace (`answering_model_id=None`, `visit_index=None`, `replicate=None`) so the resulting store matches any answering model. The classmethod `Benchmark.run_verification` uses internally when `interface="manual"` is in play with no explicit `replay_store`. Direct callers can use this to migrate off the manual interface incrementally: build the store via `from_manual_traces`, then drop `manual_traces` from the model config and pass `replay_store=` instead. |
+| `karenina.replay.capture_from_result_set(result_set, *, include_parsed=True, include_agent_traces=True, only_successful=True, answering_model_ids=None, scenario_ids=None, replicate_selector="all")` | Walk a `VerificationResultSet` and emit a populated store. |
+| `karenina.replay.capture_from_scenario_result(scenario_result, *, answering_model_id, scenario_id=None, nodes=None, include_parsed=True, include_agent_traces=True, replicate=None)` | Walk a single `ScenarioExecutionResult`. |
+
+The `VerificationResultSet.to_replay_store(**kwargs)` method on the result set is a forwarding wrapper around `capture_from_result_set` and accepts the same keyword arguments.
 
 ## Hybrid scenarios: canned setup, live followup
 
@@ -397,8 +440,9 @@ hybrid_store.register(
     ),
 )
 
-hybrid_store.has_any_for(scenario_id="cf-2-turn", scenario_node="setup", question_id=setup_qid), hybrid_store.has_any_for(
-    scenario_id="cf-2-turn", scenario_node="followup", question_id=setup_qid
+(
+    hybrid_store.has_any_for(scenario_id="cf-2-turn", scenario_node="setup", question_id=setup_qid),
+    hybrid_store.has_any_for(scenario_id="cf-2-turn", scenario_node="followup", question_id=setup_qid),
 )
 ```
 
@@ -441,6 +485,10 @@ revisit_store.register(
 ```
 
 If you only register a single entry with `visit_index=None`, the same trace replays on every visit. The choice belongs to whoever builds the store: per-visit entries are useful for testing branching dialogue under fixed-but-distinct model responses, while a single wildcard entry is useful for stress-testing routing logic against a constant turn payload.
+
+## Trace-message hydration
+
+`ReplayEntry.trace_messages` carries the captured agent trace as a `list[dict]`, where each dict is one `Message.to_dict()` output. When the replay short-circuit serves an entry that has `trace_messages`, the pipeline rehydrates them into port `Message` objects (see [Ports](../advanced-adapters/ports.md)) before threading them into downstream stages. The hydration path is `karenina.replay.ports_message_hydration.hydrate_trace_messages(raw: list[dict[str, Any]]) -> list[Message]`. Most users never call this directly; it is documented here only because it is the seam where captured agent traces become indistinguishable from live ones from the perspective of every stage after `GenerateAnswer`. If you build a `ReplayEntry` by hand and want to populate `trace_messages`, the dicts must round-trip through `Message.to_dict()` / `Message.from_dict()` to stay valid.
 
 ## Strict miss in the pipeline
 
@@ -504,7 +552,7 @@ from karenina.schemas.verification.config import VerificationConfig
 
 builder = ScenarioReplayBuilder(bench, config=cfg)
 builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1", "s2"])
-report = builder.validate()   # inspect before committing
+report = builder.validate()  # inspect before committing
 store = builder.build(strict=True)
 ```
 
@@ -523,11 +571,10 @@ no_mcp_qa = ReplayStore.load("artifacts/qa_no_mcp.json")
 mcp_qa = ReplayStore.load("artifacts/qa_mcp.json")
 
 builder = ScenarioReplayBuilder(bench, config=no_mcp_cfg)
-builder.add_qa(no_mcp_qa, target_nodes=["ask"],
-               scenarios=["syco_hard_casual_no_mcp", "syco_hard_authority_no_mcp"])
-builder.add_qa(mcp_qa, target_nodes=["ask"],
-               scenarios=["syco_hard_casual_mcp", "syco_hard_authority_mcp"],
-               config=mcp_cfg)
+builder.add_qa(no_mcp_qa, target_nodes=["ask"], scenarios=["syco_hard_casual_no_mcp", "syco_hard_authority_no_mcp"])
+builder.add_qa(
+    mcp_qa, target_nodes=["ask"], scenarios=["syco_hard_casual_mcp", "syco_hard_authority_mcp"], config=mcp_cfg
+)
 
 report = builder.validate()
 assert not report.unmatched_targets, report
@@ -542,6 +589,36 @@ result_set = bench.run_verification(config=replay_cfg)
 ### Inspecting a projection before committing
 
 `report.matched` is the number of targets that resolved to a QA entry. `report.unmatched_targets` classifies misses as `missing_scenario`, `missing_node`, or `no_qa_entry`. `report.orphan_qa_entries` classifies unused QA entries as `no_target_scenario` (no projection target referenced the question) or `model_id_never_requested` (question matched, but runtime model differed from capture). `report.duplicate_targets` lists `(scenario_id, node_id)` pairs hit by more than one projection; `build(strict=False)` applies last-projection-wins.
+
+#### `ProjectionReport` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `projected_keys` | `list[ReplayKey]` | One per resolved (scenario, node) target. Source of truth: `matched` is computed from this. |
+| `unmatched_targets` | `list[UnmatchedTarget]` | Targets that did not resolve to a QA entry. |
+| `orphan_qa_entries` | `list[OrphanEntry]` | QA entries no staged projection consumed. |
+| `duplicate_targets` | `list[tuple[str, str]]` | `(scenario_id, node_id)` pairs hit by more than one projection. |
+| `matched` (property) | `int` | `len(projected_keys)`. |
+
+#### `UnmatchedTarget` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `scenario_id` | `str` | Scenario name that was scanned. |
+| `node_id` | `str` | Node id requested as a projection target. |
+| `question_id` | `str \| None` | The node's question id when resolution reached that step; `None` for misses earlier in the pipeline (`missing_scenario`, `missing_node`). |
+| `answering_model_id` | `str \| None` | Effective runtime answering model id at the target; `None` for early misses. |
+| `reason` | `Literal["missing_scenario", "missing_node", "no_qa_entry"]` | Why resolution failed. |
+
+#### `OrphanEntry` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | `str` | Question id of the orphaned QA entry. |
+| `answering_model_id` | `str \| None` | Captured `ReplayKey.answering_model_id` (may be a wildcard `None`). |
+| `reason` | `Literal["no_target_scenario", "model_id_never_requested"]` | `no_target_scenario`: question_id is not attached to any node in any of the projection's declared scenarios. `model_id_never_requested`: question matched at least one targeted scenario / node, but the effective runtime model at every such target differed from the entry's answering_model_id. |
+
+All three are Pydantic v2 models with `extra="forbid"`; unknown fields raise at construction time.
 
 ## Hydration mismatch policy
 

@@ -33,16 +33,19 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from karenina.benchmark.benchmark_helpers import TemplateProgressEvent
+
 # Mock for generate_all_templates — returns pre-built template results
 _mock_template_results = {}
+
 
 def _mock_generate_all_templates(self, **kwargs):
     """Return mock template generation results."""
     results = {}
     for qid in self.get_question_ids():
-        if not self.get_template(qid) or kwargs.get("force_regenerate"):
+        if not self.has_template(qid) or kwargs.get("force_regenerate"):
             # Create a simple VerifiedField template for each question
-            template_code = '''from karenina.schemas.entities import BaseAnswer, BooleanMatch, VerifiedField
+            template_code = """from karenina.schemas.entities import BaseAnswer, BooleanMatch, VerifiedField
 
 
 class Answer(BaseAnswer):
@@ -51,15 +54,27 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
-'''
+"""
             self.add_answer_template(qid, template_code)
             results[qid] = {"success": True, "template_code": template_code, "skipped": False}
         else:
             results[qid] = {"success": True, "skipped": True}
         if kwargs.get("progress_callback"):
+            processed = len(results)
+            total = len(self.get_question_ids())
             kwargs["progress_callback"](
-                len(results) / len(self.get_question_ids()) * 100,
-                f"Generated {len(results)}/{len(self.get_question_ids())}",
+                TemplateProgressEvent(
+                    event="task_completed",
+                    question_id=qid,
+                    processed_count=processed,
+                    total_count=total,
+                    successful_count=processed,
+                    failed_count=0,
+                    percentage=processed / total * 100,
+                    error=None,
+                    template_code=None,
+                    task_duration=None,
+                )
             )
     return results
 ```
@@ -118,12 +133,21 @@ For this tutorial, we add questions manually:
 
 ```python
 questions = [
-    ("What is the mechanism of action of metformin?", "Metformin activates AMP-activated protein kinase (AMPK) and reduces hepatic glucose production."),
+    (
+        "What is the mechanism of action of metformin?",
+        "Metformin activates AMP-activated protein kinase (AMPK) and reduces hepatic glucose production.",
+    ),
     ("What is the half-life of amoxicillin?", "Approximately 1 hour."),
     ("Name three common side effects of statins.", "Muscle pain, liver enzyme elevation, and digestive problems."),
     ("What is the antidote for acetaminophen overdose?", "N-acetylcysteine (NAC)."),
-    ("How does warfarin prevent blood clots?", "Warfarin inhibits vitamin K epoxide reductase, blocking synthesis of clotting factors II, VII, IX, and X."),
-    ("What is the therapeutic index of lithium?", "Narrow — therapeutic range is 0.6-1.2 mEq/L, with toxicity above 1.5 mEq/L."),
+    (
+        "How does warfarin prevent blood clots?",
+        "Warfarin inhibits vitamin K epoxide reductase, blocking synthesis of clotting factors II, VII, IX, and X.",
+    ),
+    (
+        "What is the therapeutic index of lithium?",
+        "Narrow — therapeutic range is 0.6-1.2 mEq/L, with toxicity above 1.5 mEq/L.",
+    ),
     ("What class of drug is omeprazole?", "Proton pump inhibitor (PPI)."),
     ("What is the primary indication for naloxone?", "Reversal of opioid overdose."),
 ]
@@ -148,7 +172,7 @@ with patch.object(type(benchmark), "generate_all_templates", _mock_generate_all_
         model="claude-haiku-4-5",
         model_provider="anthropic",
         only_missing=True,
-        progress_callback=lambda pct, msg: print(f"  {pct:.0f}%: {msg}"),
+        progress_callback=lambda event: print(f"  {event.percentage:.0f}%: {event.event}"),
     )
 
 # Summarize results
@@ -320,6 +344,7 @@ print(f"Progress:  {loaded.get_progress()}%")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 
@@ -350,9 +375,9 @@ Save checkpoint
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.ipynb) — Detailed template patterns (boolean, numeric, regex)
-- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb) — Add rubric traits alongside templates
-- [Quality Assessment](quality-assessment-benchmark.ipynb) — Rubric-only evaluation
-- [Answer Templates](../core_concepts/answer-templates.ipynb) — Template concepts
-- [ADeLe Concepts](../../notebooks/core_concepts/adele.ipynb) — Full ADeLe dimension reference
-- [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb) — Advanced few-shot options
+- [Factual QA Benchmark](factual-qa-benchmark.ipynb): Detailed template patterns (boolean, numeric, regex)
+- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Add rubric traits alongside templates
+- [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Template concepts
+- [ADeLe Concepts](../../notebooks/core_concepts/adele.ipynb): Full ADeLe dimension reference
+- [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb): Advanced few-shot options

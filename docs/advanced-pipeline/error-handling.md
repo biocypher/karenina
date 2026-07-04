@@ -89,14 +89,15 @@ The built-in type matcher walks the exception's MRO, so it catches not only well
 
 ### Built-in Message Substrings
 
-When no type rule matches, the registry falls back to substring matching on the lowercased exception message. The substrings are checked in this fixed order; the first match wins.
+When no type rule matches, the registry falls back to substring matching on the lowercased exception message. The rows below are in the true check order, top to bottom, and the first match wins. Note that `CONNECTION` appears twice: `event loop`, `portal`, and `temporary failure` are checked last, after the `SERVER_ERROR` substrings, not grouped with the other connection substrings.
 
 | Substring | Category |
 |-----------|----------|
-| `connection`, `network`, `dns`, `event loop`, `portal`, `temporary failure` | `CONNECTION` |
+| `connection`, `network`, `dns` | `CONNECTION` |
 | `timeout`, `timed out` | `TIMEOUT` |
 | `rate limit`, `429`, `overloaded` | `RATE_LIMIT` |
 | `500`, `502`, `503` | `SERVER_ERROR` |
+| `event loop`, `portal`, `temporary failure` | `CONNECTION` |
 
 The `event loop` and `portal` keywords exist because anyio portal lifecycle errors propagate as plain `RuntimeError` and would otherwise fall through to `PERMANENT`. Treating them as `CONNECTION` errors makes the executor retry them, which masks transient races during worker startup.
 
@@ -132,6 +133,7 @@ Real-world deployments usually need a handful of custom rules to handle exceptio
 ```python
 class VllmQueueTimeout(Exception):
     pass
+
 
 registry = ErrorRegistry()
 registry.register(VllmQueueTimeout, ErrorCategory.RATE_LIMIT)
@@ -201,6 +203,7 @@ If you are unsure why an exception is being classified one way or another, the s
 ```python
 def explain(exc):
     return ErrorRegistry().classify(exc)
+
 
 cases = [
     ConnectionError("connection reset"),
@@ -300,28 +303,19 @@ config = TimeoutEscalationConfig(
 )
 
 # How the timeout grows for retries 0..4 with base=30s and max_attempts=3
-[
-    compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3)
-    for n in range(5)
-]
+[compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3) for n in range(5)]
 ```
 
 ```python
 # Multiplicative variant capped at 120s
 config = TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0, max_timeout=120.0)
-[
-    compute_escalated_timeout(base_timeout=15.0, timeout_attempt=n, config=config, max_attempts=4)
-    for n in range(5)
-]
+[compute_escalated_timeout(base_timeout=15.0, timeout_attempt=n, config=config, max_attempts=4) for n in range(5)]
 ```
 
 ```python
 # Linear interpolation between base and max across the timeout retry budget
 config = TimeoutEscalationConfig(strategy="linear", max_timeout=120.0)
-[
-    compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3)
-    for n in range(4)
-]
+[compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3) for n in range(4)]
 ```
 
 Escalation only fires inside `RetryExecutor.execute_with_timeout` and `aexecute_with_timeout`, which are the entry points used by `stream_invoke`. Other adapter calls keep using the base `request_timeout` for every retry.
@@ -371,11 +365,13 @@ from karenina.utils.retry_policy import (
 
 attempts = {"count": 0}
 
+
 def flaky():
     attempts["count"] += 1
     if attempts["count"] < 3:
         raise ConnectionError("transient network blip")
     return "ok"
+
 
 executor = RetryExecutor(
     policy=RetryPolicy(
@@ -394,6 +390,7 @@ Two retries fired (third call succeeded), the executor returned the success valu
 # Permanent errors short-circuit immediately
 def bad_input():
     raise ValueError("not even a number")
+
 
 try:
     executor.execute(bad_input)
@@ -472,11 +469,54 @@ The harmonization deletes several previously-supported retry surfaces.
 - **Evaluator retry decorators (abstention, sufficiency).** Removed entirely; the executor is the only retry surface.
 - **Scenario turn retry.** A failing turn now terminates the scenario instead of retrying. Per-call retry still happens inside the executor.
 - **`karenina.utils.retry` module.** Re-exports point at the new modules; importing the old paths raises.
+- **`is_retryable_error` (next to be deprecated).** Still present in `karenina.utils.errors.__all__` as a backward-compatible wrapper around `ErrorRegistry.classify(...).is_retryable()`, and slated for removal in a future release. New code should call `ErrorRegistry().classify(exc)` directly so the resulting `ErrorCategory` is also visible to retry-budget logic.
+
+## Tuning for Production
+
+The defaults in `RetryPolicy()` are tuned for a mixed workload running with modest concurrency. Production pipelines that push concurrency higher, run on saturated provider endpoints, or face long-tail latency typically need a few of the knobs below.
+
+### Budget vs. Concurrency
+
+`async_max_workers` (in `VerificationConfig`) controls how many tasks run in parallel; the global LLM semaphore further caps how many of those tasks can hold an LLM call at once. Per-category retry budgets multiply with concurrency: at `async_max_workers=4` and `rate_limit.max_attempts=5`, a sustained 429 storm will fire up to twenty rate-limit retries before any of the four workers gives up. This is usually fine, but on a small endpoint it can prolong outages by keeping the retry pressure going. When workers go up, consider lowering `rate_limit.max_attempts` slightly so the system fails fast and lets a backoff scheduler upstream take over.
+
+### Timeout Escalation vs. Higher Base Timeout
+
+If a model occasionally needs ten extra seconds to finish reasoning (long-tail latency), `TimeoutEscalationConfig` is the right tool: the first attempt uses the base `request_timeout`, and only the retries grow it. If a model systematically needs more time than `request_timeout` allows (a different model class, a longer prompt template, MCP tool loops), raise the base `request_timeout` instead. Escalating from a base that is already wrong wastes the first attempt every time.
+
+### When 5xx Retries Are Wasteful
+
+`server_error.max_attempts` defaults to `2` for a reason. A sustained 5xx response usually means the provider is having an outage or degraded for the entire pipeline run. Retrying 5xx more than a couple of times burns the budget without recovering, and pads `retry_counts` with noise that obscures genuine intermittent errors. Set `server_error.max_attempts=1` (or `0`) when you would rather fail fast and rerun the affected questions later via `extend_template`.
+
+### Reading retry_counts to Drive Policy
+
+`retry_counts` is the feedback loop. Aggregate over a finished run:
+
+- A category whose `used` is consistently near `budget` is under-budgeted. Widen its `max_attempts` or split the offending exceptions into a different category via `custom_error_patterns`.
+- A category whose `used` is always zero is either fine or never firing (e.g., the workload does not produce that error). No action needed.
+- A mix where some questions exhaust the budget and others use zero retries usually points to a single endpoint or a single model that needs a per-model `retry_policy` override.
+
+For the field's shape and quick checks, see [VerificationResult Structure: Retry Counts](../workflows/analyzing-results/verification-result.md#retry-counts).
+
+## API Reference Index
+
+Public symbols exposed by the retry/error subsystem. Direct links are to the source files; one-line summaries below.
+
+| Symbol | Module | Summary |
+|--------|--------|---------|
+| `RetryExecutor` | `karenina.utils.retry_policy` | Sync/async executor wrapping a callable with category-aware retry; four entry points (`execute`, `aexecute`, `execute_with_timeout`, `aexecute_with_timeout`). |
+| `RetryPolicy` | `karenina.utils.retry_policy` | Pydantic model grouping one `CategoryRetryConfig` per retryable category, plus optional `timeout_escalation`. Exposes `derive_sdk_max_retries()`. |
+| `ErrorRegistry` | `karenina.utils.errors` | Extensible classifier mapping live exceptions to `ErrorCategory` via user rules then built-in rules. |
+| `ErrorPatternConfig` | `karenina.utils.retry_policy` | Declarative pattern entry (`pattern`, `category`, `match_type`) suitable for serializing into `VerificationConfig.custom_error_patterns` and presets. |
+| `TimeoutEscalationConfig` | `karenina.utils.retry_policy` | Strategy config (`additive`, `multiplicative`, `linear`) that grows the per-attempt timeout on `TIMEOUT` retries. |
+| `track_retries` | `karenina.utils.retry_policy` | Context manager that installs a contextvar-local tracker so `RetryExecutor` records `{used, budget}` per category over a logical pipeline run. |
+| `compute_escalated_timeout` | `karenina.utils.retry_policy` | Pure function returning the next per-attempt timeout given base, attempt index, escalation config, and the category's budget. Used internally by the `_with_timeout` executor variants. |
 
 ## Related
 
 - [Stages in Detail](stages.md): which stages call the executor and which guards record streaming-timeout partial content.
 - [Adapters Overview](../advanced-adapters/index.md): where individual adapters install their `RetryExecutor`.
 - [Writing Adapters](../advanced-adapters/writing-adapters.md): how to wire `RetryExecutor` into a new adapter.
+- [Preset Schema: Retry Configuration](../reference/configuration/preset-schema.md#retry-configuration): YAML/JSON layout for `retry_policy` and `custom_error_patterns`.
+- [VerificationResult Structure: Retry Counts](../workflows/analyzing-results/verification-result.md#retry-counts): inspecting `retry_counts` after a run.
 
 For end-to-end analysis of a finished run, see [Error Analysis](../workflows/analyzing-results/error-analysis.md).

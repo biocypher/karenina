@@ -8,7 +8,7 @@ Choose the path that matches your goal:
 
 **TaskEval User**: Evaluate existing outputs (agent traces, external text):
 
-> [Installation](../getting-started/installation.md) → [TaskEval](../core_concepts/task-eval.md) → [TaskEval Workflow](../notebooks/task-eval/index.ipynb) → [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) → [Rubrics](../core_concepts/rubrics/index.md) → [Analyzing Results](../workflows/analyzing-results/index.md)
+> [Installation](../getting-started/installation.md) → [TaskEval](../notebooks/core_concepts/task-eval.ipynb) → [TaskEval Workflow](../notebooks/task-eval/index.ipynb) → [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) → [Rubrics](../core_concepts/rubrics/index.md) → [Analyzing Results](../workflows/analyzing-results/index.md)
 
 **Power User** — Dive into advanced features:
 
@@ -41,7 +41,7 @@ Choose the path that matches your goal:
 | [Questions & Benchmarks](../core_concepts/questions-and-benchmarks/index.md) | The central objects: questions bundled with templates, rubrics, and metadata |
 | [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) | The JSON-LD benchmark format: questions, templates, rubrics, and metadata |
 | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) | Pydantic models that define how a Judge LLM evaluates correctness |
-| [Rubrics](../core_concepts/rubrics/index.md) | Quality assessment with four trait types: LLM, regex, callable, metric |
+| [Rubrics](../core_concepts/rubrics/index.md) | Quality assessment with five trait types: LLM, Regex, Callable, Metric, Agentic |
 | [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) | When to use which evaluation unit, and when to use both together |
 | [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) | Template-only, template-and-rubric, and rubric-only evaluation |
 | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) | The 13-stage engine that executes evaluation end to end |

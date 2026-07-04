@@ -146,12 +146,12 @@ from karenina.schemas.config.models import (
 
 middleware = AgentMiddlewareConfig(
     limits=AgentLimitConfig(
-        model_call_limit=40,    # default: 25
-        tool_call_limit=80,     # default: 50
+        model_call_limit=40,  # default: 25
+        tool_call_limit=80,  # default: 50
     ),
     summarization=SummarizationConfig(
-        trigger_fraction=0.7,   # default: 0.8
-        keep_messages=30,       # default: 20
+        trigger_fraction=0.7,  # default: 0.8
+        keep_messages=30,  # default: 20
     ),
 )
 
@@ -167,7 +167,9 @@ model_config = ModelConfig(
 print(f"Model call limit: {middleware.limits.model_call_limit}")
 print(f"Tool call limit: {middleware.limits.tool_call_limit}")
 print(f"Exit behavior: {middleware.limits.exit_behavior}")
-print(f"Summarization: trigger at {middleware.summarization.trigger_fraction:.0%}, keep {middleware.summarization.keep_messages} messages")
+print(
+    f"Summarization: trigger at {middleware.summarization.trigger_fraction:.0%}, keep {middleware.summarization.keep_messages} messages"
+)
 print(f"Model retry: {middleware.model_retry.max_retries} retries, on_failure='{middleware.model_retry.on_failure}'")
 print(f"Tool retry: {middleware.tool_retry.max_retries} retries, on_failure='{middleware.tool_retry.on_failure}'")
 print(f"Prompt caching: enabled={middleware.prompt_caching.enabled}, ttl='{middleware.prompt_caching.ttl}'")
@@ -236,7 +238,7 @@ config = VerificationConfig(
     answering_models=[model_config],  # MCP-enabled model from Section 5
     parsing_models=[judge],
     use_full_trace_for_template=False,  # default: only final AI message for parsing
-    use_full_trace_for_rubric=True,     # default: full trace for rubric evaluation
+    use_full_trace_for_rubric=True,  # default: full trace for rubric evaluation
 )
 
 print(f"Template sees full trace: {config.use_full_trace_for_template}")

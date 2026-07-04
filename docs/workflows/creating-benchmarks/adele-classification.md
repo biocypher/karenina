@@ -15,7 +15,7 @@ jupyter:
 
 # ADeLe Question Classification
 
-ADeLe (Assessment of Difficulty Level) classifies benchmark questions across 18 cognitive dimensions, from domain knowledge required to reasoning complexity. Each dimension produces an ordinal score from 0 (none) to 5 (very high). Use classification results to understand your benchmark's difficulty profile, filter questions by complexity, or create rubrics based on ADeLe traits.
+ADeLe (Annotated Demand Levels) classifies benchmark questions across 18 cognitive dimensions, from domain knowledge required to reasoning complexity. Each dimension produces an ordinal score from 0 (none) to 5 (very high). Use classification results to understand your benchmark's difficulty profile, filter questions by complexity, or create rubrics based on ADeLe traits.
 
 This tutorial is useful when you have a set of questions and want to characterize what your benchmark measures before running verification. Classification can also guide question selection: keep only high-reasoning questions for a challenging benchmark, or balance difficulty across categories.
 
@@ -39,54 +39,81 @@ from karenina.integrations.adele.schemas import QuestionClassificationResult
 
 # The actual 18 ADeLe trait names
 _DIMS = [
-    "attention_and_scan", "atypicality", "comprehension_complexity",
-    "comprehension_evaluation", "conceptualization_and_learning",
-    "knowledge_applied_sciences", "knowledge_cultural", "knowledge_formal_sciences",
-    "knowledge_natural_sciences", "knowledge_social_sciences",
-    "metacognition_relevance", "metacognition_task_planning", "metacognition_uncertainty",
-    "mind_modelling", "logical_reasoning_logic", "logical_reasoning_quantitative",
-    "spatial_physical_understanding", "volume",
+    "attention_and_scan",
+    "atypicality",
+    "comprehension_complexity",
+    "comprehension_evaluation",
+    "conceptualization_and_learning",
+    "knowledge_applied_sciences",
+    "knowledge_cultural",
+    "knowledge_formal_sciences",
+    "knowledge_natural_sciences",
+    "knowledge_social_sciences",
+    "metacognition_relevance",
+    "metacognition_task_planning",
+    "metacognition_uncertainty",
+    "mind_modelling",
+    "logical_reasoning_logic",
+    "logical_reasoning_quantitative",
+    "spatial_physical_understanding",
+    "volume",
 ]
 _LEVEL_NAMES = ["very_low", "very_low", "low", "moderate", "high", "very_high"]
+
 
 def _make_result(qid, qtext, raw_scores, ts_suffix="00Z", tokens=700):
     scores = dict(zip(_DIMS, raw_scores))
     labels = {d: _LEVEL_NAMES[min(s, 5)] for d, s in scores.items()}
     return QuestionClassificationResult(
-        question_id=qid, question_text=qtext, scores=scores, labels=labels,
-        model="claude-haiku-4-5", classified_at=f"2025-02-15T10:30:{ts_suffix}",
+        question_id=qid,
+        question_text=qtext,
+        scores=scores,
+        labels=labels,
+        model="claude-haiku-4-5",
+        classified_at=f"2025-02-15T10:30:{ts_suffix}",
         usage_metadata={"input_tokens": tokens - 200, "output_tokens": 200, "total_tokens": tokens},
     )
 
+
 _mock_single_result = _make_result(
-    "q1", "What is the approved pharmacological target of venetoclax?",
+    "q1",
+    "What is the approved pharmacological target of venetoclax?",
     #  AS  AT  CEc CEe CL  KNa KNc KNf KNn KNs MCr MCt MCu MS  QLl QLq SNs VO
-    [  2,  1,  2,  3,  1,  4,  0,  1,  4,  0,  2,  1,  1,  0,  2,  0,  0,  3],
+    [2, 1, 2, 3, 1, 4, 0, 1, 4, 0, 2, 1, 1, 0, 2, 0, 0, 3],
 )
 _mock_partial_result = QuestionClassificationResult(
     question_id="q1",
     question_text="What is the approved pharmacological target of venetoclax?",
     scores={"knowledge_natural_sciences": 4, "logical_reasoning_logic": 2},
     labels={"knowledge_natural_sciences": "high", "logical_reasoning_logic": "low"},
-    model="claude-haiku-4-5", classified_at="2025-02-15T10:30:05Z",
+    model="claude-haiku-4-5",
+    classified_at="2025-02-15T10:30:05Z",
     usage_metadata={"input_tokens": 180, "output_tokens": 60, "total_tokens": 240},
 )
 _mock_batch_results = {
     "q1": _mock_single_result,
     "q2": _make_result(
-        "q2", "Compare the mechanisms of action of imatinib and dasatinib.",
-        [3, 2, 3, 4, 2, 5, 0, 1, 5, 0, 3, 3, 2, 1, 3, 0, 0, 4], ts_suffix="10Z", tokens=730,
+        "q2",
+        "Compare the mechanisms of action of imatinib and dasatinib.",
+        [3, 2, 3, 4, 2, 5, 0, 1, 5, 0, 3, 3, 2, 1, 3, 0, 0, 4],
+        ts_suffix="10Z",
+        tokens=730,
     ),
     "q3": _make_result(
-        "q3", "What is the half-life of amoxicillin?",
-        [1, 0, 1, 2, 0, 2, 0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 2], ts_suffix="15Z", tokens=670,
+        "q3",
+        "What is the half-life of amoxicillin?",
+        [1, 0, 1, 2, 0, 2, 0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 2],
+        ts_suffix="15Z",
+        tokens=670,
     ),
 }
+
 
 def _mock_classify_single(self, question_text, trait_names=None, question_id=None):
     if trait_names and len(trait_names) < 18:
         return _mock_partial_result
     return _mock_single_result
+
 
 def _mock_classify_batch(self, questions, trait_names=None, on_progress=None):
     results = {}
@@ -214,8 +241,10 @@ with patch.object(QuestionClassifier, "classify_batch", _mock_classify_batch):
 
 print(f"\nClassified {len(batch_results)} questions")
 for qid, res in batch_results.items():
-    print(f"  {qid}: knowledge_natural_sciences={res.scores['knowledge_natural_sciences']}, "
-          f"logical_reasoning_logic={res.scores['logical_reasoning_logic']}")
+    print(
+        f"  {qid}: knowledge_natural_sciences={res.scores['knowledge_natural_sciences']}, "
+        f"logical_reasoning_logic={res.scores['logical_reasoning_logic']}"
+    )
 ```
 
 ---
@@ -285,20 +314,14 @@ Use scores to select question subsets by cognitive profile. This is useful for b
 
 ```python
 # Find questions requiring significant logical reasoning (logical_reasoning_logic >= 3)
-high_reasoning = {
-    qid: res for qid, res in batch_results.items()
-    if res.scores.get("logical_reasoning_logic", 0) >= 3
-}
+high_reasoning = {qid: res for qid, res in batch_results.items() if res.scores.get("logical_reasoning_logic", 0) >= 3}
 print(f"High logical reasoning questions: {len(high_reasoning)}")
 for qid in high_reasoning:
     score = high_reasoning[qid].scores["logical_reasoning_logic"]
     print(f"  {qid}: logical_reasoning_logic={score}")
 
 # Find low-knowledge questions (knowledge_natural_sciences <= 2)
-low_knowledge = {
-    qid: res for qid, res in batch_results.items()
-    if res.scores.get("knowledge_natural_sciences", 0) <= 2
-}
+low_knowledge = {qid: res for qid, res in batch_results.items() if res.scores.get("knowledge_natural_sciences", 0) <= 2}
 print(f"\nLow natural science knowledge questions: {len(low_knowledge)}")
 for qid in low_knowledge:
     score = low_knowledge[qid].scores["knowledge_natural_sciences"]
@@ -310,9 +333,9 @@ You can also combine filters for more specific selection:
 ```python
 # Questions requiring high domain knowledge AND logical reasoning
 complex_questions = {
-    qid: res for qid, res in batch_results.items()
-    if res.scores.get("knowledge_natural_sciences", 0) >= 4
-    and res.scores.get("logical_reasoning_logic", 0) >= 3
+    qid: res
+    for qid, res in batch_results.items()
+    if res.scores.get("knowledge_natural_sciences", 0) >= 4 and res.scores.get("logical_reasoning_logic", 0) >= 3
 }
 print(f"High knowledge + logical reasoning: {len(complex_questions)} questions")
 ```
@@ -327,9 +350,7 @@ ADeLe traits can be used directly as rubric traits for verification. `create_ade
 from karenina.integrations.adele import create_adele_rubric, ADELE_TRAIT_NAMES
 
 # Create a rubric with selected traits
-rubric = create_adele_rubric(
-    trait_names=["knowledge_natural_sciences", "logical_reasoning_logic"]
-)
+rubric = create_adele_rubric(trait_names=["knowledge_natural_sciences", "logical_reasoning_logic"])
 
 print(f"Rubric traits: {len(rubric.llm_traits)}")
 for trait in rubric.llm_traits:
@@ -360,7 +381,7 @@ print("Done.")
 
 ## Next Steps
 
-- [ADeLe Concept Page](../../core_concepts/adele.md): Full dimension reference and scoring details
+- [ADeLe Concept Page](../../notebooks/core_concepts/adele.ipynb): Full dimension reference and scoring details
 - [Rubrics](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts and trait types
 - [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb): Bulk workflows, template generation, and classification in context
 - [Running Verification](../running-verification/index.md): Execute benchmarks with ADeLe rubrics

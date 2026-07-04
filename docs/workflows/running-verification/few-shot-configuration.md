@@ -61,26 +61,32 @@ _examples_q4 = [
 ]
 
 _q1_id = _benchmark.add_question(
-    question="What is the target of venetoclax?", raw_answer="BCL2",
+    question="What is the target of venetoclax?",
+    raw_answer="BCL2",
     few_shot_examples=_examples_q1,
 )
 _q2_id = _benchmark.add_question(
-    question="What is the half-life of caffeine in healthy adults?", raw_answer="5 hours",
+    question="What is the half-life of caffeine in healthy adults?",
+    raw_answer="5 hours",
     few_shot_examples=_examples_q2,
 )
 _q3_id = _benchmark.add_question(
-    question="Is venetoclax FDA-approved for CLL?", raw_answer="Yes",
+    question="Is venetoclax FDA-approved for CLL?",
+    raw_answer="Yes",
     few_shot_examples=_examples_q3,
 )
 _q4_id = _benchmark.add_question(
-    question="What drug class does vancomycin belong to?", raw_answer="Glycopeptide",
+    question="What drug class does vancomycin belong to?",
+    raw_answer="Glycopeptide",
     few_shot_examples=_examples_q4,
 )
 
 _qids = _benchmark.get_question_ids()
 _examples_by_qid = {
-    _q1_id: _examples_q1, _q2_id: _examples_q2,
-    _q3_id: _examples_q3, _q4_id: _examples_q4,
+    _q1_id: _examples_q1,
+    _q2_id: _examples_q2,
+    _q3_id: _examples_q3,
+    _q4_id: _examples_q4,
 }
 ```
 
@@ -133,7 +139,8 @@ from karenina.schemas.config.models import FewShotConfig
 
 config_all = FewShotConfig(pool_mode="all")
 resolved = config_all.resolve_examples_for_question(
-    question_id=_q2_id, available_examples=_examples_by_qid[_q2_id],
+    question_id=_q2_id,
+    available_examples=_examples_by_qid[_q2_id],
 )
 
 print(f"Mode: {config_all.pool_mode}")
@@ -153,7 +160,8 @@ K-shot randomly samples *k* examples per question, using the question ID as seed
 ```python
 config_kshot = FewShotConfig(pool_mode="k-shot", pool_k=2)
 resolved = config_kshot.resolve_examples_for_question(
-    question_id=_q2_id, available_examples=_examples_by_qid[_q2_id],
+    question_id=_q2_id,
+    available_examples=_examples_by_qid[_q2_id],
 )
 
 print(f"Mode: {config_kshot.pool_mode}, k={config_kshot.pool_k}")
@@ -171,13 +179,16 @@ If a question has fewer examples than *k*, all examples are used (no error).
 Custom mode selects specific examples by index:
 
 ```python
-config_custom = FewShotConfig.from_index_selections({
-    _q1_id: [0, 2],       # First and third examples
-    _q2_id: [1],           # Second example only
-    _q4_id: [0, 1, 3],    # Skip third example
-})
+config_custom = FewShotConfig.from_index_selections(
+    {
+        _q1_id: [0, 2],  # First and third examples
+        _q2_id: [1],  # Second example only
+        _q4_id: [0, 1, 3],  # Skip third example
+    }
+)
 resolved_q1 = config_custom.resolve_examples_for_question(
-    question_id=_q1_id, available_examples=_examples_by_qid[_q1_id],
+    question_id=_q1_id,
+    available_examples=_examples_by_qid[_q1_id],
 )
 
 print(f"Mode: {config_custom.pool_mode}")
@@ -195,7 +206,8 @@ Setting `source="disabled"` turns off few-shot entirely, returning an empty list
 ```python
 config_none = FewShotConfig(source="disabled")
 resolved = config_none.resolve_examples_for_question(
-    question_id=_q1_id, available_examples=_examples_by_qid[_q1_id],
+    question_id=_q1_id,
+    available_examples=_examples_by_qid[_q1_id],
 )
 
 print(f"Source: {config_none.source}")
@@ -216,7 +228,7 @@ from karenina.schemas.config.models import QuestionFewShotConfig
 config_mixed = FewShotConfig(
     pool_mode="all",
     question_configs={
-        _q1_id: QuestionFewShotConfig(mode="k-shot", k=1),   # Sample 1 example
+        _q1_id: QuestionFewShotConfig(mode="k-shot", k=1),  # Sample 1 example
         _q3_id: QuestionFewShotConfig(mode="custom", selected_examples=[]),  # No examples for q3
         # q2, q4: inherit global "all" mode
     },
@@ -225,7 +237,8 @@ config_mixed = FewShotConfig(
 for qid, label in [(_q1_id, "q1"), (_q2_id, "q2"), (_q3_id, "q3"), (_q4_id, "q4")]:
     effective = config_mixed.get_effective_config(qid)
     resolved = config_mixed.resolve_examples_for_question(
-        question_id=qid, available_examples=_examples_by_qid[qid],
+        question_id=qid,
+        available_examples=_examples_by_qid[qid],
     )
     print(f"{label}: mode={effective.mode}, resolved={len(resolved)}")
 ```
@@ -240,14 +253,16 @@ Global examples are appended to every question's resolved examples, regardless o
 
 ```python
 config_global = FewShotConfig(
-    pool_mode="k-shot", pool_k=1,
+    pool_mode="k-shot",
+    pool_k=1,
     global_examples=[
         {"question": "What is the capital of France?", "answer": "Paris"},
         {"question": "What is 2 + 2?", "answer": "4"},
     ],
 )
 resolved = config_global.resolve_examples_for_question(
-    question_id=_q1_id, available_examples=_examples_by_qid[_q1_id],
+    question_id=_q1_id,
+    available_examples=_examples_by_qid[_q1_id],
 )
 
 print(f"Total resolved: {len(resolved)} (1 from k-shot + 2 global)")
@@ -264,13 +279,19 @@ Resolution order: stored examples first, then global examples.
 `from_index_selections()` builds custom selections for multiple questions. `k_shot_for_questions()` creates per-question k values in one call:
 
 ```python
-config_bulk = FewShotConfig.from_index_selections({
-    _q1_id: [0, 1], _q2_id: [0, 2, 3], _q3_id: [1], _q4_id: [0, 3],
-})
+config_bulk = FewShotConfig.from_index_selections(
+    {
+        _q1_id: [0, 1],
+        _q2_id: [0, 2, 3],
+        _q3_id: [1],
+        _q4_id: [0, 3],
+    }
+)
 print(f"Custom bulk (mode={config_bulk.pool_mode}):")
 for qid, label in [(_q1_id, "q1"), (_q2_id, "q2"), (_q3_id, "q3"), (_q4_id, "q4")]:
     resolved = config_bulk.resolve_examples_for_question(
-        question_id=qid, available_examples=_examples_by_qid[qid],
+        question_id=qid,
+        available_examples=_examples_by_qid[qid],
     )
     print(f"  {label}: {len(resolved)} examples selected")
 ```
@@ -302,12 +323,14 @@ config_preview = FewShotConfig(
 )
 
 resolved_q1 = config_preview.resolve_examples_for_question(
-    question_id=_q1_id, available_examples=_examples_by_qid[_q1_id],
+    question_id=_q1_id,
+    available_examples=_examples_by_qid[_q1_id],
 )
 print(f"Q1 (inherits 'all'): {len(resolved_q1)} examples (3 stored + 1 global)")
 
 resolved_q2 = config_preview.resolve_examples_for_question(
-    question_id=_q2_id, available_examples=_examples_by_qid[_q2_id],
+    question_id=_q2_id,
+    available_examples=_examples_by_qid[_q2_id],
 )
 print(f"Q2 (k-shot, k=2):   {len(resolved_q2)} examples (2 sampled + 1 global)")
 ```
@@ -332,13 +355,16 @@ few_shot = FewShotConfig(
 
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     few_shot_config=few_shot,
 )

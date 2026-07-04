@@ -39,20 +39,23 @@ for _mod in [
 from karenina.benchmark.task_eval import TaskEval
 from karenina.ports.messages import Message
 
+
 class Answer(BaseAnswer):
-    identifies_bcl2: bool = Field(
-        description="True if BCL2 is identified as the primary target."
-    )
+    identifies_bcl2: bool = Field(description="True if BCL2 is identified as the primary target.")
+
     def ground_truth(self):
         self.correct = {"identifies_bcl2": True}
+
     def verify(self) -> bool:
         return self.identifies_bcl2 == self.correct["identifies_bcl2"]
+
 
 def _mock_add_template(self, template_class, step_id=None):
     self.add_question(
         {"id": template_class.__name__.lower(), "question": "", "raw_answer": "", "answer_template": "mock"},
         step_id=step_id,
     )
+
 
 TaskEval.add_template = _mock_add_template
 
@@ -138,7 +141,7 @@ You would record this text with `log()`, attach a template for the BCL2 check an
 | Starting point | Questions (define what to ask) | Text (record what happened) |
 | Answer generation | Pipeline generates responses | You supply pre-recorded text |
 | Question definition | Required | Not required |
-| Pipeline stages used | All 13 stages | Same pipeline; generation stage bypassed |
+| Pipeline stages used | All 13 stages (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) | Same pipeline; generation stage bypassed |
 | Result type | `VerificationResult` (per question/model) | `TaskEvalResult` (global + per-step) |
 | Best for | Controlled model comparison | Evaluating existing outputs |
 
@@ -209,10 +212,17 @@ The evaluation mode is auto-detected from what you attach:
 task.add_template(Answer)
 
 # Quality: each trait is scored independently by the judge LLM
-task.add_rubric(Rubric(llm_traits=[
-    LLMRubricTrait(name="conciseness", kind="boolean",
-                   description="True if the response is direct and avoids unnecessary elaboration.")
-]))
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="conciseness",
+                kind="boolean",
+                description="True if the response is direct and avoids unnecessary elaboration.",
+            )
+        ]
+    )
+)
 ```
 
 <div class="admonition note">
@@ -240,10 +250,12 @@ task.log("BCL2 is the primary pharmacological target of venetoclax.")
 task.log("Found 3 relevant papers.", step_id="retrieval")
 
 # Structured trace
-task.log_trace([
-    Message.user("What is the target of venetoclax?"),
-    Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
-])
+task.log_trace(
+    [
+        Message.user("What is the target of venetoclax?"),
+        Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
+    ]
+)
 ```
 
 The `target` parameter controls routing when a `step_id` is provided:
@@ -303,10 +315,31 @@ See the [workflow](../../task-eval/#step-4-configure-and-evaluate) for step-scop
 
 `StepEval` provides `get_summary_stats()` for aggregate statistics (traces passed, template verification counts, rubric trait counts, success rate) and `aggregate_rubric_results()` for averaging rubric scores across replicates. For replicate support, set `replicate_count` on your `VerificationConfig`.
 
-## 11. Next Steps
+## 11. The `taskeval` Interface
+
+TaskEval is wired through a sentinel value of `ModelConfig.interface`: `"taskeval"`. When the verification pipeline encounters this interface, it routes around answer generation entirely and consumes the pre-collected text supplied via `log()` / `log_trace()` instead.
+
+The interface is registered on `AdapterRegistry` with `llm_factory=None`, `parser_factory=None`, and `agent_factory=None`, plus `requires_provider=False`. There is no LLM, parser, or agent backing it: this interface is a routing signal, not an adapter that calls a model.
+
+```python
+from karenina.schemas.config import ModelConfig
+
+answering_model = ModelConfig(
+    id="taskeval-answerer",
+    model_name="recorded-output",  # arbitrary sentinel name
+    interface="taskeval",
+)
+```
+
+`model_name` is required by `ModelConfig` but its value is treated as a label (it identifies the recorded output set, not a live model). `model_provider` is not required because `requires_provider=False`. Parsing and rubric models in the same `VerificationConfig` still use a real adapter (typically `langchain` or `claude_tool`) for judge calls.
+
+For the registry-side details and the full interface matrix, see [Available Adapters](../../../advanced-adapters/available-adapters/#taskeval-taskeval-no-op-interface).
+
+## 12. Next Steps
 
 - [TaskEval workflow](../../task-eval/): step-by-step guide with complete code
 - [Answer templates](../answer-templates/): writing templates for correctness evaluation
 - [Rubrics](../../../core_concepts/rubrics/): defining quality traits
-- [Verification pipeline](../verification-pipeline/): the 13-stage pipeline TaskEval routes through
+- [Verification pipeline](../verification-pipeline/): the 13-stage pipeline (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) TaskEval routes through
 - [Evaluation modes](../evaluation-modes/): `template_only`, `rubric_only`, `template_and_rubric`
+- [Available adapters](../../../advanced-adapters/available-adapters/): the full interface matrix, including the `taskeval` row

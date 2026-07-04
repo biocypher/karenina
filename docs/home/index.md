@@ -46,7 +46,7 @@ This documentation is organized into four sections, each serving a different rea
 - **Define precise evaluation criteria** using code-based answer templates (Pydantic models)
 - **Evaluate answers** using both rule-based verification and LLM-as-judge strategies
 - **Support natural, unconstrained outputs**, no rigid response formats required
-- **Assess response quality** with rubrics (LLM judgment, regex, callable, and metric traits)
+- **Assess response quality** with rubrics (LLM judgment, regex, callable, metric, and agentic traits)
 - **Evaluate agentic tasks** where models operate in workspaces with tool access (coding, data analysis)
 - **Judge workspace artifacts** with an independent agent that inspects files, re-runs tests, and verifies outputs
 

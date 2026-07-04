@@ -38,12 +38,16 @@ from karenina import Benchmark
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
-    VerificationResultMetadata, VerificationResultTemplate,
+    VerificationResultMetadata,
+    VerificationResultTemplate,
 )
 from karenina.storage import DBConfig
 from karenina.storage.operations import (
-    import_verification_results, load_benchmark, load_verification_results,
-    save_benchmark, save_verification_results,
+    import_verification_results,
+    load_benchmark,
+    load_verification_results,
+    save_benchmark,
+    save_verification_results,
 )
 
 _tmpdir = tempfile.mkdtemp(prefix="karenina_db_tutorial_")
@@ -53,7 +57,8 @@ _db_url = f"sqlite:///{_db_path}"
 _benchmark = Benchmark.create(
     name="Drug Target QA",
     description="Evaluate LLM accuracy on drug target identification",
-    version="1.0.0", creator="Pharmacology Team",
+    version="1.0.0",
+    creator="Pharmacology Team",
 )
 _q1_id = _benchmark.add_question(
     question="What is the primary target of venetoclax?",
@@ -73,20 +78,29 @@ _parsing = ModelIdentity(model_name="claude-haiku-4-5", interface="langchain")
 _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 _run_id = str(uuid4())
 
+
 def _make_result(qid, verified, response):
     rid = VerificationResultMetadata.compute_result_id(qid, _answering, _parsing, _ts)
     return VerificationResult(
         metadata=VerificationResultMetadata(
-            question_id=qid, template_id="tmpl_mock",
-            failure=None, caveats=[], question_text="mock",
-            answering=_answering, parsing=_parsing,
-            execution_time=1.2, timestamp=_ts, result_id=rid,
+            question_id=qid,
+            template_id="tmpl_mock",
+            failure=None,
+            caveats=[],
+            question_text="mock",
+            answering=_answering,
+            parsing=_parsing,
+            execution_time=1.2,
+            timestamp=_ts,
+            result_id=rid,
         ),
         template=VerificationResultTemplate(
-            raw_llm_response=response, verify_result=verified,
+            raw_llm_response=response,
+            verify_result=verified,
             template_verification_performed=True,
         ),
     )
+
 
 _mock_results = {
     f"{_q1_id}_0": _make_result(_q1_id, True, "BCL2 is the primary target."),
@@ -104,9 +118,9 @@ All database operations require a `DBConfig` object that specifies how to connec
 ```python
 db_config = DBConfig(
     storage_url=_db_url,
-    auto_create=True,   # Create tables automatically on first use
-    auto_commit=True,    # Commit after each operation
-    echo=False,          # Set True to see SQL statements (debugging)
+    auto_create=True,  # Create tables automatically on first use
+    auto_commit=True,  # Commit after each operation
+    echo=False,  # Set True to see SQL statements (debugging)
 )
 
 print(f"Storage URL:  {db_config.storage_url}")
@@ -322,6 +336,22 @@ This lets you inspect what would change before committing. When you are satisfie
 
 ---
 
+## Failure and Caveat Persistence Columns
+
+When results are written to a CSV export (via `ResultsIOManager`) or saved to the database, the [`metadata.failure`](../../reference/api/failure-and-caveats.md) and [`metadata.caveats`](../../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) fields are flattened into dedicated columns rather than serialized as a nested object. This keeps queries simple: filtering by failure category is a column comparison.
+
+| Column | Type | Source |
+|--------|------|--------|
+| `success` | `bool` | `metadata.failure is None` |
+| `failure_category` | `str` (empty when no failure) | `metadata.failure.category.value` |
+| `failure_group` | `str` (empty when no failure) | `metadata.failure.group.value` (computed from category) |
+| `failure_stage` | `str` (empty when no failure) | `metadata.failure.stage` |
+| `failure_reason` | `str` (empty when no failure) | `metadata.failure.reason` (capped at 500 chars) |
+| `failure_details_json` | `str` (empty when no details) | `json.dumps(metadata.failure.details)` |
+| `caveats` | `str` (comma-joined enum values, possibly empty) | `",".join(c.value for c in metadata.caveats)` |
+
+Round-trip is symmetric: `_process_csv_row` parses these columns back into a `Failure` object (with `group` re-derived from `category`) and a `list[Caveat]`. The exact column names and serialization live in `karenina/benchmark/core/results_io.py`. For the full taxonomy of categories, groups, and caveats, see the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
+
 ## JSON-LD vs Database
 
 Both storage approaches are complementary. Use the one that fits your workflow, or use both together.
@@ -341,6 +371,7 @@ A common pattern: save checkpoints to JSON-LD for version control and sharing, t
 
 ```python
 import shutil
+
 shutil.rmtree(_tmpdir, ignore_errors=True)
 print(f"Cleaned up: {_tmpdir}")
 ```

@@ -79,18 +79,26 @@ _pass_fail = [True, True, True, False, None]  # 3 pass, 1 fail, 1 error
 
 def _make(qid, q_text, raw_ans, verified, error=False):
     rid = VerificationResultMetadata.compute_result_id(qid, _answering, _parsing, _ts)
-    template = None if error else VerificationResultTemplate(
-        raw_llm_response=f"The answer is {raw_ans}.",
-        verify_result=verified,
-        template_verification_performed=True,
-        parsed_gt_response={"answer": raw_ans},
-        parsed_llm_response={"answer": raw_ans if verified else "unknown"},
+    template = (
+        None
+        if error
+        else VerificationResultTemplate(
+            raw_llm_response=f"The answer is {raw_ans}.",
+            verify_result=verified,
+            template_verification_performed=True,
+            parsed_gt_response={"answer": raw_ans},
+            parsed_llm_response={"answer": raw_ans if verified else "unknown"},
+        )
     )
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=qid,
             template_id="tmpl_" + qid[:8],
-            failure=Failure(category=FailureCategory.UNEXPECTED_ERROR, stage="unknown", reason="Template class not found") if error else None,
+            failure=Failure(
+                category=FailureCategory.UNEXPECTED_ERROR, stage="unknown", reason="Template class not found"
+            )
+            if error
+            else None,
             caveats=[],
             question_text=q_text,
             raw_answer=raw_ans,
@@ -116,9 +124,7 @@ _orig_run = Benchmark.run_verification
 def _patched_run(self, config, **kwargs):
     qids = kwargs.get("question_ids")
     if qids:
-        return VerificationResultSet(
-            results=[r for r in _mock_results if r.metadata.question_id in qids]
-        )
+        return VerificationResultSet(results=[r for r in _mock_results if r.metadata.question_id in qids])
     return _mock_result_set
 
 
@@ -138,8 +144,10 @@ from karenina.schemas.config import ModelConfig
 
 benchmark = Benchmark.load(str(_tmp))
 config = VerificationConfig.from_overrides(
-    answering_id="claude-haiku-4-5", answering_model="claude-haiku-4-5",
-    parsing_id="claude-haiku-4-5", parsing_model="claude-haiku-4-5",
+    answering_id="claude-haiku-4-5",
+    answering_model="claude-haiku-4-5",
+    parsing_id="claude-haiku-4-5",
+    parsing_model="claude-haiku-4-5",
 )
 results = benchmark.run_verification(config)
 print(f"Verified {len(results)} questions")
@@ -301,13 +309,18 @@ from karenina.storage import DBConfig
 
 config_with_db = VerificationConfig(
     answering_models=[
-        ModelConfig(id="claude-haiku-4-5", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(
+            id="claude-haiku-4-5", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain"
+        )
     ],
     parsing_models=[
-        ModelConfig(id="claude-haiku-4-5", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="claude-haiku-4-5",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     db_config=DBConfig(storage_url="sqlite:///results.db"),
 )
@@ -372,10 +385,12 @@ When all questions succeed, `run_verification` returns normally. You can also in
 ```python
 for result in results:
     if result.metadata.failure is not None:
-        print(f"Error in {result.metadata.question_id}: {result.metadata.failure.reason if result.metadata.failure else None}")
+        print(
+            f"Error in {result.metadata.question_id}: {result.metadata.failure.reason if result.metadata.failure else None}"
+        )
 ```
 
-In parallel mode, `VerificationBatchError` is also raised if the batch exceeds the configured timeout (`ExecutorConfig.timeout_seconds`, default 600 seconds). The `partial_results` attribute contains whichever questions completed before the timeout.
+The parallel executor also supports a batch-level timeout, but it is disabled by default. `ExecutorConfig.timeout_seconds` defaults to `None`, and the standard `run_verification` path does not set it, so the executor runs until every question finishes rather than aborting on a wall-clock ceiling. When a positive `timeout_seconds` is configured and the batch exceeds it, `VerificationBatchError` is raised and its `partial_results` attribute holds whichever questions completed before the timeout.
 
 | Exception | When |
 |-----------|------|
@@ -398,8 +413,10 @@ Enable async for parallel question processing:
 
 ```python
 config_async = VerificationConfig.from_overrides(
-    answering_id="claude-haiku-4-5", answering_model="claude-haiku-4-5",
-    parsing_id="claude-haiku-4-5", parsing_model="claude-haiku-4-5",
+    answering_id="claude-haiku-4-5",
+    answering_model="claude-haiku-4-5",
+    parsing_id="claude-haiku-4-5",
+    parsing_model="claude-haiku-4-5",
     async_execution=True,
     async_workers=4,
 )
@@ -417,7 +434,7 @@ Also configurable via `KARENINA_ASYNC_ENABLED` and `KARENINA_ASYNC_MAX_WORKERS` 
 - [Multi-Model Comparison](multi-model-comparison.ipynb) — Compare models side-by-side
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All configuration fields
 - [CLI Reference: verify](../../reference/cli/verify.md) — Full CLI options
-- [Analyzing Results](../analyzing-results/index.md) — DataFrame analysis and export
+- [Analyzing Results](../../workflows/analyzing-results/index.md) — DataFrame analysis and export
 
 ```python tags=["hide-cell"]
 # Cleanup

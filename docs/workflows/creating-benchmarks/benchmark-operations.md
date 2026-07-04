@@ -17,7 +17,7 @@ jupyter:
 
 This page covers the full operational API for working with `Benchmark` objects: creating, populating, inspecting, querying, and checking readiness. Think of it as a reference for everything you can do with a benchmark before running verification.
 
-For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Concepts)](../../core_concepts/questions-and-benchmarks/benchmarks.md). For end-to-end authoring scenarios, see the other pages in this section ([Factual QA](factual-qa-benchmark.md), [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md), [Scaled Authoring](scaled-authoring.md)).
+For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb). For end-to-end authoring scenarios, see the other pages in this section ([Factual QA](factual-qa-benchmark.md), [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md), [Scaled Authoring](scaled-authoring.md)).
 
 ```python tags=["hide-cell"]
 # Setup cell: hidden in rendered documentation.
@@ -107,7 +107,7 @@ print(f"Added via Question object: {q_extra_id}")
 
 Pass both the question and an answer template in one call. See [Inline (at question creation time)](#inline-at-question-creation-time) below for the full example.
 
-Question IDs are deterministic: derived from the question text via hashing. The same text always produces the same ID. For details on ID generation and custom IDs, see [Questions (Core Concepts)](../../core_concepts/questions-and-benchmarks/questions.md#deterministic-ids).
+Question IDs are deterministic: derived from the question text via hashing. The same text always produces the same ID. For details on ID generation and custom IDs, see [Questions (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#deterministic-ids).
 
 ---
 
@@ -122,7 +122,7 @@ The Judge LLM sees `raw_answer` as context during the parsing stage. A precise `
 | Good | `"BCL2 (B-cell lymphoma 2)"` | Full name with abbreviation; clear and unambiguous |
 | Good | `"BCL2 (B-cell lymphoma 2), an anti-apoptotic protein overexpressed in CLL"` | Rich context; particularly helpful for domain-specific questions |
 
-For more on the relationship between `raw_answer` and the template's `ground_truth()`, see [Questions (Core Concepts)](../../core_concepts/questions-and-benchmarks/questions.md#raw_answer-vs-template-ground_truth).
+For more on the relationship between `raw_answer` and the template's `ground_truth()`, see [Questions (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#raw_answer-vs-template-ground_truth).
 
 ---
 
@@ -151,6 +151,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.identifies_bh3_mimetic == self.correct["identifies_bh3_mimetic"]
+
 
 q3_id = benchmark.add_question(
     question="Describe the pharmacological mechanism of venetoclax.",
@@ -188,6 +189,7 @@ class Answer(BaseAnswer):
         extracted = self.target.strip().upper().replace("-", "").replace(" ", "")
         return extracted == self.correct["target"]
 
+
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 has template: {benchmark.has_template(q1_id)}")
 ```
@@ -201,7 +203,7 @@ Apply a single template to all questions that do not yet have one:
 # applied_ids = benchmark.apply_global_template(template_code)
 ```
 
-`apply_global_template()` only applies to questions without an existing template. Questions that already have one (even a default placeholder) are skipped.
+`apply_global_template()` applies to every question that lacks a real template, as reported by `has_template()`. Questions holding only the default placeholder count as template-less and do receive the global template. Only questions that already have a real, non-default template are skipped.
 
 ### Default Templates
 
@@ -230,27 +232,29 @@ Rubric traits assess response quality. They attach at two levels.
 Global traits apply to every question in the benchmark:
 
 ```python
-global_rubric = Rubric(llm_traits=[
-    LLMRubricTrait(
-        name="conciseness",
-        description=(
-            "True if the response directly answers the question without "
-            "unnecessary preamble, filler phrases, or tangential information. "
-            "A concise response may still include relevant context or caveats. "
-            "False if the response contains significant padding, repeats the "
-            "question back, or includes large blocks of unrequested detail."
+global_rubric = Rubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="conciseness",
+            description=(
+                "True if the response directly answers the question without "
+                "unnecessary preamble, filler phrases, or tangential information. "
+                "A concise response may still include relevant context or caveats. "
+                "False if the response contains significant padding, repeats the "
+                "question back, or includes large blocks of unrequested detail."
+            ),
+            kind="boolean",
+            higher_is_better=True,
         ),
-        kind="boolean",
-        higher_is_better=True,
-    ),
-])
+    ]
+)
 benchmark.set_global_rubric(global_rubric)
 print(f"Global rubric set: {benchmark.get_global_rubric() is not None}")
 ```
 
 ### Question-specific traits
 
-Question-specific traits apply to a single question. When both global and question-specific traits exist, they merge. If a question-specific trait has the same name as a global trait, the question-specific one takes precedence.
+Question-specific traits apply to a single question. When both global and question-specific traits exist, they merge. There is no precedence or override: if a global and a question-specific trait of the same type share a name, merging the two rubrics raises a `ValueError`. Trait names must be unique across the global and question-specific scopes.
 
 ```python
 benchmark.add_question_rubric_trait(
@@ -289,7 +293,7 @@ Custom properties describe the benchmark as a whole. For per-question metadata, 
 
 ### Finished status
 
-The `finished` flag determines whether a question enters the verification pipeline. Only finished questions are processed by `get_finished_templates()`. See [Questions (Core Concepts)](../../core_concepts/questions-and-benchmarks/questions.md#the-finished-flag) for the conceptual explanation.
+The `finished` flag determines whether a question enters the verification pipeline. Only finished questions are processed by `get_finished_templates()`. See [Questions (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#the-finished-flag) for the conceptual explanation.
 
 ```python
 # Mark individual questions
@@ -364,9 +368,9 @@ print(f"All have templates:     {readiness['all_have_templates']}")
 print(f"All finished:           {readiness['all_finished']}")
 print(f"Templates valid:        {readiness['templates_valid']}")
 print(f"Rubrics valid:          {readiness['rubrics_valid']}")
-if readiness['missing_templates']:
+if readiness["missing_templates"]:
     print(f"Missing templates:      {readiness['missing_templates_count']} questions")
-if readiness['unfinished_questions']:
+if readiness["unfinished_questions"]:
     print(f"Unfinished:             {int(readiness['unfinished_count'])} questions")
 ```
 
@@ -388,9 +392,9 @@ For a higher-level view, `get_health_report()` returns a scored assessment (0 to
 report = benchmark.get_health_report()
 print(f"Health score:  {report['health_score']}")
 print(f"Health status: {report['health_status']}")
-if report.get('recommendations'):
+if report.get("recommendations"):
     print("Recommendations:")
-    for rec in report['recommendations']:
+    for rec in report["recommendations"]:
         print(f"  - {rec}")
 ```
 
@@ -482,8 +486,8 @@ Slicing is also supported: `benchmark[0:2]` returns a list of `SchemaOrgQuestion
 | `is_complete` returns `False` | Some questions lack real templates or are not marked finished | Check `benchmark.get_unfinished_questions()` and `benchmark.get_missing_templates()` |
 | `check_readiness()` says ready but verification returns no results | Questions have templates but are not marked `finished` | Call `benchmark.mark_finished(question_id)` for each question |
 | `validate_templates()` reports errors | Template code has syntax errors or missing imports | Review template code; ensure it inherits from `BaseAnswer` |
-| Global template does not appear on a question | `apply_global_template()` only applies to questions without templates | Questions that already have a template (even a default) may need explicit `add_answer_template()` |
-| Rubric trait name collision raises `ValueError` | A question-specific trait has the same name as a global trait | Question-specific traits override globals with the same name; ensure names are intentionally unique or use override semantics |
+| Global template does not appear on a question | `apply_global_template()` skips questions that already hold a real, non-default template | Overwrite it explicitly with `add_answer_template()` |
+| Rubric trait name collision raises `ValueError` | A question-specific trait has the same name as a global trait of the same type | Same-type collisions are rejected at merge time; rename one of the traits so each name is unique within its type. Cross-type duplicates are also rejected by the `Rubric` constructor. |
 | Ambiguous `raw_answer` leads to poor parsing | The Judge LLM lacks context to extract the right value | Use descriptive `raw_answer` values: `"BCL2 (B-cell lymphoma 2)"` not just `"BCL2"` |
 | Same question text produces different IDs across benchmarks | Comparing custom IDs vs auto-generated IDs, or text differs in whitespace | Use consistent text or explicit `question_id` values |
 | Modified question text breaks result cross-references | ID changed because it is computed from text | Use a custom `question_id` when text may evolve |

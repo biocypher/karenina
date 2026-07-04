@@ -36,8 +36,12 @@ from karenina.integrations.adele import (
 )
 
 _SCORE_TO_LABEL = {
-    0: "none", 1: "very_low", 2: "low",
-    3: "intermediate", 4: "high", 5: "very_high",
+    0: "none",
+    1: "very_low",
+    2: "low",
+    3: "intermediate",
+    4: "high",
+    5: "very_high",
 }
 
 _MOCK_PROFILES = {
@@ -216,9 +220,7 @@ from karenina.integrations.adele import QuestionClassifier
 # Default: claude-haiku-4-5 via Anthropic, batch mode, temperature 0.0
 classifier = QuestionClassifier()
 
-result = classifier.classify_single(
-    "What is the chemical formula for water?"
-)
+result = classifier.classify_single("What is the chemical formula for water?")
 
 # Scores are integer indices (0-5) keyed by trait name
 print("Scores (first 5):", dict(list(result.scores.items())[:5]))
@@ -239,10 +241,7 @@ questions = [
     ("q3", "Write a haiku about recursion."),
 ]
 
-results = classifier.classify_batch(
-    questions,
-    on_progress=lambda done, total: print(f"{done}/{total}")
-)
+results = classifier.classify_batch(questions, on_progress=lambda done, total: print(f"{done}/{total}"))
 
 for qid, r in results.items():
     # Show only non-zero dimensions for readability
@@ -257,7 +256,7 @@ You do not have to evaluate all 18 dimensions. Pass `trait_names` to select spec
 ```python
 result = classifier.classify_single(
     "Prove that the square root of 2 is irrational.",
-    trait_names=["logical_reasoning_logic", "knowledge_formal_sciences", "atypicality"]
+    trait_names=["logical_reasoning_logic", "knowledge_formal_sciences", "atypicality"],
 )
 
 # Only the selected dimensions appear in scores and labels
@@ -271,17 +270,16 @@ A common workflow is to classify questions first, then run verification only on 
 
 ```python
 # Classify a set of questions
-all_results = classifier.classify_batch([
-    ("q1", "What is 2 + 2?"),
-    ("q2", "Prove that the square root of 2 is irrational."),
-    ("q3", "Explain the significance of BCL2 in cancer therapy."),
-])
+all_results = classifier.classify_batch(
+    [
+        ("q1", "What is 2 + 2?"),
+        ("q2", "Prove that the square root of 2 is irrational."),
+        ("q3", "Explain the significance of BCL2 in cancer therapy."),
+    ]
+)
 
 # Filter to questions requiring high logical reasoning (score >= 4)
-complex_ids = [
-    qid for qid, r in all_results.items()
-    if r.scores.get("logical_reasoning_logic", 0) >= 4
-]
+complex_ids = [qid for qid, r in all_results.items() if r.scores.get("logical_reasoning_logic", 0) >= 4]
 print(f"Questions requiring high logical reasoning: {complex_ids}")
 ```
 
@@ -369,7 +367,11 @@ result = QuestionClassificationResult(
     question_id="q1",
     question_text="What is 2 + 2?",
     scores={"attention_and_scan": 0, "knowledge_formal_sciences": 1, "logical_reasoning_quantitative": 1},
-    labels={"attention_and_scan": "none", "knowledge_formal_sciences": "very_low", "logical_reasoning_quantitative": "very_low"},
+    labels={
+        "attention_and_scan": "none",
+        "knowledge_formal_sciences": "very_low",
+        "logical_reasoning_quantitative": "very_low",
+    },
     model="claude-haiku-4-5",
     classified_at="2025-06-15T10:30:00",
 )
@@ -384,18 +386,14 @@ The metadata dict can be passed as `custom_metadata` when adding a question to a
 ```python
 # Reconstruct from checkpoint metadata
 loaded = QuestionClassificationResult.from_checkpoint_metadata(
-    metadata,
-    question_id="q1",
-    question_text="What is 2 + 2?"
+    metadata, question_id="q1", question_text="What is 2 + 2?"
 )
 print(f"Loaded scores: {loaded.scores}")
 print(f"Loaded model: {loaded.model}")
 
 # Returns None when no classification exists
 empty = QuestionClassificationResult.from_checkpoint_metadata(
-    {"other_key": "value"},
-    question_id="q1",
-    question_text="What is 2 + 2?"
+    {"other_key": "value"}, question_id="q1", question_text="What is 2 + 2?"
 )
 print(f"From empty metadata: {empty}")
 ```

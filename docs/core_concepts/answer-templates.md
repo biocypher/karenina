@@ -397,8 +397,7 @@ class Answer(BaseAnswer):
         ground_truth="O+",
         verify_with=ExactMatch(normalize=["lowercase", "strip"]),
         extraction_hint=(
-            "Look for blood type notation like 'O+', 'A-', 'O positive', etc. "
-            "Convert full names to shorthand notation."
+            "Look for blood type notation like 'O+', 'A-', 'O positive', etc. Convert full names to shorthand notation."
         ),
     )
 
@@ -687,16 +686,14 @@ class Answer(BaseAnswer):
     )
     mentions_kras: bool = VerifiedField(
         description=(
-            "True if the response names KRAS (or K-Ras, K-RAS) as part of the "
-            "signaling pathway. False otherwise."
+            "True if the response names KRAS (or K-Ras, K-RAS) as part of the signaling pathway. False otherwise."
         ),
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
     mentions_braf: bool = VerifiedField(
         description=(
-            "True if the response names BRAF (or B-Raf, B-RAF) as part of the "
-            "signaling pathway. False otherwise."
+            "True if the response names BRAF (or B-Raf, B-RAF) as part of the signaling pathway. False otherwise."
         ),
         ground_truth=True,
         verify_with=BooleanMatch(),
@@ -810,13 +807,17 @@ class Answer(BaseAnswer):
     )
 
     class VerificationStrategy:
-        verify_strategy = AnyOf(conditions=[
-            FieldCheck(field="target"),
-            AllOf(conditions=[
-                FieldCheck(field="mechanism"),
-                FieldCheck(field="is_approved"),
-            ]),
-        ])
+        verify_strategy = AnyOf(
+            conditions=[
+                FieldCheck(field="target"),
+                AllOf(
+                    conditions=[
+                        FieldCheck(field="mechanism"),
+                        FieldCheck(field="is_approved"),
+                    ]
+                ),
+            ]
+        )
 ```
 
 In this example, verification passes if the target is correct, *or* if both the mechanism and approval status are correct.
@@ -1082,12 +1083,8 @@ For classic templates, `verify_granular()` is an optional method you define your
 
 ```python
 class Answer(BaseAnswer):
-    delivery_mechanism: str = Field(
-        description="The vaccine delivery mechanism described in the response"
-    )
-    target_protein: str = Field(
-        description="The protein that cells are instructed to produce"
-    )
+    delivery_mechanism: str = Field(description="The vaccine delivery mechanism described in the response")
+    target_protein: str = Field(description="The protein that cells are instructed to produce")
 
     def ground_truth(self):
         self.correct = {
@@ -1247,7 +1244,7 @@ def verify(self) -> bool:
 
 ## 11. Next Steps
 
-- [Verification Primitives](verification-primitives.md): Full reference for all 18 verification primitives, including parameters and examples
+- [Verification Primitives](verification-primitives.md): Full reference for all 23 verification primitives, including parameters and examples
 - [Rubrics](../../../core_concepts/rubrics/): Assess response quality beyond correctness
 - [Evaluation Modes](../evaluation-modes/): Choose between template-only, rubric-only, or both
 - [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/): Step-by-step implementation of these patterns in a benchmark

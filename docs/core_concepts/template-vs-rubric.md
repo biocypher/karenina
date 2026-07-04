@@ -32,7 +32,7 @@ Karenina evaluates LLM responses using two complementary building blocks: **answ
 | **Requires ground truth** | Yes (the `self.correct` dictionary) | No (judges by reading the response alone) |
 | **Method** | Judge LLM parses response into schema, then `verify()` checks programmatically | Trait evaluators assess the raw text (LLM, regex, callable, or metric) |
 | **Output** | Boolean (pass/fail) | Boolean, integer score, or metrics dict |
-| **Pipeline stages** | [ParseTemplate](../verification-pipeline/) (stage 7), [VerifyTemplate](../verification-pipeline/) (stage 8) | [RubricEvaluation](../verification-pipeline/) (stage 11) |
+| **Pipeline stages** | [ParseTemplate](../verification-pipeline/) (stage 7a, plus optional 7b agentic parsing), [VerifyTemplate](../verification-pipeline/) (stage 8) | [RubricEvaluation](../verification-pipeline/) (stage 11a, plus optional 11b agentic rubric evaluation) |
 
 In short:
 
@@ -114,7 +114,7 @@ The verification is entirely programmatic: once the Judge LLM fills in the schem
            bool/int      bool        bool/int
 ```
 
-[Rubrics](../../../core_concepts/rubrics/) evaluate **qualities of the raw response** without parsing it into structured data first. Unlike templates, rubrics never see a filled schema; they work directly on the response text. Four trait classes are available, and `LLMRubricTrait` supports boolean, score, and literal evaluation kinds:
+[Rubrics](../../../core_concepts/rubrics/) evaluate **qualities of the raw response** without parsing it into structured data first. Unlike templates, rubrics never see a filled schema; they work directly on the response text. Five trait classes are available (LLM, regex, callable, metric, agentic), and `LLMRubricTrait` supports boolean, score, and literal evaluation kinds:
 
 | Trait Type | Returns | LLM Required | Use Case |
 |---|---|---|---|
@@ -265,9 +265,9 @@ The `evaluation_mode` field on [VerificationConfig](../../../reference/configura
 
 | Mode | Templates | Rubrics | Pipeline stages active | When to use |
 |---|---|---|---|---|
-| `template_only` (default) | Yes | No | Stages 1-10, 13 | Pure correctness verification |
-| `template_and_rubric` | Yes | Yes | All 13 stages | Correctness + quality assessment |
-| `rubric_only` | No | Yes | Stages 2-5, 11-13 (template stages skipped) | Quality-only evaluation; no correct answer needed |
+| `template_only` (default) | Yes | No | Stages 1-10, 13 (plus the always-on placeholder-retry guard between 4 and 5) | Pure correctness verification |
+| `template_and_rubric` | Yes | Yes | All 13 stages (plus the always-on placeholder-retry guard between 4 and 5) | Correctness + quality assessment |
+| `rubric_only` | No | Yes | Stages 2-5, 11-13 (template stages skipped; placeholder-retry guard still runs between 4 and 5) | Quality-only evaluation; no correct answer needed |
 
 For details on configuring evaluation modes, see [Evaluation Modes](../evaluation-modes/).
 
@@ -335,10 +335,10 @@ print(f"Regex trait '{has_citations.name}' on sample without citations: {has_cit
 **What happens during evaluation** (using `template_and_rubric` mode):
 
 1. **Stages 1-2**: The pipeline validates the template and generates an answer (or uses a cached response in TaskEval).
-2. **Stages 3-6**: Guard stages run (recursion limit, trace validation, optional abstention/sufficiency checks).
-3. **Stage 7 (ParseTemplate)**: The Judge LLM receives the question, the response, and the template's JSON schema. It fills in `identifies_bcl2_as_target`.
+2. **Stages 3-6 (plus placeholder-retry guard)**: Guard stages run (recursion limit, trace validation, the always-on placeholder-retry auto-fail guard between stages 4 and 5, then optional abstention/sufficiency checks).
+3. **Stage 7a (ParseTemplate)**: The Judge LLM receives the question, the response, and the template's JSON schema. It fills in `identifies_bcl2_as_target`. (Stage 7b runs an agentic parsing investigation when configured.)
 4. **Stage 8 (VerifyTemplate)**: `verify()` runs each field's primitive against its ground truth. Result: **PASS** or **FAIL**.
-5. **Stage 11 (RubricEvaluation)**: Each trait evaluates the raw response independently. The LLM trait assesses whether the mechanism is explained. The regex trait checks for `[N]` citation patterns.
+5. **Stage 11a (RubricEvaluation)**: Each trait evaluates the raw response independently. The LLM trait assesses whether the mechanism is explained. The regex trait checks for `[N]` citation patterns. (Stage 11b runs agentic rubric evaluation when agentic traits are present.)
 6. **Stage 13 (FinalizeResult)**: All results are combined into a single `VerificationResult`.
 
 The template verdict and rubric scores are independent. A response could correctly identify BCL2 (template passes) but fail to explain the mechanism (LLM trait returns `False`) and include no citations (regex trait returns `False`).
@@ -348,7 +348,7 @@ The template verdict and rubric scores are independent. A response could correct
 - [Answer Templates](../answer-templates/): deep dive into template structure, `verify()`, and field types
 - [Rubrics](../../../core_concepts/rubrics/): all trait types, attachment scoping, and the `higher_is_better` field
 - [Evaluation Modes](../evaluation-modes/): configuring `template_only`, `rubric_only`, and `template_and_rubric`
-- [Verification Pipeline](../verification-pipeline/): the 13-stage engine that executes both evaluation paths
+- [Verification Pipeline](../verification-pipeline/): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that executes both evaluation paths
 - [LLM Evaluation Philosophy](../../../home/philosophy/): why Karenina uses LLMs as judges
 
 **Back to**: [Core Concepts](../../../core_concepts/)

@@ -77,7 +77,7 @@ These concept pages provide the foundational knowledge that the scenarios build 
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Template structure, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md): Trait types (LLM, regex, callable, metric), global vs per-question
 - [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How template-only, template+rubric, and rubric-only map to pipeline stages
-- [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine that TaskEval feeds into
+- [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine (with sub-stages 7a/7b and 11a/11b) that TaskEval feeds into
 
 ---
 

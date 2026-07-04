@@ -134,6 +134,7 @@ Question + Response Trace + Workspace Path
 |-------|------|----------|---------|-------------|
 | `name` | `str` | Yes | | Human-readable identifier (must be unique within the rubric) |
 | `description` | `str` | Yes | | Evaluation instructions for the agent. This is the primary channel for telling the agent what to investigate and what counts as evidence |
+| `summary` | `str \| None` | No | `None` | Short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset |
 | `kind` | `"boolean"` / `"score"` / `"literal"` / `type[BaseModel]` | Yes | | Shape of the result. String literals produce scalar scores; a `BaseModel` subclass (template kind) produces structured multi-field findings (see Section 5.4) |
 | `higher_is_better` | `bool \| None` | Yes | | Whether higher values indicate better performance. Must be `None` for template kind, because structured results have no single direction |
 | `min_score` | `int \| None` | No | `1` | Lower bound for score traits. Auto-derived for literal |
@@ -149,7 +150,7 @@ Question + Response Trace + Workspace Path
 | `timeout_seconds` | `int` | `120` | Wall-clock timeout for the investigation step |
 | `materialize_trace` | `bool` | `False` | Write the answering agent trace to a file in the workspace instead of inlining it in the investigation prompt. The investigation agent receives the file path and can use grep/search tools on it. Requires `context_mode` that includes the trace (`"trace_only"` or `"trace_and_workspace"`). See Section 5.5 |
 | `persist_trace` | `bool` | `False` | When `True`, the materialized trace file is kept after evaluation. When `False` (default), cleaned up after evaluation completes |
-| `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. The model's interface must have a registered `agent_factory` |
+| `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. The interface must be registered with `agent_tier="deep_agent"`; a model-validator rejects any other tier (including `"basic_agent"`) at trait construction time |
 
 ## 4. How It Works
 
@@ -170,7 +171,7 @@ During the [verification pipeline](../../verification-pipeline/), agentic rubric
 For each agentic trait, the pipeline:
 
 1. Resolves the model: uses `trait.model_override` if set, otherwise falls back to the pipeline's parsing model.
-2. Validates that the resolved model's interface has an `agent_factory` registered. If not, the trait is skipped with a warning.
+2. Validates that the resolved model's interface is registered with `agent_tier="deep_agent"`. If the tier is anything else (or the interface is unregistered), the trait is skipped with a warning.
 3. Runs the investigation step (agent with tools, bounded by `max_turns` and `timeout_seconds`).
 4. Runs the extraction step (structured parser call on the investigation trace).
 5. Stores the score in `VerificationResult.rubric.agentic_trait_scores` and the trace in `VerificationResult.rubric.agentic_trait_investigation_traces`.
@@ -287,15 +288,9 @@ from karenina.schemas.entities.rubric import AgenticRubricTrait
 class CodeQualityFindings(BaseModel):
     """The agent investigates the workspace and fills this in."""
 
-    has_type_hints: bool = Field(
-        description="True if the code uses type annotations on function signatures."
-    )
-    test_count: int = Field(
-        description="Number of test functions found in test files."
-    )
-    external_dependencies: list[str] = Field(
-        description="Third-party packages imported by the code."
-    )
+    has_type_hints: bool = Field(description="True if the code uses type annotations on function signatures.")
+    test_count: int = Field(description="Number of test functions found in test files.")
+    external_dependencies: list[str] = Field(description="Third-party packages imported by the code.")
 
 
 trait = AgenticRubricTrait(
@@ -376,17 +371,17 @@ Like `LLMRubricTrait`, agentic traits provide a `validate_score` method that che
 
 ```python
 # Boolean trait: only accepts bool
-print(runs_cleanly.validate_score(True))    # True
-print(runs_cleanly.validate_score(1))       # False (int rejected for boolean)
+print(runs_cleanly.validate_score(True))  # True
+print(runs_cleanly.validate_score(1))  # False (int rejected for boolean)
 
 # Score trait: accepts int in [min_score, max_score]
-print(test_quality.validate_score(3))       # True
-print(test_quality.validate_score(6))       # False (above max_score)
+print(test_quality.validate_score(3))  # True
+print(test_quality.validate_score(6))  # False (above max_score)
 
 # Literal trait: accepts int in [0, len(classes)-1] or -1 (error state)
-print(library_trait.validate_score(0))      # True (statsmodels)
-print(library_trait.validate_score(-1))     # True (error state)
-print(library_trait.validate_score(4))      # False (out of range)
+print(library_trait.validate_score(0))  # True (statsmodels)
+print(library_trait.validate_score(-1))  # True (error state)
+print(library_trait.validate_score(4))  # False (out of range)
 ```
 
 ## 6. When to Use Agentic Traits

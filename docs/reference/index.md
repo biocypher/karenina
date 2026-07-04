@@ -9,7 +9,7 @@ This section is about *looking things up* — exhaustive tables of every CLI fla
 | Reference | What It Covers |
 |-----------|---------------|
 | [Configuration Reference](configuration/index.md) | Exhaustive field-by-field tables for VerificationConfig, ModelConfig, PromptConfig, presets, and environment variables |
-| [CLI Reference](cli/index.md) | Complete documentation for all CLI commands (`verify`, `preset`, `serve`, `init`, `optimize`) |
+| [CLI Reference](cli/index.md) | Complete documentation for all CLI commands (`verify`, `verify-status`, `serve`, `init`, `optimize`, `optimize-history`, `optimize-compare`, `analyze-errors`, `preset`) |
 | [API Reference](api/SUMMARY.md) | Auto-generated Python API reference from source code docstrings |
 
 ---

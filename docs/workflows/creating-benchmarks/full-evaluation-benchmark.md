@@ -53,7 +53,7 @@ print(f"Created: {benchmark.name}")
 
 ## Add Questions with Templates
 
-Each question gets a template that defines how to check correctness. Templates here are kept brief since this tutorial focuses on rubric traits — see [Factual QA Benchmark](factual-qa-benchmark.ipynb) for detailed template patterns.
+Each question gets a template that defines how to check correctness. Templates here are kept brief since this tutorial focuses on rubric traits; see [Factual QA Benchmark](factual-qa-benchmark.ipynb) for detailed template patterns.
 
 ### Question 1: Boolean Check
 
@@ -62,6 +62,7 @@ q1_id = benchmark.add_question(
     question="What is the approved pharmacological target of trastuzumab?",
     raw_answer="HER2 (ERBB2) is the target of trastuzumab",
 )
+
 
 class Answer(BaseAnswer):
     identifies_her2: bool = Field(
@@ -75,6 +76,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         return self.identifies_her2
 
+
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
 ```
@@ -87,6 +89,7 @@ q2_id = benchmark.add_question(
     raw_answer="Biguanide",
 )
 
+
 class Answer(BaseAnswer):
     drug_class: str = Field(
         description=(
@@ -97,6 +100,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.drug_class.strip().lower() == "biguanide"
+
 
 benchmark.update_template(q2_id, Answer)
 print(f"Q2 added with template: {q2_id[:50]}...")
@@ -110,12 +114,10 @@ q3_id = benchmark.add_question(
     raw_answer="Aspirin irreversibly inhibits cyclooxygenase (COX) enzymes, reducing prostaglandin synthesis and thereby decreasing inflammation.",
 )
 
+
 class Answer(BaseAnswer):
     mechanism: str = Field(
-        description=(
-            "A brief summary of how aspirin reduces inflammation, as described "
-            "in the response."
-        )
+        description=("A brief summary of how aspirin reduces inflammation, as described in the response.")
     )
     target_enzyme: str = Field(
         description=(
@@ -134,15 +136,16 @@ class Answer(BaseAnswer):
         enzyme_correct = self.target_enzyme.strip().upper() in ("COX", "CYCLOOXYGENASE")
         return enzyme_correct and self.mentions_irreversible
 
+
 benchmark.update_template(q3_id, Answer)
 print(f"Q3 added with template: {q3_id[:50]}...")
 ```
 
 ## Add Global Rubric Traits
 
-Global traits are evaluated on **every question** in the benchmark. They capture quality dimensions that apply universally — safety, formatting, response length.
+Global traits are evaluated on **every question** in the benchmark. They capture quality dimensions that apply universally: safety, formatting, response length.
 
-### LLM Boolean Trait — Safety
+### LLM Boolean Trait: Safety
 
 ```python
 from karenina.schemas import LLMRubricTrait
@@ -163,19 +166,16 @@ benchmark.add_global_rubric_trait(safety_trait)
 print(f"Added global trait: {safety_trait.name}")
 ```
 
-### Regex Trait — No Hedging Language
+### Regex Trait: No Hedging Language
 
-Regex traits require no LLM call — they evaluate instantly using pattern matching on the raw response text.
+Regex traits require no LLM call; they evaluate instantly using pattern matching on the raw response text.
 
 ```python
 from karenina.schemas import RegexRubricTrait
 
 citation_trait = RegexRubricTrait(
     name="No Hedging Language",
-    description=(
-        "Checks that the response states facts directly without hedging phrases "
-        "that undermine confidence."
-    ),
+    description=("Checks that the response states facts directly without hedging phrases that undermine confidence."),
     pattern=r"\b(I think|I believe|I guess|probably)\b",
     case_sensitive=False,
     invert_result=True,
@@ -186,7 +186,7 @@ benchmark.add_global_rubric_trait(citation_trait)
 print(f"Added global trait: {citation_trait.name}")
 ```
 
-### Callable Trait — Minimum Word Count
+### Callable Trait: Minimum Word Count
 
 Callable traits run a custom Python function on the response text. Karenina itself does not invoke an evaluator LLM for them, but your function may still call external services or another LLM if you choose.
 
@@ -207,9 +207,9 @@ print(f"Added global trait: {word_count_trait.name}")
 
 ## Add Per-Question Rubric Traits
 
-Per-question traits target quality dimensions relevant to specific questions. They are merged with global traits at evaluation time — trait names must be unique across both scopes.
+Per-question traits target quality dimensions relevant to specific questions. They are merged with global traits at evaluation time; trait names must be unique across both scopes.
 
-### LLM Score Trait on Q1 — Explanation Clarity
+### LLM Score Trait on Q1: Explanation Clarity
 
 Score traits ask the parsing model to rate a quality on a numeric scale.
 
@@ -232,7 +232,7 @@ benchmark.add_question_rubric_trait(q1_id, clarity_trait)
 print(f"Added to Q1: {clarity_trait.name}")
 ```
 
-### LLM Literal Trait on Q3 — Response Tone
+### LLM Literal Trait on Q3: Response Tone
 
 Literal traits classify the response into ordered categories. The score is the class index (starting at 0).
 
@@ -253,7 +253,7 @@ benchmark.add_question_rubric_trait(q3_id, tone_trait)
 print(f"Added to Q3: {tone_trait.name} (classes: {list(tone_trait.classes.keys())})")
 ```
 
-### Metric Rubric Trait on Q3 — Mechanism Completeness
+### Metric Rubric Trait on Q3: Mechanism Completeness
 
 Metric traits measure instruction adherence using a confusion-matrix approach. You define what the response should contain, and the parsing model checks each instruction.
 
@@ -334,6 +334,7 @@ print(f"Global traits: {loaded_rubric.get_trait_names()}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 
@@ -350,7 +351,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.ipynb) -- Template-only evaluation with detailed template patterns
-- [Quality Assessment](quality-assessment-benchmark.ipynb) -- Rubric-only evaluation without templates
-- [Scaled Authoring](scaled-authoring.ipynb) -- Bulk workflows and auto-generation
-- [Rubrics Overview](../../core_concepts/rubrics/index.md) -- Deep dive into rubric concepts and trait types
+- [Factual QA Benchmark](factual-qa-benchmark.ipynb): Template-only evaluation with detailed template patterns
+- [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation without templates
+- [Scaled Authoring](scaled-authoring.ipynb): Bulk workflows and auto-generation
+- [Rubrics Overview](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts and trait types

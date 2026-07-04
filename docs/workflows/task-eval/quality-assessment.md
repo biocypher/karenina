@@ -73,20 +73,24 @@ async def _replaying_ainvoke(self, input, config=None, **kwargs):
     if fixture is None:
         # Fallback: return a generic rubric evaluation response
         return AIMessage(
-            content=[{
-                "type": "tool_use",
-                "id": f"fixture_{_call_counter}",
-                "name": "RubricEvaluationResult",
-                "input": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
-                "caller": {"type": "direct"},
-            }],
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": f"fixture_{_call_counter}",
+                    "name": "RubricEvaluationResult",
+                    "input": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
+                    "caller": {"type": "direct"},
+                }
+            ],
             id=f"fixture-{_call_counter}",
-            tool_calls=[{
-                "name": "RubricEvaluationResult",
-                "args": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
-                "id": f"fixture_{_call_counter}",
-                "type": "tool_call",
-            }],
+            tool_calls=[
+                {
+                    "name": "RubricEvaluationResult",
+                    "args": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
+                    "id": f"fixture_{_call_counter}",
+                    "type": "tool_call",
+                }
+            ],
             response_metadata={"model_name": "claude-haiku-4-5-20251001", "stop_reason": "tool_use"},
             usage_metadata={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
         )
@@ -113,6 +117,7 @@ def _safe_add_template(self, template_class, step_id=None):
         _original_add_template(self, template_class, step_id=step_id)
     except (TypeError, OSError):
         from karenina.schemas.entities import BaseAnswer
+
         _code = "from karenina.schemas.entities import BaseAnswer\nclass Answer(BaseAnswer):\n    pass\n"
         self.add_question(
             {"id": template_class.__name__.lower(), "question": "", "raw_answer": "", "answer_template": _code},
@@ -138,15 +143,28 @@ from karenina.schemas.verification.config import VerificationConfig
 task = TaskEval(task_id="quality-check")
 task.log("BCL2 is the primary target of venetoclax, a selective inhibitor used in CLL treatment [1].")
 
-rubric = Rubric(llm_traits=[
-    LLMRubricTrait(name="conciseness", kind="boolean", higher_is_better=True,
-                   description="True if the response is concise and directly answers the question."),
-])
+rubric = Rubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="conciseness",
+            kind="boolean",
+            higher_is_better=True,
+            description="True if the response is concise and directly answers the question.",
+        ),
+    ]
+)
 task.add_rubric(rubric)
 
 config = VerificationConfig(
-    parsing_models=[ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                                model_provider="anthropic", interface="langchain", temperature=0.0)],
+    parsing_models=[
+        ModelConfig(
+            id="haiku",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
+    ],
     parsing_only=True,
 )
 result = task.evaluate(config)
@@ -281,10 +299,13 @@ def check_word_count(text: str) -> bool:
     word_count = len(text.split())
     return 30 <= word_count <= 200
 
+
 def count_sentences(text: str) -> int:
     """Return the number of sentences (periods followed by space or end-of-string)."""
     import re
-    return len(re.findall(r'[.!?](?:\s|$)', text))
+
+    return len(re.findall(r"[.!?](?:\s|$)", text))
+
 
 print(f"check_word_count: {check_word_count.__doc__.strip()}")
 print(f"count_sentences: {count_sentences.__doc__.strip()}")
@@ -341,8 +362,10 @@ sentence_count_trait = CallableRubricTrait.from_callable(
     description="Number of sentences in the response.",
 )
 
-print(f"Created callable traits: {word_count_trait.name} ({word_count_trait.kind}), "
-      f"{sentence_count_trait.name} ({sentence_count_trait.kind})")
+print(
+    f"Created callable traits: {word_count_trait.name} ({word_count_trait.kind}), "
+    f"{sentence_count_trait.name} ({sentence_count_trait.kind})"
+)
 ```
 
 ---
@@ -362,9 +385,11 @@ full_rubric = Rubric(
 
 task.add_rubric(full_rubric)
 
-print(f"Rubric: {len(full_rubric.llm_traits)} LLM, "
-      f"{len(full_rubric.regex_traits)} regex, "
-      f"{len(full_rubric.callable_traits)} callable traits")
+print(
+    f"Rubric: {len(full_rubric.llm_traits)} LLM, "
+    f"{len(full_rubric.regex_traits)} regex, "
+    f"{len(full_rubric.callable_traits)} callable traits"
+)
 print(f"All trait names: {full_rubric.get_trait_names()}")
 ```
 
@@ -435,9 +460,7 @@ Evaluate a second response with the same rubric to compare quality. Create a new
 
 ```python
 task_b = TaskEval(task_id="compare-b", callable_registry=registry)
-task_b.log(
-    "Venetoclax targets BCL2. It is used for cancer."
-)
+task_b.log("Venetoclax targets BCL2. It is used for cancer.")
 task_b.add_rubric(full_rubric)
 
 result_b = task_b.evaluate(config)

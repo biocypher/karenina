@@ -25,7 +25,23 @@ While a [Question object](../questions/) is the minimal unit of evaluation, the 
 from unittest.mock import MagicMock, patch
 
 mock_modules = {}
-for mod in ["sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext", "sqlalchemy.ext.declarative"]:
+for mod in [
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
+]:
     mock_modules[mod] = MagicMock()
 
 with patch.dict("sys.modules", mock_modules):
@@ -39,9 +55,9 @@ Think of a benchmark as a complete kit. When you share a benchmark, you are hand
 1.  **Questions**: The primary building blocks (see [Questions](../questions/)).
     *   **Answer Templates**: The executable Python logic contained **within each question** that determines correctness (see [Answer Templates](../../answer-templates/)).
     *   **Question-Specific Rubrics**: Quality standards defined for a single question.
-    *   **Workspace Paths**: For [agentic tasks](../agentic-evaluation/), optional per-question directories containing starter code, tests, or data files.
+    *   **Workspace Paths**: For [agentic tasks](../../agentic-evaluation/), optional per-question directories containing starter code, tests, or data files.
 2.  **Global Rubric Traits**: Quality standards (safety, conciseness) defined at the **benchmark level** that apply to every question in the set (see [Rubrics](../../../../core_concepts/rubrics/)).
-3.  **Workspace Root**: For [agentic evaluation](../agentic-evaluation/), the root directory on the local filesystem where task workspaces live. Each question can reference a subdirectory within this root via its `workspace_path`.
+3.  **Workspace Root**: For [agentic evaluation](../../agentic-evaluation/), the root directory on the local filesystem where task workspaces live. Each question can reference a subdirectory within this root via its `workspace_path`.
 4.  **Identity Metadata**: The name, version, and authorship information that defines the benchmark's purpose.
 
 ```
@@ -140,7 +156,7 @@ When you "run" a benchmark, the framework pulls the questions and logic from the
 
 ## 5. Workspaces for Agentic Benchmarks
 
-For [agentic evaluation](../agentic-evaluation/) (coding tasks, data analysis), a benchmark can define a `workspace_root`: the root directory on the local filesystem where task workspaces live. Each question can then set a `workspace_path` (a relative path within the root) pointing to its starter code, test files, or data.
+For [agentic evaluation](../../agentic-evaluation/) (coding tasks, data analysis), a benchmark can define a `workspace_root`: the root directory on the local filesystem where task workspaces live. Each question can then set a `workspace_path` (a relative path within the root) pointing to its starter code, test files, or data.
 
 ```python
 from pathlib import Path
@@ -158,7 +174,7 @@ The workspace root belongs to the benchmark because it describes where the task 
 benchmark = Benchmark.load("checkpoint.jsonld", workspace_root=Path("/new/machine/tasks"))
 ```
 
-For full details on workspace copying, cleanup, and agentic judging, see [Agentic Evaluation](../agentic-evaluation/).
+For full details on workspace copying, cleanup, and agentic judging, see [Agentic Evaluation](../../agentic-evaluation/).
 
 ## 6. Detailed Reference: Metadata Fields
 
@@ -172,7 +188,7 @@ Every benchmark carries built-in identity fields to track its evolution.
 | `creator` | The person or team responsible for the benchmark. |
 | `date_created` | ISO timestamp of when the benchmark was initialized. |
 | `date_modified` | ISO timestamp of the last change to the benchmark definition. |
-| `workspace_root` | Root directory for [agentic task](../agentic-evaluation/) workspaces (not persisted in checkpoints). |
+| `workspace_root` | Root directory for [agentic task](../../agentic-evaluation/) workspaces (not persisted in checkpoints). |
 
 ## 7. Next Steps
 
@@ -180,5 +196,5 @@ Every benchmark carries built-in identity fields to track its evolution.
 *   [Answer Templates](../../answer-templates/): Writing the verification logic.
 *   [Checkpoints](../../../../core_concepts/questions-and-benchmarks/checkpoints/): How benchmarks persist as portable JSON-LD files.
 *   [Evaluation Modes](../../evaluation-modes/): How to configure and execute a benchmark run.
-*   [Agentic Evaluation](../agentic-evaluation/): Workspace setup and agentic judging for coding tasks.
+*   [Agentic Evaluation](../../agentic-evaluation/): Workspace setup and agentic judging for coding tasks.
 *   [Benchmark Operations](../../../../workflows/creating-benchmarks/benchmark-operations/): The full API for managing benchmarks programmatically.

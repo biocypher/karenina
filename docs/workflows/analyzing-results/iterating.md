@@ -45,6 +45,25 @@ failed = template_results.filter(failed_only=True)
 print(f"Failed: {len(failed.results)} / {len(template_results.results)}")
 ```
 
+### Filter by Failure Category
+
+When you want to triage by failure type (e.g. focus on retry-exhausted runs separately from real content failures), use the unified [`failure_category` and `failure_group`](../../reference/api/failure-and-caveats.md) columns on the DataFrame:
+
+```python
+df = template_results.to_dataframe()
+
+# Only content failures (verify_template returned False)
+content_fails = df[df["failure_category"] == "content"]
+
+# All retry-exhausted runs (timeout, connection, rate_limit, server_error)
+retry_fails = df[df["failure_group"] == "retry"]
+
+# Specific transient failure mode
+rate_limited = df[df["failure_category"] == "rate_limit"]
+```
+
+Use `failure_group` for coarse buckets and `failure_category` for the leaf taxonomy. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md) for the full list of values and which pipeline stage emits each one.
+
 ### Find Failing Questions
 
 Use a DataFrame to identify which questions are failing and why:
