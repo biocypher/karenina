@@ -42,7 +42,7 @@
 
 Karenina is an open-source Python framework for defining, running, and sharing LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions via [MCP](docs/core_concepts/mcp-overview.md), and fully [agentic coding and data analysis tasks](docs/core_concepts/agentic-evaluation.md) where both the answering model and the judge operate in a real workspace with file and code access.
 
-It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, and metric traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
+It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, metric, and agentic traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
 
 The core challenge Karenina addresses is making the formulation of domain-specific benchmarks accessible to non-LLM-technical experts, allowing them to focus their time and expertise on knowledge rather than infrastructure. LLM-assisted template generation automates most code writing, and a JSON-LD format (building on schema.org vocabularies) provides seamless portability between the Python library, REST API, and web GUI.
 
@@ -199,15 +199,15 @@ Rubrics support five trait types (LLM traits have three sub-kinds: boolean, scor
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (boolean) | `bool` | Yes | Binary quality judgment (safety, conciseness) |
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (score) | `int` | Yes | Numeric rating within a configurable range |
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (literal) | `int` | Yes | Classification into ordered categories (e.g., tone: formal/casual/technical) |
-| **[RegexTrait](docs/core_concepts/rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
-| **[CallableTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
+| **[RegexRubricTrait](docs/core_concepts/rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
+| **[CallableRubricTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
 | **[MetricRubricTrait](docs/core_concepts/rubrics/metric-traits.md)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
 | **[AgenticRubricTrait](docs/core_concepts/agentic-evaluation.md#9-agentic-rubric-evaluation)** | `bool` or `int` | Yes | Agent investigates workspace artifacts before scoring (code quality, test coverage) |
 
 Here is how a complete evaluation looks for our venetoclax question, combining the template above with two rubric traits:
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait
 
 # Template (from above): verifies BCL2 is identified as the target → PASS/FAIL
 
@@ -224,7 +224,7 @@ mechanism_trait = LLMRubricTrait(
 )
 
 # Regex trait: does the response include citations?
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="has_citations",
     description="The response includes at least one numbered citation.",
     pattern=r"\[\d+\]",
@@ -279,7 +279,6 @@ config = VerificationConfig(
         model_provider="anthropic", interface="langchain", temperature=0.0,
     )],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 results = benchmark.run_verification(config)
 
@@ -324,7 +323,7 @@ karenina serve --port 8080
 - **[Agentic evaluation](docs/core_concepts/agentic-evaluation.md)**: evaluate coding and data analysis tasks where models and judges operate in workspaces with tool access
 - **[5 rubric trait types](docs/core_concepts/rubrics/index.md)**: LLM (boolean, score, literal), regex, callable, metric, agentic
 - **[2 evaluation modes](docs/core_concepts/evaluation-modes.md)**: Benchmark (closed-loop) and TaskEval (open-loop, pre-recorded outputs)
-- **[6 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`
+- **[7 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `langchain_deep_agents`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`
 - **[13-stage configurable verification pipeline](docs/core_concepts/verification-pipeline.md)**: each stage can be enabled or disabled independently
 - **[MCP integration](docs/core_concepts/mcp-overview.md)**: Model Context Protocol servers with tool use tracking
 - **[Few-shot prompting](docs/core_concepts/few-shot.md)**: global or per-question examples with flexible selection modes
@@ -452,7 +451,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 
 ### Core Concepts
 - [**Answer Templates**](docs/core_concepts/answer-templates.md): Structured correctness verification
-- [**Rubrics**](docs/core_concepts/rubrics/index.md): Quality assessment with four trait types
+- [**Rubrics**](docs/core_concepts/rubrics/index.md): Quality assessment with five trait types
 - [**Templates vs Rubrics**](docs/core_concepts/template-vs-rubric.md): When to use which
 - [**Verification Pipeline**](docs/core_concepts/verification-pipeline.md): The 13-stage evaluation engine
 - [**Agentic Evaluation**](docs/core_concepts/agentic-evaluation.md): Workspace-based evaluation for coding and data analysis tasks
