@@ -233,6 +233,7 @@ For the full extension surface, see the [Extending a Prior Run tutorial](./exten
 
 ```python tags=["hide-cell"]
 import shutil
+
 shutil.rmtree(_tmp_dir, ignore_errors=True)
 ```
 

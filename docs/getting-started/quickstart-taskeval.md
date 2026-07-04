@@ -110,7 +110,7 @@ BaseChatModel.ainvoke = _replaying_ainvoke
 # cannot retrieve source code from cell-defined classes.
 from karenina.benchmark.task_eval import TaskEval as _TaskEval
 
-_ANSWER_TEMPLATE_CODE = '''\
+_ANSWER_TEMPLATE_CODE = """\
 from karenina.schemas.entities import BaseAnswer, VerifiedField
 from karenina.schemas.primitives import BooleanMatch
 
@@ -134,7 +134,7 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
-'''
+"""
 
 _original_add_template = _TaskEval.add_template
 
@@ -342,30 +342,33 @@ multi_task.log(
     step_id="retrieval",
 )
 multi_task.log(
-    "BCL2 is the primary target of venetoclax. It selectively inhibits BCL2, "
-    "triggering apoptosis in CLL cells.",
+    "BCL2 is the primary target of venetoclax. It selectively inhibits BCL2, triggering apoptosis in CLL cells.",
     step_id="synthesis",
 )
 
 # Step-specific rubrics
 multi_task.add_rubric(
-    Rubric(llm_traits=[
-        LLMRubricTrait(
-            name="retrieval_quality",
-            kind="boolean",
-            description="True if relevant sources were found for the query.",
-        )
-    ]),
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="retrieval_quality",
+                kind="boolean",
+                description="True if relevant sources were found for the query.",
+            )
+        ]
+    ),
     step_id="retrieval",
 )
 multi_task.add_rubric(
-    Rubric(llm_traits=[
-        LLMRubricTrait(
-            name="synthesis_accuracy",
-            kind="boolean",
-            description="True if the synthesis accurately reflects the retrieved information.",
-        )
-    ]),
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="synthesis_accuracy",
+                kind="boolean",
+                description="True if the synthesis accurately reflects the retrieved information.",
+            )
+        ]
+    ),
     step_id="synthesis",
 )
 

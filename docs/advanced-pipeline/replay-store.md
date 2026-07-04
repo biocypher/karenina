@@ -183,7 +183,10 @@ hit.raw_trace, miss
 ```
 
 ```python
-store.has_any_for(question_id="urn:uuid:question-paris-abcdef12"), store.has_any_for(question_id="urn:uuid:question-not-here")
+(
+    store.has_any_for(question_id="urn:uuid:question-paris-abcdef12"),
+    store.has_any_for(question_id="urn:uuid:question-not-here"),
+)
 ```
 
 ### Miss policies: strict vs fall_through
@@ -437,8 +440,9 @@ hybrid_store.register(
     ),
 )
 
-hybrid_store.has_any_for(scenario_id="cf-2-turn", scenario_node="setup", question_id=setup_qid), hybrid_store.has_any_for(
-    scenario_id="cf-2-turn", scenario_node="followup", question_id=setup_qid
+(
+    hybrid_store.has_any_for(scenario_id="cf-2-turn", scenario_node="setup", question_id=setup_qid),
+    hybrid_store.has_any_for(scenario_id="cf-2-turn", scenario_node="followup", question_id=setup_qid),
 )
 ```
 
@@ -548,7 +552,7 @@ from karenina.schemas.verification.config import VerificationConfig
 
 builder = ScenarioReplayBuilder(bench, config=cfg)
 builder.add_qa(qa_store, target_nodes=["ask"], scenarios=["s1", "s2"])
-report = builder.validate()   # inspect before committing
+report = builder.validate()  # inspect before committing
 store = builder.build(strict=True)
 ```
 
@@ -567,11 +571,10 @@ no_mcp_qa = ReplayStore.load("artifacts/qa_no_mcp.json")
 mcp_qa = ReplayStore.load("artifacts/qa_mcp.json")
 
 builder = ScenarioReplayBuilder(bench, config=no_mcp_cfg)
-builder.add_qa(no_mcp_qa, target_nodes=["ask"],
-               scenarios=["syco_hard_casual_no_mcp", "syco_hard_authority_no_mcp"])
-builder.add_qa(mcp_qa, target_nodes=["ask"],
-               scenarios=["syco_hard_casual_mcp", "syco_hard_authority_mcp"],
-               config=mcp_cfg)
+builder.add_qa(no_mcp_qa, target_nodes=["ask"], scenarios=["syco_hard_casual_no_mcp", "syco_hard_authority_no_mcp"])
+builder.add_qa(
+    mcp_qa, target_nodes=["ask"], scenarios=["syco_hard_casual_mcp", "syco_hard_authority_mcp"], config=mcp_cfg
+)
 
 report = builder.validate()
 assert not report.unmatched_targets, report

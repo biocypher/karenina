@@ -41,13 +41,19 @@ _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 
 
 def _make_result(
-    qid, question_text, answering, verified, response,
-    rubric_scores=None, regex_scores=None, callable_scores=None,
-    parsed_gt=None, parsed_llm=None, replicate=None,
+    qid,
+    question_text,
+    answering,
+    verified,
+    response,
+    rubric_scores=None,
+    regex_scores=None,
+    callable_scores=None,
+    parsed_gt=None,
+    parsed_llm=None,
+    replicate=None,
 ):
-    rid = VerificationResultMetadata.compute_result_id(
-        qid, answering, _parsing, _ts, replicate
-    )
+    rid = VerificationResultMetadata.compute_result_id(qid, answering, _parsing, _ts, replicate)
     _gt = parsed_gt or {"answer": response}
     _llm = parsed_llm or {"answer": response}
     # Per-field graded score. Non-graded primitives (used here) record exactly
@@ -92,27 +98,69 @@ def _make_result(
 # Create results for two models across 3 questions
 _mock_results = [
     # Claude Haiku results
-    _make_result("q1", "What is the capital of France?", _answering_haiku, True, "Paris",
-                 rubric_scores={"clarity": 4, "conciseness": True},
-                 regex_scores={"no_hedging": True},
-                 parsed_gt={"capital": "Paris"}, parsed_llm={"capital": "Paris"}),
-    _make_result("q2", "What is 6 multiplied by 7?", _answering_haiku, True, "42",
-                 rubric_scores={"clarity": 5, "conciseness": True},
-                 parsed_gt={"result": "42"}, parsed_llm={"result": "42"}),
-    _make_result("q3", "What element has atomic number 8?", _answering_haiku, False, "Nitrogen",
-                 rubric_scores={"clarity": 3, "conciseness": False},
-                 parsed_gt={"element": "Oxygen"}, parsed_llm={"element": "Nitrogen"}),
+    _make_result(
+        "q1",
+        "What is the capital of France?",
+        _answering_haiku,
+        True,
+        "Paris",
+        rubric_scores={"clarity": 4, "conciseness": True},
+        regex_scores={"no_hedging": True},
+        parsed_gt={"capital": "Paris"},
+        parsed_llm={"capital": "Paris"},
+    ),
+    _make_result(
+        "q2",
+        "What is 6 multiplied by 7?",
+        _answering_haiku,
+        True,
+        "42",
+        rubric_scores={"clarity": 5, "conciseness": True},
+        parsed_gt={"result": "42"},
+        parsed_llm={"result": "42"},
+    ),
+    _make_result(
+        "q3",
+        "What element has atomic number 8?",
+        _answering_haiku,
+        False,
+        "Nitrogen",
+        rubric_scores={"clarity": 3, "conciseness": False},
+        parsed_gt={"element": "Oxygen"},
+        parsed_llm={"element": "Nitrogen"},
+    ),
     # Claude Sonnet results
-    _make_result("q1", "What is the capital of France?", _answering_sonnet, True, "Paris",
-                 rubric_scores={"clarity": 5, "conciseness": True},
-                 regex_scores={"no_hedging": True},
-                 parsed_gt={"capital": "Paris"}, parsed_llm={"capital": "Paris"}),
-    _make_result("q2", "What is 6 multiplied by 7?", _answering_sonnet, True, "42",
-                 rubric_scores={"clarity": 5, "conciseness": True},
-                 parsed_gt={"result": "42"}, parsed_llm={"result": "42"}),
-    _make_result("q3", "What element has atomic number 8?", _answering_sonnet, True, "Oxygen",
-                 rubric_scores={"clarity": 4, "conciseness": True},
-                 parsed_gt={"element": "Oxygen"}, parsed_llm={"element": "Oxygen"}),
+    _make_result(
+        "q1",
+        "What is the capital of France?",
+        _answering_sonnet,
+        True,
+        "Paris",
+        rubric_scores={"clarity": 5, "conciseness": True},
+        regex_scores={"no_hedging": True},
+        parsed_gt={"capital": "Paris"},
+        parsed_llm={"capital": "Paris"},
+    ),
+    _make_result(
+        "q2",
+        "What is 6 multiplied by 7?",
+        _answering_sonnet,
+        True,
+        "42",
+        rubric_scores={"clarity": 5, "conciseness": True},
+        parsed_gt={"result": "42"},
+        parsed_llm={"result": "42"},
+    ),
+    _make_result(
+        "q3",
+        "What element has atomic number 8?",
+        _answering_sonnet,
+        True,
+        "Oxygen",
+        rubric_scores={"clarity": 4, "conciseness": True},
+        parsed_gt={"element": "Oxygen"},
+        parsed_llm={"element": "Oxygen"},
+    ),
 ]
 
 results = VerificationResultSet(results=_mock_results)
@@ -168,7 +216,11 @@ df = template_results.to_dataframe()
 
 # Key columns for field-level analysis
 print("Field comparison columns:")
-print(df[["question_id", "answering_model", "field_name", "gt_value", "llm_value", "field_match", "field_score"]].to_string(index=False))
+print(
+    df[
+        ["question_id", "answering_model", "field_name", "gt_value", "llm_value", "field_match", "field_score"]
+    ].to_string(index=False)
+)
 ```
 
 The `field_score` column is the continuous companion to the binary `field_match`. For every non-graded primitive it is exactly `1.0` (pass) or `0.0` (fail), so it mirrors `field_match` exactly. The graded numeric primitives ([`NumericGraded`](../../core_concepts/verification-primitives.md#numericgraded), [`NumericRangeGraded`](../../core_concepts/verification-primitives.md#numericrangegraded), and [`NumericThresholdGraded`](../../core_concepts/verification-primitives.md#numericthresholdgraded)) instead record fractional partial credit in `[0, 1]` for near-misses, which is how a `field_match` of `False` can sit next to a positive `field_score`. The column is `None` for results saved without per-field scores (for example legacy runs that predate `field_scores`).
@@ -235,9 +287,11 @@ Every Template, Rubric, and Judgment DataFrame includes six columns that summari
 
 ```python
 template_df = results.get_template_results().to_dataframe()
-print(template_df[
-    ["question_id", "answering_model", "success", "failure_category", "failure_group", "caveats"]
-].head().to_string(index=False))
+print(
+    template_df[["question_id", "answering_model", "success", "failure_category", "failure_group", "caveats"]]
+    .head()
+    .to_string(index=False)
+)
 ```
 
 The `failure_*` values use the enum string forms (e.g. `failure_group == "retry"`, not `"retry_exhausted"`). For the full taxonomy and the classifier priority that decides which category fires, see the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
@@ -284,9 +338,7 @@ if len(df_scores) > 0:
 
 ```python
 # Average LLM trait scores by model
-avg_by_model = rubric_results.aggregate_llm_traits(
-    strategy="mean", by="answering_model"
-)
+avg_by_model = rubric_results.aggregate_llm_traits(strategy="mean", by="answering_model")
 print("Average LLM trait scores by model:")
 for model, traits in avg_by_model.items():
     print(f"  {model}:")
@@ -374,11 +426,7 @@ Compare template pass rates and rubric scores across models using pandas:
 ```python
 # Template pass rates by model
 template_df = results.get_template_results().to_dataframe()
-model_pass = (
-    template_df.drop_duplicates(subset=["result_index"])
-    .groupby("answering_model")["verify_result"]
-    .mean()
-)
+model_pass = template_df.drop_duplicates(subset=["result_index"]).groupby("answering_model")["verify_result"].mean()
 print("Template pass rate by model:")
 print(model_pass.to_string())
 ```

@@ -36,18 +36,24 @@ from typing import Any, Literal
 # Minimal primitives
 # ---------------------------------------------------------------------------
 
+
 class BooleanMatch:
     type: str = "boolean_match"
+
     def check(self, value: Any, expected: Any) -> bool:
         return bool(value) == bool(expected)
 
+
 class ExactMatch:
     type: str = "exact_match"
+
     def check(self, value: Any, expected: Any) -> bool:
         return value == expected
 
+
 class NumericExact:
     type: str = "numeric_exact"
+
     def check(self, value: Any, expected: Any) -> bool:
         return value == expected
 
@@ -56,8 +62,10 @@ class NumericExact:
 # StateCheck and ScenarioEdge mocks
 # ---------------------------------------------------------------------------
 
+
 class StateCheck:
     type: str = "state_check"
+
     def __init__(self, field: str, expected: Any = None, verify_with: Any = None) -> None:
         self.field = field
         self.expected = expected
@@ -65,10 +73,14 @@ class StateCheck:
 
 
 class ScenarioEdge:
-    def __init__(self, source: str, target: str,
-                 condition: StateCheck | list[StateCheck] | None = None,
-                 condition_callable: Any | None = None,
-                 condition_source: str | None = None) -> None:
+    def __init__(
+        self,
+        source: str,
+        target: str,
+        condition: StateCheck | list[StateCheck] | None = None,
+        condition_callable: Any | None = None,
+        condition_source: str | None = None,
+    ) -> None:
         self.source = source
         self.target = target
         self.condition = condition
@@ -107,6 +119,7 @@ class ScenarioState:
 # ---------------------------------------------------------------------------
 # Edge resolution mock
 # ---------------------------------------------------------------------------
+
 
 def _resolve_dot_path(path: str, state: ScenarioState) -> Any:
     parts = path.split(".", 1)
@@ -183,6 +196,7 @@ def resolve_next_node(
 # Scenario builder mock (routing methods only)
 # ---------------------------------------------------------------------------
 
+
 class Scenario:
     """Lightweight mock for state and routing documentation examples."""
 
@@ -191,9 +205,9 @@ class Scenario:
         self.description = description
         self._edges: list[ScenarioEdge] = []
 
-    def add_edge(self, source: str, target: str, *,
-                 when: dict[str, Any] | None = None,
-                 when_callable: Any | None = None) -> None:
+    def add_edge(
+        self, source: str, target: str, *, when: dict[str, Any] | None = None, when_callable: Any | None = None
+    ) -> None:
         if when is not None:
             conditions = []
             for f, v in when.items():
@@ -204,17 +218,17 @@ class Scenario:
                 else:
                     prim = NumericExact()
                 conditions.append(StateCheck(field=f, expected=v, verify_with=prim))
-            condition: StateCheck | list[StateCheck] | None = (
-                conditions[0] if len(conditions) == 1 else conditions
-            )
+            condition: StateCheck | list[StateCheck] | None = conditions[0] if len(conditions) == 1 else conditions
         else:
             condition = None
-        self._edges.append(ScenarioEdge(
-            source=source,
-            target=target,
-            condition=condition,
-            condition_callable=when_callable,
-        ))
+        self._edges.append(
+            ScenarioEdge(
+                source=source,
+                target=target,
+                condition=condition,
+                condition_callable=when_callable,
+            )
+        )
 
     def edges_from(self, node_id: str) -> list[ScenarioEdge]:
         return [e for e in self._edges if e.source == node_id]
@@ -350,16 +364,24 @@ scenario_a.add_edge("ask", END)  # unconditional fallback: reached only if verif
 scenario_a.add_edge("retry", END)
 
 state_pass = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=True, parsed={},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=True,
+    parsed={},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 state_fail = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=False, parsed={},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=False,
+    parsed={},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 
 print(f"Pass path: {resolve_next_node(scenario_a.edges_from('ask'), state_pass)[0]}")
@@ -377,16 +399,24 @@ scenario_b.add_edge("ask", "clarify", when={"parsed.confidence": "low"})
 scenario_b.add_edge("ask", END)  # fallback for any other confidence value
 
 state_low = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=True, parsed={"confidence": "low"},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=True,
+    parsed={"confidence": "low"},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 state_high = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=True, parsed={"confidence": "high"},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=True,
+    parsed={"confidence": "high"},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 
 print(f"Low confidence path: {resolve_next_node(scenario_b.edges_from('ask'), state_low)[0]}")
@@ -403,9 +433,11 @@ Before calling the callback, the engine takes a `deepcopy` snapshot of `accumula
 # In real usage, state_update is attached to a ScenarioNode.
 # Here we demonstrate the accumulation pattern directly.
 
+
 def track_attempts(accumulated: dict, parsed_fields: dict) -> dict:
     """Increment attempt counter on each visit."""
     return {**accumulated, "attempts": accumulated.get("attempts", 0) + 1}
+
 
 # Simulate three visits
 acc: dict = {}
@@ -420,8 +452,10 @@ scenario_c.add_edge("probe", END, when={"accumulated.attempts": 3})
 scenario_c.add_edge("probe", "probe")  # fallback: loop back
 
 state_3 = ScenarioState(
-    turn=2, current_node="probe",
-    verify_result=None, parsed={},
+    turn=2,
+    current_node="probe",
+    verify_result=None,
+    parsed={},
     node_visits={"probe": 3},
     history=[],
     accumulated={"attempts": 3},
@@ -442,8 +476,10 @@ scenario_d.add_edge("synthesize", "explain", when={"node_results.ask.verify_resu
 scenario_d.add_edge("synthesize", END)
 
 state_ask_failed = ScenarioState(
-    turn=2, current_node="synthesize",
-    verify_result=True, parsed={},
+    turn=2,
+    current_node="synthesize",
+    verify_result=True,
+    parsed={},
     node_visits={"ask": 1, "synthesize": 1},
     history=[],
     accumulated={},
@@ -452,8 +488,10 @@ state_ask_failed = ScenarioState(
     },
 )
 state_ask_passed = ScenarioState(
-    turn=2, current_node="synthesize",
-    verify_result=True, parsed={},
+    turn=2,
+    current_node="synthesize",
+    verify_result=True,
+    parsed={},
     node_visits={"ask": 1, "synthesize": 1},
     history=[],
     accumulated={},

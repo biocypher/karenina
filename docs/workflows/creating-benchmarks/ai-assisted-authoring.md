@@ -42,7 +42,7 @@ from karenina.benchmark.authoring.answers.builder import AnswerBuilder
 from karenina.benchmark.benchmark_helpers import TemplateProgressEvent
 
 # Realistic generated template code (matches actual generator output format)
-_GENERATED_CODE = '''from karenina.schemas.entities import BaseAnswer, VerifiedField
+_GENERATED_CODE = """from karenina.schemas.entities import BaseAnswer, VerifiedField
 from karenina.schemas.primitives import BooleanMatch
 
 class Answer(BaseAnswer):
@@ -56,11 +56,13 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
-'''
+"""
+
 
 def _mock_generate_answer_template(question_obj, **kwargs):
     """Return realistic generated template code without calling an LLM."""
     return _GENERATED_CODE
+
 
 def _mock_generate_all_templates(self, **kwargs):
     """Simulate batch template generation."""
@@ -196,7 +198,7 @@ edited_code = code_string.replace(
     '        description="True if the response identifies BCL2 as the primary pharmacological target of venetoclax.",\n'
     "        ground_truth=True,\n"
     "        verify_with=BooleanMatch(),",
-    '        description=(\n'
+    "        description=(\n"
     '            "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "\n'
     '            "B-cell lymphoma 2) as the direct pharmacological target of venetoclax. "\n'
     '            "False if BCL2 is mentioned only as a pathway member."\n'
@@ -223,17 +225,20 @@ For minor edits (tweaking a description, adjusting a ground truth value, swappin
 builder = (
     AnswerBuilder()
     .add_attribute(
-        "identifies_target", "bool",
+        "identifies_target",
+        "bool",
         "True if the response identifies BCL2 as the primary target of venetoclax.",
         True,
     )
     .add_attribute(
-        "mentions_mechanism", "bool",
+        "mentions_mechanism",
+        "bool",
         "True if the response describes venetoclax as a BH3 mimetic.",
         True,
     )
     .add_attribute(
-        "specifies_indication", "bool",
+        "specifies_indication",
+        "bool",
         "True if the response mentions CLL or AML as an approved indication.",
         True,
     )
@@ -256,7 +261,8 @@ print(f"Builder state:\n{builder}")
 builder_with_regex = (
     AnswerBuilder()
     .add_attribute(
-        "identifies_drug_class", "bool",
+        "identifies_drug_class",
+        "bool",
         "True if the response identifies venetoclax as a BH3 mimetic or BCL2 inhibitor.",
         True,
     )
@@ -390,6 +396,7 @@ This pattern scales to hundreds of questions. The initial bulk generation handle
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 

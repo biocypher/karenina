@@ -56,12 +56,8 @@ _benchmark.add_question(
 _qids = _benchmark.get_question_ids()
 
 # Build a mock VerificationResult with agentic fields
-_answering = ModelIdentity(
-    model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk"
-)
-_parsing = ModelIdentity(
-    model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk"
-)
+_answering = ModelIdentity(model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk")
+_parsing = ModelIdentity(model_name="claude-sonnet-4-20250514", interface="claude_agent_sdk")
 _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 _rid = VerificationResultMetadata.compute_result_id(_qids[0], _answering, _parsing, _ts)
 
@@ -200,6 +196,7 @@ The field is declared on `AdapterSpec` in the [adapter registry](../../src/karen
 @dataclass
 class AdapterSpec:
     """Adapter specification in the registry."""
+
     agent_tier: str = "tool_loop"
 ```
 

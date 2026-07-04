@@ -54,10 +54,7 @@ In rubric-only mode, questions still have a `raw_answer`; this serves as a refer
 
 ```python
 q1_id = benchmark.add_question(
-    question=(
-        "A patient asks: 'My doctor said I need a colonoscopy. What does that "
-        "involve and should I be worried?'"
-    ),
+    question=("A patient asks: 'My doctor said I need a colonoscopy. What does that involve and should I be worried?'"),
     raw_answer=(
         "A colonoscopy is a routine screening procedure where a doctor uses a thin, "
         "flexible tube with a camera to examine the inside of your colon. It's one of "
@@ -73,10 +70,7 @@ print(f"Q1 added: {q1_id[:50]}...")
 
 ```python
 q2_id = benchmark.add_question(
-    question=(
-        "I just started metformin for my diabetes. What side effects should I "
-        "expect?"
-    ),
+    question=("I just started metformin for my diabetes. What side effects should I expect?"),
     raw_answer=(
         "When starting metformin, some people experience digestive side effects like "
         "nausea, stomach upset, or diarrhea. These are usually mild and often improve "
@@ -92,10 +86,7 @@ print(f"Q2 added: {q2_id[:50]}...")
 
 ```python
 q3_id = benchmark.add_question(
-    question=(
-        "I've been feeling really anxious lately and can't sleep. Should I be "
-        "concerned?"
-    ),
+    question=("I've been feeling really anxious lately and can't sleep. Should I be concerned?"),
     raw_answer=(
         "It's completely understandable to feel worried when anxiety affects your sleep. "
         "Anxiety and sleep difficulties are very common and highly treatable. While "
@@ -316,6 +307,7 @@ print(f"Global traits: {loaded_rubric.get_trait_names()}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 

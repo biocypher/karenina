@@ -38,13 +38,14 @@ from karenina.benchmark.benchmark_helpers import TemplateProgressEvent
 # Mock for generate_all_templates — returns pre-built template results
 _mock_template_results = {}
 
+
 def _mock_generate_all_templates(self, **kwargs):
     """Return mock template generation results."""
     results = {}
     for qid in self.get_question_ids():
         if not self.has_template(qid) or kwargs.get("force_regenerate"):
             # Create a simple VerifiedField template for each question
-            template_code = '''from karenina.schemas.entities import BaseAnswer, BooleanMatch, VerifiedField
+            template_code = """from karenina.schemas.entities import BaseAnswer, BooleanMatch, VerifiedField
 
 
 class Answer(BaseAnswer):
@@ -53,7 +54,7 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
-'''
+"""
             self.add_answer_template(qid, template_code)
             results[qid] = {"success": True, "template_code": template_code, "skipped": False}
         else:
@@ -132,12 +133,21 @@ For this tutorial, we add questions manually:
 
 ```python
 questions = [
-    ("What is the mechanism of action of metformin?", "Metformin activates AMP-activated protein kinase (AMPK) and reduces hepatic glucose production."),
+    (
+        "What is the mechanism of action of metformin?",
+        "Metformin activates AMP-activated protein kinase (AMPK) and reduces hepatic glucose production.",
+    ),
     ("What is the half-life of amoxicillin?", "Approximately 1 hour."),
     ("Name three common side effects of statins.", "Muscle pain, liver enzyme elevation, and digestive problems."),
     ("What is the antidote for acetaminophen overdose?", "N-acetylcysteine (NAC)."),
-    ("How does warfarin prevent blood clots?", "Warfarin inhibits vitamin K epoxide reductase, blocking synthesis of clotting factors II, VII, IX, and X."),
-    ("What is the therapeutic index of lithium?", "Narrow — therapeutic range is 0.6-1.2 mEq/L, with toxicity above 1.5 mEq/L."),
+    (
+        "How does warfarin prevent blood clots?",
+        "Warfarin inhibits vitamin K epoxide reductase, blocking synthesis of clotting factors II, VII, IX, and X.",
+    ),
+    (
+        "What is the therapeutic index of lithium?",
+        "Narrow — therapeutic range is 0.6-1.2 mEq/L, with toxicity above 1.5 mEq/L.",
+    ),
     ("What class of drug is omeprazole?", "Proton pump inhibitor (PPI)."),
     ("What is the primary indication for naloxone?", "Reversal of opioid overdose."),
 ]
@@ -334,6 +344,7 @@ print(f"Progress:  {loaded.get_progress()}%")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 

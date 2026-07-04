@@ -71,9 +71,9 @@ phase_a = VerificationConfig(answering_models=[answerer], parsing_models=[judge_
 # prior = bench.run_verification(config=phase_a, run_name="demo")
 
 phase_b = VerificationConfig(
-    answering_models=[answerer],              # same as prior
-    parsing_models=[judge_a, judge_b],        # old + new, full union
-    replicate_count=1,                        # same as prior
+    answering_models=[answerer],  # same as prior
+    parsing_models=[judge_a, judge_b],  # old + new, full union
+    replicate_count=1,  # same as prior
 )
 # merged = bench.extend_template(prior_results=prior, config=phase_b, run_name="demo")
 ```
@@ -86,8 +86,8 @@ After the call, `merged.results` has the shape of a joint run with `parsing_mode
 other_answerer = ModelConfig(id="other", model_provider="openai", model_name="gpt-4.1-mini")
 
 phase_b = VerificationConfig(
-    answering_models=[answerer, other_answerer],   # union: old + new
-    parsing_models=[judge_a],                       # same as prior
+    answering_models=[answerer, other_answerer],  # union: old + new
+    parsing_models=[judge_a],  # same as prior
     replicate_count=1,
 )
 # merged = bench.extend_template(prior_results=prior, config=phase_b)
@@ -101,7 +101,7 @@ phase_b = VerificationConfig(
 phase_b = VerificationConfig(
     answering_models=[answerer],
     parsing_models=[judge_a],
-    replicate_count=3,                              # prior had 2
+    replicate_count=3,  # prior had 2
 )
 # merged = bench.extend_template(prior_results=prior, config=phase_b)
 ```
@@ -162,9 +162,9 @@ bench.set_global_rubric(
 )
 
 phase_b = VerificationConfig(
-    answering_models=[answerer],        # must match prior
-    parsing_models=[judge_a],           # must match prior
-    replicate_count=1,                  # must match prior
+    answering_models=[answerer],  # must match prior
+    parsing_models=[judge_a],  # must match prior
+    replicate_count=1,  # must match prior
 )
 # merged = bench.extend_rubric(prior_results=prior, config=phase_b)
 ```
@@ -262,9 +262,9 @@ phase_b = VerificationConfig(
 # Phase 3: attach rubric to the merged result.
 # bench.set_global_rubric(my_rubric)
 phase_c = VerificationConfig(
-    answering_models=[answerer],            # match the merged shape
-    parsing_models=[judge_a, judge_b],      # match the merged shape
-    replicate_count=2,                      # MUST equal phase_b's replicate_count
+    answering_models=[answerer],  # match the merged shape
+    parsing_models=[judge_a, judge_b],  # match the merged shape
+    replicate_count=2,  # MUST equal phase_b's replicate_count
 )
 # rubric_extended = bench.extend_rubric(prior_results=template_extended, config=phase_c)
 ```

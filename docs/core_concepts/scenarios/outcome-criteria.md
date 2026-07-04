@@ -36,29 +36,43 @@ from typing import Any, Literal
 # Minimal primitives
 # ---------------------------------------------------------------------------
 
+
 class BooleanMatch:
     type: str = "boolean_match"
+
     def check(self, value: Any, expected: Any) -> bool:
         return bool(value) == bool(expected)
 
+
 class ExactMatch:
     type: str = "exact_match"
+
     def check(self, value: Any, expected: Any) -> bool:
         return value == expected
+
 
 class NumericExact:
     type: str = "numeric_exact"
+
     def check(self, value: Any, expected: Any) -> bool:
         return value == expected
 
+
 class NumericRange:
     type: str = "numeric_range"
-    def __init__(self, min: int | float | None = None, max: int | float | None = None,
-                 exclusive_min: bool = False, exclusive_max: bool = False) -> None:
+
+    def __init__(
+        self,
+        min: int | float | None = None,
+        max: int | float | None = None,
+        exclusive_min: bool = False,
+        exclusive_max: bool = False,
+    ) -> None:
         self.min = min
         self.max = max
         self.exclusive_min = exclusive_min
         self.exclusive_max = exclusive_max
+
     def check(self, value: Any, expected: Any) -> bool:
         if self.min is not None:
             if self.exclusive_min and value <= self.min:
@@ -77,26 +91,35 @@ class NumericRange:
 # Scope types
 # ---------------------------------------------------------------------------
 
+
 class LastTurn:
     type: str = "last_turn"
+
 
 class FirstTurn:
     type: str = "first_turn"
 
+
 class TurnAt:
     type: str = "turn_at"
+
     def __init__(self, index: int) -> None:
         self.index = index
 
+
 class AnyTurn:
     type: str = "any_turn"
+
     def __init__(self, node_id: str | None = None) -> None:
         self.node_id = node_id
 
+
 class AllTurns:
     type: str = "all_turns"
+
     def __init__(self, node_id: str | None = None) -> None:
         self.node_id = node_id
+
 
 ScopeUnion = LastTurn | FirstTurn | TurnAt | AnyTurn | AllTurns
 
@@ -105,26 +128,38 @@ ScopeUnion = LastTurn | FirstTurn | TurnAt | AnyTurn | AllTurns
 # Check nodes
 # ---------------------------------------------------------------------------
 
+
 class TurnCheck:
     type: str = "turn_check"
+
     def __init__(self, scope: Any, field: str, verify_with: Any, expected: Any = None) -> None:
         self.scope = scope
         self.field = field
         self.expected = expected
         self.verify_with = verify_with
 
+
 class ResultCheck:
     type: str = "result_check"
+
     def __init__(self, field: str, verify_with: Any, expected: Any = None) -> None:
         self.field = field
         self.expected = expected
         self.verify_with = verify_with
 
+
 class CrossTurnCheck:
     type: str = "cross_turn_check"
-    def __init__(self, source_turn: Any, source_field: str,
-                 target_turn: Any, target_field: str,
-                 comparison: str, normalize: list | None = None) -> None:
+
+    def __init__(
+        self,
+        source_turn: Any,
+        source_field: str,
+        target_turn: Any,
+        target_field: str,
+        comparison: str,
+        normalize: list | None = None,
+    ) -> None:
         self.source_turn = source_turn
         self.source_field = source_field
         self.target_turn = target_turn
@@ -132,14 +167,18 @@ class CrossTurnCheck:
         self.comparison = comparison
         self.normalize = normalize or []
 
+
 class CountTurns:
     type: str = "count_turns"
+
     def __init__(self, node_id: str | list[str] | None = None, verify_result: bool | None = None) -> None:
         self.node_id = node_id
         self.verify_result = verify_result
 
+
 class FirstMatchIndex:
     type: str = "first_match_index"
+
     def __init__(self, node_id: str | list[str] | None = None, verify_result: bool | None = None) -> None:
         self.node_id = node_id
         self.verify_result = verify_result
@@ -149,18 +188,24 @@ class FirstMatchIndex:
 # Composition nodes
 # ---------------------------------------------------------------------------
 
+
 class AllOf:
     type: str = "all_of"
+
     def __init__(self, conditions: list) -> None:
         self.conditions = conditions
+
 
 class AnyOf:
     type: str = "any_of"
+
     def __init__(self, conditions: list) -> None:
         self.conditions = conditions
 
+
 class AtLeastN:
     type: str = "at_least_n"
+
     def __init__(self, n: int, conditions: list) -> None:
         self.n = n
         self.conditions = conditions
@@ -169,6 +214,7 @@ class AtLeastN:
 # ---------------------------------------------------------------------------
 # Sugar functions
 # ---------------------------------------------------------------------------
+
 
 def _infer_primitive(value: Any) -> Any:
     if isinstance(value, bool):
@@ -179,6 +225,7 @@ def _infer_primitive(value: Any) -> Any:
         return NumericExact()
     return ExactMatch()
 
+
 def _make_turn_checks(scope: Any, **fields: Any) -> TurnCheck | AllOf:
     checks = []
     for f, v in fields.items():
@@ -187,55 +234,75 @@ def _make_turn_checks(scope: Any, **fields: Any) -> TurnCheck | AllOf:
         return checks[0]
     return AllOf(conditions=checks)
 
+
 def last_turn(**fields: Any) -> TurnCheck | AllOf:
     return _make_turn_checks(LastTurn(), **fields)
+
 
 def first_turn(**fields: Any) -> TurnCheck | AllOf:
     return _make_turn_checks(FirstTurn(), **fields)
 
+
 def any_turn(*, node: str | None = None, **fields: Any) -> TurnCheck | AllOf:
     return _make_turn_checks(AnyTurn(node_id=node), **fields)
+
 
 def all_turns(*, node: str | None = None, **fields: Any) -> TurnCheck | AllOf:
     return _make_turn_checks(AllTurns(node_id=node), **fields)
 
+
 def status_is(expected: str) -> ResultCheck:
     return ResultCheck(field="status", expected=expected, verify_with=ExactMatch())
+
 
 def turn_count_gte(n: int) -> ResultCheck:
     return ResultCheck(field="turn_count", verify_with=NumericRange(min=n))
 
+
 def turn_count_eq(n: int) -> ResultCheck:
     return ResultCheck(field="turn_count", expected=n, verify_with=NumericExact())
+
 
 def count_turns(*, node: str | None = None, verify_result: bool | None = None) -> CountTurns:
     return CountTurns(node_id=node, verify_result=verify_result)
 
+
 def first_match_index(*, node: str | None = None, verify_result: bool | None = None) -> FirstMatchIndex:
     return FirstMatchIndex(node_id=node, verify_result=verify_result)
 
-def cross_turn(*, source: Any, source_field: str, target: Any,
-               target_field: str, comparison: str, normalize: list | None = None) -> CrossTurnCheck:
+
+def cross_turn(
+    *, source: Any, source_field: str, target: Any, target_field: str, comparison: str, normalize: list | None = None
+) -> CrossTurnCheck:
     return CrossTurnCheck(
-        source_turn=source, source_field=source_field,
-        target_turn=target, target_field=target_field,
-        comparison=comparison, normalize=normalize or [],
+        source_turn=source,
+        source_field=source_field,
+        target_turn=target,
+        target_field=target_field,
+        comparison=comparison,
+        normalize=normalize or [],
     )
+
 
 def first_turn_scope() -> FirstTurn:
     return FirstTurn()
 
+
 def last_turn_scope() -> LastTurn:
     return LastTurn()
+
 
 def turn_at(index: int) -> TurnAt:
     return TurnAt(index=index)
 
+
 def all_of(*checks: Any) -> AllOf:
     return AllOf(conditions=list(checks))
 
+
 def any_of(*checks: Any) -> AnyOf:
     return AnyOf(conditions=list(checks))
+
 
 def at_least_n(n: int, *checks: Any) -> AtLeastN:
     return AtLeastN(n=n, conditions=list(checks))
@@ -245,10 +312,16 @@ def at_least_n(n: int, *checks: Any) -> AtLeastN:
 # ScenarioOutcomeCriterion mock
 # ---------------------------------------------------------------------------
 
+
 class ScenarioOutcomeCriterion:
-    def __init__(self, name: str, description: str = "",
-                 check: Any = None, evaluate: Any = None,
-                 evaluate_source: str | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        description: str = "",
+        check: Any = None,
+        evaluate: Any = None,
+        evaluate_source: str | None = None,
+    ) -> None:
         self.name = name
         self.description = description
         self.check = check
@@ -260,6 +333,7 @@ class ScenarioOutcomeCriterion:
 # Scenario builder mock (outcome methods only)
 # ---------------------------------------------------------------------------
 
+
 class Scenario:
     """Lightweight mock for outcome criteria documentation examples."""
 
@@ -269,9 +343,7 @@ class Scenario:
         self._outcome_criteria: list[ScenarioOutcomeCriterion] = []
 
     def add_outcome(self, name: str, check: Any, *, description: str = "") -> None:
-        self._outcome_criteria.append(
-            ScenarioOutcomeCriterion(name=name, description=description, check=check)
-        )
+        self._outcome_criteria.append(ScenarioOutcomeCriterion(name=name, description=description, check=check))
 
     def add_outcome_criterion(self, criterion: ScenarioOutcomeCriterion) -> None:
         self._outcome_criteria.append(criterion)
@@ -281,6 +353,7 @@ class Scenario:
 # TurnRecord and ScenarioExecutionResult mocks for evaluation examples
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class TurnRecord:
     node_id: str
@@ -288,6 +361,7 @@ class TurnRecord:
     raw_response: str
     verify_result: bool | None
     parsed_fields: dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class ScenarioExecutionResult:
@@ -303,11 +377,13 @@ class ScenarioExecutionResult:
 # Minimal evaluate_outcome for demonstration
 # ---------------------------------------------------------------------------
 
+
 def evaluate_outcome(node: Any, result: ScenarioExecutionResult) -> bool | int | float:
     """Evaluate an outcome node against a completed execution result."""
     if isinstance(node, CountTurns):
         return sum(
-            1 for t in result.history
+            1
+            for t in result.history
             if (node.node_id is None or t.node_id == node.node_id)
             and (node.verify_result is None or t.verify_result == node.verify_result)
         )
@@ -319,6 +395,7 @@ def evaluate_outcome(node: Any, result: ScenarioExecutionResult) -> bool | int |
                 return i
         return -1
     return _eval_bool_node(node, result)
+
 
 def _eval_bool_node(node: Any, result: ScenarioExecutionResult) -> bool:
     if isinstance(node, AllOf):
@@ -341,10 +418,20 @@ def _eval_bool_node(node: Any, result: ScenarioExecutionResult) -> bool:
                 turns = []
         elif isinstance(scope, AnyTurn):
             filtered = [t for t in history if scope.node_id is None or t.node_id == scope.node_id]
-            return bool(filtered) and any(node.verify_with.check(getattr(t, node.field, t.parsed_fields.get(node.field.split(".", 1)[-1])), node.expected) for t in filtered)
+            return bool(filtered) and any(
+                node.verify_with.check(
+                    getattr(t, node.field, t.parsed_fields.get(node.field.split(".", 1)[-1])), node.expected
+                )
+                for t in filtered
+            )
         elif isinstance(scope, AllTurns):
             filtered = [t for t in history if scope.node_id is None or t.node_id == scope.node_id]
-            return bool(filtered) and all(node.verify_with.check(getattr(t, node.field, t.parsed_fields.get(node.field.split(".", 1)[-1])), node.expected) for t in filtered)
+            return bool(filtered) and all(
+                node.verify_with.check(
+                    getattr(t, node.field, t.parsed_fields.get(node.field.split(".", 1)[-1])), node.expected
+                )
+                for t in filtered
+            )
         else:
             return False
         if not turns:
@@ -356,6 +443,7 @@ def _eval_bool_node(node: Any, result: ScenarioExecutionResult) -> bool:
         val = getattr(result, node.field, None)
         return node.verify_with.check(val, node.expected)
     if isinstance(node, CrossTurnCheck):
+
         def _resolve_single(scope: Any) -> TurnRecord | None:
             if not result.history:
                 return None
@@ -369,16 +457,22 @@ def _eval_bool_node(node: Any, result: ScenarioExecutionResult) -> bool:
                 except IndexError:
                     return None
             return None
+
         src = _resolve_single(node.source_turn)
         tgt = _resolve_single(node.target_turn)
         if src is None or tgt is None:
             return False
         sv = getattr(src, node.source_field, None)
         tv = getattr(tgt, node.target_field, None)
-        ops = {"eq": lambda t, s: t == s, "neq": lambda t, s: t != s,
-               "gt": lambda t, s: t > s, "gte": lambda t, s: t >= s,
-               "lt": lambda t, s: t < s, "lte": lambda t, s: t <= s,
-               "contains": lambda t, s: str(s) in str(t)}
+        ops = {
+            "eq": lambda t, s: t == s,
+            "neq": lambda t, s: t != s,
+            "gt": lambda t, s: t > s,
+            "gte": lambda t, s: t >= s,
+            "lt": lambda t, s: t < s,
+            "lte": lambda t, s: t <= s,
+            "contains": lambda t, s: str(s) in str(t),
+        }
         op = ops.get(node.comparison)
         return bool(op(tv, sv)) if op else False
     return False
@@ -607,12 +701,14 @@ For logic that cannot be expressed declaratively, pass a `ScenarioOutcomeCriteri
 ```python
 scenario_e = Scenario("custom-logic")
 
-scenario_e.add_outcome_criterion(ScenarioOutcomeCriterion(
-    name="short_execution",
-    description="Scenario completed in three turns or fewer",
-    evaluate=lambda result: result.turn_count <= 3,
-    evaluate_source="lambda result: result.turn_count <= 3",
-))
+scenario_e.add_outcome_criterion(
+    ScenarioOutcomeCriterion(
+        name="short_execution",
+        description="Scenario completed in three turns or fewer",
+        evaluate=lambda result: result.turn_count <= 3,
+        evaluate_source="lambda result: result.turn_count <= 3",
+    )
+)
 
 print(f"Outcome: {scenario_e._outcome_criteria[0].name}")
 print(f"Has callable: {scenario_e._outcome_criteria[0].evaluate is not None}")

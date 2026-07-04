@@ -134,6 +134,7 @@ Real-world deployments usually need a handful of custom rules to handle exceptio
 class VllmQueueTimeout(Exception):
     pass
 
+
 registry = ErrorRegistry()
 registry.register(VllmQueueTimeout, ErrorCategory.RATE_LIMIT)
 
@@ -202,6 +203,7 @@ If you are unsure why an exception is being classified one way or another, the s
 ```python
 def explain(exc):
     return ErrorRegistry().classify(exc)
+
 
 cases = [
     ConnectionError("connection reset"),
@@ -301,28 +303,19 @@ config = TimeoutEscalationConfig(
 )
 
 # How the timeout grows for retries 0..4 with base=30s and max_attempts=3
-[
-    compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3)
-    for n in range(5)
-]
+[compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3) for n in range(5)]
 ```
 
 ```python
 # Multiplicative variant capped at 120s
 config = TimeoutEscalationConfig(strategy="multiplicative", multiplier=2.0, max_timeout=120.0)
-[
-    compute_escalated_timeout(base_timeout=15.0, timeout_attempt=n, config=config, max_attempts=4)
-    for n in range(5)
-]
+[compute_escalated_timeout(base_timeout=15.0, timeout_attempt=n, config=config, max_attempts=4) for n in range(5)]
 ```
 
 ```python
 # Linear interpolation between base and max across the timeout retry budget
 config = TimeoutEscalationConfig(strategy="linear", max_timeout=120.0)
-[
-    compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3)
-    for n in range(4)
-]
+[compute_escalated_timeout(base_timeout=30.0, timeout_attempt=n, config=config, max_attempts=3) for n in range(4)]
 ```
 
 Escalation only fires inside `RetryExecutor.execute_with_timeout` and `aexecute_with_timeout`, which are the entry points used by `stream_invoke`. Other adapter calls keep using the base `request_timeout` for every retry.
@@ -372,11 +365,13 @@ from karenina.utils.retry_policy import (
 
 attempts = {"count": 0}
 
+
 def flaky():
     attempts["count"] += 1
     if attempts["count"] < 3:
         raise ConnectionError("transient network blip")
     return "ok"
+
 
 executor = RetryExecutor(
     policy=RetryPolicy(
@@ -395,6 +390,7 @@ Two retries fired (third call succeeded), the executor returned the success valu
 # Permanent errors short-circuit immediately
 def bad_input():
     raise ValueError("not even a number")
+
 
 try:
     executor.execute(bad_input)

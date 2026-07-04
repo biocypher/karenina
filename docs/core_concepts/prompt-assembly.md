@@ -24,13 +24,21 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
-    "sqlalchemy.sql", "sqlalchemy.event",
-    "karenina.storage", "karenina.storage.base",
-    "karenina.storage.engine", "karenina.storage.db_config",
-    "karenina.storage.models", "karenina.storage.generated_models",
-    "karenina.storage.auto_mapper", "karenina.storage.operations",
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
 ]:
     mock_modules[mod] = MagicMock()
 
@@ -359,6 +367,7 @@ Enable debug logging on `karenina.benchmark.verification.prompts` to see the ass
 
 ```python
 import logging
+
 logging.getLogger("karenina.benchmark.verification.prompts").setLevel(logging.DEBUG)
 print("Debug logging enabled for prompt assembly.")
 ```

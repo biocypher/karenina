@@ -80,6 +80,7 @@ q1_id = benchmark.add_question(
     raw_answer="TP53 is the most commonly mutated gene in human cancers",
 )
 
+
 # Then define and attach the template
 class Answer(BaseAnswer):
     identifies_tp53: bool = VerifiedField(
@@ -93,6 +94,7 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
+
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
@@ -123,6 +125,7 @@ q2_id = benchmark.add_question(
     raw_answer="O+",
 )
 
+
 class Answer(BaseAnswer):
     blood_type: str = VerifiedField(
         description=(
@@ -137,6 +140,7 @@ class Answer(BaseAnswer):
         ground_truth="O+",
         verify_with=ExactMatch(normalize=["lowercase", "strip"]),
     )
+
 
 benchmark.update_template(q2_id, Answer)
 print(f"Q2 added with template: {q2_id[:50]}...")
@@ -159,6 +163,7 @@ q3_id = benchmark.add_question(
     raw_answer="37.0",
 )
 
+
 class Answer(BaseAnswer):
     temperature_celsius: float = VerifiedField(
         description=(
@@ -175,6 +180,7 @@ class Answer(BaseAnswer):
         verify_with=NumericTolerance(tolerance=0.5, mode="absolute"),
     )
 
+
 benchmark.update_template(q3_id, Answer)
 print(f"Q3 added with template: {q3_id[:50]}...")
 ```
@@ -183,6 +189,7 @@ The `mode="absolute"` setting means the extracted value must be within 0.5 of 37
 
 ```python
 from karenina.schemas.primitives import NumericExact
+
 
 # Example: exact numeric match
 class Answer(BaseAnswer):
@@ -195,6 +202,7 @@ class Answer(BaseAnswer):
         ground_truth=23,
         verify_with=NumericExact(),
     )
+
 
 print("Exact-match example defined (not added to benchmark)")
 ```
@@ -216,6 +224,7 @@ q4_id = benchmark.add_question(
     raw_answer="September 28, 1928",
 )
 
+
 class Answer(BaseAnswer):
     mentions_discovery_year: bool = VerifiedField(
         description="True if the response mentions the year 1928",
@@ -227,6 +236,7 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=TraceRegex(pattern=r"\bFleming\b"),
     )
+
 
 benchmark.update_template(q4_id, Answer)
 print(f"Q4 added with template: {q4_id[:50]}...")
@@ -248,6 +258,7 @@ q5_id = benchmark.add_question(
         "spike protein, which triggers an immune response producing antibodies."
     ),
 )
+
 
 class Answer(BaseAnswer):
     delivery_mechanism: str = VerifiedField(
@@ -287,6 +298,7 @@ class Answer(BaseAnswer):
         verify_with=BooleanMatch(),
         weight=1.0,
     )
+
 
 benchmark.update_template(q5_id, Answer)
 print(f"Q5 added with template: {q5_id[:50]}...")
@@ -340,6 +352,7 @@ print(f"Match:     {loaded.question_count == benchmark.question_count}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 

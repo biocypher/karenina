@@ -113,7 +113,10 @@ _mock_rubric = VerificationResultRubric(
 # ---------------------------------------------------------------------------
 _question_id = "mock-bix51-question-id"
 _result_id = VerificationResultMetadata.compute_result_id(
-    _question_id, _answering, _parsing, _ts,
+    _question_id,
+    _answering,
+    _parsing,
+    _ts,
 )
 
 _mock_result = VerificationResult(
@@ -127,10 +130,7 @@ _mock_result = VerificationResult(
             "to determine which demographics (age, BMI, gender) predict treatment "
             "remission."
         ),
-        raw_answer=(
-            "Age is significant (p=0.002), BMI is not (p=0.087). "
-            "P(remission|age=65)=0.395, AIC=104.1"
-        ),
+        raw_answer=("Age is significant (p=0.002), BMI is not (p=0.087). P(remission|age=65)=0.395, AIC=104.1"),
         answering=_answering,
         parsing=_parsing,
         execution_time=45.3,
@@ -295,8 +295,7 @@ class Answer(BaseAnswer):
     )
     age_model_aic: float = VerifiedField(
         description=(
-            "AIC (Akaike Information Criterion) for the logistic regression model "
-            "using age as the sole predictor."
+            "AIC (Akaike Information Criterion) for the logistic regression model using age as the sole predictor."
         ),
         ground_truth=104.14,
         verify_with=NumericTolerance(tolerance=1.0, mode="absolute"),

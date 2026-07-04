@@ -313,6 +313,7 @@ See [Extending Runs: Composing the two facades](../../core_concepts/extending-ru
 
 ```python tags=["hide-cell"]
 import shutil
+
 shutil.rmtree(work_dir, ignore_errors=True)
 ```
 

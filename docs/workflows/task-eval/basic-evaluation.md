@@ -106,7 +106,7 @@ BaseChatModel.ainvoke = _replaying_ainvoke
 # cannot retrieve source code from cell-defined classes.
 from karenina.benchmark.task_eval import TaskEval as _TaskEval
 
-_ANSWER_TEMPLATE_CODE = '''\
+_ANSWER_TEMPLATE_CODE = """\
 from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 from typing import Any
@@ -126,7 +126,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.identifies_bcl2 == self.correct["identifies_bcl2"]
-'''
+"""
 
 _original_add_template = _TaskEval.add_template
 
@@ -165,17 +165,28 @@ from pydantic import Field
 task = TaskEval(task_id="quick-demo")
 task.log("The primary pharmacological target of venetoclax is BCL2.")
 
+
 class Answer(BaseAnswer):
     identifies_bcl2: bool = Field(description="True if BCL2 is identified as the target.")
+
     def ground_truth(self):
         self.correct = {"identifies_bcl2": True}
+
     def verify(self) -> bool:
         return self.identifies_bcl2 == self.correct["identifies_bcl2"]
 
+
 task.add_template(Answer)
 config = VerificationConfig(
-    parsing_models=[ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                                model_provider="anthropic", interface="langchain", temperature=0.0)],
+    parsing_models=[
+        ModelConfig(
+            id="haiku",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
+    ],
     parsing_only=True,
 )
 result = task.evaluate(config)
@@ -248,10 +259,12 @@ Use `log_trace()` when the judge LLM needs to see the full conversation structur
 from karenina.ports.messages import Message
 
 trace_demo = TaskEval(task_id="trace-demo")
-trace_demo.log_trace([
-    Message.user("What is the target of venetoclax?"),
-    Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
-])
+trace_demo.log_trace(
+    [
+        Message.user("What is the target of venetoclax?"),
+        Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
+    ]
+)
 
 print(f"Logged {len(trace_demo.global_logs)} trace event(s)")
 ```
@@ -263,17 +276,19 @@ For agent workflows with tool use, include `ToolUseContent` blocks and `Message.
 ```python
 from karenina.ports.messages import ToolUseContent
 
-trace_demo.log_trace([
-    Message.user("What is the target of venetoclax?"),
-    Message.assistant("Let me search the database.", tool_calls=[
-        ToolUseContent(id="call_1", name="search_db", input={"query": "venetoclax target"})
-    ]),
-    Message.tool_result(tool_use_id="call_1", content="BCL2 (B-cell lymphoma 2)"),
-    Message.assistant(
-        "Based on the search results, the primary pharmacological target "
-        "of venetoclax is BCL2 (B-cell lymphoma 2)."
-    ),
-])
+trace_demo.log_trace(
+    [
+        Message.user("What is the target of venetoclax?"),
+        Message.assistant(
+            "Let me search the database.",
+            tool_calls=[ToolUseContent(id="call_1", name="search_db", input={"query": "venetoclax target"})],
+        ),
+        Message.tool_result(tool_use_id="call_1", content="BCL2 (B-cell lymphoma 2)"),
+        Message.assistant(
+            "Based on the search results, the primary pharmacological target of venetoclax is BCL2 (B-cell lymphoma 2)."
+        ),
+    ]
+)
 
 print(f"Total trace events: {len(trace_demo.global_logs)}")
 ```

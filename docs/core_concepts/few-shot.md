@@ -215,8 +215,8 @@ override_config = FewShotConfig(
     pool_mode="k-shot",
     pool_k=3,
     question_configs={
-        "question_1": QuestionFewShotConfig(mode="all"),           # use all examples
-        "question_2": QuestionFewShotConfig(mode="k-shot", k=5),   # sample 5 instead of 3
+        "question_1": QuestionFewShotConfig(mode="all"),  # use all examples
+        "question_2": QuestionFewShotConfig(mode="k-shot", k=5),  # sample 5 instead of 3
         "question_3": QuestionFewShotConfig(mode="custom", selected_examples=[]),  # no examples
         # question_4 inherits: k-shot with k=3
     },
@@ -305,24 +305,30 @@ The resolution order is: resolved stored examples, then global examples.
 
 ```python
 # Custom selections by index
-by_index = FewShotConfig.from_index_selections({
-    "question_1": [0, 2, 4],
-    "question_2": [1, 3],
-})
-print(f"from_index_selections: pool_mode={by_index.pool_mode}, "
-      f"questions={list(by_index.question_configs.keys())}")
+by_index = FewShotConfig.from_index_selections(
+    {
+        "question_1": [0, 2, 4],
+        "question_2": [1, 3],
+    }
+)
+print(f"from_index_selections: pool_mode={by_index.pool_mode}, questions={list(by_index.question_configs.keys())}")
 
 # Custom selections by hash
-by_hash = FewShotConfig.from_hash_selections({
-    "question_1": [FewShotConfig.generate_example_hash("example question text")],
-})
+by_hash = FewShotConfig.from_hash_selections(
+    {
+        "question_1": [FewShotConfig.generate_example_hash("example question text")],
+    }
+)
 print(f"from_hash_selections: pool_mode={by_hash.pool_mode}")
 
 # Different k per question
-per_q_k = FewShotConfig.k_shot_for_questions({
-    "question_1": 5,
-    "question_2": 2,
-}, pool_k=3)
+per_q_k = FewShotConfig.k_shot_for_questions(
+    {
+        "question_1": 5,
+        "question_2": 2,
+    },
+    pool_k=3,
+)
 print(f"k_shot_for_questions: pool_mode={per_q_k.pool_mode}, pool_k={per_q_k.pool_k}")
 ```
 

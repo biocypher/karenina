@@ -66,11 +66,46 @@ _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 _qids = _benchmark.get_question_ids()
 
 _mcp_data = [
-    {"verified": True, "recursion_hit": False, "iterations": 3, "tool_calls": 4, "tools": ["brave_search"], "suspect_failed": 0},
-    {"verified": True, "recursion_hit": False, "iterations": 2, "tool_calls": 2, "tools": ["brave_search"], "suspect_failed": 0},
-    {"verified": True, "recursion_hit": False, "iterations": 5, "tool_calls": 7, "tools": ["brave_search", "read_resource"], "suspect_failed": 1},
-    {"verified": False, "recursion_hit": True, "iterations": 10, "tool_calls": 12, "tools": ["brave_search"], "suspect_failed": 3},
-    {"verified": True, "recursion_hit": False, "iterations": 2, "tool_calls": 3, "tools": ["brave_search"], "suspect_failed": 0},
+    {
+        "verified": True,
+        "recursion_hit": False,
+        "iterations": 3,
+        "tool_calls": 4,
+        "tools": ["brave_search"],
+        "suspect_failed": 0,
+    },
+    {
+        "verified": True,
+        "recursion_hit": False,
+        "iterations": 2,
+        "tool_calls": 2,
+        "tools": ["brave_search"],
+        "suspect_failed": 0,
+    },
+    {
+        "verified": True,
+        "recursion_hit": False,
+        "iterations": 5,
+        "tool_calls": 7,
+        "tools": ["brave_search", "read_resource"],
+        "suspect_failed": 1,
+    },
+    {
+        "verified": False,
+        "recursion_hit": True,
+        "iterations": 10,
+        "tool_calls": 12,
+        "tools": ["brave_search"],
+        "suspect_failed": 3,
+    },
+    {
+        "verified": True,
+        "recursion_hit": False,
+        "iterations": 2,
+        "tool_calls": 3,
+        "tools": ["brave_search"],
+        "suspect_failed": 0,
+    },
 ]
 
 _trace = [
@@ -85,14 +120,22 @@ def _make(qid, q_text, raw_ans, mcp):
     rid = VerificationResultMetadata.compute_result_id(qid, _answering, _parsing, _ts)
     return VerificationResult(
         metadata=VerificationResultMetadata(
-            question_id=qid, template_id="tmpl_" + qid[:8],
-            failure=None, caveats=[], question_text=q_text,
-            raw_answer=raw_ans, answering=_answering, parsing=_parsing,
-            execution_time=8.0, timestamp=_ts, result_id=rid,
+            question_id=qid,
+            template_id="tmpl_" + qid[:8],
+            failure=None,
+            caveats=[],
+            question_text=q_text,
+            raw_answer=raw_ans,
+            answering=_answering,
+            parsing=_parsing,
+            execution_time=8.0,
+            timestamp=_ts,
+            result_id=rid,
         ),
         template=VerificationResultTemplate(
             raw_llm_response=f"Based on my research, {raw_ans.lower()}.",
-            verify_result=mcp["verified"], template_verification_performed=True,
+            verify_result=mcp["verified"],
+            template_verification_performed=True,
             parsed_gt_response={"answer": raw_ans},
             parsed_llm_response={"answer": raw_ans if mcp["verified"] else "unable to determine"},
             recursion_limit_reached=mcp["recursion_hit"],
@@ -154,9 +197,13 @@ config = VerificationConfig(
         )
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     evaluation_mode="template_only",
 )
@@ -233,9 +280,13 @@ config_full_trace = VerificationConfig(
         )
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     # Pass full trace to evaluation (includes tool calls)
     use_full_trace_for_template=True,
@@ -290,7 +341,7 @@ for result in results[:3]:
         print(f"Q: {result.metadata.question_text[:40]}")
         print(f"  Iterations: {m['iterations']}, Tool calls: {m['tool_calls']}")
         print(f"  Tools: {m['tools_used']}")
-        if m.get('suspect_failed_tool_calls', 0) > 0:
+        if m.get("suspect_failed_tool_calls", 0) > 0:
             print(f"  Suspect failures: {m['suspect_failed_tool_calls']} ({m['suspect_failed_tools']})")
 ```
 

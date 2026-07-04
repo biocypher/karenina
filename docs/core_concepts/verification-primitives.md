@@ -24,13 +24,22 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.engine", "sqlalchemy.orm", "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
-    "sqlalchemy.sql", "sqlalchemy.event",
-    "karenina.storage", "karenina.storage.base",
-    "karenina.storage.engine", "karenina.storage.db_config",
-    "karenina.storage.models", "karenina.storage.generated_models",
-    "karenina.storage.auto_mapper", "karenina.storage.operations",
+    "sqlalchemy",
+    "sqlalchemy.engine",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
 ]:
     mock_modules[mod] = MagicMock()
 
@@ -871,11 +880,13 @@ class Answer(BaseAnswer):
     gene: str = VerifiedField(
         description="Gene name",
         ground_truth="BCL2",
-        verify_with=ExactMatch(normalize=[
-            "lowercase",
-            "strip",
-            SynonymMap(mapping={"bcl-2": "bcl2", "b-cell lymphoma 2": "bcl2"}),
-        ]),
+        verify_with=ExactMatch(
+            normalize=[
+                "lowercase",
+                "strip",
+                SynonymMap(mapping={"bcl-2": "bcl2", "b-cell lymphoma 2": "bcl2"}),
+            ]
+        ),
     )
 
 

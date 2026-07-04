@@ -20,6 +20,7 @@ Callable traits evaluate LLM responses using **custom Python functions**. They a
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
 import warnings
+
 warnings.filterwarnings("ignore", message="Deserializing callable")
 ```
 
@@ -136,7 +137,7 @@ short_response = "The answer is BCL2."
 long_response = "The drug target is BCL2. " * 20
 
 print(minimum_length_trait.evaluate(short_response))  # False
-print(minimum_length_trait.evaluate(long_response))   # True
+print(minimum_length_trait.evaluate(long_response))  # True
 ```
 
 If you think of callable traits as "serialized Python functions with metadata," `from_callable()` is the method that turns ordinary Python code into that stored form safely.
@@ -164,7 +165,7 @@ repetition_trait = CallableRubricTrait.from_callable(
 )
 
 print(repetition_trait.evaluate("Unique sentence one. Unique sentence two. Unique sentence three."))  # True
-print(repetition_trait.evaluate("Repeat this. Repeat this. Repeat this."))                            # False
+print(repetition_trait.evaluate("Repeat this. Repeat this. Repeat this."))  # False
 ```
 
 ## 6. Score Callable Traits
@@ -177,6 +178,7 @@ def count_sentences(text: str) -> int:
 
     sentences = re.split(r"[.!?]+", text.strip())
     return len([s for s in sentences if s.strip()])
+
 
 sentence_count_trait = CallableRubricTrait.from_callable(
     name="Sentence Count",
@@ -244,7 +246,7 @@ tone_classifier = CallableRubricTrait.from_callable(
 )
 
 print(tone_classifier.evaluate("Therefore, the evidence suggests..."))  # 0 (formal)
-print(tone_classifier.evaluate("Yeah, I think it's fine"))              # 1 (casual)
+print(tone_classifier.evaluate("Yeah, I think it's fine"))  # 1 (casual)
 ```
 
 Use literal callables when you have a programmatic classifier that maps responses to discrete categories. If the classification needs LLM judgment, use an [LLM trait](../llm-traits/) with `kind="literal"` instead.
@@ -291,10 +293,12 @@ Callable traits combine with other trait types in a `Rubric`:
 ```python
 from karenina.schemas import CallableRubricTrait, Rubric
 
-rubric = Rubric(callable_traits=[
-    minimum_length_trait,
-    sentence_count_trait,
-])
+rubric = Rubric(
+    callable_traits=[
+        minimum_length_trait,
+        sentence_count_trait,
+    ]
+)
 
 print(f"Rubric has {len(rubric.callable_traits)} callable traits")
 for trait in rubric.callable_traits:

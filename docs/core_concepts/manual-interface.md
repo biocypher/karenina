@@ -54,26 +54,34 @@ _answering_id = ModelIdentity(model_name="manual", interface="manual")
 _parsing_id = ModelIdentity(model_name="claude-haiku-4-5", interface="langchain")
 _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 
+
 def _make_result(qid, q_text, raw_ans):
     rid = VerificationResultMetadata.compute_result_id(qid, _answering_id, _parsing_id, _ts)
     return VerificationResult(
         metadata=VerificationResultMetadata(
-            question_id=qid, template_id="tmpl",
-            failure=None, caveats=[], question_text=q_text,
-            raw_answer=raw_ans, answering=_answering_id, parsing=_parsing_id,
-            execution_time=0.3, timestamp=_ts, result_id=rid,
+            question_id=qid,
+            template_id="tmpl",
+            failure=None,
+            caveats=[],
+            question_text=q_text,
+            raw_answer=raw_ans,
+            answering=_answering_id,
+            parsing=_parsing_id,
+            execution_time=0.3,
+            timestamp=_ts,
+            result_id=rid,
         ),
         template=VerificationResultTemplate(
             raw_llm_response=f"The answer is {raw_ans}.",
-            verify_result=True, template_verification_performed=True,
+            verify_result=True,
+            template_verification_performed=True,
             parsed_gt_response={"answer": raw_ans},
             parsed_llm_response={"answer": raw_ans},
         ),
     )
 
-_mock_results = VerificationResultSet(
-    results=[_make_result(qid, q, a) for qid, (q, a) in zip(_qids, _questions_data)]
-)
+
+_mock_results = VerificationResultSet(results=[_make_result(qid, q, a) for qid, (q, a) in zip(_qids, _questions_data)])
 _orig_run_verification = Benchmark.run_verification
 Benchmark.run_verification = lambda self, config, **kw: _mock_results
 ```
@@ -232,10 +240,13 @@ manual_traces.register_trace(
 )
 
 # Or batch register
-manual_traces.register_traces({
-    "What is 2+2?": "The answer is 4.",
-    "What is 3+3?": "The answer is 6.",
-}, map_to_id=True)
+manual_traces.register_traces(
+    {
+        "What is 2+2?": "The answer is 4.",
+        "What is 3+3?": "The answer is 6.",
+    },
+    map_to_id=True,
+)
 
 print(f"Registered traces for {len(benchmark.get_question_ids())} questions")
 ```

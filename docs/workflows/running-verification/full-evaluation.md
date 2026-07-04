@@ -68,11 +68,29 @@ _qids = _benchmark.get_question_ids()
 
 # Mock scenarios: normal, normal, abstention, insufficient, normal+embedding
 _scenarios = [
-    {"verified": True, "rubric": {"accuracy": 4, "completeness": True, "citation_format": True}, "abstention": False, "sufficiency": True, "embedding": None},
-    {"verified": True, "rubric": {"accuracy": 5, "completeness": True, "citation_format": True}, "abstention": False, "sufficiency": True, "embedding": None},
+    {
+        "verified": True,
+        "rubric": {"accuracy": 4, "completeness": True, "citation_format": True},
+        "abstention": False,
+        "sufficiency": True,
+        "embedding": None,
+    },
+    {
+        "verified": True,
+        "rubric": {"accuracy": 5, "completeness": True, "citation_format": True},
+        "abstention": False,
+        "sufficiency": True,
+        "embedding": None,
+    },
     {"verified": None, "rubric": None, "abstention": True, "sufficiency": None, "embedding": None},
     {"verified": None, "rubric": None, "abstention": False, "sufficiency": False, "embedding": None},
-    {"verified": True, "rubric": {"accuracy": 3, "completeness": False, "citation_format": True}, "abstention": False, "sufficiency": True, "embedding": 0.87},
+    {
+        "verified": True,
+        "rubric": {"accuracy": 3, "completeness": False, "citation_format": True},
+        "abstention": False,
+        "sufficiency": True,
+        "embedding": 0.87,
+    },
 ]
 
 
@@ -101,7 +119,10 @@ def _make(qid, q_text, raw_ans, scenario):
         rubric = VerificationResultRubric(
             rubric_evaluation_performed=True,
             rubric_evaluation_strategy="batch",
-            llm_trait_scores={"accuracy": scenario["rubric"]["accuracy"], "completeness": scenario["rubric"]["completeness"]},
+            llm_trait_scores={
+                "accuracy": scenario["rubric"]["accuracy"],
+                "completeness": scenario["rubric"]["completeness"],
+            },
             regex_trait_scores={"citation_format": scenario["rubric"]["citation_format"]},
         )
     return VerificationResult(
@@ -154,13 +175,16 @@ from karenina.schemas.config import ModelConfig
 
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     # Evaluation mode
     evaluation_mode="template_and_rubric",
@@ -196,13 +220,16 @@ prompt_config = PromptConfig(
 
 config_with_prompts = VerificationConfig(
     answering_models=[
-        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     evaluation_mode="template_and_rubric",
     prompt_config=prompt_config,
@@ -232,8 +259,10 @@ print("Load with: VerificationConfig.from_preset(Path('presets/production.json')
 ```python
 # Apply overrides on top of a preset base
 config_override = VerificationConfig.from_overrides(
-    answering_id="haiku", answering_model="claude-haiku-4-5",
-    parsing_id="haiku-parser", parsing_model="claude-haiku-4-5",
+    answering_id="haiku",
+    answering_model="claude-haiku-4-5",
+    parsing_id="haiku-parser",
+    parsing_model="claude-haiku-4-5",
     evaluation_mode="template_and_rubric",
     abstention=True,
 )
@@ -297,9 +326,11 @@ for result in results:
 for result in results:
     t = result.template
     if t and t.embedding_check_performed:
-        print(f"Q: {result.metadata.question_text[:40]}  "
-              f"Similarity: {t.embedding_similarity_score:.2f}  "
-              f"Override: {t.embedding_override_applied}")
+        print(
+            f"Q: {result.metadata.question_text[:40]}  "
+            f"Similarity: {t.embedding_similarity_score:.2f}  "
+            f"Override: {t.embedding_override_applied}"
+        )
 ```
 
 ---
@@ -342,12 +373,10 @@ benchmark.add_question(
 # Run with rubric mode enabled
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     evaluation_mode="template_and_rubric",
 )

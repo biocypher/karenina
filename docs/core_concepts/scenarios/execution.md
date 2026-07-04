@@ -34,6 +34,7 @@ from typing import Any, Literal
 @dataclass
 class ScenarioExecutorConfig:
     """Stand-in mirroring karenina.benchmark.verification.scenario_executor.ScenarioExecutorConfig."""
+
     max_workers: int = 2
     max_concurrent_requests: int | None = None
     enable_cache: bool = True
@@ -50,6 +51,7 @@ class ScenarioExecutor:
 
 # Cache key helper from karenina.scenario.manager
 import hashlib
+
 
 def build_scenario_cache_key(
     scenario_id: str,

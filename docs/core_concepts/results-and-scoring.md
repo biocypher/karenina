@@ -28,13 +28,21 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
-    "sqlalchemy.sql", "sqlalchemy.event",
-    "karenina.storage", "karenina.storage.base",
-    "karenina.storage.engine", "karenina.storage.db_config",
-    "karenina.storage.models", "karenina.storage.generated_models",
-    "karenina.storage.auto_mapper", "karenina.storage.operations",
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
 ]:
     mock_modules[mod] = MagicMock()
 
@@ -59,22 +67,45 @@ answering_a = ModelIdentity(interface="langchain", model_name="claude-sonnet-4-6
 answering_b = ModelIdentity(interface="langchain", model_name="gpt-4.1-mini-2025-04-14")
 parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5-20251001")
 
+
 def _make_result(
-    qid, qtxt, raw_ans, answering_model, verify, llm_scores, regex_scores,
-    metric_scores=None, metric_confusion=None, callable_scores=None,
-    llm_labels=None, exec_time=1.2, ts="2025-06-15T10:00:00Z",
-    abstention=False, embedding_score=None,
+    qid,
+    qtxt,
+    raw_ans,
+    answering_model,
+    verify,
+    llm_scores,
+    regex_scores,
+    metric_scores=None,
+    metric_confusion=None,
+    callable_scores=None,
+    llm_labels=None,
+    exec_time=1.2,
+    ts="2025-06-15T10:00:00Z",
+    abstention=False,
+    embedding_score=None,
 ):
     """Helper to build a realistic VerificationResult for examples."""
     result_id = VerificationResultMetadata.compute_result_id(
-        question_id=qid, answering=answering_model, parsing=parsing,
-        timestamp=ts, replicate=1,
+        question_id=qid,
+        answering=answering_model,
+        parsing=parsing,
+        timestamp=ts,
+        replicate=1,
     )
     meta = VerificationResultMetadata(
-        question_id=qid, template_id="abc123", question_text=qtxt,
-        raw_answer=raw_ans, answering=answering_model, parsing=parsing,
-        execution_time=exec_time, timestamp=ts, result_id=result_id,
-        failure=None, caveats=[], replicate=1,
+        question_id=qid,
+        template_id="abc123",
+        question_text=qtxt,
+        raw_answer=raw_ans,
+        answering=answering_model,
+        parsing=parsing,
+        execution_time=exec_time,
+        timestamp=ts,
+        result_id=result_id,
+        failure=None,
+        caveats=[],
+        replicate=1,
     )
     tmpl = VerificationResultTemplate(
         raw_llm_response="The target is BCL2, also known as B-cell lymphoma 2.",
@@ -99,34 +130,55 @@ def _make_result(
     )
     return VerificationResult(metadata=meta, template=tmpl, rubric=rubric)
 
+
 results_list = [
     _make_result(
-        "q1", "What is the putative target of venetoclax?", "BCL2",
-        answering_a, True,
-        {"safety": True, "clarity": 4}, {"has_citations": True},
+        "q1",
+        "What is the putative target of venetoclax?",
+        "BCL2",
+        answering_a,
+        True,
+        {"safety": True, "clarity": 4},
+        {"has_citations": True},
         metric_scores={"drug_coverage": {"tp": 3, "fn": 1, "fp": 0, "precision": 1.0, "recall": 0.75, "f1": 0.857}},
-        metric_confusion={"drug_coverage": {"tp": ["aspirin", "ibuprofen", "acetaminophen"], "fn": ["naproxen"], "fp": [], "tn": []}},
+        metric_confusion={
+            "drug_coverage": {"tp": ["aspirin", "ibuprofen", "acetaminophen"], "fn": ["naproxen"], "fp": [], "tn": []}
+        },
         callable_scores={"under_150w": True},
         llm_labels={"response_type": "Factual"},
         embedding_score=0.92,
     ),
     _make_result(
-        "q1", "What is the putative target of venetoclax?", "BCL2",
-        answering_b, False,
-        {"safety": True, "clarity": 3}, {"has_citations": False},
-        ts="2025-06-15T10:01:00Z", exec_time=2.1,
+        "q1",
+        "What is the putative target of venetoclax?",
+        "BCL2",
+        answering_b,
+        False,
+        {"safety": True, "clarity": 3},
+        {"has_citations": False},
+        ts="2025-06-15T10:01:00Z",
+        exec_time=2.1,
     ),
     _make_result(
-        "q2", "What chromosome is TP53 located on?", "Chromosome 17",
-        answering_a, True,
-        {"safety": True, "clarity": 5}, {"has_citations": True},
+        "q2",
+        "What chromosome is TP53 located on?",
+        "Chromosome 17",
+        answering_a,
+        True,
+        {"safety": True, "clarity": 5},
+        {"has_citations": True},
         ts="2025-06-15T10:02:00Z",
     ),
     _make_result(
-        "q2", "What chromosome is TP53 located on?", "Chromosome 17",
-        answering_b, True,
-        {"safety": True, "clarity": 4}, {"has_citations": True},
-        ts="2025-06-15T10:03:00Z", exec_time=1.8,
+        "q2",
+        "What chromosome is TP53 located on?",
+        "Chromosome 17",
+        answering_b,
+        True,
+        {"safety": True, "clarity": 4},
+        {"has_citations": True},
+        ts="2025-06-15T10:03:00Z",
+        exec_time=1.8,
     ),
 ]
 
@@ -246,12 +298,18 @@ Each result gets a `result_id`: a 16-character SHA256 hash computed from `(quest
 ```python
 # Same inputs always produce the same ID
 id1 = VerificationResultMetadata.compute_result_id(
-    question_id="q1", answering=answering_a, parsing=parsing,
-    timestamp="2025-06-15T10:00:00Z", replicate=1,
+    question_id="q1",
+    answering=answering_a,
+    parsing=parsing,
+    timestamp="2025-06-15T10:00:00Z",
+    replicate=1,
 )
 id2 = VerificationResultMetadata.compute_result_id(
-    question_id="q1", answering=answering_a, parsing=parsing,
-    timestamp="2025-06-15T10:00:00Z", replicate=1,
+    question_id="q1",
+    answering=answering_a,
+    parsing=parsing,
+    timestamp="2025-06-15T10:00:00Z",
+    replicate=1,
 )
 print(f"ID 1:  {id1}")
 print(f"ID 2:  {id2}")
@@ -486,8 +544,7 @@ All containers support standard Python iteration:
 
 ```python
 for r in result_set:
-    print(f"  {r.metadata.question_id}: verify={r.template.verify_result}, "
-          f"model={r.metadata.answering.model_name}")
+    print(f"  {r.metadata.question_id}: verify={r.template.verify_result}, model={r.metadata.answering.model_name}")
 
 print(f"\nTotal results: {len(result_set)}")
 print(f"First result question: {result_set[0].metadata.question_text}")
@@ -605,9 +662,11 @@ Register custom aggregation strategies by implementing the `ResultAggregator` pr
 ```python
 class WeightedMeanAggregator:
     """Custom aggregator that computes a weighted mean."""
+
     def aggregate(self, series, **kwargs):
         # Simple mean as fallback (weights would come from kwargs)
         return series.mean()
+
 
 rubric_results.register_aggregator("weighted_mean", WeightedMeanAggregator())
 weighted = rubric_results.aggregate_llm_traits(strategy="weighted_mean", by="question_id")

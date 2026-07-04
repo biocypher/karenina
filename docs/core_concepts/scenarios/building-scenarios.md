@@ -37,6 +37,7 @@ END: str = "__end__"
 
 class Question(BaseModel):
     """Minimal Question stand-in for documentation examples."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     question: str
     raw_answer: str
@@ -46,6 +47,7 @@ class Question(BaseModel):
 
 class StateCheck(BaseModel):
     """Check a ScenarioState field using a comparison primitive."""
+
     field: str
     expected: Any = None
     verify_with: Any = None
@@ -53,6 +55,7 @@ class StateCheck(BaseModel):
 
 class ScenarioDefinition(BaseModel):
     """Frozen scenario graph returned by Scenario.validate()."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     name: str
     description: str = ""
@@ -123,9 +126,7 @@ class Scenario:
 
     def add_outcome(self, name: str, check: Any, *, description: str = "") -> None:
         self._outcome_criteria = getattr(self, "_outcome_criteria", [])
-        self._outcome_criteria.append(
-            {"name": name, "description": description, "check": check}
-        )
+        self._outcome_criteria.append({"name": name, "description": description, "check": check})
 
     def add_outcome_criterion(self, criterion: Any) -> None:
         self._outcome_criteria = getattr(self, "_outcome_criteria", [])
@@ -202,8 +203,8 @@ q_followup = Question(
 s = Scenario("bcl2-mechanism", description="Two-turn mechanism check")
 s.add_node("initial", question=q_initial)
 s.add_node("followup", question=q_followup)
-s.add_edge("initial", "followup")   # unconditional: always proceed
-s.add_edge("followup", END)         # unconditional: then terminate
+s.add_edge("initial", "followup")  # unconditional: always proceed
+s.add_edge("followup", END)  # unconditional: then terminate
 s.set_entry("initial")
 
 defn = s.validate()
@@ -401,7 +402,9 @@ A -----> B --> END
 ```python
 q_main = Question(question="What drug class does venetoclax belong to?", raw_answer="BCL-2 inhibitor")
 q_correct_path = Question(question="Good. What is the clinical indication?", raw_answer="CLL, SLL, AML")
-q_incorrect_path = Question(question="Let us revisit. Venetoclax targets BCL-2. What class is that?", raw_answer="BCL-2 inhibitor")
+q_incorrect_path = Question(
+    question="Let us revisit. Venetoclax targets BCL-2. What class is that?", raw_answer="BCL-2 inhibitor"
+)
 
 branching = Scenario("branching-example")
 branching.add_node("main", question=q_main)

@@ -39,20 +39,23 @@ for _mod in [
 from karenina.benchmark.task_eval import TaskEval
 from karenina.ports.messages import Message
 
+
 class Answer(BaseAnswer):
-    identifies_bcl2: bool = Field(
-        description="True if BCL2 is identified as the primary target."
-    )
+    identifies_bcl2: bool = Field(description="True if BCL2 is identified as the primary target.")
+
     def ground_truth(self):
         self.correct = {"identifies_bcl2": True}
+
     def verify(self) -> bool:
         return self.identifies_bcl2 == self.correct["identifies_bcl2"]
+
 
 def _mock_add_template(self, template_class, step_id=None):
     self.add_question(
         {"id": template_class.__name__.lower(), "question": "", "raw_answer": "", "answer_template": "mock"},
         step_id=step_id,
     )
+
 
 TaskEval.add_template = _mock_add_template
 
@@ -209,10 +212,17 @@ The evaluation mode is auto-detected from what you attach:
 task.add_template(Answer)
 
 # Quality: each trait is scored independently by the judge LLM
-task.add_rubric(Rubric(llm_traits=[
-    LLMRubricTrait(name="conciseness", kind="boolean",
-                   description="True if the response is direct and avoids unnecessary elaboration.")
-]))
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="conciseness",
+                kind="boolean",
+                description="True if the response is direct and avoids unnecessary elaboration.",
+            )
+        ]
+    )
+)
 ```
 
 <div class="admonition note">
@@ -240,10 +250,12 @@ task.log("BCL2 is the primary pharmacological target of venetoclax.")
 task.log("Found 3 relevant papers.", step_id="retrieval")
 
 # Structured trace
-task.log_trace([
-    Message.user("What is the target of venetoclax?"),
-    Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
-])
+task.log_trace(
+    [
+        Message.user("What is the target of venetoclax?"),
+        Message.assistant("The primary pharmacological target of venetoclax is BCL2."),
+    ]
+)
 ```
 
 The `target` parameter controls routing when a `step_id` is provided:
@@ -314,7 +326,7 @@ from karenina.schemas.config import ModelConfig
 
 answering_model = ModelConfig(
     id="taskeval-answerer",
-    model_name="recorded-output",   # arbitrary sentinel name
+    model_name="recorded-output",  # arbitrary sentinel name
     interface="taskeval",
 )
 ```

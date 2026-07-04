@@ -288,15 +288,9 @@ from karenina.schemas.entities.rubric import AgenticRubricTrait
 class CodeQualityFindings(BaseModel):
     """The agent investigates the workspace and fills this in."""
 
-    has_type_hints: bool = Field(
-        description="True if the code uses type annotations on function signatures."
-    )
-    test_count: int = Field(
-        description="Number of test functions found in test files."
-    )
-    external_dependencies: list[str] = Field(
-        description="Third-party packages imported by the code."
-    )
+    has_type_hints: bool = Field(description="True if the code uses type annotations on function signatures.")
+    test_count: int = Field(description="Number of test functions found in test files.")
+    external_dependencies: list[str] = Field(description="Third-party packages imported by the code.")
 
 
 trait = AgenticRubricTrait(
@@ -377,17 +371,17 @@ Like `LLMRubricTrait`, agentic traits provide a `validate_score` method that che
 
 ```python
 # Boolean trait: only accepts bool
-print(runs_cleanly.validate_score(True))    # True
-print(runs_cleanly.validate_score(1))       # False (int rejected for boolean)
+print(runs_cleanly.validate_score(True))  # True
+print(runs_cleanly.validate_score(1))  # False (int rejected for boolean)
 
 # Score trait: accepts int in [min_score, max_score]
-print(test_quality.validate_score(3))       # True
-print(test_quality.validate_score(6))       # False (above max_score)
+print(test_quality.validate_score(3))  # True
+print(test_quality.validate_score(6))  # False (above max_score)
 
 # Literal trait: accepts int in [0, len(classes)-1] or -1 (error state)
-print(library_trait.validate_score(0))      # True (statsmodels)
-print(library_trait.validate_score(-1))     # True (error state)
-print(library_trait.validate_score(4))      # False (out of range)
+print(library_trait.validate_score(0))  # True (statsmodels)
+print(library_trait.validate_score(-1))  # True (error state)
+print(library_trait.validate_score(4))  # False (out of range)
 ```
 
 ## 6. When to Use Agentic Traits

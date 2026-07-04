@@ -70,6 +70,7 @@ q1_id = benchmark.add_question(
     ),
 )
 
+
 class Answer(BaseAnswer):
     identifies_pd1_target: bool = Field(
         description=(
@@ -82,6 +83,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.identifies_pd1_target
+
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added: {q1_id[:50]}...")
@@ -102,6 +104,7 @@ q2_id = benchmark.add_question(
     ),
 )
 
+
 class Answer(BaseAnswer):
     mentions_keynote_trial: bool = Field(
         description=(
@@ -114,6 +117,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         return self.mentions_keynote_trial
 
+
 benchmark.update_template(q2_id, Answer)
 print(f"Q2 added: {q2_id[:50]}...")
 ```
@@ -123,8 +127,7 @@ print(f"Q2 added: {q2_id[:50]}...")
 ```python
 q3_id = benchmark.add_question(
     question=(
-        "When should pembrolizumab be considered over chemotherapy for NSCLC, "
-        "and what biomarker testing is required?"
+        "When should pembrolizumab be considered over chemotherapy for NSCLC, and what biomarker testing is required?"
     ),
     raw_answer=(
         "Pembrolizumab should be considered as first-line monotherapy when PD-L1 "
@@ -137,6 +140,7 @@ q3_id = benchmark.add_question(
     ),
 )
 
+
 class Answer(BaseAnswer):
     mentions_pdl1_testing: bool = Field(
         description=(
@@ -148,6 +152,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.mentions_pdl1_testing
+
 
 benchmark.update_template(q3_id, Answer)
 print(f"Q3 added: {q3_id[:50]}...")
@@ -263,8 +268,7 @@ from karenina.schemas import RegexRubricTrait
 disclaimer_trait = RegexRubricTrait(
     name="Safety Disclaimer",
     description=(
-        "Checks that the response includes a safety disclaimer directing "
-        "patients to consult a healthcare professional."
+        "Checks that the response includes a safety disclaimer directing patients to consult a healthcare professional."
     ),
     pattern=r"consult\s+(a\s+|your\s+)?(doctor|physician|healthcare\s+(professional|provider))",
     case_sensitive=False,
@@ -293,6 +297,7 @@ LLMs are notoriously imprecise at counting characters, words, or items. A callab
 ```python
 from karenina.schemas import CallableRubricTrait
 
+
 def check_response_length(text: str) -> bool:
     """Verify that a clinical decision response meets length requirements.
 
@@ -301,6 +306,7 @@ def check_response_length(text: str) -> bool:
     """
     char_count = len(text.strip())
     return 200 <= char_count <= 2000
+
 
 length_trait = CallableRubricTrait.from_callable(
     name="Response Length",
@@ -376,10 +382,7 @@ When reproducibility matters (regulatory contexts, automated pipelines, CI gates
 ```python
 no_hedging_trait = RegexRubricTrait(
     name="No Clinical Hedging",
-    description=(
-        "Checks that the response does not use hedging language that could "
-        "undermine clinical confidence."
-    ),
+    description=("Checks that the response does not use hedging language that could undermine clinical confidence."),
     pattern=r"\b(I think|I believe|I guess|probably|it seems like|I'm not sure)\b",
     case_sensitive=False,
     invert_result=True,
@@ -424,7 +427,9 @@ mechanism_trait = LLMRubricTrait(
 )
 
 benchmark.add_question_rubric_trait(q1_id, mechanism_trait)
-print(f"Added to Q1: {mechanism_trait.name} (deep judgment, up to {mechanism_trait.deep_judgment_max_excerpts} excerpts)")
+print(
+    f"Added to Q1: {mechanism_trait.name} (deep judgment, up to {mechanism_trait.deep_judgment_max_excerpts} excerpts)"
+)
 ```
 
 This trait is **per-question** on Q1 because receptor-level mechanism depth only applies to the mechanism question.
@@ -491,6 +496,7 @@ print(f"Global traits: {loaded_rubric.get_trait_names()}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 

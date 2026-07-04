@@ -147,7 +147,7 @@ citation_trait = RegexRubricTrait(
 )
 
 print(citation_trait.evaluate("The drug targets BCL2 [1] and KRAS [2]."))  # True
-print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))          # False
+print(citation_trait.evaluate("The drug targets BCL2 and KRAS."))  # False
 ```
 
 ### 4.2 Enforcing Answer Formats
@@ -163,7 +163,7 @@ format_trait = RegexRubricTrait(
 )
 
 print(format_trait.evaluate("The gene is [ANSWER]BCL2[/ANSWER]."))  # True
-print(format_trait.evaluate("The gene is BCL2."))                   # False
+print(format_trait.evaluate("The gene is BCL2."))  # False
 ```
 
 ## 5. Case Sensitivity
@@ -179,9 +179,9 @@ keyword_trait = RegexRubricTrait(
     higher_is_better=True,
 )
 
-print(keyword_trait.evaluate("Machine Learning is a broad field."))   # True
-print(keyword_trait.evaluate("We used machine learning techniques.")) # True
-print(keyword_trait.evaluate("We used deep learning techniques."))    # False
+print(keyword_trait.evaluate("Machine Learning is a broad field."))  # True
+print(keyword_trait.evaluate("We used machine learning techniques."))  # True
+print(keyword_trait.evaluate("We used deep learning techniques."))  # False
 ```
 
 Use case-insensitive matching deliberately. If capitalization itself matters to the required format, keep `case_sensitive=True`.
@@ -200,8 +200,8 @@ no_hedging_trait = RegexRubricTrait(
     higher_is_better=True,
 )
 
-print(no_hedging_trait.evaluate("The answer is 42."))         # True
-print(no_hedging_trait.evaluate("The answer is perhaps 42.")) # False
+print(no_hedging_trait.evaluate("The answer is 42."))  # True
+print(no_hedging_trait.evaluate("The answer is perhaps 42."))  # False
 ```
 
 This is usually the clearest way to express an absence check because `True` means the response passed the rule.
@@ -231,7 +231,7 @@ prohibited_trait = RegexRubricTrait(
 )
 
 print(prohibited_trait.evaluate("Contact me at user@example.com"))  # True
-print(prohibited_trait.evaluate("No personal info here."))          # False
+print(prohibited_trait.evaluate("No personal info here."))  # False
 ```
 
 <div class="admonition tip">

@@ -63,6 +63,7 @@ q1_id = benchmark.add_question(
     raw_answer="HER2 (ERBB2) is the target of trastuzumab",
 )
 
+
 class Answer(BaseAnswer):
     identifies_her2: bool = Field(
         description=(
@@ -74,6 +75,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.identifies_her2
+
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
@@ -87,6 +89,7 @@ q2_id = benchmark.add_question(
     raw_answer="Biguanide",
 )
 
+
 class Answer(BaseAnswer):
     drug_class: str = Field(
         description=(
@@ -97,6 +100,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.drug_class.strip().lower() == "biguanide"
+
 
 benchmark.update_template(q2_id, Answer)
 print(f"Q2 added with template: {q2_id[:50]}...")
@@ -110,12 +114,10 @@ q3_id = benchmark.add_question(
     raw_answer="Aspirin irreversibly inhibits cyclooxygenase (COX) enzymes, reducing prostaglandin synthesis and thereby decreasing inflammation.",
 )
 
+
 class Answer(BaseAnswer):
     mechanism: str = Field(
-        description=(
-            "A brief summary of how aspirin reduces inflammation, as described "
-            "in the response."
-        )
+        description=("A brief summary of how aspirin reduces inflammation, as described in the response.")
     )
     target_enzyme: str = Field(
         description=(
@@ -133,6 +135,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         enzyme_correct = self.target_enzyme.strip().upper() in ("COX", "CYCLOOXYGENASE")
         return enzyme_correct and self.mentions_irreversible
+
 
 benchmark.update_template(q3_id, Answer)
 print(f"Q3 added with template: {q3_id[:50]}...")
@@ -172,10 +175,7 @@ from karenina.schemas import RegexRubricTrait
 
 citation_trait = RegexRubricTrait(
     name="No Hedging Language",
-    description=(
-        "Checks that the response states facts directly without hedging phrases "
-        "that undermine confidence."
-    ),
+    description=("Checks that the response states facts directly without hedging phrases that undermine confidence."),
     pattern=r"\b(I think|I believe|I guess|probably)\b",
     case_sensitive=False,
     invert_result=True,
@@ -334,6 +334,7 @@ print(f"Global traits: {loaded_rubric.get_trait_names()}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 

@@ -152,6 +152,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         return self.identifies_bh3_mimetic == self.correct["identifies_bh3_mimetic"]
 
+
 q3_id = benchmark.add_question(
     question="Describe the pharmacological mechanism of venetoclax.",
     raw_answer="BH3 mimetic that selectively inhibits BCL2",
@@ -187,6 +188,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         extracted = self.target.strip().upper().replace("-", "").replace(" ", "")
         return extracted == self.correct["target"]
+
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 has template: {benchmark.has_template(q1_id)}")
@@ -230,20 +232,22 @@ Rubric traits assess response quality. They attach at two levels.
 Global traits apply to every question in the benchmark:
 
 ```python
-global_rubric = Rubric(llm_traits=[
-    LLMRubricTrait(
-        name="conciseness",
-        description=(
-            "True if the response directly answers the question without "
-            "unnecessary preamble, filler phrases, or tangential information. "
-            "A concise response may still include relevant context or caveats. "
-            "False if the response contains significant padding, repeats the "
-            "question back, or includes large blocks of unrequested detail."
+global_rubric = Rubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="conciseness",
+            description=(
+                "True if the response directly answers the question without "
+                "unnecessary preamble, filler phrases, or tangential information. "
+                "A concise response may still include relevant context or caveats. "
+                "False if the response contains significant padding, repeats the "
+                "question back, or includes large blocks of unrequested detail."
+            ),
+            kind="boolean",
+            higher_is_better=True,
         ),
-        kind="boolean",
-        higher_is_better=True,
-    ),
-])
+    ]
+)
 benchmark.set_global_rubric(global_rubric)
 print(f"Global rubric set: {benchmark.get_global_rubric() is not None}")
 ```
@@ -364,9 +368,9 @@ print(f"All have templates:     {readiness['all_have_templates']}")
 print(f"All finished:           {readiness['all_finished']}")
 print(f"Templates valid:        {readiness['templates_valid']}")
 print(f"Rubrics valid:          {readiness['rubrics_valid']}")
-if readiness['missing_templates']:
+if readiness["missing_templates"]:
     print(f"Missing templates:      {readiness['missing_templates_count']} questions")
-if readiness['unfinished_questions']:
+if readiness["unfinished_questions"]:
     print(f"Unfinished:             {int(readiness['unfinished_count'])} questions")
 ```
 
@@ -388,9 +392,9 @@ For a higher-level view, `get_health_report()` returns a scored assessment (0 to
 report = benchmark.get_health_report()
 print(f"Health score:  {report['health_score']}")
 print(f"Health status: {report['health_status']}")
-if report.get('recommendations'):
+if report.get("recommendations"):
     print("Recommendations:")
-    for rec in report['recommendations']:
+    for rec in report["recommendations"]:
         print(f"  - {rec}")
 ```
 

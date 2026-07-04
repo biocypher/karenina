@@ -86,6 +86,7 @@ class Message:
 @dataclass
 class TaggedMessage:
     """A Message paired with the agent identity that produced it."""
+
     message: Message
     agent_id: str
 
@@ -230,6 +231,7 @@ This is the right strategy when the transcript is large enough that inlining it 
 
 ```python
 # Signature: handover_callable(tagged_messages, state) -> list[Message]
+
 
 def keep_only_assistant_blocks(
     tagged_messages: list[TaggedMessage],
