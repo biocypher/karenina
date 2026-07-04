@@ -29,7 +29,7 @@ Key flags:
 | `-k "pattern"` | Run tests matching a pattern |
 | `--co` | List tests without running them |
 
-Tests use captured LLM response fixtures to avoid live API calls. See `tests/fixtures/llm_responses/README.md` for fixture documentation.
+Tests use captured LLM response fixtures to avoid live API calls. See `tests/fixtures/MANIFEST.md` for fixture documentation.
 
 ## Linting and Type Checking
 

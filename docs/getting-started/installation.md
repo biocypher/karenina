@@ -54,6 +54,7 @@ uv pip install "karenina[embeddings,examples] @ git+https://github.com/biocypher
 | `embeddings` | sentence-transformers | Embedding similarity checks (pipeline stage 9) |
 | `gepa` | gepa | GEPA prompt optimization integration |
 | `deep-agents` | deepagents, langchain-mcp-adapters | Deep-agents adapter for advanced agentic verification |
+| `paper-analysis` | bambi, arviz, pymc | Statistical analysis of paper results (Bayesian GLMM) |
 
 !!! note "MCP is a core dependency"
     The MCP client library (`mcp>=1.25.0`) is included in the base installation.
@@ -130,8 +131,8 @@ The CLI entry point may not be on your `PATH`. Try:
 # Run via uv
 uv run karenina --version
 
-# Or via python module
-python -m karenina --version
+# Or check the import directly
+python -c "import karenina; print(karenina.__version__)"
 ```
 
 If using `pip install`, ensure your Python scripts directory is on `PATH`.
