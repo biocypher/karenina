@@ -228,7 +228,6 @@ config = VerificationConfig.from_overrides(
     deep_judgment_rubric_max_excerpts=5,
     deep_judgment_rubric_fuzzy_threshold=0.90,
     deep_judgment_rubric_retry_attempts=3,
-    deep_judgment_rubric_search=True,
     deep_judgment_rubric_search_tool="tavily",
     answering_model="claude-haiku-4-5",
     answering_id="answering",
@@ -246,9 +245,10 @@ Override parameter to config field mapping:
 | `deep_judgment_rubric_max_excerpts` | `deep_judgment_rubric_max_excerpts_default` |
 | `deep_judgment_rubric_fuzzy_threshold` | `deep_judgment_rubric_fuzzy_match_threshold_default` |
 | `deep_judgment_rubric_retry_attempts` | `deep_judgment_rubric_excerpt_retry_attempts_default` |
-| `deep_judgment_rubric_search` | `deep_judgment_rubric_search_enabled` |
 | `deep_judgment_rubric_search_tool` | `deep_judgment_rubric_search_tool` |
 | `deep_judgment_rubric_config` | `deep_judgment_rubric_config` |
+
+The `from_overrides` signature also accepts `deep_judgment_rubric_search`, but it has no effect on the resulting config. `VerificationConfig` has no global rubric-search flag: `__init__` pops and discards `deep_judgment_rubric_search_enabled`. Enable search-enhanced hallucination detection per trait instead, via `LLMRubricTrait.deep_judgment_search_enabled`, or in custom mode via the per-trait `search_enabled` field of `deep_judgment_rubric_config`.
 
 ### Via CLI
 

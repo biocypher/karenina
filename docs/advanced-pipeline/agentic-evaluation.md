@@ -19,10 +19,16 @@ The `GenerateAnswer` stage (stage 2) checks this field to decide whether to use 
 ```python
 # generate_answer.py, Step 2
 spec = AdapterRegistry.get_spec(answering_model.interface)
-use_agent = bool(answering_model.mcp_urls_dict) or (spec is not None and spec.agent_tier == "deep_agent")
+use_agent = (
+    bool(answering_model.mcp_urls_dict)
+    or (spec is not None and spec.agent_tier == "deep_agent")
+    or answering_model.interface == "manual"
+)
 ```
 
 When `use_agent=True`, the stage calls `AgentPort.run()`, which captures the full conversation trace: tool calls, tool results, and intermediate reasoning. When `False`, it calls `LLMPort.invoke()`, which returns only the final text response.
+
+The third clause is a special case for the `manual` interface. Its `agent_tier` is `"tool_loop"`, but the interface check forces `use_agent=True` anyway, because `ManualLLMAdapter` raises `ManualInterfaceError` on the `LLMPort` path and manual answers must flow through `ManualAgentAdapter` via `AgentPort`.
 
 | Interface | `agent_tier` | Reason |
 |-----------|:------------------:|--------|
@@ -197,7 +203,7 @@ Template replay and extension runs have two limitations:
 
 ### Result Storage
 
-The stage stores four artifacts and two result builder fields:
+On the successful path the stage stores four artifacts and two result builder fields:
 
 ```python
 context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
@@ -210,6 +216,8 @@ context.set_result_field(ArtifactKeys.AGENTIC_PARSING_PERFORMED, True)
 ```
 
 The stage also sets `TEMPLATE_EVALUATOR` to `None` and `DEEP_JUDGMENT_PERFORMED` to `False`, since agentic parsing does not use the classical template evaluator or deep judgment extraction.
+
+When the Step 2 parser extraction raises, the stage records two additional result fields before continuing. It sets `AGENTIC_EXTRACTION_ERROR` to the parser error string and attempts a local JSON recovery from the investigation trace. If recovery succeeds, it also sets `AGENTIC_EXTRACTION_RECOVERY` to `"local_json"` and proceeds with the recovered answer. If recovery also fails, the stage marks the context error and produces no parsed answer. Both fields surface on `VerificationResultTemplate` as `agentic_extraction_error` and `agentic_extraction_recovery`.
 
 ## 4. Ground Truth Stripping in BaseAnswer.model_json_schema()
 

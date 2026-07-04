@@ -576,6 +576,7 @@ config = VerificationConfig(
 | `availability_checker` | `Callable \| None` | `None` | Returns `AdapterAvailability`. `None` means always available. |
 | `fallback_interface` | `str \| None` | `None` | Interface to fall back to when unavailable |
 | `routes_to` | `str \| None` | `None` | Interface this one delegates to (for routing interfaces) |
+| `runtime_profile` | `Any \| None` | `None` | Optional runtime-behavior extension hook. External adapters can supply a profile to plug into the shared agent prompt and capability helpers (for example, sandbox path mapping) without changing core code. Kept as `Any` to avoid coupling the registry to agent-only helper types. |
 | `supports_mcp` | `bool` | `False` | Whether the adapter can connect to MCP servers |
 | `supports_tools` | `bool` | `False` | Whether the adapter supports tool use |
 | `agent_tier` | `str` | `"tool_loop"` | Agent capability tier. `"tool_loop"`: basic tool-calling loop (e.g., LangChain ReAct), the adapter orchestrates each tool call turn. `"deep_agent"`: full agent runtime with built-in tools (e.g., Claude Code, LangChain Deep Agents), the runtime handles tool loops internally and `GenerateAnswer` prefers the `AgentPort` path to capture the full trace. |

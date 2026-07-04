@@ -171,10 +171,12 @@ Each `PromptTask` enum value identifies a distinct LLM call in the pipeline. The
 | `parsing` | ParseTemplate | Judge LLM parses response into template schema |
 | `agentic_parsing_investigation` | AgenticParseTemplate | Investigation agent examines workspace/trace |
 | `agentic_parsing_extraction` | AgenticParseTemplate | Extracts structured answer from investigation trace |
+| `agentic_parsing_decision` | DynamicParseTemplate | Combined dynamic parse decision and direct extraction call |
 | `abstention_detection` | AbstentionCheck | Detects model refusal |
 | `sufficiency_detection` | SufficiencyCheck | Checks response completeness |
 | `rubric_llm_trait_batch` | RubricEvaluation | Batched boolean/score LLM traits |
 | `rubric_llm_trait_single` | RubricEvaluation | Sequential single LLM trait |
+| `rubric_llm_trait_template` | RubricEvaluation | Template-kind LLM trait: LLM fills a Pydantic schema from the response |
 | `rubric_literal_trait_batch` | RubricEvaluation | Batched literal (categorical) traits |
 | `rubric_literal_trait_single` | RubricEvaluation | Sequential single literal trait |
 | `rubric_metric_trait` | RubricEvaluation | Metric trait (confusion matrix) |

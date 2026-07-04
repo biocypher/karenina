@@ -122,6 +122,8 @@ A **routing interface** that delegates to the LangChain adapter. Connects to any
 
 Like `openrouter`, this interface uses the same LangChain adapter classes with `routes_to = "langchain"`. The custom base URL and API key are passed through to the underlying adapter.
 
+For structured parsing (the [parse_template stage](../core_concepts/verification-pipeline.md)), the adapter treats `openai_endpoint` specially: it builds the structured model with `with_structured_output(schema, method="json_schema")` so the server enforces the schema through guided decoding rather than the LangChain default function-calling path, which small self-hosted models often fail (silently returning `None` or raising). If the backend rejects the `json_schema` method, the adapter retries `with_structured_output` without the override, and if that also fails it falls back to manual JSON parsing at invoke time. For the most reliable parsing, run a server that supports guided decoding / JSON-schema-constrained output (vLLM and Ollama both do).
+
 ### Configuration
 
 ```python
@@ -138,6 +140,23 @@ config = ModelConfig(
 **Required fields**: `id`, `model_name`, `endpoint_base_url`, `endpoint_api_key`
 
 Both `endpoint_base_url` and `endpoint_api_key` are validated at factory creation time — missing either raises `AdapterUnavailableError`.
+
+### Endpoints Not Served at `/v1`
+
+By default the interface appends `/v1` to `endpoint_base_url` (the common OpenAI-compatible convention), so `http://localhost:8000` and `http://localhost:8000/v1` behave identically. Some hosted APIs expose their OpenAI-compatible path under a different version segment (for example a z.ai coding endpoint served at `.../v4/chat/completions`). For those, pass `endpoint_base_url_mode` through [`extra_kwargs`](../reference/configuration/model-config.md#advanced) so the base URL is used exactly as given:
+
+```python
+config = ModelConfig(
+    id="zai-coding",
+    model_name="glm-4.6",
+    interface="openai_endpoint",
+    endpoint_base_url="https://api.z.ai/api/coding/paas/v4",
+    endpoint_api_key="sk-...",
+    extra_kwargs={"endpoint_base_url_mode": "raw"},
+)
+```
+
+`endpoint_base_url_mode` accepts `"auto_v1"` (the default: appends `/v1` unless the URL already ends in `/v1`) or `"raw"` (uses `endpoint_base_url` verbatim, only stripping a trailing slash). Any other value raises. The same key works for the [`langchain_deep_agents`](#langchain_deep_agents-langchain-deep-agents) interface when it targets an OpenAI-compatible endpoint.
 
 ### When to Use
 
@@ -180,12 +199,38 @@ config = ModelConfig(
 
 **Availability check**: Checks that the `deepagents` package is importable. No fallback interface is provided because Deep Agents' natively agentic behavior cannot be meaningfully approximated by the scaffolded LangChain adapter.
 
+### Extended Thinking (`effort`)
+
+For `model_provider="anthropic"`, pass an `effort` tier through `extra_kwargs` to enable Anthropic extended thinking:
+
+```python
+config = ModelConfig(
+    id="deep-agent",
+    model_name="claude-sonnet-4-20250514",
+    model_provider="anthropic",
+    interface="langchain_deep_agents",
+    extra_kwargs={"effort": "high"},
+)
+```
+
+The tier maps to an extended-thinking `budget_tokens` value:
+
+| `effort` | `budget_tokens` |
+|----------|-----------------|
+| `"low"` | 2048 |
+| `"medium"` | 8192 |
+| `"high"` | 16384 |
+| `"xhigh"` | 16384 |
+| `"max"` | 32000 |
+
+When `effort` is set, the adapter turns on extended thinking with that budget, forces `temperature=1` (a requirement of Anthropic extended thinking, so any configured temperature is overridden with a warning), and raises `max_tokens` to sit above the budget (at least `budget + 4096`, since Anthropic requires `max_tokens` greater than `thinking.budget_tokens`). An unrecognized tier raises `AdapterUnavailableError`. `effort` is ignored for non-Anthropic providers. The tiers mirror the `claude --effort` reasoning levels used by the native [`claude_agent_sdk`](#claude_agent_sdk-native-anthropic-agent-sdk) path.
+
 ### Agent Behavior
 
 The agent adapter uses `create_deep_agent()` from the `deepagents` package, which returns a compiled LangGraph graph. The adapter handles:
 
 - System prompt extraction and forwarding to `create_deep_agent(system_prompt=...)`
-- Backend selection: uses `FilesystemBackend` with an optional `workspace_path` from `AgentConfig`, falling back to the current working directory
+- Backend selection (four-way, keyed off `extra_kwargs['agent_runtime']['backend']`): `FilesystemBackend` (`filesystem`, the default) exposes file tools rooted at the `AgentConfig.workspace_path` (or the current working directory when unset), `ContainerSandboxBackend` (`container`) runs file and shell tools inside a Docker/Singularity/Apptainer image, and `LocalShellBackend` (`local_shell`) runs them directly on the host (unsafe, logged as such). When `access_mode='read_only'`, the chosen backend is wrapped in a `ReadOnlyBackend` that blocks writes and command execution. See [Sandboxed Runtime Backends](../notebooks/core_concepts/agentic-evaluation.ipynb#10-sandboxed-runtime-backends).
 - Recursion limit control via LangGraph config (derived from `AgentConfig.max_turns`)
 - Dual trace output: both a raw trace string and structured `trace_messages` list
 - Usage metadata extraction from `AIMessage.response_metadata`
@@ -194,6 +239,8 @@ The agent adapter uses `create_deep_agent()` from the `deepagents` package, whic
 - Static tool support (karenina `Tool` objects converted to LangChain tools and passed to `create_deep_agent`)
 
 Extra configuration can be passed through `AgentConfig.extra`, which forwards arbitrary keyword arguments to `create_deep_agent()`.
+
+When the model targets an OpenAI-compatible hosted endpoint via `endpoint_base_url`, `extra_kwargs['endpoint_base_url_mode']` controls how that base URL is finalized: `'auto_v1'` (the default) appends `/v1` when it is missing, while `'raw'` passes the URL through unchanged. Use `'raw'` for hosted APIs that already carry a provider-specific version segment as the final OpenAI SDK base URL (for example Z.ai's coding endpoint).
 
 ### LLM Behavior
 
@@ -247,11 +294,12 @@ config = ModelConfig(
 
 ### Parser Behavior
 
-The Claude SDK parser uses **native structured output** (`supports_structured_output = True`):
+The Claude SDK parser uses **native structured output** (`supports_structured_output = True`), but it makes **direct API calls** and bypasses the Agent SDK subprocess transport used by the agent and LLM adapters:
 
-- Uses `query()` with `output_format={'type': 'json_schema', ...}` to get structured responses
-- Returns a Python dict directly (not a JSON string), validated with `schema.model_validate(dict)`
-- SDK handles retries autonomously via `max_turns` (minimum 2 for structured output)
+- For the Anthropic API (no custom base URL), calls `anthropic.AsyncAnthropic().messages.create()` with `output_config={'format': {'type': 'json_schema', 'schema': ...}}` for constrained decoding
+- For custom OpenAI-compatible endpoints (vLLM, sglang), calls `openai.AsyncOpenAI().chat.completions.create()` with `response_format={'type': 'json_schema', ...}`. The OpenAI-compatible base URL is derived from the model's Anthropic base URL by default (same host and port, with `/v1` appended). Set `extra_kwargs['claude_sdk_parser_openai_base_url']` to point these structured-output calls at an explicit OpenAI-compatible schema endpoint instead
+- Reads the text response and parses it with `json.loads()` (falling back to `extract_json_from_response()` for fenced or mixed output), then validates via `schema.model_validate(data)`
+- Retries are handled by the Anthropic/OpenAI SDK client's native `max_retries`, derived from `RetryPolicy.derive_sdk_max_retries()`, not by `RetryExecutor`
 
 ### Agent Behavior
 
@@ -261,6 +309,9 @@ The agent adapter uses `ClaudeSDKClient` for full agent functionality:
 - Built-in tool execution via the SDK
 - MCP server integration (native support)
 - Trace capture via `sdk_messages_to_raw_trace()` conversion
+- Runtime backend selection via `extra_kwargs['agent_runtime']['backend']`: `native` (the default) runs on the host with Claude Code's Bash sandbox (toggled by `sandbox_enabled`), while `container` wraps every Bash command so it runs inside a Docker/Singularity/Apptainer image mounted at `/workspace`. See [Sandboxed Runtime Backends](../notebooks/core_concepts/agentic-evaluation.ipynb#10-sandboxed-runtime-backends)
+
+By default the adapter disallows Claude Code's bundled `Skill` tool (it applies `disallowed_tools=["Skill"]` unless the caller sets that key). Newer Claude Code CLIs (2.1.170 and later) advertise their bundled skills by appending a system-role message to every request's `messages` array. That message contaminates benchmark conversations with skill listings, and OpenAI-compatible Anthropic endpoints such as vLLM's `/v1/messages` reject it with HTTP 400 because only `user` and `assistant` roles are accepted there. Disallowing the `Skill` tool suppresses the system-role message entirely. To re-enable skills, pass `AgentConfig(extra={"disallowed_tools": []})`.
 
 The LLM adapter uses a lighter-weight `query()` call for simple single-turn invocations.
 
@@ -375,7 +426,7 @@ This design is deliberate — in the manual workflow, the answering trace is pre
 
 ### Capabilities
 
-No system prompt support, no structured output, no MCP, no tools. The manual adapter's `capabilities` property returns `PortCapabilities(supports_system_prompt=False, supports_structured_output=False)`.
+All three manual adapters return the default `PortCapabilities()` with no arguments, so `supports_system_prompt` is `True` (the dataclass default) and `supports_structured_output` is `False`. These capability flags are inert in practice: the LLM and parser adapters are no-ops that raise `ManualInterfaceError`, and the agent adapter only replays a pre-recorded trace, so no system prompt, structured output, MCP, or tools ever reach a live backend.
 
 ### When to Use
 
@@ -420,11 +471,6 @@ config = ModelConfig(
 - Producing `VerificationResult` records for outputs that were never generated by karenina
 
 This adapter is wired by TaskEval; users do not normally instantiate it directly. See the [TaskEval skill / docs](../notebooks/core_concepts/task-eval.ipynb) for the supported workflow.
-
-<div class="admonition note">
-<p class="admonition-title">Not an adapter: <code>karenina/src/karenina/adapters/deep_agents/</code></p>
-<p>A directory named <code>deep_agents/</code> exists in the source tree but is <strong>not</strong> a registered adapter. Only <code>__pycache__</code> and an empty <code>prompts/</code> subdirectory remain; there is no <code>registration.py</code> and no entry in <code>AdapterRegistry._load_builtins()</code>. The actual deep-agents adapter is <code>langchain_deep_agents/</code> (interface <code>"langchain_deep_agents"</code>), documented above. Treat the bare <code>deep_agents/</code> path as historical residue, not a usable interface.</p>
-</div>
 
 ---
 

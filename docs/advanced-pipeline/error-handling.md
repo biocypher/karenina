@@ -89,14 +89,15 @@ The built-in type matcher walks the exception's MRO, so it catches not only well
 
 ### Built-in Message Substrings
 
-When no type rule matches, the registry falls back to substring matching on the lowercased exception message. The substrings are checked in this fixed order; the first match wins.
+When no type rule matches, the registry falls back to substring matching on the lowercased exception message. The rows below are in the true check order, top to bottom, and the first match wins. Note that `CONNECTION` appears twice: `event loop`, `portal`, and `temporary failure` are checked last, after the `SERVER_ERROR` substrings, not grouped with the other connection substrings.
 
 | Substring | Category |
 |-----------|----------|
-| `connection`, `network`, `dns`, `event loop`, `portal`, `temporary failure` | `CONNECTION` |
+| `connection`, `network`, `dns` | `CONNECTION` |
 | `timeout`, `timed out` | `TIMEOUT` |
 | `rate limit`, `429`, `overloaded` | `RATE_LIMIT` |
 | `500`, `502`, `503` | `SERVER_ERROR` |
+| `event loop`, `portal`, `temporary failure` | `CONNECTION` |
 
 The `event loop` and `portal` keywords exist because anyio portal lifecycle errors propagate as plain `RuntimeError` and would otherwise fall through to `PERMANENT`. Treating them as `CONNECTION` errors makes the executor retry them, which masks transient races during worker startup.
 

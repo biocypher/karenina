@@ -276,6 +276,7 @@ Each adapter captures traces in two formats:
 class Message:
     role: Role           # SYSTEM, USER, ASSISTANT, TOOL
     content: list[Content]  # TextContent, ToolUseContent, ToolResultContent, ThinkingContent
+    usage_metadata: dict[str, Any] | None = None  # Per-call token/cache accounting preserved into trace_messages
 ```
 
 Content block types:

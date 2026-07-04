@@ -389,6 +389,7 @@ Replaces the classical `ParseTemplate` step with an investigation agent that can
 
 - **Included**: `template_only` and `template_and_rubric` modes when `agentic_parsing=True` and the parsing model's adapter has `agent_tier='deep_agent'`
 - **Mutually exclusive with 7a**: When 7b is selected, the classical `ParseTemplateStage` is omitted from the pipeline
+- **Dynamic variant**: When [`agentic_parsing_trigger="dynamic"`](../reference/configuration/verification-config.md) is set alongside `agentic_parsing=True`, the orchestrator swaps in `DynamicParseTemplateStage` (stage name `DynamicParseTemplate`) at this position instead. It first attempts to parse the template directly from the final answer message and escalates to the full agentic investigation only when that direct parse is insufficient or malformed
 - **Runtime skip**: Same conditions as 7a (recursion, trace validation, abstention, or insufficiency)
 
 ### What It Does

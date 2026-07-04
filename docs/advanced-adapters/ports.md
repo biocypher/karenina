@@ -248,6 +248,7 @@ class AgentConfig:
     timeout: float | None = None   # Optional timeout in seconds
     question_hash: str | None = None  # MD5 hash for manual trace lookup
     extra: dict[str, Any] = field(default_factory=dict)  # Adapter-specific options
+    workspace_path: Path | None = None  # Optional working directory for the agent
 ```
 
 | Field | Type | Default | Description |
@@ -257,6 +258,7 @@ class AgentConfig:
 | `timeout` | `float \| None` | `None` | Timeout in seconds for the entire run. `None` means no timeout. |
 | `question_hash` | `str \| None` | `None` | MD5 hash for manual interface trace lookup. Ignored by other adapters. |
 | `extra` | `dict[str, Any]` | `{}` | Adapter-specific options (e.g., Claude SDK `permission_mode`, `max_budget_usd`). |
+| `workspace_path` | `Path \| None` | `None` | Optional working directory for the agent. Enforcement is adapter-specific: the Claude SDK uses it as the process `cwd` for real isolation, while other adapters inject the path into the system prompt. |
 
 ### AgentResult
 
@@ -273,18 +275,20 @@ class AgentResult:
     limit_reached: bool            # True if stopped by max_turns limit
     session_id: str | None = None  # Adapter-specific session ID
     actual_model: str | None = None  # Actual model used (may differ from requested)
+    timeout_reached: bool = False  # True if stopped by a wall-clock timeout
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `final_response` | `str` | The last assistant message text. |
 | `raw_trace` | `str` | Legacy string format with `--- AI Message ---` delimiters. Used for database storage and regex-based processing. |
-| `trace_messages` | `list[Message]` | Structured message objects for type-safe access. Used by the frontend structured trace display. |
+| `trace_messages` | `list[Message]` | Structured message objects for type-safe access. Used by the frontend structured trace display. Assistant entries carry per-call `usage_metadata` (per-turn input/output and cache token accounting) when the Claude SDK or DeepAgents adapter surfaces it, so `template.trace_messages[*]` preserves turn-level usage on top of the run-level `usage` field. |
 | `usage` | `UsageMetadata` | Aggregate token/cost usage for the entire agent run. |
 | `turns` | `int` | Number of agent iterations completed. |
 | `limit_reached` | `bool` | `True` if the agent hit `max_turns` rather than completing naturally. |
 | `session_id` | `str \| None` | Session identifier for checkpointing (adapter-specific). |
 | `actual_model` | `str \| None` | The model that actually generated the response (may differ due to routing or fallback). |
+| `timeout_reached` | `bool` | `True` if the agent stopped on a wall-clock timeout rather than completing naturally. A partial trace may be available. Distinct from `limit_reached`, which signals a turn or recursion-limit stop. |
 
 !!! tip "Dual trace formats"
     Both `raw_trace` and `trace_messages` represent the same conversation. `raw_trace` is the legacy format for backward compatibility; `trace_messages` is the structured format for new features. Both are produced by all adapters.
@@ -425,6 +429,7 @@ The unified message format used across all ports. See [Adapter Architecture](ind
 class Message:
     role: Role                     # system, user, assistant, tool
     content: list[Content]         # List of content blocks
+    usage_metadata: dict[str, Any] | None = None  # Per-call token/cache accounting
 
     @property
     def text(self) -> str: ...     # Extract all text content as a string
@@ -480,6 +485,9 @@ class PortCapabilities:
     supports_system_prompt: bool = True       # Separate system messages supported
     supports_structured_output: bool = False  # JSON schema enforcement supported
     supports_streaming: bool = False          # astream/stream_invoke implemented
+    supports_file_tools: bool = False         # Agent can inspect workspace files
+    supports_code_execution: bool = False     # Agent can execute shell commands
+    uses_sandboxed_execution: bool = False    # Command execution isolated from host
 ```
 
 When `supports_system_prompt` is `False`, the `PromptAssembler` prepends system text to the user message instead of sending it as a separate system message. `supports_streaming` is set by adapters that implement `LLMPort.astream` and `LLMPort.stream_invoke`; the default `False` reflects that streaming is not part of the standard verification path. Streaming is currently used only by callers that need partial-output recovery on wall-clock timeouts (see [`stream_invoke` and `is_partial`](#llmresponse) above) and is internal/experimental for most evaluation workflows: do not rely on it as a stable user-facing API. Always check `capabilities.supports_streaming` before invoking the streaming methods, since adapters that lack support raise `NotImplementedError`.

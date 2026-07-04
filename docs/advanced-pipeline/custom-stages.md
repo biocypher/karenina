@@ -120,7 +120,7 @@ Use the `ArtifactKeys` constants instead of raw strings to reference artifacts. 
 | `RAW_ANSWER` | Answer class before question ID injection |
 | `USAGE_TRACKER` | Token usage tracker |
 | `VERIFY_RESULT` | Boolean verification outcome |
-| `VERIFY_GRANULAR_RESULT` | Per-field verification results dict |
+| `VERIFY_GRANULAR_RESULT` | Partial-credit score (float 0.0-1.0) from `verify_granular()` |
 
 **Detection results:**
 

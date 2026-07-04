@@ -136,10 +136,11 @@ After resolution, the method checks `AdapterRegistry.get_spec(model.interface)` 
 | Key | Type | Description |
 |-----|------|-------------|
 | `AGENTIC_RUBRIC_EVALUATION_PERFORMED` | `bool` | Always `True` when the stage runs |
-| `AGENTIC_TRAIT_SCORES` | `dict[str, int \| bool \| None]` | Trait name to score. `None` indicates evaluation failure. |
+| `AGENTIC_TRAIT_SCORES` | `dict[str, int \| bool \| float \| str \| list \| None]` | Trait name to score. Template-kind agentic traits contribute float, string, or list values under dot-notation keys. `None` indicates evaluation failure. |
 | `AGENTIC_TRAIT_INVESTIGATION_TRACES` | `dict[str, str \| None]` | Trait name to investigation trace. `None` if agent failed before producing output. |
+| `AGENTIC_TRAIT_EXTRACTION_METADATA` | `dict[str, dict[str, str \| None]]` | Per-trait extraction provenance, keyed by base trait name. Each entry records how the score was recovered. `method` is `local_json` (parsed from a JSON block in the trace), `parser_after_local_json_failed` (the `ParserPort` succeeded after the local JSON attempt failed), or `failed` (both paths failed). `local_json_error` and `parser_error` carry the corresponding error strings or `None`. |
 
-All three are stored as both artifacts (for downstream stages) and result fields (for `FinalizeResult`), using `set_artifact_and_result()`.
+All four are stored as both artifacts (for downstream stages) and result fields (for `FinalizeResult`), using `set_artifact_and_result()`.
 
 ### should_run() Conditions
 
@@ -209,12 +210,13 @@ if rubric_evaluation_performed or agentic_evaluation_performed:
 
 This means a rubric with only agentic traits (no LLM/regex/callable/metric traits) will still produce a rubric result section, because `agentic_evaluation_performed` is `True` even when `rubric_evaluation_performed` is `False`.
 
-Within `VerificationResultRubric`, agentic results occupy two dedicated fields:
+Within `VerificationResultRubric`, agentic results occupy three dedicated fields:
 
 | Field | Type | Source |
 |-------|------|--------|
-| `agentic_trait_scores` | `dict[str, int \| bool] \| None` | `AGENTIC_TRAIT_SCORES` result field |
+| `agentic_trait_scores` | `dict[str, int \| bool \| float \| str \| list \| None] \| None` | `AGENTIC_TRAIT_SCORES` result field |
 | `agentic_trait_investigation_traces` | `dict[str, str] \| None` | `AGENTIC_TRAIT_INVESTIGATION_TRACES` result field |
+| `agentic_trait_extraction_metadata` | `dict[str, dict[str, str \| None]] \| None` | `AGENTIC_TRAIT_EXTRACTION_METADATA` result field (per-trait `method`, `local_json_error`, `parser_error`) |
 
 ### Runner Auto-Upgrade Check
 
