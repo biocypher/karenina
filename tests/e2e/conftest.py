@@ -113,7 +113,6 @@ def preset_dict() -> dict[str, Any]:
         "answering_models": [],
         "parsing_only": True,
         "replicate_count": 1,
-        "rubric_enabled": False,
         "evaluation_mode": "template_only",
         "async_enabled": False,
     }
@@ -149,7 +148,6 @@ def preset_with_claude() -> dict[str, Any]:
             }
         ],
         "replicate_count": 1,
-        "rubric_enabled": False,
         "evaluation_mode": "template_only",
         "async_enabled": False,
     }
@@ -224,7 +222,6 @@ def tmp_presets_dir(tmp_path: Path) -> Path:
             "answering_models": [],
             "parsing_only": True,
             "replicate_count": 1,
-            "rubric_enabled": False,
             "evaluation_mode": "template_only",
             "async_enabled": False,
         },
@@ -377,7 +374,6 @@ def workspace_dir(tmp_path: Path) -> Path:
         "answering_models": [],
         "parsing_only": True,
         "replicate_count": 1,
-        "rubric_enabled": False,
         "evaluation_mode": "template_only",
         "async_enabled": False,
     }

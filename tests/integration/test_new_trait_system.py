@@ -1,4 +1,4 @@
-"""Integration test for the new trait system (RegexTrait + CallableTrait).
+"""Integration test for the new trait system (RegexRubricTrait + CallableRubricTrait).
 
 This test verifies that the refactored trait system works correctly:
 - Rubric trait evaluation (LLM, Regex, Callable)
@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 import pandas as pd
 import pytest
 
-from karenina.schemas.entities.rubric import CallableTrait, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import CallableRubricTrait, LLMRubricTrait, RegexRubricTrait, Rubric
 from karenina.schemas.results import RubricResults
 from karenina.schemas.verification import (
     VerificationResult,
@@ -41,14 +41,23 @@ def _create_metadata(
     error: str | None = None,
 ) -> VerificationResultMetadata:
     """Helper to create metadata with computed result_id."""
+    from karenina.schemas.results.failure import Failure, FailureCategory
+
     timestamp = datetime.now(UTC).isoformat()
     _answering = ModelIdentity(interface="langchain", model_name=answering_model)
     _parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5")
+    failure = None
+    if not completed:
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="unknown",
+            reason=error or "unexpected error",
+        )
     return VerificationResultMetadata(
         question_id=question_id,
         template_id="test-template-id",
-        completed_without_errors=completed,
-        error=error,
+        failure=failure,
+        caveats=[],
         question_text=f"Question text for {question_id}",
         raw_answer="Expected answer",
         answering=_answering,
@@ -99,16 +108,16 @@ def llm_traits() -> list[LLMRubricTrait]:
 
 
 @pytest.fixture
-def regex_traits() -> list[RegexTrait]:
+def regex_traits() -> list[RegexRubricTrait]:
     """Create regex rubric traits."""
     return [
-        RegexTrait(
+        RegexRubricTrait(
             name="HasCitations",
             description="Response includes citations like [1], [2]",
             pattern=r"\[\d+\]",
             higher_is_better=True,
         ),
-        RegexTrait(
+        RegexRubricTrait(
             name="HasNumbers",
             description="Response includes numeric values",
             pattern=r"\d+",
@@ -118,7 +127,7 @@ def regex_traits() -> list[RegexTrait]:
 
 
 @pytest.fixture
-def callable_traits() -> list[CallableTrait]:
+def callable_traits() -> list[CallableRubricTrait]:
     """Create callable rubric traits."""
 
     def contains_citations(text: str) -> bool:
@@ -138,14 +147,14 @@ def callable_traits() -> list[CallableTrait]:
             return 5
 
     return [
-        CallableTrait.from_callable(
+        CallableRubricTrait.from_callable(
             name="ContainsCitations",
             func=contains_citations,
             kind="boolean",
             description="Check if response contains citation markers",
             higher_is_better=True,
         ),
-        CallableTrait.from_callable(
+        CallableRubricTrait.from_callable(
             name="ResponseLength",
             func=response_length_score,
             kind="score",
@@ -160,8 +169,8 @@ def callable_traits() -> list[CallableTrait]:
 @pytest.fixture
 def rubric(
     llm_traits: list[LLMRubricTrait],
-    regex_traits: list[RegexTrait],
-    callable_traits: list[CallableTrait],
+    regex_traits: list[RegexRubricTrait],
+    callable_traits: list[CallableRubricTrait],
 ) -> Rubric:
     """Create a complete rubric with all trait types."""
     return Rubric(
@@ -297,7 +306,7 @@ class TestRubricStructure:
 
         assert accuracy_trait.kind == "boolean"
 
-    def test_regex_trait_properties(self, regex_traits: list[RegexTrait]):
+    def test_regex_trait_properties(self, regex_traits: list[RegexRubricTrait]):
         """Verify regex traits have correct properties."""
         trait_names = {t.name for t in regex_traits}
         assert "HasCitations" in trait_names
@@ -308,7 +317,7 @@ class TestRubricStructure:
         assert citation_trait.pattern is not None
         assert len(citation_trait.pattern) > 0
 
-    def test_callable_trait_properties(self, callable_traits: list[CallableTrait]):
+    def test_callable_trait_properties(self, callable_traits: list[CallableRubricTrait]):
         """Verify callable traits have correct properties."""
         trait_names = {t.name for t in callable_traits}
         assert "ContainsCitations" in trait_names
@@ -334,7 +343,7 @@ class TestRubricStructure:
 class TestTraitEvaluation:
     """Test trait evaluation functionality."""
 
-    def test_regex_trait_evaluation(self, regex_traits: list[RegexTrait]):
+    def test_regex_trait_evaluation(self, regex_traits: list[RegexRubricTrait]):
         """Verify regex traits evaluate correctly."""
         citation_trait = next(t for t in regex_traits if t.name == "HasCitations")
         numbers_trait = next(t for t in regex_traits if t.name == "HasNumbers")
@@ -347,7 +356,7 @@ class TestTraitEvaluation:
         assert numbers_trait.evaluate("There are 42 items.") is True
         assert numbers_trait.evaluate("No numbers here.") is False
 
-    def test_boolean_callable_evaluation(self, callable_traits: list[CallableTrait]):
+    def test_boolean_callable_evaluation(self, callable_traits: list[CallableRubricTrait]):
         """Verify boolean callable traits evaluate correctly."""
         citation_trait = next(t for t in callable_traits if t.name == "ContainsCitations")
 
@@ -357,7 +366,7 @@ class TestTraitEvaluation:
         # Test without citation
         assert citation_trait.evaluate("No citations here.") is False
 
-    def test_score_callable_evaluation(self, callable_traits: list[CallableTrait]):
+    def test_score_callable_evaluation(self, callable_traits: list[CallableRubricTrait]):
         """Verify score callable traits evaluate correctly."""
         length_trait = next(t for t in callable_traits if t.name == "ResponseLength")
 

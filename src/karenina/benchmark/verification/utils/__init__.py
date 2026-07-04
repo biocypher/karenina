@@ -12,7 +12,6 @@ from .cache_helpers import (
     log_cache_stats,
 )
 from .error_helpers import is_retryable_error
-from .llm_detection import is_openai_endpoint_llm
 from .llm_judge_helpers import extract_judge_result, fallback_json_parse
 from .resource_helpers import cleanup_resources
 from .search_helpers import parse_tool_output
@@ -22,6 +21,7 @@ from .task_helpers import (
     extract_feature_flags,
     merge_rubrics_for_task,
     resolve_few_shot_for_task,
+    stamp_agentic_trait_overrides,
 )
 from .template_parsing_helpers import (
     _extract_attribute_descriptions,
@@ -37,9 +37,7 @@ from .template_parsing_helpers import (
 from .template_validation import validate_answer_template
 from .trace_agent_metrics import (
     TOOL_FAILURE_PATTERNS,
-    extract_agent_metrics,
     extract_agent_metrics_from_messages,
-    extract_middleware_metrics,
 )
 from .trace_formatting import TraceFormatConfig, messages_to_raw_trace
 from .trace_parsing import extract_final_ai_message, prepare_evaluation_input
@@ -55,6 +53,7 @@ __all__ = [
     "resolve_few_shot_for_task",
     "create_preview_result",
     "extract_feature_flags",
+    "stamp_agentic_trait_overrides",
     # Storage helpers
     "auto_save_results",
     # Resource helpers
@@ -65,15 +64,11 @@ __all__ = [
     "strip_markdown_fences",
     "extract_json_from_text",
     "extract_balanced_braces",
-    # LLM detection
-    "is_openai_endpoint_llm",
     # Search helpers
     "parse_tool_output",
     # Agent metrics
     "TOOL_FAILURE_PATTERNS",
-    "extract_agent_metrics",
     "extract_agent_metrics_from_messages",
-    "extract_middleware_metrics",
     # Parsing utilities — underscore-prefixed but exported because they are
     # internal helpers shared across verification subpackages (used by
     # evaluators/template/deep_judgment.py and prompts/ modules).

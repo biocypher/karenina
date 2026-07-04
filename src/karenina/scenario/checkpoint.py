@@ -114,6 +114,7 @@ def _serialize_edge(edge: ScenarioEdge) -> SchemaOrgScenarioEdge:
         target=edge.target,
         condition=_serialize_condition(edge.condition),
         conditionSource=edge.condition_source,
+        handover=edge.handover,
     )
 
 
@@ -147,9 +148,21 @@ def scenario_to_schema_org(defn: ScenarioDefinition) -> SchemaOrgScenario:
         nodes[node_id] = SchemaOrgScenarioNode(
             nodeId=node_id,
             question=_question_to_schema_org(node),
-            modelOverride=(node.model_override.model_dump() if node.model_override else None),
+            modelOverride=(
+                node.model_override.model_dump(
+                    exclude={
+                        "answering_model": {"endpoint_api_key", "anthropic_api_key"},
+                        "parsing_model": {"endpoint_api_key", "anthropic_api_key"},
+                    },
+                    exclude_none=True,
+                )
+                if node.model_override
+                else None
+            ),
             toolFilter=(node.tool_filter.model_dump() if node.tool_filter else None),
             stateUpdateSource=node.state_update_source,
+            questionData=node.question.model_dump(),
+            agentIdentity=node.agent_identity,
             metadata=node.metadata or {},
         )
 
@@ -289,11 +302,15 @@ def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
 
     nodes: dict[str, ScenarioNode] = {}
     for node_id, snode in schema.nodes.items():
-        q = Question(
-            question=snode.question.text,
-            raw_answer=snode.question.acceptedAnswer.text,
-            answer_template=snode.question.hasPart.text,
-        )
+        if snode.questionData is not None:
+            q = Question(**snode.questionData)
+        else:
+            # Backward compat: old checkpoints without questionData
+            q = Question(
+                question=snode.question.text,
+                raw_answer=snode.question.acceptedAnswer.text,
+                answer_template=snode.question.hasPart.text,
+            )
 
         state_update_fn = None
         if snode.stateUpdateSource:
@@ -314,6 +331,7 @@ def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
             tool_filter=tool_filter,
             state_update=state_update_fn,
             state_update_source=snode.stateUpdateSource,
+            agent_identity=snode.agentIdentity,
             metadata=snode.metadata or {},
         )
 
@@ -330,6 +348,7 @@ def schema_org_to_scenario(schema: SchemaOrgScenario) -> ScenarioDefinition:
                 condition=_deserialize_condition(sedge.condition),
                 condition_callable=condition_callable,
                 condition_source=sedge.conditionSource,
+                handover=sedge.handover,
             )
         )
 

@@ -37,7 +37,7 @@ class SchemaOrgPropertyValue(BaseModel):
 
     type: Literal["PropertyValue"] = Field(alias="@type", default="PropertyValue")
     name: str
-    value: Any
+    value: Any = None
 
 
 # Schema.org Rating for rubric traits
@@ -65,6 +65,8 @@ class SchemaOrgRating(BaseModel):
         "karenina:QuestionSpecificLLMRubricTrait",
         "karenina:GlobalAgenticRubricTrait",
         "karenina:QuestionSpecificAgenticRubricTrait",
+        "karenina:GlobalDynamicRubricTrait",
+        "karenina:QuestionSpecificDynamicRubricTrait",
     ]
 
     @model_validator(mode="before")
@@ -172,6 +174,8 @@ class SchemaOrgScenarioNode(BaseModel):
     modelOverride: dict[str, Any] | None = None
     toolFilter: dict[str, Any] | None = None
     stateUpdateSource: str | None = None
+    questionData: dict[str, Any] | None = None
+    agentIdentity: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -184,6 +188,7 @@ class SchemaOrgScenarioEdge(BaseModel):
     target: str
     condition: dict[str, Any] | list[dict[str, Any]] | None = None
     conditionSource: str | None = None
+    handover: str | None = None
 
 
 class SchemaOrgScenarioOutcome(BaseModel):

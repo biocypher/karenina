@@ -76,13 +76,15 @@ In both modes, Karenina stores the derived metrics in `VerificationResult.rubric
 |-------|------|---------|-------------|
 | `name` | `str` | *(required)* | Human-readable identifier |
 | `description` | `str \| None` | `None` | Optional scope or evaluator context |
+| `summary` | `str \| None` | `None` | Short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset |
 | `evaluation_mode` | `Literal["tp_only", "full_matrix"]` | `"tp_only"` | Whether you define only TP instructions or both TP and TN |
 | `metrics` | `list[str]` | *(required)* | Metrics to compute for this trait |
 | `tp_instructions` | `list[str]` | *(required)* | Items that should be present in the answer |
 | `tn_instructions` | `list[str]` | `[]` | Items that should not be present; required in `full_matrix` mode |
 | `repeated_extraction` | `bool` | `True` | Deduplicate repeated excerpts using case-insensitive exact matching |
+| `higher_is_better` | `bool \| None` | `None` | Whether higher metric values indicate better performance. `None` (the default for metric traits) means directionality does not apply; set to `True` or `False` only when downstream analysis tools need an explicit direction signal |
 
-Metric traits do not use `higher_is_better`; the returned metrics are inherently interpreted as "higher is better."
+The `higher_is_better` default is `None` for metric traits because the returned metrics carry their own interpretation; `precision`, `recall`, and `f1` are conventionally higher-is-better, while a confusion-matrix bucket count may not be.
 
 ## 3. Why the Instruction Lists Matter
 

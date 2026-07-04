@@ -9,6 +9,9 @@ After running verification and analyzing results, you'll often want to export da
 
 ## Benchmark Export Methods
 
+!!! warning "Deprecated methods"
+    `export_verification_results()`, `export_verification_results_to_file()`, and `load_verification_results_from_file()` on `Benchmark` are deprecated and emit a `DeprecationWarning`. They still work, so the examples on this page remain accurate. The maintained replacements live on `ResultsStore`: `ResultsStore.export()` returns a JSON-serializable dict, `ResultsStore.export_to_file()` writes that dict to a JSON file, and `ResultsStore.from_file()` loads a `ResultsStore` back. The `ResultsStore` export path covers JSON only. The deprecated `Benchmark` methods below additionally produce CSV output and return the export as a string.
+
 The `Benchmark` class provides two methods for exporting verification results:
 
 | Method | Returns | Use When |
@@ -143,9 +146,9 @@ template_df.to_csv("template_results.csv", index=False)
 rubric_df = results.get_rubrics_results().to_dataframe()
 rubric_df.to_csv("rubric_results.csv", index=False)
 
-# Deep judgment results (if available)
+# Deep judgment results (if any results have judgment data)
 judgment_results = results.get_judgment_results()
-if judgment_results is not None:
+if judgment_results.get_results_with_judgment():
     judgment_df = judgment_results.to_dataframe()
     judgment_df.to_csv("judgment_results.csv", index=False)
 ```

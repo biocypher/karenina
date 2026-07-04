@@ -5,6 +5,13 @@ This package contains utility functions and export functionality:
 - Results export to JSON/CSV formats
 """
 
+from .agentic_parse_helpers import (
+    prepare_extraction_input,
+    recover_extraction_from_investigation,
+    run_extraction,
+    run_investigation,
+    truncate_extraction_input,
+)
 from .deep_judgment_helpers import (
     apply_deep_judgment_config_to_traits,
     resolve_deep_judgment_config_for_trait,
@@ -13,16 +20,22 @@ from .results_exporter import (
     HasTraitNames,
     create_export_filename,
     export_verification_results_csv,
-    export_verification_results_json,
+    export_verification_results_json_stream,
 )
 
 __all__ = [
     # Deep judgment helpers
     "resolve_deep_judgment_config_for_trait",
     "apply_deep_judgment_config_to_traits",
+    # Agentic parse helpers
+    "prepare_extraction_input",
+    "recover_extraction_from_investigation",
+    "run_extraction",
+    "run_investigation",
+    "truncate_extraction_input",
     # Export functions
     "export_verification_results_csv",
-    "export_verification_results_json",
+    "export_verification_results_json_stream",
     "create_export_filename",
     "HasTraitNames",
 ]

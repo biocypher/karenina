@@ -20,7 +20,20 @@ Exception hierarchy::
     │   ├── McpTimeoutError
     │   ├── McpClientError
     │   └── McpConfigValidationError
-    └── BenchmarkConversionError     # Benchmark conversion errors
+    ├── StreamingTimeoutError        # LLM streaming timeout (also inherits TimeoutError)
+    ├── VerificationBatchError       # Partial-failure batch verification errors
+    ├── BenchmarkConversionError     # Benchmark conversion errors
+    ├── ReplayError                  # Replay layer errors (see replay/exceptions.py)
+    │   ├── ReplayMissError
+    │   ├── ReplayHydrationError
+    │   ├── ReplayPersistenceError
+    │   └── ProjectionError
+    └── ErrorAnalysisError           # Error-analysis errors (see benchmark/error_analysis/exceptions.py)
+        ├── MaterializationError
+        ├── LauncherNotFoundError
+        ├── LauncherUnavailableError
+        ├── LauncherExecutionError
+        └── LauncherNoOutputError
 
 Domain-specific modules (ports/errors.py, adapters/manual/exceptions.py, etc.)
 remain the canonical definition sites for their respective exceptions. This module
@@ -28,6 +41,11 @@ re-exports them for convenience and defines the shared base class.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from karenina.schemas.verification.result import VerificationResult
 
 
 class KareninaError(Exception):
@@ -79,3 +97,66 @@ class McpClientError(McpError):
     ) -> None:
         super().__init__(message)
         self.server_name = server_name
+
+
+class StreamingTimeoutError(KareninaError, TimeoutError):
+    """Raised when an LLM streaming operation times out.
+
+    Inherits from both KareninaError (karenina exception hierarchy) and
+    TimeoutError (for adapter retry classification as TIMEOUT category).
+
+    Args:
+        message: Human-readable description of the timeout.
+        partial_content: Any content accumulated before the timeout occurred.
+    """
+
+    def __init__(self, message: str, partial_content: str = "") -> None:
+        super().__init__(message)
+        self.partial_content = partial_content
+
+
+class VerificationBatchError(KareninaError):
+    """Raised when a batch verification completes with partial failures.
+
+    Stores both the successfully completed results and the per-question
+    errors so callers can inspect partial progress without losing data.
+
+    Args:
+        message: Human-readable summary of the batch failure.
+        partial_results: Mapping of question ID to its completed
+            VerificationResult for questions that succeeded.
+        errors: List of (identifier, exception) pairs for items
+            that failed during verification.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        partial_results: dict[str, VerificationResult],
+        errors: list[tuple[str, BaseException]],
+    ) -> None:
+        super().__init__(message)
+        self.partial_results = partial_results
+        self.errors = errors
+
+
+# Re-export error-analysis exceptions for convenience. The canonical
+# definition lives in karenina.benchmark.error_analysis.exceptions.
+from karenina.benchmark.error_analysis.exceptions import (  # noqa: E402, F401
+    ErrorAnalysisError,
+    LauncherExecutionError,
+    LauncherNoOutputError,
+    LauncherNotFoundError,
+    LauncherUnavailableError,
+    MaterializationError,
+)
+
+# Re-export replay layer exceptions for convenience. The canonical
+# definition lives in karenina.replay.exceptions.
+from karenina.replay.exceptions import (  # noqa: E402, F401
+    ProjectionError,
+    ReplayError,
+    ReplayHydrationError,
+    ReplayMissError,
+    ReplayPersistenceError,
+)

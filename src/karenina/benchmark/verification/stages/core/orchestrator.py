@@ -3,21 +3,26 @@
 Manages stage execution, dependencies, and error handling.
 """
 
+import copy
 import logging
 import time
 
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import VerificationResult
+from karenina.utils.retry_policy import RetryPolicy, track_retries
 
 from ..pipeline.abstention_check import AbstentionCheckStage
 from ..pipeline.agentic_parse_template import AgenticParseTemplateStage
 from ..pipeline.agentic_rubric_evaluation import AgenticRubricEvaluationStage
 from ..pipeline.deep_judgment_autofail import DeepJudgmentAutoFailStage
 from ..pipeline.deep_judgment_rubric_auto_fail import DeepJudgmentRubricAutoFailStage
+from ..pipeline.dynamic_parse_template import DynamicParseTemplateStage
 from ..pipeline.embedding_check import EmbeddingCheckStage
 from ..pipeline.finalize_result import FinalizeResultStage
 from ..pipeline.generate_answer import GenerateAnswerStage
 from ..pipeline.parse_template import ParseTemplateStage
+from ..pipeline.placeholder_retry_autofail import PlaceholderRetryAutoFailStage
 from ..pipeline.recursion_limit_autofail import RecursionLimitAutoFailStage
 from ..pipeline.rubric_evaluation import RubricEvaluationStage
 from ..pipeline.sufficiency_check import SufficiencyCheckStage
@@ -68,9 +73,53 @@ class StageOrchestrator:
         """
         Initialize orchestrator with stage list.
 
+        The ``stages`` list is kept intact on ``self.stages`` so external
+        callers and tests can inspect the full configured pipeline (including
+        the trailing ``FinalizeResultStage``). Internally, ``execute`` runs
+        the non-finalize stages in its main try/except loop and then invokes
+        the finalize stage exactly once, unconditionally, so a raise in any
+        earlier stage (including stage 1) still produces a populated
+        ``VerificationResult``.
+
         Args:
             stages: Ordered list of stages to execute
         """
+        # Validate finalize placement before registering stages so layout
+        # errors surface as ValueError (not as a downstream "already
+        # registered" duplicate when two FinalizeResultStage instances share
+        # the same stage name). Reject any layout that would cause the
+        # synthesized trailing finalize to run alongside a duplicate or
+        # mid-list one.
+        finalize_positions = [
+            index for index, candidate in enumerate(stages) if isinstance(candidate, FinalizeResultStage)
+        ]
+        if len(finalize_positions) > 1:
+            raise ValueError(
+                "FinalizeResultStage must appear at most once in the pipeline; "
+                f"found {len(finalize_positions)} occurrences at indices "
+                f"{finalize_positions}"
+            )
+        if finalize_positions and finalize_positions[0] != len(stages) - 1:
+            raise ValueError(
+                "FinalizeResultStage must be the last stage in the pipeline; "
+                f"found at index {finalize_positions[0]} of {len(stages)}"
+            )
+
+        # Reject stages that claim the "FinalizeResult" name without inheriting
+        # from FinalizeResultStage. Such stages would be partitioned into
+        # _main_stages, silently coexisting with a synthesized trailing
+        # finalize and bypassing the final_result contract (issue 203).
+        impostors = [
+            index
+            for index, candidate in enumerate(stages)
+            if candidate.name == "FinalizeResult" and not isinstance(candidate, FinalizeResultStage)
+        ]
+        if impostors:
+            raise ValueError(
+                "Stages named 'FinalizeResult' must inherit from FinalizeResultStage; "
+                f"found non-FinalizeResultStage impostor(s) at index/indices {impostors}"
+            )
+
         self.stages = stages
         self.registry = StageRegistry()
 
@@ -78,15 +127,31 @@ class StageOrchestrator:
         for stage in stages:
             self.registry.register(stage)
 
+        # Partition the stage list so finalize runs exactly once after the
+        # main loop, regardless of exceptions in earlier stages. When no
+        # FinalizeResultStage is present at all, synthesise a fresh one so
+        # minimal stage lists (e.g. unit tests) still produce a finalized
+        # VerificationResult.
+        main_stages: StageList = list(stages)
+        if finalize_positions:
+            popped = main_stages.pop()
+            assert isinstance(popped, FinalizeResultStage)  # noqa: S101 - narrow type for mypy
+            self._finalize_stage: FinalizeResultStage = popped
+        else:
+            self._finalize_stage = FinalizeResultStage()
+        self._main_stages: StageList = main_stages
+
     @classmethod
     def from_config(
         cls,
         rubric: Rubric | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
-        deep_judgment_enabled: bool = False,
+        deep_judgment_enabled: bool = False,  # Whether any template deep-judgment mode is active
         evaluation_mode: str = "template_only",
         agentic_parsing: bool = False,
+        agentic_parsing_trigger: str = "always",
+        dynamic_rubric: DynamicRubric | None = None,
     ) -> "StageOrchestrator":
         """
         Build orchestrator from configuration.
@@ -105,11 +170,24 @@ class StageOrchestrator:
                 - "rubric_only": Skip template, only evaluate rubrics
             agentic_parsing: Whether to use agentic parsing (Stage 7b) instead of
                 classical parsing (Stage 7a). Requires AgentPort support.
+            agentic_parsing_trigger: "always" preserves Stage 7b behavior; "dynamic"
+                runs DynamicParseTemplateStage when agentic_parsing is enabled.
+            dynamic_rubric: Optional dynamic rubric whose traits are conditionally
+                evaluated based on concept presence in the response.
 
         Returns:
             Configured StageOrchestrator instance
         """
         stages: StageList = []
+
+        # Check whether the dynamic rubric contributes non-agentic or agentic traits
+        _dynamic_has_non_agentic = dynamic_rubric is not None and (
+            dynamic_rubric.llm_traits
+            or dynamic_rubric.regex_traits
+            or dynamic_rubric.callable_traits
+            or dynamic_rubric.metric_traits
+        )
+        _dynamic_has_agentic = dynamic_rubric is not None and bool(dynamic_rubric.agentic_traits)
 
         if evaluation_mode == "rubric_only":
             # Rubric-only mode: Skip template verification stages
@@ -122,18 +200,32 @@ class StageOrchestrator:
             # Auto-fail if trace doesn't end with AI message
             stages.append(TraceValidationAutoFailStage())
 
+            # Auto-fail if trace is solely a ModelRetryMiddleware exhaustion placeholder
+            stages.append(PlaceholderRetryAutoFailStage())
+
             # Optional abstention check (can run on raw response)
             if abstention_enabled:
                 stages.append(AbstentionCheckStage())
 
+            # Sufficiency check is not applicable in rubric_only mode (no template parsing)
+            if sufficiency_enabled:
+                logger.info(
+                    "sufficiency_enabled=True ignored in rubric_only mode: "
+                    "sufficiency check requires template parsing which is skipped"
+                )
+
             # Rubric evaluation (required for rubric_only mode)
-            if rubric and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits):
+            _rubric_has_non_agentic = rubric and (
+                rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits
+            )
+            if _rubric_has_non_agentic or _dynamic_has_non_agentic:
                 stages.append(RubricEvaluationStage())
-                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
-                stages.append(DeepJudgmentRubricAutoFailStage())
+                # Deep judgment rubric auto-fail (only when deep judgment is enabled)
+                if deep_judgment_enabled:
+                    stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation
-            if rubric and rubric.agentic_traits:
+            if (rubric and rubric.agentic_traits) or _dynamic_has_agentic:
                 stages.append(AgenticRubricEvaluationStage())
 
             # Finalize result (always last)
@@ -148,6 +240,7 @@ class StageOrchestrator:
                     GenerateAnswerStage(),
                     RecursionLimitAutoFailStage(),  # Auto-fail if recursion limit hit
                     TraceValidationAutoFailStage(),  # Auto-fail if trace doesn't end with AI message
+                    PlaceholderRetryAutoFailStage(),  # Auto-fail on ModelRetryMiddleware placeholder
                 ]
             )
 
@@ -161,8 +254,10 @@ class StageOrchestrator:
             if sufficiency_enabled:
                 stages.append(SufficiencyCheckStage())
 
-            # Template parsing: classical or agentic
-            if agentic_parsing:
+            # Template parsing: classical, agentic, or dynamic agentic
+            if agentic_parsing and agentic_parsing_trigger == "dynamic":
+                stages.append(DynamicParseTemplateStage())
+            elif agentic_parsing:
                 stages.append(AgenticParseTemplateStage())
             else:
                 stages.append(ParseTemplateStage())
@@ -177,17 +272,19 @@ class StageOrchestrator:
                 stages.append(DeepJudgmentAutoFailStage())
 
             # Rubric evaluation (for template_and_rubric mode)
-            if (
-                evaluation_mode == "template_and_rubric"
-                and rubric
-                and (rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits)
-            ):
+            _rubric_has_non_agentic = rubric and (
+                rubric.llm_traits or rubric.regex_traits or rubric.callable_traits or rubric.metric_traits
+            )
+            if evaluation_mode == "template_and_rubric" and (_rubric_has_non_agentic or _dynamic_has_non_agentic):
                 stages.append(RubricEvaluationStage())
-                # Deep judgment rubric auto-fail (if deep judgment traits were evaluated)
-                stages.append(DeepJudgmentRubricAutoFailStage())
+                # Deep judgment rubric auto-fail (only when deep judgment is enabled)
+                if deep_judgment_enabled:
+                    stages.append(DeepJudgmentRubricAutoFailStage())
 
             # Stage 11b: Agentic rubric evaluation (after Stage 11)
-            if evaluation_mode == "template_and_rubric" and rubric and rubric.agentic_traits:
+            if evaluation_mode == "template_and_rubric" and (
+                (rubric and rubric.agentic_traits) or _dynamic_has_agentic
+            ):
                 stages.append(AgenticRubricEvaluationStage())
 
             # Finalize result (always last)
@@ -208,8 +305,16 @@ class StageOrchestrator:
         """
         Execute the verification pipeline.
 
-        Runs each stage in sequence, respecting should_run() conditions
-        and handling errors gracefully.
+        Runs each non-finalize stage in sequence, respecting should_run()
+        conditions and catching any exceptions so that the final
+        ``FinalizeResultStage`` is invoked exactly once at the end of the
+        run. Exceptions raised by stage ``execute()`` implementations are
+        logged at ERROR level (with ``exc_info=True``), attributed to the
+        raising stage via ``context.mark_error(..., stage=stage.name)``, and
+        then swallowed so finalization can proceed. When the raising stage is
+        ``ValidateTemplateStage``, the raised exception message is also
+        mirrored into the ``TEMPLATE_VALIDATION_ERROR`` artifact so the
+        failure classifier can attribute the failure to template validation.
 
         Args:
             context: Verification context (modified in-place)
@@ -233,33 +338,95 @@ class StageOrchestrator:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        # Execute stages in order
-        for stage in self.stages:
-            # Check if stage should run
-            if not stage.should_run(context):
-                logger.debug(f"Skipping stage {stage.name} (should_run returned False)")
-                continue
+        # Bind a fresh retry tracker for the duration of this pipeline run.
+        # The tracker is pre-populated with per-category budgets from the
+        # answering model's RetryPolicy (which is the same policy stamped onto
+        # both answering and parsing models in batch_runner.py). Every retry
+        # observed by an adapter's RetryExecutor increments the matching
+        # category's "used" counter. FinalizeResultStage reads the snapshot
+        # below and stores it on VerificationResultMetadata.retry_counts so
+        # callers can see, per result, how many transient failures were
+        # recovered from and what budget was available for each category.
+        active_policy = (
+            context.answering_model.retry_policy
+            if context.answering_model is not None and context.answering_model.retry_policy is not None
+            else RetryPolicy()
+        )
+        execution_time = 0.0
+        with track_retries(active_policy) as retry_counts:
+            # Seed the artifact with the initial budgets (used=0) so even
+            # stages running first observe the snapshot (e.g. when
+            # FinalizeResultStage is the only stage in a minimal pipeline).
+            context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
 
-            # Execute stage
-            try:
-                logger.debug(f"Executing stage: {stage.name}")
-                stage.execute(context)
+            # Execute main (non-finalize) stages in order. Exceptions are
+            # caught so the guaranteed finalize call below still runs.
+            for stage in self._main_stages:
+                # Record the originating stage so mark_error() can attribute
+                # failures even when callers omit the stage kwarg.
+                context.begin_stage(stage.name)
 
-                # If error was set during execution, log it
-                if context.error:
-                    logger.warning(f"Stage {stage.name} set error: {context.error}")
-                    # Don't break - FinalizeResultStage needs to run
+                # Check if stage should run
+                if not stage.should_run(context):
+                    logger.debug("Skipping stage %s (should_run returned False)", stage.name)
+                    continue
 
-            except Exception as e:
-                # Stage execution failed - mark error and continue to finalize
-                error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
-                logger.error(error_msg, exc_info=True)
-                context.mark_error(error_msg)
-                # Continue to FinalizeResultStage even on error
+                # Execute stage
+                error_before = context.error
+                try:
+                    logger.debug("Executing stage: %s", stage.name)
+                    stage.execute(context)
 
-            # Update execution time after each stage so FinalizeResultStage has access to it
+                    # Log only if this stage introduced or changed the error
+                    if context.error and context.error != error_before:
+                        logger.warning("Stage %s set error: %s", stage.name, context.error)
+                        # Don't break - FinalizeResultStage needs to run
+
+                except Exception as e:
+                    # Stage execution failed: log at ERROR, mark the error on
+                    # the context, and let the guaranteed finalize call below
+                    # produce a populated result.
+                    error_msg = f"Stage {stage.name} raised exception: {type(e).__name__}: {e}"
+                    logger.error("Stage %s raised exception", stage.name, exc_info=True)
+                    context.mark_error(
+                        error_msg,
+                        category=context.error_registry.classify(e),
+                        stage=stage.name,
+                    )
+                    # Mirror the raised message into TEMPLATE_VALIDATION_ERROR
+                    # so classify_failure attributes the failure to template
+                    # validation (rule 5). ValidateTemplateStage catches its
+                    # own known-bad templates and sets this artifact itself;
+                    # this path handles the raise-from-inside-execute case.
+                    if isinstance(stage, ValidateTemplateStage):
+                        context.set_artifact(
+                            ArtifactKeys.TEMPLATE_VALIDATION_ERROR,
+                            str(e),
+                        )
+
+                # Update execution time after each stage so FinalizeResultStage
+                # has access to it
+                execution_time = time.time() - start_time
+                context.set_result_field(ArtifactKeys.EXECUTION_TIME, execution_time)
+
+                # Snapshot the retry tracker so FinalizeResultStage (which
+                # runs at the end of this loop) sees the budgets and counts
+                # as a plain nested dict copy, not a live reference.
+                context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
+
+            # Guaranteed finalize: runs exactly once regardless of whether any
+            # earlier stage raised. Kept inside the track_retries context so
+            # the snapshot visible to FinalizeResultStage reflects all retries
+            # observed during the run.
+            context.begin_stage(self._finalize_stage.name)
             execution_time = time.time() - start_time
             context.set_result_field(ArtifactKeys.EXECUTION_TIME, execution_time)
+            context.set_artifact(ArtifactKeys.RETRY_COUNTS, copy.deepcopy(retry_counts))
+            try:
+                self._finalize_stage.execute(context)
+            except Exception:
+                logger.error("FinalizeResultStage raised exception", exc_info=True)
+                raise
 
         # Extract final result
         final_result = context.get_artifact(ArtifactKeys.FINAL_RESULT)
@@ -277,8 +444,10 @@ class StageOrchestrator:
             raise RuntimeError(error_msg)
 
         logger.info(
-            f"Verification pipeline complete for question {context.question_id} "
-            f"(execution_time: {execution_time:.2f}s, success: {context.completed_without_errors})"
+            "Verification pipeline complete for question %s (execution_time: %.2fs, success: %s)",
+            context.question_id,
+            execution_time,
+            context.completed_without_errors,
         )
 
         return final_result

@@ -128,3 +128,32 @@ class TestWrapSdkError:
 
         assert isinstance(result, AgentExecutionError)
         assert "ValueError" in result.message
+
+    def test_turn_limit_error_by_type_name(self) -> None:
+        """MaxTurnsExceeded exception should map to AgentExecutionError with limit flag."""
+        mock_error = MagicMock()
+        mock_error.__class__.__name__ = "MaxTurnsExceededException"
+        result = wrap_sdk_error(mock_error)
+        assert isinstance(result, AgentExecutionError)
+        assert result.limit_reached is True
+
+    def test_turn_limit_error_by_message(self) -> None:
+        """Exception with 'max_turns' in message should map to limit error."""
+        error = RuntimeError("Agent exceeded max_turns limit")
+        result = wrap_sdk_error(error)
+        assert isinstance(result, AgentExecutionError)
+        assert result.limit_reached is True
+
+    def test_recursion_in_message(self) -> None:
+        """Exception with 'recursion' in message should map to limit error."""
+        error = RuntimeError("Hit recursion limit after 50 turns")
+        result = wrap_sdk_error(error)
+        assert isinstance(result, AgentExecutionError)
+        assert result.limit_reached is True
+
+    def test_non_limit_error_has_limit_reached_false(self) -> None:
+        """Non-limit errors should have limit_reached=False."""
+        error = ValueError("Something went wrong")
+        result = wrap_sdk_error(error)
+        assert isinstance(result, AgentExecutionError)
+        assert result.limit_reached is False

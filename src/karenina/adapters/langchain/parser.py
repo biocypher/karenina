@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
+from karenina.utils.errors import ErrorRegistry
 from karenina.utils.json_extraction import extract_json_from_response, is_invalid_json_error
 
 from .llm import LangChainLLMAdapter
@@ -221,7 +222,9 @@ class LangChainParserAdapter:
             return ParsePortResult(parsed=result, usage=total_usage)
 
         except Exception as structured_error:
-            logger.debug(f"Structured output parsing failed: {structured_error}")
+            if ErrorRegistry().classify(structured_error).is_retryable():
+                raise
+            logger.debug("Structured output parsing failed: %s", structured_error)
 
         # Strategy 2: Fallback to regular LLM invocation with manual JSON parsing
         llm_response = await self._llm_adapter.ainvoke(messages)
@@ -234,7 +237,7 @@ class LangChainParserAdapter:
             logger.debug("Template parsing succeeded via fallback JSON parsing")
             return ParsePortResult(parsed=result, usage=total_usage)
         except Exception as parse_error:
-            logger.debug(f"Fallback JSON parsing failed: {parse_error}")
+            logger.debug("Fallback JSON parsing failed: %s", parse_error)
 
             # Check if retries are disabled
             if self._max_retries <= 0:
@@ -291,7 +294,22 @@ class LangChainParserAdapter:
         portal = get_async_portal()
 
         if portal is not None:
-            return portal.call(self.aparse_to_pydantic, messages, schema)
+            # Bound portal.call with a worst-case wall-clock budget so that a
+            # stalled coroutine inside the portal's event loop cannot wedge
+            # the worker thread forever (defensive guard for issue 192).
+            # The aparse_to_pydantic flow may issue up to 4 internal LLM call
+            # sequences (native structured, fallback, null retry, format
+            # retry); each goes through RetryExecutor with up to
+            # (timeout_max_attempts + 1) ainvoke attempts plus backoff.
+            timeout_bound = self._compute_portal_timeout_bound()
+            if timeout_bound is None:
+                return portal.call(self.aparse_to_pydantic, messages, schema)
+            future = portal.start_task_soon(self.aparse_to_pydantic, messages, schema)
+            try:
+                return future.result(timeout=timeout_bound)
+            except concurrent.futures.TimeoutError:
+                future.cancel()
+                raise
 
         # Check if we're in an async context
         try:
@@ -308,6 +326,55 @@ class LangChainParserAdapter:
         except RuntimeError:
             # No event loop running
             return asyncio.run(self.aparse_to_pydantic(messages, schema))
+
+    def _compute_portal_timeout_bound(self) -> float | None:
+        """Compute a conservative wall-clock bound for ``portal.call``.
+
+        Returns None when ``request_timeout`` is unset, in which case the
+        caller should not impose a bound (preserves the prior behavior).
+
+        The bound covers the worst case across the up to 4 internal LLM
+        call sequences inside ``aparse_to_pydantic`` (native structured,
+        fallback, null-feedback retry, format-feedback retry), each with
+        ``timeout_max_attempts + 1`` attempts plus inter-attempt backoff.
+
+        When ``RetryPolicy.timeout_escalation`` is configured, the per-attempt
+        timeout grows on each TIMEOUT retry. The bound sums the escalated
+        per-attempt timeouts for the worst case rather than assuming a
+        constant per-attempt budget.
+        """
+        request_timeout = self._llm_adapter._config.request_timeout
+        if request_timeout is None:
+            return None
+
+        retry_policy = self._llm_adapter._retry_policy
+        if retry_policy is None:
+            from karenina.utils.retry_policy import RetryPolicy
+
+            retry_policy = RetryPolicy()
+
+        from karenina.utils.retry_policy import compute_escalated_timeout
+
+        timeout_max_attempts = retry_policy.timeout.max_attempts
+        escalation = retry_policy.timeout_escalation
+        attempts = timeout_max_attempts + 1  # initial + retries
+
+        # Sum the worst-case per-attempt timeouts. When escalation is None,
+        # this collapses to request_timeout * attempts.
+        per_call_timeouts = sum(
+            compute_escalated_timeout(
+                base_timeout=request_timeout,
+                timeout_attempt=n,
+                config=escalation,
+                max_attempts=timeout_max_attempts,
+            )
+            or request_timeout
+            for n in range(attempts)
+        )
+        backoff_max = retry_policy.timeout.backoff_max
+        per_call = per_call_timeouts + backoff_max * timeout_max_attempts
+        # 4 internal LLM call sequences, plus a 30s grace.
+        return per_call * 4 + 30.0
 
     # -------------------------------------------------------------------------
     # Parsing Logic
@@ -337,7 +404,7 @@ class LangChainParserAdapter:
             data = json.loads(json_str)
             return schema.model_validate(data)
         except (json.JSONDecodeError, ValidationError, ValueError) as e:
-            logger.debug(f"JSON extraction failed: {e}")
+            logger.debug("JSON extraction failed: %s", e)
 
         # Strategy 2: JSON repair for malformed JSON
         try:
@@ -349,7 +416,7 @@ class LangChainParserAdapter:
         except ImportError:
             logger.debug("json-repair not installed, skipping repair strategy")
         except Exception as e:
-            logger.debug(f"JSON repair failed: {e}")
+            logger.debug("JSON repair failed: %s", e)
 
         # All strategies failed
         preview = content[:200] if len(content) > 200 else content
@@ -402,7 +469,7 @@ class LangChainParserAdapter:
             logger.debug("Parsing error is not null-related, skipping null-value retry")
             return None, empty_usage
 
-        logger.info(f"Detected null values in required fields: {null_fields}. Retrying with feedback...")
+        logger.info("Detected null values in required fields: %s. Retrying with feedback...", null_fields)
 
         # Build feedback message
         field_list = ", ".join(null_fields)
@@ -416,11 +483,13 @@ class LangChainParserAdapter:
             llm_response = await self._llm_adapter.ainvoke(retry_messages)
             retry_usage = llm_response.usage if llm_response.usage else empty_usage
             result = self._parse_response_content(llm_response.content, schema)
-            logger.info(f"Successfully parsed after null-value retry. Fixed fields: {field_list}")
+            logger.info("Successfully parsed after null-value retry. Fixed fields: %s", field_list)
             return result, retry_usage
 
         except Exception as e:
-            logger.warning(f"Retry parsing failed after null-value feedback: {e}")
+            if ErrorRegistry().classify(e).is_retryable():
+                raise
+            logger.warning("Retry parsing failed after null-value feedback: %s", e)
             return None, empty_usage
 
     async def _retry_with_format_feedback(
@@ -484,7 +553,9 @@ class LangChainParserAdapter:
             return result, retry_usage
 
         except Exception as e:
-            logger.warning(f"Retry parsing failed after format feedback: {e}")
+            if ErrorRegistry().classify(e).is_retryable():
+                raise
+            logger.warning("Retry parsing failed after format feedback: %s", e)
             return None, empty_usage
 
     async def aclose(self) -> None:

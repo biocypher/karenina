@@ -8,6 +8,7 @@ Public API::
 from karenina.scenario.builder import Scenario
 from karenina.scenario.checkpoint import scenario_to_schema_org, schema_org_to_scenario
 from karenina.scenario.edge_resolution import evaluate_state_check, resolve_next_node
+from karenina.scenario.handover import TaggedMessage
 from karenina.scenario.manager import ScenarioManager
 from karenina.scenario.outcome_evaluation import evaluate_outcome
 from karenina.scenario.sugar import (
@@ -28,6 +29,7 @@ from karenina.scenario.sugar import (
     turn_count_eq,
     turn_count_gte,
 )
+from karenina.scenario.trace_materialization import materialize_trace
 from karenina.schemas.scenario.definition import ScenarioDefinition
 from karenina.schemas.scenario.types import (
     END,
@@ -49,6 +51,9 @@ __all__ = [
     "END",
     "ModelOverride",
     "ScenarioOutcomeCriterion",
+    # Handover
+    "TaggedMessage",
+    "materialize_trace",
     # Edge resolution
     "evaluate_state_check",
     "resolve_next_node",

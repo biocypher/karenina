@@ -7,14 +7,20 @@ Two-step evaluation for agentic rubric traits:
 This mirrors the Stage 7b (AgenticParseTemplate) pattern.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, cast
 
 from pydantic import BaseModel
 
-from karenina.adapters import get_agent, get_parser
-from karenina.ports import AgentConfig, Message
+from karenina.adapters import get_agent, get_llm, get_parser
+from karenina.adapters.agent_runtime import map_path_for_prompt, workspace_path_for_prompt
+from karenina.adapters.registry import close_adapter
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import prepare_extraction_input
+from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
+from karenina.ports import AgentConfig, Message, PortCapabilities
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 from karenina.schemas.outputs.rubric import (
@@ -22,8 +28,12 @@ from karenina.schemas.outputs.rubric import (
     SingleLiteralClassification,
     SingleNumericScore,
 )
+from karenina.schemas.verification.prompt_config import PromptConfig
+from karenina.utils.json_extraction import extract_json_from_response
 
 logger = logging.getLogger(__name__)
+
+AgenticTraitExtractionMetadata = dict[str, str | None]
 
 
 class AgenticTraitEvaluator:
@@ -34,8 +44,14 @@ class AgenticTraitEvaluator:
             (either trait.model_override or the inherited parsing model).
     """
 
-    def __init__(self, model_config: ModelConfig) -> None:
+    def __init__(
+        self,
+        model_config: ModelConfig,
+        prompt_config: PromptConfig | None = None,
+    ) -> None:
         self._model_config = model_config
+        self._prompt_config = prompt_config
+        self.last_extraction_metadata: AgenticTraitExtractionMetadata | None = None
 
     def evaluate_trait(
         self,
@@ -101,6 +117,9 @@ class AgenticTraitEvaluator:
     ) -> str:
         """Launch agent to investigate the response/workspace.
 
+        For ``trace_only`` mode without a workspace, uses LLMPort (single
+        call) instead of AgentPort, since no tool access is needed.
+
         Args:
             trait: The agentic rubric trait to evaluate.
             question_text: The original question text.
@@ -112,24 +131,56 @@ class AgenticTraitEvaluator:
         Returns:
             Raw investigation trace string.
         """
-        agent = get_agent(self._model_config)
+        agent = None
+        capabilities = PortCapabilities()
+        needs_tools = (
+            trait.context_mode != "trace_only"
+            or workspace_path is not None
+            or (trait.materialize_trace and trace_file_path is not None)
+        )
+        if needs_tools:
+            agent = get_agent(self._model_config)
+            capabilities = agent.capabilities
 
-        system_prompt = (
+        if capabilities.supports_code_execution:
+            execution_text = (
+                "You may inspect files and execute commands in the sandboxed workspace."
+                if capabilities.uses_sandboxed_execution
+                else "You may inspect files and execute commands in the configured workspace."
+            )
+        elif capabilities.supports_file_tools:
+            execution_text = "You may inspect files, but command execution is not available."
+        else:
+            execution_text = "Use only the response text supplied in the prompt."
+        system_text = (
             "You are an evaluation agent investigating the quality of an LLM response. "
-            "You have access to tools and can examine files, run code, and navigate "
-            "the workspace.\n\n"
             f"Your task: {trait.description}\n\n"
+            f"{execution_text}\n\n"
             "After investigating, summarize your findings clearly. Your investigation "
             f"trace will be parsed into a {trait.kind} result."
         )
+        if trait.is_template_kind:
+            kind_class = cast(type[BaseModel], trait.kind)
+            schema_json = json.dumps(kind_class.model_json_schema(), indent=2)
+            system_text += (
+                "\n\nEnd your final response with a JSON object matching this schema. "
+                "Do not wrap the schema in another object and do not include placeholder values "
+                "for missing fields.\n"
+                f"{schema_json}"
+            )
 
         # Build user message based on context_mode
         user_parts: list[str] = [f"Question: {question_text}"]
 
         if trait.context_mode in ("trace_and_workspace", "trace_only") and raw_llm_response:
             if trait.materialize_trace and trace_file_path:
+                prompt_trace_path = map_path_for_prompt(
+                    self._model_config,
+                    trace_file_path,
+                    Path(workspace_path) if workspace_path else None,
+                )
                 trace_content = (
-                    f"The full agent trace is saved to: {trace_file_path}\n"
+                    f"The full agent trace is saved to: {prompt_trace_path}\n"
                     "Use file tools (grep, search, read) to examine it."
                 )
             else:
@@ -137,12 +188,66 @@ class AgenticTraitEvaluator:
             user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{trace_content}\n--- END TRACE ---")
 
         if workspace_path and trait.context_mode != "trace_only":
-            user_parts.append(f"\nWorkspace directory: {workspace_path}")
+            prompt_workspace = workspace_path_for_prompt(self._model_config, Path(workspace_path))
+            user_parts.append(f"\nWorkspace directory: {prompt_workspace}")
 
-        messages = [
-            Message.system(system_prompt),
-            Message.user("\n".join(user_parts)),
-        ]
+        user_text = "\n".join(user_parts)
+
+        # Assemble with adapter + user instructions
+        assembler = PromptAssembler(
+            task=PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION,
+            interface=self._model_config.interface,
+            capabilities=capabilities,
+        )
+        user_instructions = (
+            self._prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION.value)
+            if self._prompt_config
+            else None
+        )
+        messages = assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=user_instructions,
+        )
+
+        if not needs_tools:
+            return self._run_llm_investigation(trait, messages)
+
+        assert agent is not None
+        return self._run_agent_investigation(trait, messages, workspace_path, agent=agent)
+
+    def _run_llm_investigation(
+        self,
+        trait: AgenticRubricTrait,
+        messages: list[Message],
+    ) -> str:
+        """Run investigation via LLMPort (single call, no tools).
+
+        Used for trace_only mode where the trace is inlined in the prompt
+        and no workspace tools are needed.
+        """
+        llm = get_llm(self._model_config)
+        try:
+            result = llm.invoke(messages)
+            logger.info(
+                "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
+                trait.name,
+            )
+            return result.content or ""
+        finally:
+            close_adapter(llm)
+
+    def _run_agent_investigation(
+        self,
+        trait: AgenticRubricTrait,
+        messages: list[Message],
+        workspace_path: Path | str | None,
+        *,
+        agent: Any | None = None,
+    ) -> str:
+        """Run investigation via AgentPort (multi-turn with tools)."""
+        if agent is None:
+            agent = get_agent(self._model_config)
 
         agent_config = AgentConfig(
             max_turns=trait.max_turns,
@@ -150,14 +255,17 @@ class AgenticTraitEvaluator:
             workspace_path=Path(workspace_path) if workspace_path else None,
         )
 
-        result = agent.run(messages=messages, config=agent_config)
-        logger.info(
-            "Agentic rubric investigation for '%s' completed in %d turns (limit_reached=%s)",
-            trait.name,
-            result.turns,
-            result.limit_reached,
-        )
-        return result.raw_trace
+        try:
+            result = agent.run(messages=messages, config=agent_config)
+            logger.info(
+                "Agentic rubric investigation for '%s' completed in %d turns (limit_reached=%s)",
+                trait.name,
+                result.turns,
+                result.limit_reached,
+            )
+            return result.raw_trace
+        finally:
+            close_adapter(agent)
 
     def run_extraction(
         self,
@@ -174,29 +282,62 @@ class AgenticTraitEvaluator:
             The extracted score (bool for boolean traits, int for score/literal),
             or a dict for template kind traits.
         """
+        self.last_extraction_metadata = None
         if trait.is_template_kind:
             return self._extract_template(trait, investigation_trace)
 
         parser = get_parser(self._model_config)
-        messages = self._build_extraction_messages(trait, investigation_trace)
+        system_text, user_text = self._build_extraction_texts(trait, investigation_trace)
 
-        if trait.kind == "boolean":
-            bool_result = parser.parse_to_pydantic(messages, SingleBooleanScore)
-            return bool_result.parsed.result
+        # Assemble with adapter + user instructions
+        assembler = PromptAssembler(
+            task=PromptTask.RUBRIC_AGENTIC_TRAIT_EXTRACTION,
+            interface=self._model_config.interface,
+            capabilities=parser.capabilities,
+        )
+        user_instructions = (
+            self._prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_EXTRACTION.value)
+            if self._prompt_config
+            else None
+        )
+        messages = assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=user_instructions,
+        )
 
-        if trait.kind == "score":
-            score_result = parser.parse_to_pydantic(messages, SingleNumericScore)
-            return score_result.parsed.score
+        try:
+            if trait.kind == "boolean":
+                bool_result = parse_to_pydantic_resilient(
+                    parser,
+                    messages,
+                    SingleBooleanScore,
+                    retry_policy=self._model_config.retry_policy,
+                )
+                return bool_result.parsed.result
 
-        if trait.kind == "literal":
-            literal_result = parser.parse_to_pydantic(
-                messages,
-                SingleLiteralClassification,
-            )
-            return self._resolve_literal_index(
-                literal_result.parsed.classification,
-                trait,
-            )
+            if trait.kind == "score":
+                score_result = parse_to_pydantic_resilient(
+                    parser,
+                    messages,
+                    SingleNumericScore,
+                    retry_policy=self._model_config.retry_policy,
+                )
+                return score_result.parsed.score
+
+            if trait.kind == "literal":
+                literal_result = parse_to_pydantic_resilient(
+                    parser,
+                    messages,
+                    SingleLiteralClassification,
+                    retry_policy=self._model_config.retry_policy,
+                )
+                return self._resolve_literal_index(
+                    literal_result.parsed.classification,
+                    trait,
+                )
+        finally:
+            close_adapter(parser)
 
         raise ValueError(f"Unknown trait kind: {trait.kind}")
 
@@ -214,25 +355,108 @@ class AgenticTraitEvaluator:
         Returns:
             Dict of extracted field values (model_dump of the parsed model).
         """
-        parser = get_parser(self._model_config)
-        messages = [
-            Message.system(
-                "You are extracting structured findings from an investigation. "
-                "Based on the investigation output below, fill in every field "
-                "of the requested format with evidence from the investigation."
-            ),
-            Message.user(investigation_trace),
-        ]
         kind_class = cast(type[BaseModel], trait.kind)
-        parse_result = parser.parse_to_pydantic(messages, kind_class)
+        local_error: str | None = None
+        try:
+            parsed = self._extract_template_locally(kind_class, investigation_trace)
+        except Exception as exc:
+            local_error = str(exc)
+        else:
+            self.last_extraction_metadata = {
+                "method": "local_json",
+                "local_json_error": None,
+                "parser_error": None,
+            }
+            return parsed.model_dump()
+
+        parser = get_parser(self._model_config)
+        try:
+            return self._extract_template_with_parser(
+                investigation_trace,
+                kind_class,
+                parser,
+                local_error=local_error,
+            )
+        finally:
+            close_adapter(parser)
+
+    @staticmethod
+    def _extract_template_locally(
+        kind_class: type[BaseModel],
+        investigation_trace: str,
+    ) -> BaseModel:
+        """Recover template-kind findings from final investigation JSON locally."""
+        extraction_input = prepare_extraction_input(investigation_trace)
+        json_text = extract_json_from_response(extraction_input)
+        data = json.loads(json_text)
+        if not isinstance(data, dict):
+            raise ValueError(f"Recovered investigation JSON must be an object, got {type(data).__name__}")
+        return kind_class.model_validate(data)
+
+    def _extract_template_with_parser(
+        self,
+        investigation_trace: str,
+        kind_class: type[BaseModel],
+        parser: Any,
+        *,
+        local_error: str | None,
+    ) -> dict[str, Any]:
+        """Extract template findings with ParserPort after local recovery fails."""
+        system_text = (
+            "You are extracting structured findings from an investigation. "
+            "Based on the investigation output below, fill in every field "
+            "of the requested format with evidence from the investigation."
+        )
+        user_text = investigation_trace
+
+        assembler = PromptAssembler(
+            task=PromptTask.RUBRIC_AGENTIC_TRAIT_EXTRACTION,
+            interface=self._model_config.interface,
+            capabilities=parser.capabilities,
+        )
+        user_instructions = (
+            self._prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_EXTRACTION.value)
+            if self._prompt_config
+            else None
+        )
+        messages = assembler.assemble(
+            system_text=system_text,
+            user_text=user_text,
+            user_instructions=user_instructions,
+        )
+
+        try:
+            parse_result = parse_to_pydantic_resilient(
+                parser,
+                messages,
+                kind_class,
+                retry_policy=self._model_config.retry_policy,
+            )
+        except Exception as exc:
+            self.last_extraction_metadata = {
+                "method": "failed",
+                "local_json_error": local_error,
+                "parser_error": str(exc),
+            }
+            raise
+
+        self.last_extraction_metadata = {
+            "method": "parser_after_local_json_failed",
+            "local_json_error": local_error,
+            "parser_error": None,
+        }
         return parse_result.parsed.model_dump()
 
-    def _build_extraction_messages(
-        self,
+    @staticmethod
+    def _build_extraction_texts(
         trait: AgenticRubricTrait,
         investigation_trace: str,
-    ) -> list[Message]:
-        """Build prompt messages for score extraction from investigation trace."""
+    ) -> tuple[str, str]:
+        """Build base prompt texts for score extraction from investigation trace.
+
+        Returns:
+            Tuple of (system_text, user_text) before assembly.
+        """
         system_parts = [
             "You are a structured data extraction assistant. "
             "Extract the final evaluation result from the investigation report below."
@@ -244,10 +468,7 @@ class AgenticTraitEvaluator:
             class_desc = ", ".join(f"'{k}': {v}" for k, v in trait.classes.items())
             system_parts.append(f"\nClassify into one of: {class_desc}")
 
-        return [
-            Message.system("\n".join(system_parts)),
-            Message.user(f"Investigation report:\n\n{investigation_trace}"),
-        ]
+        return "\n".join(system_parts), f"Investigation report:\n\n{investigation_trace}"
 
     @staticmethod
     def _resolve_literal_index(

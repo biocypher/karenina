@@ -39,7 +39,8 @@ def create_mock_result(kwargs: dict) -> VerificationResult:
         metadata=VerificationResultMetadata(
             question_id=kwargs["question_id"],
             template_id="test_template",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text=kwargs["question_text"],
             answering=_answering,
             parsing=_parsing,
@@ -84,7 +85,7 @@ def create_task(
         "few_shot_examples": None,
         "few_shot_enabled": False,
         "abstention_enabled": False,
-        "deep_judgment_enabled": False,
+        "deep_judgment_mode": "disabled",
     }
 
 

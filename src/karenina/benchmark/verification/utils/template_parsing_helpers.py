@@ -5,8 +5,8 @@ evaluators/template_parsing.py which is used by TemplateEvaluator.
 For new code, prefer using TemplateEvaluator for template parsing operations.
 """
 
+import json
 import logging
-import re
 from typing import Any, get_args, get_origin
 
 from karenina.schemas.entities import BaseAnswer
@@ -104,7 +104,7 @@ def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]
     without requiring it to follow the full schema format.
 
     Args:
-        json_schema: JSON schema string from PydanticOutputParser.get_format_instructions()
+        json_schema: JSON schema string from model_json_schema()
         attribute_names: List of attribute names to extract descriptions for
 
     Returns:
@@ -116,16 +116,23 @@ def _extract_attribute_descriptions(json_schema: str, attribute_names: list[str]
         {"drug_target": "The target protein"}
     """
     attribute_descriptions = {}
+
+    # Parse the JSON schema once, falling back to per-attribute fallbacks on error
+    try:
+        schema_dict = json.loads(json_schema)
+        properties = schema_dict.get("properties", {})
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Failed to parse JSON schema, using fallback descriptions")
+        properties = {}
+
     for attr in attribute_names:
-        # Extract description from JSON schema using regex
-        # Pattern matches: "attr_name": {..., "description": "text", ...}
-        pattern = rf'"{attr}":\s*{{[^}}]*"description":\s*"([^"]*)"'
-        match = re.search(pattern, json_schema)
-        if match:
-            attribute_descriptions[attr] = match.group(1)
+        prop = properties.get(attr, {})
+        description = prop.get("description") if isinstance(prop, dict) else None
+        if description:
+            attribute_descriptions[attr] = description
         else:
-            # Fallback if description not found
             attribute_descriptions[attr] = f"Evidence for {attr}"
+
     return attribute_descriptions
 
 
@@ -191,10 +198,11 @@ def format_excerpts_for_reasoning(excerpts: dict[str, list[dict[str, Any]]]) -> 
                 lines.append("    Search Results:")
 
                 if not isinstance(search_results, list):
-                    raise TypeError(
-                        f"Unsupported search_results format: {type(search_results).__name__}. "
-                        "Expected list of structured results."
+                    logger.warning(
+                        "Unsupported search_results format: %s. Expected list of structured results.",
+                        type(search_results).__name__,
                     )
+                    continue
                 formatted = _format_search_results_for_llm(search_results)
                 search_lines = formatted.split("\n")
 
@@ -413,7 +421,13 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
         List of trait objects found in the template (LLM, regex, callable, or metric)
     """
     try:
-        from karenina.schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
+        from karenina.schemas.entities import (
+            CallableRubricTrait,
+            LLMRubricTrait,
+            MetricRubricTrait,
+            RegexRubricTrait,
+            Rubric,
+        )
 
         from .class_discovery import find_answer_class
         from .template_validation import _build_exec_namespace
@@ -424,8 +438,8 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             {
                 "Rubric": Rubric,
                 "LLMRubricTrait": LLMRubricTrait,
-                "RegexTrait": RegexTrait,
-                "CallableTrait": CallableTrait,
+                "RegexRubricTrait": RegexRubricTrait,
+                "CallableRubricTrait": CallableRubricTrait,
                 "MetricRubricTrait": MetricRubricTrait,
             }
         )
@@ -451,13 +465,15 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             if isinstance(obj, Rubric):
                 # Collect all trait types
                 for llm_trait in obj.llm_traits:
-                    if isinstance(llm_trait, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
+                    if isinstance(
+                        llm_trait, LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait
+                    ):
                         traits_list.append(llm_trait)
                 for regex_trait in obj.regex_traits:
-                    if isinstance(regex_trait, RegexTrait):
+                    if isinstance(regex_trait, RegexRubricTrait):
                         traits_list.append(regex_trait)
                 for callable_trait in obj.callable_traits:
-                    if isinstance(callable_trait, CallableTrait):
+                    if isinstance(callable_trait, CallableRubricTrait):
                         traits_list.append(callable_trait)
                 for metric_trait in obj.metric_traits:
                     if isinstance(metric_trait, MetricRubricTrait):
@@ -466,7 +482,7 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
             # If already list of trait objects
             if isinstance(obj, list):
                 for item in obj:
-                    if isinstance(item, LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait):
+                    if isinstance(item, LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait):
                         traits_list.append(item)
                     elif isinstance(item, dict) and "name" in item:
                         # Try to infer trait type and construct it
@@ -475,11 +491,11 @@ def extract_rubric_traits_from_template(answer_template: str) -> list[Any]:
                                 # LLMRubricTrait
                                 traits_list.append(LLMRubricTrait(**item))
                             elif "pattern" in item:
-                                # RegexTrait
-                                traits_list.append(RegexTrait(**item))
+                                # RegexRubricTrait
+                                traits_list.append(RegexRubricTrait(**item))
                             elif "callable_code" in item:
-                                # CallableTrait
-                                traits_list.append(CallableTrait(**item))
+                                # CallableRubricTrait
+                                traits_list.append(CallableRubricTrait(**item))
                             elif "metrics" in item:
                                 # MetricRubricTrait
                                 traits_list.append(MetricRubricTrait(**item))

@@ -6,7 +6,12 @@ Karenina provides a command-line interface for running verifications, managing p
 karenina [OPTIONS] COMMAND [ARGS]...
 ```
 
-The only global option is `--help`, which displays the command list.
+Global options apply to the `karenina` entry point itself (before any subcommand):
+
+| Option | Description |
+|--------|-------------|
+| `--version` | Print the installed karenina version and exit |
+| `--help` | Show the command list and exit |
 
 ---
 
@@ -19,6 +24,7 @@ The only global option is `--help`, which displays the command list.
 | **preset** | Manage verification presets (list, show, delete) | [preset](preset.md) |
 | **serve** | Start the Karenina webapp server | [serve](serve.md) |
 | **init** | Initialize Karenina configuration and directories | [init](init.md) |
+| **analyze-errors** | Materialize a verification run (a VerificationResultSet JSON export plus the benchmark JSON-LD checkpoint) into per-failure folders for triage and Claude Code launching | — |
 | **optimize** | Optimize prompts and instructions using GEPA | [optimize](optimize.md) |
 | **optimize-history** | View optimization history | — |
 | **optimize-compare** | Compare multiple optimization runs | — |
@@ -75,6 +81,8 @@ Most users start with a preset file that defines model providers, evaluation mod
 karenina verify checkpoint.jsonld --preset claude-haiku.json --answering-model claude-sonnet-4-5
 ```
 
+Feature flags (`--abstention`, `--sufficiency`, `--embedding-check`, `--deep-judgment`) are tri-state: `--flag` enables, `--no-flag` disables, and omitting both preserves the preset default. Embedding settings (`--embedding-threshold`, `--embedding-model`) defer to environment variables when not passed explicitly.
+
 See [Configuration Hierarchy](../../workflows/configuration/index.md) for how presets, CLI arguments, and environment variables interact.
 
 ### Progressive save and resume
@@ -86,10 +94,10 @@ For long-running verification jobs, use progressive save to periodically checkpo
 karenina verify checkpoint.jsonld --preset default.json --progressive-save
 
 # Check progress of a running or interrupted job
-karenina verify-status state_file.json
+karenina verify-status results.json.state
 
-# Resume an interrupted job
-karenina verify checkpoint.jsonld --preset default.json --resume state_file.json
+# Resume an interrupted job (benchmark path and config are loaded from the state file)
+karenina verify --resume results.json.state
 ```
 
 ---

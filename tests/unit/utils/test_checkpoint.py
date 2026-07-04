@@ -15,10 +15,10 @@ from datetime import datetime
 import pytest
 
 from karenina.schemas.entities import (
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
 )
 from karenina.utils.checkpoint import (
     BenchmarkConversionError,
@@ -161,9 +161,9 @@ def test_generate_template_id_whitespace_only_returns_no_template() -> None:
 
 @pytest.mark.unit
 def test_generate_template_id_strips_whitespace() -> None:
-    """Test that leading/trailing whitespace is stripped before hashing."""
+    """Test that leading/trailing whitespace and uniform indentation are stripped before hashing."""
     template1 = "class Answer(BaseAnswer):\n    value: str"
-    template2 = "  class Answer(BaseAnswer):\n    value: str  "
+    template2 = "  class Answer(BaseAnswer):\n      value: str  "
 
     id1 = generate_template_id(template1)
     id2 = generate_template_id(template2)
@@ -172,14 +172,14 @@ def test_generate_template_id_strips_whitespace() -> None:
 
 
 # =============================================================================
-# convert_rubric_trait_to_rating() - RegexTrait Tests
+# convert_rubric_trait_to_rating() - RegexRubricTrait Tests
 # =============================================================================
 
 
 @pytest.mark.unit
 def test_convert_regex_trait_to_rating_global() -> None:
-    """Test converting global RegexTrait to SchemaOrgRating."""
-    trait = RegexTrait(
+    """Test converting global RegexRubricTrait to SchemaOrgRating."""
+    trait = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         case_sensitive=True,
@@ -204,8 +204,8 @@ def test_convert_regex_trait_to_rating_global() -> None:
 
 @pytest.mark.unit
 def test_convert_regex_trait_to_rating_question_specific() -> None:
-    """Test converting question-specific RegexTrait to SchemaOrgRating."""
-    trait = RegexTrait(
+    """Test converting question-specific RegexRubricTrait to SchemaOrgRating."""
+    trait = RegexRubricTrait(
         name="has_url",
         pattern=r"https?://\S+",
         higher_is_better=True,
@@ -217,13 +217,13 @@ def test_convert_regex_trait_to_rating_question_specific() -> None:
 
 
 # =============================================================================
-# convert_rubric_trait_to_rating() - CallableTrait Tests
+# convert_rubric_trait_to_rating() - CallableRubricTrait Tests
 # =============================================================================
 
 
 @pytest.mark.unit
 def test_convert_callable_trait_boolean_to_rating() -> None:
-    """Test converting boolean CallableTrait to SchemaOrgRating."""
+    """Test converting boolean CallableRubricTrait to SchemaOrgRating."""
     import cloudpickle
 
     def func(text):
@@ -231,7 +231,7 @@ def test_convert_callable_trait_boolean_to_rating() -> None:
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="has_keyword",
         kind="boolean",
         callable_code=code,
@@ -255,7 +255,7 @@ def test_convert_callable_trait_boolean_to_rating() -> None:
 
 @pytest.mark.unit
 def test_convert_callable_trait_score_to_rating() -> None:
-    """Test converting score CallableTrait to SchemaOrgRating."""
+    """Test converting score CallableRubricTrait to SchemaOrgRating."""
     import cloudpickle
 
     def func(text):
@@ -263,7 +263,7 @@ def test_convert_callable_trait_score_to_rating() -> None:
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="length_score",
         kind="score",
         callable_code=code,
@@ -285,10 +285,10 @@ def test_convert_callable_trait_score_to_rating() -> None:
 
 @pytest.mark.unit
 def test_convert_callable_trait_question_specific() -> None:
-    """Test converting question-specific CallableTrait to SchemaOrgRating."""
+    """Test converting question-specific CallableRubricTrait to SchemaOrgRating."""
     import cloudpickle
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="custom_check",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda _: True),
@@ -477,7 +477,7 @@ def test_convert_metric_trait_question_specific() -> None:
 
 @pytest.mark.unit
 def test_convert_rating_to_regex_trait() -> None:
-    """Test converting SchemaOrgRating back to RegexTrait."""
+    """Test converting SchemaOrgRating back to RegexRubricTrait."""
     from karenina.schemas.checkpoint import (
         SchemaOrgPropertyValue,
         SchemaOrgRating,
@@ -499,7 +499,7 @@ def test_convert_rating_to_regex_trait() -> None:
 
     trait = convert_rating_to_rubric_trait(rating)
 
-    assert isinstance(trait, RegexTrait)
+    assert isinstance(trait, RegexRubricTrait)
     assert trait.name == "has_email"
     assert trait.pattern == r"\S+@\S+"
     assert trait.case_sensitive is True
@@ -509,7 +509,7 @@ def test_convert_rating_to_regex_trait() -> None:
 
 @pytest.mark.unit
 def test_convert_rating_to_callable_trait_boolean() -> None:
-    """Test converting SchemaOrgRating back to boolean CallableTrait."""
+    """Test converting SchemaOrgRating back to boolean CallableRubricTrait."""
     import base64
 
     import cloudpickle
@@ -540,7 +540,7 @@ def test_convert_rating_to_callable_trait_boolean() -> None:
 
     trait = convert_rating_to_rubric_trait(rating)
 
-    assert isinstance(trait, CallableTrait)
+    assert isinstance(trait, CallableRubricTrait)
     assert trait.name == "long_text"
     assert trait.kind == "boolean"
     assert trait.invert_result is False
@@ -548,7 +548,7 @@ def test_convert_rating_to_callable_trait_boolean() -> None:
 
 @pytest.mark.unit
 def test_convert_rating_to_callable_trait_score() -> None:
-    """Test converting SchemaOrgRating back to score CallableTrait."""
+    """Test converting SchemaOrgRating back to score CallableRubricTrait."""
     import base64
 
     import cloudpickle
@@ -579,7 +579,7 @@ def test_convert_rating_to_callable_trait_score() -> None:
 
     trait = convert_rating_to_rubric_trait(rating)
 
-    assert isinstance(trait, CallableTrait)
+    assert isinstance(trait, CallableRubricTrait)
     assert trait.kind == "score"
     assert trait.min_score == 0
     assert trait.max_score == 100

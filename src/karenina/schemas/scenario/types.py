@@ -71,6 +71,10 @@ class ScenarioEdge(BaseModel):
     condition_callable: Callable[..., Any] | None = Field(default=None, exclude=True)
     condition_source: str | None = None
 
+    # Handover: context routing when transitioning between nodes
+    handover: str | None = None
+    handover_callable: Callable[..., Any] | None = Field(default=None, exclude=True)
+
 
 class ScenarioNode(BaseModel):
     """A unique execution point in a scenario graph."""
@@ -82,6 +86,7 @@ class ScenarioNode(BaseModel):
     model_override: ModelOverride | None = None
     tool_filter: ToolFilter | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    agent_identity: str | None = None
 
     # Callable field (excluded from serialization)
     state_update: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = Field(default=None, exclude=True)

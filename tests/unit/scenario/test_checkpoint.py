@@ -5,6 +5,7 @@ import json
 import pytest
 
 from karenina.scenario.builder import Scenario
+from karenina.scenario.checkpoint import scenario_to_schema_org, schema_org_to_scenario
 from karenina.schemas.scenario.definition import ScenarioDefinition
 from karenina.schemas.scenario.types import END, ScenarioOutcomeCriterion
 
@@ -71,3 +72,43 @@ class TestScenarioCheckpointSerialization:
         data = defn.model_dump()
         ask_node = data["nodes"]["ask"]
         assert "state_update" not in ask_node
+
+
+def _build_scenario_with_handover():
+    s = Scenario("handover_test")
+    s.add_node("ask", question=_make_question("Q1"))
+    s.add_node("guard", question=_make_question("Q2"), agent_identity="guardrail")
+    s.add_edge("ask", "guard", handover="transcript_prepend")
+    s.add_edge("guard", END)
+    s.set_entry("ask")
+    return s.validate()
+
+
+@pytest.mark.unit
+class TestHandoverCheckpointRoundtrip:
+    def test_agent_identity_serialized(self):
+        defn = _build_scenario_with_handover()
+        schema = scenario_to_schema_org(defn)
+        assert schema.nodes["guard"].agentIdentity == "guardrail"
+        assert schema.nodes["ask"].agentIdentity is None
+
+    def test_handover_serialized(self):
+        defn = _build_scenario_with_handover()
+        schema = scenario_to_schema_org(defn)
+        edge_with_handover = schema.edges[0]
+        assert edge_with_handover.handover == "transcript_prepend"
+
+    def test_roundtrip_preserves_agent_identity(self):
+        defn = _build_scenario_with_handover()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        assert restored.nodes["guard"].agent_identity == "guardrail"
+        assert restored.nodes["ask"].agent_identity is None
+
+    def test_roundtrip_preserves_handover(self):
+        defn = _build_scenario_with_handover()
+        schema = scenario_to_schema_org(defn)
+        restored = schema_org_to_scenario(schema)
+        handover_edge = [e for e in restored.edges if e.handover is not None]
+        assert len(handover_edge) == 1
+        assert handover_edge[0].handover == "transcript_prepend"

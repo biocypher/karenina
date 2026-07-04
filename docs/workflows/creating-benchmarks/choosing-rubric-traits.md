@@ -15,7 +15,7 @@ jupyter:
 
 # Choosing the Right Rubric Trait Type
 
-Karenina offers five trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) that cover seven distinct evaluation needs. This tutorial is organized by **need**: "I need to check X; which trait type solves it?" For each need, you will create a trait, attach it to a benchmark, and learn when to prefer one type over another.
+Karenina offers six trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) that cover seven distinct evaluation needs. This tutorial is organized by **need**: "I need to check X. Which trait type solves it?" For each need, you will create a trait, attach it to a benchmark, and learn when to prefer one type over another.
 
 This complements the build-focused tutorials ([Full Evaluation Benchmark](full-evaluation-benchmark.ipynb), [Quality Assessment](quality-assessment-benchmark.ipynb)) by providing a decision framework for trait selection.
 
@@ -70,6 +70,7 @@ q1_id = benchmark.add_question(
     ),
 )
 
+
 class Answer(BaseAnswer):
     identifies_pd1_target: bool = Field(
         description=(
@@ -82,6 +83,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.identifies_pd1_target
+
 
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added: {q1_id[:50]}...")
@@ -102,6 +104,7 @@ q2_id = benchmark.add_question(
     ),
 )
 
+
 class Answer(BaseAnswer):
     mentions_keynote_trial: bool = Field(
         description=(
@@ -114,6 +117,7 @@ class Answer(BaseAnswer):
     def verify(self) -> bool:
         return self.mentions_keynote_trial
 
+
 benchmark.update_template(q2_id, Answer)
 print(f"Q2 added: {q2_id[:50]}...")
 ```
@@ -123,8 +127,7 @@ print(f"Q2 added: {q2_id[:50]}...")
 ```python
 q3_id = benchmark.add_question(
     question=(
-        "When should pembrolizumab be considered over chemotherapy for NSCLC, "
-        "and what biomarker testing is required?"
+        "When should pembrolizumab be considered over chemotherapy for NSCLC, and what biomarker testing is required?"
     ),
     raw_answer=(
         "Pembrolizumab should be considered as first-line monotherapy when PD-L1 "
@@ -137,6 +140,7 @@ q3_id = benchmark.add_question(
     ),
 )
 
+
 class Answer(BaseAnswer):
     mentions_pdl1_testing: bool = Field(
         description=(
@@ -148,6 +152,7 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.mentions_pdl1_testing
+
 
 benchmark.update_template(q3_id, Answer)
 print(f"Q3 added: {q3_id[:50]}...")
@@ -258,13 +263,12 @@ This trait is **per-question** on Q2 because audience register is most revealing
 Regex traits run instantly with no LLM call, are perfectly reproducible, and cost nothing. Use them for checks that can be expressed as a pattern match.
 
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import RegexRubricTrait
 
-disclaimer_trait = RegexTrait(
+disclaimer_trait = RegexRubricTrait(
     name="Safety Disclaimer",
     description=(
-        "Checks that the response includes a safety disclaimer directing "
-        "patients to consult a healthcare professional."
+        "Checks that the response includes a safety disclaimer directing patients to consult a healthcare professional."
     ),
     pattern=r"consult\s+(a\s+|your\s+)?(doctor|physician|healthcare\s+(professional|provider))",
     case_sensitive=False,
@@ -291,7 +295,8 @@ This trait is **global** because every response about a cancer drug should inclu
 LLMs are notoriously imprecise at counting characters, words, or items. A callable trait runs a Python function on the response text, giving you exact, deterministic results for any computation.
 
 ```python
-from karenina.schemas import CallableTrait
+from karenina.schemas import CallableRubricTrait
+
 
 def check_response_length(text: str) -> bool:
     """Verify that a clinical decision response meets length requirements.
@@ -302,7 +307,8 @@ def check_response_length(text: str) -> bool:
     char_count = len(text.strip())
     return 200 <= char_count <= 2000
 
-length_trait = CallableTrait.from_callable(
+
+length_trait = CallableRubricTrait.from_callable(
     name="Response Length",
     func=check_response_length,
     kind="boolean",
@@ -322,12 +328,12 @@ This trait is **per-question** on Q3 because the length constraint is specific t
 
 <div class="admonition tip">
 <p class="admonition-title">Callable vs regex: where to draw the line</p>
-<p>If the check is pure pattern matching (presence or absence of text), use RegexTrait. If it requires <strong>counting</strong>, <strong>arithmetic</strong>, or <strong>combining multiple conditions</strong>, use CallableTrait. An LLM score trait that asks "rate the response length from 1-5" introduces variance on something you can measure exactly. When precision matters, compute; do not judge.</p>
+<p>If the check is pure pattern matching (presence or absence of text), use RegexRubricTrait. If it requires <strong>counting</strong>, <strong>arithmetic</strong>, or <strong>combining multiple conditions</strong>, use CallableRubricTrait. An LLM score trait that asks "rate the response length from 1-5" introduces variance on something you can measure exactly. When precision matters, compute; do not judge.</p>
 </div>
 
 <div class="admonition warning">
 <p class="admonition-title">Security note</p>
-<p>CallableTrait serializes functions with cloudpickle. Only load benchmarks containing callable traits from trusted sources, as deserialization executes arbitrary Python. Callable traits are not available in the GUI for this reason.</p>
+<p>CallableRubricTrait serializes functions with cloudpickle. Only load benchmarks containing callable traits from trusted sources, as deserialization executes arbitrary Python. Callable traits are not available in the GUI for this reason.</p>
 </div>
 
 ---
@@ -374,12 +380,9 @@ This trait is **per-question** on Q2 because the trial checklist is specific to 
 When reproducibility matters (regulatory contexts, automated pipelines, CI gates), prefer deterministic traits. An inverted regex trait checks that an undesirable pattern does not appear.
 
 ```python
-no_hedging_trait = RegexTrait(
+no_hedging_trait = RegexRubricTrait(
     name="No Clinical Hedging",
-    description=(
-        "Checks that the response does not use hedging language that could "
-        "undermine clinical confidence."
-    ),
+    description=("Checks that the response does not use hedging language that could undermine clinical confidence."),
     pattern=r"\b(I think|I believe|I guess|probably|it seems like|I'm not sure)\b",
     case_sensitive=False,
     invert_result=True,
@@ -424,7 +427,9 @@ mechanism_trait = LLMRubricTrait(
 )
 
 benchmark.add_question_rubric_trait(q1_id, mechanism_trait)
-print(f"Added to Q1: {mechanism_trait.name} (deep judgment, up to {mechanism_trait.deep_judgment_max_excerpts} excerpts)")
+print(
+    f"Added to Q1: {mechanism_trait.name} (deep judgment, up to {mechanism_trait.deep_judgment_max_excerpts} excerpts)"
+)
 ```
 
 This trait is **per-question** on Q1 because receptor-level mechanism depth only applies to the mechanism question.
@@ -452,9 +457,9 @@ print()
 for qid in benchmark.get_question_ids():
     q = benchmark.get_question(qid)
     q_text = q["question"][:60]
-    has_rubric = q.get("has_rubric", False)
+    has_rubric = q.get("question_rubric")
     if has_rubric:
-        print(f"'{q_text}...' has per-question traits")
+        print(f"'{q_text}...' has question-level rubric")
     else:
         print(f"'{q_text}...' uses global traits only")
 ```
@@ -491,6 +496,7 @@ print(f"Global traits: {loaded_rubric.get_trait_names()}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 
@@ -502,18 +508,18 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 |------|-----------|-------|---------|
 | 1. Subjective quality | LLMRubricTrait (score) | Global | All |
 | 2. Categorical classification | LLMRubricTrait (literal, nominal) | Per-question | Q2 |
-| 3. Format validation | RegexTrait | Global | All |
-| 4. Complex validation (counting) | CallableTrait | Per-question | Q3 |
+| 3. Format validation | RegexRubricTrait | Global | All |
+| 4. Complex validation (counting) | CallableRubricTrait | Per-question | Q3 |
 | 5. Precision/recall/F1 | MetricRubricTrait (tp_only) | Per-question | Q2 |
-| 6. Deterministic check | RegexTrait (inverted) | Global | All |
+| 6. Deterministic check | RegexRubricTrait (inverted) | Global | All |
 | 7. Evidence-based | LLMRubricTrait + deep judgment | Per-question | Q1 |
 
 ## Next Steps
 
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Build a complete template + rubric benchmark from scratch
 - [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation for tasks with no single correct answer
-- [Rubrics Overview](../../../core_concepts/rubrics/): Deep dive into rubric concepts, the `higher_is_better` field, and trait type API details
-- [LLM Traits](../../core_concepts/rubrics/llm-traits.ipynb): Boolean, score, and literal kinds with deep judgment
-- [Regex Traits](../../core_concepts/rubrics/regex-traits.ipynb): Deterministic pattern matching
-- [Callable Traits](../../core_concepts/rubrics/callable-traits.ipynb): Custom Python functions
-- [Metric Traits](../../core_concepts/rubrics/metric-traits.ipynb): Precision, recall, F1 computation
+- [Rubrics Overview](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts, the `higher_is_better` field, and trait type API details
+- [LLM Traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): Boolean, score, and literal kinds with deep judgment
+- [Regex Traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb): Deterministic pattern matching
+- [Callable Traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb): Custom Python functions
+- [Metric Traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb): Precision, recall, F1 computation

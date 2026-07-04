@@ -2,7 +2,7 @@
 
 This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb).
 
-`VerificationConfig` is a Pydantic model with **33 fields** organized into 10 categories below.
+`VerificationConfig` is a Pydantic model with **~38 user-facing fields** organized into the categories below. Field counts can drift slightly with new releases; the source of truth is `karenina/schemas/verification/config.py`.
 
 ---
 
@@ -26,7 +26,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `replicate_count` | `int` | `1` | Number of times to run each question/model combination. Higher values allow measuring variance across runs. |
+| `replicate_count` | `int` | `1` | Number of times to run each question/model combination. Higher values allow measuring variance across runs. Must be >= 1. |
 | `parsing_only` | `bool` | `False` | When `True`, only parsing models are required (no answering models needed). Used for TaskEval and similar use cases where answers are pre-generated. |
 
 ---
@@ -35,18 +35,11 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `evaluation_mode` | `Literal["template_only", "template_and_rubric", "rubric_only"]` | `"template_only"` | Determines which pipeline stages run. `template_only`: template verification only. `template_and_rubric`: both template and rubric evaluation. `rubric_only`: skip template verification, evaluate rubrics on raw response. |
-| `rubric_enabled` | `bool` | `False` | Master switch for rubric evaluation. Must be `True` when `evaluation_mode` is `template_and_rubric` or `rubric_only`. Must be `False` when `evaluation_mode` is `template_only`. |
+| `evaluation_mode` | `Literal["template_only", "template_and_rubric", "rubric_only"]` | `"template_only"` | Determines which pipeline stages run. `template_only`: template verification only. `template_and_rubric`: both template and rubric evaluation. `rubric_only`: skip template verification, evaluate rubrics on raw response. When set to `template_and_rubric` or `rubric_only`, rubric evaluation is automatically enabled. |
 | `rubric_trait_names` | `list[str] \| None` | `None` | Optional filter to evaluate only specific rubric traits by name. When `None`, all traits are evaluated. |
 | `rubric_evaluation_strategy` | `Literal["batch", "sequential"] \| None` | `"batch"` | How LLM rubric traits are evaluated. `batch`: all LLM traits in a single call (efficient, requires JSON output). `sequential`: traits evaluated one-by-one (more reliable, higher cost). |
 | `agentic_rubric_strategy` | `Literal["individual", "shared"]` | `"individual"` | How agentic rubric traits are evaluated. `individual`: one agent per trait (default, most reliable). `shared`: one agent evaluates all traits that share a model (efficient, but falls back to individual when models differ). |
-| `agentic_rubric_parallel` | `bool` | `False` | Reserved for future use. When implemented, will allow parallel evaluation of independent agentic traits. |
-
-**Validation rules:**
-
-- `evaluation_mode="rubric_only"` requires `rubric_enabled=True`
-- `evaluation_mode="template_and_rubric"` requires `rubric_enabled=True`
-- `evaluation_mode="template_only"` requires `rubric_enabled=False`
+| `agentic_rubric_parallel` | `bool` | `False` | Run individual agentic rubric trait sessions concurrently. Only applies when `agentic_rubric_strategy="individual"`. Wired into the orchestrator: each trait gets a concurrent agent session bounded by the global LLM semaphore. |
 
 ---
 
@@ -54,8 +47,9 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `use_full_trace_for_template` | `bool` | `False` | If `True`, pass full agent trace to template parsing. If `False`, extract only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
+| `use_full_trace_for_template` | `bool` | `False` | If `True`, the judge sees the full agent trace when parsing the template and when running the abstention/sufficiency checks. If `False`, the judge sees only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
 | `use_full_trace_for_rubric` | `bool` | `True` | If `True`, pass full agent trace to rubric evaluation. If `False`, extract only the final AI message. The full trace is always captured in `raw_llm_response` regardless. |
+| `allow_partial_trace_scoring` | `bool` | `True` | If `True`, template parsing and scoring still run on responses that were truncated by an answer-generation timeout. Timeout metadata is preserved separately so partial scores do not hide agent failures. If `False`, truncated traces are not scored. |
 
 !!! note
     If `use_full_trace_for_template=False` and the trace doesn't end with an AI message, the trace validation stage will fail with an error.
@@ -68,6 +62,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 |-------|------|---------|-------------|
 | `abstention_enabled` | `bool` | `False` | Enable abstention/refusal detection. When the model refuses to answer, parsing is skipped and the result is auto-failed. |
 | `sufficiency_enabled` | `bool` | `False` | Enable response sufficiency detection. When the response lacks enough information to fill the template, parsing is skipped and the result is auto-failed. |
+| `include_extraction_hints` | `bool` | `True` | Controls whether extraction hints are included in parsing prompts. Extraction hints provide the judge LLM with guidance on how to extract specific template fields from the response. Enabled by default. |
 
 See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage examples.
 
@@ -79,7 +74,7 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 |-------|------|---------|---------|-------------|
 | `embedding_check_enabled` | `bool` | `False` | `EMBEDDING_CHECK` | Enable semantic similarity verification as a fallback after template verify(). |
 | `embedding_check_model` | `str` | `"all-MiniLM-L6-v2"` | `EMBEDDING_CHECK_MODEL` | SentenceTransformer model name for computing embeddings. |
-| `embedding_check_threshold` | `float` | `0.85` | `EMBEDDING_CHECK_THRESHOLD` | Cosine similarity threshold (0.0–1.0). Values above this threshold are considered semantically matching. |
+| `embedding_check_threshold` | `float` | `0.85` | `EMBEDDING_CHECK_THRESHOLD` | Cosine similarity threshold. Constrained to [0.0, 1.0]. Values above this threshold are considered semantically matching. |
 
 **Environment variable precedence:** Env vars are applied only when the field is not explicitly set. Explicit arguments always take priority over env vars.
 
@@ -90,7 +85,13 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 | Field | Type | Default | Env Var | Description |
 |-------|------|---------|---------|-------------|
 | `async_enabled` | `bool` | `True` | `KARENINA_ASYNC_ENABLED` | Enable parallel execution of verification across questions. |
-| `async_max_workers` | `int` | `2` | `KARENINA_ASYNC_MAX_WORKERS` | Maximum number of concurrent verification workers when async is enabled. |
+| `async_max_workers` | `int` | `2` | `KARENINA_ASYNC_MAX_WORKERS` | Maximum number of concurrent verification workers when async is enabled. Must be >= 1. |
+| `max_concurrent_requests` | `int \| None` | `None` | `KARENINA_MAX_CONCURRENT_LLM_REQUESTS` | Global cap on concurrent LLM requests across all workers. `None` means no global limit (concurrency bounded by `async_max_workers` only). Set to 16-64 for self-hosted inference servers (vLLM, SGLang). |
+| `task_ordering` | `Literal["auto", "prefix_cache", "distribute_answerers", "generation_order", "random"]` | `"auto"` | — | Task queue ordering strategy. `auto` picks `distribute_answerers` when answerers span more than one identity, else `prefix_cache`. `prefix_cache` groups by answering model for KV cache hits. `distribute_answerers` round-robins across answerer identities. `generation_order` preserves template-first loop order. `random` shuffles tasks. |
+| `answerer_concurrency_limits` | `int \| dict[str, int] \| None` | `None` | — | Per-answerer concurrency cap, enforced at task start. Pass an `int` to apply the same cap to every entry in `answering_models` (keyed by `ModelConfig.id`). Pass a `dict` keyed by `ModelConfig.id` for per-model caps; answerers not in the dict run uncapped. `None` disables caps. |
+| `request_timeout` | `float` | `120.0` | — | HTTP request timeout (seconds) for all LLM calls in the pipeline (answer generation, parsing, rubric evaluation, guardrail calls). Must be a number: `None` is rejected. The per-model `ModelConfig.request_timeout` is `float \| None`, where `None` means the provider SDK default. |
+
+Both sequential and parallel execution modes collect per-question errors without aborting. If any questions fail (or the parallel batch exceeds its timeout), `VerificationBatchError` is raised with `partial_results` and `errors` attributes so callers can recover partial progress. See [Basic Verification: Error Handling](../../notebooks/running-verification/basic-verification.ipynb) for usage examples.
 
 ---
 
@@ -98,7 +99,7 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `deep_judgment_enabled` | `bool` | `False` | Enable multi-stage deep judgment analysis for template verification. Adds excerpt extraction, fuzzy matching, and reasoning to parsed results. |
+| `deep_judgment_mode` | `Literal["disabled", "reasoning_only", "full"]` | `"disabled"` | Template deep-judgment mode. `"disabled"`: off. `"reasoning_only"`: reasoning traces without excerpts (2 LLM calls). `"full"`: excerpts + reasoning (3+ LLM calls). |
 | `deep_judgment_max_excerpts_per_attribute` | `int` | `3` | Maximum number of excerpts to extract per template attribute during deep judgment. |
 | `deep_judgment_fuzzy_match_threshold` | `float` | `0.80` | Fuzzy match similarity threshold for validating excerpts against the original trace. |
 | `deep_judgment_excerpt_retry_attempts` | `int` | `2` | Number of retry attempts for excerpt extraction when fuzzy matching fails. |
@@ -113,7 +114,7 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 |-------|------|---------|-------------|
 | `deep_judgment_rubric_mode` | `Literal["disabled", "enable_all", "use_checkpoint", "custom"]` | `"disabled"` | Controls how deep judgment is applied to rubric traits. `disabled`: off. `enable_all`: apply to all LLM traits. `use_checkpoint`: use settings saved in checkpoint. `custom`: use per-trait configuration from `deep_judgment_rubric_config`. |
 | `deep_judgment_rubric_global_excerpts` | `bool` | `True` | For `enable_all` mode: globally enable or disable excerpt extraction for all traits. |
-| `deep_judgment_rubric_config` | `dict[str, Any] \| None` | `None` | Per-trait configuration for `custom` mode. See structure below. |
+| `deep_judgment_rubric_config` | `DeepJudgmentRubricCustomConfig \| None` | `None` | Per-trait configuration for `custom` mode. See structure below. |
 | `deep_judgment_rubric_max_excerpts_default` | `int` | `7` | Default maximum excerpts per rubric trait (used as fallback when per-trait config omits this setting). |
 | `deep_judgment_rubric_fuzzy_match_threshold_default` | `float` | `0.80` | Default fuzzy match threshold for rubric excerpt validation. |
 | `deep_judgment_rubric_excerpt_retry_attempts_default` | `int` | `2` | Default retry attempts for rubric excerpt extraction. |
@@ -156,6 +157,64 @@ Each trait entry is validated as a `DeepJudgmentTraitConfig` with these fields:
 | `fuzzy_match_threshold` | `float \| None` | `None` | Fuzzy threshold (falls back to global default). |
 | `excerpt_retry_attempts` | `int \| None` | `None` | Retry attempts (falls back to global default). |
 | `search_enabled` | `bool` | `False` | Enable search validation for this trait's excerpts. |
+
+---
+
+## Agentic Parsing
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `agentic_parsing` | `bool` | `False` | Enable agentic parsing (Stage 7b). The judge uses tools to independently verify artifacts before extracting structured data. Requires a parsing model with `agent_tier='deep_agent'`. |
+| `agentic_parsing_trigger` | `Literal["always", "dynamic"]` | `"always"` | When `agentic_parsing=True`, controls whether Stage 7b always runs the agentic investigation. `"always"` runs it unconditionally. `"dynamic"` first tries a final-message parse and escalates to agentic investigation only when the response is insufficient or malformed. `"dynamic"` requires `agentic_parsing=True`. |
+| `agentic_judge_context` | `Literal["workspace_only", "trace_and_workspace", "trace_only"]` | `"workspace_only"` | What context the investigation agent receives. `workspace_only`: question + workspace path. `trace_and_workspace`: answering agent trace + workspace path. `trace_only`: equivalent to classical Stage 7a parsing. |
+| `agentic_parsing_max_turns` | `int` | `15` | Max turns for the investigation agent. Must be >= 1. |
+| `agentic_parsing_timeout` | `float` | `120.0` | Timeout in seconds for the investigation agent. Must be >= 0.0. |
+| `agentic_parsing_materialize_trace` | `bool` | `False` | Write the answering agent trace to a file for Stage 7b's investigation agent. Used by the coding-task agentic parsing path. For scenario handover-level trace materialization, use the `transcript_materialize` handover strategy on `ScenarioEdge` instead. |
+| `agentic_parsing_persist_trace` | `bool` | `False` | When `True`, the materialized trace file is kept after extraction. When `False` (default), it is cleaned up in a finally block after the stage runs. Ignored when `agentic_parsing_materialize_trace=False`. |
+
+---
+
+## Workspace
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `workspace_copy` | `bool` | `True` | When `True`, pre-existing question workspaces are copied to a sibling working directory before execution, protecting the original for re-runs. When `False`, the pipeline works directly in the original directory (destructive). |
+| `workspace_cleanup` | `bool` | `True` | Whether to delete working copies after the run. Only applies to copied or auto-created workspaces, never to original source directories. |
+| `workspace_output_mode` | `Literal["none", "full", "produced"]` | `"none"` | Whether to capture runtime workspaces as sidecar artifacts. `"none"`: no capture. `"full"`: copy the complete final workspace. `"produced"`: copy only new or content-modified files relative to the prepared workspace baseline. |
+| `workspace_output_dir` | `Path \| None` | `None` | Directory where captured workspaces are written when `workspace_output_mode` is not `"none"`. |
+| `workspace_output_exclude_patterns` | `list[str]` | `[]` | Additional fnmatch-style exclude patterns applied during workspace capture. |
+
+The `workspace_root` directory is configured on `Benchmark`, not on `VerificationConfig`.
+
+---
+
+## Replay Store
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `replay_store` | `ReplayStore \| None` | `None` | Replay layer (see `karenina.replay`). When provided, the pipeline short-circuits to canned traces on matching keys and runs live otherwise. Excluded from serialization (can hold large captured traces). Loaded by the CLI from `--replay <path>`. |
+| `replay_parse_on_hydration_mismatch` | `Literal["fall_through", "strict"]` | `"fall_through"` | What to do when a replay key matches the answering call but downstream parse inputs differ from the captured run. `fall_through` falls back to live execution, `strict` raises an error. |
+| `skip_triples` | `frozenset[tuple[str, str, str, int \| None]] \| None` | `None` | Set of completed `(question_id, answering_canonical_key, parsing_canonical_key, replicate)` tuples that the executor must skip. Populated by the resume path (loaded from a `.state` file) and by [`extend_template`](../../notebooks/core_concepts/extending-runs.ipynb) so already-completed work is not re-run. Excluded from serialization and `repr`. |
+
+See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme, and [Extending Runs](../../notebooks/core_concepts/extending-runs.ipynb) for how `skip_triples` drives `extend_template` / `extend_rubric`.
+
+---
+
+## Retry and Error Handling
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `retry_policy` | `RetryPolicy` | `RetryPolicy()` | Per-category retry budgets for transient LLM errors. See [Error Handling](../../advanced-pipeline/error-handling.md) for the policy categories and how to compose custom policies. |
+| `custom_error_patterns` | `list[ErrorPatternConfig]` | `[]` | User-defined error patterns appended to the `ErrorRegistry`. Lets callers classify provider-specific or self-hosted error strings into the registry's transient/fatal/timeout categories. |
+| `max_requeue_count` | `int` | `5` | Maximum times a task can be requeued in the parallel executor's IN_PROGRESS cache loop before generating the answer fresh. Must be >= 1. |
+
+---
+
+## Scenario Execution
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `scenario_turn_limit` | `int` | `20` | Maximum turns before forced termination in scenario execution. Must be >= 1. |
 
 ---
 
@@ -229,8 +288,8 @@ config = VerificationConfig.from_overrides(
 | `abstention` | `abstention_enabled` | Enable abstention detection |
 | `sufficiency` | `sufficiency_enabled` | Enable sufficiency detection |
 | `embedding_check` | `embedding_check_enabled` | Enable embedding check |
-| `deep_judgment` | `deep_judgment_enabled` | Enable template deep judgment |
-| `evaluation_mode` | `evaluation_mode` + `rubric_enabled` | Sets both evaluation mode and rubric flag |
+| `deep_judgment_mode` | `deep_judgment_mode` | Template deep-judgment mode (`"disabled"`, `"reasoning_only"`, `"full"`) |
+| `evaluation_mode` | `evaluation_mode` | Sets the evaluation mode |
 | `embedding_threshold` | `embedding_check_threshold` | Embedding similarity threshold |
 | `embedding_model` | `embedding_check_model` | Embedding model name |
 | `async_execution` | `async_enabled` | Enable async execution |

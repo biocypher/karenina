@@ -72,20 +72,24 @@ async def _replaying_ainvoke(self, input, config=None, **kwargs):
     fixture = _fixtures_by_sequence.get(_call_counter)
     if fixture is None:
         return AIMessage(
-            content=[{
-                "type": "tool_use",
-                "id": f"fixture_{_call_counter}",
-                "name": "RubricEvaluationResult",
-                "input": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
-                "caller": {"type": "direct"},
-            }],
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": f"fixture_{_call_counter}",
+                    "name": "RubricEvaluationResult",
+                    "input": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
+                    "caller": {"type": "direct"},
+                }
+            ],
             id=f"fixture-{_call_counter}",
-            tool_calls=[{
-                "name": "RubricEvaluationResult",
-                "args": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
-                "id": f"fixture_{_call_counter}",
-                "type": "tool_call",
-            }],
+            tool_calls=[
+                {
+                    "name": "RubricEvaluationResult",
+                    "args": {"reasoning": "Fixture response", "abstention_detected": False, "score": True},
+                    "id": f"fixture_{_call_counter}",
+                    "type": "tool_call",
+                }
+            ],
             response_metadata={"model_name": "claude-haiku-4-5-20251001", "stop_reason": "tool_use"},
             usage_metadata={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
         )
@@ -107,7 +111,7 @@ from karenina.benchmark.task_eval import TaskEval as _TaskEval
 _original_add_template = _TaskEval.add_template
 
 
-_MULTISTEP_TEMPLATE_CODE = '''\
+_MULTISTEP_TEMPLATE_CODE = """\
 from karenina.schemas.entities import BaseAnswer
 from pydantic import Field
 
@@ -124,15 +128,20 @@ class Answer(BaseAnswer):
 
     def verify(self) -> bool:
         return self.identifies_bcl2 == self.correct["identifies_bcl2"]
-'''
+"""
+
 
 def _safe_add_template(self, template_class, step_id=None):
     try:
         _original_add_template(self, template_class, step_id=step_id)
     except (TypeError, OSError):
         self.add_question(
-            {"id": template_class.__name__.lower(), "question": "", "raw_answer": "",
-             "answer_template": _MULTISTEP_TEMPLATE_CODE},
+            {
+                "id": template_class.__name__.lower(),
+                "question": "",
+                "raw_answer": "",
+                "answer_template": _MULTISTEP_TEMPLATE_CODE,
+            },
             step_id=step_id,
         )
 
@@ -157,19 +166,44 @@ task = TaskEval(task_id="multi-step-demo")
 task.log("Found 3 relevant papers on venetoclax.", step_id="retrieval")
 task.log("BCL2 is the direct target of venetoclax.", step_id="synthesis")
 
-task.add_rubric(Rubric(llm_traits=[
-    LLMRubricTrait(name="source_quality", kind="boolean", higher_is_better=True,
-                   description="True if relevant sources were identified."),
-]), step_id="retrieval")
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="source_quality",
+                kind="boolean",
+                higher_is_better=True,
+                description="True if relevant sources were identified.",
+            ),
+        ]
+    ),
+    step_id="retrieval",
+)
 
-task.add_rubric(Rubric(llm_traits=[
-    LLMRubricTrait(name="accuracy", kind="boolean", higher_is_better=True,
-                   description="True if the synthesis is factually accurate."),
-]), step_id="synthesis")
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="accuracy",
+                kind="boolean",
+                higher_is_better=True,
+                description="True if the synthesis is factually accurate.",
+            ),
+        ]
+    ),
+    step_id="synthesis",
+)
 
 config = VerificationConfig(
-    parsing_models=[ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                                model_provider="anthropic", interface="langchain", temperature=0.0)],
+    parsing_models=[
+        ModelConfig(
+            id="haiku",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
+    ],
     parsing_only=True,
 )
 
@@ -264,18 +298,22 @@ Use `log_trace()` when you need to preserve conversation structure, tool calls, 
 ```python
 from karenina.ports.messages import Message, ToolUseContent
 
-task.log_trace([
-    Message.user("What is the approved pharmacological target of venetoclax?"),
-    Message.assistant("Let me search the drug database.", tool_calls=[
-        ToolUseContent(id="call_1", name="search_drugs", input={"query": "venetoclax target"})
-    ]),
-    Message.tool_result(tool_use_id="call_1", content="BCL2 (B-cell lymphoma 2); selective BH3 mimetic"),
-    Message.assistant(
-        "Based on the database search, the approved pharmacological target of "
-        "venetoclax is BCL2 (B-cell lymphoma 2). Venetoclax acts as a selective "
-        "BH3 mimetic that directly binds to the BCL2 protein."
-    ),
-], step_id="retrieval")
+task.log_trace(
+    [
+        Message.user("What is the approved pharmacological target of venetoclax?"),
+        Message.assistant(
+            "Let me search the drug database.",
+            tool_calls=[ToolUseContent(id="call_1", name="search_drugs", input={"query": "venetoclax target"})],
+        ),
+        Message.tool_result(tool_use_id="call_1", content="BCL2 (B-cell lymphoma 2); selective BH3 mimetic"),
+        Message.assistant(
+            "Based on the database search, the approved pharmacological target of "
+            "venetoclax is BCL2 (B-cell lymphoma 2). Venetoclax acts as a selective "
+            "BH3 mimetic that directly binds to the BCL2 protein."
+        ),
+    ],
+    step_id="retrieval",
+)
 
 print(f"Global logs after trace: {len(task.global_logs)}")
 ```
@@ -287,77 +325,86 @@ print(f"Global logs after trace: {len(task.global_logs)}")
 Pass `step_id` to `add_rubric()` to attach criteria to a specific step. Each step can have different traits, tuned to what that phase should accomplish.
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
 
 # Retrieval: did it find relevant sources?
-task.add_rubric(Rubric(
-    llm_traits=[
-        LLMRubricTrait(
-            name="source_relevance",
-            kind="boolean",
-            higher_is_better=True,
-            description=(
-                "True if the retrieved sources are directly relevant to the query about "
-                "venetoclax's pharmacological target. False if sources are tangential or unrelated."
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="source_relevance",
+                kind="boolean",
+                higher_is_better=True,
+                description=(
+                    "True if the retrieved sources are directly relevant to the query about "
+                    "venetoclax's pharmacological target. False if sources are tangential or unrelated."
+                ),
             ),
-        ),
-        LLMRubricTrait(
-            name="source_count",
-            kind="score",
-            min_score=1,
-            max_score=5,
-            higher_is_better=True,
-            description=(
-                "Rate the number and diversity of sources retrieved. "
-                "1: no sources or only one. 3: adequate coverage. 5: comprehensive multi-source retrieval."
+            LLMRubricTrait(
+                name="source_count",
+                kind="score",
+                min_score=1,
+                max_score=5,
+                higher_is_better=True,
+                description=(
+                    "Rate the number and diversity of sources retrieved. "
+                    "1: no sources or only one. 3: adequate coverage. 5: comprehensive multi-source retrieval."
+                ),
             ),
-        ),
-    ],
-), step_id="retrieval")
+        ],
+    ),
+    step_id="retrieval",
+)
 
 print("Added retrieval rubric (2 traits)")
 ```
 
 ```python
 # Reasoning: is the analysis sound?
-task.add_rubric(Rubric(
-    llm_traits=[
-        LLMRubricTrait(
-            name="reasoning_quality",
-            kind="boolean",
-            higher_is_better=True,
-            description=(
-                "True if the reasoning step correctly synthesizes information from "
-                "retrieved sources. False if it introduces unsupported claims or "
-                "ignores contradictory evidence."
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="reasoning_quality",
+                kind="boolean",
+                higher_is_better=True,
+                description=(
+                    "True if the reasoning step correctly synthesizes information from "
+                    "retrieved sources. False if it introduces unsupported claims or "
+                    "ignores contradictory evidence."
+                ),
             ),
-        ),
-    ],
-), step_id="reasoning")
+        ],
+    ),
+    step_id="reasoning",
+)
 
 print("Added reasoning rubric (1 trait)")
 ```
 
 ```python
 # Synthesis: is the final answer accurate and well-supported?
-task.add_rubric(Rubric(
-    llm_traits=[
-        LLMRubricTrait(
-            name="factual_accuracy",
-            kind="boolean",
-            higher_is_better=True,
-            description="True if the final answer is factually correct.",
-        ),
-    ],
-    regex_traits=[
-        RegexTrait(
-            name="has_citations",
-            pattern=r"\[.+?\d{4}\]|\(.+?\d{4}\)",
-            description="Response includes author-year citations.",
-            higher_is_better=True,
-        ),
-    ],
-), step_id="synthesis")
+task.add_rubric(
+    Rubric(
+        llm_traits=[
+            LLMRubricTrait(
+                name="factual_accuracy",
+                kind="boolean",
+                higher_is_better=True,
+                description="True if the final answer is factually correct.",
+            ),
+        ],
+        regex_traits=[
+            RegexRubricTrait(
+                name="has_citations",
+                pattern=r"\[.+?\d{4}\]|\(.+?\d{4}\)",
+                description="Response includes author-year citations.",
+                higher_is_better=True,
+            ),
+        ],
+    ),
+    step_id="synthesis",
+)
 
 print("Added synthesis rubric (1 LLM + 1 regex trait)")
 ```
@@ -420,8 +467,7 @@ for step_id in ["retrieval", "reasoning", "synthesis"]:
     step_result = task.evaluate(config, step_id=step_id)
     step_eval = step_result.per_step[step_id]
     stats = step_eval.get_summary_stats()
-    print(f"Step '{step_id}': "
-          f"{stats['rubric_traits_passed']}/{stats['rubric_traits_total']} rubric traits passed")
+    print(f"Step '{step_id}': {stats['rubric_traits_passed']}/{stats['rubric_traits_total']} rubric traits passed")
 ```
 
 ---
@@ -477,9 +523,12 @@ filtered_task.log("DEBUG: starting retrieval, timeout=30s", step_id="retrieval")
 filtered_task.log("DEBUG: 3 results returned in 1.2s", step_id="retrieval")
 
 # Structured trace: included in evaluation
-filtered_task.log_trace([
-    Message.assistant("Found 3 papers on venetoclax: Souers 2013, Roberts 2016, Anderson 2016."),
-], step_id="retrieval")
+filtered_task.log_trace(
+    [
+        Message.assistant("Found 3 papers on venetoclax: Souers 2013, Roberts 2016, Anderson 2016."),
+    ],
+    step_id="retrieval",
+)
 
 print(f"Total logs: {len(filtered_task.global_logs)}")
 print("With traces_only: only the Message trace reaches the judge")
@@ -512,4 +561,4 @@ _TaskEval.add_template = _original_add_template
 - [Quality Assessment](../../notebooks/task-eval/quality-assessment.ipynb): Rubric-only evaluation with all trait types
 - [TaskEval concept page](../../core_concepts/task-eval.md): Object structure, pipeline integration, merge strategies
 - [Rubrics](../../core_concepts/rubrics/index.md): All five trait types in depth
-- [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine that TaskEval feeds into
+- [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine (with sub-stages 7a/7b and 11a/11b) that TaskEval feeds into

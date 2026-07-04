@@ -26,6 +26,7 @@ def _build_exec_namespace() -> dict[str, Any]:
         AnyOf,
         AtLeastN,
         BooleanMatch,
+        ConditionalGroundTruth,
         ContainsAll,
         ContainsAny,
         DateMatch,
@@ -33,9 +34,15 @@ def _build_exec_namespace() -> dict[str, Any]:
         DateTolerance,
         ExactMatch,
         FieldCheck,
+        GroundTruthCase,
         LiteralMatch,
         NumericExact,
+        NumericGraded,
+        NumericMaximum,
+        NumericMinimum,
         NumericRange,
+        NumericRangeGraded,
+        NumericThresholdGraded,
         NumericTolerance,
         OrderedMatch,
         RegexMatch,
@@ -71,6 +78,11 @@ def _build_exec_namespace() -> dict[str, Any]:
         "SemanticMatch": SemanticMatch,
         "NumericExact": NumericExact,
         "NumericTolerance": NumericTolerance,
+        "NumericGraded": NumericGraded,
+        "NumericRangeGraded": NumericRangeGraded,
+        "NumericThresholdGraded": NumericThresholdGraded,
+        "NumericMinimum": NumericMinimum,
+        "NumericMaximum": NumericMaximum,
         "NumericRange": NumericRange,
         "SetContainment": SetContainment,
         "OrderedMatch": OrderedMatch,
@@ -88,6 +100,9 @@ def _build_exec_namespace() -> dict[str, Any]:
         "FieldCheck": FieldCheck,
         # Normalizers
         "SynonymMap": SynonymMap,
+        # Conditional ground truth
+        "ConditionalGroundTruth": ConditionalGroundTruth,
+        "GroundTruthCase": GroundTruthCase,
     }
 
 

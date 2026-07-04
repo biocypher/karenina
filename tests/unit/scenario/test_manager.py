@@ -113,6 +113,53 @@ class TestModelResolution:
         assert ans.model_name == "claude"
         assert parse.model_name == "claude"
 
+    def test_openai_endpoint_override_inherits_missing_api_key_for_same_endpoint(self):
+        q = _make_question()
+        base_ans = ModelConfig(
+            id="qwen",
+            model_name="qwen",
+            interface="openai_endpoint",
+            endpoint_base_url="http://vllm:8000",
+            endpoint_api_key="EMPTY",
+        )
+        override = ModelOverride(
+            answering_model=ModelConfig(
+                id="qwen",
+                model_name="qwen",
+                interface="openai_endpoint",
+                endpoint_base_url="http://vllm:8000",
+            ),
+        )
+        node = ScenarioNode(node_id="ask", question=q, model_override=override)
+
+        ans, _ = _resolve_models(node, base_ans, _make_model("parser"))
+
+        assert ans.endpoint_api_key is not None
+        assert ans.endpoint_api_key.get_secret_value() == "EMPTY"
+
+    def test_openai_endpoint_override_does_not_inherit_api_key_for_different_endpoint(self):
+        q = _make_question()
+        base_ans = ModelConfig(
+            id="qwen",
+            model_name="qwen",
+            interface="openai_endpoint",
+            endpoint_base_url="http://vllm-a:8000",
+            endpoint_api_key="EMPTY",
+        )
+        override = ModelOverride(
+            answering_model=ModelConfig(
+                id="qwen",
+                model_name="qwen",
+                interface="openai_endpoint",
+                endpoint_base_url="http://vllm-b:8000",
+            ),
+        )
+        node = ScenarioNode(node_id="ask", question=q, model_override=override)
+
+        ans, _ = _resolve_models(node, base_ans, _make_model("parser"))
+
+        assert ans.endpoint_api_key is None
+
 
 # ---------------------------------------------------------------------------
 # _evaluate_outcome_criteria
@@ -318,3 +365,294 @@ class TestReportProgress:
             True,
             None,
         )
+
+
+# ---------------------------------------------------------------------------
+# ScenarioManager._run_turn: per-question rubric stamping
+# ---------------------------------------------------------------------------
+
+
+def _make_pipeline_config_with_retry(
+    request_timeout: float = 600.0,
+    timeout_max_attempts: int = 5,
+):
+    """Build a VerificationConfig with non-default timeout and retry policy."""
+    from karenina.schemas.verification.config import VerificationConfig
+    from karenina.utils.retry_policy import (
+        CategoryRetryConfig,
+        RetryPolicy,
+        TimeoutEscalationConfig,
+    )
+
+    retry_policy = RetryPolicy(
+        timeout=CategoryRetryConfig(
+            max_attempts=timeout_max_attempts,
+            backoff_min=2.0,
+            backoff_max=20.0,
+        ),
+        timeout_escalation=TimeoutEscalationConfig(
+            strategy="additive",
+            increment=120.0,
+            max_timeout=1200.0,
+        ),
+    )
+    return VerificationConfig(
+        answering_models=[_make_model("base_ans")],
+        parsing_models=[_make_model("base_parse")],
+        request_timeout=request_timeout,
+        retry_policy=retry_policy,
+        evaluation_mode="template_and_rubric",
+    )
+
+
+def _make_deep_agent_override(model_id: str = "guard_agent"):
+    """Build a ModelConfig with claude_agent_sdk interface for AgenticRubricTrait.model_override."""
+    return ModelConfig(
+        id=model_id,
+        model_name=model_id,
+        model_provider="anthropic",
+        interface="claude_agent_sdk",
+    )
+
+
+@pytest.mark.unit
+class TestPerQuestionRubricAgenticStamping:
+    """Verify that per-question rubrics on scenario nodes get agentic trait stamping.
+
+    The benchmark facade stamps the global rubric before passing it to the
+    scenario executor, but per-question rubrics live on each Question and are
+    materialized by ScenarioManager._run_turn. They must also receive the same
+    pipeline-level retry_policy and request_timeout stamping for any
+    AgenticRubricTrait.model_override they carry.
+    """
+
+    def _build_node_with_question_rubric(self, override):
+        from karenina.schemas.entities import Question
+        from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+
+        agentic = AgenticRubricTrait(
+            name="investigate",
+            description="Investigate the trace",
+            kind="boolean",
+            higher_is_better=True,
+            model_override=override,
+        )
+        rubric = Rubric(agentic_traits=[agentic])
+        question = Question(
+            question="Is it safe?",
+            raw_answer="yes",
+            answer_template="class Answer: pass",
+            question_rubric=rubric.model_dump(),
+        )
+        return ScenarioNode(node_id="ask", question=question), rubric
+
+    def test_per_question_rubric_agentic_override_is_stamped(self, monkeypatch):
+        """A scenario node carrying a per-question rubric with an agentic
+        trait override receives stamping during _run_turn."""
+        from karenina.benchmark.verification.stages.core.base import VerificationContext
+        from karenina.benchmark.verification.stages.core.orchestrator import StageOrchestrator
+
+        config = _make_pipeline_config_with_retry(request_timeout=600.0, timeout_max_attempts=5)
+        override = _make_deep_agent_override()
+        node, _original_rubric = self._build_node_with_question_rubric(override)
+
+        captured: dict[str, object] = {}
+
+        def fake_execute(self, context: VerificationContext):
+            captured["context_rubric"] = context.rubric
+            from karenina.schemas.verification import VerificationResult, VerificationResultMetadata
+            from karenina.schemas.verification.model_identity import ModelIdentity
+
+            ans_id = ModelIdentity.from_model_config(context.answering_model, role="answering")
+            parse_id = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+            return VerificationResult(
+                metadata=VerificationResultMetadata(
+                    question_id=context.question_id,
+                    template_id=context.template_id,
+                    failure=None,
+                    caveats=[],
+                    question_text=context.question_text,
+                    answering=ans_id,
+                    parsing=parse_id,
+                    execution_time=0.0,
+                    timestamp="2026-01-01T00:00:00",
+                    result_id="test",
+                )
+            )
+
+        monkeypatch.setattr(StageOrchestrator, "execute", fake_execute)
+
+        manager = ScenarioManager()
+        manager._run_turn(
+            node=node,
+            conversation_history=[],
+            answering_model=_make_model("base_ans"),
+            parsing_model=_make_model("base_parse"),
+            config=config,
+            run_name=None,
+            global_rubric=None,
+        )
+
+        passed_rubric = captured["context_rubric"]
+        assert passed_rubric is not None
+        assert len(passed_rubric.agentic_traits) == 1
+        passed_override = passed_rubric.agentic_traits[0].model_override
+        assert passed_override is not None
+        # Stamping populated the unset fields from the pipeline config
+        assert passed_override.request_timeout == 600.0
+        assert passed_override.retry_policy is not None
+        assert passed_override.retry_policy.timeout.max_attempts == 5
+        assert passed_override.retry_policy.timeout_escalation is not None
+        assert passed_override.retry_policy.timeout_escalation.strategy == "additive"
+
+        # The original override on the rubric we built locally is unchanged
+        # (it was deep-copied through model_dump round-trip on the question,
+        # so we instead assert on the question_rubric dict identity).
+        assert override.request_timeout is None
+        assert override.retry_policy is None
+
+    def test_per_question_rubric_explicit_fields_preserved(self, monkeypatch):
+        """Explicit request_timeout / retry_policy on a per-question rubric
+        override are preserved (not overwritten by the pipeline config)."""
+        from karenina.benchmark.verification.stages.core.base import VerificationContext
+        from karenina.benchmark.verification.stages.core.orchestrator import StageOrchestrator
+        from karenina.schemas.entities import Question
+        from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+        from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
+
+        explicit_policy = RetryPolicy(
+            timeout=CategoryRetryConfig(max_attempts=9, backoff_min=1.0, backoff_max=2.0),
+        )
+        explicit_override = ModelConfig(
+            id="guard_agent",
+            model_name="guard_agent",
+            model_provider="anthropic",
+            interface="claude_agent_sdk",
+            request_timeout=42.0,
+            retry_policy=explicit_policy,
+        )
+        agentic = AgenticRubricTrait(
+            name="investigate",
+            description="Investigate the trace",
+            kind="boolean",
+            higher_is_better=True,
+            model_override=explicit_override,
+        )
+        rubric = Rubric(agentic_traits=[agentic])
+        question = Question(
+            question="Is it safe?",
+            raw_answer="yes",
+            answer_template="class Answer: pass",
+            question_rubric=rubric.model_dump(),
+        )
+        node = ScenarioNode(node_id="ask", question=question)
+
+        config = _make_pipeline_config_with_retry(request_timeout=600.0, timeout_max_attempts=5)
+
+        captured: dict[str, object] = {}
+
+        def fake_execute(self, context: VerificationContext):
+            captured["context_rubric"] = context.rubric
+            from karenina.schemas.verification import VerificationResult, VerificationResultMetadata
+            from karenina.schemas.verification.model_identity import ModelIdentity
+
+            ans_id = ModelIdentity.from_model_config(context.answering_model, role="answering")
+            parse_id = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+            return VerificationResult(
+                metadata=VerificationResultMetadata(
+                    question_id=context.question_id,
+                    template_id=context.template_id,
+                    failure=None,
+                    caveats=[],
+                    question_text=context.question_text,
+                    answering=ans_id,
+                    parsing=parse_id,
+                    execution_time=0.0,
+                    timestamp="2026-01-01T00:00:00",
+                    result_id="test",
+                )
+            )
+
+        monkeypatch.setattr(StageOrchestrator, "execute", fake_execute)
+
+        manager = ScenarioManager()
+        manager._run_turn(
+            node=node,
+            conversation_history=[],
+            answering_model=_make_model("base_ans"),
+            parsing_model=_make_model("base_parse"),
+            config=config,
+            run_name=None,
+            global_rubric=None,
+        )
+
+        passed_rubric = captured["context_rubric"]
+        assert passed_rubric is not None
+        passed_override = passed_rubric.agentic_traits[0].model_override
+        assert passed_override is not None
+        # Explicit values preserved
+        assert passed_override.request_timeout == 42.0
+        assert passed_override.retry_policy is not None
+        assert passed_override.retry_policy.timeout.max_attempts == 9
+        # Confirm not replaced by pipeline default
+        assert passed_override.retry_policy.timeout.max_attempts != 5
+
+    def test_global_rubric_used_when_no_per_question_rubric(self, monkeypatch):
+        """When the node has no per-question rubric, global_rubric is used as-is."""
+        from karenina.benchmark.verification.stages.core.base import VerificationContext
+        from karenina.benchmark.verification.stages.core.orchestrator import StageOrchestrator
+        from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
+
+        config = _make_pipeline_config_with_retry()
+        global_rubric = Rubric(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="quality",
+                    description="A quality trait",
+                    kind="boolean",
+                    higher_is_better=True,
+                )
+            ]
+        )
+
+        node = ScenarioNode(node_id="ask", question=_make_question())
+
+        captured: dict[str, object] = {}
+
+        def fake_execute(self, context: VerificationContext):
+            captured["context_rubric"] = context.rubric
+            from karenina.schemas.verification import VerificationResult, VerificationResultMetadata
+            from karenina.schemas.verification.model_identity import ModelIdentity
+
+            ans_id = ModelIdentity.from_model_config(context.answering_model, role="answering")
+            parse_id = ModelIdentity.from_model_config(context.parsing_model, role="parsing")
+            return VerificationResult(
+                metadata=VerificationResultMetadata(
+                    question_id=context.question_id,
+                    template_id=context.template_id,
+                    failure=None,
+                    caveats=[],
+                    question_text=context.question_text,
+                    answering=ans_id,
+                    parsing=parse_id,
+                    execution_time=0.0,
+                    timestamp="2026-01-01T00:00:00",
+                    result_id="test",
+                )
+            )
+
+        monkeypatch.setattr(StageOrchestrator, "execute", fake_execute)
+
+        manager = ScenarioManager()
+        manager._run_turn(
+            node=node,
+            conversation_history=[],
+            answering_model=_make_model("base_ans"),
+            parsing_model=_make_model("base_parse"),
+            config=config,
+            run_name=None,
+            global_rubric=global_rubric,
+        )
+
+        # global_rubric is passed through unchanged (identity)
+        assert captured["context_rubric"] is global_rubric

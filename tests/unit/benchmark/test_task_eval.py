@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from karenina.benchmark.task_eval import LogEvent, StepEval, TaskEval, TaskEvalResult
 from karenina.benchmark.task_eval.helpers import (
-    convert_string_logs_to_messages,
     merge_logs_and_traces,
 )
 from karenina.ports.messages import Message, Role, ToolUseContent
@@ -253,29 +252,6 @@ class TestAgentMetrics:
 # =============================================================================
 
 
-@pytest.mark.unit
-class TestHelpers:
-    """Tests for helper functions."""
-
-    def test_convert_string_logs_to_messages(self):
-        """convert_string_logs_to_messages wraps each text as assistant Message."""
-        messages = convert_string_logs_to_messages(["hello", "world"])
-        assert len(messages) == 2
-        assert all(m.role == Role.ASSISTANT for m in messages)
-        assert messages[0].text == "hello"
-        assert messages[1].text == "world"
-
-    def test_convert_string_logs_skips_empty(self):
-        """convert_string_logs_to_messages skips empty strings."""
-        messages = convert_string_logs_to_messages(["hello", "", "world"])
-        assert len(messages) == 2
-
-    def test_convert_string_logs_empty_input(self):
-        """convert_string_logs_to_messages returns empty list for empty input."""
-        messages = convert_string_logs_to_messages([])
-        assert messages == []
-
-
 # =============================================================================
 # Evaluation Loop Tests (mock run_single_model_verification)
 # =============================================================================
@@ -294,7 +270,8 @@ class TestEvaluationLoop:
         metadata = VerificationResultMetadata(
             question_id="test_q",
             template_id="test_t",
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text="test question",
             answering=ModelIdentity(interface="mock", model_name="mock"),
             parsing=ModelIdentity(interface="mock", model_name="mock"),
@@ -341,7 +318,7 @@ class TestEvaluationLoop:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -409,7 +386,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -462,7 +439,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -491,7 +468,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -551,7 +528,7 @@ class Answer(BaseAnswer):
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test_parser",
+                    id="mock",
                     model_provider="mock",
                     model_name="mock",
                     interface="langchain",
@@ -566,6 +543,361 @@ class Answer(BaseAnswer):
         assert agent_metrics is not None
         assert agent_metrics["iterations"] == 2
         assert agent_metrics["tool_calls"] == 1
+
+
+# =============================================================================
+# Agentic Trait Plumbing Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAgenticTraitPlumbing:
+    """Tests that agentic rubric traits are fully plumbed through TaskEval."""
+
+    def _make_mock_verification_result(self):
+        """Create a mock VerificationResult for testing."""
+        from karenina.schemas.verification import VerificationResult
+        from karenina.schemas.verification.model_identity import ModelIdentity
+        from karenina.schemas.verification.result_components import VerificationResultMetadata
+
+        metadata = VerificationResultMetadata(
+            question_id="test_q",
+            template_id="test_t",
+            failure=None,
+            caveats=[],
+            question_text="test question",
+            answering=ModelIdentity(interface="mock", model_name="mock"),
+            parsing=ModelIdentity(interface="mock", model_name="mock"),
+            execution_time=0.1,
+            timestamp="2026-01-01T00:00:00",
+            result_id="abcd1234abcd1234",
+        )
+        return VerificationResult(metadata=metadata)
+
+    def test_detect_evaluation_mode_agentic_only(self):
+        """Rubric with only agentic_traits is detected as rubric mode."""
+        from karenina.benchmark.task_eval.task_eval import EvaluationContext
+        from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+
+        rubric = Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="lib_check",
+                    description="Check which library was used",
+                    kind="boolean",
+                    higher_is_better=True,
+                ),
+            ],
+        )
+        context = EvaluationContext(
+            questions=[],
+            logs=[LogEvent(level="info", text="output")],
+            merged_rubric=rubric,
+        )
+
+        task = TaskEval()
+        mode = task._detect_evaluation_mode(context)
+        assert mode == "rubric_only"
+
+    def test_merge_rubrics_preserves_agentic_traits(self):
+        """Merging rubrics preserves agentic_traits."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait, LLMRubricTrait, Rubric
+
+        rubric1 = Rubric(
+            llm_traits=[
+                LLMRubricTrait(name="clarity", description="Is it clear?", kind="boolean"),
+            ],
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="lib_check",
+                    description="Check library",
+                    kind="boolean",
+                    higher_is_better=True,
+                ),
+            ],
+        )
+        rubric2 = Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="tool_usage",
+                    description="Check tool usage",
+                    kind="boolean",
+                    higher_is_better=True,
+                ),
+            ],
+        )
+
+        task = TaskEval()
+        merged = task._merge_rubrics([rubric1, rubric2])
+
+        assert merged is not None
+        assert len(merged.agentic_traits) == 2
+        agentic_names = {t.name for t in merged.agentic_traits}
+        assert agentic_names == {"lib_check", "tool_usage"}
+
+    def test_merge_rubrics_detects_duplicate_agentic_names(self):
+        """Merging rubrics with duplicate agentic trait names raises ValueError."""
+        from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+
+        rubric1 = Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="same_name",
+                    description="First",
+                    kind="boolean",
+                    higher_is_better=True,
+                ),
+            ],
+        )
+        rubric2 = Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="same_name",
+                    description="Second",
+                    kind="boolean",
+                    higher_is_better=True,
+                ),
+            ],
+        )
+
+        task = TaskEval()
+        with pytest.raises(ValueError, match="Duplicate rubric trait names"):
+            task._merge_rubrics([rubric1, rubric2])
+
+    def test_detect_evaluation_mode_template_and_agentic(self):
+        """Template + agentic-only rubric detects as template_and_rubric."""
+        from karenina.benchmark.task_eval.task_eval import EvaluationContext
+        from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+
+        rubric = Rubric(
+            agentic_traits=[
+                AgenticRubricTrait(
+                    name="lib_check",
+                    description="Check library",
+                    kind="boolean",
+                    higher_is_better=True,
+                ),
+            ],
+        )
+
+        template_code = """
+from karenina.schemas.entities import BaseAnswer
+from pydantic import Field
+
+class Answer(BaseAnswer):
+    value: int = Field(description="The answer")
+    def verify(self) -> bool:
+        return self.value == 4
+"""
+        context = EvaluationContext(
+            questions=[{"id": "q1", "question": "test", "answer_template": template_code}],
+            logs=[LogEvent(level="info", text="output")],
+            merged_rubric=rubric,
+        )
+
+        task = TaskEval()
+        mode = task._detect_evaluation_mode(context)
+        assert mode == "template_and_rubric"
+
+
+# =============================================================================
+# Dynamic Rubric Plumbing Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestDynamicRubricPlumbing:
+    """Tests that DynamicRubric is fully plumbed through TaskEval."""
+
+    def _make_mock_verification_result(self):
+        """Create a mock VerificationResult for testing."""
+        from karenina.schemas.verification import VerificationResult
+        from karenina.schemas.verification.model_identity import ModelIdentity
+        from karenina.schemas.verification.result_components import VerificationResultMetadata
+
+        metadata = VerificationResultMetadata(
+            question_id="test_q",
+            template_id="test_t",
+            failure=None,
+            caveats=[],
+            question_text="test question",
+            answering=ModelIdentity(interface="mock", model_name="mock"),
+            parsing=ModelIdentity(interface="mock", model_name="mock"),
+            execution_time=0.1,
+            timestamp="2026-01-01T00:00:00",
+            result_id="abcd1234abcd1234",
+        )
+        return VerificationResult(metadata=metadata)
+
+    def test_add_dynamic_rubric_global(self):
+        """add_dynamic_rubric stores in global_dynamic_rubrics."""
+        from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+        task = TaskEval()
+        dr = DynamicRubric(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="safety",
+                    summary="safety check",
+                    description="Is the response safe?",
+                    kind="boolean",
+                ),
+            ],
+        )
+        task.add_dynamic_rubric(dr)
+        assert len(task.global_dynamic_rubrics) == 1
+
+    def test_add_dynamic_rubric_step(self):
+        """add_dynamic_rubric with step_id stores in step_dynamic_rubrics."""
+        from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+        task = TaskEval()
+        dr = DynamicRubric(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="safety",
+                    summary="safety check",
+                    description="Is the response safe?",
+                    kind="boolean",
+                ),
+            ],
+        )
+        task.add_dynamic_rubric(dr, step_id="s1")
+        assert "s1" in task.step_dynamic_rubrics
+        assert len(task.step_dynamic_rubrics["s1"]) == 1
+
+    def test_dynamic_rubric_passed_to_runner(self, monkeypatch):
+        """DynamicRubric is passed through to run_single_model_verification."""
+        from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+        mock_result = self._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.verification import VerificationConfig
+
+        task = TaskEval(task_id="test")
+        task.log("Some response about drug interactions")
+        task.add_rubric(
+            __import__("karenina.schemas.entities.rubric", fromlist=["Rubric"]).Rubric(
+                llm_traits=[
+                    LLMRubricTrait(
+                        name="quality",
+                        description="Is it good?",
+                        kind="boolean",
+                    ),
+                ],
+            )
+        )
+        task.add_dynamic_rubric(
+            DynamicRubric(
+                llm_traits=[
+                    LLMRubricTrait(
+                        name="interaction_safety",
+                        summary="drug interaction warnings",
+                        description="Answer True if drug interaction warnings present.",
+                        kind="boolean",
+                    ),
+                ],
+            )
+        )
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        task.evaluate(config)
+        assert len(call_kwargs) == 1
+        assert call_kwargs[0]["dynamic_rubric"] is not None
+        assert len(call_kwargs[0]["dynamic_rubric"].llm_traits) == 1
+        assert call_kwargs[0]["dynamic_rubric"].llm_traits[0].name == "interaction_safety"
+
+    def test_dynamic_rubric_triggers_rubric_mode(self):
+        """DynamicRubric alone (no static rubric) triggers rubric evaluation mode."""
+        from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+        task = TaskEval()
+        dr = DynamicRubric(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="safety",
+                    summary="safety check",
+                    description="Is it safe?",
+                    kind="boolean",
+                ),
+            ],
+        )
+        task.add_dynamic_rubric(dr)
+
+        context = task._get_evaluation_context(step_id=None)
+        mode = task._detect_evaluation_mode(context)
+        assert mode == "rubric_only"
+
+
+# =============================================================================
+# Question Normalization Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestQuestionNormalization:
+    """Tests that _normalize_question extracts all relevant fields from Question objects."""
+
+    def test_extracts_question_rubric(self):
+        """_normalize_question extracts question_rubric from Question objects."""
+        from karenina.schemas.entities import Question
+
+        q = Question(
+            question="What is BCL2?",
+            raw_answer="BCL2 is a protein.",
+            question_rubric={"llm_traits": [{"name": "tone", "description": "Formal?", "kind": "boolean"}]},
+        )
+
+        task = TaskEval()
+        normalized = task._normalize_question(q)
+        assert "question_rubric" in normalized
+        assert normalized["question_rubric"] is not None
+
+    def test_extracts_question_dynamic_rubric(self):
+        """_normalize_question extracts question_dynamic_rubric from Question objects."""
+        from karenina.schemas.entities import Question
+
+        q = Question(
+            question="What is BCL2?",
+            raw_answer="BCL2 is a protein.",
+            question_dynamic_rubric={
+                "llm_traits": [
+                    {
+                        "name": "interaction_safety",
+                        "summary": "drug interactions",
+                        "description": "Mentions interactions?",
+                        "kind": "boolean",
+                    }
+                ]
+            },
+        )
+
+        task = TaskEval()
+        normalized = task._normalize_question(q)
+        assert "question_dynamic_rubric" in normalized
+        assert normalized["question_dynamic_rubric"] is not None
 
 
 # =============================================================================

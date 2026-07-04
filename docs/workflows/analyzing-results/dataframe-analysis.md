@@ -1,10 +1,12 @@
 ---
 jupyter:
   jupytext:
+    formats: docs/workflows/analyzing-results//md,docs/notebooks/analyzing-results//ipynb
     text_representation:
       extension: .md
       format_name: markdown
       format_version: '1.3'
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -39,19 +41,32 @@ _ts = datetime.datetime.now(tz=datetime.UTC).isoformat()
 
 
 def _make_result(
-    qid, question_text, answering, verified, response,
-    rubric_scores=None, regex_scores=None, callable_scores=None,
-    parsed_gt=None, parsed_llm=None, replicate=None,
+    qid,
+    question_text,
+    answering,
+    verified,
+    response,
+    rubric_scores=None,
+    regex_scores=None,
+    callable_scores=None,
+    parsed_gt=None,
+    parsed_llm=None,
+    replicate=None,
 ):
-    rid = VerificationResultMetadata.compute_result_id(
-        qid, answering, _parsing, _ts, replicate
-    )
+    rid = VerificationResultMetadata.compute_result_id(qid, answering, _parsing, _ts, replicate)
+    _gt = parsed_gt or {"answer": response}
+    _llm = parsed_llm or {"answer": response}
+    # Per-field graded score. Non-graded primitives (used here) record exactly
+    # 1.0 on a match and 0.0 on a miss, mirroring the binary field_match. The
+    # graded numeric primitives instead record fractional partial credit.
+    field_scores = {name: (1.0 if _gt.get(name) == _llm.get(name) else 0.0) for name in _llm}
     template = VerificationResultTemplate(
         raw_llm_response=response,
         verify_result=verified,
         template_verification_performed=True,
-        parsed_gt_response=parsed_gt or {"answer": response},
-        parsed_llm_response=parsed_llm or {"answer": response},
+        parsed_gt_response=_gt,
+        parsed_llm_response=_llm,
+        field_scores=field_scores,
     )
     rubric = None
     if rubric_scores or regex_scores or callable_scores:
@@ -65,7 +80,8 @@ def _make_result(
         metadata=VerificationResultMetadata(
             question_id=qid,
             template_id="tmpl_" + qid[:8],
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text=question_text,
             answering=answering,
             parsing=_parsing,
@@ -82,27 +98,69 @@ def _make_result(
 # Create results for two models across 3 questions
 _mock_results = [
     # Claude Haiku results
-    _make_result("q1", "What is the capital of France?", _answering_haiku, True, "Paris",
-                 rubric_scores={"clarity": 4, "conciseness": True},
-                 regex_scores={"no_hedging": True},
-                 parsed_gt={"capital": "Paris"}, parsed_llm={"capital": "Paris"}),
-    _make_result("q2", "What is 6 multiplied by 7?", _answering_haiku, True, "42",
-                 rubric_scores={"clarity": 5, "conciseness": True},
-                 parsed_gt={"result": "42"}, parsed_llm={"result": "42"}),
-    _make_result("q3", "What element has atomic number 8?", _answering_haiku, False, "Nitrogen",
-                 rubric_scores={"clarity": 3, "conciseness": False},
-                 parsed_gt={"element": "Oxygen"}, parsed_llm={"element": "Nitrogen"}),
+    _make_result(
+        "q1",
+        "What is the capital of France?",
+        _answering_haiku,
+        True,
+        "Paris",
+        rubric_scores={"clarity": 4, "conciseness": True},
+        regex_scores={"no_hedging": True},
+        parsed_gt={"capital": "Paris"},
+        parsed_llm={"capital": "Paris"},
+    ),
+    _make_result(
+        "q2",
+        "What is 6 multiplied by 7?",
+        _answering_haiku,
+        True,
+        "42",
+        rubric_scores={"clarity": 5, "conciseness": True},
+        parsed_gt={"result": "42"},
+        parsed_llm={"result": "42"},
+    ),
+    _make_result(
+        "q3",
+        "What element has atomic number 8?",
+        _answering_haiku,
+        False,
+        "Nitrogen",
+        rubric_scores={"clarity": 3, "conciseness": False},
+        parsed_gt={"element": "Oxygen"},
+        parsed_llm={"element": "Nitrogen"},
+    ),
     # Claude Sonnet results
-    _make_result("q1", "What is the capital of France?", _answering_sonnet, True, "Paris",
-                 rubric_scores={"clarity": 5, "conciseness": True},
-                 regex_scores={"no_hedging": True},
-                 parsed_gt={"capital": "Paris"}, parsed_llm={"capital": "Paris"}),
-    _make_result("q2", "What is 6 multiplied by 7?", _answering_sonnet, True, "42",
-                 rubric_scores={"clarity": 5, "conciseness": True},
-                 parsed_gt={"result": "42"}, parsed_llm={"result": "42"}),
-    _make_result("q3", "What element has atomic number 8?", _answering_sonnet, True, "Oxygen",
-                 rubric_scores={"clarity": 4, "conciseness": True},
-                 parsed_gt={"element": "Oxygen"}, parsed_llm={"element": "Oxygen"}),
+    _make_result(
+        "q1",
+        "What is the capital of France?",
+        _answering_sonnet,
+        True,
+        "Paris",
+        rubric_scores={"clarity": 5, "conciseness": True},
+        regex_scores={"no_hedging": True},
+        parsed_gt={"capital": "Paris"},
+        parsed_llm={"capital": "Paris"},
+    ),
+    _make_result(
+        "q2",
+        "What is 6 multiplied by 7?",
+        _answering_sonnet,
+        True,
+        "42",
+        rubric_scores={"clarity": 5, "conciseness": True},
+        parsed_gt={"result": "42"},
+        parsed_llm={"result": "42"},
+    ),
+    _make_result(
+        "q3",
+        "What element has atomic number 8?",
+        _answering_sonnet,
+        True,
+        "Oxygen",
+        rubric_scores={"clarity": 4, "conciseness": True},
+        parsed_gt={"element": "Oxygen"},
+        parsed_llm={"element": "Oxygen"},
+    ),
 ]
 
 results = VerificationResultSet(results=_mock_results)
@@ -158,8 +216,14 @@ df = template_results.to_dataframe()
 
 # Key columns for field-level analysis
 print("Field comparison columns:")
-print(df[["question_id", "answering_model", "field_name", "gt_value", "llm_value", "field_match"]].to_string(index=False))
+print(
+    df[
+        ["question_id", "answering_model", "field_name", "gt_value", "llm_value", "field_match", "field_score"]
+    ].to_string(index=False)
+)
 ```
+
+The `field_score` column is the continuous companion to the binary `field_match`. For every non-graded primitive it is exactly `1.0` (pass) or `0.0` (fail), so it mirrors `field_match` exactly. The graded numeric primitives ([`NumericGraded`](../../core_concepts/verification-primitives.md#numericgraded), [`NumericRangeGraded`](../../core_concepts/verification-primitives.md#numericrangegraded), and [`NumericThresholdGraded`](../../core_concepts/verification-primitives.md#numericthresholdgraded)) instead record fractional partial credit in `[0, 1]` for near-misses, which is how a `field_match` of `False` can sit next to a positive `field_score`. The column is `None` for results saved without per-field scores (for example legacy runs that predate `field_scores`).
 
 ### Pass Rate by Model
 
@@ -208,6 +272,30 @@ print(f"Pass rate: {summary['pass_rate']:.0%}")
 print(f"Unique questions: {summary['num_questions']}")
 ```
 
+## Unified Failure and Caveat Columns
+
+Every Template, Rubric, and Judgment DataFrame includes six columns that summarize the run's [Failure and Caveats](../../reference/api/failure-and-caveats.md) verdict. They appear on every row, populated from `result.metadata.failure` and `result.metadata.caveats`.
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `success` | `bool` | `True` when `metadata.failure is None`, otherwise `False` |
+| `failure_category` | `str | None` | The leaf [`FailureCategory`](../../reference/api/failure-and-caveats.md#3-failurecategory-14-leaf-values) string value (e.g. `"content"`, `"rate_limit"`); `None` on success |
+| `failure_group` | `str | None` | The aggregation [`FailureGroup`](../../reference/api/failure-and-caveats.md#4-failuregroup-5-aggregation-buckets) string value (one of `content`, `autofail`, `retry`, `abstained`, `system`); `None` on success |
+| `failure_stage` | `str | None` | The pipeline stage that originated the failure (e.g. `"verify_template"`, `"parse_template"`); `None` on success |
+| `failure_reason` | `str | None` | Trimmed reason string capped at 500 characters; `None` on success |
+| `caveats` | `str` | Comma-joined list of [`Caveat`](../../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) string values; empty string when no caveats fired |
+
+```python
+template_df = results.get_template_results().to_dataframe()
+print(
+    template_df[["question_id", "answering_model", "success", "failure_category", "failure_group", "caveats"]]
+    .head()
+    .to_string(index=False)
+)
+```
+
+The `failure_*` values use the enum string forms (e.g. `failure_group == "retry"`, not `"retry_exhausted"`). For the full taxonomy and the classifier priority that decides which category fires, see the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
+
 ## Rubric DataFrames
 
 `RubricResults` converts rubric evaluation scores to DataFrames, with one row
@@ -250,9 +338,7 @@ if len(df_scores) > 0:
 
 ```python
 # Average LLM trait scores by model
-avg_by_model = rubric_results.aggregate_llm_traits(
-    strategy="mean", by="answering_model"
-)
+avg_by_model = rubric_results.aggregate_llm_traits(strategy="mean", by="answering_model")
 print("Average LLM trait scores by model:")
 for model, traits in avg_by_model.items():
     print(f"  {model}:")
@@ -298,6 +384,39 @@ df = rubric_with_dj.to_dataframe()
 print(f"Rubric DataFrame columns: {len(df.columns)}")
 ```
 
+## Dynamic Rubric Columns
+
+When a [DynamicRubric](../../core_concepts/rubrics/index.md#6-dynamic-rubric) is used, the rubric DataFrame includes additional `{trait_name}_skipped` boolean columns. These columns indicate whether each dynamic trait was skipped (`True`) or promoted and evaluated (`False`) for a given result. If a result did not involve a dynamic rubric, the column value is `NaN`.
+
+```python
+rubric_results = results.get_rubrics_results()
+df = rubric_results.to_dataframe()
+
+# Check for _skipped columns
+skipped_cols = [c for c in df.columns if c.endswith("_skipped")]
+if skipped_cols:
+    print("Dynamic rubric skip columns:", skipped_cols)
+    print(df[["question_id", "trait_name"] + skipped_cols].head())
+```
+
+The underlying `VerificationResultRubric` stores two fields for dynamic rubric metadata:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dynamic_rubric_skipped_traits` | `dict[str, str]` or `None` | Mapping of skipped trait names to skip reasons (e.g., `"concept not present in response"` or `"excluded by rubric_trait_names filter"`) |
+| `dynamic_rubric_promoted_traits` | `list[str]` or `None` | Names of traits that passed the presence check and were evaluated |
+
+Access these fields directly on a result:
+
+```python
+for result in results:
+    if result.rubric and result.rubric.dynamic_rubric_skipped_traits:
+        for trait, reason in result.rubric.dynamic_rubric_skipped_traits.items():
+            print(f"  Skipped {trait}: {reason}")
+    if result.rubric and result.rubric.dynamic_rubric_promoted_traits:
+        print(f"  Evaluated: {result.rubric.dynamic_rubric_promoted_traits}")
+```
+
 ## Common Analysis Patterns
 
 ### Model Comparison
@@ -307,11 +426,7 @@ Compare template pass rates and rubric scores across models using pandas:
 ```python
 # Template pass rates by model
 template_df = results.get_template_results().to_dataframe()
-model_pass = (
-    template_df.drop_duplicates(subset=["result_index"])
-    .groupby("answering_model")["verify_result"]
-    .mean()
-)
+model_pass = template_df.drop_duplicates(subset=["result_index"]).groupby("answering_model")["verify_result"].mean()
 print("Template pass rate by model:")
 print(model_pass.to_string())
 ```

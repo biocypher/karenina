@@ -7,7 +7,15 @@ import logging
 import shutil
 from typing import Any
 
+from karenina.benchmark.verification.failure_classifier import (
+    classify_failure,
+    collect_caveats,
+)
 from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
+from karenina.benchmark.verification.workspace_capture import (
+    DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
+    capture_workspace,
+)
 from karenina.schemas.verification import VerificationResult
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -91,16 +99,55 @@ class FinalizeResultStage(BaseVerificationStage):
         # Extract parsed responses if available
         parsed_gt_response = None
         parsed_llm_response = None
+        field_results_dict = None
+        field_scores_dict = None
+        composition_strategy_str = None
         parsed_answer = context.get_artifact(ArtifactKeys.PARSED_ANSWER)
         if parsed_answer is not None:
             try:
                 parsed_gt_response, parsed_llm_response = _split_parsed_response(parsed_answer)
             except Exception as e:
-                logger.warning(f"Failed to split parsed response: {e}")
+                logger.warning("Failed to split parsed response: %s", e)
+
+            # Compute per-field primitive verification results (issue 150)
+            if hasattr(parsed_answer, "_compute_field_results"):
+                try:
+                    computed = parsed_answer._compute_field_results()
+                    if computed:
+                        field_results_dict = computed
+                    # Per-field graded scores (companion to field_results). For
+                    # non-graded primitives these are 1.0/0.0; NumericGraded
+                    # contributes partial credit. Computed in the same pass.
+                    if hasattr(parsed_answer, "_compute_field_scores"):
+                        computed_scores = parsed_answer._compute_field_scores()
+                        if computed_scores:
+                            field_scores_dict = computed_scores
+                    # Merge resolved ground truths (including conditional) into
+                    # parsed_gt_response so downstream consumers see all fields
+                    resolved_gts = parsed_answer._get_resolved_ground_truths()
+                    if resolved_gts and parsed_gt_response is not None:
+                        parsed_gt_response.update(resolved_gts)
+                    elif resolved_gts and parsed_gt_response is None:
+                        parsed_gt_response = dict(resolved_gts)
+                except Exception as e:
+                    logger.warning("Failed to compute field results: %s", e)
+
+            # Extract composition strategy from template class (issue 151)
+            strategy_cls = getattr(parsed_answer.__class__, "VerificationStrategy", None)
+            if strategy_cls is not None:
+                strategy = getattr(strategy_cls, "verify_strategy", None)
+                if strategy is not None:
+                    composition_strategy_str = self._format_strategy(strategy)
 
         # Determine which verification types were performed
-        # Template verification was performed if VerifyTemplateStage ran and set field_verification_result
+        # Template verification was performed if VerifyTemplateStage ran and set field_verification_result.
+        # This is the single derivation site for TEMPLATE_VERIFICATION_PERFORMED; the result field
+        # is written so the failure classifier (classify_failure) can read it via get_result_field.
         template_verification_performed = context.get_artifact(ArtifactKeys.FIELD_VERIFICATION_RESULT) is not None
+        context.set_result_field(
+            ArtifactKeys.TEMPLATE_VERIFICATION_PERFORMED,
+            template_verification_performed,
+        )
 
         # Rubric evaluation was performed if RubricEvaluationStage ran and set verify_rubric
         rubric_evaluation_performed = context.get_result_field(ArtifactKeys.VERIFY_RUBRIC) is not None
@@ -145,14 +192,28 @@ class FinalizeResultStage(BaseVerificationStage):
             parsing=parsing_identity,
             timestamp=timestamp,
             replicate=context.replicate,
+            scenario_id=context.scenario_id,
+            scenario_node=context.scenario_node,
+            scenario_turn=context.scenario_turn,
         )
 
-        # Create metadata subclass
+        # Read retry counts captured by the orchestrator's track_retries() block.
+        # Shape: {category: {"used": int, "budget": int}} or None when retry
+        # tracking was not active for this run (e.g. legacy code paths that
+        # bypass the orchestrator).
+        retry_counts = context.get_artifact(ArtifactKeys.RETRY_COUNTS)
+
+        # Create metadata subclass.
+        # Failure / caveat attribution is delegated to the central classifier
+        # so the pipeline has a single source of truth for how a finalized
+        # context maps to a Failure or list of Caveats.
         metadata = VerificationResultMetadata(
             question_id=context.question_id,
             template_id=context.template_id,
-            completed_without_errors=context.completed_without_errors,
-            error=context.error,
+            failure=classify_failure(context),
+            caveats=collect_caveats(context),
+            warnings=list(context.warnings),
+            retry_counts=retry_counts,
             keywords=context.keywords,
             question_text=context.question_text,
             raw_answer=context.raw_answer,
@@ -165,6 +226,13 @@ class FinalizeResultStage(BaseVerificationStage):
             result_id=result_id,
             run_name=context.run_name,
             replicate=context.replicate,
+            few_shot_enabled=context.few_shot_enabled,
+            few_shot_example_count=len(context.few_shot_examples) if context.few_shot_examples else 0,
+            evaluation_mode=context.get_result_field(ArtifactKeys.EVALUATION_MODE),
+            scenario_id=context.scenario_id,
+            scenario_node=context.scenario_node,
+            scenario_turn=context.scenario_turn,
+            scenario_path=context.scenario_path,
         )
 
         # Build structured trace_messages for storage
@@ -176,6 +244,15 @@ class FinalizeResultStage(BaseVerificationStage):
                 d = msg.to_dict()
                 d["block_index"] = block_index
                 trace_messages_dicts.append(d)
+
+        # Build conversation_context (full LLM input: system + prior turns + current question)
+        conversation_context_dicts: list[dict[str, Any]] = []
+        conversation_context_raw = context.get_artifact(ArtifactKeys.CONVERSATION_CONTEXT)
+        if conversation_context_raw:
+            for block_index, msg in enumerate(conversation_context_raw):
+                d = msg.to_dict()
+                d["block_index"] = block_index
+                conversation_context_dicts.append(d)
 
         # Compute raw_llm_response from trace_messages if available,
         # otherwise fall back to the string stored by generate_answer
@@ -191,11 +268,16 @@ class FinalizeResultStage(BaseVerificationStage):
         template = VerificationResultTemplate(
             raw_llm_response=raw_llm_response,
             trace_messages=trace_messages_dicts,
+            conversation_context=conversation_context_dicts,
             parsed_gt_response=parsed_gt_response,
             parsed_llm_response=parsed_llm_response,
             template_verification_performed=template_verification_performed,
             verify_result=context.get_result_field(ArtifactKeys.VERIFY_RESULT),
             verify_granular_result=context.get_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT),
+            field_verification_error=context.get_result_field(ArtifactKeys.FIELD_VERIFICATION_ERROR),
+            field_results=field_results_dict,
+            field_scores=field_scores_dict,
+            composition_strategy=composition_strategy_str,
             embedding_check_performed=context.get_result_field(ArtifactKeys.EMBEDDING_CHECK_PERFORMED, False),
             embedding_similarity_score=context.get_result_field(ArtifactKeys.EMBEDDING_SIMILARITY_SCORE),
             embedding_override_applied=context.get_result_field(ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED, False),
@@ -206,9 +288,16 @@ class FinalizeResultStage(BaseVerificationStage):
             regex_overall_success=context.get_result_field(ArtifactKeys.REGEX_OVERALL_SUCCESS),
             regex_extraction_results=context.get_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS),
             recursion_limit_reached=context.get_result_field(ArtifactKeys.RECURSION_LIMIT_REACHED, False),
+            response_timeout_partial=context.get_result_field(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False),
+            usage_unavailable=context.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE, False),
             # Agentic parsing
             investigation_trace=context.get_result_field(ArtifactKeys.INVESTIGATION_TRACE),
             agentic_parsing_performed=context.get_result_field(ArtifactKeys.AGENTIC_PARSING_PERFORMED, False),
+            agentic_extraction_recovery=context.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_RECOVERY),
+            agentic_extraction_error=context.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_ERROR),
+            dynamic_parsing_performed=context.get_result_field(ArtifactKeys.DYNAMIC_PARSING_PERFORMED, False),
+            dynamic_parse_decision=context.get_result_field(ArtifactKeys.DYNAMIC_PARSE_DECISION),
+            dynamic_decision_reasoning=context.get_result_field(ArtifactKeys.DYNAMIC_DECISION_REASONING),
             abstention_check_performed=context.get_result_field(ArtifactKeys.ABSTENTION_CHECK_PERFORMED, False),
             abstention_detected=context.get_result_field(ArtifactKeys.ABSTENTION_DETECTED),
             abstention_override_applied=context.get_result_field(ArtifactKeys.ABSTENTION_OVERRIDE_APPLIED, False),
@@ -233,9 +322,9 @@ class FinalizeResultStage(BaseVerificationStage):
             # Note: evaluation_rubric is no longer stored per-result, it goes in shared_data at export
             evaluation_rubric = context.rubric
 
-            llm_trait_scores: dict[str, int] | None = None
+            llm_trait_scores: dict[str, Any] | None = None
             regex_trait_scores: dict[str, bool] | None = None
-            callable_trait_scores: dict[str, bool | int] | None = None
+            callable_trait_scores: dict[str, bool | int | float] | None = None
             metric_trait_scores_dict: dict[str, dict[str, float]] | None = None
 
             if verify_rubric and evaluation_rubric and isinstance(verify_rubric, dict):
@@ -244,20 +333,26 @@ class FinalizeResultStage(BaseVerificationStage):
                 regex_trait_names = {trait.name for trait in (evaluation_rubric.regex_traits or [])}
                 callable_trait_names = {trait.name for trait in (evaluation_rubric.callable_traits or [])}
 
-                # Split verify_rubric by trait type
-                llm_results: dict[str, int] = {}
+                # Split verify_rubric by trait type. Template-kind LLM traits
+                # contribute multiple entries with dotted keys, so llm_results
+                # carries Any to accept strings, lists, bools, and numerics.
+                llm_results: dict[str, Any] = {}
                 regex_results: dict[str, bool] = {}
-                callable_results: dict[str, bool | int] = {}
+                callable_results: dict[str, bool | int | float] = {}
 
                 for trait_name, trait_value in verify_rubric.items():
                     # Skip failed trait evaluations (None values)
                     if trait_value is None:
                         continue
-                    if trait_name in llm_trait_names:
+                    # Template-kind traits produce dotted keys ("trait.field");
+                    # match the prefix before the first dot against the trait
+                    # name so template results are attributed to the right type.
+                    base_name = trait_name.split(".", 1)[0]
+                    if base_name in llm_trait_names:
                         llm_results[trait_name] = trait_value
-                    elif trait_name in regex_trait_names:
+                    elif base_name in regex_trait_names:
                         regex_results[trait_name] = trait_value
-                    elif trait_name in callable_trait_names:
+                    elif base_name in callable_trait_names:
                         callable_results[trait_name] = trait_value
                     # Note: metric traits are stored separately in metric_trait_metrics
 
@@ -276,7 +371,18 @@ class FinalizeResultStage(BaseVerificationStage):
 
             # Get agentic trait evaluation results (populated by Stage 11b)
             agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
-            agentic_trait_traces = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+            agentic_trait_traces_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+            agentic_trait_extraction_metadata = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
+            # Filter out None traces from failed investigations to satisfy dict[str, str] schema
+            agentic_trait_traces = (
+                {k: v for k, v in agentic_trait_traces_raw.items() if v is not None}
+                if agentic_trait_traces_raw
+                else None
+            )
+
+            # Get dynamic rubric metadata (populated by presence check pre-processing)
+            dynamic_skipped = context.get_result_field(ArtifactKeys.DYNAMIC_RUBRIC_SKIPPED_TRAITS)
+            dynamic_promoted = context.get_result_field(ArtifactKeys.DYNAMIC_RUBRIC_PROMOTED_TRAITS)
 
             rubric_result = VerificationResultRubric(
                 rubric_evaluation_performed=rubric_evaluation_performed,
@@ -289,13 +395,18 @@ class FinalizeResultStage(BaseVerificationStage):
                 metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
                 agentic_trait_scores=agentic_trait_scores,
                 agentic_trait_investigation_traces=agentic_trait_traces,
+                agentic_trait_extraction_metadata=agentic_trait_extraction_metadata,
+                dynamic_rubric_skipped_traits=dynamic_skipped,
+                dynamic_rubric_promoted_traits=dynamic_promoted,
+                trait_provenance=context.trait_provenance,
             )
 
         # Create deep-judgment subclass (if enabled)
         deep_judgment = None
-        if context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False):
+        dj_mode = context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_MODE)
+        if dj_mode and dj_mode != "disabled":
             deep_judgment = VerificationResultDeepJudgment(
-                deep_judgment_enabled=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, False),
+                deep_judgment_mode=dj_mode,
                 deep_judgment_performed=context.get_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False),
                 extracted_excerpts=context.get_result_field(ArtifactKeys.EXTRACTED_EXCERPTS),
                 attribute_reasoning=context.get_result_field(ArtifactKeys.ATTRIBUTE_REASONING),
@@ -351,6 +462,23 @@ class FinalizeResultStage(BaseVerificationStage):
         # Store final result
         context.set_artifact(ArtifactKeys.FINAL_RESULT, result)
 
+        # Capture workspace sidecars before cleanup so cleanup can remain enabled.
+        if context.workspace_output_mode != "none":
+            exclude_patterns = []
+            if context.workspace_output_mode == "produced":
+                exclude_patterns = [
+                    *DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
+                    *context.workspace_output_exclude_patterns,
+                ]
+            capture_workspace(
+                mode=context.workspace_output_mode,  # type: ignore[arg-type]
+                output_dir=context.workspace_output_dir,
+                workspace_path=context.workspace_path,
+                baseline=context.workspace_output_baseline,
+                result=result,
+                exclude_patterns=exclude_patterns,
+            )
+
         # Clean up workspace working copies (never originals)
         if context.workspace_path and context.workspace_cleanup and context.workspace_is_copy:
             try:
@@ -362,3 +490,23 @@ class FinalizeResultStage(BaseVerificationStage):
                     context.workspace_path,
                     exc_info=True,
                 )
+
+    @staticmethod
+    def _format_strategy(strategy: Any) -> str:
+        """Format a composition strategy node as a human-readable string.
+
+        Args:
+            strategy: A composition strategy node (AllOf, AnyOf, AtLeastN).
+
+        Returns:
+            String like "all_of", "any_of", or "at_least_n(2)".
+        """
+        from karenina.schemas.entities.composition import AllOf, AnyOf, AtLeastN
+
+        if isinstance(strategy, AnyOf):
+            return "any_of"
+        elif isinstance(strategy, AtLeastN):
+            return f"at_least_n({strategy.n})"
+        elif isinstance(strategy, AllOf):
+            return "all_of"
+        return str(strategy.__class__.__name__).lower()

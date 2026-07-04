@@ -9,18 +9,44 @@ from typing import Any
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import PromptConfig, VerificationResult
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
 )
 from karenina.utils.checkpoint import generate_template_id
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
+from karenina.utils.retry_policy import ErrorPatternConfig
 
 from .stages import StageOrchestrator, VerificationContext
 
 logger = logging.getLogger(__name__)
+
+
+def _build_error_registry(patterns: list[ErrorPatternConfig]) -> ErrorRegistry:
+    """Build an ErrorRegistry from declarative error pattern configs.
+
+    Creates a fresh ErrorRegistry with built-in defaults, then registers
+    each user-defined pattern from the config.
+
+    Args:
+        patterns: List of ErrorPatternConfig from VerificationConfig.custom_error_patterns.
+
+    Returns:
+        Configured ErrorRegistry with both built-in and custom patterns.
+    """
+    registry = ErrorRegistry()
+    for pattern_config in patterns:
+        registry.register_pattern(
+            pattern_config.pattern,
+            ErrorCategory(pattern_config.category),
+            match_type=pattern_config.match_type,
+        )
+    return registry
 
 
 def run_single_model_verification(
@@ -32,13 +58,14 @@ def run_single_model_verification(
     run_name: str | None = None,
     replicate: int | None = None,
     rubric: Rubric | None = None,
+    dynamic_rubric: DynamicRubric | None = None,
     keywords: list[str] | None = None,
     raw_answer: str | None = None,
     few_shot_examples: list[dict[str, str]] | None = None,
     few_shot_enabled: bool = False,
     abstention_enabled: bool = False,
     sufficiency_enabled: bool = False,
-    deep_judgment_enabled: bool = False,
+    deep_judgment_mode: str = "disabled",
     rubric_evaluation_strategy: str = "batch",
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -48,7 +75,7 @@ def run_single_model_verification(
     # Deep-judgment rubric configuration (NEW)
     deep_judgment_rubric_mode: str = "disabled",
     deep_judgment_rubric_global_excerpts: bool = True,
-    deep_judgment_rubric_config: dict[str, Any] | None = None,
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None,
     deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS,
     deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
@@ -61,18 +88,38 @@ def run_single_model_verification(
     # Trace filtering configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False,
     use_full_trace_for_rubric: bool = True,
+    allow_partial_trace_scoring: bool = True,
     # Agentic parsing configuration
     agentic_parsing: bool = False,
+    agentic_parsing_trigger: str = "always",
     agentic_judge_context: str = "workspace_only",
     agentic_parsing_max_turns: int = 15,
     agentic_parsing_timeout: float = 120.0,
+    agentic_parsing_materialize_trace: bool = False,
+    agentic_parsing_persist_trace: bool = False,
     workspace_root: Path | None = None,
     workspace_copy: bool = True,
     workspace_cleanup: bool = True,
+    workspace_output_mode: str = "none",
+    workspace_output_dir: Path | None = None,
+    workspace_output_exclude_patterns: list[str] | None = None,
     question_workspace_path: str | None = None,
     # Agentic rubric evaluation configuration
     agentic_rubric_strategy: str = "individual",
     agentic_rubric_parallel: bool = False,
+    # Embedding check configuration
+    embedding_check_enabled: bool = False,
+    embedding_check_model: str | None = None,
+    embedding_check_threshold: float | None = None,
+    # Trait provenance
+    trait_provenance: dict[str, str] | None = None,
+    # Error classification
+    custom_error_patterns: list[ErrorPatternConfig] | None = None,
+    # Replay layer
+    replay_store: Any = None,
+    replay_parse_on_hydration_mismatch: str = "fall_through",
+    # TaskEval signal (set by TaskEval entry; suppresses QUESTION slot in rubric prompts)
+    task_eval_mode: bool = False,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -96,7 +143,7 @@ def run_single_model_verification(
         few_shot_enabled: Whether to use few-shot prompting (disabled by default)
         abstention_enabled: Whether to enable abstention detection
         sufficiency_enabled: Whether to enable trace sufficiency detection
-        deep_judgment_enabled: Whether to enable deep-judgment parsing
+        deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full")
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
             - "batch": All traits evaluated in single LLM call (default, efficient)
             - "sequential": Traits evaluated one-by-one (reliable, more expensive)
@@ -134,6 +181,7 @@ def run_single_model_verification(
         answering_model=answering_model,
         parsing_model=parsing_model,
         rubric=rubric,
+        dynamic_rubric=dynamic_rubric,
         keywords=keywords,
         raw_answer=raw_answer,
         # Run Metadata
@@ -143,7 +191,7 @@ def run_single_model_verification(
         few_shot_enabled=few_shot_enabled,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_mode=deep_judgment_mode,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
         # Deep-Judgment Configuration
@@ -168,20 +216,40 @@ def run_single_model_verification(
         # Trace Filtering Configuration (MCP Agent Evaluation)
         use_full_trace_for_template=use_full_trace_for_template,
         use_full_trace_for_rubric=use_full_trace_for_rubric,
+        allow_partial_trace_scoring=allow_partial_trace_scoring,
         # Answer Caching
         cached_answer_data=cached_answer_data,
         # Agentic Parsing
         agentic_parsing=agentic_parsing,
+        agentic_parsing_trigger=agentic_parsing_trigger,
         agentic_judge_context=agentic_judge_context,
         agentic_parsing_max_turns=agentic_parsing_max_turns,
         agentic_parsing_timeout=agentic_parsing_timeout,
+        agentic_parsing_materialize_trace=agentic_parsing_materialize_trace,
+        agentic_parsing_persist_trace=agentic_parsing_persist_trace,
         question_workspace_path=question_workspace_path,
         workspace_root=workspace_root,
         workspace_copy=workspace_copy,
         workspace_cleanup=workspace_cleanup,
+        workspace_output_mode=workspace_output_mode,
+        workspace_output_dir=workspace_output_dir,
+        workspace_output_exclude_patterns=workspace_output_exclude_patterns or [],
         # Agentic Rubric
         agentic_rubric_strategy=agentic_rubric_strategy,
         agentic_rubric_parallel=agentic_rubric_parallel,
+        # Embedding Check
+        embedding_check_enabled=embedding_check_enabled,
+        embedding_check_model=embedding_check_model,
+        embedding_check_threshold=embedding_check_threshold,
+        # Trait Provenance
+        trait_provenance=trait_provenance,
+        # Error Classification
+        error_registry=_build_error_registry(custom_error_patterns or []),
+        # Replay layer
+        replay_store=replay_store,
+        replay_parse_on_hydration_mismatch=replay_parse_on_hydration_mismatch,
+        # TaskEval signal
+        task_eval_mode=task_eval_mode,
     )
 
     # Build ModelIdentity objects for pipeline use (needed even if validation fails)
@@ -198,29 +266,37 @@ def run_single_model_verification(
     answering_mcp_servers = list(answering_model.mcp_urls_dict.keys()) if answering_model.mcp_urls_dict else None
     context.set_result_field("answering_mcp_servers", answering_mcp_servers)
 
-    # Determine evaluation mode automatically if not explicitly set
-    # If rubric is provided and mode is template_only, upgrade to template_and_rubric
-    if (
-        rubric
-        and (
-            rubric.llm_traits
-            or rubric.regex_traits
-            or rubric.callable_traits
-            or rubric.metric_traits
-            or rubric.agentic_traits
+    # Warn if rubric traits are provided but evaluation_mode won't use them.
+    _has_rubric_traits = rubric and (
+        rubric.llm_traits
+        or rubric.regex_traits
+        or rubric.callable_traits
+        or rubric.metric_traits
+        or rubric.agentic_traits
+    )
+    _has_dynamic_rubric_traits = dynamic_rubric is not None and not dynamic_rubric.is_empty()
+    if (_has_rubric_traits or _has_dynamic_rubric_traits) and evaluation_mode == "template_only":
+        logger.warning(
+            "Rubric traits were provided but evaluation_mode='template_only'. "
+            "Rubric evaluation will be skipped. Set evaluation_mode='template_and_rubric' "
+            "to evaluate rubric traits."
         )
-        and evaluation_mode == "template_only"
-    ):
-        evaluation_mode = "template_and_rubric"
+
+    if evaluation_mode == "rubric_only" and not _has_rubric_traits and not _has_dynamic_rubric_traits:
+        logger.warning(
+            "evaluation_mode='rubric_only' but no rubric traits provided. Rubric evaluation will produce no scores."
+        )
 
     # Build stage orchestrator from configuration
     orchestrator = StageOrchestrator.from_config(
         rubric=rubric,
+        dynamic_rubric=dynamic_rubric,
         abstention_enabled=abstention_enabled,
         sufficiency_enabled=sufficiency_enabled,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_enabled=deep_judgment_mode != "disabled",
         evaluation_mode=evaluation_mode,
         agentic_parsing=agentic_parsing,
+        agentic_parsing_trigger=agentic_parsing_trigger,
     )
 
     # Execute verification pipeline

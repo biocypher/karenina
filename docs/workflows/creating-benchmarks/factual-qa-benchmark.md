@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -37,7 +37,7 @@ from pathlib import Path
 from pydantic import Field
 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
     NumericTolerance,
@@ -80,6 +80,7 @@ q1_id = benchmark.add_question(
     raw_answer="TP53 is the most commonly mutated gene in human cancers",
 )
 
+
 # Then define and attach the template
 class Answer(BaseAnswer):
     identifies_tp53: bool = VerifiedField(
@@ -94,11 +95,12 @@ class Answer(BaseAnswer):
         verify_with=BooleanMatch(),
     )
 
+
 benchmark.update_template(q1_id, Answer)
 print(f"Q1 added with template: {q1_id[:50]}...")
 ```
 
-These templates use `VerifiedField` with built-in verification primitives. For cases requiring custom logic, see [Advanced: Custom Verification](../../core_concepts/answer-templates.md#8-advanced-custom-verification).
+These templates use `VerifiedField` with built-in verification primitives. For cases requiring custom logic, see [Advanced: Custom Verification](../../notebooks/core_concepts/answer-templates.ipynb#8-advanced-custom-verification).
 
 A boolean check avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description. The `BooleanMatch()` primitive compares the extracted boolean against `ground_truth=True` automatically; no `verify()` method needed.
 
@@ -123,6 +125,7 @@ q2_id = benchmark.add_question(
     raw_answer="O+",
 )
 
+
 class Answer(BaseAnswer):
     blood_type: str = VerifiedField(
         description=(
@@ -137,6 +140,7 @@ class Answer(BaseAnswer):
         ground_truth="O+",
         verify_with=ExactMatch(normalize=["lowercase", "strip"]),
     )
+
 
 benchmark.update_template(q2_id, Answer)
 print(f"Q2 added with template: {q2_id[:50]}...")
@@ -159,6 +163,7 @@ q3_id = benchmark.add_question(
     raw_answer="37.0",
 )
 
+
 class Answer(BaseAnswer):
     temperature_celsius: float = VerifiedField(
         description=(
@@ -175,6 +180,7 @@ class Answer(BaseAnswer):
         verify_with=NumericTolerance(tolerance=0.5, mode="absolute"),
     )
 
+
 benchmark.update_template(q3_id, Answer)
 print(f"Q3 added with template: {q3_id[:50]}...")
 ```
@@ -182,7 +188,8 @@ print(f"Q3 added with template: {q3_id[:50]}...")
 The `mode="absolute"` setting means the extracted value must be within 0.5 of 37.0 (i.e., 36.5 to 37.5). For exact counts where only one value is correct, use `NumericTolerance(tolerance=0, mode="absolute")`. Here is the same pattern applied to a chromosome count with an `int` field:
 
 ```python
-from karenina.schemas.entities.primitives import NumericExact
+from karenina.schemas.primitives import NumericExact
+
 
 # Example: exact numeric match
 class Answer(BaseAnswer):
@@ -195,6 +202,7 @@ class Answer(BaseAnswer):
         ground_truth=23,
         verify_with=NumericExact(),
     )
+
 
 print("Exact-match example defined (not added to benchmark)")
 ```
@@ -216,6 +224,7 @@ q4_id = benchmark.add_question(
     raw_answer="September 28, 1928",
 )
 
+
 class Answer(BaseAnswer):
     mentions_discovery_year: bool = VerifiedField(
         description="True if the response mentions the year 1928",
@@ -228,13 +237,14 @@ class Answer(BaseAnswer):
         verify_with=TraceRegex(pattern=r"\bFleming\b"),
     )
 
+
 benchmark.update_template(q4_id, Answer)
 print(f"Q4 added with template: {q4_id[:50]}...")
 ```
 
 Each `TraceRegex` field is a named check: the `pattern` is applied to the raw trace, and the result is compared against `ground_truth`. Because these fields are excluded from the parsing schema, the pipeline detects a template with only `TraceRegex` fields and skips LLM parsing entirely. No judge model is needed.
 
-`TraceRegex` fields can also be combined with regular parsed fields when you want both structured extraction and pattern matching. In that case, the parsed fields are verified by their own primitives and the `TraceRegex` fields independently check the raw response. See [Answer Templates: Regex Checks](../../core_concepts/answer-templates.md#regex-checks) for a combined example.
+`TraceRegex` fields can also be combined with regular parsed fields when you want both structured extraction and pattern matching. In that case, the parsed fields are verified by their own primitives and the `TraceRegex` fields independently check the raw response. See [Answer Templates: Regex Checks](../../notebooks/core_concepts/answer-templates.ipynb#regex-checks) for a combined example.
 
 ### Question 5: Multi-Field with Weighted Scoring (Vaccine Mechanism)
 
@@ -248,6 +258,7 @@ q5_id = benchmark.add_question(
         "spike protein, which triggers an immune response producing antibodies."
     ),
 )
+
 
 class Answer(BaseAnswer):
     delivery_mechanism: str = VerifiedField(
@@ -288,6 +299,7 @@ class Answer(BaseAnswer):
         weight=1.0,
     )
 
+
 benchmark.update_template(q5_id, Answer)
 print(f"Q5 added with template: {q5_id[:50]}...")
 ```
@@ -306,7 +318,7 @@ print(f"Progress:        {benchmark.get_progress()}%")
 # Preview a question
 q = benchmark.get_question(q1_id)
 print(f"\nQ1: {q['question'][:60]}...")
-print(f"Has template: {q.get('finished', False)}")
+print(f"Has template: {benchmark.has_template(q1_id)}")
 ```
 
 ---
@@ -340,6 +352,7 @@ print(f"Match:     {loaded.question_count == benchmark.question_count}")
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 
@@ -364,4 +377,4 @@ The five patterns above form a toolkit for factual verification. Most real bench
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Add rubric traits for quality assessment
 - [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation without templates
 - [Scaled Authoring](scaled-authoring.ipynb): Bulk workflows and auto-generation
-- [Answer Templates](../core_concepts/answer-templates.ipynb): Deep dive into template concepts
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Deep dive into template concepts

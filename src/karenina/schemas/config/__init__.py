@@ -10,7 +10,6 @@ from .models import (
     INTERFACE_MANUAL,
     INTERFACE_OPENAI_ENDPOINT,
     INTERFACE_OPENROUTER,
-    INTERFACES_NO_PROVIDER_REQUIRED,
     AgentLimitConfig,
     AgentMiddlewareConfig,
     FewShotConfig,
@@ -28,7 +27,6 @@ __all__ = [
     "INTERFACE_MANUAL",
     "INTERFACE_LANGCHAIN",
     "INTERFACE_OPENAI_ENDPOINT",
-    "INTERFACES_NO_PROVIDER_REQUIRED",
     # Model configuration
     "ModelConfig",
     "FewShotConfig",

@@ -1,15 +1,15 @@
 # Presets
 
-Presets are reusable JSON files that capture a complete `VerificationConfig` — model choices, feature toggles, and execution settings — so you can reload the same configuration across multiple benchmark runs without reconfiguring manually each time.
+Presets are reusable JSON files that capture a complete `VerificationConfig` (model choices, feature toggles, and execution settings) so you can reload the same configuration across multiple benchmark runs without reconfiguring manually each time.
 
 ---
 
 ## Why Use Presets?
 
-- **Consistency** — The same preset guarantees identical configuration across runs, eliminating configuration drift
-- **Reusability** — Switch between test, production, and experimental setups instantly
-- **Shareability** — Exchange preset files with teammates or commit them to version control
-- **Simplicity** — Replace 15+ configuration parameters with a single file reference
+- **Consistency**: The same preset guarantees identical configuration across runs, eliminating configuration drift
+- **Reusability**: Switch between test, production, and experimental setups instantly
+- **Shareability**: Exchange preset files with teammates or commit them to version control
+- **Simplicity**: Replace 15+ configuration parameters with a single file reference
 
 ---
 
@@ -35,9 +35,8 @@ A preset file is a JSON wrapper around a `VerificationConfig` dictionary:
     ],
     "parsing_models": [...],
     "replicate_count": 1,
-    "rubric_enabled": false,
     "evaluation_mode": "template_only",
-    "deep_judgment_enabled": false,
+    "deep_judgment_mode": "disabled",
     "abstention_enabled": false,
     "async_enabled": true,
     "async_max_workers": 2
@@ -58,7 +57,7 @@ The top-level fields:
 | `created_at` | str | ISO 8601 timestamp |
 | `updated_at` | str | ISO 8601 timestamp |
 
-The `config` object contains all `VerificationConfig` fields. Model configurations are sanitized when saved — interface-specific fields that don't apply are removed, and `manual_traces` are excluded (they must be provided at runtime).
+The `config` object contains all `VerificationConfig` fields. Model configurations are sanitized when saved: interface-specific fields that don't apply are removed, and `manual_traces` are excluded (they must be provided at runtime).
 
 See [Preset Schema Reference](../../reference/configuration/preset-schema.md) for the complete schema specification.
 
@@ -85,8 +84,7 @@ config = VerificationConfig(
     answering_models=[model],
     parsing_models=[model],
     replicate_count=3,
-    rubric_enabled=True,
-    deep_judgment_enabled=True,
+    deep_judgment_mode="full",
 )
 
 metadata = config.save_preset(
@@ -213,8 +211,8 @@ Prompts for confirmation before deleting the preset file.
 
 Karenina looks for presets in this order:
 
-1. **`KARENINA_PRESETS_DIR` environment variable** — If set, this directory is used
-2. **`./presets/`** — Relative to the current working directory
+1. **`KARENINA_PRESETS_DIR` environment variable**: If set, this directory is used
+2. **`./presets/`**: Relative to the current working directory
 
 Set a custom preset directory:
 
@@ -240,9 +238,9 @@ CLI Arguments  >  Preset Values  >  Environment Variables  >  Built-in Defaults
 
 When you combine a preset with CLI overrides:
 
-1. **Load the preset** — All preset values become the base configuration
-2. **Apply CLI overrides** — Explicitly-passed flags replace preset values
-3. **Fill gaps from environment** — Any fields not set by preset or CLI fall back to environment variables, then defaults
+1. **Load the preset**: All preset values become the base configuration
+2. **Apply CLI overrides**: Explicitly-passed flags replace preset values
+3. **Fill gaps from environment**: Any fields not set by preset or CLI fall back to environment variables, then defaults
 
 This means a preset's value for `async_max_workers=2` overrides an environment variable `KARENINA_ASYNC_MAX_WORKERS=8`, but a CLI flag `--async-workers 4` overrides both.
 
@@ -271,8 +269,8 @@ Examples:
 
 ## Next Steps
 
-- [Configuration Hierarchy](index.md) — How presets interact with CLI args, env vars, and defaults
-- [Environment Variables](environment-variables.md) — Setting project-wide defaults
-- [Workspace Initialization](../../getting-started/workspace-init.md) — Creating a project with a `presets/` directory
-- [Running Verification](../running-verification/index.md) — Using presets in verification workflows
-- [Preset Schema Reference](../../reference/configuration/preset-schema.md) — Complete preset JSON schema
+- [Configuration Hierarchy](index.md): How presets interact with CLI args, env vars, and defaults
+- [Environment Variables](environment-variables.md): Setting project-wide defaults
+- [Workspace Initialization](../../getting-started/workspace-init.md): Creating a project with a `presets/` directory
+- [Running Verification](../running-verification/index.md): Using presets in verification workflows
+- [Preset Schema Reference](../../reference/configuration/preset-schema.md): Complete preset JSON schema

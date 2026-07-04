@@ -10,6 +10,7 @@ from karenina.ports.usage import UsageMetadata as PortUsageMetadata  # noqa: F40
 BlockingPortal  # Used in type hints within TYPE_CHECKING block
 PortUsageMetadata  # Used in type hints within TYPE_CHECKING block (trace_usage_tracker.py)
 
+
 # Hook method parameters that must match interface signature
 def _whitelist_runtime(runtime):
     """Whitelist for LangGraph hook interface parameter (middleware.py)."""
@@ -21,5 +22,23 @@ def _whitelist_schema(schema):
     """Whitelist for ParserPort/LLMPort protocol method parameter (ports/parser.py, ports/llm.py)."""
     _ = schema  # Tell vulture this parameter name is intentionally used
 
+
 # create_verbose_logger parameters kept for API backwards compatibility
 # These are consumed via _ = param pattern to avoid vulture warnings
+
+
+# Pytest fixtures used as side-effect-only parameters in conformance tests.
+# The fixture sets up mocks before arun() is called; the parameter name in the
+# test method signature is required by pytest to inject it, but the test body
+# does not reference it directly.
+def _whitelist_conformance_fixtures(mock_deep_agents_agent_result):
+    """Whitelist for conformance test fixture parameters (test_agent_port.py)."""
+    _ = mock_deep_agents_agent_result
+
+
+# Pytest fixtures used as side-effect-only parameters in streaming exporter tests.
+# deterministic_header pins export_timestamp and karenina_version via monkeypatch;
+# its return value is None, so the test body never references the parameter.
+def _whitelist_streaming_exporter_fixtures(deterministic_header):
+    """Whitelist for streaming exporter test fixture (test_streaming_exporter.py)."""
+    _ = deterministic_header

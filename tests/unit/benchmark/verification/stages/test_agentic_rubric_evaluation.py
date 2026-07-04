@@ -130,6 +130,7 @@ class TestAgenticRubricEvaluationProperties:
         assert ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED in stage.produces
         assert ArtifactKeys.AGENTIC_TRAIT_SCORES in stage.produces
         assert ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES in stage.produces
+        assert ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA in stage.produces
 
 
 @pytest.mark.unit
@@ -147,7 +148,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -161,8 +162,43 @@ class TestAgenticRubricEvaluationExecute:
         assert "code_quality" in traces
         assert traces["code_quality"] == "investigation trace"
 
+        metadata = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
+        assert metadata == {}
+
         performed = ctx.get_artifact(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED)
         assert performed is True
+
+    def test_execute_individual_strategy_stores_extraction_metadata(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = (True, "investigation trace")
+        fake_evaluator.last_extraction_metadata = {
+            "method": "local_json",
+            "local_json_error": None,
+            "parser_error": None,
+        }
+
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        stage = mod.AgenticRubricEvaluationStage()
+        stage.execute(ctx)
+
+        metadata = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
+        assert metadata == {
+            "code_quality": {
+                "method": "local_json",
+                "local_json_error": None,
+                "parser_error": None,
+            }
+        }
 
     def test_execute_failed_trait_stores_none(self, monkeypatch):
         from karenina.benchmark.verification.stages.pipeline import (
@@ -175,7 +211,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -207,7 +243,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         traits = [
@@ -237,7 +273,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait()])
@@ -249,13 +285,12 @@ class TestAgenticRubricEvaluationExecute:
         assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"code_quality": True}
         assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES) is not None
 
-    def test_execute_skips_trait_when_model_lacks_agent_support(self):
-        """Trait is skipped if its resolved model has no agent_factory."""
+    def test_execute_raises_when_model_lacks_agent_support(self):
+        """ValueError raised if resolved model lacks deep_agent tier."""
         from karenina.benchmark.verification.stages.pipeline import (
             agentic_rubric_evaluation as mod,
         )
 
-        # Use a model with an interface that has no agent_factory
         no_agent_model = ModelConfig(
             id="test",
             model_name="test-model",
@@ -265,15 +300,11 @@ class TestAgenticRubricEvaluationExecute:
 
         trait = _make_trait()
         ctx = _make_context(agentic_traits=[trait])
-        # Override the parsing_model to one without agent support
         ctx.parsing_model = no_agent_model
 
         stage = mod.AgenticRubricEvaluationStage()
-        stage.execute(ctx)
-
-        scores = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES)
-        assert scores["code_quality"] is None
-        assert ctx.error is None
+        with pytest.raises(ValueError, match="agent_tier='deep_agent'"):
+            stage.execute(ctx)
 
     def test_execute_with_workspace_path(self, monkeypatch):
         from karenina.benchmark.verification.stages.pipeline import (
@@ -286,7 +317,7 @@ class TestAgenticRubricEvaluationExecute:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(
@@ -330,7 +361,7 @@ class TestTemplateKindFlattening:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         trait = AgenticRubricTrait(
@@ -364,7 +395,7 @@ class TestTemplateKindFlattening:
         monkeypatch.setattr(
             mod,
             "AgenticTraitEvaluator",
-            lambda model_config: fake_evaluator,  # noqa: ARG005
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
         )
 
         ctx = _make_context(agentic_traits=[_make_trait(name="quality", kind="boolean")])
@@ -398,7 +429,6 @@ class TestWriteTraceFile:
         assert trace_path.exists()
         assert trace_path.read_text(encoding="utf-8") == "Hello trace content"
         assert trace_path.parent.name == "traces"
-        assert ".karenina" in str(trace_path)
         assert "q1_trace.txt" in trace_path.name
 
     def test_includes_turn_in_filename(self, tmp_path):
@@ -442,3 +472,66 @@ class TestWriteTraceFile:
         )
         assert "/" not in trace_path.name
         assert ":" not in trace_path.name
+
+
+@pytest.mark.unit
+class TestValidateAgentSupport:
+    """Tests for _validate_agent_support raising on non-deep_agent interfaces."""
+
+    def test_raises_when_parsing_model_lacks_deep_agent(self):
+        """ValueError raised when parsing model interface is not deep_agent."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trait = _make_trait("my_trait")
+        rubric = Rubric(agentic_traits=[trait])
+        parsing_model = ModelConfig(
+            id="test",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+        )
+        ctx = VerificationContext(
+            question_id="q1",
+            template_id="t1",
+            question_text="Question",
+            template_code="class Answer: pass",
+            answering_model=parsing_model,
+            parsing_model=parsing_model,
+            rubric=rubric,
+        )
+
+        with pytest.raises(ValueError, match="agent_tier='deep_agent'"):
+            AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
+
+    def test_passes_when_parsing_model_is_deep_agent(self):
+        """No error when parsing model supports deep_agent."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trait = _make_trait("my_trait")
+        ctx = _make_context(agentic_traits=[trait])
+
+        # Should not raise
+        AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
+
+    def test_model_override_with_non_deep_agent_rejected_at_construction(self):
+        """AgenticRubricTrait rejects non-deep_agent model_override at construction."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        override = ModelConfig(
+            id="bad",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+        )
+        with pytest.raises(PydanticValidationError, match="agent_tier"):
+            AgenticRubricTrait(
+                name="my_trait",
+                description="Test trait",
+                kind="boolean",
+                higher_is_better=True,
+                model_override=override,
+            )

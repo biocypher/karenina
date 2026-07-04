@@ -29,7 +29,7 @@ Key flags:
 | `-k "pattern"` | Run tests matching a pattern |
 | `--co` | List tests without running them |
 
-Tests use captured LLM response fixtures to avoid live API calls. See `tests/fixtures/llm_responses/README.md` for fixture documentation.
+Tests use captured LLM response fixtures to avoid live API calls. See `tests/fixtures/MANIFEST.md` for fixture documentation.
 
 ## Linting and Type Checking
 
@@ -54,9 +54,9 @@ The verification pipeline uses a stage-based architecture where each stage imple
 
 See [Advanced Pipeline](advanced-pipeline/index.md) for the full guide, including:
 
-- [13 Stages in Detail](advanced-pipeline/stages.md) --- what each stage does
-- [Writing Custom Stages](advanced-pipeline/custom-stages.md) --- the `VerificationStage` protocol, `VerificationContext`, artifact keys, and a complete example
-- [Prompt Assembly](advanced-pipeline/prompt-assembly.md) --- the tri-section prompt system
+- [Pipeline Stages in Detail](advanced-pipeline/stages.md): what each stage does
+- [Writing Custom Stages](advanced-pipeline/custom-stages.md): the `VerificationStage` protocol, `VerificationContext`, artifact keys, and a complete example
+- [Prompt Assembly](advanced-pipeline/prompt-assembly.md): the tri-section prompt system
 
 ### Creating Adapters
 
@@ -64,9 +64,9 @@ Adapters connect the pipeline to LLM backends through three port protocols: `LLM
 
 See [Advanced Adapters](advanced-adapters/index.md) for the full guide, including:
 
-- [Port Types](advanced-adapters/ports.md) --- protocol signatures for all three ports
-- [Available Adapters](advanced-adapters/available-adapters.md) --- existing adapter implementations and capabilities
-- [Writing Custom Adapters](advanced-adapters/writing-adapters.md) --- step-by-step guide with registration, factory functions, and prompt instructions
+- [Port Types](advanced-adapters/ports.md): protocol signatures for all three ports
+- [Available Adapters](advanced-adapters/available-adapters.md): existing adapter implementations and capabilities
+- [Writing Custom Adapters](advanced-adapters/writing-adapters.md): step-by-step guide with registration, factory functions, and prompt instructions
 
 ## Pull Request Process
 
@@ -90,6 +90,6 @@ src/karenina/
 
 ## Related
 
-- [Advanced Pipeline](advanced-pipeline/index.md) --- pipeline architecture and extension
-- [Advanced Adapters](advanced-adapters/index.md) --- adapter architecture and extension
-- [Installation](getting-started/installation.md) --- basic setup and dependencies
+- [Advanced Pipeline](advanced-pipeline/index.md): pipeline architecture and extension
+- [Advanced Adapters](advanced-adapters/index.md): adapter architecture and extension
+- [Installation](getting-started/installation.md): basic setup and dependencies

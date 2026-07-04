@@ -479,6 +479,50 @@ class TestRubricDataFrameAgenticSupport:
         if len(metric_rows) > 0:
             assert all(metric_rows["evaluation_method"] == "metric")
 
+    def test_investigation_trace_column_present(self):
+        """Issue 153: investigation_trace column is populated from agentic_trait_investigation_traces."""
+
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            rubric_evaluation_strategy="batch",
+            agentic_trait_scores={
+                "CodeQuality": 4,
+                "FollowsInstructions": True,
+            },
+            agentic_trait_investigation_traces={
+                "CodeQuality": "I examined the code and found it well-structured.",
+            },
+        )
+        result = VerificationResult(
+            metadata=create_metadata("trace_q1"),
+            template=VerificationResultTemplate(
+                raw_llm_response="test",
+                template_verification_performed=True,
+                verify_result=True,
+            ),
+            rubric=rubric,
+        )
+        results = RubricResults(results=[result])
+        df = results.to_dataframe(trait_type="agentic")
+
+        assert "investigation_trace" in df.columns
+        cq_row = df[df["trait_name"] == "CodeQuality"]
+        assert cq_row["investigation_trace"].iloc[0] == "I examined the code and found it well-structured."
+
+        fi_row = df[df["trait_name"] == "FollowsInstructions"]
+        assert fi_row["investigation_trace"].iloc[0] is None
+
+    def test_investigation_trace_none_when_no_traces(
+        self,
+        verification_result_with_agentic: VerificationResult,
+    ):
+        """investigation_trace is None when agentic_trait_investigation_traces is empty."""
+        results = RubricResults(results=[verification_result_with_agentic])
+        df = results.to_dataframe(trait_type="agentic")
+
+        assert "investigation_trace" in df.columns
+        assert all(df["investigation_trace"].isna())
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

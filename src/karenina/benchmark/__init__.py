@@ -3,14 +3,17 @@
 from ..schemas.config import ModelConfig
 from ..schemas.verification import FinishedTemplate, VerificationConfig, VerificationJob, VerificationResult
 from .benchmark import Benchmark
-from .verification import export_verification_results_csv, export_verification_results_json
+from .verification import (
+    export_verification_results_csv,
+    export_verification_results_json_stream,
+)
 from .verification.runner import run_single_model_verification as run_question_verification
 from .verification.utils.template_validation import validate_answer_template
 
 __all__ = [
     "Benchmark",
     "export_verification_results_csv",
-    "export_verification_results_json",
+    "export_verification_results_json_stream",
     "FinishedTemplate",
     "ModelConfig",
     "VerificationConfig",

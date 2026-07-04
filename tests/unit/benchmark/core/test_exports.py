@@ -392,6 +392,25 @@ class TestClone:
         assert original._base.question_count == 1
         assert cloned.question_count == 1
 
+    def test_clone_preserves_deep_judgment_config(self, monkeypatch) -> None:
+        """Test that clone passes save_deep_judgment_config=True to save."""
+        benchmark = Benchmark.create(name="original")
+        benchmark.add_question("Q?", "A")
+        manager = ExportManager(benchmark._base, benchmark._template_manager, benchmark._rubric_manager)
+
+        captured_kwargs: dict = {}
+        original_save = manager.base.save
+
+        def patched_save(path, **kwargs):
+            captured_kwargs.update(kwargs)
+            return original_save(path, **kwargs)
+
+        monkeypatch.setattr(manager.base, "save", patched_save)
+
+        manager.clone()
+
+        assert captured_kwargs.get("save_deep_judgment_config") is True
+
 
 @pytest.mark.unit
 class TestExportToFile:

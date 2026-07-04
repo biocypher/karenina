@@ -4,9 +4,10 @@ This module provides the LangChainLLMAdapter class that wraps existing
 LangChain infrastructure (init_chat_model) behind the unified LLMPort interface.
 
 Retry Logic:
-    This adapter includes tenacity-based retry for transient errors (connection
-    errors, timeouts, rate limits, 5xx errors). Retry is applied to both
-    ainvoke() and with_structured_output() calls with exponential backoff.
+    This adapter uses RetryExecutor with per-category retry budgets for
+    transient errors (connection errors, timeouts, rate limits, 5xx errors).
+    Retry is applied to both ainvoke() and with_structured_output() calls
+    with exponential backoff.
 
 Structured Output Fallback:
     When the underlying model doesn't support with_structured_output(), the
@@ -23,20 +24,24 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
 
+from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
-from karenina.utils.errors import is_retryable_error
+from karenina.ports.llm import StreamingLLMResponse
+from karenina.utils.errors import ErrorRegistry, is_retryable_error
 from karenina.utils.json_extraction import extract_json_from_response
 from karenina.utils.messages import append_error_feedback
-from karenina.utils.retry import TRANSIENT_RETRY
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
-from .messages import LangChainMessageConverter
+from .messages import LangChainMessageConverter, extract_text_from_lc_content
 from .prompts import FORMAT_INSTRUCTIONS
-from .usage import extract_langchain_usage, extract_usage_from_response
+from .usage import extract_langchain_usage, extract_usage_from_chunk, extract_usage_from_response
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,9 @@ class LangChainLLMAdapter:
         self._structured_model = _structured_model
         self._base_model = _base_model
         self._max_retries = _max_retries
+        self._retry_policy = model_config.retry_policy
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
 
         if _base_model is not None:
             self._model = _structured_model if _structured_model else _base_model
@@ -124,8 +132,23 @@ class LangChainLLMAdapter:
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
 
+        if self._config.max_tokens is not None:
+            kwargs["max_tokens"] = self._config.max_tokens
+
+        if self._config.request_timeout is not None:
+            # LangChain's ChatAnthropic uses 'default_request_timeout', not 'request_timeout'.
+            # Other providers (OpenAI, Google) accept 'request_timeout' as-is.
+            if self._config.model_provider == "anthropic":
+                kwargs["default_request_timeout"] = self._config.request_timeout
+            else:
+                kwargs["request_timeout"] = self._config.request_timeout
+
         if self._config.extra_kwargs:
             kwargs.update(self._config.extra_kwargs)
+
+        # Suppress SDK-level retries. RetryExecutor is the sole retry layer.
+        # Placed after extra_kwargs merge to ensure SDK retries stay at 0.
+        kwargs["max_retries"] = 0
 
         # Initialize model via existing infrastructure
         model = init_chat_model_unified(
@@ -151,17 +174,18 @@ class LangChainLLMAdapter:
         """Declare what prompt features this adapter supports.
 
         Returns:
-            PortCapabilities with system prompt support and structured output support.
+            PortCapabilities with system prompt, structured output, and streaming support.
         """
         return PortCapabilities(
             supports_system_prompt=True,
             supports_structured_output=True,
+            supports_streaming=True,
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM asynchronously with automatic retry for transient errors.
 
-        Uses tenacity for exponential backoff retry logic on transient errors
+        Uses RetryExecutor with per-category retry budgets for transient errors
         (connection errors, timeouts, rate limits, 5xx errors).
 
         For structured output mode, tries native with_structured_output() first.
@@ -186,6 +210,7 @@ class LangChainLLMAdapter:
         # Regular text mode
         return await self._ainvoke_text(messages)
 
+    @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
 
@@ -227,6 +252,120 @@ class LangChainLLMAdapter:
             # No event loop running, safe to use asyncio.run
             return asyncio.run(self.ainvoke(messages))
 
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+        """Stream LLM response, accumulating tokens as they arrive.
+
+        Uses LangChain's cross-provider ``.astream()`` method which yields
+        ``AIMessageChunk`` objects uniformly across providers.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Yields:
+            StreamingLLMResponse that can be iterated for text chunks.
+        """
+        lc_messages = self._converter.to_provider(messages)
+        response = StreamingLLMResponse()
+
+        async def _chunk_generator() -> AsyncIterator[str]:  # noqa: ANN202
+            """Yield text chunks from LangChain's astream, extracting usage from final chunk.
+
+            Chunk content may be a ``str`` or a ``list`` of block dicts
+            (Anthropic extended thinking, vision, tool_use). The helper
+            extracts only text blocks; non-text blocks stay internal.
+            """
+            async for chunk in self._model.astream(lc_messages):
+                text = extract_text_from_lc_content(chunk.content)
+                if text:
+                    yield text
+                # Usage metadata typically arrives on the final chunk
+                if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                    response.usage = extract_usage_from_chunk(chunk, model_name=self._config.model_name)
+
+        response._set_chunk_source(_chunk_generator())
+        yield response
+        response.is_complete = True
+
+    async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
+        """
+        async with self.astream(messages) as sr:
+            try:
+                async with asyncio.timeout(timeout):
+                    async for _chunk in sr:
+                        pass
+            except TimeoutError:
+                from karenina.exceptions import StreamingTimeoutError
+
+                raise StreamingTimeoutError(
+                    f"Streaming timed out after {timeout}s",
+                    partial_content=sr.accumulated_content,
+                ) from None
+
+        return LLMResponse(
+            content=sr.accumulated_content,
+            usage=sr.usage,
+            raw=None,
+        )
+
+    @with_llm_semaphore
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content synchronously.
+
+        Uses streaming internally so that partial content can be captured on
+        timeout. Returns the same LLMResponse type as invoke(). Retries via
+        RetryExecutor on transient errors (including StreamingTimeoutError
+        with zero content, classified as RATE_LIMIT for queue congestion).
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If retries are exhausted and the stream
+                still exceeds the wall-clock timeout.
+        """
+        result: LLMResponse = self._retry_executor.execute_with_timeout(
+            self._stream_invoke_once, messages, timeout=timeout
+        )
+        return result
+
+    def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Single stream_invoke attempt (no retry). Called by RetryExecutor."""
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        portal = get_async_portal()
+
+        if portal is not None:
+            return portal.call(self._astream_with_timeout, messages, timeout)
+
+        try:
+            asyncio.get_running_loop()
+
+            def run_in_thread() -> LLMResponse:
+                return asyncio.run(self._astream_with_timeout(messages, timeout))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result(timeout=(timeout or 300) + 30)
+
+        except RuntimeError:
+            return asyncio.run(self._astream_with_timeout(messages, timeout))
+
     def with_structured_output(self, schema: type[BaseModel], *, max_retries: int | None = None) -> LangChainLLMAdapter:
         """Return a new adapter configured for structured output.
 
@@ -255,17 +394,34 @@ class LangChainLLMAdapter:
             >>> response = await structured.ainvoke(messages)
             >>> assert isinstance(response.raw, Answer)
         """
-        # Try to create a structured model for native support
+        # Try to create a structured model for native support.
+        # For OpenAI-compatible self-hosted endpoints (e.g. vLLM, Ollama), force
+        # method="json_schema" so the server enforces the schema via guided
+        # decoding. Small models on these backends often fail the LangChain
+        # default function-calling path, which silently returns None or raises.
         structured_model = None
         if hasattr(self._model, "with_structured_output"):
+            kwargs: dict[str, Any] = {}
+            if self._config.interface == "openai_endpoint":
+                kwargs["method"] = "json_schema"
             try:
-                structured_model = self._model.with_structured_output(schema)
+                structured_model = self._model.with_structured_output(schema, **kwargs)
             except Exception as e:
-                # Creation failed - will use fallback at invoke time
                 logger.debug(
-                    f"Could not create structured model for {self._config.model_name}: {e}. "
-                    "Will use fallback parsing at invoke time."
+                    "Could not create structured model for %s with %s: %s. Retrying without method override.",
+                    self._config.model_name,
+                    kwargs or "default method",
+                    e,
                 )
+                if kwargs:
+                    try:
+                        structured_model = self._model.with_structured_output(schema)
+                    except Exception as e2:
+                        logger.debug(
+                            "Could not create structured model for %s: %s. Will use fallback parsing at invoke time.",
+                            self._config.model_name,
+                            e2,
+                        )
 
         return LangChainLLMAdapter(
             model_config=self._config,
@@ -282,12 +438,60 @@ class LangChainLLMAdapter:
     async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
         """Invoke LLM for regular text output."""
         lc_messages = self._converter.to_provider(messages)
-        response = await self._invoke_model_with_retry(self._model, lc_messages)
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._ainvoke_with_timeout,
+            self._model,
+            lc_messages,
+            timeout=self._config.request_timeout,
+        )
 
-        content = str(response.content) if hasattr(response, "content") else str(response)
+        content = extract_text_from_lc_content(response.content) if hasattr(response, "content") else str(response)
         usage = extract_usage_from_response(response, model_name=self._config.model_name)
 
         return LLMResponse(content=content, usage=usage, raw=response)
+
+    async def _ainvoke_with_timeout(
+        self,
+        model: Any,
+        lc_messages: list[Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """Call ``model.ainvoke`` under a wall-clock timeout as a guardrail.
+
+        LangChain's ``ainvoke`` (especially the structured-output and
+        usage-metadata-callback paths) can stall internally without ever
+        raising. The httpx ``request_timeout`` does not catch every such case,
+        so this karenina-layer ``asyncio.wait_for`` enforces a hard
+        per-attempt wall-clock budget.
+
+        A fired timeout raises a stock ``asyncio.TimeoutError``, which
+        ``ErrorRegistry`` classifies as ``TIMEOUT`` via the built-in MRO
+        check. The configured timeout retry budget then applies inside
+        ``RetryExecutor.aexecute_with_timeout``, which can also escalate
+        the per-attempt timeout via ``RetryPolicy.timeout_escalation``.
+
+        When ``timeout`` is None, falls back to ``self._config.request_timeout``.
+        When that is also None, the call is made without any wrapper to
+        preserve the previous behavior.
+
+        Args:
+            model: The LangChain model exposing ``ainvoke``.
+            lc_messages: Provider-formatted messages to send.
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+
+        Returns:
+            The raw model response object.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        if timeout is None:
+            timeout = self._config.request_timeout
+        if timeout is None:
+            return await model.ainvoke(lc_messages)
+        return await asyncio.wait_for(model.ainvoke(lc_messages), timeout=timeout)
 
     # =========================================================================
     # Structured Output (main flow)
@@ -349,15 +553,33 @@ class LangChainLLMAdapter:
                 # Use callback to capture usage since with_structured_output
                 # may return a BaseModel directly (losing response_metadata)
                 with get_usage_metadata_callback() as cb:
-                    response = await self._invoke_model_with_retry(self._structured_model, lc_messages)
+                    response = await self._retry_executor.aexecute_with_timeout(
+                        self._ainvoke_with_timeout,
+                        self._structured_model,
+                        lc_messages,
+                        timeout=self._config.request_timeout,
+                    )
 
                 if isinstance(response, BaseModel):
                     # Prefer callback usage (reliable), fall back to response extraction
                     usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
                     if usage.total_tokens == 0:
                         usage = extract_usage_from_response(response, model_name=self._config.model_name)
+                    # Serialize to JSON so callers can json.loads(response.content)
+                    content = response.model_dump_json()
                     return LLMResponse(
-                        content=str(response),
+                        content=content,
+                        usage=usage,
+                        raw=response,
+                    )
+                if isinstance(response, dict):
+                    # Some LangChain models return a dict instead of a Pydantic model
+                    usage = extract_langchain_usage(cb.usage_metadata, model_name=self._config.model_name)
+                    if usage.total_tokens == 0:
+                        usage = extract_usage_from_response(response, model_name=self._config.model_name)
+                    content = json.dumps(response)
+                    return LLMResponse(
+                        content=content,
                         usage=usage,
                         raw=response,
                     )
@@ -401,10 +623,15 @@ class LangChainLLMAdapter:
         # Use base model for fallback (not the structured model)
         model_to_use = self._base_model if self._base_model is not None else self._model
         lc_messages = self._converter.to_provider(augmented_messages)
-        response = await self._invoke_model_with_retry(model_to_use, lc_messages)
+        response = await self._retry_executor.aexecute_with_timeout(
+            self._ainvoke_with_timeout,
+            model_to_use,
+            lc_messages,
+            timeout=self._config.request_timeout,
+        )
 
         # Extract and parse response
-        text_content = str(response.content) if hasattr(response, "content") else str(response)
+        text_content = extract_text_from_lc_content(response.content) if hasattr(response, "content") else str(response)
         parsed_model = self._parse_json_response(text_content)
 
         return LLMResponse(
@@ -469,37 +696,31 @@ class LangChainLLMAdapter:
     # Low-level Helpers
     # =========================================================================
 
-    async def _invoke_model_with_retry(self, model: Any, lc_messages: list[Any]) -> Any:
-        """Invoke a LangChain model with automatic retry for transient errors.
-
-        This is a helper that applies the standard transient retry policy
-        to any model invocation.
-
-        Args:
-            model: The LangChain model to invoke.
-            lc_messages: LangChain-formatted messages.
-
-        Returns:
-            The model's response.
-
-        Raises:
-            Exception: After all retries are exhausted.
-        """
-
-        @TRANSIENT_RETRY
-        async def _invoke() -> Any:
-            return await model.ainvoke(lc_messages)
-
-        return await _invoke()
-
     async def aclose(self) -> None:
-        """Close underlying resources.
+        """Close the underlying model's httpx clients, best-effort.
 
-        LangChain adapters delegate to LangChain's model management which
-        handles its own HTTP client lifecycle. This is a no-op provided
-        for interface consistency with other adapters.
+        For ChatOpenAI-derived models (openai_endpoint, openrouter), this
+        releases the bounded httpx pool injected by the custom model classes.
+        For provider-native models (anthropic, openai, google via
+        init_chat_model), the http_client/http_async_client attributes are
+        usually not present and the call is a no-op.
+
+        Cleanup never raises: each close is wrapped in try/except so that
+        ``aclose`` can always be called safely from cleanup paths.
         """
-        pass
+        async_client = getattr(self._model, "http_async_client", None)
+        if async_client is not None:
+            try:
+                await async_client.aclose()
+            except Exception as exc:
+                logger.warning("Failed to close async httpx client on adapter aclose: %s", exc)
+
+        sync_client = getattr(self._model, "http_client", None)
+        if sync_client is not None:
+            try:
+                sync_client.close()
+            except Exception as exc:
+                logger.warning("Failed to close sync httpx client on adapter aclose: %s", exc)
 
 
 # Verify protocol compliance at import time

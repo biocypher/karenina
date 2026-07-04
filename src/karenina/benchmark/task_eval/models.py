@@ -34,6 +34,10 @@ class StepEval(BaseModel):
         default_factory=dict,
         description="Full verification results per question: {question_id: [VerificationResult, ...]}",
     )
+    failed_questions: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Questions that failed evaluation, keyed by question_id with error messages",
+    )
 
     def format_rubric_scores(self, indent: str = "  ") -> str:
         """Format verification results including rubric scores."""
@@ -102,8 +106,8 @@ class StepEval(BaseModel):
                     )
 
                 # Show error if present
-                if result.metadata.error:
-                    lines.append(f"{indent}  {result_num} Error: {result.metadata.error}")
+                if result.metadata.failure is not None:
+                    lines.append(f"{indent}  {result_num} Error: {result.metadata.failure.reason}")
 
                 if i < len(results) - 1:
                     lines.append("")  # Separator between multiple results
@@ -144,7 +148,23 @@ class StepEval(BaseModel):
 
         for _trace_id, results in self.verification_results.items():
             total_results += len(results)
-            if any(result.template and result.template.verify_result for result in results):
+
+            template_passed = any(result.template and result.template.verify_result for result in results)
+            template_performed = any(
+                result.template and result.template.template_verification_performed for result in results
+            )
+            rubric_passed = any(
+                result.rubric
+                and result.rubric.rubric_evaluation_performed
+                and result.rubric.get_all_trait_scores()
+                and all(
+                    score is True or (isinstance(score, int) and score > 0)
+                    for score in result.rubric.get_all_trait_scores().values()
+                )
+                for result in results
+            )
+
+            if template_passed or (not template_performed and rubric_passed):
                 passed_traces += 1
 
             # Count template verification and rubric traits separately
@@ -163,7 +183,13 @@ class StepEval(BaseModel):
                     # Count LLM and manual rubric traits
                     all_trait_scores = rubric.get_all_trait_scores()
                     if all_trait_scores:
-                        for score in all_trait_scores.values():
+                        for trait_name, score in all_trait_scores.items():
+                            # Template-kind LLM traits expose dotted keys
+                            # ("trait.field") with free-form values (strings,
+                            # lists, etc.). They have no pass/fail semantics,
+                            # so they are not counted here.
+                            if "." in trait_name:
+                                continue
                             rubric_traits_total += 1
                             if score is True or (isinstance(score, int) and score > 0):
                                 rubric_traits_passed += 1
@@ -249,7 +275,7 @@ class StepEval(BaseModel):
             dict: Aggregated rubric results with failed replicate count
         """
         # Filter out failed replicates
-        successful_results = [r for r in results if r.metadata.completed_without_errors]
+        successful_results = [r for r in results if r.metadata.failure is None]
         failed_count = len(results) - len(successful_results)
 
         if not successful_results:
@@ -310,17 +336,28 @@ class StepEval(BaseModel):
         """
         Average LLM trait scores across replicates.
 
+        Template-kind LLM traits contribute dotted keys ("trait.field") with
+        free-form values (strings, lists, etc.) that cannot be averaged. They
+        are skipped here; downstream consumers inspect them directly on each
+        replicate's ``llm_trait_scores``.
+
         Args:
             results: List of successful VerificationResult objects
 
         Returns:
-            dict: Trait names mapped to averaged scores
+            dict: Trait names mapped to averaged scores (numeric/bool only).
         """
-        trait_scores: dict[str, list[int]] = {}
+        trait_scores: dict[str, list[int | float | bool]] = {}
 
         for result in results:
             if result.rubric and result.rubric.llm_trait_scores:
                 for trait_name, score in result.rubric.llm_trait_scores.items():
+                    # Skip template-kind entries (dotted keys) and any
+                    # non-numeric values so they cannot be averaged.
+                    if "." in trait_name:
+                        continue
+                    if not isinstance(score, int | float | bool):
+                        continue
                     if trait_name not in trait_scores:
                         trait_scores[trait_name] = []
                     trait_scores[trait_name].append(score)
@@ -360,7 +397,7 @@ class StepEval(BaseModel):
         Returns:
             dict: Trait names mapped to aggregated values (pass rate or average score)
         """
-        trait_values: dict[str, list[bool | int]] = {}
+        trait_values: dict[str, list[bool | int | float]] = {}
 
         for result in results:
             if result.rubric and result.rubric.callable_trait_scores:
@@ -508,7 +545,10 @@ class TaskEvalResult(BaseModel):
         return "\n".join(lines)
 
     def summary(self) -> str:
-        """Return a concise summary of the evaluation results."""
+        """Return a concise summary of the evaluation results.
+
+        Aggregates across global evaluation and all per-step evaluations.
+        """
         total_traces = 0
         passed_traces = 0
         total_template_verifications = 0
@@ -549,7 +589,10 @@ class TaskEvalResult(BaseModel):
         return " | ".join(parts) if parts else "No evaluations performed"
 
     def summary_compact(self) -> str:
-        """Return a very compact one-line summary."""
+        """Return a very compact one-line summary.
+
+        Reports global evaluation statistics only (excludes per-step evaluations).
+        """
         if self.global_eval:
             stats = self.global_eval.get_summary_stats()
             parts = []

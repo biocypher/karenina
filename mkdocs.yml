@@ -6,11 +6,25 @@ repo_name: biocypher/karenina
 
 exclude_docs: |
   _archive/
+  # Superseded first-generation flat tutorials, replaced by the nested
+  # notebooks/ structure below. Kept in-tree pending removal, excluded from
+  # the built site so they no longer surface as unreferenced orphan pages.
+  notebooks/analyzing-results.ipynb
+  notebooks/creating-benchmark.ipynb
+  notebooks/custom-templates.ipynb
+  notebooks/dataframe-analysis.ipynb
+  notebooks/mcp-verification.ipynb
+  notebooks/multi-model-eval.ipynb
+  notebooks/rubric-traits.ipynb
+  notebooks/running-verification.ipynb
   # Jupytext .md companion files — notebooks are the canonical source
   getting-started/quickstart.md
   getting-started/quickstart-taskeval.md
   getting-started/quickstart-scenarios.md
   workflows/task-eval/index.md
+  workflows/task-eval/basic-evaluation.md
+  workflows/task-eval/multi-step-evaluation.md
+  workflows/task-eval/quality-assessment.md
   core_concepts/answer-templates.md
   core_concepts/verification-primitives.md
   core_concepts/rubrics/llm-traits.md
@@ -25,13 +39,19 @@ exclude_docs: |
   workflows/creating-benchmarks/choosing-rubric-traits.md
   workflows/creating-benchmarks/scaled-authoring.md
   workflows/creating-benchmarks/ai-assisted-authoring.md
+  workflows/creating-benchmarks/adele-classification.md
+  workflows/creating-benchmarks/benchmark-operations.md
   workflows/running-verification/basic-verification.md
   workflows/running-verification/full-evaluation.md
   workflows/running-verification/multi-model-comparison.md
   workflows/running-verification/deep-judgment.md
   workflows/running-verification/mcp-agent-evaluation.md
   workflows/running-verification/manual-interface-workflow.md
+  workflows/running-verification/extending-a-prior-run.md
+  workflows/running-verification/few-shot-configuration.md
+  workflows/running-verification/progressive-save.md
   workflows/analyzing-results/dataframe-analysis.md
+  workflows/analyzing-results/database-persistence.md
   core_concepts/questions-and-benchmarks/benchmarks.md
   core_concepts/questions-and-benchmarks/questions.md
   core_concepts/verification-pipeline.md
@@ -45,11 +65,16 @@ exclude_docs: |
   core_concepts/results-and-scoring.md
   core_concepts/rubrics/agentic-traits.md
   core_concepts/agentic-evaluation.md
+  core_concepts/extending-runs.md
   workflows/running-verification/agentic-evaluation.md
   core_concepts/scenarios/building-scenarios.md
   core_concepts/scenarios/outcome-criteria.md
   core_concepts/scenarios/state-and-routing.md
+  core_concepts/scenarios/handover.md
+  core_concepts/scenarios/execution.md
   workflows/scenarios/sycophancy-tutorial.md
+  advanced-pipeline/error-handling.md
+  advanced-pipeline/replay-store.md
 
 theme:
   name: material
@@ -77,6 +102,12 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+
+# Compatibility shim for the pinned pygments 2.20 / pymdown-extensions 10.16
+# pair, which crash when a code block is highlighted without a title/filename.
+# See hooks/pygments_compat.py. Remove once the toolchain versions are resolved.
+hooks:
+  - hooks/pygments_compat.py
 
 plugins:
   - search
@@ -196,6 +227,8 @@ nav:
       - Building Scenarios: notebooks/core_concepts/scenarios/building-scenarios.ipynb
       - Outcome Criteria: notebooks/core_concepts/scenarios/outcome-criteria.ipynb
       - State and Routing: notebooks/core_concepts/scenarios/state-and-routing.ipynb
+      - Handover: notebooks/core_concepts/scenarios/handover.ipynb
+      - Execution: notebooks/core_concepts/scenarios/execution.ipynb
     - Templates vs Rubrics: notebooks/core_concepts/template-vs-rubric.ipynb
     - Evaluation Modes: notebooks/core_concepts/evaluation-modes.ipynb
     - Results & Scoring: notebooks/core_concepts/results-and-scoring.ipynb
@@ -206,13 +239,18 @@ nav:
       - Verification Pipeline: notebooks/core_concepts/verification-pipeline.ipynb
       - Prompt Assembly: notebooks/core_concepts/prompt-assembly.ipynb
       - Agentic Evaluation: notebooks/core_concepts/agentic-evaluation.ipynb
+      - Extending Runs: notebooks/core_concepts/extending-runs.ipynb
     - Infrastructure:
       - Adapters: core_concepts/adapters.md
       - MCP Overview: notebooks/core_concepts/mcp-overview.ipynb
       - Manual Interface: notebooks/core_concepts/manual-interface.ipynb
   - Workflows:
     - workflows/index.md
-    - Evaluating with TaskEval: notebooks/task-eval/index.ipynb
+    - Evaluating with TaskEval:
+      - Overview: notebooks/task-eval/index.ipynb
+      - Basic Evaluation: notebooks/task-eval/basic-evaluation.ipynb
+      - Multi-Step Evaluation: notebooks/task-eval/multi-step-evaluation.ipynb
+      - Quality Assessment: notebooks/task-eval/quality-assessment.ipynb
     - Configuration:
       - Overview: workflows/configuration/index.md
       - Environment Variables: workflows/configuration/environment-variables.md
@@ -224,6 +262,9 @@ nav:
       - Quality Assessment: notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb
       - Choosing Rubric Traits: notebooks/creating-benchmarks/choosing-rubric-traits.ipynb
       - Scaled Authoring: notebooks/creating-benchmarks/scaled-authoring.ipynb
+      - AI-Assisted Authoring: notebooks/creating-benchmarks/ai-assisted-authoring.ipynb
+      - ADeLe Classification: notebooks/creating-benchmarks/adele-classification.ipynb
+      - Benchmark Operations: notebooks/creating-benchmarks/benchmark-operations.ipynb
     - Running Verification:
       - Overview: workflows/running-verification/index.md
       - Basic Verification: notebooks/running-verification/basic-verification.ipynb
@@ -233,14 +274,29 @@ nav:
       - MCP Agent Evaluation: notebooks/running-verification/mcp-agent-evaluation.ipynb
       - Manual Interface: notebooks/running-verification/manual-interface-workflow.ipynb
       - Agentic Evaluation: notebooks/running-verification/agentic-evaluation.ipynb
+      - Extending a Prior Run: notebooks/running-verification/extending-a-prior-run.ipynb
+      - Few-Shot Configuration: notebooks/running-verification/few-shot-configuration.ipynb
+      - Progressive Save: notebooks/running-verification/progressive-save.ipynb
     - Analyzing Results:
       - Overview: workflows/analyzing-results/index.md
       - Verification Result: workflows/analyzing-results/verification-result.md
       - DataFrame Analysis: notebooks/analyzing-results/dataframe-analysis.ipynb
+      - Database Persistence: notebooks/analyzing-results/database-persistence.ipynb
+      - Error Analysis: workflows/analyzing-results/error-analysis.md
       - Exporting: workflows/analyzing-results/exporting.md
       - Iterating: workflows/analyzing-results/iterating.md
     - Scenarios:
       - Sycophancy Tutorial: notebooks/scenarios/sycophancy-tutorial.ipynb
+    - Library Walkthrough:
+      - Defining a Benchmark: notebooks/using-karenina/defining-benchmark.ipynb
+      - Adding Questions: notebooks/using-karenina/adding-questions.ipynb
+      - Accessing and Filtering: notebooks/using-karenina/accessing-filtering.ipynb
+      - Answer Templates: notebooks/using-karenina/templates.ipynb
+      - Rubrics: notebooks/using-karenina/rubrics.ipynb
+      - Model Configuration: notebooks/using-karenina/model-configuration.ipynb
+      - Running Verification: notebooks/using-karenina/verification.ipynb
+      - Analyzing Results with DataFrames: notebooks/using-karenina/analyzing-results-dataframes.ipynb
+      - Saving and Loading: notebooks/using-karenina/saving-loading.ipynb
   - Reference:
     - reference/index.md
     - Configuration Reference:
@@ -258,6 +314,9 @@ nav:
       - serve: reference/cli/serve.md
       - init: reference/cli/init.md
       - optimize: reference/cli/optimize.md
+    - Failure and Caveats: reference/api/failure-and-caveats.md
+    - Sinks: reference/api/sinks.md
+    - Replay: reference/api/replay.md
     - API Reference: reference/api/
   - Advanced:
     - advanced.md
@@ -270,12 +329,35 @@ nav:
       - Custom Stages: advanced-pipeline/custom-stages.md
       - Agentic Evaluation: advanced-pipeline/agentic-evaluation.md
       - Agentic Rubric Evaluation: advanced-pipeline/agentic-rubric-evaluation.md
+      - Error Handling and Retries: notebooks/advanced/pipeline/error-handling.ipynb
+      - Replay Store: notebooks/advanced/pipeline/replay-store.ipynb
     - Adapters:
       - Overview: advanced-adapters/index.md
       - Ports: advanced-adapters/ports.md
       - Available Adapters: advanced-adapters/available-adapters.md
       - MCP Integration: advanced-adapters/mcp-integration.md
       - Writing Adapters: advanced-adapters/writing-adapters.md
+    - Features:
+      - Abstention Detection: notebooks/advanced/abstention-detection.ipynb
+      - Deep-Judgment Parsing: notebooks/advanced/deep-judgment.ipynb
+      - Embedding Check: notebooks/advanced/embedding-check.ipynb
+      - Few-Shot Prompting: notebooks/advanced/few-shot.ipynb
+      - Manual Trace System: notebooks/advanced/manual-traces.ipynb
+      - MCP Integration: notebooks/advanced/mcp-integration.ipynb
+      - Configuration Presets: notebooks/advanced/presets.ipynb
+      - TaskEval Trace Evaluation: notebooks/advanced/task-eval.ipynb
+    - GEPA Optimization:
+      - Quick Start: notebooks/gepa/01_gepa_quickstart.ipynb
+      - Configuration: notebooks/gepa/02_configuration.ipynb
+      - Data Splitting: notebooks/gepa/03_data_splitting.ipynb
+      - Scoring Deep Dive: notebooks/gepa/04_scoring_deep_dive.ipynb
+      - Karenina Adapter: notebooks/gepa/05_karenina_adapter.ipynb
+      - Feedback Generation: notebooks/gepa/06_feedback_generation.ipynb
+      - Tracking Runs: notebooks/gepa/07_tracking_runs.ipynb
+      - Export and Reuse: notebooks/gepa/08_export_and_reuse.ipynb
+      - Full Optimization Workflow: notebooks/gepa/09_full_optimization_workflow.ipynb
+      - MCP Tool Optimization: notebooks/gepa/10_mcp_tool_optimization.ipynb
+      - Verbose Real Optimization: notebooks/gepa/11_verbose_real_optimization.ipynb
   - Contributing:
     - contributing.md
 

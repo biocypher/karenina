@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .base import BenchmarkBase
@@ -37,6 +37,7 @@ class VerificationManager:
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
         workspace_root: "Path | None" = None,
+        sink: Any = None,
     ) -> VerificationResultSet:
         """
         Run verification on the benchmark using existing execution system.
@@ -48,6 +49,9 @@ class VerificationManager:
             async_enabled: Optional async control (overrides KARENINA_ASYNC_ENABLED env var if provided)
             progress_callback: Optional callback for progress updates
             workspace_root: Root directory for task workspaces (from Benchmark).
+            sink: Optional :class:`ResultSink` for progressive save / crash
+                recovery. Forwarded verbatim to
+                :func:`run_verification_batch`.
 
         Returns:
             VerificationResultSet containing all verification results
@@ -91,17 +95,17 @@ class VerificationManager:
                 # If it's a list of trait objects, convert to Rubric and dump
                 elif isinstance(question_rubric_raw, list):
                     from karenina.schemas.entities.rubric import (
-                        CallableTrait,
+                        CallableRubricTrait,
                         LLMRubricTrait,
                         MetricRubricTrait,
-                        RegexTrait,
+                        RegexRubricTrait,
                         Rubric,
                     )
 
                     # Separate traits by type
                     llm_traits = [t for t in question_rubric_raw if isinstance(t, LLMRubricTrait)]
-                    regex_traits = [t for t in question_rubric_raw if isinstance(t, RegexTrait)]
-                    callable_traits = [t for t in question_rubric_raw if isinstance(t, CallableTrait)]
+                    regex_traits = [t for t in question_rubric_raw if isinstance(t, RegexRubricTrait)]
+                    callable_traits = [t for t in question_rubric_raw if isinstance(t, CallableRubricTrait)]
                     metric_traits = [t for t in question_rubric_raw if isinstance(t, MetricRubricTrait)]
 
                     # Create Rubric and convert to dict
@@ -113,6 +117,16 @@ class VerificationManager:
                     )
                     question_rubric_dict = rubric.model_dump()
 
+            # Convert question_dynamic_rubric to dict if needed
+            question_dynamic_rubric_dict = None
+            question_dynamic_rubric_raw = q_data.get("question_dynamic_rubric")
+            if question_dynamic_rubric_raw is not None:
+                if isinstance(question_dynamic_rubric_raw, dict):
+                    question_dynamic_rubric_dict = question_dynamic_rubric_raw
+                else:
+                    # Already a DynamicRubric object; dump to dict
+                    question_dynamic_rubric_dict = question_dynamic_rubric_raw.model_dump()
+
             template = FinishedTemplate(
                 question_id=q_id,
                 question_text=q_data["question"],
@@ -121,13 +135,15 @@ class VerificationManager:
                 last_modified=q_data.get("dateModified", datetime.now().isoformat()),
                 few_shot_examples=q_data.get("few_shot_examples"),
                 question_rubric=question_rubric_dict,
+                question_dynamic_rubric=question_dynamic_rubric_dict,
                 keywords=q_data.get("keywords"),
                 workspace_path=q_data.get("workspace_path"),
             )
             templates.append(template)
 
-        # Get global rubric
+        # Get global rubric and global dynamic rubric
         global_rubric = self.rubric_manager.get_global_rubric()
+        global_dynamic_rubric = self.rubric_manager.get_global_dynamic_rubric()
 
         # Determine storage_url from config if db_config is present
         storage_url = None
@@ -156,11 +172,13 @@ class VerificationManager:
             config=config,
             run_name=run_name,
             global_rubric=global_rubric,
+            global_dynamic_rubric=global_dynamic_rubric,
             async_enabled=async_enabled,  # Can override env var
             storage_url=storage_url,
             benchmark_name=self.base.name,
             progress_callback=batch_progress_callback,
             workspace_root=workspace_root,
+            sink=sink,
         )
 
         return results

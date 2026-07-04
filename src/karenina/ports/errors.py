@@ -105,6 +105,7 @@ class AgentExecutionError(PortError):
     Args:
         message: Human-readable description of the error.
         stderr: Standard error output from the failed process, if available.
+        limit_reached: True if the error was caused by hitting a turn/recursion limit.
 
     Example:
         raise AgentExecutionError(
@@ -113,9 +114,10 @@ class AgentExecutionError(PortError):
         )
     """
 
-    def __init__(self, message: str, stderr: str | None = None) -> None:
+    def __init__(self, message: str, stderr: str | None = None, limit_reached: bool = False) -> None:
         super().__init__(message)
         self.stderr = stderr
+        self.limit_reached = limit_reached
 
 
 class AgentTimeoutError(AgentExecutionError):

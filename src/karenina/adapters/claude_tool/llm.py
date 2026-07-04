@@ -7,7 +7,7 @@ Key features:
 - Uses Anthropic's native Python SDK for efficient API calls
 - Supports structured output via client.beta.messages.parse() with Pydantic
 - Implements prompt caching for efficiency
-- Uses SDK's built-in retry logic for transient errors
+- Derives SDK max_retries from RetryPolicy for consistent retry budgets
 """
 
 from __future__ import annotations
@@ -15,21 +15,23 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
-from dotenv import load_dotenv
 from pydantic import BaseModel
 
+from karenina.adapters._parallel_base import with_llm_semaphore
 from karenina.ports import AdapterUnavailableError, LLMPort, LLMResponse, Message, ParseError
 from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import StreamingLLMResponse
 from karenina.schemas.config import ModelConfig
+from karenina.utils.errors import ErrorRegistry
 from karenina.utils.messages import append_error_feedback
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .messages import build_system_with_cache, convert_to_anthropic, extract_system_prompt
 from .usage import extract_usage_from_response
-
-# Load environment variables from .env file (for ANTHROPIC_API_KEY)
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,9 @@ class ClaudeToolLLMAdapter:
     - Structured output via client.beta.messages.parse() with Pydantic
     - Prompt caching for efficiency
 
-    Note: Transient error retries are handled by the Anthropic SDK (default: 2 retries
-    with exponential backoff for connection errors, timeouts, rate limits, and 5xx errors).
+    Note: Transient error retries are handled by the Anthropic SDK. The max_retries
+    parameter is derived from the model's RetryPolicy so retry budgets stay consistent
+    across all adapters.
 
     Example:
         >>> from karenina.schemas.config import ModelConfig
@@ -87,6 +90,9 @@ class ClaudeToolLLMAdapter:
         self._structured_schema = _structured_schema
         self._max_retries = _max_retries
 
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
+
         # Initialize clients lazily to avoid import issues
         self._client: Any = None
         self._async_client: Any = None
@@ -102,8 +108,13 @@ class ClaudeToolLLMAdapter:
                 kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
             if self._config.anthropic_base_url:
                 kwargs["base_url"] = self._config.anthropic_base_url
+            if self._config.request_timeout is not None:
+                kwargs["timeout"] = self._config.request_timeout
 
-            # SDK handles retries automatically (default: 2 retries with exponential backoff)
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
             self._client = Anthropic(**kwargs)
         return self._client
 
@@ -118,8 +129,13 @@ class ClaudeToolLLMAdapter:
                 kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
             if self._config.anthropic_base_url:
                 kwargs["base_url"] = self._config.anthropic_base_url
+            if self._config.request_timeout is not None:
+                kwargs["timeout"] = self._config.request_timeout
 
-            # SDK handles retries automatically (default: 2 retries with exponential backoff)
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
             self._async_client = AsyncAnthropic(**kwargs)
         return self._async_client
 
@@ -128,11 +144,12 @@ class ClaudeToolLLMAdapter:
         """Declare what prompt features this adapter supports.
 
         Returns:
-            PortCapabilities with system prompt support and structured output support.
+            PortCapabilities with system prompt, structured output, and streaming support.
         """
         return PortCapabilities(
             supports_system_prompt=True,
             supports_structured_output=True,
+            supports_streaming=True,
         )
 
     async def ainvoke(self, messages: list[Message]) -> LLMResponse:
@@ -156,31 +173,7 @@ class ClaudeToolLLMAdapter:
     async def _ainvoke_text(self, messages: list[Message]) -> LLMResponse:
         """Invoke LLM for regular text output."""
         client = self._get_async_client()
-
-        # Convert messages
-        anthropic_messages = convert_to_anthropic(messages)
-        system_prompt = extract_system_prompt(messages)
-
-        # Build kwargs
-        if not self._config.model_name:
-            raise AdapterUnavailableError("model_name is required in ModelConfig", reason="missing_model_name")
-
-        kwargs: dict[str, Any] = {
-            "model": self._config.model_name,
-            "max_tokens": self._config.max_tokens,
-            "messages": anthropic_messages,
-        }
-
-        # Add system with caching if present
-        if system_prompt:
-            cached_system = build_system_with_cache(system_prompt)
-            if cached_system:
-                kwargs["system"] = cached_system
-
-        # Add temperature if specified
-        if self._config.temperature is not None:
-            kwargs["temperature"] = self._config.temperature
-
+        kwargs = self._build_invoke_kwargs(messages)
         response = await client.messages.create(**kwargs)
 
         # Extract text content
@@ -269,12 +262,15 @@ class ClaudeToolLLMAdapter:
             raise ParseError(f"Parsed output is {type(parsed_output).__name__}, expected {schema.__name__}")
 
         usage = extract_usage_from_response(response, model=self._config.model_name)
+        # Serialize to JSON so callers can json.loads(response.content)
+        content = parsed_output.model_dump_json()
         return LLMResponse(
-            content=str(parsed_output),
+            content=content,
             usage=usage,
             raw=parsed_output,
         )
 
+    @with_llm_semaphore
     def invoke(self, messages: list[Message]) -> LLMResponse:
         """Invoke the LLM synchronously.
 
@@ -305,6 +301,143 @@ class ClaudeToolLLMAdapter:
 
         except RuntimeError:
             return asyncio.run(self.ainvoke(messages))
+
+    def _build_invoke_kwargs(self, messages: list[Message]) -> dict[str, Any]:
+        """Build kwargs for messages.create / messages.stream.
+
+        Shared between _ainvoke_text and astream to avoid duplication.
+        """
+        anthropic_messages = convert_to_anthropic(messages)
+        system_prompt = extract_system_prompt(messages)
+
+        if not self._config.model_name:
+            raise AdapterUnavailableError("model_name is required in ModelConfig", reason="missing_model_name")
+
+        kwargs: dict[str, Any] = {
+            "model": self._config.model_name,
+            "max_tokens": self._config.max_tokens,
+            "messages": anthropic_messages,
+        }
+
+        if system_prompt:
+            cached_system = build_system_with_cache(system_prompt)
+            if cached_system:
+                kwargs["system"] = cached_system
+
+        if self._config.temperature is not None:
+            kwargs["temperature"] = self._config.temperature
+
+        return kwargs
+
+    @asynccontextmanager
+    async def astream(self, messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:  # noqa: ANN201
+        """Stream LLM response, accumulating tokens as they arrive.
+
+        Uses Anthropic SDK's ``client.messages.stream()`` for native streaming.
+        On timeout, the StreamingLLMResponse contains whatever content
+        was received before the interruption.
+
+        Args:
+            messages: List of unified Message objects.
+
+        Yields:
+            StreamingLLMResponse that can be iterated for text chunks.
+        """
+        client = self._get_async_client()
+        kwargs = self._build_invoke_kwargs(messages)
+        response = StreamingLLMResponse()
+
+        async with client.messages.stream(**kwargs) as stream:
+            response._set_chunk_source(stream.text_stream)
+            try:
+                yield response
+            finally:
+                # Best-effort usage extraction from the stream's final message
+                try:
+                    final_message = await stream.get_final_message()
+                    response.usage = extract_usage_from_response(final_message, model=self._config.model_name)
+                except Exception:
+                    logger.warning("Could not extract usage from stream", exc_info=True)
+        response.is_complete = True
+
+    async def _astream_with_timeout(self, messages: list[Message], timeout: float | None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content.
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If the stream exceeds the wall-clock timeout.
+        """
+        async with self.astream(messages) as sr:
+            try:
+                async with asyncio.timeout(timeout):
+                    async for _chunk in sr:
+                        pass
+            except TimeoutError:
+                from karenina.exceptions import StreamingTimeoutError
+
+                raise StreamingTimeoutError(
+                    f"Streaming timed out after {timeout}s",
+                    partial_content=sr.accumulated_content,
+                ) from None
+
+        return LLMResponse(
+            content=sr.accumulated_content,
+            usage=sr.usage,
+            raw=None,
+        )
+
+    @with_llm_semaphore
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Stream with wall-clock timeout, returning accumulated content synchronously.
+
+        Uses streaming internally so that partial content can be captured on
+        timeout. Returns the same LLMResponse type as invoke(). Retries via
+        RetryExecutor on transient errors (including StreamingTimeoutError
+        with zero content, classified as RATE_LIMIT for queue congestion).
+
+        Args:
+            messages: List of unified Message objects.
+            timeout: Wall-clock timeout in seconds. None means no timeout.
+
+        Returns:
+            LLMResponse with accumulated content.
+
+        Raises:
+            StreamingTimeoutError: If retries are exhausted and the stream
+                still exceeds the wall-clock timeout.
+        """
+        result: LLMResponse = self._retry_executor.execute_with_timeout(
+            self._stream_invoke_once, messages, timeout=timeout
+        )
+        return result
+
+    def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Single stream_invoke attempt (no retry). Called by RetryExecutor."""
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        portal = get_async_portal()
+
+        if portal is not None:
+            return portal.call(self._astream_with_timeout, messages, timeout)
+
+        try:
+            asyncio.get_running_loop()
+
+            def run_in_thread() -> LLMResponse:
+                return asyncio.run(self._astream_with_timeout(messages, timeout))
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_thread)
+                return future.result(timeout=(timeout or 300) + 30)
+
+        except RuntimeError:
+            return asyncio.run(self._astream_with_timeout(messages, timeout))
 
     def with_structured_output(
         self, schema: type[BaseModel], *, max_retries: int | None = None

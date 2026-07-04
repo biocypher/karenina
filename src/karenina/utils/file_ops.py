@@ -5,7 +5,9 @@ Provides reusable atomic file write functionality.
 
 import contextlib
 import os
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TextIO
 
 
 def atomic_write(filepath: Path, data: str) -> None:
@@ -38,4 +40,43 @@ def atomic_write(filepath: Path, data: str) -> None:
         if partial_path.exists():
             with contextlib.suppress(OSError):
                 partial_path.unlink()
+        raise
+
+
+@contextlib.contextmanager
+def atomic_writer(filepath: Path) -> Iterator[TextIO]:
+    """Context-manager twin of atomic_write for streaming writes.
+
+    Yields a text file handle pointing at a ``.partial`` sidecar of
+    ``filepath``. On clean exit, fsyncs the handle, closes it, and
+    atomically renames the sidecar into place. On any exception inside
+    the ``with`` block (including ``KeyboardInterrupt`` / ``SystemExit``
+    via ``BaseException``), removes the ``.partial`` file and reraises.
+
+    Args:
+        filepath: Target file path.
+
+    Yields:
+        An open writable text file handle for the ``.partial`` sidecar.
+
+    Raises:
+        OSError: If the partial write, rename, or cleanup fails.
+    """
+    partial_path = filepath.with_suffix(filepath.suffix + ".partial")
+    partial_path.parent.mkdir(parents=True, exist_ok=True)
+
+    f: TextIO | None = None
+    try:
+        f = open(partial_path, "w", encoding="utf-8")  # noqa: SIM115
+        yield f
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
+        partial_path.replace(filepath)
+    except BaseException:
+        if f is not None and not f.closed:
+            with contextlib.suppress(OSError):
+                f.close()
+        with contextlib.suppress(OSError):
+            partial_path.unlink()
         raise

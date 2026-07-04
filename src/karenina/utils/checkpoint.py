@@ -21,29 +21,68 @@ from ..schemas.checkpoint import (
     SchemaOrgQuestion,
     SchemaOrgSoftwareSourceCode,
 )
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
-from ..schemas.entities.rubric import AgenticRubricTrait
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
+from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from .checkpoint_trait_converters import (
+    convert_dynamic_rubric_to_ratings,
     convert_rating_to_rubric_trait,
+    convert_ratings_to_dynamic_rubric,
     convert_rubric_trait_to_rating,
     strip_deep_judgment_config_from_checkpoint,
 )
 
 logger = logging.getLogger(__name__)
 
+VALID_QUESTION_TRAIT_TYPES: frozenset[str] = frozenset(
+    [
+        "karenina:GlobalRubricTrait",
+        "karenina:QuestionSpecificRubricTrait",
+        "karenina:GlobalRegexTrait",
+        "karenina:QuestionSpecificRegexTrait",
+        "karenina:GlobalCallableTrait",
+        "karenina:QuestionSpecificCallableTrait",
+        "karenina:GlobalMetricRubricTrait",
+        "karenina:QuestionSpecificMetricRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:QuestionSpecificLLMRubricTrait",
+        "karenina:GlobalDynamicRubricTrait",
+        "karenina:QuestionSpecificDynamicRubricTrait",
+        "karenina:GlobalAgenticRubricTrait",
+        "karenina:QuestionSpecificAgenticRubricTrait",
+    ]
+)
+
+VALID_GLOBAL_TRAIT_TYPES: frozenset[str] = frozenset(
+    [
+        "karenina:GlobalRubricTrait",
+        "karenina:GlobalRegexTrait",
+        "karenina:GlobalCallableTrait",
+        "karenina:GlobalMetricRubricTrait",
+        "karenina:GlobalLLMRubricTrait",
+        "karenina:GlobalDynamicRubricTrait",
+        "karenina:GlobalAgenticRubricTrait",
+    ]
+)
+
 # Re-export for backward compatibility
 __all__ = [
     "BenchmarkConversionError",
+    "VALID_QUESTION_TRAIT_TYPES",
+    "VALID_GLOBAL_TRAIT_TYPES",
     "generate_question_id",
     "generate_template_id",
     "convert_rubric_trait_to_rating",
     "convert_rating_to_rubric_trait",
+    "convert_dynamic_rubric_to_ratings",
+    "convert_ratings_to_dynamic_rubric",
     "strip_deep_judgment_config_from_checkpoint",
     "create_jsonld_benchmark",
     "add_question_to_benchmark",
     "add_global_rubric_to_benchmark",
+    "add_global_dynamic_rubric_to_benchmark",
     "extract_questions_from_benchmark",
     "extract_global_rubric_from_benchmark",
+    "extract_global_dynamic_rubric_from_benchmark",
     "validate_jsonld_benchmark",
 ]
 
@@ -91,8 +130,16 @@ def generate_template_id(template: str | None) -> str:
     if not template or template.strip() == "":
         return "no_template"
 
-    # Create MD5 hash of the template
-    hash_obj = hashlib.md5(template.strip().encode("utf-8"))
+    # Normalize source before hashing to ensure consistent IDs regardless
+    # of indentation context (module-level vs. string literal in TaskEval)
+    import textwrap
+
+    normalized = textwrap.dedent(template)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = "\n".join(line.rstrip() for line in normalized.split("\n"))
+    normalized = normalized.strip()
+
+    hash_obj = hashlib.md5(normalized.encode("utf-8"))
     return hash_obj.hexdigest()[:32]
 
 
@@ -144,7 +191,9 @@ def add_question_to_benchmark(
     raw_answer: str,
     answer_template: str,
     question_id: str | None = None,
-    question_rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait]
+    question_rubric_traits: list[
+        LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
+    ]
     | None = None,
     finished: bool = False,
     author: dict[str, Any] | None = None,
@@ -177,6 +226,15 @@ def add_question_to_benchmark(
     Returns:
         The question ID that was added
     """
+    # Extract existing IDs from benchmark
+    existing_ids = set()
+    for item in benchmark.dataFeedElement:
+        if item.id:
+            existing_ids.add(item.id)
+        else:
+            # Generate ID from question text if no ID set
+            existing_ids.add(generate_question_id(item.item.text))
+
     if question_id is None:
         # Generate base ID from question text
         base_id = generate_question_id(question)
@@ -185,18 +243,13 @@ def add_question_to_benchmark(
         question_id = base_id
         counter = 1
 
-        # Extract existing IDs from benchmark
-        existing_ids = set()
-        for item in benchmark.dataFeedElement:
-            if item.id:
-                existing_ids.add(item.id)
-            else:
-                # Generate ID from question text if no ID set
-                existing_ids.add(generate_question_id(item.item.text))
-
         while question_id in existing_ids:
             question_id = f"{base_id}-{counter}"
             counter += 1
+    else:
+        # Explicit ID provided: reject duplicates
+        if question_id in existing_ids:
+            raise ValueError(f"Question with ID {question_id} already exists")
 
     timestamp = datetime.now().isoformat()
 
@@ -260,7 +313,9 @@ def add_question_to_benchmark(
 
 def add_global_rubric_to_benchmark(
     benchmark: JsonLdCheckpoint,
-    rubric_traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait],
+    rubric_traits: list[
+        LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
+    ],
 ) -> None:
     """
     Add global rubric traits to a benchmark.
@@ -346,12 +401,12 @@ def extract_questions_from_benchmark(
 
             # Categorize traits by type to match Rubric schema
             if traits:
-                from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+                from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
                 from ..schemas.entities.rubric import AgenticRubricTrait as AgenticRubricTraitLocal
 
                 llm_traits = [t for t in traits if isinstance(t, LLMRubricTrait)]
-                regex_traits = [t for t in traits if isinstance(t, RegexTrait)]
-                callable_traits = [t for t in traits if isinstance(t, CallableTrait)]
+                regex_traits = [t for t in traits if isinstance(t, RegexRubricTrait)]
+                callable_traits = [t for t in traits if isinstance(t, CallableRubricTrait)]
                 metric_traits = [t for t in traits if isinstance(t, MetricRubricTrait)]
                 agentic_traits = [t for t in traits if isinstance(t, AgenticRubricTraitLocal)]
 
@@ -388,7 +443,7 @@ def extract_questions_from_benchmark(
 
 def extract_global_rubric_from_benchmark(
     benchmark: JsonLdCheckpoint,
-) -> list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] | None:
+) -> list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait] | None:
     """
     Extract global rubric traits from a benchmark.
 
@@ -403,7 +458,7 @@ def extract_global_rubric_from_benchmark(
     Returns:
         List of trait objects or None if no global rubric
     """
-    traits: list[LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait] = []
+    traits: list[LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait] = []
 
     # Extract from rating array (standard format)
     if benchmark.rating:
@@ -428,7 +483,7 @@ def extract_global_rubric_from_benchmark(
                         # Normalize legacy "invert" field to "invert_result"
                         if "invert" in trait_data and "invert_result" not in trait_data:
                             trait_data["invert_result"] = trait_data.pop("invert")
-                        traits.append(RegexTrait(**trait_data))
+                        traits.append(RegexRubricTrait(**trait_data))
                 except (json.JSONDecodeError, TypeError):
                     pass  # Invalid JSON, skip
 
@@ -436,7 +491,7 @@ def extract_global_rubric_from_benchmark(
                 try:
                     callable_traits_data = json.loads(prop.value)
                     for trait_data in callable_traits_data:
-                        traits.append(CallableTrait(**trait_data))
+                        traits.append(CallableRubricTrait(**trait_data))
                 except (json.JSONDecodeError, TypeError):
                     pass  # Invalid JSON, skip
 
@@ -449,6 +504,54 @@ def extract_global_rubric_from_benchmark(
                     pass  # Invalid JSON, skip
 
     return traits if traits else None
+
+
+def add_global_dynamic_rubric_to_benchmark(
+    benchmark: JsonLdCheckpoint,
+    dynamic_rubric: DynamicRubric,
+) -> None:
+    """Add a global dynamic rubric to a benchmark.
+
+    Dynamic rubric traits are stored alongside regular rubric traits in the
+    ``rating`` array, distinguished by their ``@type`` discriminator
+    (``karenina:GlobalDynamicRubricTrait``).
+
+    Args:
+        benchmark: The benchmark to modify.
+        dynamic_rubric: The DynamicRubric to serialize into the checkpoint.
+    """
+    ratings = convert_dynamic_rubric_to_ratings(dynamic_rubric, "global")
+
+    # Append to existing ratings (preserving any regular rubric traits)
+    if benchmark.rating is None:
+        benchmark.rating = []
+    benchmark.rating.extend(ratings)
+    benchmark.dateModified = datetime.now().isoformat()
+
+
+def extract_global_dynamic_rubric_from_benchmark(
+    benchmark: JsonLdCheckpoint,
+) -> DynamicRubric | None:
+    """Extract global dynamic rubric traits from a benchmark.
+
+    Filters the ``rating`` array for entries tagged with
+    ``karenina:GlobalDynamicRubricTrait`` and reconstructs the DynamicRubric.
+
+    Args:
+        benchmark: The benchmark to extract from.
+
+    Returns:
+        DynamicRubric if any dynamic traits are found, otherwise None.
+    """
+    if not benchmark.rating:
+        return None
+
+    dynamic_ratings = [r for r in benchmark.rating if r.additionalType == "karenina:GlobalDynamicRubricTrait"]
+
+    if not dynamic_ratings:
+        return None
+
+    return convert_ratings_to_dynamic_rubric(dynamic_ratings)
 
 
 def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
@@ -484,18 +587,7 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
                 # Validate ratings if present
                 if item.item.rating:
                     for rating in item.item.rating:
-                        if rating.additionalType not in [
-                            "karenina:GlobalRubricTrait",
-                            "karenina:QuestionSpecificRubricTrait",
-                            "karenina:GlobalRegexTrait",
-                            "karenina:QuestionSpecificRegexTrait",
-                            "karenina:GlobalCallableTrait",
-                            "karenina:QuestionSpecificCallableTrait",
-                            "karenina:GlobalMetricRubricTrait",
-                            "karenina:QuestionSpecificMetricRubricTrait",
-                            "karenina:GlobalLLMRubricTrait",
-                            "karenina:QuestionSpecificLLMRubricTrait",
-                        ]:
+                        if rating.additionalType not in VALID_QUESTION_TRAIT_TYPES:
                             return (
                                 False,
                                 f"Invalid additionalType for rating: {rating.additionalType}",
@@ -504,13 +596,7 @@ def validate_jsonld_benchmark(benchmark: JsonLdCheckpoint) -> tuple[bool, str]:
         # Validate global ratings if present
         if benchmark.rating:
             for rating in benchmark.rating:
-                if rating.additionalType not in [
-                    "karenina:GlobalRubricTrait",
-                    "karenina:GlobalRegexTrait",
-                    "karenina:GlobalCallableTrait",
-                    "karenina:GlobalMetricRubricTrait",
-                    "karenina:GlobalLLMRubricTrait",
-                ]:
+                if rating.additionalType not in VALID_GLOBAL_TRAIT_TYPES:
                     return (
                         False,
                         f"Dataset-level rating must be a global trait type, got {rating.additionalType}",

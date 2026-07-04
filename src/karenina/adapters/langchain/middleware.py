@@ -9,6 +9,7 @@ Use the AgentPort interface via get_agent() instead.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -19,9 +20,17 @@ from pydantic import SecretStr
 from .prompts import SUMMARIZATION, build_question_context
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from karenina.schemas.config import AgentMiddlewareConfig
 
 logger = logging.getLogger(__name__)
+
+# Default per-LLM-call timeout used by PerCallTimeoutMiddleware when the
+# caller does not supply an explicit value. Matches the LangChainLLMAdapter
+# default (see llm.py _ainvoke_with_timeout) so the agent path and LLM path
+# share the same budget. See issue 195 for the wedge mode this prevents.
+_DEFAULT_PER_CALL_TIMEOUT_S = 180.0
 
 
 def fetch_openai_endpoint_context_size(
@@ -249,12 +258,93 @@ def create_invoke_summarization_middleware(
     )
 
 
+class PerCallTimeoutMiddleware(_get_agent_middleware_base()):  # type: ignore[misc]
+    """Middleware that bounds each individual model.ainvoke() inside the agent loop.
+
+    LangGraph's create_agent wraps the whole agent loop (many model + tool
+    iterations) in a single asyncio.wait_for at agent.py:arun(), but does not
+    bound each individual model call. Issue 195 documented a residual wedge
+    mode where a single model.ainvoke() inside the loop silently stalls for
+    the entire agent_timeout, even though httpx.Timeout(read=120s) is
+    configured on the underlying http client. The wedge is silent: no
+    httpx.ReadTimeout, no openai APITimeoutError, no exception at all until
+    the outer agent_timeout fires and kills the whole run.
+
+    This middleware mirrors the LangChainLLMAdapter._ainvoke_with_timeout
+    pattern at the LangGraph-middleware layer: every model call that
+    _execute_model_async makes inside the agent loop runs under an
+    asyncio.wait_for budget. When the budget expires, a stock
+    asyncio.TimeoutError is raised, which the ModelRetryMiddleware layered
+    above catches and retries with backoff. If all retries exhaust, the
+    exception propagates out of agent.ainvoke() where the existing
+    exception handler logs it as AgentExecutionError.
+
+    The sync wrap_model_call path is implemented as a passthrough (no
+    timeout) because karenina's agent adapter only ever runs async, and
+    interrupting a sync call cleanly without spawning threads is not
+    straightforward. If a sync code path ever hits this middleware, it
+    still functions, just without the guardrail.
+    """
+
+    def __init__(self, timeout: float) -> None:
+        """Initialize the per-call timeout middleware.
+
+        Args:
+            timeout: Per-model-call wall-clock timeout in seconds. Must be
+                positive. Callers that want "no timeout" should simply not
+                attach this middleware.
+        """
+        super().__init__()
+        if timeout <= 0:
+            msg = f"PerCallTimeoutMiddleware timeout must be positive, got {timeout}"
+            raise ValueError(msg)
+        self.timeout = timeout
+        self.tools: list[Any] = []  # no extra tools registered
+
+    def wrap_model_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Any],
+    ) -> Any:
+        """Sync passthrough: the agent adapter is async-only in karenina.
+
+        See class docstring: we intentionally do not try to bound sync calls.
+        This method exists only so the middleware does not raise
+        NotImplementedError if LangGraph ever routes a sync call through it.
+        """
+        return handler(request)
+
+    async def awrap_model_call(
+        self,
+        request: Any,
+        handler: Callable[[Any], Awaitable[Any]],
+    ) -> Any:
+        """Bound a single async model call by wall-clock timeout.
+
+        Calls the provided ``handler`` (which executes the model inside the
+        LangGraph agent loop) under an ``asyncio.wait_for`` wrapper. On
+        timeout, cancels the underlying handler and raises
+        ``asyncio.TimeoutError``; the outer ModelRetryMiddleware, if
+        present, retries the call with backoff.
+        """
+        try:
+            return await asyncio.wait_for(handler(request), timeout=self.timeout)
+        except TimeoutError:
+            logger.warning(
+                "PerCallTimeoutMiddleware: model call exceeded %.1fs budget; "
+                "cancelling and letting the retry layer handle it",
+                self.timeout,
+            )
+            raise
+
+
 def build_agent_middleware(
     config: AgentMiddlewareConfig | None,
     max_context_tokens: int | None = None,
     interface: str = "langchain",
     base_model: Any = None,
     provider: str | None = None,
+    request_timeout: float | None = None,
 ) -> list[Any]:
     """Build middleware list from configuration.
 
@@ -267,6 +357,12 @@ def build_agent_middleware(
             Required if summarization is enabled and no explicit model is configured.
         provider: The model provider (e.g., "anthropic", "openai"). Used to add
             provider-specific middleware like Anthropic prompt caching.
+        request_timeout: Per-LLM-call wall-clock timeout in seconds. When
+            set to a positive value, a PerCallTimeoutMiddleware is added
+            so each individual model.ainvoke() inside the agent loop is
+            bounded. When None or non-positive, no per-call guardrail is
+            added (the outer agent_timeout remains the only safety net).
+            See issue 195 for the wedge mode this prevents.
 
     Returns:
         List of configured middleware instances.
@@ -327,6 +423,10 @@ def build_agent_middleware(
     )
 
     # 3. Model retry middleware (replaces tenacity for agent path)
+    # ToolRetryMiddleware accepts "raise" via upstream back-compat, but
+    # ModelRetryMiddleware checks `on_failure == "error"` directly. Map here
+    # so the karenina-facing literal `["continue", "raise"]` propagates correctly.
+    _model_retry_on_failure = "error" if config.model_retry.on_failure == "raise" else config.model_retry.on_failure
     middleware.append(
         ModelRetryMiddleware(
             max_retries=config.model_retry.max_retries,
@@ -334,9 +434,21 @@ def build_agent_middleware(
             initial_delay=config.model_retry.initial_delay,
             max_delay=config.model_retry.max_delay,
             jitter=config.model_retry.jitter,
-            on_failure=config.model_retry.on_failure,  # type: ignore[arg-type]
+            on_failure=_model_retry_on_failure,  # type: ignore[arg-type]
         )
     )
+
+    # 3b. Per-LLM-call timeout middleware (inner to retry so each attempt
+    # gets its own budget). Added only when a positive request_timeout is
+    # supplied so the default behaviour (no per-call guardrail) stays the
+    # same for callers that do not opt in. See issue 195.
+    effective_call_timeout = request_timeout if request_timeout is not None and request_timeout > 0 else None
+    if effective_call_timeout is not None:
+        middleware.append(PerCallTimeoutMiddleware(timeout=effective_call_timeout))
+        logger.info(
+            "PerCallTimeoutMiddleware enabled: timeout=%.1fs (from request_timeout)",
+            effective_call_timeout,
+        )
 
     # 4. Tool retry middleware (new capability)
     middleware.append(

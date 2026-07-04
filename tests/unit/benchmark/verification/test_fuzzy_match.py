@@ -1,14 +1,12 @@
 """Unit tests for fuzzy matching utilities.
 
-Tests fuzzy_match_excerpt and fuzzy_match_excerpt_with_context functions
-used for deep-judgment excerpt validation.
+Tests fuzzy_match_excerpt function used for deep-judgment excerpt validation.
 """
 
 import pytest
 
 from karenina.benchmark.verification.utils.trace_fuzzy_match import (
     fuzzy_match_excerpt,
-    fuzzy_match_excerpt_with_context,
 )
 
 
@@ -150,76 +148,6 @@ def test_fuzzy_match_threshold_boundary() -> None:
     match_found, similarity = fuzzy_match_excerpt(excerpt, trace)
 
     assert similarity >= 0.75
-
-
-@pytest.mark.unit
-def test_fuzzy_match_with_context_basic() -> None:
-    """Test fuzzy_match_excerpt_with_context returns context."""
-    trace = "The drug venetoclax targets BCL-2 protein and induces apoptosis."
-    excerpt = "targets BCL-2"
-
-    match_found, similarity, context = fuzzy_match_excerpt_with_context(excerpt, trace)
-
-    assert match_found is True
-    assert similarity >= 0.75
-    assert "targets BCL-2" in context
-
-
-@pytest.mark.unit
-def test_fuzzy_match_with_context_no_match() -> None:
-    """Test fuzzy_match_excerpt_with_context with no match."""
-    trace = "Some text here."
-    excerpt = "completely different"
-
-    match_found, similarity, context = fuzzy_match_excerpt_with_context(excerpt, trace)
-
-    assert match_found is False
-    assert similarity < 0.75
-    assert context == ""
-
-
-@pytest.mark.unit
-def test_fuzzy_match_with_context_custom_context_chars() -> None:
-    """Test fuzzy_match_excerpt_with_context with custom context length."""
-    trace = "The drug venetoclax targets BCL-2 protein and induces apoptosis."
-    excerpt = "targets BCL-2"
-
-    match_found, similarity, context = fuzzy_match_excerpt_with_context(excerpt, trace, context_chars=5)
-
-    assert match_found is True
-    # Context should be shorter with smaller context_chars
-    assert len(context) > 0
-
-
-@pytest.mark.unit
-def test_fuzzy_match_with_context_start_ellipsis() -> None:
-    """Test that context includes ellipsis when match is not at start."""
-    trace = "The drug venetoclax targets BCL-2 protein."
-    excerpt = "venetoclax targets"
-
-    match_found, similarity, context = fuzzy_match_excerpt_with_context(excerpt, trace)
-
-    assert match_found is True
-    # Match is not at the very start, so should have leading ellipsis
-    assert "venetoclax targets" in context
-    # If context is truncated, it should have ellipsis
-    if not context.startswith("The drug"):
-        assert context.startswith("...")
-
-
-@pytest.mark.unit
-def test_fuzzy_match_with_context_end_ellipsis() -> None:
-    """Test that context includes ellipsis when match is not at end."""
-    trace = "The drug venetoclax targets BCL-2 protein and induces apoptosis."
-    excerpt = "venetoclax targets"
-
-    match_found, similarity, context = fuzzy_match_excerpt_with_context(excerpt, trace)
-
-    assert match_found is True
-    # Match is in the middle, so context should have ellipsis at end if truncated
-    assert "venetoclax targets" in context
-    if not context.endswith("apoptosis."):
-        assert context.endswith("...")
 
 
 @pytest.mark.unit

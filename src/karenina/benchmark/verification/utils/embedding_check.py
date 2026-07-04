@@ -8,6 +8,7 @@ from collections import OrderedDict
 from typing import Any
 
 from karenina.adapters.factory import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.ports.messages import Message
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_THRESHOLD
@@ -232,6 +233,8 @@ def check_semantic_equivalence(
     if not ground_truth_data or not llm_response_data:
         return False
 
+    parsing_llm: Any | None = None
+
     try:
         # Get LLM via the port/adapter factory (respects interface routing)
         parsing_llm = get_llm(parsing_model)
@@ -286,6 +289,9 @@ Are these two responses semantically equivalent?"""
 
     except Exception as e:
         raise RuntimeError(f"Failed to perform semantic equivalence check: {e}") from e
+    finally:
+        if parsing_llm is not None:
+            close_adapter(parsing_llm)
 
 
 def perform_embedding_check(
@@ -293,6 +299,10 @@ def perform_embedding_check(
     llm_response_data: dict[str, Any] | None,
     parsing_model: ModelConfig,
     question_text: str | None = None,
+    *,
+    enabled: bool | None = None,
+    model: str | None = None,
+    threshold: float | None = None,
 ) -> tuple[bool, float | None, str | None, bool]:
     """
     Perform complete embedding check with fallback to semantic equivalence.
@@ -302,6 +312,12 @@ def perform_embedding_check(
         llm_response_data: The LLM response parsed data
         parsing_model: The parsing model configuration for semantic check
         question_text: The original question text for context (optional but recommended)
+        enabled: Whether embedding check is enabled. When None, falls back to
+            the EMBEDDING_CHECK env var via _should_use_embedding_check().
+        model: Embedding model name override. When None, falls back to
+            the EMBEDDING_CHECK_MODEL env var via _get_embedding_model_name().
+        threshold: Similarity threshold override. When None, falls back to
+            the EMBEDDING_CHECK_THRESHOLD env var via _get_embedding_threshold().
 
     Returns:
         Tuple of (
@@ -311,17 +327,21 @@ def perform_embedding_check(
             embedding_check_performed
         )
     """
-    if not _should_use_embedding_check():
+    check_enabled = enabled if enabled is not None else _should_use_embedding_check()
+    if not check_enabled:
         return False, None, None, False
 
     try:
         # Compute embedding similarity
         similarity_score, model_name = compute_embedding_similarity(ground_truth_data, llm_response_data)
+        # Override reported model name if explicit model was provided
+        if model is not None:
+            model_name = model
 
-        threshold = _get_embedding_threshold()
+        effective_threshold = threshold if threshold is not None else _get_embedding_threshold()
 
         # Check if similarity exceeds threshold
-        if similarity_score >= threshold:
+        if similarity_score >= effective_threshold:
             # Perform semantic equivalence check
             try:
                 is_equivalent = check_semantic_equivalence(

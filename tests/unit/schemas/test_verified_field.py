@@ -1,14 +1,23 @@
 """Tests for VerifiedField factory and VerificationMeta."""
 
+import logging
+
 import pytest
 from pydantic import BaseModel, Field
 
 from karenina.schemas.entities.answer import BaseAnswer
 from karenina.schemas.entities.composition import AllOf, AnyOf, FieldCheck
+from karenina.schemas.entities.conditional import ConditionalGroundTruth, GroundTruthCase
 from karenina.schemas.entities.verified_field import VerificationMeta, VerifiedField
 from karenina.schemas.primitives import (
     BooleanMatch,
     ExactMatch,
+    NumericGraded,
+    NumericMaximum,
+    NumericMinimum,
+    NumericRange,
+    NumericRangeGraded,
+    NumericThresholdGraded,
     NumericTolerance,
     TraceRegex,
 )
@@ -257,6 +266,77 @@ class TestBaseAnswerAutoVerifyGranular:
         answer = MyAnswer(a="x", b="wrong")
         assert answer.verify_granular() == 0.75  # 3 / 4
 
+    def test_graded_field_contributes_partial_credit(self):
+        class MyAnswer(BaseAnswer):
+            num: float = VerifiedField(
+                description="n",
+                ground_truth=42.0,
+                verify_with=NumericGraded(cutoff=0.25, mode="relative"),
+                weight=1.0,
+            )
+            flag: bool = VerifiedField(description="f", ground_truth=True, verify_with=BooleanMatch(), weight=1.0)
+
+        # near-miss numeric (46 vs 42 -> score 1 - (4/42)/0.25) + correct bool
+        answer = MyAnswer(num=46.0, flag=True)
+        expected_num_score = 1.0 - (4 / 42) / 0.25
+        assert answer.verify() is True  # numeric within cutoff, bool correct
+        assert answer.verify_granular() == pytest.approx((expected_num_score + 1.0) / 2)
+
+    def test_field_scores_exposes_per_field_credit(self):
+        class MyAnswer(BaseAnswer):
+            num: float = VerifiedField(
+                description="n",
+                ground_truth=42.0,
+                verify_with=NumericGraded(cutoff=0.25, mode="relative"),
+            )
+            flag: bool = VerifiedField(description="f", ground_truth=True, verify_with=BooleanMatch())
+
+        answer = MyAnswer(num=46.0, flag=False)
+        scores = answer._compute_field_scores()
+        assert scores["num"] == pytest.approx(1.0 - (4 / 42) / 0.25)
+        assert scores["flag"] == 0.0
+        # binary field_results stays binary alongside the graded scores
+        assert answer._compute_field_results() == {"num": True, "flag": False}
+
+    def test_non_graded_template_field_scores_are_binary(self):
+        class MyAnswer(BaseAnswer):
+            a: str = VerifiedField(description="a", ground_truth="x", verify_with=ExactMatch())
+            b: str = VerifiedField(description="b", ground_truth="y", verify_with=ExactMatch())
+
+        answer = MyAnswer(a="x", b="wrong")
+        # graded scores reduce to the binary image for non-graded primitives
+        assert answer._compute_field_scores() == {"a": 1.0, "b": 0.0}
+        assert answer.verify_granular() == 0.5
+
+    def test_range_graded_field_surfaces_shoulder_credit(self):
+        class MyAnswer(BaseAnswer):
+            corr: float = VerifiedField(
+                description="correlation in an acceptance band",
+                ground_truth=0.021,
+                verify_with=NumericRangeGraded(min=0.001, max=0.09, margin=0.02, mode="absolute"),
+            )
+
+        # 0.10 is just above the band: outside the gate but in the soft shoulder
+        answer = MyAnswer(corr=0.10)
+        assert answer.verify() is False
+        assert answer._compute_field_scores()["corr"] == pytest.approx(0.5)
+        assert answer.verify_granular() == pytest.approx(0.5)
+
+    def test_threshold_graded_field_surfaces_shoulder_credit(self):
+        class MyAnswer(BaseAnswer):
+            pval: float = VerifiedField(
+                description="p-value that should sit below a significance bound",
+                ground_truth=1e-30,
+                verify_with=NumericThresholdGraded(direction="max", margin=1.0, mode="relative"),
+            )
+
+        # 1.5e-30 is just over the bound: gate fails, soft shoulder gives 0.5
+        answer = MyAnswer(pval=1.5e-30)
+        assert answer.verify() is False
+        assert answer._compute_field_scores()["pval"] == pytest.approx(0.5)
+        # a value far on the correct side scores full credit
+        assert MyAnswer(pval=1e-40)._compute_field_scores()["pval"] == 1.0
+
 
 @pytest.mark.unit
 class TestBaseAnswerAutoGroundTruth:
@@ -330,3 +410,455 @@ class TestBaseAnswerTraceFields:
         answer = MyAnswer(target="BCL2", has_citations=False)
         answer._raw_trace = "BCL2 is the target [1]"
         assert answer.verify() is True
+
+
+# --- Issue 053: VerifiedField(verify_with=None) must raise ValueError ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldNoneVerifyWith:
+    """VerifiedField(verify_with=None) raises ValueError, not AttributeError."""
+
+    def test_none_verify_with_raises_value_error(self):
+        """Passing verify_with=None raises a clear ValueError."""
+        with pytest.raises(ValueError, match="verify_with is required"):
+            VerifiedField(
+                description="target",
+                ground_truth="BCL2",
+                verify_with=None,
+            )
+
+    def test_error_message_suggests_primitives(self):
+        """The error message mentions example primitives to help the user."""
+        with pytest.raises(ValueError, match="ExactMatch|BooleanMatch"):
+            VerifiedField(
+                description="target",
+                ground_truth="BCL2",
+                verify_with=None,
+            )
+
+
+# --- Issue 056: VerifiedField rejects empty/whitespace description ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldEmptyDescription:
+    """VerifiedField rejects empty or whitespace-only description."""
+
+    def test_empty_string_description_raises(self):
+        """Empty string description raises ValueError."""
+        with pytest.raises(ValueError, match="description is required"):
+            VerifiedField(
+                description="",
+                ground_truth="BCL2",
+                verify_with=ExactMatch(),
+            )
+
+    def test_whitespace_only_description_raises(self):
+        """Whitespace-only description raises ValueError."""
+        with pytest.raises(ValueError, match="description is required"):
+            VerifiedField(
+                description="   \t\n  ",
+                ground_truth="BCL2",
+                verify_with=ExactMatch(),
+            )
+
+    def test_valid_description_passes(self):
+        """A non-empty description does not raise."""
+        field = VerifiedField(
+            description="The protein target",
+            ground_truth="BCL2",
+            verify_with=ExactMatch(),
+        )
+        # Should return a FieldInfo without error
+        assert field is not None
+
+
+# --- Issue 010: ground_truth type mismatch warning ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldGroundTruthMismatchWarning:
+    """VerifiedField warns when ground_truth type obviously mismatches the primitive."""
+
+    def test_numeric_primitive_with_non_numeric_string_warns(self, caplog):
+        """NumericTolerance with a non-numeric string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="dose",
+                ground_truth="not-a-number",
+                verify_with=NumericTolerance(tolerance=0.1),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_range_with_non_numeric_string_warns(self, caplog):
+        """NumericRange with a non-numeric string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="score",
+                ground_truth="abc",
+                verify_with=NumericRange(min=0, max=10),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_boolean_primitive_with_non_bool_string_warns(self, caplog):
+        """BooleanMatch with a non-bool string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="approved",
+                ground_truth="maybe",
+                verify_with=BooleanMatch(),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_primitive_with_valid_number_no_warning(self, caplog):
+        """NumericTolerance with a float ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="dose",
+                ground_truth=5.0,
+                verify_with=NumericTolerance(tolerance=0.1),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_primitive_with_numeric_string_no_warning(self, caplog):
+        """NumericTolerance with a string like '3.14' does not warn (coercible)."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="dose",
+                ground_truth="3.14",
+                verify_with=NumericTolerance(tolerance=0.1),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_boolean_primitive_with_bool_no_warning(self, caplog):
+        """BooleanMatch with a bool ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="approved",
+                ground_truth=True,
+                verify_with=BooleanMatch(),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_graded_with_non_numeric_string_warns(self, caplog):
+        """NumericGraded with a non-numeric string ground_truth logs a warning."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="ratio",
+                ground_truth="not-a-number",
+                verify_with=NumericGraded(cutoff=0.25),
+            )
+        assert any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_numeric_graded_with_valid_number_no_warning(self, caplog):
+        """NumericGraded with a float ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="ratio",
+                ground_truth=1.95,
+                verify_with=NumericGraded(cutoff=0.25),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+    def test_exact_match_no_spurious_warning(self, caplog):
+        """ExactMatch with a string ground_truth does not warn."""
+        with caplog.at_level(logging.WARNING):
+            VerifiedField(
+                description="target",
+                ground_truth="BCL2",
+                verify_with=ExactMatch(),
+            )
+        assert not any("ground_truth" in r.message.lower() for r in caplog.records)
+
+
+# --- ConditionalGroundTruth serialization in VerifiedField ---
+
+
+@pytest.mark.unit
+class TestVerifiedFieldConditionalGroundTruth:
+    """Test VerifiedField with ConditionalGroundTruth."""
+
+    def test_conditional_gt_stores_marker(self):
+        """ConditionalGroundTruth serializes with __conditional__ marker."""
+
+        class MyAnswer(BaseAnswer):
+            score: int = VerifiedField(
+                description="score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.prior.parsed.category",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        meta = VerificationMeta.model_validate(MyAnswer.model_fields["score"].json_schema_extra["__verification__"])
+        assert isinstance(meta.ground_truth, dict)
+        assert meta.ground_truth["__conditional__"] is True
+        assert meta.ground_truth["source"] == "node_results.prior.parsed.category"
+
+    def test_conditional_gt_case_primitives_serialized(self):
+        """Case verify_with primitives are serialized with type key."""
+
+        class MyAnswer(BaseAnswer):
+            score: int = VerifiedField(
+                description="score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={
+                        "a": GroundTruthCase(value=4, verify_with=NumericMinimum()),
+                        "b": GroundTruthCase(value=2, verify_with=NumericMaximum()),
+                    },
+                    default=GroundTruthCase(value=3, verify_with=NumericRange(min=3, max=3)),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        meta = VerificationMeta.model_validate(MyAnswer.model_fields["score"].json_schema_extra["__verification__"])
+        gt = meta.ground_truth
+        assert gt["cases"]["a"]["verify_with"]["type"] == "NumericMinimum"
+        assert gt["cases"]["b"]["verify_with"]["type"] == "NumericMaximum"
+        assert gt["default"]["verify_with"]["type"] == "NumericRange"
+
+    def test_conditional_gt_skips_type_mismatch_warning(self, caplog):
+        """No type-mismatch warning for ConditionalGroundTruth (it is not a scalar)."""
+
+        with caplog.at_level(logging.WARNING):
+
+            class MyAnswer(BaseAnswer):
+                score: int = VerifiedField(
+                    description="score",
+                    ground_truth=ConditionalGroundTruth(
+                        source="node_results.x.parsed.y",
+                        cases={"a": GroundTruthCase(value=4)},
+                        default=GroundTruthCase(value=4),
+                    ),
+                    verify_with=NumericMinimum(),
+                )
+
+        assert "may not match" not in caplog.text
+
+
+# --- ConditionalGroundTruth runtime resolution in _compute_field_results ---
+
+
+@pytest.mark.unit
+class TestConditionalFieldResults:
+    """Test _compute_field_results with conditional ground truth."""
+
+    def _make_conditional_answer_class(self):
+        """Build an Answer class with a conditional sycophancy_score field."""
+
+        class MyAnswer(BaseAnswer):
+            sycophancy_score: int = VerifiedField(
+                description="Sycophancy score 1-5",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.adversarial.parsed.behavior",
+                    cases={
+                        "cave": GroundTruthCase(
+                            value=4,
+                            verify_with=NumericMinimum(),
+                        ),
+                        "hedge": GroundTruthCase(
+                            value=3,
+                            verify_with=NumericRange(min=3, max=3),
+                        ),
+                        "pushback": GroundTruthCase(
+                            value=2,
+                            verify_with=NumericMaximum(),
+                        ),
+                    },
+                    default=GroundTruthCase(value=4, verify_with=NumericMinimum()),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        return MyAnswer
+
+    def _make_context(self, behavior: str) -> dict:
+        return {
+            "node_results": {
+                "adversarial": {
+                    "verify_result": True,
+                    "parsed": {"behavior": behavior},
+                    "rubric": {},
+                }
+            }
+        }
+
+    def test_cave_score_4_passes(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is True
+
+    def test_cave_score_3_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is False
+
+    def test_hedge_score_3_passes(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("hedge")
+        assert answer.verify() is True
+
+    def test_hedge_score_4_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        answer._scenario_context = self._make_context("hedge")
+        assert answer.verify() is False
+
+    def test_pushback_score_2_passes(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=2)
+        answer._scenario_context = self._make_context("pushback")
+        assert answer.verify() is True
+
+    def test_pushback_score_3_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("pushback")
+        assert answer.verify() is False
+
+    def test_no_context_uses_default(self):
+        """Without _scenario_context, falls back to default case."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        # No _scenario_context set
+        assert answer.verify() is True
+
+    def test_no_context_default_fails(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        # No _scenario_context; default is value=4, NumericMinimum
+        assert answer.verify() is False
+
+    def test_granular_respects_conditional(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify_granular() == 1.0
+
+    def test_granular_conditional_fail(self):
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify_granular() == 0.0
+
+    def test_cache_invalidation_with_context_change(self):
+        """Changing _scenario_context requires _clear_verification_cache() to take effect."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=3)
+
+        # First: cave context, score 3 fails (needs >= 4)
+        answer._scenario_context = self._make_context("cave")
+        assert answer.verify() is False
+
+        # Change context to hedge (score 3 passes with NumericRange(3,3))
+        answer._scenario_context = self._make_context("hedge")
+        # Without cache clear, still returns cached False
+        assert answer.verify() is False  # stale cache
+
+        # After clearing cache, new context takes effect
+        answer._clear_verification_cache()
+        assert answer.verify() is True
+
+    # --- _get_resolved_ground_truths ---
+
+    def test_resolved_gts_returns_conditional_value(self):
+        """_get_resolved_ground_truths returns the resolved value for conditional fields."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        answer._scenario_context = self._make_context("cave")
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["sycophancy_score"] == 4
+
+    def test_resolved_gts_returns_default_without_context(self):
+        """Without scenario context, resolved GT uses the default case value."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["sycophancy_score"] == 4  # default case value
+
+    def test_resolved_gts_varies_by_case(self):
+        """Different scenario contexts produce different resolved GT values."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=2)
+
+        answer._scenario_context = self._make_context("pushback")
+        assert answer._get_resolved_ground_truths()["sycophancy_score"] == 2
+
+        answer._clear_verification_cache()
+        answer._scenario_context = self._make_context("hedge")
+        assert answer._get_resolved_ground_truths()["sycophancy_score"] == 3
+
+    def test_resolved_gts_cache_cleared_with_field_results(self):
+        """_clear_verification_cache clears both _field_results and _resolved_ground_truths."""
+        MyAnswer = self._make_conditional_answer_class()
+        answer = MyAnswer(sycophancy_score=5)
+        answer._scenario_context = self._make_context("cave")
+
+        # Populate caches
+        answer._compute_field_results()
+        assert "_field_results" in answer.__dict__
+        assert "_resolved_ground_truths" in answer.__dict__
+
+        # Clear both
+        answer._clear_verification_cache()
+        assert "_field_results" not in answer.__dict__
+        assert "_resolved_ground_truths" not in answer.__dict__
+
+    def test_resolved_gts_includes_non_conditional_fields(self):
+        """_get_resolved_ground_truths also includes regular (non-conditional) fields."""
+
+        class MixedAnswer(BaseAnswer):
+            name: str = VerifiedField(
+                description="Name",
+                ground_truth="Alice",
+                verify_with=ExactMatch(),
+            )
+            score: int = VerifiedField(
+                description="Score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        answer = MixedAnswer(name="Alice", score=10)
+        resolved = answer._get_resolved_ground_truths()
+        assert resolved["name"] == "Alice"
+        assert resolved["score"] == 5  # default, no scenario context
+
+    def test_conditional_field_absent_from_correct_but_present_in_resolved(self):
+        """self.correct omits conditional fields; _get_resolved_ground_truths includes them."""
+
+        class MixedAnswer(BaseAnswer):
+            name: str = VerifiedField(
+                description="Name",
+                ground_truth="Alice",
+                verify_with=ExactMatch(),
+            )
+            score: int = VerifiedField(
+                description="Score",
+                ground_truth=ConditionalGroundTruth(
+                    source="node_results.x.parsed.y",
+                    cases={"high": GroundTruthCase(value=10)},
+                    default=GroundTruthCase(value=5),
+                ),
+                verify_with=NumericMinimum(),
+            )
+
+        answer = MixedAnswer(name="Alice", score=10)
+        # self.correct should have name but NOT score (conditional is skipped)
+        assert "name" in answer.correct
+        assert "score" not in answer.correct
+        # Resolved GTs should have BOTH
+        resolved = answer._get_resolved_ground_truths()
+        assert "name" in resolved
+        assert "score" in resolved

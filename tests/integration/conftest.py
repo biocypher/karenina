@@ -22,7 +22,7 @@ from karenina.benchmark.verification.evaluators import RubricEvaluator, Template
 from karenina.ports import LLMPort, LLMResponse
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import BaseAnswer, LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import BaseAnswer, LLMRubricTrait, RegexRubricTrait, Rubric
 
 # Import FixtureBackedLLMClient from root conftest
 from tests.conftest import FixtureBackedLLMClient
@@ -164,7 +164,7 @@ def parsing_model_config() -> ModelConfig:
     with captured fixtures.
     """
     return ModelConfig(
-        id="test-parser",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,
@@ -441,7 +441,7 @@ def multi_trait_rubric() -> Rubric:
         min_score=1,
         max_score=5,
     )
-    citation_trait = RegexTrait(
+    citation_trait = RegexRubricTrait(
         name="has_citations",
         pattern=r"\[\d+\]",
         description="Response includes numeric citations like [1], [2]",
@@ -458,12 +458,12 @@ def citation_regex_rubric() -> Rubric:
 
     Tests deterministic pattern matching without LLM calls.
     """
-    citation_trait = RegexTrait(
+    citation_trait = RegexRubricTrait(
         name="has_citations",
         pattern=r"\[\d+\]",
         description="Response includes numeric citations like [1], [2]",
     )
-    url_trait = RegexTrait(
+    url_trait = RegexRubricTrait(
         name="has_urls",
         pattern=r"https?://\S+",
         description="Response includes URLs",

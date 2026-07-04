@@ -430,8 +430,8 @@ def save_verification_results(
                 config=config or {},
                 total_questions=len({r.metadata.question_id for r in results.values()}),
                 processed_count=len(results),
-                successful_count=sum(1 for r in results.values() if r.metadata.completed_without_errors),
-                failed_count=sum(1 for r in results.values() if not r.metadata.completed_without_errors),
+                successful_count=sum(1 for r in results.values() if r.metadata.failure is None),
+                failed_count=sum(1 for r in results.values() if r.metadata.failure is not None),
                 start_time=None,  # These would come from config
                 end_time=None,
             )
@@ -441,8 +441,8 @@ def save_verification_results(
         else:
             # Update existing run
             existing_run.processed_count = len(results)
-            existing_run.successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
-            existing_run.failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
+            existing_run.successful_count = sum(1 for r in results.values() if r.metadata.failure is None)
+            existing_run.failed_count = sum(1 for r in results.values() if r.metadata.failure is not None)
             # Commit the updated run
             session.commit()
 
@@ -628,7 +628,7 @@ def import_verification_results(
     """Import verification results from JSON export format.
 
     Supports:
-    - v2.x format: {format_version: "2.0"/"2.1", metadata, shared_data, results}
+    - v2.x format: {format_version: "2.0"/"2.1"/"2.2", metadata, shared_data, results}
 
     Args:
         json_data: Parsed JSON data from export file
@@ -653,13 +653,13 @@ def import_verification_results(
     format_version = json_data.get("format_version")
 
     # Extract results and metadata based on format
-    if format_version in ("2.0", "2.1"):
+    if format_version in ("2.0", "2.1", "2.2"):
         results_list = json_data.get("results", [])
         metadata = json_data.get("metadata", {})
         shared_data = json_data.get("shared_data", {})
     else:
         raise ValueError(
-            f"Unsupported checkpoint format. Expected format_version '2.0' or '2.1'. Got: {format_version!r}"
+            f"Unsupported checkpoint format. Expected format_version '2.0', '2.1', or '2.2'. Got: {format_version!r}"
         )
 
     if not results_list:
@@ -744,7 +744,7 @@ def import_verification_results(
                 session.add(result_model)
 
                 imported_count += 1
-                if result.metadata.completed_without_errors:
+                if result.metadata.failure is None:
                     successful_count += 1
                 else:
                     failed_count += 1

@@ -32,6 +32,7 @@ from karenina.cli.utils import (
     validate_output_path,
 )
 from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
@@ -54,11 +55,20 @@ def _make_template(question_id: str) -> FinishedTemplate:
 
 # Helper function to create minimal VerificationResult
 def _make_result(question_id: str, completed: bool = True) -> VerificationResult:
+    failure = (
+        None
+        if completed
+        else Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="generate_answer",
+            reason="test failure",
+        )
+    )
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=question_id,
             template_id="test-template",
-            completed_without_errors=completed,
+            failure=failure,
             question_text=f"Question {question_id}",
             answering=ModelIdentity(interface="langchain", model_name="gpt-4"),
             parsing=ModelIdentity(interface="langchain", model_name="gpt-4"),
@@ -475,7 +485,7 @@ def test_create_export_job_basic() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -485,7 +495,7 @@ def test_create_export_job_basic() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -528,7 +538,7 @@ def test_create_export_job_with_failures() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -538,7 +548,7 @@ def test_create_export_job_with_failures() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -574,7 +584,7 @@ def test_create_export_job_default_run_name() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -584,7 +594,7 @@ def test_create_export_job_default_run_name() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -619,7 +629,7 @@ def test_create_export_job_generates_uuid() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -629,7 +639,7 @@ def test_create_export_job_generates_uuid() -> None:
         ],
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",

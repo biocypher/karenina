@@ -24,6 +24,11 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from dotenv import find_dotenv, load_dotenv
+
+# Load credentials from .env (repo root) so live-capture runs have API keys.
+load_dotenv(find_dotenv())
+
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -446,7 +451,7 @@ def _run_template_parsing_scenario(model: str, provider: str, output_dir: Path, 
     This uses the real TemplateEvaluator with real Answer templates from our fixtures
     to ensure captured prompts match production exactly.
     """
-    from karenina.benchmark.verification.evaluators.template_evaluator import TemplateEvaluator
+    from karenina.benchmark.verification.evaluators import TemplateEvaluator
     from karenina.schemas.workflow import ModelConfig
 
     real_llm = _create_real_llm(model, provider)
@@ -576,7 +581,7 @@ def _run_rubric_evaluation_scenario(model: str, provider: str, output_dir: Path,
     This uses the real RubricEvaluator with real rubric traits to ensure
     captured prompts match production exactly.
     """
-    from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+    from karenina.benchmark.verification.evaluators import RubricEvaluator
     from karenina.schemas.domain import LLMRubricTrait, Rubric
     from karenina.schemas.workflow import ModelConfig
 
@@ -1012,8 +1017,9 @@ def _run_claude_tool_trace_scenario(model: str, provider: str, output_dir: Path,
                 "raw_trace": raw_trace,
                 "verify_result": verify_result,
                 "result_metadata": {
-                    "completed_without_errors": result.metadata.completed_without_errors,
-                    "error": result.metadata.error,
+                    "success": result.metadata.failure is None,
+                    "failure": result.metadata.failure.model_dump() if result.metadata.failure else None,
+                    "caveats": [c.value for c in result.metadata.caveats],
                     "answering_model": result.metadata.answering_model,
                     "parsing_model": result.metadata.parsing_model,
                     "execution_time": result.metadata.execution_time,
@@ -1052,7 +1058,7 @@ def _run_literal_evaluation_scenario(model: str, provider: str, output_dir: Path
     - Multiple literal traits batch evaluation (sentiment + response_type)
     - Invalid classification handling (LLM returns invalid class name)
     """
-    from karenina.benchmark.verification.evaluators.rubric_evaluator import RubricEvaluator
+    from karenina.benchmark.verification.evaluators import RubricEvaluator
     from karenina.schemas.domain import LLMRubricTrait, Rubric
     from karenina.schemas.workflow import ModelConfig
 

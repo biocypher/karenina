@@ -15,6 +15,7 @@ from langchain_core.messages import (
 )
 
 from karenina.adapters.langchain import LangChainMessageConverter
+from karenina.adapters.langchain.messages import extract_text_from_lc_content
 from karenina.ports import (
     Message,
     Role,
@@ -236,3 +237,70 @@ class TestLangChainMessageConverter:
         assert roundtrip[2].role == Role.ASSISTANT
         assert roundtrip[3].role == Role.TOOL
         assert roundtrip[4].role == Role.ASSISTANT
+
+
+@pytest.mark.unit
+class TestExtractTextFromLcContent:
+    """Tests for extract_text_from_lc_content helper.
+
+    This helper normalizes LangChain message/chunk ``content`` to plain
+    text. The ``str`` branch must be an exact pass-through for backward
+    compatibility with non-thinking providers.
+    """
+
+    def test_str_content_is_pass_through(self) -> None:
+        assert extract_text_from_lc_content("Hello, world!") == "Hello, world!"
+
+    def test_empty_str_is_pass_through(self) -> None:
+        assert extract_text_from_lc_content("") == ""
+
+    def test_empty_list_returns_empty(self) -> None:
+        assert extract_text_from_lc_content([]) == ""
+
+    def test_list_of_text_blocks_is_joined(self) -> None:
+        content = [
+            {"type": "text", "text": "Hello, "},
+            {"type": "text", "text": "world!"},
+        ]
+        assert extract_text_from_lc_content(content) == "Hello, world!"
+
+    def test_thinking_blocks_are_dropped(self) -> None:
+        content = [
+            {"type": "thinking", "thinking": "reasoning chain", "signature": "sig"},
+            {"type": "text", "text": "Final answer."},
+        ]
+        assert extract_text_from_lc_content(content) == "Final answer."
+
+    def test_tool_use_only_returns_empty(self) -> None:
+        content = [
+            {"type": "tool_use", "id": "t1", "name": "search", "input": {}},
+        ]
+        assert extract_text_from_lc_content(content) == ""
+
+    def test_tool_use_with_prefix_text_keeps_text(self) -> None:
+        content = [
+            {"type": "text", "text": "Let me search."},
+            {"type": "tool_use", "id": "t1", "name": "search", "input": {}},
+        ]
+        assert extract_text_from_lc_content(content) == "Let me search."
+
+    def test_bare_str_items_are_joined(self) -> None:
+        assert extract_text_from_lc_content(["foo", "bar"]) == "foobar"
+
+    def test_image_blocks_are_dropped(self) -> None:
+        content = [
+            {"type": "image", "source": {"type": "base64", "data": "..."}},
+            {"type": "text", "text": "Describe this."},
+        ]
+        assert extract_text_from_lc_content(content) == "Describe this."
+
+    def test_none_content_returns_empty(self) -> None:
+        assert extract_text_from_lc_content(None) == ""
+
+    def test_unknown_type_returns_empty(self) -> None:
+        assert extract_text_from_lc_content(42) == ""
+
+    def test_text_block_with_non_str_text_is_skipped(self) -> None:
+        """A malformed text block (non-str text value) must not crash."""
+        content = [{"type": "text", "text": None}, {"type": "text", "text": "ok"}]
+        assert extract_text_from_lc_content(content) == "ok"

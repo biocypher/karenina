@@ -11,8 +11,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from karenina.adapters.registry import AdapterRegistry
+from karenina.adapters.agent_runtime import workspace_path_for_prompt
+from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
+from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 
@@ -43,6 +45,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_rubric_evaluation_performed: True when this stage ran.
         agentic_trait_scores: Dict mapping trait name to score (or None on failure).
         agentic_trait_investigation_traces: Dict mapping trait name to investigation trace.
+        agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
     """
 
     @property
@@ -62,6 +65,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED,
             ArtifactKeys.AGENTIC_TRAIT_SCORES,
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -92,8 +96,13 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
 
         Args:
             context: Verification context with rubric and artifacts.
+
+        Raises:
+            ValueError: If no agentic trait can be evaluated because
+                the resolved model interface lacks ``agent_tier='deep_agent'``.
         """
         traits = context.rubric.agentic_traits  # type: ignore[union-attr]
+        self._validate_agent_support(traits, context)
         raw_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         workspace_path = context.workspace_path
 
@@ -119,14 +128,14 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         try:
             strategy = context.agentic_rubric_strategy
             if strategy == "shared":
-                scores, traces = self._execute_shared(
+                scores, traces, extraction_metadata = self._execute_shared(
                     traits,
                     context,
                     raw_response,
                     workspace_path,
                 )
             else:
-                scores, traces = self._execute_individual(
+                scores, traces, extraction_metadata = self._execute_individual(
                     traits,
                     context,
                     raw_response,
@@ -148,6 +157,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
                 traces,
+            )
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
+                extraction_metadata,
             )
 
             evaluated = sum(1 for v in scores.values() if v is not None)
@@ -179,7 +193,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[dict[str, int | bool | dict[str, Any] | None], dict[str, str | None]]:
+    ) -> tuple[
+        dict[str, int | bool | dict[str, Any] | None],
+        dict[str, str | None],
+        dict[str, dict[str, str | None]],
+    ]:
         """Evaluate each trait with its own agent.
 
         Returns:
@@ -188,6 +206,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
         scores: dict[str, int | bool | dict[str, Any] | None] = {}
         traces: dict[str, str | None] = {}
+        extraction_metadata: dict[str, dict[str, str | None]] = {}
 
         for trait in traits:
             model = self._resolve_model(trait, context)
@@ -200,7 +219,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 traces[trait.name] = None
                 continue
 
-            evaluator = AgenticTraitEvaluator(model_config=model)
+            evaluator = AgenticTraitEvaluator(
+                model_config=model,
+                prompt_config=context.prompt_config,
+            )
             score, trace = evaluator.evaluate_trait(
                 trait=trait,
                 question_text=context.question_text,
@@ -213,8 +235,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             else:
                 scores[trait.name] = score
             traces[trait.name] = trace
+            metadata = getattr(evaluator, "last_extraction_metadata", None)
+            if isinstance(metadata, dict):
+                extraction_metadata[trait.name] = metadata
 
-        return scores, traces
+        return scores, traces, extraction_metadata
 
     def _execute_shared(
         self,
@@ -222,7 +247,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[dict[str, int | bool | dict[str, Any] | None], dict[str, str | None]]:
+    ) -> tuple[
+        dict[str, int | bool | dict[str, Any] | None],
+        dict[str, str | None],
+        dict[str, dict[str, str | None]],
+    ]:
         """Evaluate all traits with a single shared agent.
 
         All traits must resolve to the same model (by interface, provider,
@@ -241,7 +270,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             logger.warning("No traits have agent support; all skipped")
             empty_scores: dict[str, int | bool | dict[str, Any] | None] = {t.name: None for t in traits}
             empty_traces: dict[str, str | None] = {t.name: None for t in traits}
-            return empty_scores, empty_traces
+            return empty_scores, empty_traces, {}
 
         # Check that all valid models match on interface + provider + model_name
         first_model = valid[0][1]
@@ -256,7 +285,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
 
         # Build a combined investigation prompt
-        evaluator = AgenticTraitEvaluator(model_config=first_model)
+        evaluator = AgenticTraitEvaluator(
+            model_config=first_model,
+            prompt_config=context.prompt_config,
+        )
         valid_traits = [trait for trait, _ in valid]
 
         combined_desc_parts = [f"- {trait.name}: {trait.description}" for trait in valid_traits]
@@ -269,15 +301,28 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         shared_timeout = max(t.timeout_seconds for t in valid_traits)
 
         # Run a single shared investigation
+        agent: Any | None = None
         try:
             from karenina.adapters import get_agent
-            from karenina.ports import AgentConfig, Message
+            from karenina.ports import AgentConfig
 
             agent = get_agent(first_model)
-            system_prompt = (
+            capabilities = agent.capabilities
+            if capabilities.supports_code_execution:
+                access_text = (
+                    "You have access to tools and can examine files, execute code in the sandbox, "
+                    "and navigate the workspace."
+                    if capabilities.uses_sandboxed_execution
+                    else "You have access to tools and can examine files, run code, and navigate the workspace."
+                )
+            else:
+                access_text = (
+                    "You have access to tools and can examine files and navigate the workspace, "
+                    "but command execution is not available."
+                )
+            system_text = (
                 "You are an evaluation agent investigating the quality of an LLM "
-                "response. You have access to tools and can examine files, run "
-                "code, and navigate the workspace.\n\n"
+                f"response. {access_text}\n\n"
                 "Evaluate ALL of the following criteria:\n"
                 f"{combined_description}\n\n"
                 "After investigating, report your findings for each criterion "
@@ -290,12 +335,27 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_response}\n--- END TRACE ---")
 
             if workspace_path and include_workspace:
-                user_parts.append(f"\nWorkspace directory: {workspace_path}")
+                prompt_workspace = workspace_path_for_prompt(first_model, workspace_path)
+                user_parts.append(f"\nWorkspace directory: {prompt_workspace}")
 
-            messages = [
-                Message.system(system_prompt),
-                Message.user("\n".join(user_parts)),
-            ]
+            user_text = "\n".join(user_parts)
+
+            # Assemble with adapter + user instructions
+            assembler = PromptAssembler(
+                task=PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION,
+                interface=first_model.interface,
+                capabilities=capabilities,
+            )
+            user_instructions = (
+                context.prompt_config.get_for_task(PromptTask.RUBRIC_AGENTIC_TRAIT_INVESTIGATION.value)
+                if context.prompt_config
+                else None
+            )
+            messages = assembler.assemble(
+                system_text=system_text,
+                user_text=user_text,
+                user_instructions=user_instructions,
+            )
 
             agent_config = AgentConfig(
                 max_turns=shared_max_turns,
@@ -316,10 +376,14 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 raw_response,
                 workspace_path,
             )
+        finally:
+            if agent is not None:
+                close_adapter(agent)
 
         # Per-trait extraction from the shared trace
         result_scores: dict[str, int | bool | dict[str, Any] | None] = {}
         result_traces: dict[str, str | None] = {}
+        extraction_metadata: dict[str, dict[str, str | None]] = {}
 
         for trait, model in resolved:
             if model is None:
@@ -335,6 +399,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                         result_scores[f"{trait.name}.{field_name}"] = value
                 else:
                     result_scores[trait.name] = extracted
+                metadata = getattr(evaluator, "last_extraction_metadata", None)
+                if isinstance(metadata, dict):
+                    extraction_metadata[trait.name] = metadata
             except Exception:
                 logger.warning(
                     "Extraction failed for trait '%s' in shared strategy",
@@ -342,8 +409,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                     exc_info=True,
                 )
                 result_scores[trait.name] = None
+                metadata = getattr(evaluator, "last_extraction_metadata", None)
+                if isinstance(metadata, dict):
+                    extraction_metadata[trait.name] = metadata
 
-        return result_scores, result_traces
+        return result_scores, result_traces, extraction_metadata
 
     # ------------------------------------------------------------------
     # Trace materialization
@@ -359,7 +429,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Write trace to a file for agent grep/search access.
 
         When ``workspace_path`` is provided, the trace file is placed under
-        ``<workspace>/.karenina/traces/``. Otherwise a temporary directory
+        ``<workspace>/traces/``. Otherwise a temporary directory
         is created as a fallback.
 
         Args:
@@ -375,7 +445,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         if workspace_path is None:
             trace_dir = Path(tempfile.mkdtemp(prefix="karenina_traces_"))
         else:
-            trace_dir = Path(workspace_path) / ".karenina" / "traces"
+            trace_dir = Path(workspace_path) / "traces"
         trace_dir.mkdir(parents=True, exist_ok=True)
 
         safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", question_id)
@@ -390,6 +460,46 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _validate_agent_support(
+        traits: list[AgenticRubricTrait],
+        context: VerificationContext,
+    ) -> None:
+        """Validate that every agentic trait can be evaluated.
+
+        Checks each trait's resolved model (model_override or parsing_model)
+        for ``agent_tier='deep_agent'``. Raises if any trait cannot be
+        evaluated, since silent skipping hides configuration errors.
+
+        Raises:
+            ValueError: If any trait resolves to an interface that lacks
+                ``agent_tier='deep_agent'``.
+        """
+        default_model = context.parsing_model
+        default_spec = AdapterRegistry.get_spec(default_model.interface)
+        default_ok = default_spec is not None and default_spec.agent_tier == "deep_agent"
+
+        unsupported: list[str] = []
+        for trait in traits:
+            if trait.model_override is not None:
+                spec = AdapterRegistry.get_spec(trait.model_override.interface)
+                if spec is None or spec.agent_tier != "deep_agent":
+                    unsupported.append(trait.name)
+            elif not default_ok:
+                unsupported.append(trait.name)
+
+        if unsupported:
+            trait_names = ", ".join(f"'{n}'" for n in unsupported)
+            raise ValueError(
+                f"Agentic rubric traits ({trait_names}) require an interface with "
+                f"agent_tier='deep_agent' (e.g., 'claude_agent_sdk' or "
+                f"'langchain_deep_agents'), but the resolved model uses "
+                f"interface='{default_model.interface}' "
+                f"(agent_tier='{default_spec.agent_tier if default_spec else 'unknown'}'). "
+                f"Either change the parsing model interface or set model_override "
+                f"on each agentic trait."
+            )
+
+    @staticmethod
     def _resolve_model(
         trait: AgenticRubricTrait,
         context: VerificationContext,
@@ -397,16 +507,17 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Resolve the model to use for a given trait.
 
         Returns trait.model_override if set; otherwise context.parsing_model.
-        Validates that the resolved model's interface has an agent_factory
-        registered. Returns None if no agent support is available (the trait
-        will be skipped).
+        Validates that the resolved model's interface has
+        agent_tier='deep_agent'. Returns None if the interface lacks deep
+        agent support (the trait will be skipped).
         """
         model = trait.model_override or context.parsing_model
         spec = AdapterRegistry.get_spec(model.interface)
-        if spec is None or spec.agent_factory is None:
-            logger.debug(
-                "Interface '%s' has no agent_factory; trait '%s' will be skipped",
+        if spec is None or spec.agent_tier != "deep_agent":
+            logger.warning(
+                "Interface '%s' has agent_tier='%s' (not 'deep_agent'); trait '%s' will be skipped",
                 model.interface,
+                spec.agent_tier if spec else "unknown",
                 trait.name,
             )
             return None

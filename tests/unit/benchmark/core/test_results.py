@@ -17,6 +17,7 @@ import pytest
 from karenina import Benchmark
 from karenina.benchmark.core.results import ResultsManager
 from karenina.benchmark.core.results_io import ResultsIOManager
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import VerificationResult, VerificationResultMetadata, VerificationResultTemplate
 from karenina.schemas.verification.model_identity import ModelIdentity
 
@@ -39,12 +40,16 @@ def create_sample_result(
         timestamp=timestamp,
     )
 
+    failure = (
+        None
+        if success
+        else Failure(category=FailureCategory.UNEXPECTED_ERROR, stage="generate_answer", reason="Test error")
+    )
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=question_id,
             template_id="template_hash",
-            completed_without_errors=success,
-            error=None if success else "Test error",
+            failure=failure,
             question_text=question_text,
             answering=_answering,
             parsing=_parsing,
@@ -606,11 +611,11 @@ class TestLoadResultsFromFile:
         assert len(loaded) == 0
 
     def test_load_empty_csv_returns_empty_dict(self, tmp_path) -> None:
-        """Test loading CSV with only header returns empty dict."""
+        """Test loading CSV with headers only returns empty dict."""
         benchmark = Benchmark.create(name="test")
         manager = ResultsManager(benchmark)
 
-        csv_content = "row_index,question_id,question_text"
+        csv_content = "row_index,question_id,question_text\n"
         csv_path = tmp_path / "results.csv"
         csv_path.write_text(csv_content)
 
@@ -641,3 +646,44 @@ class TestEscapeCsvField:
     def test_escape_with_newline(self) -> None:
         """Test escaping string with newline wraps in quotes."""
         assert ResultsIOManager._escape_csv_field("line1\nline2") == '"line1\nline2"'
+
+
+@pytest.mark.unit
+class TestResultsManagerFailureSummary:
+    """Tests for ResultsManager summary computed via Failure objects (no legacy fields)."""
+
+    def test_summary_counts_pass_when_failure_is_none(self) -> None:
+        """Results with ``metadata.failure is None`` must count as successful."""
+        benchmark = Benchmark.create(name="test")
+        manager = ResultsManager(benchmark)
+
+        manager.store_verification_results(
+            {
+                "q1": create_sample_result(question_id="q1", success=True),
+                "q2": create_sample_result(question_id="q2", success=True),
+            },
+            run_name="pass_run",
+        )
+
+        summary = manager.get_verification_summary(run_name="pass_run")
+        assert summary["successful_count"] == 2
+        assert summary["failed_count"] == 0
+        assert summary["success_rate"] == 100.0
+
+    def test_summary_counts_fail_when_failure_is_present(self) -> None:
+        """Results with a ``Failure`` attached must count as failed."""
+        benchmark = Benchmark.create(name="test")
+        manager = ResultsManager(benchmark)
+
+        manager.store_verification_results(
+            {
+                "q1": create_sample_result(question_id="q1", success=True),
+                "q2": create_sample_result(question_id="q2", success=False),
+            },
+            run_name="mixed_run",
+        )
+
+        summary = manager.get_verification_summary(run_name="mixed_run")
+        assert summary["successful_count"] == 1
+        assert summary["failed_count"] == 1
+        assert summary["success_rate"] == 50.0

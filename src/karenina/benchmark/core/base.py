@@ -44,6 +44,7 @@ class BenchmarkBase:
         self._checkpoint = create_jsonld_benchmark(name, description, version, creator)
         self._questions_cache: dict[str, dict[str, Any]] = {}
         self._question_registry: dict[str, QuestionRegistryEntry] = {}
+        self._global_dynamic_rubric: Any = None
         self._rebuild_cache()
 
     @classmethod
@@ -84,6 +85,7 @@ class BenchmarkBase:
         instance._checkpoint = checkpoint_data
         instance._questions_cache = {}
         instance._question_registry = {}
+        instance._global_dynamic_rubric = None
         instance._rebuild_cache()
 
         return instance
@@ -94,9 +96,9 @@ class BenchmarkBase:
 
         Args:
             path: Path where to save the benchmark
-            save_deep_judgment_config: If True, include deep judgment configuration
-                in LLM rubric traits. If False (default), deep judgment settings
-                are stripped before saving. Default is False for backward compatibility.
+            save_deep_judgment_config: If True, include deep judgment
+                configuration in LLM rubric traits. If False (default),
+                deep judgment settings are stripped before saving.
         """
         from copy import deepcopy
 

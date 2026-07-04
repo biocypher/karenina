@@ -21,11 +21,11 @@ from .checkpoint import (
     validate_jsonld_benchmark,
 )
 from .code import extract_and_combine_codeblocks
-from .errors import is_retryable_error
+from .errors import ErrorCategory, ErrorRegistry, is_retryable_error
 from .file_ops import atomic_write
 from .json_extraction import extract_json_from_response
 from .messages import append_error_feedback
-from .retry import TRANSIENT_RETRY, create_transient_retry, log_retry
+from .retry_policy import CategoryRetryConfig, ErrorPatternConfig, RetryExecutor, RetryPolicy
 from .testing import FixtureBackedLLMClient, MockResponse, MockUsage
 from .version import get_karenina_version
 
@@ -49,15 +49,18 @@ __all__ = [
     # Code parsing
     "extract_and_combine_codeblocks",
     # Error handling
+    "ErrorCategory",
+    "ErrorRegistry",
     "is_retryable_error",
     # JSON extraction
     "extract_json_from_response",
     # Message utilities
     "append_error_feedback",
-    # Retry utilities
-    "TRANSIENT_RETRY",
-    "create_transient_retry",
-    "log_retry",
+    # Retry policy (category-aware)
+    "CategoryRetryConfig",
+    "ErrorPatternConfig",
+    "RetryExecutor",
+    "RetryPolicy",
     # Testing utilities
     "FixtureBackedLLMClient",
     "MockResponse",

@@ -10,7 +10,15 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from karenina.schemas.entities import Rubric
 
+from karenina.schemas.results.caveat import Caveat
+from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import VerificationResult
+from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.schemas.verification.result_components import (
+    VerificationResultMetadata,
+    VerificationResultRubric,
+    VerificationResultTemplate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +63,13 @@ class ResultsIOManager:
             CSV string in frontend format
         """
         if not results:
-            return "row_index,question_id,question_text,success,error,execution_time,timestamp,embedding_check_performed,embedding_similarity_score,embedding_override_applied,embedding_model_used\n"
+            return (
+                "row_index,question_id,question_text,success,"
+                "failure_category,failure_group,failure_stage,failure_reason,failure_details_json,"
+                "caveats,execution_time,timestamp,"
+                "embedding_check_performed,embedding_similarity_score,embedding_override_applied,"
+                "embedding_model_used\n"
+            )
 
         # Extract all unique rubric trait names from results
         all_rubric_trait_names: set[str] = set()
@@ -98,7 +112,12 @@ class ResultsIOManager:
             "answering_system_prompt",
             "parsing_system_prompt",
             "success",
-            "error",
+            "failure_category",
+            "failure_group",
+            "failure_stage",
+            "failure_reason",
+            "failure_details_json",
+            "caveats",
             "execution_time",
             "timestamp",
             "run_name",
@@ -160,57 +179,62 @@ class ResultsIOManager:
             )
             rubric_summary = f"{passed_traits}/{len(traits)}"
 
+        failure = result.metadata.failure
+        success_value: str | bool
+        if result.template and result.template.abstention_detected and result.template.abstention_override_applied:
+            success_value = "abstained"
+        else:
+            success_value = failure is None
+
         return [
             index,  # row_index
-            ResultsIOManager._escape_csv_field(result.metadata.question_id),
-            ResultsIOManager._escape_csv_field(result.metadata.question_text),
-            ResultsIOManager._escape_csv_field(result.template.raw_llm_response if result.template else ""),
-            ResultsIOManager._escape_csv_field(
+            result.metadata.question_id,
+            result.metadata.question_text,
+            result.template.raw_llm_response if result.template else "",
+            (
                 json.dumps(result.template.parsed_gt_response)
                 if result.template and result.template.parsed_gt_response
                 else ""
             ),
-            ResultsIOManager._escape_csv_field(
+            (
                 json.dumps(result.template.parsed_llm_response)
                 if result.template and result.template.parsed_llm_response
                 else ""
             ),
-            ResultsIOManager._escape_csv_field(
+            (
                 json.dumps(result.template.verify_result)
                 if result.template and result.template.verify_result is not None
                 else "N/A"
             ),
-            ResultsIOManager._escape_csv_field(
+            (
                 json.dumps(result.template.verify_granular_result)
                 if result.template and result.template.verify_granular_result is not None
                 else "N/A"
             ),
-            *[ResultsIOManager._escape_csv_field(value) for value in global_rubric_values],
+            *global_rubric_values,
             *([question_specific_rubrics_value] if question_specific_traits else []),
-            ResultsIOManager._escape_csv_field(rubric_summary),
-            ResultsIOManager._escape_csv_field(result.metadata.answering_model),
-            ResultsIOManager._escape_csv_field(result.metadata.parsing_model),
-            ResultsIOManager._escape_csv_field(result.metadata.replicate or ""),
-            ResultsIOManager._escape_csv_field(result.metadata.answering_system_prompt or ""),
-            ResultsIOManager._escape_csv_field(result.metadata.parsing_system_prompt or ""),
-            ResultsIOManager._escape_csv_field(
-                "abstained"
-                if result.template
-                and result.template.abstention_detected
-                and result.template.abstention_override_applied
-                else result.metadata.completed_without_errors
-            ),
-            ResultsIOManager._escape_csv_field(result.metadata.error or ""),
-            ResultsIOManager._escape_csv_field(result.metadata.execution_time),
-            ResultsIOManager._escape_csv_field(result.metadata.timestamp),
-            ResultsIOManager._escape_csv_field(result.metadata.run_name or ""),
+            rubric_summary,
+            result.metadata.answering_model,
+            result.metadata.parsing_model,
+            result.metadata.replicate or "",
+            result.metadata.answering_system_prompt or "",
+            result.metadata.parsing_system_prompt or "",
+            success_value,
+            failure.category.value if failure else "",
+            failure.group.value if failure else "",
+            failure.stage if failure else "",
+            failure.reason if failure else "",
+            json.dumps(failure.details) if (failure and failure.details) else "",
+            ",".join(c.value for c in result.metadata.caveats),
+            result.metadata.execution_time,
+            result.metadata.timestamp,
+            result.metadata.run_name or "",
+            "",  # job_id: not stored in VerificationResult, populated by server layer
             # Embedding check fields
-            ResultsIOManager._escape_csv_field(result.template.embedding_check_performed if result.template else False),
-            ResultsIOManager._escape_csv_field(result.template.embedding_similarity_score if result.template else ""),
-            ResultsIOManager._escape_csv_field(
-                result.template.embedding_override_applied if result.template else False
-            ),
-            ResultsIOManager._escape_csv_field(result.template.embedding_model_used if result.template else ""),
+            result.template.embedding_check_performed if result.template else False,
+            result.template.embedding_similarity_score if result.template else "",
+            result.template.embedding_override_applied if result.template else False,
+            result.template.embedding_model_used if result.template else "",
         ]
 
     @staticmethod
@@ -255,7 +279,14 @@ class ResultsIOManager:
                     # Remove row_index if present and create key
                     item_copy = dict(item)
                     row_index = item_copy.pop("row_index", None)
-                    question_id = item_copy.get("question_id", "unknown")
+                    # Check top-level first, then nested metadata for question_id
+                    question_id = item_copy.get("question_id")
+                    if question_id is None:
+                        metadata = item_copy.get("metadata")
+                        if isinstance(metadata, dict):
+                            question_id = metadata.get("question_id", "unknown")
+                        else:
+                            question_id = "unknown"
                     result_key = f"{question_id}_{row_index}" if row_index else question_id
                     try:
                         results[result_key] = VerificationResult(**item_copy)
@@ -279,117 +310,281 @@ class ResultsIOManager:
 
     @staticmethod
     def load_from_csv(file_path: Path) -> dict[str, VerificationResult]:
-        """
-        Load results from CSV file supporting frontend format.
+        """Load results from CSV file, reconstructing nested VerificationResult objects.
+
+        Parses the flat CSV columns back into the nested sub-objects
+        (metadata, template, rubric) that VerificationResult expects.
 
         Args:
-            file_path: Path to the CSV file
+            file_path: Path to the CSV file.
 
         Returns:
-            Dictionary of loaded verification results
+            Dictionary of loaded verification results keyed by "{question_id}_{row_index}".
         """
-        results = {}
+        results: dict[str, VerificationResult] = {}
 
         with open(file_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
+            for row_num, row in enumerate(reader, start=1):
+                try:
+                    result_key, verification_result = ResultsIOManager._process_csv_row(row)
+                    if verification_result is not None:
+                        results[result_key] = verification_result
+                    else:
+                        logger.warning("Skipping invalid CSV row %d: processing returned None", row_num)
+                except Exception:
+                    logger.warning("Skipping malformed CSV row %d", row_num, exc_info=True)
+                    continue
 
-            for row in reader:
-                result_key, processed_row = ResultsIOManager._process_csv_row(row)
-                if processed_row:
-                    try:
-                        results[result_key] = VerificationResult(**processed_row)
-                    except Exception:
-                        logger.warning("Skipping malformed CSV row at key %s", result_key, exc_info=True)
-                        continue
-
+        logger.info("Loaded %d results from CSV file %s", len(results), file_path)
         return results
 
     @staticmethod
-    def _process_csv_row(row: dict[str, str]) -> tuple[str, dict[str, Any] | None]:
-        """
-        Process a single CSV row into a format suitable for VerificationResult.
+    def _parse_model_identity(display_string: str | None) -> ModelIdentity:
+        """Parse a ModelIdentity display string back into a ModelIdentity object.
+
+        Handles these formats:
+        - "interface:model_name"
+        - "interface:model_name (config_id)"
+        - "interface:model_name +[tool1, tool2]"
+        - "interface:model_name (config_id) +[tool1, tool2]"
 
         Args:
-            row: Dictionary from csv.DictReader
+            display_string: The display string from CSV export, or None/empty.
 
         Returns:
-            Tuple of (result_key, processed_row_dict) or (result_key, None) if row is invalid
+            Reconstructed ModelIdentity.
         """
-        # Get row_index for key generation
+        if not display_string:
+            return ModelIdentity(interface="unknown", model_name="unknown")
+
+        tools: list[str] = []
+        base = display_string
+
+        # Split on " +[" to extract tools
+        if " +[" in display_string:
+            base, tools_part = display_string.split(" +[", 1)
+            tools = [t.strip() for t in tools_part.rstrip("]").split(",") if t.strip()]
+
+        # Extract config_id from " (config_id)" suffix
+        config_id: str | None = None
+        if " (" in base and base.endswith(")"):
+            candidate_base, config_part = base.rsplit(" (", 1)
+            if ":" in candidate_base:
+                config_id = config_part.rstrip(")")
+                base = candidate_base
+
+        # Split base on ":" to get interface and model_name
+        parts = base.split(":", 1)
+        interface = parts[0] if parts else "unknown"
+        model_name = parts[1] if len(parts) > 1 else "unknown"
+
+        return ModelIdentity(
+            interface=interface,
+            model_name=model_name,
+            tools=tools,
+            config_id=config_id,
+        )
+
+    @staticmethod
+    def _parse_rubric_traits(row: dict[str, str]) -> dict[str, int | bool]:
+        """Extract rubric trait scores from CSV row columns.
+
+        Collects traits from "rubric_*" columns and the "question_specific_rubrics"
+        JSON column, converting values to int or bool.
+
+        Args:
+            row: Dictionary from csv.DictReader.
+
+        Returns:
+            Dict of trait name to score (int or bool). Empty dict if no traits found.
+        """
+        trait_scores: dict[str, int | bool] = {}
+
+        # Extract global rubric traits (columns starting with "rubric_")
+        for key, value in row.items():
+            if key == "rubric_summary":
+                continue
+            if key.startswith("rubric_") and value:
+                trait_name = key[len("rubric_") :]
+                try:
+                    if value.isdigit():
+                        trait_scores[trait_name] = int(value)
+                    elif value.lower() in ("true", "false"):
+                        trait_scores[trait_name] = value.lower() == "true"
+                    else:
+                        # Try float then int conversion for numeric strings like "4.0"
+                        trait_scores[trait_name] = int(float(value))
+                except (ValueError, AttributeError):
+                    logger.debug("Could not convert rubric trait value for %s, skipping", trait_name)
+
+        # Extract question-specific rubrics from JSON column
+        qs_raw = row.get("question_specific_rubrics", "")
+        if qs_raw:
+            try:
+                question_specific = json.loads(qs_raw)
+                if isinstance(question_specific, dict):
+                    for name, value in question_specific.items():
+                        if isinstance(value, bool | int):
+                            trait_scores[name] = value
+                        elif isinstance(value, float) or isinstance(value, str) and value.isdigit():
+                            trait_scores[name] = int(value)
+            except json.JSONDecodeError:
+                logger.debug("Could not parse question_specific_rubrics JSON")
+
+        return trait_scores
+
+    @staticmethod
+    def _parse_json_field(value: str | None) -> Any:
+        """Parse a JSON string field, returning None for empty or N/A values.
+
+        Args:
+            value: Raw string from CSV cell.
+
+        Returns:
+            Parsed JSON value, or None if the value is empty/N/A/unparseable.
+        """
+        if not value or value == "N/A":
+            return None
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    @staticmethod
+    def _process_csv_row(row: dict[str, str]) -> tuple[str, VerificationResult | None]:
+        """Process a single CSV row into a VerificationResult with nested sub-objects.
+
+        Reconstructs the metadata, template, and rubric sub-objects from the
+        flat CSV columns that export_to_csv produces.
+
+        Args:
+            row: Dictionary from csv.DictReader.
+
+        Returns:
+            Tuple of (result_key, VerificationResult) or (result_key, None) if
+            the row cannot be parsed.
+        """
+        # Generate result key
         row_index = row.get("row_index", "")
         question_id = row.get("question_id", "unknown")
         result_key = f"{question_id}_{row_index}" if row_index else question_id
 
-        # Process rubric data
-        verify_rubric = {}
+        # Parse model identities from display strings
+        answering = ResultsIOManager._parse_model_identity(row.get("answering_model"))
+        parsing = ResultsIOManager._parse_model_identity(row.get("parsing_model"))
 
-        # Extract global rubric traits (columns starting with "rubric_")
-        for key, value in row.items():
-            if key.startswith("rubric_") and value:
-                trait_name = key[len("rubric_") :]
-                try:
-                    # Try to convert to number first, then boolean
-                    if isinstance(value, str) and value.isdigit():
-                        verify_rubric[trait_name] = int(value)
-                    elif isinstance(value, str) and value.lower() in ("true", "false"):
-                        verify_rubric[trait_name] = value.lower() == "true"
-                    else:
-                        verify_rubric[trait_name] = value  # type: ignore[assignment]
-                except (ValueError, AttributeError):
-                    logger.debug("Could not convert rubric trait value for %s, using raw value", trait_name)
-                    verify_rubric[trait_name] = value  # type: ignore[assignment]
-
-        # Extract question-specific rubrics from JSON column
-        if "question_specific_rubrics" in row and row["question_specific_rubrics"]:
+        # Parse execution_time
+        execution_time = 0.0
+        if row.get("execution_time"):
             try:
-                question_specific = json.loads(row["question_specific_rubrics"])
-                if isinstance(question_specific, dict):
-                    verify_rubric.update(question_specific)
-            except json.JSONDecodeError:
-                logger.debug("Could not parse question_specific_rubrics JSON for row")
+                execution_time = float(row["execution_time"])
+            except ValueError:
+                logger.debug("Could not parse execution_time '%s', defaulting to 0.0", row.get("execution_time"))
 
-        # Convert JSON strings back to objects
-        processed_row: dict[str, Any] = {}
-        for field, value in row.items():
-            if field.startswith("rubric_") or field in [
-                "row_index",
-                "question_specific_rubrics",
-                "rubric_summary",
-            ]:
-                continue  # Skip these fields as they're processed separately
+        # Parse replicate
+        replicate: int | None = None
+        if row.get("replicate"):
+            try:
+                replicate = int(row["replicate"])
+            except ValueError:
+                replicate = None
 
-            if (
-                field in ["parsed_gt_response", "parsed_llm_response", "verify_result", "verify_granular_result"]
-                and value
-                and value != "N/A"
-            ):
-                try:
-                    processed_row[field] = json.loads(value)
-                except (json.JSONDecodeError, TypeError):
-                    logger.debug("Could not parse JSON for field %s, using raw value", field)
-                    processed_row[field] = value
-            elif field == "execution_time" and value:
-                try:
-                    processed_row[field] = float(value)
-                except ValueError:
-                    logger.debug("Could not parse execution_time '%s', defaulting to 0.0", value)
-                    processed_row[field] = 0.0
-            elif field == "success" and value:
-                # Handle "abstained" status as True (since abstention overrides are successful responses)
-                if value.lower() == "abstained":
-                    processed_row[field] = True
-                else:
-                    processed_row[field] = value.lower() in ("true", "1", "yes")
-            elif field == "replicate" and value:
-                try:
-                    processed_row[field] = int(value)
-                except ValueError:
-                    processed_row[field] = None
-            else:
-                processed_row[field] = value if value else None
+        # Build timestamp (required field; fall back to current time if missing)
+        timestamp = row.get("timestamp") or ""
 
-        # Add the processed rubric data
-        if verify_rubric:
-            processed_row["verify_rubric"] = verify_rubric
+        # Compute result_id from available data
+        result_id = VerificationResultMetadata.compute_result_id(
+            question_id=question_id,
+            answering=answering,
+            parsing=parsing,
+            timestamp=timestamp,
+            replicate=replicate,
+        )
 
-        return result_key, processed_row
+        # Reconstruct failure + caveats from dedicated CSV columns.
+        failure: Failure | None = None
+        failure_category_raw = row.get("failure_category") or ""
+        if failure_category_raw:
+            details_raw = row.get("failure_details_json") or ""
+            details = json.loads(details_raw) if details_raw else None
+            failure = Failure(
+                category=FailureCategory(failure_category_raw),
+                stage=row.get("failure_stage") or "",
+                reason=row.get("failure_reason") or "",
+                details=details,
+            )
+
+        caveats_raw = row.get("caveats") or ""
+        caveats: list[Caveat] = [Caveat(c) for c in caveats_raw.split(",") if c]
+
+        # Build metadata sub-object
+        metadata = VerificationResultMetadata(
+            question_id=question_id,
+            template_id="no_template",
+            failure=failure,
+            caveats=caveats,
+            question_text=row.get("question_text", ""),
+            answering=answering,
+            parsing=parsing,
+            answering_system_prompt=row.get("answering_system_prompt") or None,
+            parsing_system_prompt=row.get("parsing_system_prompt") or None,
+            execution_time=execution_time,
+            timestamp=timestamp,
+            result_id=result_id,
+            run_name=row.get("run_name") or None,
+            replicate=replicate,
+        )
+
+        # Build template sub-object (if any template-related data exists)
+        template: VerificationResultTemplate | None = None
+        raw_llm_response = row.get("raw_llm_response", "")
+        verify_result_raw = row.get("verify_result")
+        parsed_gt = ResultsIOManager._parse_json_field(row.get("parsed_gt_response"))
+        parsed_llm = ResultsIOManager._parse_json_field(row.get("parsed_llm_response"))
+        verify_result = ResultsIOManager._parse_json_field(verify_result_raw)
+        verify_granular = ResultsIOManager._parse_json_field(row.get("verify_granular_result"))
+
+        # Parse embedding fields
+        embedding_check = row.get("embedding_check_performed", "").lower() in ("true", "1")
+        embedding_score: float | None = None
+        if row.get("embedding_similarity_score"):
+            try:
+                embedding_score = float(row["embedding_similarity_score"])
+            except ValueError:
+                embedding_score = None
+        embedding_override = row.get("embedding_override_applied", "").lower() in ("true", "1")
+        embedding_model = row.get("embedding_model_used") or None
+
+        has_template_data = bool(
+            raw_llm_response or parsed_gt or parsed_llm or verify_result is not None or verify_granular is not None
+        )
+        if has_template_data:
+            template = VerificationResultTemplate(
+                raw_llm_response=raw_llm_response or "",
+                parsed_gt_response=parsed_gt,
+                parsed_llm_response=parsed_llm,
+                verify_result=verify_result,
+                verify_granular_result=verify_granular,
+                embedding_check_performed=embedding_check,
+                embedding_similarity_score=embedding_score,
+                embedding_override_applied=embedding_override,
+                embedding_model_used=embedding_model,
+            )
+
+        # Build rubric sub-object (if any rubric traits exist)
+        rubric: VerificationResultRubric | None = None
+        trait_scores = ResultsIOManager._parse_rubric_traits(row)
+        if trait_scores:
+            rubric = VerificationResultRubric(
+                rubric_evaluation_performed=True,
+                llm_trait_scores=trait_scores,
+            )
+
+        verification_result = VerificationResult(
+            metadata=metadata,
+            template=template,
+            rubric=rubric,
+        )
+
+        return result_key, verification_result

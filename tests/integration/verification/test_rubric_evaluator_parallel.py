@@ -41,7 +41,7 @@ def mock_llm() -> MagicMock:
 def mock_model_config() -> ModelConfig:
     """Create a mock model config."""
     return ModelConfig(
-        id="test-model",
+        id="claude-sonnet-4-20250514",
         model_name="claude-sonnet-4-20250514",
         model_provider="anthropic",
         interface="claude_agent_sdk",

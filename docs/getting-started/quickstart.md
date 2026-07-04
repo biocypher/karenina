@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -130,7 +130,7 @@ print(f"Created benchmark: {benchmark.name}")
 
 ---
 
-## Step 2: Add Questions
+## Step 2: Add Questions and Answers pairs
 
 Each question has a text prompt and a reference answer (the ground truth).
 
@@ -162,13 +162,13 @@ for q in questions:
 print(f"Added {len(question_ids)} questions")
 ```
 
-> **Learn more**: [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) — including bulk import from Excel, CSV, and TSV files
+> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb), including bulk import from Excel, CSV, and TSV files
 
 ---
 
 ## Step 3: Write Answer Templates
 
-Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. Each field uses `VerifiedField` to declare:
+Answer templates are Pydantic models that define how a Judge LLM should parse and verify a model's response. At its core, designing a template means establishing the exact **validation logic used to evaluate the model's answers.** Each field uses `VerifiedField` to declare:
 
 1. A **description** that tells the judge what to extract
 2. The **ground truth** value (what a correct answer looks like)
@@ -176,7 +176,7 @@ Answer templates are Pydantic models that define how a Judge LLM should parse an
 
 The class must inherit from `BaseAnswer`.
 
-### Automatic Generation
+### Case A: Automatic Generation
 
 The fastest way to get started is to let Karenina generate templates for you using an LLM. This analyses each question and its reference answer, then produces a complete template:
 
@@ -197,9 +197,9 @@ generated_code = benchmark.get_template(question_ids[0])
 print(generated_code)
 ```
 
-### Manual Definition (Class-Based)
+### Case B: Manual Definition (Class-Based)
 
-When you need precise control over verification logic, define templates as Python classes and pass them directly. Each field uses `VerifiedField` to declare what to extract, the correct answer, and how to compare:
+Alternatively, when you need precise control over verification logic, define templates as Python classes and pass them directly. Each field uses `VerifiedField` to declare what to extract, the correct answer, and how to compare:
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
@@ -224,17 +224,17 @@ benchmark.update_template(question_ids[1], Answer)
 print("Updated template for Venetoclax question with class-based definition")
 ```
 
-> **Learn more**: [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Authoring](creating-benchmarks/scaled-authoring.ipynb) · [Answer Templates (Concepts)](core_concepts/answer-templates.ipynb)
+> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb) · [Answer Templates (Concepts)](../notebooks/core_concepts/answer-templates.ipynb)
 
 ---
 
 ## Step 4: Add Rubric Traits
 
-While templates verify **correctness**, rubrics assess **quality** — properties of the raw response like conciseness, safety, or format compliance.
+While templates verify **correctness**, rubrics assess **quality**: properties of the raw response like conciseness, safety, or format compliance.
 
-Karenina supports four trait types: LLM, regex, callable, and metric. Here we use two.
+Karenina supports five trait types: LLM, Regex, Callable, Metric, and Agentic. Here we use two.
 
-### Global Trait (evaluated for every question)
+### Global Trait: evaluated for every question
 
 ```python
 from karenina.schemas import LLMRubricTrait
@@ -249,32 +249,32 @@ benchmark.add_global_rubric_trait(
 print("Added global rubric trait: Conciseness (score 1-5)")
 ```
 
-### Question-Specific Trait (evaluated for one question)
+### Question-Specific Trait: evaluated for one question
 
-This regex trait checks that the Venetoclax answer mentions the BCL2 protein:
+This LLM trait checks that the Venetoclax answer discusses the drug's safety profile:
 
 ```python
-from karenina.schemas import RegexTrait
+from karenina.schemas import LLMRubricTrait
 
-venetoclax_qid = question_ids[1]  # The Venetoclax question
+venetoclax_qid = question_ids[1]  # "What is the approved drug target of Venetoclax?"
 
 benchmark.add_question_rubric_trait(
     venetoclax_qid,
-    RegexTrait(
-        name="Contains BCL2",
+    LLMRubricTrait(
+        name="Discusses Safety Profile",
         description=(
-            "The response explicitly mentions the gene symbol BCL2 (exact case-sensitive "
-            "match). This verifies the model uses the standard HGNC symbol rather than "
-            "only informal variants like 'Bcl-2' or 'B-cell lymphoma 2'."
+            "Answer True if the response discusses the safety profile of venetoclax, "
+            "including any mention of adverse effects, toxicity, contraindications, "
+            "or risk factors. Answer False if the response omits safety considerations "
+            "entirely."
         ),
-        pattern=r"\bBCL2\b",
-        case_sensitive=True,
+        kind="boolean",
     ),
 )
-print(f"Added regex trait 'Contains BCL2' to question {venetoclax_qid}")
+print(f"Added LLM trait 'Discusses Safety Profile' to question {venetoclax_qid}")
 ```
 
-> **Learn more**: [Full Evaluation Benchmark](creating-benchmarks/full-evaluation-benchmark.ipynb) · [All Four Trait Types](../core_concepts/rubrics/index.md) — LLM, regex, callable, and metric traits
+> **Learn more**: [Full Evaluation Benchmark](../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) · [All Five Trait Types](../core_concepts/rubrics/index.md): LLM, Regex, Callable, Metric, and Agentic traits
 
 ---
 
@@ -306,14 +306,13 @@ config = VerificationConfig(
         )
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
-> **Learn more**: [Verification Config](running-verification/basic-verification.ipynb) · [Multi-Model Evaluation](running-verification/multi-model-comparison.ipynb) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
+> **Learn more**: [Verification Config](../notebooks/running-verification/basic-verification.ipynb) · [Multi-Model Evaluation](../notebooks/running-verification/multi-model-comparison.ipynb) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
 
 ---
 
@@ -349,7 +348,7 @@ df_rubrics = rubric_results.to_dataframe()
 df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
 ```
 
-> **Learn more**: [DataFrame Analysis](../07-analyzing-results/dataframe-analysis.md) · [VerificationResult](../07-analyzing-results/verification-result.md) · [Exporting Results](../07-analyzing-results/exporting.md)
+> **Learn more**: [DataFrame Analysis](../notebooks/analyzing-results/dataframe-analysis.ipynb) · [VerificationResult](../workflows/analyzing-results/verification-result.md) · [Exporting Results](../workflows/analyzing-results/exporting.md)
 
 ---
 
@@ -372,7 +371,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](running-verification/basic-verification.ipynb)
+> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](../notebooks/running-verification/basic-verification.ipynb)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory

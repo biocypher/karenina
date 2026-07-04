@@ -1,5 +1,7 @@
 """Tests for scenario state dataclasses."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from karenina.schemas.scenario.state import (
@@ -136,3 +138,126 @@ class TestScenarioExecutionResult:
                 outcome_results={},
             )
             assert result.status == status
+
+    def test_replicate_default_none(self):
+        state = ScenarioState(
+            turn=0,
+            current_node="n",
+            verify_result=None,
+            parsed={},
+            node_visits={},
+            history=[],
+            accumulated={},
+            node_results={},
+        )
+        result = ScenarioExecutionResult(
+            scenario_id="s",
+            status="completed",
+            path=["n"],
+            turn_count=1,
+            history=[],
+            turn_results=[],
+            final_state=state,
+            outcome_results={},
+        )
+        assert result.replicate is None
+
+    def test_replicate_set(self):
+        state = ScenarioState(
+            turn=0,
+            current_node="n",
+            verify_result=None,
+            parsed={},
+            node_visits={},
+            history=[],
+            accumulated={},
+            node_results={},
+        )
+        result = ScenarioExecutionResult(
+            scenario_id="s",
+            status="completed",
+            path=["n"],
+            turn_count=1,
+            history=[],
+            turn_results=[],
+            final_state=state,
+            outcome_results={},
+            replicate=3,
+        )
+        assert result.replicate == 3
+
+    def test_to_replay_store_threads_self_replicate(self, monkeypatch):
+        """to_replay_store forwards self.replicate to capture_from_scenario_result by default."""
+        from karenina.replay import capture as capture_mod
+
+        captured: dict[str, object] = {}
+
+        def fake_capture(result, *, answering_model_id, **kwargs):
+            captured["replicate"] = kwargs.get("replicate")
+            captured["answering_model_id"] = answering_model_id
+            return MagicMock()  # dummy ReplayStore; we only inspect captured kwargs
+
+        monkeypatch.setattr(capture_mod, "capture_from_scenario_result", fake_capture, raising=True)
+
+        state = ScenarioState(
+            turn=0,
+            current_node="n",
+            verify_result=None,
+            parsed={},
+            node_visits={},
+            history=[],
+            accumulated={},
+            node_results={},
+        )
+        result = ScenarioExecutionResult(
+            scenario_id="s",
+            status="completed",
+            path=["n"],
+            turn_count=1,
+            history=[],
+            turn_results=[],
+            final_state=state,
+            outcome_results={},
+            replicate=7,
+        )
+        result.to_replay_store(answering_model_id="m")
+
+        assert captured["replicate"] == 7
+        assert captured["answering_model_id"] == "m"
+
+    def test_to_replay_store_explicit_replicate_overrides_self(self, monkeypatch):
+        """Caller's explicit replicate kwarg wins over self.replicate."""
+        from karenina.replay import capture as capture_mod
+
+        captured: dict[str, object] = {}
+
+        def fake_capture(result, *, answering_model_id, **kwargs):
+            captured["replicate"] = kwargs.get("replicate")
+            return MagicMock()
+
+        monkeypatch.setattr(capture_mod, "capture_from_scenario_result", fake_capture, raising=True)
+
+        state = ScenarioState(
+            turn=0,
+            current_node="n",
+            verify_result=None,
+            parsed={},
+            node_visits={},
+            history=[],
+            accumulated={},
+            node_results={},
+        )
+        result = ScenarioExecutionResult(
+            scenario_id="s",
+            status="completed",
+            path=["n"],
+            turn_count=1,
+            history=[],
+            turn_results=[],
+            final_state=state,
+            outcome_results={},
+            replicate=7,
+        )
+        result.to_replay_store(answering_model_id="m", replicate=42)
+
+        assert captured["replicate"] == 42

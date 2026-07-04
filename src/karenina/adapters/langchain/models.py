@@ -14,10 +14,75 @@ import os
 import re
 from typing import Any
 
+import httpx
 from langchain_openai import ChatOpenAI
 from pydantic import Field, SecretStr
 
 logger = logging.getLogger(__name__)
+
+# Httpx pool sizing for ChatOpenAI-derived custom models.
+#
+# These bound the underlying httpx connection pool so that, under concurrent
+# streaming load, sockets in CLOSE_WAIT cannot accumulate without limit and
+# pool waits cannot block forever. The pool deadline turns silent waits into
+# httpx.PoolTimeout exceptions, which ErrorRegistry classifies as TIMEOUT and
+# RetryExecutor can rescue. See issue 194 for the lsof-confirmed root cause.
+_HTTPX_DEFAULT_MAX_CONNECTIONS = 32
+_HTTPX_DEFAULT_MAX_KEEPALIVE = 16
+_HTTPX_DEFAULT_POOL_TIMEOUT_S = 30.0
+_HTTPX_DEFAULT_CONNECT_TIMEOUT_S = 10.0
+# Per-chunk read timeout: this is NOT a wall-clock budget for the whole
+# response, it is the maximum gap between successive bytes/chunks. Streaming
+# generations can run for many minutes, but individual token-to-token gaps
+# (even during heavy "thinking" phases) should be a few seconds at most. A
+# silent stream death (vLLM sent FIN but no ReadTimeout fires because we
+# never asked for one) was the second wedge mode observed in issue 194 after
+# the pool fix landed: the pool fix bounded socket counts but a stuck
+# ESTABLISHED stream still hung the agent for the full agent_timeout. This
+# converts that hang into a retryable httpx.ReadTimeout within ~2 minutes,
+# which RetryExecutor classifies as TIMEOUT and rescues automatically.
+_HTTPX_DEFAULT_READ_TIMEOUT_S = 120.0
+
+
+def _build_default_request_timeout() -> httpx.Timeout:
+    """Build the per-request timeout that bounds read and connect waits.
+
+    The openai SDK overrides the underlying httpx client's default Timeout
+    on every request via ``client.send(request, timeout=...)``, which means
+    setting read/connect on the http client alone has no effect on real
+    traffic. We pass this Timeout via langchain-openai's ``request_timeout``
+    field instead: that maps to the openai SDK's ``timeout`` parameter,
+    which is then used for ``client.send`` and DOES bound each request.
+
+    Pool deadline is still meaningful here: it bounds the wait when a
+    request needs to acquire a connection from the underlying pool, before
+    any send call is even reached.
+    """
+    return httpx.Timeout(
+        connect=_HTTPX_DEFAULT_CONNECT_TIMEOUT_S,
+        read=_HTTPX_DEFAULT_READ_TIMEOUT_S,
+        write=None,
+        pool=_HTTPX_DEFAULT_POOL_TIMEOUT_S,
+    )
+
+
+def _build_httpx_clients() -> tuple[httpx.Client, httpx.AsyncClient]:
+    """Build sync and async httpx clients with bounded pool and read timeouts.
+
+    Returns:
+        A tuple of (sync_client, async_client). Both are configured with the
+        module-level default Limits and Timeout. The read timeout on the
+        client itself is mostly a defense-in-depth measure: the openai SDK
+        overrides per-request timeouts via ``client.send(request, timeout=)``
+        so the effective per-request bound also has to be set via
+        ``request_timeout`` on the model class. See _build_default_request_timeout.
+    """
+    limits = httpx.Limits(
+        max_connections=_HTTPX_DEFAULT_MAX_CONNECTIONS,
+        max_keepalive_connections=_HTTPX_DEFAULT_MAX_KEEPALIVE,
+    )
+    timeout = _build_default_request_timeout()
+    return httpx.Client(limits=limits, timeout=timeout), httpx.AsyncClient(limits=limits, timeout=timeout)
 
 
 def _normalize_openai_endpoint_url(base_url: str) -> str:
@@ -74,6 +139,21 @@ class ChatOpenRouter(ChatOpenAI):
 
     def __init__(self, openai_api_key: str | None = None, **kwargs: Any) -> None:
         openai_api_key = openai_api_key or os.environ.get("OPENROUTER_API_KEY")
+        # Inject bounded httpx clients unless the caller already supplied them.
+        # See _build_httpx_clients docstring and issue 194 for rationale.
+        if "http_client" not in kwargs and "http_async_client" not in kwargs:
+            sync_client, async_client = _build_httpx_clients()
+            kwargs["http_client"] = sync_client
+            kwargs["http_async_client"] = async_client
+        # Inject the per-request timeout that openai SDK actually honors.
+        # Without this, openai's per-request timeout override (~600s) defeats
+        # the read timeout we tried to set on the http client.
+        if "request_timeout" not in kwargs and "timeout" not in kwargs:
+            kwargs["request_timeout"] = _build_default_request_timeout()
+        # OpenRouter proxies OpenAI-compatible providers; same streaming-usage
+        # default as ChatOpenAIEndpoint.
+        if "stream_usage" not in kwargs:
+            kwargs["stream_usage"] = True
         super().__init__(
             base_url="https://openrouter.ai/api/v1",
             api_key=SecretStr(openai_api_key) if openai_api_key else None,
@@ -106,6 +186,7 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         self,
         base_url: str,
         openai_api_key: str | SecretStr | None = None,
+        endpoint_base_url_mode: str = "auto_v1",
         **kwargs: Any,
     ) -> None:
         # Do NOT fallback to environment - require explicit API key
@@ -118,8 +199,37 @@ class ChatOpenAIEndpoint(ChatOpenAI):
         if isinstance(openai_api_key, str):
             openai_api_key = SecretStr(openai_api_key)
 
-        # Normalize URL to ensure it ends with /v1
-        normalized_url = _normalize_openai_endpoint_url(base_url)
+        # Resolve the base URL. "auto_v1" (default) appends /v1 for the common
+        # OpenAI-compatible convention; "raw" uses the URL exactly as given, for
+        # endpoints whose OpenAI-compatible path is not at /v1 (for example the
+        # z.ai coding endpoint, served at .../v4/chat/completions).
+        if endpoint_base_url_mode not in {"auto_v1", "raw"}:
+            raise ValueError(f"endpoint_base_url_mode must be 'auto_v1' or 'raw', got {endpoint_base_url_mode!r}")
+        if endpoint_base_url_mode == "raw":
+            normalized_url = base_url.rstrip("/")
+        else:
+            normalized_url = _normalize_openai_endpoint_url(base_url)
+
+        # Inject bounded httpx clients unless the caller already supplied them.
+        # See _build_httpx_clients docstring and issue 194 for rationale.
+        if "http_client" not in kwargs and "http_async_client" not in kwargs:
+            sync_client, async_client = _build_httpx_clients()
+            kwargs["http_client"] = sync_client
+            kwargs["http_async_client"] = async_client
+        # Inject the per-request timeout that openai SDK actually honors.
+        # Without this, openai's per-request timeout override (~600s) defeats
+        # the read timeout we tried to set on the http client.
+        if "request_timeout" not in kwargs and "timeout" not in kwargs:
+            kwargs["request_timeout"] = _build_default_request_timeout()
+
+        # vLLM and other OpenAI-compatible endpoints drop the `usage` block
+        # from streaming responses unless stream_options.include_usage is set.
+        # langchain-openai exposes this as `stream_usage=True` on ChatOpenAI;
+        # default it on so token accounting works for streaming flows (karenina
+        # uses LLMPort.stream_invoke for all openai_endpoint answer generation).
+        # Callers can override by passing stream_usage=False explicitly.
+        if "stream_usage" not in kwargs:
+            kwargs["stream_usage"] = True
 
         super().__init__(
             base_url=normalized_url,

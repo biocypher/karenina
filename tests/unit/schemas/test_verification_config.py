@@ -10,6 +10,7 @@ Tests cover:
 - Preset utility class methods (sanitize_model_config, sanitize_preset_name, validate_preset_metadata, create_preset_structure)
 - save_preset() and from_preset() with temp directories
 - DeepJudgmentTraitConfig validation
+- Validation constraints: extra="forbid", Field ge/le, bool rejection
 """
 
 import json
@@ -17,11 +18,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from karenina.schemas.config import FewShotConfig, ModelConfig
+from karenina.schemas.config.models import ModelRetryConfig, ToolRetryConfig
 from karenina.schemas.verification import (
     DEFAULT_ANSWERING_SYSTEM_PROMPT,
-    DEFAULT_PARSING_SYSTEM_PROMPT,
     DeepJudgmentTraitConfig,
     VerificationConfig,
 )
@@ -46,7 +48,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -56,7 +58,7 @@ def test_verification_config_default_values(_mock_getenv) -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -75,18 +77,21 @@ def test_verification_config_default_values(_mock_getenv) -> None:
     assert config.evaluation_mode == "template_only"
     assert config.use_full_trace_for_template is False
     assert config.use_full_trace_for_rubric is True
+    assert config.allow_partial_trace_scoring is True
     assert config.abstention_enabled is False
     assert config.embedding_check_enabled is False
     assert config.embedding_check_model == "all-MiniLM-L6-v2"
     assert config.embedding_check_threshold == 0.85
     assert config.async_enabled is True
     assert config.async_max_workers == 2
-    assert config.deep_judgment_enabled is False
+    assert config.deep_judgment_mode == "disabled"
     assert config.deep_judgment_max_excerpts_per_attribute == 3
     assert config.deep_judgment_fuzzy_match_threshold == 0.80
     assert config.deep_judgment_excerpt_retry_attempts == 2
     assert config.deep_judgment_search_enabled is False
     assert config.deep_judgment_search_tool == "tavily"
+    assert config.agentic_parsing is False
+    assert config.agentic_parsing_trigger == "always"
 
 
 @pytest.mark.unit
@@ -121,7 +126,7 @@ def test_validation_requires_answering_model_when_not_parsing_only() -> None:
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -140,7 +145,7 @@ def test_validation_allows_no_answering_model_when_parsing_only() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -160,7 +165,7 @@ def test_validation_requires_model_provider_for_non_excluded_interfaces() -> Non
     from karenina.schemas.config import ModelConfig
 
     model = ModelConfig(
-        id="test",
+        id="gpt-4",
         model_name="gpt-4",
         model_provider=None,  # Missing provider
         interface="langchain",  # Requires provider
@@ -182,7 +187,7 @@ def test_validation_allows_empty_provider_for_openrouter() -> None:
     from karenina.schemas.config import ModelConfig
 
     model = ModelConfig(
-        id="test",
+        id="gpt-4",
         model_name="gpt-4",
         model_provider=None,  # Empty provider
         interface="openrouter",  # Interface that doesn't require provider
@@ -200,50 +205,13 @@ def test_validation_allows_empty_provider_for_openrouter() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    "evaluation_mode,rubric_enabled,error_match",
-    [
-        ("rubric_only", False, "evaluation_mode='rubric_only' requires rubric_enabled=True"),
-        ("template_and_rubric", False, "evaluation_mode='template_and_rubric' requires rubric_enabled=True"),
-        ("template_only", True, "evaluation_mode='template_only' is incompatible with rubric_enabled=True"),
-    ],
-    ids=[
-        "rubric_only_requires_rubric",
-        "template_and_rubric_requires_rubric",
-        "template_only_incompatible_with_rubric",
-    ],
-)
-def test_validation_evaluation_mode_rubric_consistency(
-    evaluation_mode: str, rubric_enabled: bool, error_match: str
-) -> None:
-    """Test that evaluation_mode and rubric_enabled settings are consistent."""
-    with pytest.raises(ValueError, match=error_match):
-        VerificationConfig(
-            parsing_models=[
-                ModelConfig(
-                    id="parsing",
-                    model_name="gpt-4",
-                    model_provider="openai",
-                    interface="langchain",
-                    system_prompt="test",
-                    temperature=0.1,
-                )
-            ],
-            answering_models=[],
-            evaluation_mode=evaluation_mode,
-            rubric_enabled=rubric_enabled,
-            parsing_only=True,
-        )
-
-
-@pytest.mark.unit
 def test_validation_invalid_search_tool_name() -> None:
     """Test that validation rejects unknown search tool names."""
     with pytest.raises(ValueError, match="Unknown search tool"):
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -265,7 +233,7 @@ def test_validation_search_tool_must_be_string_or_callable() -> None:
         VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -293,28 +261,28 @@ def test_default_system_prompts() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
-                system_prompt="",  # Empty, should be replaced
+                system_prompt="",  # Empty, no auto-assignment for parsing models
                 temperature=0.1,
             )
         ],
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
-                system_prompt=None,  # None, should be replaced
+                system_prompt=None,  # None, should be replaced with default
                 temperature=0.1,
             )
         ],
     )
 
-    # Default prompts should be applied
-    assert config.parsing_models[0].system_prompt == DEFAULT_PARSING_SYSTEM_PROMPT
+    # Answering models get auto-assigned default; parsing models do not
+    assert config.parsing_models[0].system_prompt == ""
     assert config.answering_models[0].system_prompt == DEFAULT_ANSWERING_SYSTEM_PROMPT
 
 
@@ -347,7 +315,7 @@ def test_env_var_sets_config_value(env_var: str, env_value: str, config_attr: st
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -368,7 +336,7 @@ def test_env_var_invalid_embedding_threshold_ignored() -> None:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -390,7 +358,7 @@ def test_explicit_value_overrides_env_var() -> None:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="parsing",
+                    id="gpt-4",
                     model_name="gpt-4",
                     model_provider="openai",
                     interface="langchain",
@@ -419,7 +387,7 @@ def test_repr_shows_models() -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -429,7 +397,7 @@ def test_repr_shows_models() -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="claude-haiku-4-5",
                 model_name="claude-haiku-4-5",
                 model_provider="anthropic",
                 interface="langchain",
@@ -452,7 +420,7 @@ def test_repr_shows_execution_settings() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -478,7 +446,7 @@ def test_repr_shows_features() -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="answering",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -488,7 +456,7 @@ def test_repr_shows_features() -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -497,15 +465,14 @@ def test_repr_shows_features() -> None:
             )
         ],
         evaluation_mode="template_and_rubric",
-        rubric_enabled=True,
         abstention_enabled=True,
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
     )
 
     repr_str = repr(config)
     assert "Rubric: enabled" in repr_str
     assert "Abstention: enabled" in repr_str
-    assert "Deep Judgment (Template):" in repr_str
+    assert "Deep Judgment (Template): mode=full" in repr_str
 
 
 # =============================================================================
@@ -520,7 +487,7 @@ def test_get_few_shot_config_returns_new_config() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -530,13 +497,13 @@ def test_get_few_shot_config_returns_new_config() -> None:
         ],
         answering_models=[],
         parsing_only=True,
-        few_shot_config=FewShotConfig(enabled=True, global_mode="all", global_k=3),
+        few_shot_config=FewShotConfig(source="both", pool_mode="all", pool_k=3),
     )
 
     result = config.get_few_shot_config()
     assert result is not None
-    assert result.enabled is True
-    assert result.global_mode == "all"
+    assert result.source == "both"
+    assert result.pool_mode == "all"
 
 
 @pytest.mark.unit
@@ -546,7 +513,7 @@ def test_get_few_shot_config_returns_none_when_disabled() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -569,7 +536,7 @@ def test_is_few_shot_enabled_true() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -579,7 +546,7 @@ def test_is_few_shot_enabled_true() -> None:
         ],
         answering_models=[],
         parsing_only=True,
-        few_shot_config=FewShotConfig(enabled=True, global_mode="all", global_k=3),
+        few_shot_config=FewShotConfig(source="both", pool_mode="all", pool_k=3),
     )
 
     assert config.is_few_shot_enabled() is True
@@ -591,7 +558,7 @@ def test_is_few_shot_enabled_false() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -651,6 +618,30 @@ def test_sanitize_model_config_includes_max_retries() -> None:
     result = VerificationConfig.sanitize_model_config(model)
 
     assert result["max_retries"] == 3
+
+
+@pytest.mark.unit
+def test_sanitize_model_config_preserves_agent_runtime_extra_kwargs() -> None:
+    """Adapter runtime settings should remain modular under extra_kwargs."""
+    model = {
+        "id": "deep-agent",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet-4-20250514",
+        "temperature": 0.0,
+        "interface": "langchain_deep_agents",
+        "system_prompt": "test",
+        "extra_kwargs": {
+            "agent_runtime": {
+                "backend": "docker",
+                "docker_image": "python:3.13-slim",
+                "docker_network": "none",
+            }
+        },
+    }
+
+    result = VerificationConfig.sanitize_model_config(model)
+
+    assert result["extra_kwargs"] == model["extra_kwargs"]
 
 
 @pytest.mark.unit
@@ -779,7 +770,7 @@ def test_save_preset_creates_file(tmp_path: Path) -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -789,7 +780,7 @@ def test_save_preset_creates_file(tmp_path: Path) -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="claude-haiku-4-5",
                 model_name="claude-haiku-4-5",
                 model_provider="anthropic",
                 interface="langchain",
@@ -833,7 +824,7 @@ def test_save_preset_generates_safe_filename(tmp_path: Path) -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -866,7 +857,7 @@ def test_save_perset_existing_file_raises(tmp_path: Path) -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -891,7 +882,7 @@ def test_from_preset_loads_config(tmp_path: Path) -> None:
     config = VerificationConfig(
         answering_models=[
             ModelConfig(
-                id="a1",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -901,7 +892,7 @@ def test_from_preset_loads_config(tmp_path: Path) -> None:
         ],
         parsing_models=[
             ModelConfig(
-                id="p1",
+                id="claude-haiku-4-5",
                 model_name="claude-haiku-4-5",
                 model_provider="anthropic",
                 interface="langchain",
@@ -960,7 +951,7 @@ def test_deep_judgment_rubric_mode_default() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -981,7 +972,7 @@ def test_deep_judgment_rubric_enable_all_mode() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1001,7 +992,9 @@ def test_deep_judgment_rubric_enable_all_mode() -> None:
 
 @pytest.mark.unit
 def test_deep_judgment_rubric_custom_mode() -> None:
-    """Test deep_judgment_rubric_mode='custom' with config."""
+    """Test deep_judgment_rubric_mode='custom' with config dict (auto-coerced)."""
+    from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
+
     custom_config = {
         "global": {
             "Clarity": {"enabled": True, "excerpt_enabled": False},
@@ -1016,7 +1009,7 @@ def test_deep_judgment_rubric_custom_mode() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1031,7 +1024,11 @@ def test_deep_judgment_rubric_custom_mode() -> None:
     )
 
     assert config.deep_judgment_rubric_mode == "custom"
-    assert config.deep_judgment_rubric_config == custom_config
+    assert isinstance(config.deep_judgment_rubric_config, DeepJudgmentRubricCustomConfig)
+    assert "Clarity" in config.deep_judgment_rubric_config.global_traits
+    assert config.deep_judgment_rubric_config.global_traits["Clarity"].enabled is True
+    assert config.deep_judgment_rubric_config.global_traits["Clarity"].excerpt_enabled is False
+    assert "q-123" in config.deep_judgment_rubric_config.question_specific
 
 
 # =============================================================================
@@ -1045,7 +1042,7 @@ def test_sufficiency_enabled_default_false() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1066,7 +1063,7 @@ def test_sufficiency_enabled_can_be_set_true() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1088,7 +1085,7 @@ def test_sufficiency_and_abstention_can_both_be_enabled() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1112,7 +1109,7 @@ def test_repr_shows_sufficiency_when_enabled() -> None:
     config = VerificationConfig(
         parsing_models=[
             ModelConfig(
-                id="parsing",
+                id="gpt-4",
                 model_name="gpt-4",
                 model_provider="openai",
                 interface="langchain",
@@ -1143,8 +1140,8 @@ class TestAgenticRubricConfigFields:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test",
-                    model_name="test",
+                    id="test-model",
+                    model_name="test-model",
                     model_provider="test",
                     interface="langchain",
                 )
@@ -1158,8 +1155,8 @@ class TestAgenticRubricConfigFields:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test",
-                    model_name="test",
+                    id="test-model",
+                    model_name="test-model",
                     model_provider="test",
                     interface="langchain",
                 )
@@ -1173,8 +1170,8 @@ class TestAgenticRubricConfigFields:
         config = VerificationConfig(
             parsing_models=[
                 ModelConfig(
-                    id="test",
-                    model_name="test",
+                    id="test-model",
+                    model_name="test-model",
                     model_provider="test",
                     interface="langchain",
                 )
@@ -1189,8 +1186,8 @@ class TestAgenticRubricConfigFields:
             VerificationConfig(
                 parsing_models=[
                     ModelConfig(
-                        id="test",
-                        model_name="test",
+                        id="test-model",
+                        model_name="test-model",
                         model_provider="test",
                         interface="langchain",
                     )
@@ -1198,3 +1195,571 @@ class TestAgenticRubricConfigFields:
                 parsing_only=True,
                 agentic_rubric_strategy="invalid",
             )
+
+
+# =============================================================================
+# Issue 013: VerificationConfig extra="forbid"
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestVerificationConfigExtraForbid:
+    """Tests for VerificationConfig rejecting unknown extra fields."""
+
+    def _make_parsing_model(self) -> ModelConfig:
+        """Create a minimal valid parsing model."""
+        return ModelConfig(
+            id="gpt-4",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+
+    def test_rejects_unknown_field(self) -> None:
+        """VerificationConfig rejects unknown extra fields."""
+        with pytest.raises(ValidationError, match="extra_forbidden"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                totally_unknown_field="should_fail",
+            )
+
+    def test_accepts_known_fields(self) -> None:
+        """VerificationConfig accepts all known fields without error."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            replicate_count=3,
+            abstention_enabled=True,
+        )
+        assert config.replicate_count == 3
+        assert config.abstention_enabled is True
+
+    def test_round_trip_dump_and_recreate(self) -> None:
+        """VerificationConfig can be dumped and recreated (round-trip).
+
+        This ensures computed fields like rubric_enabled do not break
+        reconstruction from a model_dump() output.
+        """
+        original = VerificationConfig(
+            answering_models=[
+                ModelConfig(
+                    id="gpt-4",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.5,
+                )
+            ],
+            parsing_models=[self._make_parsing_model()],
+            evaluation_mode="template_and_rubric",
+        )
+        dumped = original.model_dump()
+        # rubric_enabled appears in the dump as a computed field
+        assert "rubric_enabled" in dumped
+
+        # Recreating from dump should work (rubric_enabled is popped in __init__)
+        recreated = VerificationConfig(**dumped)
+        assert recreated.evaluation_mode == "template_and_rubric"
+        assert recreated.rubric_enabled is True
+
+    def test_from_overrides_round_trip(self) -> None:
+        """from_overrides can rebuild from a base config without errors.
+
+        This tests that model_dump() output passed back to the constructor
+        does not include fields that would be rejected by extra='forbid'.
+        """
+        base = VerificationConfig(
+            answering_models=[
+                ModelConfig(
+                    id="gpt-4",
+                    model_name="gpt-4",
+                    model_provider="openai",
+                    interface="langchain",
+                    system_prompt="test",
+                    temperature=0.5,
+                )
+            ],
+            parsing_models=[self._make_parsing_model()],
+        )
+        # from_overrides dumps the base and re-creates; must not raise
+        rebuilt = VerificationConfig.from_overrides(base, replicate_count=5)
+        assert rebuilt.replicate_count == 5
+
+
+# =============================================================================
+# Issue 014: replicate_count rejects 0 and negative in all modes
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestReplicateCountValidation:
+    """Tests for replicate_count rejecting zero and negative values."""
+
+    def _make_parsing_model(self) -> ModelConfig:
+        return ModelConfig(
+            id="gpt-4",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+
+    def test_rejects_zero_in_template_only_mode(self) -> None:
+        """replicate_count=0 is rejected even in template_only mode."""
+        with pytest.raises(ValidationError, match="replicate_count"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                replicate_count=0,
+            )
+
+    def test_rejects_negative_in_template_only_mode(self) -> None:
+        """replicate_count=-1 is rejected even in template_only mode."""
+        with pytest.raises(ValidationError, match="replicate_count"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                replicate_count=-1,
+            )
+
+    def test_accepts_one(self) -> None:
+        """replicate_count=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            replicate_count=1,
+        )
+        assert config.replicate_count == 1
+
+    def test_accepts_positive(self) -> None:
+        """replicate_count=5 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            replicate_count=5,
+        )
+        assert config.replicate_count == 5
+
+
+# =============================================================================
+# Issue 134: Numeric fields missing range constraints
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestNumericFieldRangeConstraints:
+    """Tests for numeric field range constraints on VerificationConfig."""
+
+    def _make_parsing_model(self) -> ModelConfig:
+        return ModelConfig(
+            id="gpt-4",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+
+    # async_max_workers: ge=1
+    def test_async_max_workers_rejects_zero(self) -> None:
+        """async_max_workers=0 is rejected (must be >= 1)."""
+        with pytest.raises(ValidationError, match="async_max_workers"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                async_max_workers=0,
+            )
+
+    def test_async_max_workers_accepts_one(self) -> None:
+        """async_max_workers=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            async_max_workers=1,
+        )
+        assert config.async_max_workers == 1
+
+    # embedding_check_threshold: ge=0.0, le=1.0
+    def test_embedding_threshold_rejects_negative(self) -> None:
+        """embedding_check_threshold=-0.1 is rejected."""
+        with pytest.raises(ValidationError, match="embedding_check_threshold"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                embedding_check_threshold=-0.1,
+            )
+
+    def test_embedding_threshold_rejects_above_one(self) -> None:
+        """embedding_check_threshold=1.1 is rejected."""
+        with pytest.raises(ValidationError, match="embedding_check_threshold"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                embedding_check_threshold=1.1,
+            )
+
+    def test_embedding_threshold_accepts_boundaries(self) -> None:
+        """embedding_check_threshold=0.0 and 1.0 are both accepted."""
+        config_low = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            embedding_check_threshold=0.0,
+        )
+        assert config_low.embedding_check_threshold == 0.0
+
+        config_high = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            embedding_check_threshold=1.0,
+        )
+        assert config_high.embedding_check_threshold == 1.0
+
+    # agentic_parsing_max_turns: ge=1
+    def test_agentic_parsing_max_turns_rejects_zero(self) -> None:
+        """agentic_parsing_max_turns=0 is rejected."""
+        with pytest.raises(ValidationError, match="agentic_parsing_max_turns"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                agentic_parsing_max_turns=0,
+            )
+
+    def test_agentic_parsing_max_turns_accepts_one(self) -> None:
+        """agentic_parsing_max_turns=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            agentic_parsing_max_turns=1,
+        )
+        assert config.agentic_parsing_max_turns == 1
+
+    # agentic_parsing_timeout: ge=0.0
+    def test_agentic_parsing_timeout_rejects_negative(self) -> None:
+        """agentic_parsing_timeout=-1.0 is rejected."""
+        with pytest.raises(ValidationError, match="agentic_parsing_timeout"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                agentic_parsing_timeout=-1.0,
+            )
+
+    def test_agentic_parsing_timeout_accepts_zero(self) -> None:
+        """agentic_parsing_timeout=0.0 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            agentic_parsing_timeout=0.0,
+        )
+        assert config.agentic_parsing_timeout == 0.0
+
+    # scenario_turn_limit: ge=1
+    def test_scenario_turn_limit_rejects_zero(self) -> None:
+        """scenario_turn_limit=0 is rejected."""
+        with pytest.raises(ValidationError, match="scenario_turn_limit"):
+            VerificationConfig(
+                parsing_models=[self._make_parsing_model()],
+                parsing_only=True,
+                scenario_turn_limit=0,
+            )
+
+    def test_scenario_turn_limit_accepts_one(self) -> None:
+        """scenario_turn_limit=1 is accepted."""
+        config = VerificationConfig(
+            parsing_models=[self._make_parsing_model()],
+            parsing_only=True,
+            scenario_turn_limit=1,
+        )
+        assert config.scenario_turn_limit == 1
+
+
+# =============================================================================
+# Issue 030: ModelConfig rejects manual_traces=True (bool)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestModelConfigManualTracesBoolRejection:
+    """Tests for ModelConfig rejecting bool values for manual_traces."""
+
+    def test_rejects_true_bool(self) -> None:
+        """ModelConfig rejects manual_traces=True with interface='manual'."""
+        with pytest.raises(ValueError, match="ManualTraces instance"):
+            ModelConfig(
+                interface="manual",
+                manual_traces=True,
+            )
+
+    def test_rejects_false_bool(self) -> None:
+        """ModelConfig rejects manual_traces=False with interface='manual'.
+
+        False is not None, so it passes the None check but should be caught
+        as a bool.
+        """
+        with pytest.raises(ValueError, match="ManualTraces instance"):
+            ModelConfig(
+                interface="manual",
+                manual_traces=False,
+            )
+
+    def test_accepts_none_for_non_manual(self) -> None:
+        """ModelConfig accepts manual_traces=None for non-manual interfaces."""
+        config = ModelConfig(
+            id="gpt-4",
+            model_name="gpt-4",
+            model_provider="openai",
+            interface="langchain",
+        )
+        assert config.manual_traces is None
+
+
+# =============================================================================
+# Issue 039: ModelRetryConfig and ToolRetryConfig reject negative max_retries
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRetryConfigMaxRetriesConstraint:
+    """Tests for max_retries rejecting negative values."""
+
+    def test_model_retry_rejects_negative(self) -> None:
+        """ModelRetryConfig rejects max_retries=-1."""
+        with pytest.raises(ValidationError, match="max_retries"):
+            ModelRetryConfig(max_retries=-1)
+
+    def test_model_retry_accepts_zero(self) -> None:
+        """ModelRetryConfig accepts max_retries=0 (no retries)."""
+        config = ModelRetryConfig(max_retries=0)
+        assert config.max_retries == 0
+
+    def test_model_retry_accepts_positive(self) -> None:
+        """ModelRetryConfig accepts max_retries=5."""
+        config = ModelRetryConfig(max_retries=5)
+        assert config.max_retries == 5
+
+    def test_tool_retry_rejects_negative(self) -> None:
+        """ToolRetryConfig rejects max_retries=-1."""
+        with pytest.raises(ValidationError, match="max_retries"):
+            ToolRetryConfig(max_retries=-1)
+
+    def test_tool_retry_accepts_zero(self) -> None:
+        """ToolRetryConfig accepts max_retries=0 (no retries)."""
+        config = ToolRetryConfig(max_retries=0)
+        assert config.max_retries == 0
+
+    def test_tool_retry_accepts_positive(self) -> None:
+        """ToolRetryConfig accepts max_retries=3."""
+        config = ToolRetryConfig(max_retries=3)
+        assert config.max_retries == 3
+
+
+# =============================================================================
+# Retry Configuration Fields Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRetryConfigFields:
+    """Tests for retry_policy, custom_error_patterns, and max_requeue_count fields."""
+
+    def test_verification_config_defaults(self) -> None:
+        """Test default values for retry fields."""
+        from karenina.utils.retry_policy import RetryPolicy
+
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+        )
+        assert isinstance(config.retry_policy, RetryPolicy)
+        assert config.custom_error_patterns == []
+        assert config.max_requeue_count == 5
+
+    def test_verification_config_custom_retry_policy(self) -> None:
+        """Test custom RetryPolicy on VerificationConfig."""
+        from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
+
+        policy = RetryPolicy(connection=CategoryRetryConfig(max_attempts=5))
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            retry_policy=policy,
+            max_requeue_count=10,
+        )
+        assert config.retry_policy.connection.max_attempts == 5
+        assert config.max_requeue_count == 10
+
+    def test_verification_config_custom_error_patterns(self) -> None:
+        """Test custom_error_patterns on VerificationConfig."""
+        from karenina.utils.retry_policy import ErrorPatternConfig
+
+        patterns = [ErrorPatternConfig(pattern="MyTimeout", category="timeout", match_type="type_name")]
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            custom_error_patterns=patterns,
+        )
+        assert len(config.custom_error_patterns) == 1
+        assert config.custom_error_patterns[0].pattern == "MyTimeout"
+
+    def test_verification_config_rejects_zero_requeue(self) -> None:
+        """Test that max_requeue_count must be >= 1."""
+        with pytest.raises(ValidationError):
+            VerificationConfig(
+                parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+                parsing_only=True,
+                max_requeue_count=0,
+            )
+
+    def test_model_config_default_retry_policy(self) -> None:
+        """Test ModelConfig has retry_policy defaulting to None."""
+        config = ModelConfig(id="test", model_name="test", model_provider="openai")
+        assert config.retry_policy is None
+
+    def test_model_config_custom_retry_policy(self) -> None:
+        """Test ModelConfig accepts retry_policy."""
+        from karenina.utils.retry_policy import RetryPolicy
+
+        policy = RetryPolicy()
+        config = ModelConfig(
+            id="test",
+            model_name="test",
+            model_provider="openai",
+            retry_policy=policy,
+        )
+        assert config.retry_policy is not None
+        assert isinstance(config.retry_policy, RetryPolicy)
+
+
+# =============================================================================
+# Task Ordering Tests
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTaskOrdering:
+    """Tests for the task_ordering field on VerificationConfig."""
+
+    def test_default_is_auto(self) -> None:
+        """Test that task_ordering defaults to 'auto'."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+        )
+        assert config.task_ordering == "auto"
+
+    def test_accepts_generation_order(self) -> None:
+        """Test that task_ordering accepts 'generation_order'."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            task_ordering="generation_order",
+        )
+        assert config.task_ordering == "generation_order"
+
+    def test_accepts_random(self) -> None:
+        """Test that task_ordering accepts 'random'."""
+        config = VerificationConfig(
+            parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            task_ordering="random",
+        )
+        assert config.task_ordering == "random"
+
+    def test_rejects_invalid_value(self) -> None:
+        """Test that task_ordering rejects values outside the allowed literal."""
+        with pytest.raises(ValidationError):
+            VerificationConfig(
+                parsing_models=[ModelConfig(id="test", model_name="test", model_provider="openai")],
+                parsing_only=True,
+                task_ordering="invalid",
+            )
+
+
+@pytest.mark.unit
+def test_agentic_parsing_trigger_rejects_invalid_value() -> None:
+    with pytest.raises(ValidationError):
+        VerificationConfig(
+            parsing_models=[ModelConfig(id="parser", model_name="test", model_provider="openai")],
+            parsing_only=True,
+            agentic_parsing_trigger="sometimes",
+        )
+
+
+# =============================================================================
+# Multi-endpoint scheduling: task_ordering + answerer_concurrency_limits
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestTaskOrderingSchema:
+    """Tests for the extended task_ordering Literal and 'auto' default."""
+
+    def _minimal_config(self, **overrides) -> VerificationConfig:
+        parsing = ModelConfig(
+            id="parser",
+            model_name="parser",
+            model_provider="anthropic",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+        kwargs: dict = {"parsing_models": [parsing], "parsing_only": True}
+        kwargs.update(overrides)
+        return VerificationConfig(**kwargs)
+
+    def test_default_task_ordering_is_auto(self) -> None:
+        config = self._minimal_config()
+        assert config.task_ordering == "auto"
+
+    def test_distribute_answerers_is_accepted(self) -> None:
+        config = self._minimal_config(task_ordering="distribute_answerers")
+        assert config.task_ordering == "distribute_answerers"
+
+    def test_existing_strategies_still_accepted(self) -> None:
+        for value in ("prefix_cache", "generation_order", "random"):
+            config = self._minimal_config(task_ordering=value)
+            assert config.task_ordering == value
+
+    def test_unknown_task_ordering_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            self._minimal_config(task_ordering="nope")
+
+
+@pytest.mark.unit
+class TestAnswererConcurrencyLimitsSchema:
+    """Tests for the new answerer_concurrency_limits field."""
+
+    def _minimal_config(self, **overrides) -> VerificationConfig:
+        parsing = ModelConfig(
+            id="parser",
+            model_name="parser",
+            model_provider="anthropic",
+            interface="langchain",
+            system_prompt="test",
+            temperature=0.1,
+        )
+        kwargs: dict = {"parsing_models": [parsing], "parsing_only": True}
+        kwargs.update(overrides)
+        return VerificationConfig(**kwargs)
+
+    def test_default_is_none(self) -> None:
+        config = self._minimal_config()
+        assert config.answerer_concurrency_limits is None
+
+    def test_int_accepted(self) -> None:
+        config = self._minimal_config(answerer_concurrency_limits=16)
+        assert config.answerer_concurrency_limits == 16
+
+    def test_dict_accepted(self) -> None:
+        config = self._minimal_config(
+            answerer_concurrency_limits={"m1": 10, "m2": 20},
+        )
+        assert config.answerer_concurrency_limits == {"m1": 10, "m2": 20}
+
+    def test_unknown_types_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            self._minimal_config(answerer_concurrency_limits="sixteen")

@@ -125,7 +125,6 @@ def run_quickstart():
     from karenina.schemas import (
         LLMRubricTrait,
         ModelConfig,
-        RegexTrait,
         VerificationConfig,
     )
     from karenina.schemas.entities import BaseAnswer, VerifiedField
@@ -196,15 +195,15 @@ def run_quickstart():
     venetoclax_qid = question_ids[1]
     benchmark.add_question_rubric_trait(
         venetoclax_qid,
-        RegexTrait(
-            name="Contains BCL2",
+        LLMRubricTrait(
+            name="Discusses Safety Profile",
             description=(
-                "The response explicitly mentions the gene symbol BCL2 (exact case-sensitive "
-                "match). This verifies the model uses the standard HGNC symbol rather than "
-                "only informal variants like 'Bcl-2' or 'B-cell lymphoma 2'."
+                "Answer True if the response discusses the safety profile of venetoclax, "
+                "including any mention of adverse effects, toxicity, contraindications, "
+                "or risk factors. Answer False if the response omits safety considerations "
+                "entirely."
             ),
-            pattern=r"\bBCL2\b",
-            case_sensitive=True,
+            kind="boolean",
         ),
     )
     print("Step 4: Added rubric traits")
@@ -231,7 +230,6 @@ def run_quickstart():
             )
         ],
         evaluation_mode="template_and_rubric",
-        rubric_enabled=True,
     )
     results = benchmark.run_verification(config)
     print(f"Step 5: Verification complete — {len(results.results)} results")

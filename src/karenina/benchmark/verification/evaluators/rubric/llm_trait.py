@@ -17,12 +17,13 @@ The adapter factory returns the appropriate implementation (LangChainLLMAdapter
 or ClaudeSDKLLMAdapter) based on the model interface configuration.
 """
 
-import json
 import logging
-import re
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from pydantic import BaseModel
+
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.prompts.rubric.literal_trait import LiteralTraitPromptBuilder
 from karenina.benchmark.verification.prompts.rubric.llm_trait import LLMTraitPromptBuilder
@@ -125,15 +126,22 @@ class LLMTraitEvaluator:
         )
 
     def evaluate_batch(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
         Evaluate all traits in a single LLM call using structured output.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from the
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (results_dict, usage_metadata)
@@ -141,7 +149,9 @@ class LLMTraitEvaluator:
         from karenina.schemas.outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(question, answer, traits)
+        user_prompt = self._llm_prompt_builder.build_batch_user_prompt(
+            question, answer, traits, task_eval_mode=task_eval_mode
+        )
 
         # Build instruction_context for adapter instructions (format-specific content)
         instruction_context: dict[str, object] = {
@@ -157,7 +167,11 @@ class LLMTraitEvaluator:
         # Use LLMPort.with_structured_output() for parsing
         # The adapter guarantees response.raw is a validated BatchRubricScores instance
         structured_llm = self.llm.with_structured_output(BatchRubricScores)
-        response = structured_llm.invoke(messages)
+        try:
+            response = structured_llm.invoke(messages)
+        finally:
+            if structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
         # Extract usage metadata
         usage_metadata = asdict(response.usage) if response.usage else {}
@@ -167,7 +181,12 @@ class LLMTraitEvaluator:
         return results, usage_metadata
 
     def evaluate_sequential(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
         Evaluate traits one by one.
@@ -177,9 +196,11 @@ class LLMTraitEvaluator:
         sequentially.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from each
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
@@ -191,7 +212,9 @@ class LLMTraitEvaluator:
         for trait in traits:
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             system_prompt = self._llm_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+            user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
             # Build instruction_context for adapter instructions
             format_hint = '{"result": true} or {"result": false}' if trait.kind == "boolean" else '{"score": N}'
@@ -261,6 +284,7 @@ class LLMTraitEvaluator:
 
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
+            structured_llm: LLMPort | None = None
             try:
                 # Use LLMPort.with_structured_output() for parsing
                 structured_llm = self.llm.with_structured_output(model_class)
@@ -281,6 +305,9 @@ class LLMTraitEvaluator:
                 logger.warning(f"Failed to evaluate trait '{trait.name}': {e}")
                 results[trait.name] = None  # type: ignore[assignment]
                 usage_metadata_list.append({})
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
         return results, usage_metadata_list
 
@@ -327,97 +354,151 @@ class LLMTraitEvaluator:
             clamped_score = max(min_score, min(max_score, int(score)))
             return clamped_score
 
-    def parse_batch_response(self, response: str, traits: list[LLMRubricTrait]) -> dict[str, int | bool]:
-        """
-        Parse the batch evaluation response.
+    # ========== Template Trait Evaluation Methods ==========
 
-        This is a fallback method for when structured output fails. Usually
-        LLMPort.with_structured_output() handles parsing, but this can be used
-        for manual parsing scenarios.
+    def evaluate_template(
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Evaluate template-kind LLM traits and return flattened dotted results.
+
+        Each template trait has a unique Pydantic schema, so traits cannot be
+        batched into a single output model; they are always evaluated one
+        per call (in parallel when ``async_enabled=True``).
+
+        Returned keys use dotted notation (``trait_name.field_name``) to match
+        the convention used by agentic template rubrics. Failed traits map to
+        ``None`` under the bare trait name (no flattening possible).
 
         Args:
-            response: Raw LLM response text
-            traits: List of traits being evaluated
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: Template-kind LLM traits (``trait.is_template_kind`` True).
+            task_eval_mode: When True, omit the **QUESTION:** block from each
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
-            Dictionary mapping trait names to scores
-
-        Raises:
-            ValueError: If parsing fails
+            Tuple of (flattened_results, usage_metadata_list).
         """
-        # Try to extract JSON from the response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in response: {response}")
+        if not traits:
+            return {}, []
 
-        try:
-            result = json.loads(json_match.group())
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in response: {e}") from e
-
-        # Validate and convert the results
-        validated_results: dict[str, int | bool] = {}
-        trait_map = {trait.name: trait for trait in traits}
-
-        for trait_name, score in result.items():
-            if trait_name in trait_map:
-                trait = trait_map[trait_name]
-                validated_score = self._validate_score(score, trait)
-                validated_results[trait_name] = validated_score
-
-        # Add None for missing traits
+        tasks: list[tuple[list[Message], type]] = []
         for trait in traits:
-            if trait.name not in validated_results:
-                validated_results[trait.name] = None  # type: ignore[assignment]
+            if not trait.is_template_kind:
+                raise ValueError(
+                    f"evaluate_template requires template-kind traits; trait '{trait.name}' has kind={trait.kind!r}"
+                )
+            kind_class = cast(type[BaseModel], trait.kind)  # already a BaseModel subclass
+            system_prompt = self._llm_prompt_builder.build_template_system_prompt(trait)
+            user_prompt = self._llm_prompt_builder.build_template_user_prompt(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
-        return validated_results
+            instruction_context: dict[str, object] = {
+                "json_schema": kind_class.model_json_schema(),
+                "output_format_hint": "Fill in every field of the provided schema as JSON.",
+            }
 
-    def parse_single_trait_response(self, response: str, trait: LLMRubricTrait) -> int | bool:
+            messages = self._assemble_messages(
+                PromptTask.RUBRIC_LLM_TRAIT_TEMPLATE, system_prompt, user_prompt, instruction_context
+            )
+            tasks.append((messages, kind_class))
+
+        if self._async_enabled:
+            return self._execute_concurrent_template(tasks, traits)
+        return self._execute_serial_template(tasks, traits)
+
+    @staticmethod
+    def _flatten_template_result(
+        trait_name: str,
+        parsed_dump: dict[str, Any] | None,
+        target: dict[str, Any],
+    ) -> None:
+        """Write a template trait's structured result to ``target`` as dotted keys.
+
+        On success, expands ``{field: value}`` into ``{trait_name.field: value}``.
+        On failure (``parsed_dump`` is None), stores ``target[trait_name] = None``.
         """
-        Parse a single trait evaluation response.
+        if parsed_dump is None:
+            target[trait_name] = None
+            return
+        for field_name, value in parsed_dump.items():
+            target[f"{trait_name}.{field_name}"] = value
 
-        This is a fallback method for when structured output fails. Usually
-        LLMPort.with_structured_output() handles parsing, but this can be used
-        for manual parsing scenarios.
+    def _execute_concurrent_template(
+        self,
+        tasks: list[tuple[list[Message], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Execute template evaluation tasks concurrently via LLMParallelInvoker."""
+        from karenina.adapters import LLMParallelInvoker
 
-        Args:
-            response: Raw LLM response text
-            trait: The trait being evaluated
+        logger.debug(
+            "LLMParallelInvoker: Executing %d template tasks with max_workers=%d",
+            len(tasks),
+            self._async_max_workers,
+        )
+        invoker = LLMParallelInvoker(self.llm, max_workers=self._async_max_workers)
+        raw_results = invoker.invoke_batch_structured(tasks)
 
-        Returns:
-            Parsed score (bool for boolean traits, int for numeric)
+        results: dict[str, Any] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
 
-        Raises:
-            ValueError: If parsing fails
-        """
-        response = response.strip().lower()
-
-        if trait.kind == "boolean":
-            if response in ["true", "yes", "1"]:
-                return True
-            elif response in ["false", "no", "0"]:
-                return False
+        for i, (parsed_result, usage, error) in enumerate(raw_results):
+            trait = traits[i]
+            if error:
+                logger.warning("Failed to evaluate template trait '%s': %s", trait.name, error)
+                self._flatten_template_result(trait.name, None, results)
+                usage_metadata_list.append({})
             else:
-                # Try to extract boolean from longer response
-                if "true" in response or "yes" in response:
-                    return True
-                elif "false" in response or "no" in response:
-                    return False
-                else:
-                    raise ValueError(f"Could not parse boolean from: {response}")
-        else:
-            # Extract numeric score
-            numbers = re.findall(r"\d+", response)
-            if not numbers:
-                raise ValueError(f"No numeric score found in: {response}")
+                assert parsed_result is not None
+                self._flatten_template_result(trait.name, parsed_result.model_dump(), results)
+                usage_metadata_list.append(usage or {})
 
-            score = int(numbers[0])
-            return self._validate_score(score, trait)
+        return results, usage_metadata_list
+
+    def _execute_serial_template(
+        self,
+        tasks: list[tuple[list[Message], type]],
+        traits: list[LLMRubricTrait],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Execute template evaluation tasks serially (one at a time)."""
+        results: dict[str, Any] = {}
+        usage_metadata_list: list[dict[str, Any]] = []
+
+        for i, (messages, model_class) in enumerate(tasks):
+            trait = traits[i]
+            structured_llm: LLMPort | None = None
+            try:
+                structured_llm = self.llm.with_structured_output(model_class)
+                response = structured_llm.invoke(messages)
+                usage_metadata = asdict(response.usage) if response.usage else {}
+                self._flatten_template_result(trait.name, response.raw.model_dump(), results)
+                usage_metadata_list.append(usage_metadata)
+            except Exception as e:
+                logger.warning("Failed to evaluate template trait '%s': %s", trait.name, e)
+                self._flatten_template_result(trait.name, None, results)
+                usage_metadata_list.append({})
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
+
+        return results, usage_metadata_list
 
     # ========== Literal Trait Evaluation Methods ==========
 
     def evaluate_literal_batch(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
         """
         Evaluate literal (categorical) traits in a single LLM call.
@@ -428,9 +509,11 @@ class LLMTraitEvaluator:
         Uses LLMPort.with_structured_output() for parsing.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of literal kind LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of literal kind LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from the
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (scores, labels, usage_metadata) where:
@@ -446,7 +529,9 @@ class LLMTraitEvaluator:
             return {}, {}, {}
 
         system_prompt = self._literal_prompt_builder.build_batch_system_prompt()
-        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(question, answer, literal_traits)
+        user_prompt = self._literal_prompt_builder.build_batch_user_prompt(
+            question, answer, literal_traits, task_eval_mode=task_eval_mode
+        )
 
         # Build instruction_context for adapter instructions (format-specific content)
         instruction_context: dict[str, object] = {
@@ -465,7 +550,11 @@ class LLMTraitEvaluator:
 
         # Use LLMPort.with_structured_output() for parsing
         structured_llm = self.llm.with_structured_output(BatchLiteralClassifications)
-        response = structured_llm.invoke(messages)
+        try:
+            response = structured_llm.invoke(messages)
+        finally:
+            if structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
         # Extract usage metadata
         usage_metadata = asdict(response.usage) if response.usage else {}
@@ -477,7 +566,12 @@ class LLMTraitEvaluator:
         return scores, labels, usage_metadata
 
     def evaluate_literal_sequential(
-        self, question: str, answer: str, traits: list[LLMRubricTrait]
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
         """
         Evaluate literal traits one by one.
@@ -487,9 +581,11 @@ class LLMTraitEvaluator:
         sequentially.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of literal kind LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of literal kind LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block from each
+                rendered user prompt. Set automatically by TaskEval.
 
         Returns:
             Tuple of (scores, labels, usage_metadata_list) where:
@@ -508,7 +604,9 @@ class LLMTraitEvaluator:
         tasks: list[tuple[list[Message], type[SingleLiteralClassification]]] = []
         for trait in literal_traits:
             system_prompt = self._literal_prompt_builder.build_single_trait_system_prompt(trait)
-            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(question, answer, trait)
+            user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
             # Build instruction_context for adapter instructions
             instruction_context: dict[str, object] = {
@@ -579,6 +677,7 @@ class LLMTraitEvaluator:
 
         for i, (messages, model_class) in enumerate(tasks):
             trait = traits[i]
+            structured_llm: LLMPort | None = None
             try:
                 # Use LLMPort.with_structured_output() for parsing
                 structured_llm = self.llm.with_structured_output(model_class)
@@ -598,6 +697,9 @@ class LLMTraitEvaluator:
                 scores[trait.name] = -1
                 labels[trait.name] = f"[EVALUATION_ERROR: {e!s}]"
                 usage_metadata_list.append({})
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
         return scores, labels, usage_metadata_list
 

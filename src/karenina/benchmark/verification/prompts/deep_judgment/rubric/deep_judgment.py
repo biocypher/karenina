@@ -50,16 +50,29 @@ class DeepJudgmentPromptBuilder:
 
     def build_excerpt_extraction_system_prompt(self) -> str:
         """Build system prompt for excerpt extraction."""
-        return """You are an expert at extracting verbatim quotes from text that demonstrate specific qualities.
+        return """## Role
+You extract verbatim quotes from a candidate response that bear on a single rubric trait, so a downstream reasoning stage can weigh the evidence.
 
-**CRITICAL REQUIREMENTS:**
-1. **VERBATIM QUOTES**: Excerpts must be EXACT text from the answer - do not paraphrase
-2. **Confidence Levels**: Assign confidence based on strength of evidence:
-   - "high": Direct, explicit evidence for the trait
-   - "medium": Reasonable inference or moderate evidence
-   - "low": Weak or ambiguous evidence
-3. Do NOT paraphrase or modify quotes
-4. Do NOT invent quotes not present in the text"""
+## Principles
+- Verbatim only: every quote must appear character-for-character in the response (minor whitespace differences are tolerated, paraphrasing is not).
+- Confidence levels:
+  - high: direct, explicit statement that clearly bears on the trait.
+  - medium: indirect or partial evidence; reasonable inference.
+  - low: weak, ambiguous, or tangential evidence.
+- Include weak evidence at low confidence rather than returning an empty list. Reserve the empty list for responses with no relevant text at all.
+- Prefer focused, sentence-level excerpts. If a longer span is needed, keep it tight around the load-bearing words.
+- Within the configured maximum, prioritize the strongest and most distinct excerpts; do not pad.
+
+## Anti-patterns
+- Paraphrasing or summarizing the response text.
+- Inventing quotes that the response does not contain.
+- Returning the entire response as a single excerpt.
+- Returning an empty list when ambiguous evidence exists; mark it low instead.
+- Selecting near-duplicate excerpts that say the same thing.
+
+## Output handoff
+- Your excerpts are fuzzy-matched against the response text; near-misses trigger a retry with feedback identifying the failed quotes.
+- The next stage reads excerpts in order and weighs them by their confidence label; ordering and labels carry signal."""
 
     def build_excerpt_extraction_user_prompt(
         self,
@@ -71,66 +84,43 @@ class DeepJudgmentPromptBuilder:
         """Build user prompt for excerpt extraction.
 
         Args:
-            trait: The LLM trait to extract excerpts for
-            max_excerpts: Maximum number of excerpts to extract
-            answer: The answer to extract excerpts from
-            feedback: Optional retry feedback from validation failure
+            trait: The LLM trait to extract excerpts for.
+            max_excerpts: Maximum number of excerpts to extract.
+            answer: The answer to extract excerpts from.
+            feedback: Optional retry feedback from validation failure.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        prompt = f"""Extract verbatim quotes from the answer that demonstrate the following quality trait:
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Assess this quality"}
-
-**ANSWER TO ANALYZE:**
-{answer}
-
-**TASK:**
-Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or relate to this trait.
-
-**CONFIDENCE LEVELS:**
-- "high": Direct, explicit statement that clearly demonstrates the trait
-- "medium": Indirect evidence or reasonable inference supporting the trait
-- "low": Weak, ambiguous, or tangential evidence
-
-**IMPORTANT RULES:**
-1. Quotes MUST be EXACT verbatim text from the answer above
-2. Do not paraphrase, summarize, or modify the text in any way
-3. If no relevant excerpts exist, return an empty excerpts array: {{"excerpts": []}}
-4. Select the most relevant excerpts - quality over quantity
-"""
-
+        criteria = trait.description or "Assess this quality."
+        prompt = (
+            f"## Trait\n{trait.name}\n\n"
+            f"## Criteria\n{criteria}\n\n"
+            f"## Response\n{answer}\n\n"
+            f"## Maximum excerpts\n{max_excerpts}\n"
+        )
         if feedback:
-            prompt += f"""
-**RETRY FEEDBACK (previous excerpts failed validation):**
-{feedback}
-"""
-
+            prompt += f"\n## Retry feedback\n{feedback}\n"
+        prompt += "\n## Task\nExtract verbatim excerpts that bear on the trait, with confidence levels."
         return prompt
 
     def build_retry_feedback(self, failed_excerpts: list[dict[str, Any]], fuzzy_threshold: float) -> str:
         """Build feedback message for retry attempt after validation failure.
 
         Args:
-            failed_excerpts: List of excerpts that failed validation
-            fuzzy_threshold: The similarity threshold used for validation
+            failed_excerpts: List of excerpts that failed validation.
+            fuzzy_threshold: The similarity threshold used for validation.
 
         Returns:
-            Feedback message string
+            Feedback message string. The verbatim rule lives in the system prompt;
+            this message only enumerates the failed quotes.
         """
-        feedback = "The following excerpts failed validation (not found in answer):\n"
-
+        lines = ["The following excerpts failed validation (not found in answer):"]
         for i, excerpt in enumerate(failed_excerpts, 1):
-            feedback += (
-                f'{i}. "{excerpt.get("text", "")}" '
-                f"(similarity: {excerpt.get('similarity_score', 0):.2f}, "
-                f"threshold: {fuzzy_threshold:.2f})\n"
-            )
-
-        feedback += "\nPlease provide verbatim quotes that exactly match the answer text."
-        return feedback
+            text = excerpt.get("text", "")
+            similarity = excerpt.get("similarity_score", 0)
+            lines.append(f'{i}. "{text}" (similarity: {similarity:.2f}, threshold: {fuzzy_threshold:.2f})')
+        return "\n".join(lines)
 
     # =========================================================================
     # Stage 1.5: Hallucination Assessment
@@ -138,15 +128,29 @@ Extract up to {max_excerpts} verbatim quotes from the answer that demonstrate or
 
     def build_hallucination_assessment_system_prompt(self) -> str:
         """Build system prompt for hallucination risk assessment."""
-        return """You are an expert at assessing hallucination risk using external evidence.
+        return """## Role
+You assess whether a single excerpt's claims are supported by external search results, so a downstream reasoning stage can weigh the excerpt's reliability.
 
-**YOUR ROLE:**
-Compare excerpts against external search results to determine if the information is factually supported.
+## Principles
+- Risk levels:
+  - none: multiple reliable sources clearly confirm the claim.
+  - low: at least one source supports the claim; no contradiction.
+  - medium: weak, partial, or ambiguous support; sources unclear or partly contradict.
+  - high: no supporting evidence, or the claim is actively contradicted.
+- Be evidence-based: judge from what the search results actually contain, not from prior beliefs.
+- Be conservative under uncertainty: when between two adjacent levels, choose the higher-risk one.
+- Provide a brief justification (1-3 sentences) referencing the search results.
 
-**CRITICAL REQUIREMENTS:**
-1. **Conservative Assessment**: When uncertain, lean toward higher risk levels
-2. **Evidence-Based**: Base your assessment solely on the search results provided
-3. Do NOT assume claims are true without supporting evidence"""
+## Anti-patterns
+- Treating empty or irrelevant results as confirmation that the claim is false.
+- Treating a single matching snippet as strong (none-risk) confirmation.
+- Assuming search results are current, complete, or authoritative.
+- Glossing over disagreement between sources; surface it in the justification.
+- Inferring support from the excerpt's tone or specificity rather than from the search results.
+
+## Output handoff
+- Your per-excerpt risk is aggregated by maximum severity; one "high" pulls the overall assessment up.
+- Your justification is shown to the reasoning stage, which uses it to discount unreliable excerpts; keep it concrete and short."""
 
     def build_hallucination_assessment_user_prompt(
         self,
@@ -156,31 +160,17 @@ Compare excerpts against external search results to determine if the information
         """Build user prompt for hallucination risk assessment.
 
         Args:
-            excerpt_text: The excerpt text to assess
-            search_results: External search results for verification
+            excerpt_text: The excerpt text to assess.
+            search_results: External search results for verification.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        return f"""Assess the hallucination risk for this excerpt by comparing it against external search results.
-
-**EXCERPT TO VERIFY:**
-"{excerpt_text}"
-
-**EXTERNAL SEARCH RESULTS:**
-{search_results}
-
-**RISK LEVELS (choose one):**
-- "none": Strong external evidence supports this - multiple reliable sources confirm
-- "low": Some external evidence, likely accurate - at least one source supports
-- "medium": Weak or ambiguous evidence - sources unclear or partially contradict
-- "high": No supporting evidence or actively contradicted by external sources
-
-**EVALUATION GUIDELINES:**
-1. Compare the excerpt's claims against the search results
-2. Consider the reliability and specificity of sources
-3. When uncertain between adjacent levels, choose the more conservative (higher risk) option
-4. Provide a brief justification explaining your reasoning"""
+        return (
+            f'## Excerpt\n"{excerpt_text}"\n\n'
+            f"## Search results\n{search_results}\n\n"
+            "## Task\nAssess the hallucination risk for the excerpt against the search results."
+        )
 
     # =========================================================================
     # Stage 2: Reasoning Generation
@@ -188,7 +178,29 @@ Compare excerpts against external search results to determine if the information
 
     def build_reasoning_system_prompt(self) -> str:
         """Build system prompt for reasoning generation."""
-        return "You are an expert at analyzing text quality and providing clear reasoning."
+        return """## Role
+You produce reasoning that explains how the available evidence bears on a single rubric trait. A downstream stage will translate your reasoning into a final score; do not score the trait yourself.
+
+## Principles
+- Use only the evidence visible in the inputs (excerpts or full response, plus any provided context).
+- Weigh both supporting and contradicting evidence before concluding.
+- Cite specific excerpts or passages when they bear on the criteria.
+- When the criteria are ambiguous, state the interpretation you used and apply it consistently.
+- When hallucination risk is provided, factor it into how much weight you place on each excerpt.
+- Use as much room as the evidence requires; avoid both unnecessary verbosity and premature conclusions.
+- Structure your output as three labeled sections: Evidence, Interpretation, Conclusion.
+
+## Anti-patterns
+- Concluding before all evidence has been weighed.
+- Inventing evidence not present in the inputs.
+- Restating the trait description as if it were analysis.
+- Using vague hedges ("appears to", "seems") without naming the specific evidence behind them.
+- Producing a score, label, or numeric verdict; that belongs to the next stage.
+
+## Output handoff
+- The next stage extracts a score by reading your output, keying primarily on the "Conclusion:" line and secondarily on "Interpretation:".
+- Make the Conclusion a single sentence that follows from the Evidence and Interpretation; do not place caveats there.
+- If your reasoning is genuinely balanced, say so explicitly in the Conclusion; the score stage treats balanced reasoning as the middle of the scale, not a default."""
 
     def build_reasoning_user_prompt_with_excerpts(
         self,
@@ -196,111 +208,123 @@ Compare excerpts against external search results to determine if the information
         trait: "LLMRubricTrait",
         excerpts: list[dict[str, Any]],
         hallucination_risk: dict[str, Any] | None = None,
+        *,
+        task_eval_mode: bool = False,
     ) -> str:
         """Build reasoning prompt when excerpts are available.
 
         Args:
-            question: The original question
-            trait: The LLM trait being evaluated
-            excerpts: List of validated excerpts with confidence scores
-            hallucination_risk: Optional hallucination risk assessment
+            question: The original question.
+            trait: The LLM trait being evaluated.
+            excerpts: List of validated excerpts with confidence scores.
+                Caller guarantees a non-empty list; the handler auto-fails the
+                trait before reaching this stage if no excerpts validate.
+            hallucination_risk: Optional hallucination risk assessment.
+            task_eval_mode: When True, omit the ## Question section entirely.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        # Format excerpts
-        excerpts_formatted = []
+        criteria = trait.description or "Assess this quality."
+
+        excerpts_lines: list[str] = []
         for i, excerpt in enumerate(excerpts, 1):
-            conf = excerpt.get("confidence", "unknown")
             text = excerpt.get("text", "")
+            confidence = excerpt.get("confidence", "unknown")
             risk = excerpt.get("hallucination_risk", "")
-            risk_str = f" (hallucination risk: {risk})" if risk else ""
-            excerpts_formatted.append(f'{i}. "{text}" [{conf} confidence]{risk_str}')
+            risk_suffix = f" (hallucination risk: {risk})" if risk else ""
+            excerpts_lines.append(f'{i}. "{text}" [{confidence} confidence]{risk_suffix}')
+        excerpts_block = "\n".join(excerpts_lines)
 
-        excerpts_text = "\n".join(excerpts_formatted) if excerpts_formatted else "No excerpts found."
-
-        risk_context = ""
+        sections = [
+            f"## Trait\n{trait.name}",
+            f"## Criteria\n{criteria}",
+        ]
+        if not task_eval_mode:
+            sections.append(f"## Question\n{question}")
+        sections.append(f"## Excerpts\n{excerpts_block}")
         if hallucination_risk:
-            risk_context = f"\n**Overall Hallucination Risk**: {hallucination_risk.get('overall_risk', 'unknown')}\n"
-
-        return f"""Analyze the extracted excerpts to explain how they demonstrate (or fail to demonstrate) the following trait.
-
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
-
-**Question**: {question}
-
-**Extracted Excerpts**:
-{excerpts_text}
-{risk_context}
-
-**Your Task**:
-Provide 2-3 sentences of reasoning that:
-1. Reference specific excerpts and their content
-2. Connect each excerpt to the trait criteria
-3. Assess whether the excerpts collectively satisfy the trait
-
-This reasoning will be used in a follow-up step to determine the final score.
-
-**Your reasoning:**"""
+            overall = hallucination_risk.get("overall_risk", "unknown")
+            sections.append(f"## Overall hallucination risk\n{overall}")
+        sections.append(
+            "## Task\nProduce reasoning under three labeled sections:\nEvidence: ...\nInterpretation: ...\nConclusion: ..."
+        )
+        return "\n\n".join(sections)
 
     def build_reasoning_user_prompt_without_excerpts(
         self,
         question: str,
         answer: str,
         trait: "LLMRubricTrait",
+        *,
+        task_eval_mode: bool = False,
     ) -> str:
         """Build reasoning prompt when excerpts are not available.
 
         Args:
-            question: The original question
-            answer: The complete LLM response
-            trait: The LLM trait being evaluated
+            question: The original question.
+            answer: The complete LLM response.
+            trait: The LLM trait being evaluated.
+            task_eval_mode: When True, omit the ## Question section entirely.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
-        return f"""Analyze the following answer for the quality trait below and provide your reasoning.
-
-**Trait**: {trait.name}
-**Criteria**: {trait.description or "Assess this quality"}
-
-**Question**: {question}
-
-**Complete Answer**:
-{answer}
-
-**Your Task**:
-Provide 2-3 sentences of reasoning that:
-1. Identify specific aspects of the answer relevant to this trait
-2. Explain how these aspects satisfy or fail to satisfy the criteria
-3. Consider both positive and negative evidence
-
-This reasoning will be used in a follow-up step to determine the final score.
-
-**Your reasoning:**"""
+        criteria = trait.description or "Assess this quality."
+        sections = [
+            f"## Trait\n{trait.name}",
+            f"## Criteria\n{criteria}",
+        ]
+        if not task_eval_mode:
+            sections.append(f"## Question\n{question}")
+        sections.append(f"## Response\n{answer}")
+        sections.append(
+            "## Task\nProduce reasoning under three labeled sections:\nEvidence: ...\nInterpretation: ...\nConclusion: ..."
+        )
+        return "\n\n".join(sections)
 
     # =========================================================================
     # Stage 3: Score Extraction
     # =========================================================================
 
-    def build_score_extraction_system_prompt(self) -> str:
-        """Build system prompt for final score extraction."""
-        return """You are an expert evaluator providing precise trait scores based on prior reasoning.
+    def build_score_extraction_system_prompt_boolean(self) -> str:
+        """Build system prompt for boolean score extraction."""
+        return """## Role
+You translate a reasoning analysis into a final boolean verdict for a rubric trait.
 
-**YOUR ROLE:**
-Convert analytical reasoning into a final score that accurately reflects the assessment.
+## Principles
+- Base the verdict solely on the reasoning provided.
+- The verdict must follow logically from the reasoning's Conclusion.
+- Be consistent: similar reasoning should yield the same verdict.
 
-**CRITICAL REQUIREMENTS:**
-1. **Reasoning-Based**: Base your score solely on the reasoning provided
-2. **Consistency**: Your score should logically follow from the reasoning's conclusions
-3. Do NOT contradict the reasoning - your score should align with it
+## Anti-patterns
+- Introducing new evidence or context not present in the reasoning.
+- Contradicting the reasoning's Conclusion to "split the difference".
+- Biasing toward true or false when the reasoning is hedged or balanced; the verdict should mirror the Conclusion line in the reasoning, regardless of how confident or uncertain that conclusion is. Exception: if the trait description explicitly requests a directional default (e.g., "lean false on hedged answers"), follow that instruction.
 
-**SCORING GUIDELINES:**
-- Be consistent: similar reasoning should lead to similar scores
-- When uncertain, choose conservatively based on the trait's nature:
-  - For positive traits (e.g., "is accurate"), lean toward `false` or lower scores
-  - For negative traits (e.g., "contains errors"), lean toward `true` or higher scores"""
+## Output handoff
+- Your boolean verdict is the final score for this trait; no further interpretation happens after you."""
+
+    def build_score_extraction_system_prompt_numeric(self) -> str:
+        """Build system prompt for numeric score extraction."""
+        return """## Role
+You translate a reasoning analysis into a final integer score for a rubric trait.
+
+## Principles
+- Base the score solely on the reasoning provided.
+- The score must follow logically from the reasoning's Conclusion.
+- Be consistent: similar reasoning should yield similar scores.
+- Each integer in the scale corresponds to a specific level (provided in the user prompt). Pick the integer whose level best matches the reasoning.
+
+## Anti-patterns
+- Introducing new evidence or context not present in the reasoning.
+- Contradicting the reasoning's Conclusion.
+- Defaulting to the middle of the scale when the reasoning is balanced; the middle is reserved for genuinely mixed evidence, not as a "safe" choice.
+- Returning a non-integer or a value outside the scale.
+
+## Output handoff
+- Your integer score is the final score for this trait; no further interpretation happens after you.
+- Scores outside the scale are clamped to the bounds; non-integers are rejected."""
 
     def build_score_extraction_user_prompt(
         self,
@@ -310,16 +334,15 @@ Convert analytical reasoning into a final score that accurately reflects the ass
         """Build user prompt for final score extraction.
 
         Args:
-            trait: The LLM trait being evaluated
-            reasoning: The generated reasoning from the previous stage
+            trait: The LLM trait being evaluated.
+            reasoning: The generated reasoning from the previous stage.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
         if trait.kind == "boolean":
             return self._build_boolean_score_user_prompt(trait, reasoning)
-        else:
-            return self._build_numeric_score_user_prompt(trait, reasoning)
+        return self._build_numeric_score_user_prompt(trait, reasoning)
 
     def _build_boolean_score_user_prompt(
         self,
@@ -327,19 +350,13 @@ Convert analytical reasoning into a final score that accurately reflects the ass
         reasoning: str,
     ) -> str:
         """Build user prompt for boolean score extraction."""
-        return f"""Based on the following reasoning, provide a final score for this trait.
-
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Boolean evaluation"}
-
-**YOUR PREVIOUS REASONING:**
-{reasoning}
-
-**SCORE REQUIRED:** true or false
-
-Based on your reasoning above, does the answer meet the criteria?
-- `true`: The criteria IS met based on your reasoning
-- `false`: The criteria IS NOT met based on your reasoning"""
+        criteria = trait.description or "Boolean evaluation."
+        return (
+            f"## Trait\n{trait.name}\n\n"
+            f"## Criteria\n{criteria}\n\n"
+            f"## Reasoning\n{reasoning}\n\n"
+            "## Task\nProduce the final boolean verdict (true if the criteria are met based on the reasoning, otherwise false)."
+        )
 
     def _build_numeric_score_user_prompt(
         self,
@@ -347,19 +364,98 @@ Based on your reasoning above, does the answer meet the criteria?
         reasoning: str,
     ) -> str:
         """Build user prompt for numeric score extraction."""
-        min_score = trait.min_score or 1
-        max_score = trait.max_score or 5
-        mid_score = (min_score + max_score) // 2
+        criteria = trait.description or "Score-based evaluation."
+        min_score = trait.min_score if trait.min_score is not None else 1
+        max_score = trait.max_score if trait.max_score is not None else 5
+        scale_pairs = build_integer_score_labels(min_score, max_score)
+        scale_block = "\n".join(f"{n} = {label}" for n, label in scale_pairs)
+        return (
+            f"## Trait\n{trait.name}\n\n"
+            f"## Criteria\n{criteria}\n\n"
+            f"## Reasoning\n{reasoning}\n\n"
+            f"## Scale\n{scale_block}\n\n"
+            "## Task\nProduce the final integer score from the scale."
+        )
 
-        return f"""Based on the following reasoning, provide a final score for this trait.
 
-**TRAIT:** {trait.name}
-**CRITERIA:** {trait.description or "Score-based evaluation"}
+# =========================================================================
+# Module-level helpers
+# =========================================================================
 
-**YOUR PREVIOUS REASONING:**
-{reasoning}
 
-**SCORING SCALE:**
-- {min_score} = Poor - Does not meet criteria at all
-- {mid_score} = Average - Partially meets criteria
-- {max_score} = Excellent - Fully meets or exceeds criteria"""
+_INTEGER_LABEL_LOOKUP: dict[int, list[str]] = {
+    3: ["Does not meet", "Partially meets", "Fully meets"],
+    5: ["Poor", "Below average", "Adequate", "Strong", "Excellent"],
+    7: [
+        "Very poor",
+        "Poor",
+        "Below average",
+        "Adequate",
+        "Above average",
+        "Strong",
+        "Excellent",
+    ],
+    10: [
+        "Poor",
+        "Very weak",
+        "Weak",
+        "Below average",
+        "Adequate",
+        "Above average",
+        "Good",
+        "Strong",
+        "Very strong",
+        "Excellent",
+    ],
+}
+
+_FALLBACK_LADDER: list[str] = [
+    "lowest",
+    "very low",
+    "low",
+    "below average",
+    "average",
+    "above average",
+    "high",
+    "very high",
+    "highest",
+]
+
+
+def build_integer_score_labels(min_score: int, max_score: int) -> list[tuple[int, str]]:
+    """Return one (integer, label) per integer in [min_score, max_score].
+
+    For ranges that start at 1 and have a known total length (3, 5, 7, 10),
+    use a curated lookup. Otherwise interpolate the fallback ladder onto the
+    range linearly so the lowest rung maps to min_score and the highest rung
+    maps to max_score.
+
+    Args:
+        min_score: Minimum score (inclusive).
+        max_score: Maximum score (inclusive). Must be >= min_score.
+
+    Returns:
+        List of (integer, label) tuples ordered from min_score to max_score.
+
+    Raises:
+        ValueError: If max_score < min_score.
+    """
+    if max_score < min_score:
+        raise ValueError(f"max_score ({max_score}) must be >= min_score ({min_score})")
+
+    span = max_score - min_score + 1
+    integers = list(range(min_score, max_score + 1))
+
+    if min_score == 1 and span in _INTEGER_LABEL_LOOKUP:
+        labels = _INTEGER_LABEL_LOOKUP[span]
+        return list(zip(integers, labels, strict=True))
+
+    last_idx = len(_FALLBACK_LADDER) - 1
+    if span == 1:
+        return [(integers[0], _FALLBACK_LADDER[last_idx // 2])]
+
+    pairs: list[tuple[int, str]] = []
+    for i, value in enumerate(integers):
+        rung = round(i * last_idx / (span - 1))
+        pairs.append((value, _FALLBACK_LADDER[rung]))
+    return pairs

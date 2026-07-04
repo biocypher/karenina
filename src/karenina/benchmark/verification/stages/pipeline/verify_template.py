@@ -74,10 +74,16 @@ class VerifyTemplateStage(BaseVerificationStage):
 
         Inherits error-checking from BaseVerificationStage.
         """
-        if not super().should_run(context):
+        if not super().should_run(context) and not context.can_score_partial_timeout():
             return False
         # Skip verification if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
+            return False
+        # Skip verification if response was truncated by streaming timeout
+        if (
+            context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and not context.allow_partial_trace_scoring
+        ):
             return False
         # Skip verification if abstention was detected (model refused to answer)
         if context.get_artifact(ArtifactKeys.ABSTENTION_DETECTED, False):
@@ -107,6 +113,13 @@ class VerifyTemplateStage(BaseVerificationStage):
         if not hasattr(parsed_answer, "_raw_trace") or parsed_answer._raw_trace is None:
             parsed_answer._raw_trace = raw_llm_response
 
+        # Inject scenario context for ConditionalGroundTruth resolution.
+        # _scenario_context is consumed by _compute_field_results() when
+        # a field's ground_truth carries the __conditional__ marker.
+        scenario_node_results = context.get_artifact(ArtifactKeys.SCENARIO_NODE_RESULTS)
+        if scenario_node_results is not None:
+            parsed_answer._scenario_context = {"node_results": scenario_node_results}
+
         # Get evaluator from context (created by ParseTemplateStage, or None for regex-only)
         evaluator = context.get_artifact(ArtifactKeys.TEMPLATE_EVALUATOR)
 
@@ -126,6 +139,7 @@ class VerifyTemplateStage(BaseVerificationStage):
 
                 if field_result.error:
                     logger.warning("Field verification error: %s", field_result.error)
+                    context.set_result_field(ArtifactKeys.FIELD_VERIFICATION_ERROR, field_result.error)
                 if regex_result.error:
                     logger.warning("Regex verification error: %s", regex_result.error)
             else:
@@ -134,7 +148,11 @@ class VerifyTemplateStage(BaseVerificationStage):
 
                 # Field verification: call verify() if defined, else True (no fields)
                 if hasattr(parsed_answer, "verify") and callable(parsed_answer.verify):
-                    field_verification_result = parsed_answer.verify()
+                    try:
+                        field_verification_result = parsed_answer.verify()
+                    except Exception as e:
+                        logger.warning("Field verification error (regex-only): %s", e)
+                        field_verification_result = False
                 else:
                     field_verification_result = True
 
@@ -169,7 +187,11 @@ class VerifyTemplateStage(BaseVerificationStage):
             context.set_result_field(ArtifactKeys.REGEX_EXTRACTION_RESULTS, regex_extraction_results)
 
             # Granular verification for multi-attribute templates
-            if hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
+            # Skip when field verification raised an error (issue 148): avoids
+            # contradictory signals (verify_result=False, verify_granular_result=1.0)
+            if field_result.error if evaluator is not None else False:
+                logger.debug("Skipping verify_granular() because field verification error is set")
+            elif hasattr(parsed_answer, "verify_granular") and callable(parsed_answer.verify_granular):
                 try:
                     granular_result = parsed_answer.verify_granular()
                     context.set_result_field(ArtifactKeys.VERIFY_GRANULAR_RESULT, granular_result)
@@ -181,3 +203,7 @@ class VerifyTemplateStage(BaseVerificationStage):
             error_msg = f"Verification failed: {e}"
             logger.error(error_msg)
             context.mark_error(error_msg)
+        finally:
+            if evaluator is not None and hasattr(evaluator, "close"):
+                evaluator.close()
+                context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)

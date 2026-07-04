@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "scenario": "e2e_rubric_sequential",
+    "model": "claude-haiku-4-5",
+    "timestamp": "2026-01-13T21:08:35.313040",
+    "prompt_hash": "08db6ba45ec5418eeb4583e07b06420e977b896b59964ebdb5e54710c73cb35b"
+  },
+  "request": {
+    "messages": [
+      {
+        "content": "You are a rigorous rubric evaluator assessing the trait: **clarity**\n\n**Criteria:** The response is clear and easy to understand\n\n**EVALUATION GUIDELINES:**\n- `true`: The criteria IS met; the answer clearly satisfies the requirement.\n- `false`: The criteria IS NOT met; the answer fails to satisfy the requirement.\n- Ground your judgment in evidence visible in the answer text; do not infer beyond what is stated.\n- Consider both supporting and contradicting evidence before concluding.\n- If the criteria are ambiguous, state the interpretation you used and apply it consistently.\n\n**RESPONSE FORMAT:**\nYou will receive a JSON Schema specifying the exact output structure. Your response MUST conform to this schema.\nReturn ONLY a JSON object - no explanations, no markdown, no surrounding text.\n\n**WHAT NOT TO DO:**\n- Do NOT wrap JSON in markdown code blocks (no ```)\n- Do NOT add explanatory text before or after the JSON",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "system",
+        "name": null,
+        "id": null
+      },
+      {
+        "content": "**QUESTION:**\nHow do I make a good cup of coffee?\n\n**ANSWER TO EVALUATE:**\nTo make good coffee: 1) Use fresh, quality beans. 2) Grind just before brewing. 3) Use water at 195-205\u00b0F. 4) Use a ratio of 1:16 coffee to water. 5) Brew for 4-5 minutes.\n\n**TRAIT:** clarity\n**CRITERIA:** The response is clear and easy to understand\n\n**JSON SCHEMA (your response MUST conform to this):**\n```json\n{\n  \"description\": \"Structured output for boolean trait evaluation.\\n\\nUsed for single-trait evaluation where the trait is binary (pass/fail).\",\n  \"properties\": {\n    \"result\": {\n      \"description\": \"True if the criteria is met, False otherwise\",\n      \"title\": \"Result\",\n      \"type\": \"boolean\"\n    }\n  },\n  \"required\": [\n    \"result\"\n  ],\n  \"title\": \"SingleBooleanScore\",\n  \"type\": \"object\"\n}\n```\n\n**REQUIRED OUTPUT FORMAT:**\nReturn a JSON object: {\"result\": true/false}\n\n**YOUR JSON RESPONSE:**",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "human",
+        "name": null,
+        "id": null
+      }
+    ],
+    "kwargs": {}
+  },
+  "response": {
+    "content": "{\"result\": true}",
+    "id": "lc_run--fd520957-e86f-4127-82cd-c2194973bee6-0",
+    "model": "claude-haiku-4-5",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

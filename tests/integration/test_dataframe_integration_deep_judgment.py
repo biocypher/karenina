@@ -47,7 +47,7 @@ def template_result_success() -> VerificationResultTemplate:
 def deep_judgment_result() -> VerificationResultDeepJudgment:
     """Create a deep judgment result with excerpts and reasoning."""
     return VerificationResultDeepJudgment(
-        deep_judgment_enabled=True,
+        deep_judgment_mode="full",
         deep_judgment_performed=True,
         extracted_excerpts={
             "gene_name": [
@@ -122,7 +122,7 @@ class TestJudgmentResultsDataFrame:
 
         # Check core columns
         core_columns = [
-            "completed_without_errors",
+            "success",
             "question_id",
             "answering_model",
         ]

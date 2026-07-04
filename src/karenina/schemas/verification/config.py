@@ -7,10 +7,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+
+from karenina.utils.retry_policy import ErrorPatternConfig, RetryPolicy
 
 from ..config.models import (
-    INTERFACES_NO_PROVIDER_REQUIRED,
     FewShotConfig,
     ModelConfig,
 )
@@ -66,18 +67,28 @@ class DeepJudgmentTraitConfig(BaseModel):
     search_enabled: bool = False
 
 
+class DeepJudgmentRubricCustomConfig(BaseModel):
+    """Per-trait deep judgment configuration for custom mode."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    global_traits: dict[str, DeepJudgmentTraitConfig] = Field(default_factory=dict, alias="global")
+    question_specific: dict[str, dict[str, DeepJudgmentTraitConfig]] = Field(default_factory=dict)
+
+
 class VerificationConfig(BaseModel):
     """Configuration for verification run with multiple models."""
 
+    model_config = ConfigDict(extra="forbid")
+
     answering_models: list[ModelConfig] = Field(default_factory=list)
     parsing_models: list[ModelConfig]
-    replicate_count: int = 1  # Number of times to run each test combination
+    replicate_count: int = Field(default=1, ge=1)  # Number of times to run each test combination
 
     # Parsing-only mode (for TaskEval and similar use cases)
     parsing_only: bool = False  # When True, only parsing models are required
 
     # Rubric evaluation settings
-    rubric_enabled: bool = False
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
     rubric_evaluation_strategy: Literal["batch", "sequential"] | None = "batch"
     # - "batch": Evaluate all LLM traits in a single call (efficient, requires JSON output)
@@ -89,6 +100,12 @@ class VerificationConfig(BaseModel):
     # - "template_and_rubric": Run both template verification AND rubric evaluation
     # - "rubric_only": Skip template verification, only evaluate rubrics on raw LLM response
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def rubric_enabled(self) -> bool:
+        """Whether rubric evaluation is enabled. Derived from evaluation_mode."""
+        return self.evaluation_mode in ("template_and_rubric", "rubric_only")
+
     # Trace input control: determines what portion of MCP agent trace is passed to evaluation
     use_full_trace_for_template: bool = (
         False  # If True, pass full agent trace to template parsing; if False, extract only final AI message
@@ -99,6 +116,14 @@ class VerificationConfig(BaseModel):
     # Note: The full trace is ALWAYS captured and stored in raw_llm_response regardless of these settings.
     # These flags only control what input is provided to the parsing/evaluation models.
     # If False and the trace doesn't end with an AI message, verification stage will fail with error.
+    allow_partial_trace_scoring: bool = Field(
+        default=True,
+        description=(
+            "Permit template parsing and scoring to run on responses that were "
+            "truncated by answer-generation timeout. Timeout metadata is still "
+            "preserved separately so partial scores do not hide agent failures."
+        ),
+    )
 
     # Abstention detection settings
     abstention_enabled: bool = False  # Enable abstention/refusal detection
@@ -112,14 +137,53 @@ class VerificationConfig(BaseModel):
     # Embedding check settings (semantic similarity fallback)
     embedding_check_enabled: bool = False  # Enable semantic similarity fallback
     embedding_check_model: str = DEFAULT_EMBEDDING_MODEL  # SentenceTransformer model for embeddings
-    embedding_check_threshold: float = DEFAULT_EMBEDDING_THRESHOLD  # Similarity threshold (0.0-1.0)
+    embedding_check_threshold: float = Field(
+        default=DEFAULT_EMBEDDING_THRESHOLD, ge=0.0, le=1.0
+    )  # Similarity threshold (0.0-1.0)
 
     # Async execution settings
     async_enabled: bool = DEFAULT_ASYNC_ENABLED  # Enable parallel execution
-    async_max_workers: int = DEFAULT_ASYNC_MAX_WORKERS  # Number of parallel workers
+    async_max_workers: int = Field(default=DEFAULT_ASYNC_MAX_WORKERS, ge=1)  # Number of parallel workers
+    max_concurrent_requests: int | None = Field(
+        default=None,
+        ge=1,
+        description="Global cap on concurrent LLM requests across all workers. "
+        "None means no global limit (concurrency bounded by max_workers only). "
+        "Set to 16-64 for self-hosted inference servers (vLLM, SGLang).",
+    )
+
+    # Task ordering strategy for queue generation
+    task_ordering: Literal[
+        "auto",
+        "prefix_cache",
+        "distribute_answerers",
+        "generation_order",
+        "random",
+    ] = Field(
+        default="auto",
+        description="Task queue ordering strategy. "
+        "'auto' (default) picks 'distribute_answerers' when answerers span "
+        "more than one distinct identity, else 'prefix_cache'. "
+        "'prefix_cache' groups by answering model for KV cache hits on a "
+        "single endpoint. "
+        "'distribute_answerers' round-robins across answerer identities to "
+        "spread load over multiple inference endpoints. "
+        "'generation_order' preserves template-first loop order. "
+        "'random' shuffles tasks.",
+    )
+
+    # Per-answerer concurrency caps (enforced at task start by the executor)
+    answerer_concurrency_limits: int | dict[str, int] | None = Field(
+        default=None,
+        description="Cap on concurrent tasks per answerer, enforced at task start. "
+        "Pass an int to apply the same cap to every entry in answering_models "
+        "(keyed by ModelConfig.id). Pass a dict keyed by ModelConfig.id for "
+        "per-model caps; answerers not in the dict run without a cap. "
+        "None disables caps (default).",
+    )
 
     # Deep-judgment settings (multi-stage parsing with excerpts and reasoning)
-    deep_judgment_enabled: bool = False  # Enable deep-judgment analysis (default: disabled)
+    deep_judgment_mode: Literal["disabled", "reasoning_only", "full"] = "disabled"  # Template deep-judgment mode
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS  # Max excerpts per attribute
     deep_judgment_fuzzy_match_threshold: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD  # Similarity threshold
     deep_judgment_excerpt_retry_attempts: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS  # Retry attempts
@@ -147,18 +211,7 @@ class VerificationConfig(BaseModel):
     # - "custom": Use per-trait configuration from deep_judgment_rubric_config
 
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts globally
-    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
-    # Expected structure for custom mode:
-    # {
-    #   "global": {
-    #     "TraitName": {"enabled": True, "excerpt_enabled": True, ...}
-    #   },
-    #   "question_specific": {
-    #     "question-id": {
-    #       "TraitName": {"enabled": True, ...}
-    #     }
-    #   }
-    # }
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None  # For custom mode: per-trait config
 
     # Few-shot prompting settings
     few_shot_config: FewShotConfig | None = None  # New flexible configuration
@@ -174,6 +227,15 @@ class VerificationConfig(BaseModel):
             "independently verify artifacts before extracting structured data."
         ),
     )
+    agentic_parsing_trigger: Literal["always", "dynamic"] = Field(
+        default="always",
+        description=(
+            "When agentic_parsing=True, controls whether Stage 7b always runs "
+            "the agentic investigation or first tries a dynamic final-message parse. "
+            "'always' preserves existing behavior. 'dynamic' escalates to agentic "
+            "investigation only when the final response is insufficient or malformed."
+        ),
+    )
     agentic_judge_context: Literal["workspace_only", "trace_and_workspace", "trace_only"] = Field(
         default="workspace_only",
         description=(
@@ -185,11 +247,32 @@ class VerificationConfig(BaseModel):
     )
     agentic_parsing_max_turns: int = Field(
         default=15,
+        ge=1,
         description="Max turns for the investigation agent.",
     )
     agentic_parsing_timeout: float = Field(
         default=120.0,
+        ge=0.0,
         description="Timeout in seconds for the investigation agent.",
+    )
+    agentic_parsing_materialize_trace: bool = Field(
+        default=False,
+        description=(
+            "Write the answering agent trace to a file for Stage 7b's "
+            "investigation agent. This is for the coding-task agentic "
+            "parsing path (Stage 7b). For scenario handover-level trace "
+            "materialization, use the 'transcript_materialize' handover "
+            "strategy on ScenarioEdge instead."
+        ),
+    )
+    agentic_parsing_persist_trace: bool = Field(
+        default=False,
+        description=(
+            "When True, the materialized trace file is kept after "
+            "extraction. When False (default), it is cleaned up in a "
+            "finally block after the stage runs. Ignored when "
+            "agentic_parsing_materialize_trace is False."
+        ),
     )
 
     # Agentic rubric evaluation
@@ -223,12 +306,93 @@ class VerificationConfig(BaseModel):
             "directories."
         ),
     )
+    workspace_output_mode: Literal["none", "full", "produced"] = Field(
+        default="none",
+        description=(
+            "Whether to capture runtime workspaces as sidecar artifacts. "
+            "'none' preserves existing behavior. 'full' copies the complete "
+            "final workspace. 'produced' copies new or content-modified files "
+            "relative to the prepared workspace baseline."
+        ),
+    )
+    workspace_output_dir: Path | None = Field(
+        default=None,
+        description="Directory where captured workspaces are written when workspace_output_mode is not 'none'.",
+    )
+    workspace_output_exclude_patterns: list[str] = Field(
+        default_factory=list,
+        description="Additional fnmatch-style exclude patterns for workspace capture.",
+    )
 
     # Database storage settings
     db_config: Any | None = None  # DBConfig instance for automatic result persistence
 
+    # HTTP request timeout (seconds) for all LLM calls in the pipeline.
+    # Applies to answer generation, parsing, rubric evaluation, and guardrail calls.
+    # Set to None to disable (use provider SDK defaults).
+    request_timeout: float = 120.0
+
     # Scenario execution settings
-    scenario_turn_limit: int = 20  # Max turns before forced termination in scenario execution
+    scenario_turn_limit: int = Field(default=20, ge=1)  # Max turns before forced termination in scenario execution
+
+    # Replay layer (see karenina/replay).
+    # replay_store is not serialized: it can hold large captured traces
+    # and Pydantic cannot natively serialize an arbitrary in-memory store.
+    replay_store: Any = Field(default=None, exclude=True)
+    replay_parse_on_hydration_mismatch: Literal["fall_through", "strict"] = "fall_through"
+
+    # Internal plumbing for Benchmark.extend_template: set of
+    # (question_id, answering canonical_key, parsing canonical_key, replicate)
+    # tuples already covered by prior_results. The batch runner skips these
+    # during task-queue expansion so prior rows pass through verbatim.
+    # Not part of the public surface; always None for standard verification runs.
+    skip_triples: frozenset[tuple[str, str, str, int | None]] | None = Field(default=None, exclude=True, repr=False)
+
+    @model_validator(mode="after")
+    def _validate_custom_mode_has_config(self) -> "VerificationConfig":
+        """Validate that custom mode has the required config.
+
+        Raises:
+            ValueError: If deep_judgment_rubric_mode is 'custom' but
+                deep_judgment_rubric_config is None.
+        """
+        if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config is None:
+            raise ValueError("deep_judgment_rubric_config is required when deep_judgment_rubric_mode is 'custom'")
+        return self
+
+    @field_validator("db_config", mode="before")
+    @classmethod
+    def _validate_db_config(cls, v: Any) -> Any:
+        """Validate that db_config is a DBConfig instance or None.
+
+        Uses runtime import to avoid circular dependency with karenina.storage.
+
+        Raises:
+            TypeError: If value is not None and not a DBConfig instance.
+        """
+        if v is None:
+            return v
+        from karenina.storage.db_config import DBConfig
+
+        if not isinstance(v, DBConfig):
+            raise TypeError(f"db_config must be a DBConfig instance or None, got {type(v).__name__}")
+        return v
+
+    # Retry settings for transient errors and executor requeue
+    retry_policy: RetryPolicy = Field(
+        default_factory=RetryPolicy,
+        description="Per-category retry budgets for transient LLM errors.",
+    )
+    custom_error_patterns: list[ErrorPatternConfig] = Field(
+        default_factory=list,
+        description="User-defined error patterns for the ErrorRegistry.",
+    )
+    max_requeue_count: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum times a task can be requeued in the parallel executor's "
+        "IN_PROGRESS cache loop before generating the answer fresh.",
+    )
 
     def __init__(self, **data: Any) -> None:
         """
@@ -275,20 +439,52 @@ class VerificationConfig(BaseModel):
                     data["async_max_workers"] = int(env_val)
             # else: let Pydantic use field default (DEFAULT_ASYNC_MAX_WORKERS)
 
-        # Apply default system prompts to models that don't have one
-        if "answering_models" in data:
-            for model in data["answering_models"]:
-                if isinstance(model, ModelConfig) and not model.system_prompt:
-                    model.system_prompt = DEFAULT_ANSWERING_SYSTEM_PROMPT
-                elif isinstance(model, dict) and not model.get("system_prompt"):
-                    model["system_prompt"] = DEFAULT_ANSWERING_SYSTEM_PROMPT
+        if "max_concurrent_requests" not in data:
+            env_val = os.getenv("KARENINA_MAX_CONCURRENT_LLM_REQUESTS")
+            if env_val is not None:
+                with contextlib.suppress(ValueError):
+                    data["max_concurrent_requests"] = int(env_val)
 
-        if "parsing_models" in data:
-            for model in data["parsing_models"]:
-                if isinstance(model, ModelConfig) and not model.system_prompt:
-                    model.system_prompt = DEFAULT_PARSING_SYSTEM_PROMPT
-                elif isinstance(model, dict) and not model.get("system_prompt"):
-                    model["system_prompt"] = DEFAULT_PARSING_SYSTEM_PROMPT
+        # Apply default system prompts to models that don't have one.
+        # Deep-copy ModelConfig instances to avoid mutating shared objects.
+        if "answering_models" in data:
+            data["answering_models"] = [
+                m.model_copy(update={"system_prompt": DEFAULT_ANSWERING_SYSTEM_PROMPT})
+                if isinstance(m, ModelConfig) and not m.system_prompt
+                else (
+                    {**m, "system_prompt": DEFAULT_ANSWERING_SYSTEM_PROMPT}
+                    if isinstance(m, dict) and not m.get("system_prompt")
+                    else m
+                )
+                for m in data["answering_models"]
+            ]
+
+        # Strip rubric_enabled from input: now derived from evaluation_mode
+        data.pop("rubric_enabled", None)
+
+        # Strip deep_judgment_rubric_search_enabled: not a declared field,
+        # but injected by from_overrides() and some CLI callers.
+        data.pop("deep_judgment_rubric_search_enabled", None)
+
+        # Wire instruction shortcuts into prompt_config (pop before super().__init__)
+        shortcut_mapping = {
+            "generation": data.pop("generation_instructions", None),
+            "parsing": data.pop("parsing_instructions", None),
+            "abstention_detection": data.pop("abstention_detection_instructions", None),
+            "sufficiency_detection": data.pop("sufficiency_detection_instructions", None),
+            "rubric_evaluation": data.pop("rubric_evaluation_instructions", None),
+            "agentic_parsing": data.pop("agentic_parsing_instructions", None),
+            "deep_judgment": data.pop("deep_judgment_instructions", None),
+        }
+        active_shortcuts = {k: v for k, v in shortcut_mapping.items() if v is not None}
+        if active_shortcuts:
+            pc = data.get("prompt_config") or PromptConfig()
+            if isinstance(pc, dict):
+                pc = PromptConfig(**pc)
+            updates = {k: v for k, v in active_shortcuts.items() if getattr(pc, k) is None}
+            if updates:
+                pc = pc.model_copy(update=updates)
+            data["prompt_config"] = pc
 
         super().__init__(**data)
 
@@ -320,57 +516,31 @@ class VerificationConfig(BaseModel):
         # Validate model configurations
         # Note: Basic model validation (model_name, model_provider) is also done by
         # the adapter factory at runtime, but we validate here too for early failure.
+        from karenina.adapters.registry import AdapterRegistry
+
         for model in self.answering_models + self.parsing_models:
             if not model.model_name:
                 raise ValueError(f"Model name is required in model configuration (model: {model.id})")
-            # Model provider is optional for OpenRouter, manual, and openai_endpoint interfaces
-            if model.interface not in INTERFACES_NO_PROVIDER_REQUIRED and not model.model_provider:
-                raise ValueError(
-                    f"Model provider is required for interface '{model.interface}'. "
-                    f"Only {list(INTERFACES_NO_PROVIDER_REQUIRED)} interfaces allow empty providers. "
-                    f"(model: {model.id})"
-                )
-            # System prompt is required for verification (not validated by factory)
+            # Model provider requirement is defined per-adapter via AdapterSpec.requires_provider
+            spec = AdapterRegistry.get_spec(model.interface)
+            if spec is not None and spec.requires_provider and not model.model_provider:
+                raise ValueError(f"Model provider is required for interface '{model.interface}'. (model: {model.id})")
+
+        # System prompt is required for answering models (not validated by factory).
+        # Parsing models do not require a system_prompt; their prompt is assembled
+        # by the pipeline at runtime.
+        for model in self.answering_models:
             if not model.system_prompt:
-                raise ValueError(f"System prompt is required for model {model.id}")
+                raise ValueError(f"System prompt is required for answering model {model.id}")
 
         # Additional validation for rubric-enabled scenarios
-        if self.rubric_enabled:
-            # Ensure parsing models are configured since they're needed for rubric evaluation
-            if not self.parsing_models:
-                raise ValueError("Parsing models are required when rubric evaluation is enabled")
-
-            # Check that replicate count is valid
-            if self.replicate_count < 1:
-                raise ValueError("Replicate count must be at least 1")
-
-        # Validation for evaluation_mode
-        if self.evaluation_mode == "rubric_only":
-            # Rubric-only mode requires rubric to be enabled
-            if not self.rubric_enabled:
-                raise ValueError(
-                    "evaluation_mode='rubric_only' requires rubric_enabled=True. "
-                    "Rubric-only mode evaluates rubric traits on the raw LLM response without template verification."
-                )
-        elif self.evaluation_mode == "template_and_rubric":
-            # Template + rubric mode requires rubric to be enabled
-            if not self.rubric_enabled:
-                raise ValueError(
-                    "evaluation_mode='template_and_rubric' requires rubric_enabled=True. "
-                    "This mode runs both template verification AND rubric evaluation."
-                )
-        elif self.evaluation_mode == "template_only" and self.rubric_enabled:
-            # Template-only mode should not have rubric enabled (warn about configuration mismatch)
-            raise ValueError(
-                "evaluation_mode='template_only' is incompatible with rubric_enabled=True. "
-                "Use evaluation_mode='template_and_rubric' to run both template verification and rubric evaluation, "
-                "or set rubric_enabled=False for template-only verification."
-            )
+        if self.rubric_enabled and not self.parsing_models:
+            raise ValueError("Parsing models are required when rubric evaluation is enabled")
 
         # Additional validation for few-shot prompting scenarios
-        if self.few_shot_config is not None and self.few_shot_config.enabled:
-            if self.few_shot_config.global_mode == "k-shot" and self.few_shot_config.global_k < 1:
-                raise ValueError("Global few-shot k value must be at least 1 when using k-shot mode")
+        if self.few_shot_config is not None and self.few_shot_config.source != "disabled":
+            if self.few_shot_config.pool_mode == "k-shot" and self.few_shot_config.pool_k < 1:
+                raise ValueError("Pool few-shot k value must be at least 1 when using k-shot mode")
 
             # Validate question-specific k values
             for question_id, question_config in self.few_shot_config.question_configs.items():
@@ -378,6 +548,14 @@ class VerificationConfig(BaseModel):
                     raise ValueError(
                         f"Question {question_id} few-shot k value must be at least 1 when using k-shot mode"
                     )
+
+        # Validate incompatible deep-judgment combinations
+        if self.deep_judgment_mode == "reasoning_only" and self.deep_judgment_search_enabled:
+            raise ValueError(
+                "deep_judgment_search_enabled=True is incompatible with "
+                "deep_judgment_mode='reasoning_only'. Search requires excerpt "
+                "extraction. Use deep_judgment_mode='full' for search."
+            )
 
         # Additional validation for search-enhanced deep-judgment
         if self.deep_judgment_search_enabled:
@@ -396,16 +574,22 @@ class VerificationConfig(BaseModel):
                 )
 
         # Agentic parsing validation
+        if self.agentic_parsing_trigger == "dynamic" and not self.agentic_parsing:
+            raise ValueError("agentic_parsing_trigger='dynamic' requires agentic_parsing=True")
+
         if self.agentic_parsing:
             # Check parsing model interface supports AgentPort
             from karenina.adapters.registry import AdapterRegistry
 
             for pm in self.parsing_models:
                 spec = AdapterRegistry.get_spec(pm.interface)
-                if spec is None or spec.agent_factory is None:
+                if spec is None or spec.agent_tier != "deep_agent":
+                    tier = spec.agent_tier if spec else "unknown"
                     raise ValueError(
-                        "agentic_parsing=True requires an interface with "
-                        f"AgentPort support, but '{pm.interface}' does not provide one."
+                        f"agentic_parsing=True requires an interface with "
+                        f"agent_tier='deep_agent', but '{pm.interface}' has "
+                        f"agent_tier='{tier}'. Use 'claude_agent_sdk' or "
+                        f"'langchain_deep_agents' instead."
                     )
 
             # Agentic parsing is not supported in rubric_only mode
@@ -421,6 +605,21 @@ class VerificationConfig(BaseModel):
                 logger.warning(
                     "agentic_parsing=True with agentic_judge_context='trace_only' "
                     "is equivalent to classical parsing (Stage 7a)."
+                )
+
+            if self.agentic_parsing_trigger == "dynamic" and self.agentic_judge_context == "trace_only":
+                logger.warning(
+                    "agentic_parsing_trigger='dynamic' with agentic_judge_context='trace_only' "
+                    "can only escalate to the same trace context that was already judged insufficient. "
+                    "Use agentic_judge_context='workspace_only' or 'trace_and_workspace' for workspace recovery."
+                )
+
+            # materialize_trace needs a trace in the context
+            if self.agentic_parsing_materialize_trace and self.agentic_judge_context == "workspace_only":
+                raise ValueError(
+                    "agentic_parsing_materialize_trace=True requires a trace "
+                    "to materialize, but agentic_judge_context='workspace_only' "
+                    "excludes the trace. Use 'trace_only' or 'trace_and_workspace'."
                 )
 
     def __repr__(self) -> str:
@@ -482,10 +681,10 @@ class VerificationConfig(BaseModel):
             lines.append("  Rubric: disabled")
 
         # Deep Judgment - Template
-        if self.deep_judgment_enabled:
+        if self.deep_judgment_mode != "disabled":
             features_shown = True
             lines.append(
-                f"  Deep Judgment (Template): "
+                f"  Deep Judgment (Template): mode={self.deep_judgment_mode}, "
                 f"max_excerpts={self.deep_judgment_max_excerpts_per_attribute}, "
                 f"fuzzy_threshold={self.deep_judgment_fuzzy_match_threshold}"
             )
@@ -505,8 +704,8 @@ class VerificationConfig(BaseModel):
             # Warning about sequential evaluation
             lines.append("    ⚠️  Deep judgment traits are ALWAYS evaluated sequentially (one-by-one)")
             if self.deep_judgment_rubric_mode == "custom" and self.deep_judgment_rubric_config:
-                global_traits = self.deep_judgment_rubric_config.get("global", {})
-                question_configs = self.deep_judgment_rubric_config.get("question_specific", {})
+                global_traits = self.deep_judgment_rubric_config.global_traits
+                question_configs = self.deep_judgment_rubric_config.question_specific
                 lines.append(f"    └─ {len(global_traits)} global traits, {len(question_configs)} question configs")
 
         # Abstention
@@ -528,11 +727,11 @@ class VerificationConfig(BaseModel):
 
         # Few-Shot
         few_shot_config = self.get_few_shot_config()
-        if few_shot_config and few_shot_config.enabled:
+        if few_shot_config and few_shot_config.source != "disabled":
             features_shown = True
-            lines.append(f"  Few-Shot: mode={few_shot_config.global_mode}")
-            if few_shot_config.global_mode == "k-shot":
-                lines.append(f"    └─ k={few_shot_config.global_k}")
+            lines.append(f"  Few-Shot: source={few_shot_config.source}, pool_mode={few_shot_config.pool_mode}")
+            if few_shot_config.pool_mode == "k-shot":
+                lines.append(f"    └─ pool_k={few_shot_config.pool_k}")
             if few_shot_config.question_configs:
                 lines.append(f"    └─ {len(few_shot_config.question_configs)} question configs")
 
@@ -564,7 +763,7 @@ class VerificationConfig(BaseModel):
             True if few-shot is enabled
         """
         config = self.get_few_shot_config()
-        return config is not None and config.enabled
+        return config is not None and config.source != "disabled"
 
     # ===== Preset Utility Class Methods =====
     # These methods delegate to config_presets module for backward compatibility.
@@ -633,13 +832,14 @@ class VerificationConfig(BaseModel):
         abstention: bool | None = None,
         sufficiency: bool | None = None,
         embedding_check: bool | None = None,
-        deep_judgment: bool | None = None,
+        deep_judgment_mode: str | None = None,
         # Evaluation settings
         evaluation_mode: str | None = None,
         embedding_threshold: float | None = None,
         embedding_model: str | None = None,
         async_execution: bool | None = None,
         async_workers: int | None = None,
+        max_concurrent_requests: int | None = None,
         # Trace filtering
         use_full_trace_for_template: bool | None = None,
         use_full_trace_for_rubric: bool | None = None,
@@ -651,7 +851,10 @@ class VerificationConfig(BaseModel):
         deep_judgment_rubric_retry_attempts: int | None = None,
         deep_judgment_rubric_search: bool | None = None,
         deep_judgment_rubric_search_tool: str | None = None,
-        deep_judgment_rubric_config: dict[str, Any] | None = None,
+        deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | dict[str, Any] | None = None,
+        workspace_output_mode: Literal["none", "full", "produced"] | None = None,
+        workspace_output_dir: Path | None = None,
+        workspace_output_exclude_patterns: list[str] | None = None,
     ) -> "VerificationConfig":
         """
         Create a VerificationConfig by applying overrides to an optional base config.
@@ -678,12 +881,13 @@ class VerificationConfig(BaseModel):
             abstention: Override for abstention detection flag.
             sufficiency: Override for sufficiency checking flag.
             embedding_check: Override for embedding check flag.
-            deep_judgment: Override for deep judgment flag.
+            deep_judgment_mode: Override for template deep judgment mode.
             evaluation_mode: Override for evaluation mode.
             embedding_threshold: Override for embedding similarity threshold.
             embedding_model: Override for embedding model name.
             async_execution: Override for async execution flag.
             async_workers: Override for number of async workers.
+            max_concurrent_requests: Override for global concurrent LLM request cap.
             use_full_trace_for_template: Override for full trace template flag.
             use_full_trace_for_rubric: Override for full trace rubric flag.
             deep_judgment_rubric_mode: Override for deep judgment rubric mode.
@@ -694,6 +898,9 @@ class VerificationConfig(BaseModel):
             deep_judgment_rubric_search: Override for rubric search flag.
             deep_judgment_rubric_search_tool: Override for rubric search tool.
             deep_judgment_rubric_config: Override for rubric config dict.
+            workspace_output_mode: Override for workspace sidecar capture mode.
+            workspace_output_dir: Override for workspace sidecar output directory.
+            workspace_output_exclude_patterns: Additional workspace sidecar exclude patterns.
 
         Returns:
             A new VerificationConfig with overrides applied.
@@ -716,13 +923,12 @@ class VerificationConfig(BaseModel):
             config_dict["sufficiency_enabled"] = sufficiency
         if embedding_check is not None:
             config_dict["embedding_check_enabled"] = embedding_check
-        if deep_judgment is not None:
-            config_dict["deep_judgment_enabled"] = deep_judgment
+        if deep_judgment_mode is not None:
+            config_dict["deep_judgment_mode"] = deep_judgment_mode
 
         # Evaluation settings
         if evaluation_mode is not None:
             config_dict["evaluation_mode"] = evaluation_mode
-            config_dict["rubric_enabled"] = evaluation_mode in ["template_and_rubric", "rubric_only"]
         if embedding_threshold is not None:
             config_dict["embedding_check_threshold"] = embedding_threshold
         if embedding_model is not None:
@@ -731,6 +937,8 @@ class VerificationConfig(BaseModel):
             config_dict["async_enabled"] = async_execution
         if async_workers is not None:
             config_dict["async_max_workers"] = async_workers
+        if max_concurrent_requests is not None:
+            config_dict["max_concurrent_requests"] = max_concurrent_requests
 
         # Trace filtering
         if use_full_trace_for_template is not None:
@@ -755,6 +963,14 @@ class VerificationConfig(BaseModel):
             config_dict["deep_judgment_rubric_search_tool"] = deep_judgment_rubric_search_tool
         if deep_judgment_rubric_config is not None:
             config_dict["deep_judgment_rubric_config"] = deep_judgment_rubric_config
+
+        # Workspace output capture
+        if workspace_output_mode is not None:
+            config_dict["workspace_output_mode"] = workspace_output_mode
+        if workspace_output_dir is not None:
+            config_dict["workspace_output_dir"] = workspace_output_dir
+        if workspace_output_exclude_patterns is not None:
+            config_dict["workspace_output_exclude_patterns"] = workspace_output_exclude_patterns
 
         # --- Model configuration ---
         # Determine the unified interface (answering and parsing may differ)
@@ -858,13 +1074,8 @@ class VerificationConfig(BaseModel):
                 base_model["interface"] = interface
             return ModelConfig(**base_model)
 
-        # No base — build from scratch
-        from typing import Literal, cast
-
-        InterfaceType = Literal[
-            "langchain", "openrouter", "manual", "openai_endpoint", "claude_agent_sdk", "claude_tool"
-        ]
-        final_interface = cast(InterfaceType, interface or default_interface)
+        # No base: build from scratch
+        final_interface = interface or default_interface
 
         return ModelConfig(
             model_name=model_name or default_model,

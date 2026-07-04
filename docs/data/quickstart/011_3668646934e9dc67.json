@@ -15,8 +15,8 @@
     ]
   },
   "response": {
-    "content": "Hemoglobin A has **4 protein subunits**:\n\n- **2 alpha (α) globin chains**\n- **2 beta (β) globin chains**\n\nThis tetrameric structure (α₂β₂) is essential for hemoglobin's cooperative binding of oxygen and its ability to efficiently transport oxygen throughout the body.",
-    "id": "lc_run--78a7849f-456d-4ec1-a3d1-679f26d08fb7-0",
+    "content": "Hemoglobin A has **4 protein subunits**:\n\n- 2 alpha (α) globin chains\n- 2 beta (β) globin chains\n\nThis is referred to as a **tetrameric** structure (α₂β₂).",
+    "id": "lc_run--ce127ea3-e373-4c2c-81a8-a48467ecee9c-0",
     "usage_metadata": {
       "input_tokens": 0,
       "output_tokens": 0,

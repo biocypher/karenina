@@ -20,7 +20,6 @@ from contextlib import AsyncExitStack
 from typing import Any
 
 from anthropic import Omit
-from dotenv import load_dotenv
 
 from karenina.ports import (
     AgentConfig,
@@ -35,6 +34,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
 
 from .mcp import connect_all_mcp_servers, get_all_mcp_tools
@@ -47,9 +47,6 @@ from .messages import (
 from .tools import ToolResultCollector, apply_cache_control_to_tool, wrap_mcp_tool, wrap_static_tool
 from .trace import claude_tool_messages_to_raw_trace
 from .usage import aggregate_usage, extract_usage_from_response
-
-# Load environment variables from .env file (for ANTHROPIC_API_KEY)
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +96,19 @@ class ClaudeToolAgentAdapter:
 
         # Initialize client lazily
         self._async_client: Any = None
+
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(
+            supports_system_prompt=True,
+            supports_file_tools=True,
+            supports_code_execution=True,
+        )
 
     def _get_async_client(self) -> Any:
         """Get or create the async Anthropic client."""
@@ -180,15 +190,15 @@ class ClaudeToolAgentAdapter:
                 tool_filter_names: set[str] | None = None
                 if self._config.mcp_tool_filter:
                     tool_filter_names = set(self._config.mcp_tool_filter)
-                    logger.info(f"Restricting Claude Tool agent to MCP tools: {self._config.mcp_tool_filter}")
+                    logger.info("Restricting Claude Tool agent to MCP tools: %s", self._config.mcp_tool_filter)
 
                 for server_name, session, mcp_tool in mcp_tool_list:
                     if tool_filter_names and mcp_tool.name not in tool_filter_names:
-                        logger.debug(f"Skipping MCP tool '{mcp_tool.name}' (not in tool filter)")
+                        logger.debug("Skipping MCP tool '%s' (not in tool filter)", mcp_tool.name)
                         continue
                     wrapped = wrap_mcp_tool(session, mcp_tool, server_name, collector=collector)
                     all_tools.append(wrapped)
-                    logger.debug(f"Added MCP tool '{mcp_tool.name}' from server '{server_name}'")
+                    logger.debug("Added MCP tool '%s' from server '%s'", mcp_tool.name, server_name)
 
             # Apply cache_control to the last tool for Anthropic prompt caching
             # This caches all tool definitions. Enabled by default, disable with
@@ -216,6 +226,49 @@ class ClaudeToolAgentAdapter:
             raise AgentExecutionError(f"Agent execution failed: {e}") from e
         finally:
             await exit_stack.aclose()
+
+    async def _single_turn_create(
+        self,
+        client: Any,
+        kwargs: dict[str, Any],
+    ) -> AgentResult:
+        """Complete a single-turn request via messages.create().
+
+        Used when no tools are provided. The tool_runner API requires a
+        "tools" kwarg, so this method avoids it entirely by calling the
+        standard messages.create() endpoint for a single completion.
+
+        Args:
+            client: The async Anthropic client.
+            kwargs: Keyword arguments for messages.create() (model,
+                max_tokens, messages, etc.).
+
+        Returns:
+            AgentResult with the single response.
+        """
+        logger.debug("No tools provided, using single-turn messages.create()")
+        response = await client.messages.create(**kwargs)
+
+        unified_msg = convert_from_anthropic_message(response)
+        result_messages = [unified_msg]
+        raw_trace = claude_tool_messages_to_raw_trace(result_messages)
+        final_response = self._extract_final_response(result_messages)
+        usage = extract_usage_from_response(response, model=self._config.model_name)
+
+        actual_model = self._config.model_name
+        if hasattr(response, "model") and response.model:
+            actual_model = response.model
+
+        return AgentResult(
+            final_response=final_response,
+            raw_trace=raw_trace,
+            trace_messages=result_messages,
+            usage=usage,
+            turns=1,
+            limit_reached=False,
+            session_id=None,
+            actual_model=actual_model,
+        )
 
     async def _execute_agent_loop(
         self,
@@ -276,6 +329,17 @@ class ClaudeToolAgentAdapter:
         if self._config.temperature is not None:
             kwargs["temperature"] = self._config.temperature
 
+        # No tools: single-turn completion without tool_runner.
+        # tool_runner requires the "tools" kwarg, so when no tools are
+        # provided we fall back to a plain messages.create() call.
+        if not tools:
+            if config.timeout:
+                return await asyncio.wait_for(
+                    self._single_turn_create(client, kwargs),
+                    timeout=config.timeout,
+                )
+            return await self._single_turn_create(client, kwargs)
+
         # Collect messages and usage during the loop
         collected_responses: list[Any] = []
         trace_messages: list[Message] = []
@@ -303,7 +367,7 @@ class ClaudeToolAgentAdapter:
                 # executed the tools from the previous response.
                 if prev_tool_uses and collector is not None:
                     collected_results = collector.drain()
-                    # Match by order — tool_runner executes tools in the order
+                    # Match by order: tool_runner executes tools in the order
                     # they appear in the assistant message
                     for i, tool_use in enumerate(prev_tool_uses):
                         if i < len(collected_results):
@@ -337,22 +401,36 @@ class ClaudeToolAgentAdapter:
                 # Check turn limit
                 if turns >= config.max_turns:
                     limit_reached = True
-                    logger.warning(f"Agent hit turn limit ({config.max_turns})")
+                    logger.warning("Agent hit turn limit (%d)", config.max_turns)
                     break
 
         # Execute with optional timeout
+        timeout_reached = False
         if config.timeout:
-            await asyncio.wait_for(execute_loop(), timeout=config.timeout)
+            try:
+                await asyncio.wait_for(execute_loop(), timeout=config.timeout)
+            except TimeoutError:
+                timeout_reached = True
+                logger.warning(
+                    "Agent timed out after %ss (%d turns, %d trace messages accumulated)",
+                    config.timeout,
+                    turns,
+                    len(trace_messages),
+                )
         else:
             await execute_loop()
 
         if not trace_messages:
+            if timeout_reached:
+                raise AgentTimeoutError(f"Agent execution timed out after {config.timeout}s with no messages")
             raise AgentResponseError("No messages received from tool_runner")
 
         # Build outputs
         raw_trace = claude_tool_messages_to_raw_trace(trace_messages)
         if limit_reached:
             raw_trace += "\n\n[Note: Turn limit reached - partial response shown]"
+        if timeout_reached:
+            raw_trace += "\n\n[Note: Agent timed out - partial response shown]"
 
         final_response = self._extract_final_response(trace_messages)
 
@@ -370,8 +448,9 @@ class ClaudeToolAgentAdapter:
             usage=total_usage,
             turns=turns,
             limit_reached=limit_reached,
-            session_id=None,  # tool_runner doesn't provide session IDs
+            session_id=None,
             actual_model=actual_model,
+            timeout_reached=timeout_reached,
         )
 
     def run(

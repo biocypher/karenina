@@ -117,21 +117,21 @@ LLM-based evaluation trait (score or binary).
       heading_level: 4
       show_root_heading: false
 
-### RegexTrait
+### RegexRubricTrait
 
 Regex pattern-matching evaluation trait.
 
-::: karenina.schemas.RegexTrait
+::: karenina.schemas.RegexRubricTrait
     options:
       show_source: false
       heading_level: 4
       show_root_heading: false
 
-### CallableTrait
+### CallableRubricTrait
 
 Custom Python function-based evaluation trait.
 
-::: karenina.schemas.CallableTrait
+::: karenina.schemas.CallableRubricTrait
     options:
       show_source: false
       heading_level: 4

@@ -34,6 +34,8 @@ def _make_valid_preset(**kwargs) -> dict:
 
     Note: Model config uses 'model_provider' and 'model_name' as keys.
     """
+    # Separate preset-level fields from config fields
+    preset_name = kwargs.pop("name", "test-preset")
     default_config = {
         "parsing_models": [
             {
@@ -47,12 +49,11 @@ def _make_valid_preset(**kwargs) -> dict:
         "answering_models": [],
         "parsing_only": True,
         "replicate_count": 1,
-        "rubric_enabled": False,
         "evaluation_mode": "template_only",
         "async_enabled": False,
     }
     default_config.update(kwargs)
-    return {"name": "test-preset", "config": default_config}
+    return {"name": preset_name, "config": default_config}
 
 
 # =============================================================================
@@ -161,11 +162,10 @@ def test_preset_show_displays_summary_fields(runner: CliRunner, tmp_path: Path) 
             }
         ],
         replicate_count=5,
-        rubric_enabled=True,
-        evaluation_mode="template_and_rubric",  # Required when rubric_enabled=True
+        evaluation_mode="template_and_rubric",
         abstention_enabled=True,
         embedding_check_enabled=True,
-        deep_judgment_enabled=False,
+        deep_judgment_mode="disabled",
         async_enabled=True,
     )
     with preset_file.open("w") as f:

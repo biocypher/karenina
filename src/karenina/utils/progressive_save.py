@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from karenina.benchmark.verification.stages.helpers.results_exporter import export_verification_results_json
+from karenina.benchmark.verification.stages.helpers.results_exporter import (
+    export_verification_results_json_stream,
+)
 from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
@@ -100,9 +102,16 @@ class TaskIdentifier:
 
     @classmethod
     def from_result(cls, result: VerificationResult) -> "TaskIdentifier":
-        """Create TaskIdentifier from a VerificationResult."""
+        """Create TaskIdentifier from a VerificationResult.
+
+        For scenario turn results (``metadata.scenario_id`` non-None), slot 0
+        holds the scenario_id so every turn in the same combo produces the
+        same task key. For QA results it holds ``metadata.question_id``.
+        """
+        scenario_id = getattr(result.metadata, "scenario_id", None)
+        unit_id = scenario_id if scenario_id else result.metadata.question_id
         return cls(
-            question_id=result.metadata.question_id,
+            question_id=unit_id,
             answering_canonical_key=result.metadata.answering.canonical_key,
             parsing_canonical_key=result.metadata.parsing.canonical_key,
             replicate=result.metadata.replicate,
@@ -356,7 +365,7 @@ class ProgressiveSaveManager:
     def _save_results(self) -> None:
         """Save results file in standard export format with atomic write.
 
-        Delegates to export_verification_results_json() to avoid duplicating
+        Delegates to export_verification_results_json_stream() to avoid duplicating
         the export format construction logic.
         """
         job = VerificationJob(
@@ -368,9 +377,12 @@ class ProgressiveSaveManager:
             successful_count=self.completed_count,
             start_time=self._start_time,
         )
-        result_set = VerificationResultSet(results=list(self._results))
-        json_str = export_verification_results_json(job, result_set, self.global_rubric)
-        atomic_write(self.tmp_path, json_str)
+        export_verification_results_json_stream(
+            job,
+            iter(self._results),
+            self.global_rubric,
+            out_path=self.tmp_path,
+        )
 
 
 def generate_task_manifest(tasks: list[dict[str, Any]]) -> list[str]:
@@ -471,13 +483,13 @@ def inspect_state_file(state_path: Path) -> ProgressiveJobStatus:
     with open(state_path) as f:
         state_data = json.load(f)
 
-    # Validate format version
+    # Accept both legacy 1.0 (ProgressiveSaveManager) and 2.0
+    # (ProgressiveFileSink with JSONL sidecar) formats. Only the on-disk
+    # results file naming differs for display purposes.
     format_version = state_data.get("format_version")
-    if format_version != ProgressiveSaveManager.STATE_FORMAT_VERSION:
-        raise ValueError(
-            f"Incompatible state format version: {format_version} "
-            f"(expected {ProgressiveSaveManager.STATE_FORMAT_VERSION})"
-        )
+    supported = {ProgressiveSaveManager.STATE_FORMAT_VERSION, "2.0"}
+    if format_version not in supported:
+        raise ValueError(f"Incompatible state format version: {format_version} (supported: {sorted(supported)})")
 
     # Extract config info
     config = state_data.get("config", {})
@@ -504,11 +516,15 @@ def inspect_state_file(state_path: Path) -> ProgressiveJobStatus:
     completed_task_ids = state_data.get("completed_task_ids", [])
     pending_task_ids = list(set(task_manifest) - set(completed_task_ids))
 
-    # Check tmp file
+    # Check results sidecar. Legacy layout uses .tmp (full JSON rewrite);
+    # v2 layout uses .results.jsonl (append-only).
     output_path = Path(state_data.get("output_path", ""))
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp_file_exists = tmp_path.exists()
-    tmp_file_size = tmp_path.stat().st_size if tmp_file_exists else None
+    if format_version == "2.0":
+        results_path = output_path.with_suffix(output_path.suffix + ".results.jsonl")
+    else:
+        results_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    tmp_file_exists = results_path.exists()
+    tmp_file_size = results_path.stat().st_size if tmp_file_exists else None
 
     return ProgressiveJobStatus(
         state_file_path=state_path,

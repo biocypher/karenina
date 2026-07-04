@@ -59,6 +59,20 @@ from pathlib import Path
 benchmark.save(Path("drug_target_v1.jsonld"))
 ```
 
+**Deep judgment configuration stripping.** By default, `save()` strips deep judgment configuration fields (e.g., `deep_judgment_enabled`, `deep_judgment_excerpt_enabled`) from LLM rubric traits before writing the file. These are per-trait rubric fields that control rubric deep judgment behavior. This keeps checkpoint files focused on the benchmark definition and avoids coupling saved checkpoints to a particular deep judgment configuration. To preserve deep judgment settings in the checkpoint (required for `use_checkpoint` mode), pass `save_deep_judgment_config=True`:
+
+```python
+# Preserve deep judgment trait settings in the checkpoint
+benchmark.save(Path("drug_target_v1.jsonld"), save_deep_judgment_config=True)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | `Path` | (required) | File path for the checkpoint (`.jsonld` or `.json`) |
+| `save_deep_judgment_config` | `bool` | `False` | If `True`, include deep judgment configuration in LLM rubric traits. If `False`, deep judgment settings are stripped before saving. |
+
+**Trait field round-trip reliability.** All trait fields (including `summary`, `min_score`, `max_score`, `invert_result`, `higher_is_better`, and deep judgment settings) are preserved through save/load cycles. Each trait type serializer writes these fields as `additionalProperty` entries in the JSON-LD `Rating` object, and the deserializer restores them faithfully.
+
 ### 3.2. Portability & Sharing
 Because it's a single file, a checkpoint can be committed to Git, sent to a colleague, or archived as part of a research paper. It captures the **Definition** of the evaluation, not the results, keeping the file lightweight and focused.
 
@@ -121,6 +135,7 @@ The `@context` tells JSON-LD processors how to interpret property names. Karenin
     "acceptedAnswer": { "@id": "acceptedAnswer", "@type": "@id" },
     "rating": { "@id": "contentRating", "@container": "@set" },
     "additionalProperty": { "@id": "additionalProperty", "@container": "@set" },
+    "hasPart": { "@id": "hasPart", "@container": "@set" },
     "keywords": { "@id": "keywords", "@container": "@set" }
   }
 }
@@ -143,11 +158,15 @@ Rubric traits are stored as `Rating` objects with an `additionalType` that ident
 | `karenina:GlobalRegexTrait` | Regex | Global |
 | `karenina:GlobalCallableTrait` | Callable | Global |
 | `karenina:GlobalMetricRubricTrait` | Metric | Global |
+| `karenina:GlobalDynamicRubricTrait` | Dynamic | Global |
+| `karenina:GlobalAgenticRubricTrait` | Agentic | Global |
 | `karenina:QuestionSpecificRubricTrait` | LLM (boolean/score) | Per-question |
 | `karenina:QuestionSpecificLLMRubricTrait` | LLM (literal) | Per-question |
 | `karenina:QuestionSpecificRegexTrait` | Regex | Per-question |
 | `karenina:QuestionSpecificCallableTrait` | Callable | Per-question |
 | `karenina:QuestionSpecificMetricRubricTrait` | Metric | Per-question |
+| `karenina:QuestionSpecificDynamicRubricTrait` | Dynamic | Per-question |
+| `karenina:QuestionSpecificAgenticRubricTrait` | Agentic | Per-question |
 
 Old checkpoints without the `karenina:` prefix are normalized automatically on load.
 

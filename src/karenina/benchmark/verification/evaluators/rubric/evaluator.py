@@ -19,9 +19,10 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from karenina.adapters import get_llm
+from karenina.adapters.registry import close_adapter
 from karenina.ports import LLMPort
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import CallableTrait, MetricRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import CallableRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
 
 from .deep_judgment import RubricDeepJudgmentHandler
 from .llm_trait import LLMTraitEvaluator
@@ -101,27 +102,42 @@ class RubricEvaluator:
             )
         return self._metric_trait_evaluator
 
+    def close(self) -> None:
+        """Release adapter resources held by this evaluator."""
+        close_adapter(self.llm)
+
     def evaluate_rubric(
-        self, question: str, answer: str, rubric: Rubric
-    ) -> tuple[dict[str, int | bool], dict[str, str] | None, list[dict[str, Any]]]:
+        self,
+        question: str,
+        answer: str,
+        rubric: Rubric,
+        *,
+        task_eval_mode: bool = False,
+    ) -> tuple[dict[str, Any], dict[str, str] | None, list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (LLM, regex, and callable).
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            rubric: The rubric containing evaluation traits
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            rubric: The rubric containing evaluation traits.
+            task_eval_mode: When True, omit the **QUESTION:** block from
+                rendered LLM-trait user prompts. Set automatically by TaskEval.
 
         Returns:
             Tuple of (results, llm_trait_labels, usage_metadata_list) where:
-            - results: Dictionary mapping trait names to their evaluated scores
+            - results: Dictionary mapping trait names to their evaluated scores.
+              Scalar traits (boolean/score/literal, regex, callable) use the
+              trait name as the key. Template-kind LLM traits produce multiple
+              entries with dotted keys ``trait_name.field_name`` (one per
+              schema field).
             - llm_trait_labels: Dictionary mapping literal trait names to class labels (or None if no literal traits)
             - usage_metadata_list: List of usage metadata dicts from LLM calls
 
         Raises:
             Exception: If evaluation fails completely
         """
-        results: dict[str, int | bool] = {}
+        results: dict[str, Any] = {}
         llm_trait_labels: dict[str, str] | None = None
         usage_metadata_list: list[dict[str, Any]] = []
 
@@ -137,16 +153,30 @@ class RubricEvaluator:
 
         # Evaluate LLM traits if present - delegate to LLMTraitEvaluator
         if rubric.llm_traits:
-            # Separate literal traits from boolean/score traits
-            literal_traits = [t for t in rubric.llm_traits if t.kind == "literal"]
-            non_literal_traits = [t for t in rubric.llm_traits if t.kind != "literal"]
+            # Partition traits: template (structured), literal, boolean/score
+            template_traits = [t for t in rubric.llm_traits if t.is_template_kind]
+            scalar_traits = [t for t in rubric.llm_traits if not t.is_template_kind]
+            literal_traits = [t for t in scalar_traits if t.kind == "literal"]
+            non_literal_traits = [t for t in scalar_traits if t.kind != "literal"]
+
+            # Evaluate template traits (always sequential; each has a unique schema)
+            if template_traits:
+                try:
+                    template_results, template_usage_list = self.llm_trait_evaluator.evaluate_template(
+                        question, answer, template_traits, task_eval_mode=task_eval_mode
+                    )
+                    results.update(template_results)
+                    usage_metadata_list.extend(template_usage_list)
+                except Exception as e:
+                    logger.error(f"Template evaluation failed: {e}")
+                    raise RuntimeError(f"Failed to evaluate template LLM traits: {e}") from e
 
             # Evaluate non-literal (boolean/score) traits
             if non_literal_traits:
                 if self.evaluation_strategy == "batch":
                     try:
                         llm_results, usage_metadata = self.llm_trait_evaluator.evaluate_batch(
-                            question, answer, non_literal_traits
+                            question, answer, non_literal_traits, task_eval_mode=task_eval_mode
                         )
                         results.update(llm_results)
                         if usage_metadata:
@@ -157,7 +187,7 @@ class RubricEvaluator:
                 else:  # "sequential"
                     try:
                         llm_results, seq_usage_metadata_list = self.llm_trait_evaluator.evaluate_sequential(
-                            question, answer, non_literal_traits
+                            question, answer, non_literal_traits, task_eval_mode=task_eval_mode
                         )
                         results.update(llm_results)
                         usage_metadata_list.extend(seq_usage_metadata_list)
@@ -170,7 +200,9 @@ class RubricEvaluator:
                 if self.evaluation_strategy == "batch":
                     try:
                         literal_scores, literal_labels, usage_metadata = (
-                            self.llm_trait_evaluator.evaluate_literal_batch(question, answer, literal_traits)
+                            self.llm_trait_evaluator.evaluate_literal_batch(
+                                question, answer, literal_traits, task_eval_mode=task_eval_mode
+                            )
                         )
                         results.update(literal_scores)
                         llm_trait_labels = literal_labels if literal_labels else None
@@ -182,7 +214,9 @@ class RubricEvaluator:
                 else:  # "sequential"
                     try:
                         literal_scores, literal_labels, seq_usage_metadata_list = (
-                            self.llm_trait_evaluator.evaluate_literal_sequential(question, answer, literal_traits)
+                            self.llm_trait_evaluator.evaluate_literal_sequential(
+                                question, answer, literal_traits, task_eval_mode=task_eval_mode
+                            )
                         )
                         results.update(literal_scores)
                         llm_trait_labels = literal_labels if literal_labels else None
@@ -196,9 +230,9 @@ class RubricEvaluator:
     def _evaluate_deterministic_traits(
         self,
         answer: str,
-        traits: list[RegexTrait] | list[CallableTrait],
+        traits: list[RegexRubricTrait] | list[CallableRubricTrait],
         trait_type_name: str,
-    ) -> dict[str, bool | int]:
+    ) -> dict[str, bool | int | float]:
         """
         Evaluate deterministic traits (regex or callable) using their evaluate() method.
 
@@ -207,14 +241,14 @@ class RubricEvaluator:
 
         Args:
             answer: The text to evaluate
-            traits: List of traits to evaluate (RegexTrait or CallableTrait)
+            traits: List of traits to evaluate (RegexRubricTrait or CallableRubricTrait)
             trait_type_name: Human-readable name for logging (e.g., "regex", "callable")
 
         Returns:
             Dictionary mapping trait names to their evaluated results.
             Failed traits are marked as None for consistency with LLM evaluation.
         """
-        results: dict[str, bool | int] = {}
+        results: dict[str, bool | int | float] = {}
 
         for trait in traits:
             try:
@@ -227,7 +261,7 @@ class RubricEvaluator:
 
         return results
 
-    def _evaluate_regex_traits(self, answer: str, regex_traits: list[RegexTrait]) -> dict[str, bool]:
+    def _evaluate_regex_traits(self, answer: str, regex_traits: list[RegexRubricTrait]) -> dict[str, bool]:
         """
         Evaluate regex traits using pattern matching.
 
@@ -241,7 +275,9 @@ class RubricEvaluator:
         # Type narrowing: regex traits always return bool
         return self._evaluate_deterministic_traits(answer, regex_traits, "regex")  # type: ignore[return-value]
 
-    def _evaluate_callable_traits(self, answer: str, callable_traits: list[CallableTrait]) -> dict[str, bool | int]:
+    def _evaluate_callable_traits(
+        self, answer: str, callable_traits: list[CallableRubricTrait]
+    ) -> dict[str, bool | int | float]:
         """
         Evaluate callable traits using custom functions.
 
@@ -288,6 +324,8 @@ class RubricEvaluator:
         answer: str,
         rubric: Rubric,
         config: Any,  # VerificationConfig
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Evaluate rubric with deep judgment for enabled traits.
@@ -296,10 +334,13 @@ class RubricEvaluator:
         multi-stage evaluation process.
 
         Args:
-            question: The original question
-            answer: The LLM response to evaluate
-            rubric: The rubric containing evaluation traits
-            config: VerificationConfig with deep judgment settings
+            question: The original question.
+            answer: The LLM response to evaluate.
+            rubric: The rubric containing evaluation traits.
+            config: VerificationConfig with deep judgment settings.
+            task_eval_mode: When True, omit the **Question** block from the
+                deep-judgment reasoning user prompt and from the standard
+                evaluator's user prompts. Set automatically by TaskEval.
 
         Returns:
             Dictionary containing:
@@ -311,8 +352,14 @@ class RubricEvaluator:
                 - hallucination_risks: Per-trait hallucination risk (if search enabled)
                 - traits_without_valid_excerpts: Traits that failed excerpt extraction
         """
+        from functools import partial
+
         # Create handler with the same LLM instance
         handler = RubricDeepJudgmentHandler(self.llm, self.model_config, prompt_config=self._prompt_config)
+
+        # Bake the flag into the standard-evaluator callback so the deep-judgment
+        # handler can call it without knowing about task_eval_mode.
+        standard_fn = partial(self.evaluate_rubric, task_eval_mode=task_eval_mode)
 
         # Delegate to handler, providing a callback for standard trait evaluation
         return handler.evaluate_rubric_with_deep_judgment(
@@ -320,5 +367,6 @@ class RubricEvaluator:
             answer=answer,
             rubric=rubric,
             config=config,
-            standard_evaluator_fn=self.evaluate_rubric,
+            standard_evaluator_fn=standard_fn,
+            task_eval_mode=task_eval_mode,
         )

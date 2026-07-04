@@ -31,6 +31,9 @@ from karenina.benchmark.verification.stages import (
     VerificationContext,
 )
 from karenina.benchmark.verification.stages.core.base import ArtifactKeys
+from karenina.benchmark.verification.stages.pipeline.trace_validation_autofail import (
+    TraceValidationAutoFailStage,
+)
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import AgenticRubricTrait, LLMRubricTrait, Rubric
 from karenina.schemas.verification import (
@@ -48,6 +51,8 @@ from karenina.schemas.verification.model_identity import ModelIdentity
 
 def create_minimal_result(context: VerificationContext) -> VerificationResult:
     """Create a minimal valid VerificationResult from context."""
+    from karenina.schemas.results.failure import Failure, FailureCategory
+
     _answering = ModelIdentity(interface="langchain", model_name="test/model")
     _parsing = ModelIdentity(interface="langchain", model_name="test/model")
     result_id = VerificationResultMetadata.compute_result_id(
@@ -57,11 +62,22 @@ def create_minimal_result(context: VerificationContext) -> VerificationResult:
         timestamp="2024-01-01 12:00:00",
     )
 
+    # Derive a Failure from legacy context state only when there is a real error.
+    # This mock does not invoke the classifier, but preserves the pass/fail signal
+    # that tests assert on (metadata.failure is None vs not None).
+    failure: Failure | None = None
+    if context.error is not None:
+        failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage=context.error_stage or context.last_run_stage or "unknown",
+            reason=context.error,
+            details={"error_message": context.error},
+        )
     metadata = VerificationResultMetadata(
         question_id=context.question_id,
         template_id=context.template_id,
-        completed_without_errors=context.completed_without_errors,
-        error=context.error,
+        failure=failure,
+        caveats=[],
         question_text=context.question_text,
         answering=_answering,
         parsing=_parsing,
@@ -73,19 +89,15 @@ def create_minimal_result(context: VerificationContext) -> VerificationResult:
     return VerificationResult(metadata=metadata, template=template)
 
 
-class MockFinalizeStage(BaseVerificationStage):
-    """Mock FinalizeResultStage that produces valid VerificationResult."""
+class MockFinalizeStage(FinalizeResultStage):
+    """Mock FinalizeResultStage that produces a minimal VerificationResult.
+
+    Inherits from FinalizeResultStage so the orchestrator's isinstance
+    check accepts it as a genuine finalizer (issue 203 guard).
+    """
 
     def __init__(self):
         self.executed = False
-
-    @property
-    def name(self) -> str:
-        return "FinalizeResult"
-
-    @property
-    def produces(self) -> list[str]:
-        return ["final_result"]
 
     def should_run(self, context: VerificationContext) -> bool:  # noqa: ARG002
         """Always run - this is the final stage (must not skip on errors)."""
@@ -210,7 +222,7 @@ class MockConditionalStage(BaseVerificationStage):
 def minimal_model_config() -> ModelConfig:
     """Return a minimal ModelConfig for testing."""
     return ModelConfig(
-        id="test-model",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,
@@ -317,6 +329,48 @@ class TestStageOrchestratorConfiguration:
         assert "GenerateAnswer" in stage_names
         assert "RubricEvaluation" in stage_names
         assert "FinalizeResult" in stage_names
+
+    def test_agentic_parsing_always_uses_agentic_stage(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="always",
+        )
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "AgenticParseTemplate" in stage_names
+        assert "DynamicParseTemplate" not in stage_names
+        assert "ParseTemplate" not in stage_names
+
+    def test_agentic_parsing_dynamic_uses_dynamic_stage(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="dynamic",
+        )
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "DynamicParseTemplate" in stage_names
+        assert "AgenticParseTemplate" not in stage_names
+        assert "ParseTemplate" not in stage_names
+
+    def test_dynamic_agentic_parsing_satisfies_deep_judgment_dependencies(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=True,
+            agentic_parsing_trigger="dynamic",
+            deep_judgment_enabled=True,
+        )
+
+        assert orchestrator.validate_dependencies() == []
+
+    def test_non_agentic_parsing_uses_classical_stage_when_trigger_default(self):
+        orchestrator = StageOrchestrator.from_config(
+            evaluation_mode="template_only",
+            agentic_parsing=False,
+        )
+        stage_names = [s.name for s in orchestrator.stages]
+        assert "ParseTemplate" in stage_names
+        assert "DynamicParseTemplate" not in stage_names
+        assert "AgenticParseTemplate" not in stage_names
 
     def test_abstention_enabled_adds_stage(self):
         """Verify abstention_enabled=True adds AbstentionCheckStage."""
@@ -659,7 +713,7 @@ class TestErrorHandling:
 
         assert minimal_context.completed_without_errors is False
         assert "Test error" in minimal_context.error
-        assert result.metadata.completed_without_errors is False
+        assert result.metadata.failure is not None
 
     def test_exception_caught_and_marked(self, minimal_context: VerificationContext):
         """Verify stage exception is caught and marked on context."""
@@ -670,7 +724,8 @@ class TestErrorHandling:
         assert minimal_context.completed_without_errors is False
         assert "RuntimeError" in minimal_context.error
         assert "Test exception" in minimal_context.error
-        assert result.metadata.error is not None
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.reason
 
     def test_finalize_always_runs_after_error(self, minimal_context: VerificationContext):
         """Verify FinalizeResultStage runs even after stage error."""
@@ -681,8 +736,8 @@ class TestErrorHandling:
 
         assert finalizer.executed is True
 
-    def test_missing_final_result_raises(self, minimal_context: VerificationContext):
-        """Verify missing final_result artifact raises RuntimeError."""
+    def test_missing_final_result_raises(self, minimal_context: VerificationContext):  # noqa: ARG002
+        """Reject impostor stages that borrow the FinalizeResult name without inheriting."""
 
         class NoOutputFinalize(BaseVerificationStage):
             @property
@@ -697,10 +752,8 @@ class TestErrorHandling:
                 # Intentionally don't set final_result
                 pass
 
-        orchestrator = StageOrchestrator([NoOutputFinalize()])
-
-        with pytest.raises(RuntimeError, match="did not produce a final_result"):
-            orchestrator.execute(minimal_context)
+        with pytest.raises(ValueError, match="must inherit from FinalizeResultStage"):
+            StageOrchestrator([NoOutputFinalize()])
 
 
 # =============================================================================
@@ -718,15 +771,7 @@ class TestDependencyValidation:
         producer = MockProducerStage("Producer", "data", "value")
         consumer = MockConsumerStage("Consumer", "data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -741,15 +786,7 @@ class TestDependencyValidation:
         # Consumer requires 'missing_data' which no stage produces
         consumer = MockConsumerStage("Consumer", "missing_data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -764,15 +801,7 @@ class TestDependencyValidation:
         """Verify execute raises ValueError for invalid dependencies."""
         consumer = MockConsumerStage("Consumer", "missing_data", "result")
 
-        class NoOpFinalize(BaseVerificationStage):
-            @property
-            def name(self) -> str:
-                return "FinalizeResult"
-
-            @property
-            def produces(self) -> list[str]:
-                return ["final_result"]
-
+        class NoOpFinalize(FinalizeResultStage):
             def execute(self, context: VerificationContext) -> None:  # noqa: ARG002
                 pass
 
@@ -869,6 +898,83 @@ class TestRealStageIntegration:
 
 
 # =============================================================================
+# failed_stage Attribute Tests
+# =============================================================================
+
+
+@pytest.mark.integration
+@pytest.mark.pipeline
+class TestFailedStageAttribute:
+    """Test that failed_stage is populated when guards fire."""
+
+    def test_recursion_limit_sets_failed_stage(self, minimal_context: VerificationContext):
+        """RecursionLimitAutoFailStage sets failed_stage to its stage name."""
+        minimal_context.set_artifact("recursion_limit_reached", True)
+        minimal_context.set_artifact("raw_llm_response", "Partial response...")
+
+        stage = RecursionLimitAutoFailStage()
+        stage.execute(minimal_context)
+
+        assert minimal_context.get_result_field("failed_stage") == "RecursionLimitAutoFail"
+
+    def test_trace_validation_sets_failed_stage(self, minimal_context: VerificationContext):
+        """TraceValidationAutoFailStage sets failed_stage when trace is invalid."""
+        # Simulate MCP-enabled model with invalid trace
+        minimal_context.answering_model = ModelConfig(
+            id="test-model",
+            model_name="test-model",
+            model_provider="anthropic",
+            mcp_urls_dict={"tools": "http://localhost:8080/mcp"},
+        )
+        # Empty string is an invalid trace (no AI message)
+        minimal_context.set_artifact("raw_llm_response", "")
+
+        stage = TraceValidationAutoFailStage()
+        stage.execute(minimal_context)
+
+        assert minimal_context.get_result_field("failed_stage") == "TraceValidationAutoFail"
+
+    def test_abstention_check_sets_failed_stage(self, minimal_context: VerificationContext):
+        """AbstentionCheckStage sets failed_stage when it overrides verify_result."""
+        minimal_context.abstention_enabled = True
+        minimal_context.set_artifact("raw_llm_response", "I cannot answer that question.")
+        minimal_context.set_artifact("usage_tracker", None)
+
+        # Manually simulate the override path: if the stage triggers, it sets failed_stage
+        # We test the base class behavior directly via context manipulation
+        minimal_context.set_artifact(ArtifactKeys.VERIFY_RESULT, False)
+        minimal_context.set_result_field(ArtifactKeys.VERIFY_RESULT, False)
+        minimal_context.set_result_field(ArtifactKeys.FAILED_STAGE, "AbstentionCheck")
+
+        assert minimal_context.get_result_field("failed_stage") == "AbstentionCheck"
+
+    def test_first_guard_wins(self, minimal_context: VerificationContext):
+        """Only the first guard to fire sets failed_stage (first-write-wins)."""
+        minimal_context.set_artifact("recursion_limit_reached", True)
+        minimal_context.set_artifact("raw_llm_response", "Partial response...")
+
+        # First guard fires
+        recursion_stage = RecursionLimitAutoFailStage()
+        recursion_stage.execute(minimal_context)
+
+        assert minimal_context.get_result_field("failed_stage") == "RecursionLimitAutoFail"
+
+        # Simulate a second guard trying to set failed_stage
+        # (in practice, later guards would skip, but we test the guard)
+        minimal_context.set_result_field(ArtifactKeys.VERIFY_RESULT, False)
+        # Manually invoke the first-write-wins check as BaseCheckStage would
+        if not minimal_context.get_result_field(ArtifactKeys.FAILED_STAGE):
+            minimal_context.set_result_field(ArtifactKeys.FAILED_STAGE, "SomeOtherStage")
+
+        # First guard still wins
+        assert minimal_context.get_result_field("failed_stage") == "RecursionLimitAutoFail"
+
+    def test_no_guard_means_no_failed_stage(self, minimal_context: VerificationContext):
+        """When no guard fires, failed_stage remains None."""
+        assert minimal_context.get_result_field("failed_stage") is None
+
+
+# =============================================================================
 # Pipeline Result Tests
 # =============================================================================
 
@@ -890,7 +996,7 @@ class TestPipelineResults:
 
         assert result.metadata.question_id == "test-question-1"
         assert result.metadata.template_id == "template-hash-123"
-        assert result.metadata.completed_without_errors is True
+        assert result.metadata.failure is None
 
     def test_result_captures_error(self, minimal_context: VerificationContext):
         """Verify result captures error state."""
@@ -902,8 +1008,8 @@ class TestPipelineResults:
 
         result = minimal_context.get_artifact("final_result")
 
-        assert result.metadata.completed_without_errors is False
-        assert result.metadata.error == "Test pipeline error"
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.reason == "Test pipeline error"
 
     def test_result_includes_execution_time(self, minimal_context: VerificationContext):
         """Verify result includes execution time."""

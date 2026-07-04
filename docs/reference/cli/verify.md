@@ -50,7 +50,7 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | `--parsing-provider` | `TEXT` | — | Parsing model provider for LangChain (required without `--preset`) |
 | `--parsing-id` | `TEXT` | `parsing-1` | Parsing model ID |
 | `--temperature` | `FLOAT` | — | Model temperature (`0.0`–`2.0`) |
-| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `manual` |
+| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual`, `taskeval` |
 
 ### General Settings
 
@@ -63,10 +63,12 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--abstention` | flag | `False` | Enable abstention detection (stage 5) |
-| `--sufficiency` | flag | `False` | Enable trace sufficiency detection (stage 6) |
-| `--embedding-check` | flag | `False` | Enable embedding similarity check (stage 9) |
-| `--deep-judgment` | flag | `False` | Enable deep judgment for templates (stage 10) |
+| `--abstention / --no-abstention` | flag pair | None (use preset/default) | Enable or disable abstention detection (stage 5) |
+| `--sufficiency / --no-sufficiency` | flag pair | None (use preset/default) | Enable or disable trace sufficiency detection (stage 6) |
+| `--embedding-check / --no-embedding-check` | flag pair | None (use preset/default) | Enable or disable embedding similarity check (stage 9) |
+| `--deep-judgment / --no-deep-judgment` | flag pair | None (use preset/default) | Enable or disable deep judgment for templates (stage 10) |
+
+Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` disables it, and passing neither preserves the preset default (or the built-in default of `False` when no preset is used).
 
 ### Deep Judgment — Rubric Settings
 
@@ -85,8 +87,8 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--embedding-threshold` | `FLOAT` | `0.85` | Embedding similarity threshold (`0.0`–`1.0`) |
-| `--embedding-model` | `TEXT` | `all-MiniLM-L6-v2` | Embedding model name |
+| `--embedding-threshold` | `FLOAT` | None (defers to env var or `0.85`) | Embedding similarity threshold (`0.0`--`1.0`). When omitted, respects `EMBEDDING_CHECK_THRESHOLD` env var; falls back to `0.85`. |
+| `--embedding-model` | `TEXT` | None (defers to env var or `all-MiniLM-L6-v2`) | Embedding model name. When omitted, respects `EMBEDDING_CHECK_MODEL` env var; falls back to `all-MiniLM-L6-v2`. |
 
 ### Trace Filtering (MCP)
 
@@ -102,18 +104,44 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | `--no-async` | flag | `False` | Disable async execution (run sequentially) |
 | `--async-workers` | `INTEGER` | `2` or `KARENINA_ASYNC_MAX_WORKERS` | Number of async workers |
 
+### Workspace Capture
+
+For agentic and workspace benchmarks, `verify` can save each run's final [workspace](../../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) as a sidecar artifact next to the results.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--workspace-output-mode` | `TEXT` | `none` | What to capture: `none` (nothing), `full` (the complete final workspace), or `produced` (only files that are new or whose content changed relative to the prepared workspace baseline). |
+| `--workspace-output-dir` | `PATH` | — | Directory where captured workspaces are written. When `--output` is a `.json` file and this is omitted, it defaults to a `workspaces/` directory beside the output file. |
+| `--workspace-output-exclude` | `TEXT` | — | Extra fnmatch-style pattern to exclude from capture, added on top of the built-in excludes (`.venv/`, `venv/`, `__pycache__/`, and other cache directories). Repeatable. |
+
+When `--workspace-output-mode` is not `none`, a destination must be resolvable: either pass `--workspace-output-dir`, or write JSON output with `--output results.json` (so the default `workspaces/` directory applies). Otherwise the command exits with an error:
+
+```
+--workspace-output-dir is required when workspace capture is enabled without JSON output
+```
+
+Inside the output directory, each captured run is written to a `<question_id>__<result_id>/` folder, indexed by a `manifest.jsonl` file that is compacted into `manifest.json` when the run completes. Progressive agentic runs stream results through [`AgenticProgressiveFileSink`](../api/sinks.md). See [Agentic Evaluation](../../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) for what a workspace is and the `workspace_output_*` fields in the [VerificationConfig reference](../configuration/verification-config.md).
+
 ### Manual Traces
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--manual-traces` | `PATH` | — | JSON file with manual traces (`{question_hash: trace_string}`). Required when `--interface manual`. |
 
+### Replay Store
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--replay` | `PATH` | — | Path to a replay store JSON (built by `VerificationResultSet.to_replay_store()`). The store is loaded at startup and assigned to `VerificationConfig.replay_store`; lookups during the run hit the store first and the pipeline short-circuits to the canned traces on matching keys. Misses follow the `replay_parse_on_hydration_mismatch` policy (`fall_through` by default, which runs live), so the run can mix replayed and fresh execution. |
+
+See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme and capture/hydration semantics.
+
 ### Progressive Save and Resume
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--progressive-save` | flag | `False` | Enable incremental saving to `.tmp` and `.state` files for crash recovery. Requires `--output`. |
-| `--resume` | `PATH` | — | Resume from a `.state` file. Loads config from state; other config options are ignored. |
+| `--progressive-save` | flag | `False` | Enable incremental saving to `.results.jsonl` and `.state` sidecar files for crash recovery. Requires `--output`. |
+| `--resume` | `PATH` | — | Resume from a `.state` file. Loads config from state; other config options are ignored. Resume is triple-level: completed (question, answering-model, parsing-model, replicate) tuples are skipped. |
 
 ---
 
@@ -122,14 +150,16 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | Code | Meaning |
 |------|---------|
 | `0` | Verification completed successfully |
-| `1` | Error — no templates found, invalid arguments, benchmark load failure, or unexpected error |
+| `1` | Error: no templates found, invalid arguments, benchmark load failure, partial batch failure (`VerificationBatchError`), or unexpected error |
 | `130` | Interrupted by user (Ctrl+C) |
+
+If some questions fail while others succeed, the executor raises `VerificationBatchError` with both `partial_results` and `errors`. In parallel mode, a timeout also triggers `VerificationBatchError`. How this is handled depends on whether progressive save is active. With `--progressive-save`, `run_verification_batch` catches the error, keeps the partial results (the sidecar files are retained so `--resume` picks up only the failed triples), and the run finishes normally with exit code `0`. Without progressive save, the error reaches the generic handler, which prints an unexpected-error message and exits with code `1` without writing partial results.
 
 When interrupted with Ctrl+C during a progressive save run, the command prints a resume hint:
 
 ```
 Interrupted by user.
-To resume: karenina verify --resume results.json
+To resume: karenina verify --resume results.json.state
 ```
 
 ---
@@ -141,14 +171,18 @@ Progressive save enables crash recovery for long-running verification jobs. When
 ### How it works
 
 1. **Start with progressive save**: The command creates two sidecar files next to the output path:
-    - `<output>.tmp` — Accumulated results so far
-    - `<output>.state` — Job state including config, benchmark path, and task manifest
+    - `<output>.results.jsonl` — Append-only, one completed result per line (O(1) write per task)
+    - `<output>.state` — Job state including config snapshot, benchmark path, task manifest, and the set of completed triples
 
-2. **On crash or interrupt**: The `.state` file preserves which tasks have completed. The `.tmp` file holds partial results.
+2. **On crash or interrupt**: Both sidecars are retained. The `.state` file records which triples have completed; the `.results.jsonl` file holds the results themselves.
 
-3. **Resume**: Pass the `.state` file path to `--resume`. The command reloads config from state, identifies pending tasks, and runs only those. All other CLI options are ignored when resuming.
+3. **Resume**: Pass the `.state` file path to `--resume`. The command reloads config from state, merges the completed triple set into `skip_triples`, and runs only the pending triples. All other CLI config options are ignored when resuming.
 
-4. **Finalize**: When all tasks complete, results are written to the output file and the `.tmp`/`.state` sidecar files are cleaned up.
+4. **Finalize**: On full completion, the final export is assembled from the JSONL sidecar, written to the output path, and both sidecars are deleted. On partial failure (`VerificationBatchError`), the sidecars are retained so `--resume` picks up only the failed triples.
+
+Resume is **triple-level**: the unit of work is `(question_id, answering_canonical_key, parsing_canonical_key, replicate)`. Multi-model / multi-replicate fan-outs skip only the completed tuples, not whole questions.
+
+Progressive save is also available from the Python API via `Benchmark.run_verification(sink=ProgressiveFileSink(...))` and `Benchmark.resume_verification(state_path)`. See the [Progressive Save tutorial](../../workflows/running-verification/progressive-save.md).
 
 ### Check progress
 
@@ -207,6 +241,13 @@ karenina verify checkpoint.jsonld --preset default.json \
   --abstention --sufficiency --deep-judgment
 ```
 
+### Disable a preset feature
+
+```bash
+# Preset has abstention_enabled=true; override it off
+karenina verify checkpoint.jsonld --preset default.json --no-abstention
+```
+
 ### Template and rubric evaluation
 
 ```bash
@@ -242,6 +283,15 @@ karenina verify checkpoint.jsonld --preset default.json \
 karenina verify --resume results.json.state
 ```
 
+### Capture agent workspaces
+
+```bash
+karenina verify checkpoint.jsonld --preset agentic.json \
+  --output results.json \
+  --workspace-output-mode produced \
+  --workspace-output-exclude '*.log'
+```
+
 ### Model comparison (multiple runs)
 
 ```bash
@@ -267,6 +317,34 @@ karenina verify checkpoint.jsonld --preset default.json \
 karenina verify checkpoint.jsonld --interactive
 karenina verify checkpoint.jsonld --interactive --mode advanced
 ```
+
+---
+
+## Interactive Modes: Basic vs Advanced
+
+`--interactive` launches a step-by-step wizard that builds a [VerificationConfig](../configuration/verification-config.md) through prompts. The `--mode` flag selects how many configuration knobs the wizard exposes (default: `basic`).
+
+**Basic mode** (`--mode basic`) walks through:
+
+1. Question selection (subset of finished templates)
+2. Replicate count
+3. Feature configuration: evaluation mode, abstention, sufficiency, embedding check, deep-judgment template mode
+4. Answering models (one or more)
+5. Parsing models (one or more)
+6. Optional preset save
+7. Progress bar / progressive save toggles
+
+**Advanced mode** (`--mode advanced`) runs the same flow plus an "Advanced Configuration" block before model collection. The advanced block adds prompts for:
+
+- Filtering specific rubric trait names (when rubrics are enabled)
+- Tuning deep-judgment template parameters (max excerpts, fuzzy threshold, retry attempts, search-based validation, search tool) when the template deep-judgment mode is not `disabled`
+- Configuring rubric deep-judgment (mode, global excerpt toggle, per-trait defaults, search settings, custom config)
+- [Few-shot](../../notebooks/core_concepts/few-shot.ipynb) prompting configuration
+- Async execution settings (enabled flag, max workers)
+
+Per-model prompts are also richer in advanced mode: MCP tool configuration is offered for the answering model only when `--mode advanced` is set and the chosen interface is not `manual`.
+
+Source: `karenina/src/karenina/cli/interactive.py:78` (`build_config_interactively`).
 
 ---
 

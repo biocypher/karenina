@@ -25,6 +25,17 @@ class PromptTask(str, Enum):
     PARSING = "parsing"
     """Judge LLM parses the raw response into a structured answer template."""
 
+    # --- Agentic template parsing ---
+
+    AGENTIC_PARSING_INVESTIGATION = "agentic_parsing_investigation"
+    """Investigation agent examines workspace/trace to evaluate answer template."""
+
+    AGENTIC_PARSING_EXTRACTION = "agentic_parsing_extraction"
+    """Extracts structured answer from agentic investigation trace."""
+
+    AGENTIC_PARSING_DECISION = "agentic_parsing_decision"
+    """Combined dynamic parsing decision and direct extraction call."""
+
     # --- Trace-level quality checks ---
 
     ABSTENTION_DETECTION = "abstention_detection"
@@ -40,6 +51,9 @@ class PromptTask(str, Enum):
 
     RUBRIC_LLM_TRAIT_SINGLE = "rubric_llm_trait_single"
     """Evaluates a single boolean/score LLM rubric trait sequentially."""
+
+    RUBRIC_LLM_TRAIT_TEMPLATE = "rubric_llm_trait_template"
+    """Evaluates a template-kind LLM rubric trait: LLM fills a Pydantic schema from the response."""
 
     RUBRIC_LITERAL_TRAIT_BATCH = "rubric_literal_trait_batch"
     """Evaluates all literal (categorical) rubric traits in a single batched call."""
@@ -60,6 +74,9 @@ class PromptTask(str, Enum):
 
     DJ_TEMPLATE_REASONING = "dj_template_reasoning"
     """Stage 2: Generates reasoning mapping excerpts to template attributes."""
+
+    DJ_TEMPLATE_REASONING_ONLY = "dj_template_reasoning_only"
+    """Reasoning-only: generates per-attribute reasoning directly from the response (no excerpts)."""
 
     # --- Deep judgment: rubric trait evaluation flow ---
 
@@ -82,3 +99,8 @@ class PromptTask(str, Enum):
 
     RUBRIC_AGENTIC_TRAIT_EXTRACTION = "rubric_agentic_trait_extraction"
     """Extracts the final score from an agentic rubric investigation trace."""
+
+    # --- Dynamic rubric presence check ---
+
+    RUBRIC_DYNAMIC_PRESENCE_CHECK = "rubric_dynamic_presence_check"
+    """Batch presence check for dynamic rubric trait concepts."""

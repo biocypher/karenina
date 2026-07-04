@@ -4,8 +4,8 @@ Tests cover:
 - BaseAnswer validation, required fields, type coercion
 - Question schema validation and computed ID
 - LLMRubricTrait schema validation
-- RegexTrait schema validation and pattern evaluation
-- CallableTrait schema validation
+- RegexRubricTrait schema validation and pattern evaluation
+- CallableRubricTrait schema validation
 - capture_answer_source function
 """
 
@@ -14,10 +14,10 @@ from pydantic import ValidationError
 
 from karenina.schemas.entities import (
     BaseAnswer,
-    CallableTrait,
+    CallableRubricTrait,
     LLMRubricTrait,
     Question,
-    RegexTrait,
+    RegexRubricTrait,
     TraitKind,
     capture_answer_source,
 )
@@ -266,16 +266,25 @@ def test_llm_rubric_trait_deep_judgment_fields() -> None:
 
 @pytest.mark.unit
 def test_llm_rubric_trait_default_higher_is_better() -> None:
-    """Test that higher_is_better defaults to True when None or missing."""
-    trait = LLMRubricTrait.model_validate(
+    """Test that higher_is_better defaults to True when missing, preserves None."""
+    # Missing higher_is_better defaults to True (legacy compat)
+    trait_missing = LLMRubricTrait.model_validate(
+        {
+            "name": "test",
+            "kind": "boolean",
+        }
+    )
+    assert trait_missing.higher_is_better is True
+
+    # Explicit None is preserved (directionality does not apply)
+    trait_none = LLMRubricTrait.model_validate(
         {
             "name": "test",
             "kind": "boolean",
             "higher_is_better": None,
         }
     )
-
-    assert trait.higher_is_better is True
+    assert trait_none.higher_is_better is None
 
 
 @pytest.mark.unit
@@ -291,14 +300,14 @@ def test_llm_rubric_trait_extra_fields_forbidden() -> None:
 
 
 # =============================================================================
-# RegexTrait Schema Tests
+# RegexRubricTrait Schema Tests
 # =============================================================================
 
 
 @pytest.mark.unit
 def test_regex_trait_creation() -> None:
-    """Test RegexTrait creation with valid pattern."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait creation with valid pattern."""
+    trait = RegexRubricTrait(
         name="email_present",
         pattern=r"\S+@\S+",
         higher_is_better=True,
@@ -313,8 +322,8 @@ def test_regex_trait_creation() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_case_insensitive() -> None:
-    """Test RegexTrait with case_sensitive=False."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with case_sensitive=False."""
+    trait = RegexRubricTrait(
         name="keyword_match",
         pattern=r"python",
         case_sensitive=False,
@@ -326,8 +335,8 @@ def test_regex_trait_case_insensitive() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_invert_result() -> None:
-    """Test RegexTrait with invert_result=True."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait with invert_result=True."""
+    trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
         invert_result=True,
@@ -341,7 +350,7 @@ def test_regex_trait_invert_result() -> None:
 def test_regex_trait_invalid_pattern_raises_error() -> None:
     """Test that invalid regex pattern raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        RegexTrait(
+        RegexRubricTrait(
             name="test",
             pattern=r"(?P<unclosed",  # Invalid regex
             higher_is_better=True,
@@ -352,8 +361,8 @@ def test_regex_trait_invalid_pattern_raises_error() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_evaluate_match() -> None:
-    """Test RegexTrait.evaluate() with matching text."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait.evaluate() with matching text."""
+    trait = RegexRubricTrait(
         name="email",
         pattern=r"\S+@\S+",
         case_sensitive=True,
@@ -365,8 +374,8 @@ def test_regex_trait_evaluate_match() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_evaluate_no_match() -> None:
-    """Test RegexTrait.evaluate() with non-matching text."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait.evaluate() with non-matching text."""
+    trait = RegexRubricTrait(
         name="email",
         pattern=r"\S+@\S+",
         case_sensitive=True,
@@ -378,8 +387,8 @@ def test_regex_trait_evaluate_no_match() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_evaluate_case_insensitive() -> None:
-    """Test RegexTrait.evaluate() with case_sensitive=False."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait.evaluate() with case_sensitive=False."""
+    trait = RegexRubricTrait(
         name="keyword",
         pattern=r"PYTHON",
         case_sensitive=False,
@@ -391,8 +400,8 @@ def test_regex_trait_evaluate_case_insensitive() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_evaluate_inverted() -> None:
-    """Test RegexTrait.evaluate() with invert_result=True."""
-    trait = RegexTrait(
+    """Test RegexRubricTrait.evaluate() with invert_result=True."""
+    trait = RegexRubricTrait(
         name="no_profanity",
         pattern=r"\bbadword\b",
         invert_result=True,
@@ -409,7 +418,7 @@ def test_regex_trait_evaluate_inverted() -> None:
 def test_regex_trait_extra_fields_forbidden() -> None:
     """Test that extra fields are rejected."""
     with pytest.raises(ValidationError):
-        RegexTrait(
+        RegexRubricTrait(
             name="test",
             pattern=r"\w+",
             higher_is_better=True,
@@ -418,19 +427,19 @@ def test_regex_trait_extra_fields_forbidden() -> None:
 
 
 # =============================================================================
-# CallableTrait Schema Tests
+# CallableRubricTrait Schema Tests
 # =============================================================================
 
 
 @pytest.mark.unit
 def test_callable_trait_boolean() -> None:
-    """Test CallableTrait with boolean kind."""
+    """Test CallableRubricTrait with boolean kind."""
     import cloudpickle
 
     def check_length(text: str) -> bool:
         return len(text) >= 10
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="min_length",
         kind="boolean",
         callable_code=cloudpickle.dumps(check_length),
@@ -446,13 +455,13 @@ def test_callable_trait_boolean() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_score() -> None:
-    """Test CallableTrait with score kind."""
+    """Test CallableRubricTrait with score kind."""
     import cloudpickle
 
     def word_count_score(text: str) -> int:
         return min(len(text.split()), 10)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="word_count",
         kind="score",
         callable_code=cloudpickle.dumps(word_count_score),
@@ -471,7 +480,7 @@ def test_callable_trait_extra_fields_forbidden() -> None:
     """Test that extra fields are rejected."""
     import cloudpickle
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="test",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda _: True),
@@ -480,7 +489,7 @@ def test_callable_trait_extra_fields_forbidden() -> None:
 
     # Extra fields should raise ValidationError
     with pytest.raises(ValidationError):
-        CallableTrait.model_validate(
+        CallableRubricTrait.model_validate(
             {
                 **trait.model_dump(),
                 "extra_field": "not_allowed",
@@ -642,8 +651,8 @@ def test_llm_rubric_trait_serialization_roundtrip() -> None:
 
 @pytest.mark.unit
 def test_regex_trait_serialization_roundtrip() -> None:
-    """Test RegexTrait serialization and deserialization."""
-    original = RegexTrait(
+    """Test RegexRubricTrait serialization and deserialization."""
+    original = RegexRubricTrait(
         name="has_citation",
         pattern=r"\[\d+\]",
         case_sensitive=False,
@@ -654,7 +663,7 @@ def test_regex_trait_serialization_roundtrip() -> None:
     data = original.model_dump()
 
     # Deserialize back
-    restored = RegexTrait(**data)
+    restored = RegexRubricTrait(**data)
 
     assert restored.name == original.name
     assert restored.pattern == original.pattern

@@ -5,9 +5,11 @@ few-shot resolution, and preview result creation.
 """
 
 import logging
+from itertools import zip_longest
 from typing import Any
 
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric, merge_dynamic_rubrics
 from karenina.schemas.verification import (
     FinishedTemplate,
     VerificationConfig,
@@ -18,16 +20,133 @@ from karenina.schemas.verification import (
 logger = logging.getLogger(__name__)
 
 
+def model_sort_key(model: Any) -> str:
+    """Return a stable string key for sorting models by identity.
+
+    Uses the model's ``id`` if available, falling back to ``model_name``,
+    then to an empty string. This groups tasks by answering model so that
+    prefix caches (KV caches) can be reused across consecutive requests.
+
+    Args:
+        model: A ModelConfig instance (or any object with ``id`` / ``model_name``).
+
+    Returns:
+        A string suitable for use as a sort key.
+    """
+    return getattr(model, "id", None) or getattr(model, "model_name", None) or ""
+
+
+def interleave_by_answerer(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Round-robin tasks by answerer identity, prefix-cache-friendly within each group.
+
+    Groups the input tasks by the answerer's ``ModelIdentity.canonical_key``,
+    sorts each group using the prefix-cache-friendly key
+    ``(question_id, parse_key, replicate)``, then round-robins across groups
+    so consecutive tasks target different answerer identities when possible.
+
+    Group iteration order follows the insertion order of the input (first
+    appearance of each canonical key) to keep the output deterministic.
+
+    Args:
+        tasks: Task queue as produced by ``generate_task_queue``.
+
+    Returns:
+        A new list containing the same tasks in a re-ordered sequence. The
+        input is not mutated.
+    """
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    if not tasks:
+        return []
+
+    groups: dict[str, list[dict[str, Any]]] = {}  # insertion-ordered (Python 3.7+)
+    for task in tasks:
+        key = ModelIdentity.from_model_config(task["answering_model"], role="answering").canonical_key
+        groups.setdefault(key, []).append(task)
+
+    for group in groups.values():
+        group.sort(
+            key=lambda t: (
+                t["question_id"],
+                model_sort_key(t["parsing_model"]),
+                t.get("replicate") or 0,
+            )
+        )
+
+    return [t for row in zip_longest(*groups.values()) for t in row if t is not None]
+
+
+def stamp_agentic_trait_overrides(
+    rubric: Rubric | None,
+    config: VerificationConfig,
+) -> Rubric | None:
+    """Stamp pipeline-level retry policy and request timeout onto agentic trait overrides.
+
+    Walks ``rubric.agentic_traits`` and, for any trait whose ``model_override``
+    is set, returns a copy with ``request_timeout`` and ``retry_policy`` filled
+    in from ``config`` (mirroring how the top-level answering and parsing
+    models are stamped). Existing values on the override are preserved: only
+    ``None`` fields are populated, matching the ``is None`` guard used by
+    :func:`_apply_request_timeout` and :func:`_apply_retry_config` in
+    :mod:`karenina.benchmark.verification.batch_runner`.
+
+    The original rubric instance is returned unchanged when no traits need
+    stamping (no agentic traits, none with ``model_override``, or all override
+    fields already populated). This avoids rebuilding frozen rubric and trait
+    instances in the common case.
+
+    Args:
+        rubric: The rubric whose agentic traits should be inspected; ``None``
+            short-circuits to ``None``.
+        config: Verification configuration providing the pipeline-level
+            ``request_timeout`` and ``retry_policy`` defaults.
+
+    Returns:
+        The original rubric (unchanged) when no stamping was required, or a
+        new ``Rubric`` instance with stamped agentic traits.
+    """
+    if rubric is None:
+        return None
+    if not rubric.agentic_traits:
+        return rubric
+
+    new_traits: list[Any] | None = None
+    for idx, trait in enumerate(rubric.agentic_traits):
+        override = trait.model_override
+        if override is None:
+            continue
+        updates: dict[str, Any] = {}
+        if config.request_timeout is not None and override.request_timeout is None:
+            updates["request_timeout"] = config.request_timeout
+        if config.retry_policy is not None and override.retry_policy is None:
+            updates["retry_policy"] = config.retry_policy
+        if not updates:
+            continue
+        stamped_override = override.model_copy(update=updates)
+        if new_traits is None:
+            new_traits = list(rubric.agentic_traits)
+        new_traits[idx] = trait.model_copy(update={"model_override": stamped_override})
+
+    if new_traits is None:
+        return rubric
+    return rubric.model_copy(update={"agentic_traits": new_traits})
+
+
 def merge_rubrics_for_task(
     global_rubric: Rubric | None,
     template: FinishedTemplate,
     config: VerificationConfig,
-) -> Rubric | None:
+) -> tuple[Rubric | None, dict[str, str] | None]:
     """Merge global and question-specific rubrics for a task.
 
     This is an adapter function that bridges the verification workflow layer
     with the schema layer's pure rubric operations, handling config checking
-    and error logging.
+    and error logging. After the merge, any agentic traits whose
+    ``model_override`` lacks ``request_timeout`` or ``retry_policy`` are
+    stamped from the pipeline-level configuration via
+    :func:`stamp_agentic_trait_overrides`, mirroring the behavior applied to
+    the top-level answering and parsing models in
+    :mod:`karenina.benchmark.verification.batch_runner`.
 
     Args:
         global_rubric: Optional global rubric applied to all questions
@@ -35,25 +154,61 @@ def merge_rubrics_for_task(
         config: Verification configuration with rubric settings
 
     Returns:
-        Merged rubric or None if rubrics are disabled
+        Tuple of (merged_rubric, provenance) where provenance maps each
+        trait name to its source ("global" or "question_specific"). Both
+        elements are None when rubrics are disabled or both inputs are None.
     """
-    if not getattr(config, "rubric_enabled", False):
-        return None
+    if not config.rubric_enabled:
+        return None, None
 
     question_rubric = None
     if template.question_rubric:
         try:
             question_rubric = Rubric.model_validate(template.question_rubric)
         except Exception as e:
-            logger.warning(f"Failed to parse question rubric for {template.question_id}: {e}")
+            logger.warning("Failed to parse question rubric for %s: %s", template.question_id, e)
 
-    try:
-        from karenina.schemas import merge_rubrics
+    from karenina.schemas import merge_rubrics
 
-        return merge_rubrics(global_rubric, question_rubric)
-    except ValueError as e:
-        logger.error(f"Error merging rubrics for {template.question_id}: {e}")
-        return global_rubric
+    merged, provenance = merge_rubrics(global_rubric, question_rubric)
+    stamped = stamp_agentic_trait_overrides(merged, config)
+    return stamped, provenance
+
+
+def merge_dynamic_rubrics_for_task(
+    global_dynamic_rubric: DynamicRubric | None,
+    template: FinishedTemplate,
+    config: VerificationConfig,
+) -> DynamicRubric | None:
+    """Merge global and question-specific dynamic rubrics for a task.
+
+    Mirrors :func:`merge_rubrics_for_task` for the dynamic rubric variant.
+    Deserializes the question-level dict into a DynamicRubric, then delegates
+    to :func:`merge_dynamic_rubrics` for the actual merge.
+
+    Args:
+        global_dynamic_rubric: Optional global dynamic rubric applied to all questions.
+        template: The finished template containing question-specific dynamic rubric.
+        config: Verification configuration with rubric settings.
+
+    Returns:
+        Merged DynamicRubric or None if rubrics are disabled or absent.
+    """
+    if not config.rubric_enabled:
+        return None
+
+    question_dynamic_rubric = None
+    if template.question_dynamic_rubric:
+        try:
+            question_dynamic_rubric = DynamicRubric.model_validate(template.question_dynamic_rubric)
+        except Exception as e:
+            logger.warning(
+                "Failed to parse question dynamic rubric for %s: %s",
+                template.question_id,
+                e,
+            )
+
+    return merge_dynamic_rubrics(global_dynamic_rubric, question_dynamic_rubric)
 
 
 def resolve_few_shot_for_task(
@@ -73,7 +228,7 @@ def resolve_few_shot_for_task(
         List of few-shot examples or None if disabled/unavailable
     """
     few_shot_config = config.get_few_shot_config()
-    if not few_shot_config or not few_shot_config.enabled:
+    if not few_shot_config or few_shot_config.source == "disabled":
         return None
 
     return few_shot_config.resolve_examples_for_question(
@@ -108,11 +263,15 @@ def create_preview_result(task: dict[str, Any]) -> VerificationResult:
         timestamp="",  # Empty timestamp indicates "starting" event
         replicate=replicate,
     )
+    # Preview results represent "task starting" events; they have not yet run
+    # the verification pipeline, so no classified failure exists. Downstream
+    # consumers treat an empty timestamp as the preview sentinel.
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=task["question_id"],
             template_id="no_template",
-            completed_without_errors=False,
+            failure=None,
+            caveats=[],
             question_text=task["question_text"],
             answering=answering_identity,
             parsing=parsing_identity,
@@ -137,7 +296,7 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         "few_shot_enabled": config.is_few_shot_enabled(),
         "abstention_enabled": getattr(config, "abstention_enabled", False),
         "sufficiency_enabled": getattr(config, "sufficiency_enabled", False),
-        "deep_judgment_enabled": getattr(config, "deep_judgment_enabled", False),
+        "deep_judgment_mode": getattr(config, "deep_judgment_mode", "disabled"),
         "evaluation_mode": getattr(config, "evaluation_mode", "template_only"),
         "rubric_evaluation_strategy": getattr(config, "rubric_evaluation_strategy", "batch"),
         "deep_judgment_max_excerpts_per_attribute": getattr(config, "deep_judgment_max_excerpts_per_attribute", 3),
@@ -158,16 +317,43 @@ def extract_feature_flags(config: VerificationConfig) -> dict[str, Any]:
         ),
         "deep_judgment_rubric_search_enabled": getattr(config, "deep_judgment_rubric_search_enabled", False),
         "deep_judgment_rubric_search_tool": getattr(config, "deep_judgment_rubric_search_tool", "tavily"),
+        # Embedding check configuration
+        "embedding_check_enabled": getattr(config, "embedding_check_enabled", False),
+        "embedding_check_model": getattr(config, "embedding_check_model", None),
+        "embedding_check_threshold": getattr(config, "embedding_check_threshold", None),
         # Prompt configuration
         "prompt_config": getattr(config, "prompt_config", None),
+        # Trace filtering configuration
+        "use_full_trace_for_template": getattr(config, "use_full_trace_for_template", False),
+        "use_full_trace_for_rubric": getattr(config, "use_full_trace_for_rubric", True),
+        "allow_partial_trace_scoring": getattr(config, "allow_partial_trace_scoring", True),
         # Agentic parsing configuration
         "agentic_parsing": getattr(config, "agentic_parsing", False),
+        "agentic_parsing_trigger": getattr(config, "agentic_parsing_trigger", "always"),
         "agentic_judge_context": getattr(config, "agentic_judge_context", "workspace_only"),
         "agentic_parsing_max_turns": getattr(config, "agentic_parsing_max_turns", 15),
         "agentic_parsing_timeout": getattr(config, "agentic_parsing_timeout", 120.0),
+        "agentic_parsing_materialize_trace": getattr(config, "agentic_parsing_materialize_trace", False),
+        "agentic_parsing_persist_trace": getattr(config, "agentic_parsing_persist_trace", False),
         "workspace_copy": getattr(config, "workspace_copy", True),
         "workspace_cleanup": getattr(config, "workspace_cleanup", True),
+        "workspace_output_mode": getattr(config, "workspace_output_mode", "none"),
+        "workspace_output_dir": getattr(config, "workspace_output_dir", None),
+        "workspace_output_exclude_patterns": getattr(config, "workspace_output_exclude_patterns", []),
         # Agentic rubric evaluation configuration
         "agentic_rubric_strategy": getattr(config, "agentic_rubric_strategy", "individual"),
         "agentic_rubric_parallel": getattr(config, "agentic_rubric_parallel", False),
+        # Error classification
+        "custom_error_patterns": getattr(config, "custom_error_patterns", []),
     }
+
+
+def replicate_range(count: int) -> list[int | None]:
+    """Replicate iteration matching the task queue convention.
+
+    Returns [None] for count <= 1 (no replicate numbering),
+    list[1..count] otherwise.
+    """
+    if count <= 1:
+        return [None]
+    return list(range(1, count + 1))

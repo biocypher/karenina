@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
+import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig
@@ -23,6 +27,59 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class TemplateProgressEvent:
+    """Progress event emitted during template generation.
+
+    Consumers receive these via the progress_callback parameter.
+    Job-level events (job_started, job_completed, job_cancelled) have
+    question_id=None. Task-level events have the question_id set.
+    """
+
+    event: Literal[
+        "job_started",
+        "task_started",
+        "task_completed",
+        "task_failed",
+        "job_completed",
+        "job_cancelled",
+    ]
+    question_id: str | None
+    processed_count: int
+    total_count: int
+    successful_count: int
+    failed_count: int
+    percentage: float
+    error: str | None
+    template_code: str | None
+    task_duration: float | None
+    in_progress_questions: list[str] = field(default_factory=list)
+
+
+def _resolve_max_workers(max_workers: int | None) -> int:
+    """Resolve max_workers from explicit value or environment.
+
+    Args:
+        max_workers: Explicit value, or None to auto-detect.
+
+    Returns:
+        Number of workers. 1 means sequential execution.
+    """
+    if max_workers is not None:
+        return max_workers
+    env_val = os.environ.get("KARENINA_ASYNC_MAX_WORKERS")
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            logger.warning(
+                "Invalid KARENINA_ASYNC_MAX_WORKERS value '%s', defaulting to 1",
+                env_val,
+            )
+            return 1
+    return 1
+
+
 # ---------------------------------------------------------------------------
 # Template generation
 # ---------------------------------------------------------------------------
@@ -31,8 +88,8 @@ logger = logging.getLogger(__name__)
 def generate_template_for_question(
     benchmark: Benchmark,
     question_id: str,
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
+    model: str = "claude-haiku-4-5",
+    model_provider: str = "anthropic",
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
@@ -101,62 +158,333 @@ def generate_template_for_question(
 def generate_templates(
     benchmark: Benchmark,
     question_ids: list[str],
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
+    model: str = "claude-haiku-4-5",
+    model_provider: str = "anthropic",
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
-    progress_callback: Callable[[float, str], None] | None = None,
+    progress_callback: Callable[[TemplateProgressEvent], None] | None = None,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | None = None,
+    backup_path: Path | None = None,
+    max_workers: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Generate templates for multiple questions using LLM."""
+    """Generate templates for multiple questions using LLM.
+
+    Supports sequential (max_workers=1) and parallel (max_workers>1) execution
+    with progress tracking, cancellation, and thread-safe progressive backup.
+
+    Args:
+        benchmark: The benchmark to generate templates for.
+        question_ids: List of question IDs to generate templates for.
+        model: Model name.
+        model_provider: Model provider.
+        temperature: Generation temperature.
+        interface: Adapter interface.
+        force_regenerate: If True, regenerate existing templates.
+        progress_callback: Receives TemplateProgressEvent for each lifecycle event.
+        endpoint_base_url: Optional custom endpoint URL.
+        endpoint_api_key: Optional API key for custom endpoint.
+        backup_path: If provided, atomically save all generated templates
+            to this JSON file after each successful generation.
+        max_workers: Number of parallel workers. None reads from
+            KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+        cancel_event: If set, stops generation after the current task(s) complete.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from karenina.utils.file_ops import atomic_write
+
     invalid_ids = [qid for qid in question_ids if qid not in benchmark._questions_cache]
     if invalid_ids:
         raise ValueError(f"Questions not found: {invalid_ids}")
 
-    results = {}
-    total_questions = len(question_ids)
+    workers = _resolve_max_workers(max_workers)
 
-    for i, question_id in enumerate(question_ids):
-        if progress_callback:
-            percentage = (i / total_questions) * 100
-            question_text = benchmark._questions_cache[question_id].get("question", "")
-            message = f"Processing: {question_text[:50]}..."
-            progress_callback(percentage, message)
+    # Force adapter registry initialization in the main thread before
+    # spawning workers. The registry's _ensure_initialized() has a
+    # race condition where concurrent threads can see _initializing=True
+    # and return with an empty registry.
+    if workers > 1:
+        from karenina.adapters.registry import AdapterRegistry
 
-        result = generate_template_for_question(
-            benchmark,
-            question_id=question_id,
-            model=model,
-            model_provider=model_provider,
-            temperature=temperature,
-            interface=interface,
-            force_regenerate=force_regenerate,
-            endpoint_base_url=endpoint_base_url,
-            endpoint_api_key=endpoint_api_key,
+        AdapterRegistry._ensure_initialized()
+
+    total = len(question_ids)
+    results: dict[str, dict[str, Any]] = {}
+    successful_count = 0
+    failed_count = 0
+    processed_count = 0
+    lock = threading.Lock() if workers > 1 else None
+    in_progress: list[str] = []
+
+    gen_kwargs: dict[str, Any] = {
+        "model": model,
+        "model_provider": model_provider,
+        "temperature": temperature,
+        "interface": interface,
+        "force_regenerate": force_regenerate,
+        "endpoint_base_url": endpoint_base_url,
+        "endpoint_api_key": endpoint_api_key,
+    }
+
+    def _emit(event: str, question_id: str | None = None, **kwargs: Any) -> None:
+        if not progress_callback:
+            return
+        progress_callback(
+            TemplateProgressEvent(
+                event=event,  # type: ignore[arg-type]
+                question_id=question_id,
+                processed_count=processed_count,
+                total_count=total,
+                successful_count=successful_count,
+                failed_count=failed_count,
+                percentage=(processed_count / total) * 100 if total > 0 else 0.0,
+                error=kwargs.get("error"),
+                template_code=kwargs.get("template_code"),
+                task_duration=kwargs.get("task_duration"),
+                in_progress_questions=list(in_progress),
+            )
         )
-        results[question_id] = result
 
-    if progress_callback:
-        progress_callback(100.0, "Template generation completed")
+    def _process_result(question_id: str, result: dict[str, Any], duration: float) -> None:
+        nonlocal processed_count, successful_count, failed_count
+
+        results[question_id] = result
+        success = result.get("success", False)
+        skipped = result.get("skipped", False)
+
+        if not skipped:
+            processed_count += 1
+            if success:
+                successful_count += 1
+            else:
+                failed_count += 1
+        else:
+            processed_count += 1
+            successful_count += 1
+
+        if question_id in in_progress:
+            in_progress.remove(question_id)
+
+        event_type = "task_completed" if success or skipped else "task_failed"
+        _emit(
+            event_type,
+            question_id=question_id,
+            template_code=result.get("template_code") if success else None,
+            error=result.get("error") if not success else None,
+            task_duration=duration,
+        )
+
+        if backup_path and success and not skipped:
+            _save_template_backup(benchmark, backup_path, atomic_write)
+
+    _emit("job_started")
+
+    if workers <= 1:
+        # Sequential execution
+        for question_id in question_ids:
+            if cancel_event and cancel_event.is_set():
+                _emit("job_cancelled")
+                break
+
+            in_progress.append(question_id)
+            _emit("task_started", question_id=question_id)
+
+            start = time.monotonic()
+            result = generate_template_for_question(
+                benchmark,
+                question_id=question_id,
+                **gen_kwargs,
+            )
+            duration = time.monotonic() - start
+
+            _process_result(question_id, result, duration)
+    else:
+        # Parallel execution
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_qid: dict[Any, str] = {}
+            for question_id in question_ids:
+                in_progress.append(question_id)
+                _emit("task_started", question_id=question_id)
+                future = executor.submit(
+                    _timed_generate,
+                    benchmark,
+                    question_id,
+                    gen_kwargs,
+                )
+                future_to_qid[future] = question_id
+
+            for future in as_completed(future_to_qid):
+                if cancel_event and cancel_event.is_set():
+                    for f in future_to_qid:
+                        f.cancel()
+                    _emit("job_cancelled")
+                    break
+
+                question_id = future_to_qid[future]
+                try:
+                    result, duration = future.result()
+                except Exception as e:
+                    result = {
+                        "success": False,
+                        "template_code": "",
+                        "error": str(e),
+                        "raw_response": None,
+                        "skipped": False,
+                    }
+                    duration = 0.0
+
+                assert lock is not None  # guaranteed when workers > 1
+                with lock:
+                    _process_result(question_id, result, duration)
+
+    if not (cancel_event and cancel_event.is_set()):
+        _emit("job_completed")
 
     return results
 
 
+def _timed_generate(
+    benchmark: Benchmark,
+    question_id: str,
+    gen_kwargs: dict[str, Any],
+) -> tuple[dict[str, Any], float]:
+    """Run generate_template_for_question with timing.
+
+    Args:
+        benchmark: The benchmark object.
+        question_id: Question ID to generate for.
+        gen_kwargs: Keyword arguments for generate_template_for_question.
+
+    Returns:
+        Tuple of (result_dict, duration_seconds).
+    """
+    start = time.monotonic()
+    result = generate_template_for_question(
+        benchmark,
+        question_id=question_id,
+        **gen_kwargs,
+    )
+    duration = time.monotonic() - start
+    return result, duration
+
+
+def _save_template_backup(
+    benchmark: Benchmark,
+    backup_path: Path,
+    atomic_write_fn: Callable[[Path, str], None],
+) -> None:
+    """Save all current templates to a backup JSON file.
+
+    Args:
+        benchmark: The benchmark containing generated templates.
+        backup_path: Path to write the backup file.
+        atomic_write_fn: Atomic write function for crash safety.
+    """
+    templates_dict = {}
+    for qid in benchmark.get_question_ids():
+        if benchmark.has_template(qid):
+            templates_dict[qid] = benchmark.get_template(qid)
+
+    try:
+        atomic_write_fn(backup_path, json.dumps(templates_dict, indent=2))
+    except OSError:
+        logger.warning("Failed to write template backup to %s", backup_path, exc_info=True)
+
+
+def _load_template_backup(benchmark: Benchmark, backup_path: Path) -> int:
+    """Load templates from a backup file into the benchmark.
+
+    Only imports templates for questions that exist in the benchmark and
+    do not already have a template.
+
+    Args:
+        benchmark: The benchmark to import templates into.
+        backup_path: Path to the backup JSON file.
+
+    Returns:
+        Number of templates restored from backup.
+    """
+    try:
+        with open(backup_path) as f:
+            code_blocks = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        logger.warning("Failed to read template backup from %s", backup_path, exc_info=True)
+        return 0
+
+    restored = 0
+    for question_id, template_code in code_blocks.items():
+        if question_id not in benchmark._questions_cache:
+            continue
+        if benchmark.has_template(question_id):
+            continue
+        try:
+            benchmark.add_answer_template(question_id, template_code)
+            restored += 1
+        except Exception:
+            logger.warning("Failed to restore template for %s from backup", question_id, exc_info=True)
+
+    if restored:
+        logger.info("Restored %d template(s) from backup: %s", restored, backup_path)
+
+    return restored
+
+
 def generate_all_templates(
     benchmark: Benchmark,
-    model: str = "gemini-2.0-flash",
-    model_provider: str = "google_genai",
+    model: str = "claude-haiku-4-5",
+    model_provider: str = "anthropic",
     temperature: float = 0,
     interface: str = "langchain",
     force_regenerate: bool = False,
-    progress_callback: Callable[[float, str], None] | None = None,
+    progress_callback: Callable[[TemplateProgressEvent], None] | None = None,
     only_missing: bool = True,
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | None = None,
+    progressive_backup: bool = True,
+    backup_path: Path | None = None,
+    max_workers: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Generate templates for all questions in the benchmark using LLM."""
+    """Generate templates for all questions in the benchmark using LLM.
+
+    Args:
+        benchmark: The benchmark to generate templates for.
+        model: Model name.
+        model_provider: Model provider.
+        temperature: Generation temperature.
+        interface: Adapter interface.
+        force_regenerate: If True, regenerate existing templates.
+        progress_callback: Optional progress callback.
+        only_missing: If True, only generate for questions without templates.
+        endpoint_base_url: Optional custom endpoint URL.
+        endpoint_api_key: Optional API key for custom endpoint.
+        progressive_backup: If True (default), save generated templates to a
+            backup JSON file after each successful generation. If the process
+            is interrupted, previously generated templates are preserved and
+            automatically restored on the next run.
+        backup_path: Path for the backup file. If None and progressive_backup
+            is True, defaults to ``{benchmark_name}_templates_backup.json``
+            in the current directory.
+        max_workers: Number of parallel workers. None reads from
+            KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+        cancel_event: If set, stops generation after the current task(s) complete.
+    """
+    # Resolve backup path
+    effective_backup_path: Path | None = None
+    if progressive_backup:
+        if backup_path is not None:
+            effective_backup_path = backup_path
+        else:
+            safe_name = benchmark.name.replace(" ", "_").replace("/", "_")
+            effective_backup_path = Path(f"{safe_name}_templates_backup.json")
+
+        # Restore any previously generated templates from backup
+        if effective_backup_path.exists() and not force_regenerate:
+            _load_template_backup(benchmark, effective_backup_path)
+
     if only_missing and not force_regenerate:
         from typing import cast
 
@@ -178,6 +506,9 @@ def generate_all_templates(
         progress_callback=progress_callback,
         endpoint_base_url=endpoint_base_url,
         endpoint_api_key=endpoint_api_key,
+        backup_path=effective_backup_path,
+        max_workers=max_workers,
+        cancel_event=cancel_event,
     )
 
 
@@ -441,7 +772,7 @@ def store_verification_results(
 
 def build_repr(benchmark: Benchmark) -> str:
     """Build the developer-friendly repr string for a Benchmark."""
-    from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait
+    from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait
 
     lines = ["Benchmark("]
 
@@ -522,11 +853,11 @@ def build_repr(benchmark: Benchmark) -> str:
             for trait in question_rubric:
                 if isinstance(trait, LLMRubricTrait):
                     total_llm += 1
-                elif isinstance(trait, RegexTrait):
+                elif isinstance(trait, RegexRubricTrait):
                     total_regex += 1
                 elif isinstance(trait, MetricRubricTrait):
                     total_metric += 1
-                elif isinstance(trait, CallableTrait):
+                elif isinstance(trait, CallableRubricTrait):
                     total_callable += 1
 
     if questions_with_rubrics:
@@ -643,9 +974,15 @@ def convert_to_schema_org_question(question_data: dict[str, Any], finished: bool
 
     ratings = None
     if question_data.get("question_rubric"):
-        ratings = [
-            convert_rubric_trait_to_rating(trait, "question-specific") for trait in question_data["question_rubric"]
-        ]
+        rubric_data = question_data["question_rubric"]
+        if isinstance(rubric_data, dict):
+            all_traits = []
+            for trait_list in rubric_data.values():
+                if isinstance(trait_list, list):
+                    all_traits.extend(trait_list)
+            ratings = [convert_rubric_trait_to_rating(trait, "question-specific") for trait in all_traits]
+        else:
+            ratings = [convert_rubric_trait_to_rating(trait, "question-specific") for trait in rubric_data]
 
     additional_properties = []
     additional_properties.append(SchemaOrgPropertyValue(name="finished", value=finished))

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from karenina.schemas.results.caveat import Caveat
+from karenina.schemas.results.failure import Failure
 
 from .model_identity import ModelIdentity
 
@@ -12,12 +15,28 @@ from .model_identity import ModelIdentity
 class VerificationResultMetadata(BaseModel):
     """Core metadata and identification fields for a verification result."""
 
+    model_config = ConfigDict(extra="forbid")
+
     question_id: str = Field(..., json_schema_extra={"index": True, "max_length": 32})
     template_id: str = Field(
         ..., json_schema_extra={"index": True, "max_length": 32}
     )  # MD5 of template or "no_template" (composite key component)
-    completed_without_errors: bool = Field(default=..., json_schema_extra={"index": True})
-    error: str | None = None
+    failure: Failure | None = Field(default=None, json_schema_extra={"index": True})
+    caveats: list[Caveat] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    partial_content: str | None = None
+    retry_counts: dict[str, dict[str, int]] | None = Field(
+        default=None,
+        description=(
+            "Per-category retry usage and budget observed during pipeline "
+            "execution. Keyed by ErrorCategory.value (e.g. 'timeout', "
+            "'connection'); each entry is {'used': int, 'budget': int} where "
+            "budget reflects the max_attempts of the active RetryPolicy at "
+            "the moment the pipeline started, and used counts how many of "
+            "those retries actually fired. None when retry tracking was not "
+            "active for this pipeline run."
+        ),
+    )
     question_text: str
     raw_answer: str | None = None  # Ground truth answer from checkpoint
     keywords: list[str] | None = None  # Keywords associated with the question
@@ -34,6 +53,11 @@ class VerificationResultMetadata(BaseModel):
     )
     run_name: str | None = None
     replicate: int | None = None  # Replicate number (1, 2, 3, ...) for repeated runs of the same question
+
+    # Provenance metadata
+    few_shot_enabled: bool = False  # Whether few-shot prompting was active (issue 178)
+    few_shot_example_count: int = 0  # Number of few-shot examples used (issue 178)
+    evaluation_mode: str | None = None  # Evaluation mode used, e.g. "template_only" (issue 184)
 
     # Scenario linking metadata (all nullable; None for standalone questions)
     scenario_id: str | None = None
@@ -58,6 +82,9 @@ class VerificationResultMetadata(BaseModel):
         parsing: ModelIdentity,
         timestamp: str,
         replicate: int | None = None,
+        scenario_id: str | None = None,
+        scenario_node: str | None = None,
+        scenario_turn: int | None = None,
     ) -> str:
         """
         Compute deterministic 16-char SHA256 hash from verification parameters.
@@ -71,6 +98,9 @@ class VerificationResultMetadata(BaseModel):
             parsing: ModelIdentity for the parsing model
             timestamp: ISO timestamp string
             replicate: Replicate number (None for single run)
+            scenario_id: Scenario identifier, when this result is a scenario turn
+            scenario_node: Scenario node identifier, when this result is a scenario turn
+            scenario_turn: Scenario turn index, when this result is a scenario turn
 
         Returns:
             16-character hex string (first 16 chars of SHA256 hash)
@@ -84,6 +114,9 @@ class VerificationResultMetadata(BaseModel):
             "parsing": parsing.canonical_key,
             "question_id": question_id,
             "replicate": replicate,
+            "scenario_id": scenario_id,
+            "scenario_node": scenario_node,
+            "scenario_turn": scenario_turn,
             "timestamp": timestamp,
         }
 
@@ -100,6 +133,7 @@ class VerificationResultTemplate(BaseModel):
 
     raw_llm_response: str = ""
     trace_messages: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_context: list[dict[str, Any]] = Field(default_factory=list)
     parsed_gt_response: dict[str, Any] | None = None  # Ground truth from 'correct' field
     parsed_llm_response: dict[str, Any] | None = None  # LLM extracted fields (excluding 'id' and 'correct')
 
@@ -109,6 +143,22 @@ class VerificationResultTemplate(BaseModel):
         default=None, json_schema_extra={"index": True}
     )  # Template verification result (None if template verification skipped)
     verify_granular_result: Any | None = None
+    field_verification_error: str | None = None  # Error from verify() exception (issue 146)
+    # Per-field primitive verification results (issue 150). Values are
+    # tri-valued: True (pass), False (fail), or None (extractor returned
+    # null for that field, kept distinct from False so a null cannot
+    # silently match a False ground truth).
+    field_results: dict[str, bool | None] | None = None
+    # Per-field graded scores in [0.0, 1.0] (or None for a null extraction).
+    # Companion to field_results: field_results is the binary check() outcome,
+    # field_scores is the continuous score() outcome. For non-graded primitives
+    # each value is exactly 1.0 (pass) or 0.0 (fail); graded primitives
+    # (NumericGraded) contribute partial credit. This is the per-field detail
+    # behind verify_granular_result.
+    field_scores: dict[str, float | None] | None = None
+    composition_strategy: str | None = (
+        None  # Composition strategy used: "all_of", "any_of", "at_least_n(N)" (issue 151)
+    )
 
     # Embeddings
     embedding_check_performed: bool = False  # Whether embedding check was attempted
@@ -126,12 +176,23 @@ class VerificationResultTemplate(BaseModel):
     # Recursion limit metadata
     recursion_limit_reached: bool = False  # Whether agent hit recursion limit
 
+    # Streaming timeout metadata
+    response_timeout_partial: bool = False  # Whether response was truncated due to streaming timeout
+    usage_unavailable: bool = False  # Whether usage metadata could not be captured (e.g., streaming timeout)
+
     # Agentic parsing
     investigation_trace: str | None = Field(
         default=None,
         description="Raw trace from the agentic judge investigation step, if agentic parsing was used.",
     )
     agentic_parsing_performed: bool = False  # Whether agentic parsing was used
+    agentic_extraction_recovery: str | None = None
+    agentic_extraction_error: str | None = None
+
+    # Dynamic parsing
+    dynamic_parsing_performed: bool = False
+    dynamic_parse_decision: str | None = None
+    dynamic_decision_reasoning: str | None = None
 
     # Abstention
     abstention_check_performed: bool = False  # Whether abstention check was attempted
@@ -179,14 +240,19 @@ class VerificationResultRubric(BaseModel):
     rubric_evaluation_strategy: str | None = None  # Strategy used: "batch" or "sequential"
 
     # Split trait scores by type (replaces old verify_rubric dict)
-    llm_trait_scores: dict[str, int | bool] | None = None  # LLM-evaluated traits (1-5 scale or binary)
+    # Template-kind LLM traits contribute multiple dotted-key entries
+    # ("trait.field") whose values follow the user-defined Pydantic schema
+    # (strings, lists, bools, numerics), hence the Any-typed value here.
+    llm_trait_scores: dict[str, Any] | None = None  # LLM-evaluated traits (scalar kinds) + template-kind fields
     llm_trait_labels: dict[str, str] | None = None  # Class labels for literal kind traits
     # Structure: {"trait_name": "ClassName"}
     # For literal kind traits, scores are stored as int indices (0 to len(classes)-1) in llm_trait_scores,
     # and the human-readable class names are stored here. For non-literal traits, this field is not used.
     # Error state: score=-1 in llm_trait_scores indicates invalid classification, label contains the invalid value.
     regex_trait_scores: dict[str, bool] | None = None  # Regex-based traits (boolean)
-    callable_trait_scores: dict[str, bool | int] | None = None  # Callable-based traits (boolean or score)
+    callable_trait_scores: dict[str, bool | int | float] | None = (
+        None  # Callable-based traits (boolean or score; score may be float in [min_score, max_score])
+    )
     metric_trait_scores: dict[str, dict[str, float]] | None = None  # Metric traits with nested metrics dict
 
     # Metric trait evaluation metadata (confusion-matrix analysis)
@@ -205,10 +271,24 @@ class VerificationResultRubric(BaseModel):
         "Each trace is the raw agent investigation output string. "
         "Keyed by trait name.",
     )
+    agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
+        default=None,
+        description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",
+    )
+
+    # Dynamic rubric metadata (populated when a DynamicRubric presence check runs)
+    dynamic_rubric_skipped_traits: dict[str, str] | None = None  # Traits skipped with reasons
+    dynamic_rubric_promoted_traits: list[str] | None = None  # Traits promoted after presence check
+
+    # Trait provenance metadata (maps trait name to source: "global", "question_specific", or "dynamic")
+    trait_provenance: dict[str, str] | None = None
 
     def get_all_trait_scores(self) -> dict[str, int | bool | float | str | list[Any] | dict[str, float] | None]:
-        """
-        Get all trait scores across all trait types in a flat dictionary.
+        """Get all trait scores across all trait types in a flat dictionary.
+
+        If cross-type same-name traits exist (e.g., an LLM trait and a regex
+        trait both named "quality"), later types overwrite earlier ones. Access
+        the individual ``*_trait_scores`` dicts directly in that case.
 
         Returns:
             dict: All trait scores, e.g.:
@@ -273,7 +353,7 @@ class VerificationResultRubric(BaseModel):
 class VerificationResultDeepJudgment(BaseModel):
     """Deep-judgment metadata (multi-stage parsing with excerpts and reasoning)."""
 
-    deep_judgment_enabled: bool = False  # Whether deep-judgment was configured
+    deep_judgment_mode: str | None = None  # Which deep-judgment mode was used (None, "reasoning_only", "full")
     deep_judgment_performed: bool = False  # Whether deep-judgment was successfully executed
     extracted_excerpts: dict[str, list[dict[str, Any]]] | None = None  # Extracted excerpts per attribute
     # Structure: {"attribute_name": [{"text": str, "confidence": "low|medium|high", "similarity_score": float,

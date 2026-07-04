@@ -14,6 +14,11 @@ from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
+# Field names that collide with BaseAnswer internal attributes.
+# Subclasses that declare any of these as model fields will get a TypeError
+# at class definition time, preventing cryptic ValidationErrors at runtime.
+_RESERVED_FIELD_NAMES = {"correct"}
+
 
 class BaseAnswer(BaseModel):
     """Base class for all answer templates in Karenina.
@@ -66,6 +71,14 @@ class BaseAnswer(BaseModel):
         get the auto-generated methods; classic templates are left alone.
         """
         super().__pydantic_init_subclass__(**kwargs)
+
+        # Reject reserved field names that would collide with internal attributes
+        reserved_conflicts = _RESERVED_FIELD_NAMES & set(cls.model_fields.keys())
+        if reserved_conflicts:
+            raise TypeError(
+                f"Field name(s) {reserved_conflicts} reserved by BaseAnswer for internal use. "
+                f"Please rename your field(s) to avoid collision."
+            )
 
         verified = cls._get_verified_fields()
         if not verified:
@@ -195,7 +208,11 @@ class BaseAnswer(BaseModel):
         if not hasattr(self, "correct") or getattr(self, "correct", None) is None:
             verified = self.__class__._get_verified_fields()
             if verified:
-                self.correct = {name: meta.ground_truth for name, meta in verified.items()}
+                self.correct = {
+                    name: meta.ground_truth
+                    for name, meta in verified.items()
+                    if not (isinstance(meta.ground_truth, dict) and meta.ground_truth.get("__conditional__"))
+                }
 
     def set_question_id(self, question_id: str) -> None:
         """Set the question ID programmatically.
@@ -223,44 +240,146 @@ class BaseAnswer(BaseModel):
                 result[name] = meta
         return result
 
-    def _compute_field_results(self) -> dict[str, bool]:
+    def _clear_verification_cache(self) -> None:
+        """Clear the cached _field_results and _resolved_ground_truths.
+
+        Call this after mutating field values or _scenario_context if you need
+        _compute_field_results() to reflect the updated state.
+        """
+        self.__dict__.pop("_field_results", None)
+        self.__dict__.pop("_field_scores", None)
+        self.__dict__.pop("_resolved_ground_truths", None)
+
+    def _compute_field_results(self) -> dict[str, bool | None]:
         """Evaluate all VerifiedField checks and cache in _field_results.
+
+        Results are cached in self.__dict__["_field_results"] after the first
+        call. Subsequent calls return the cached value without recomputation.
+        Call _clear_verification_cache() to invalidate the cache after
+        mutating field values.
+
+        Also caches the resolved ground truth values (including conditional
+        resolutions) in self.__dict__["_resolved_ground_truths"], accessible
+        via _get_resolved_ground_truths().
 
         For TracePrimitive fields, reads self._raw_trace and compares
         check_trace() result against bool(meta.ground_truth). For parsed
         fields, calls primitive.check(extracted, ground_truth).
 
+        Tri-valued results:
+            - True: field extracted and matches ground truth.
+            - False: field extracted and does NOT match ground truth.
+            - None: field returned null by the extractor (i.e., the field
+              name is present in ``self._null_fields``). This is kept
+              distinct from False so a null extraction cannot silently match
+              a False ground truth. Populated by the agentic-parse stage.
+
         Returns:
-            Mapping of field name to pass/fail boolean.
+            Mapping of field name to True / False / None.
 
         Raises:
             ValueError: If a trace field is used but _raw_trace is not set.
         """
         cached = self.__dict__.get("_field_results")
         if cached is not None:
-            return cast(dict[str, bool], cached)
+            return cast(dict[str, bool | None], cached)
 
+        from karenina.schemas.entities.conditional import _resolve_conditional
         from karenina.schemas.primitives import TracePrimitive
         from karenina.schemas.primitives.registry import _reconstruct_primitive
 
         verified = self.__class__._get_verified_fields()
-        results: dict[str, bool] = {}
+        null_fields: set[str] = self.__dict__.get("_null_fields") or set()
+        results: dict[str, bool | None] = {}
+        # Per-field graded scores computed in the SAME loop so the binary and
+        # graded maps share one resolution source and never diverge. Values are
+        # floats in [0,1] (or None for a null extraction). For non-graded
+        # primitives the score is exactly 1.0/0.0 tracking results[name].
+        scores: dict[str, float | None] = {}
+        resolved_gts: dict[str, Any] = {}
 
         for name, meta in verified.items():
             primitive = _reconstruct_primitive(meta.verify_with)
+            ground_truth = meta.ground_truth
+
+            # Resolve conditional ground truth from scenario context
+            if isinstance(ground_truth, dict) and ground_truth.get("__conditional__"):
+                scenario_ctx = getattr(self, "_scenario_context", None)
+                resolved_gt, resolved_prim_data = _resolve_conditional(ground_truth, scenario_ctx)
+                ground_truth = resolved_gt
+                if resolved_prim_data is not None:
+                    primitive = _reconstruct_primitive(resolved_prim_data)
+
+            resolved_gts[name] = ground_truth
+
+            # If the extractor returned null for this field, surface None so
+            # downstream scoring can distinguish "not answered" from "False".
+            if name in null_fields:
+                results[name] = None
+                scores[name] = None
+                continue
 
             if isinstance(primitive, TracePrimitive):
                 raw_trace = getattr(self, "_raw_trace", None)
                 if raw_trace is None:
                     raise ValueError(f"Field {name!r} uses a TracePrimitive but requires _raw_trace to be set")
                 trace_result = primitive.check_trace(raw_trace)
-                results[name] = trace_result == bool(meta.ground_truth)
+                passed = trace_result == bool(ground_truth)
+                results[name] = passed
+                scores[name] = 1.0 if passed else 0.0
             else:
-                extracted = getattr(self, name)
-                results[name] = primitive.check(extracted, meta.ground_truth)
+                extracted = getattr(self, name, None)
+                passed = primitive.check(extracted, ground_truth)
+                results[name] = passed
+                # Graded companion. Defaults to 1.0/0.0 for non-graded
+                # primitives; NumericGraded returns partial credit. Clamp to
+                # [0,1] defensively and fall back to the binary result if a
+                # primitive's score() raises.
+                try:
+                    raw_score = float(primitive.score(extracted, ground_truth))
+                except Exception:  # noqa: BLE001 - degrade to the binary outcome
+                    raw_score = 1.0 if passed else 0.0
+                scores[name] = min(1.0, max(0.0, raw_score))
 
         self.__dict__["_field_results"] = results
+        self.__dict__["_field_scores"] = scores
+        self.__dict__["_resolved_ground_truths"] = resolved_gts
         return results
+
+    def _compute_field_scores(self) -> dict[str, float | None]:
+        """Per-field graded scores in [0,1] (None for a null extraction).
+
+        Companion to _compute_field_results(): same fields, same conditional /
+        null / trace resolution, but each value is the primitive's score()
+        (continuous) rather than check() (binary). For non-graded primitives the
+        score is exactly 1.0/0.0 and tracks the boolean result; graded primitives
+        (NumericGraded) contribute partial credit. Computed and cached together
+        with _compute_field_results() so the two maps never diverge.
+
+        Returns:
+            Mapping of field name to a float in [0,1], or None for a null field.
+        """
+        cached = self.__dict__.get("_field_scores")
+        if cached is not None:
+            return cast(dict[str, float | None], cached)
+        self._compute_field_results()
+        return cast(dict[str, float | None], self.__dict__.get("_field_scores", {}))
+
+    def _get_resolved_ground_truths(self) -> dict[str, Any]:
+        """Return the resolved ground truth values for all VerifiedFields.
+
+        Triggers _compute_field_results() if not already cached. For
+        conditional fields, the returned value reflects the resolution
+        against _scenario_context (or the default case).
+
+        Returns:
+            Mapping of field name to resolved ground truth value.
+        """
+        cached = self.__dict__.get("_resolved_ground_truths")
+        if cached is not None:
+            return cast(dict[str, Any], cached)
+        self._compute_field_results()
+        return cast(dict[str, Any], self.__dict__.get("_resolved_ground_truths", {}))
 
     def _auto_verify(self) -> bool:
         """Auto-generated verify() for VerifiedField templates.
@@ -291,12 +410,27 @@ class BaseAnswer(BaseModel):
             if strategy is not None:
                 return evaluate_strategy(strategy, field_results)
 
-        return all(field_results.values())
+        # Tri-valued results: only True counts as pass. None (null extraction)
+        # is treated as not-satisfied here, but remains distinguishable from
+        # False in the cached field_results dict.
+        return all(v is True for v in field_results.values())
 
     def _auto_verify_granular(self) -> float:
         """Auto-generated verify_granular() for VerifiedField templates.
 
-        Computes a flat weighted average over all VerifiedField results.
+        For AllOf (default, no VerificationStrategy): computes a flat weighted
+        average over the per-field graded scores.
+
+        For AnyOf: returns the best single field contribution (weight times
+        score) divided by total weight.
+        For AtLeastN: returns the sum of the top-N field contributions divided
+        by total weight.
+
+        Each field contributes ``meta.weight * score`` where ``score`` is the
+        primitive's graded score in [0,1]. For non-graded primitives the score
+        is exactly 1.0 (pass) or 0.0 (fail), so this reduces term-for-term to
+        the prior passing-weight arithmetic; graded primitives (NumericGraded)
+        add partial credit.
 
         Returns:
             Score between 0.0 and 1.0.
@@ -310,18 +444,76 @@ class BaseAnswer(BaseModel):
                 "No VerifiedField fields found. Define verify_granular() manually for classic templates."
             )
 
-        field_results = self._compute_field_results()
+        field_scores = self._compute_field_scores()
 
+        # Check for VerificationStrategy inner class (issue 133)
+        strategy_cls = getattr(self.__class__, "VerificationStrategy", None)
+        strategy = getattr(strategy_cls, "verify_strategy", None) if strategy_cls else None
+
+        if strategy is not None:
+            return self._composition_aware_granular(strategy, field_scores, verified)
+
+        # Default AllOf behavior: flat weighted average of per-field scores.
+        # None (null extraction) is treated as not-satisfied here: it does NOT
+        # contribute to weighted_sum but still counts toward total_weight, so a
+        # null distinguishes from False only in field_results, not in the score.
         total_weight = 0.0
         weighted_sum = 0.0
         for name, meta in verified.items():
             total_weight += meta.weight
-            if field_results.get(name, False):
-                weighted_sum += meta.weight
+            score = field_scores.get(name)
+            if score is not None:
+                weighted_sum += meta.weight * score
 
         if total_weight == 0.0:
             return 0.0
         return weighted_sum / total_weight
+
+    @staticmethod
+    def _composition_aware_granular(
+        strategy: Any,
+        field_scores: dict[str, float | None],
+        verified: dict[str, Any],
+    ) -> float:
+        """Compute granular score honoring composition strategy.
+
+        Args:
+            strategy: Composition strategy node (AllOf, AnyOf, AtLeastN).
+            field_scores: Per-field graded score in [0,1], or None for a null
+                extraction (treated as a 0 contribution here, but distinguishable
+                from a 0.0 score in field_scores).
+            verified: Per-field VerificationMeta (for weights).
+
+        Returns:
+            Score between 0.0 and 1.0.
+        """
+        from karenina.schemas.entities.composition import AnyOf, AtLeastN
+
+        total_weight: float = sum(meta.weight for meta in verified.values())
+        if total_weight == 0.0:
+            return 0.0
+
+        # Per-field contribution = weight * score. For non-graded primitives the
+        # score is 1.0/0.0, so a contribution is the field's weight (passing) or
+        # 0 (failing), reproducing the prior passing-weight behavior exactly.
+        contributions: list[float] = sorted(
+            (verified[name].weight * (score or 0.0) for name, score in field_scores.items()),
+            reverse=True,
+        )
+
+        if isinstance(strategy, AnyOf):
+            # AnyOf: best single field contribution
+            if contributions:
+                return float(max(contributions)) / total_weight
+            return 0.0
+
+        if isinstance(strategy, AtLeastN):
+            # AtLeastN: sum of top-N contributions
+            top_n = contributions[: strategy.n]
+            return float(sum(top_n)) / total_weight
+
+        # AllOf or unknown: flat weighted average
+        return float(sum(contributions)) / total_weight
 
     def verify_regex(self, raw_trace: str) -> dict[str, Any]:
         """Verify regex patterns against the raw LLM response trace.

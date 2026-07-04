@@ -31,7 +31,7 @@ from karenina.ports.errors import (
     ParseError,
     PortError,
 )
-from karenina.ports.llm import LLMPort, LLMResponse
+from karenina.ports.llm import LLMPort, LLMResponse, StreamingLLMResponse
 from karenina.ports.messages import (
     Content,
     ContentType,
@@ -62,6 +62,7 @@ __all__ = [
     # LLM Port
     "LLMPort",
     "LLMResponse",
+    "StreamingLLMResponse",
     # Parser Port
     "ParsePortResult",
     "ParserPort",

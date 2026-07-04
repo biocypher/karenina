@@ -42,7 +42,28 @@ The `karenina.utils.mcp` module provides adapter-agnostic utilities for MCP serv
 | `connect_all_mcp_servers(exit_stack, mcp_servers)` | Connect to all configured servers in parallel. Returns `dict[str, ClientSession]`. |
 | `get_all_mcp_tools(sessions)` | Call `list_tools()` on each session. Returns `list[tuple[server_name, session, mcp_tool]]`. |
 
-These utilities use the core `mcp` Python package (`mcp.client.streamable_http.streamablehttp_client`) for HTTP transport. The Claude Tool adapter reuses these directly; other adapters have their own connection mechanisms.
+These utilities use the core `mcp` Python package (`mcp.client.streamable_http.streamablehttp_client`) for HTTP transport. The Claude Tool and Deep Agents adapters reuse these directly; other adapters have their own connection mechanisms.
+
+### AsyncExitStack Pattern
+
+MCP sessions must remain open for the duration of the agent loop. The correct pattern uses `AsyncExitStack` to manage session lifetimes, with cleanup deferred to the adapter's `aclose()` method:
+
+```python
+# Correct: sessions stay alive until aclose()
+self._exit_stack = AsyncExitStack()
+sessions = await connect_all_mcp_servers(self._exit_stack, mcp_servers)
+tools = await get_all_mcp_tools(sessions)
+# ... agent uses tools ...
+# In aclose(): await self._exit_stack.aclose()
+
+# Wrong: sessions close before the agent can use them
+async with AsyncExitStack() as stack:
+    sessions = await connect_all_mcp_servers(stack, mcp_servers)
+    tools = await get_all_mcp_tools(sessions)
+# sessions are dead here, but tools still reference them
+```
+
+This pattern applies to any adapter that manages MCP sessions directly (Claude Tool, Deep Agents). The Claude Agent SDK handles session management internally via its own runtime.
 
 ### Tool Description Management (`utils/mcp/tools.py`)
 
@@ -115,6 +136,34 @@ Tool filtering and description overrides apply at steps 3-4 of the execution flo
 
 - Middleware stack: summarization, prompt caching, retry logic via `AgentMiddlewareConfig`
 - Partial state recovery on recursion limit via `InMemorySaver` checkpointer
+- Multi-provider support (any LangChain-compatible LLM)
+
+### Deep Agents Adapter
+
+**Transport**: HTTP/SSE only (via `langchain-mcp-adapters`, same as the LangChain adapter)
+
+**Key classes**:
+
+- `DeepAgentsAgentAdapter` — The AgentPort implementation
+- Uses `convert_mcp_to_tools()` from the adapter's `mcp.py` module
+
+**Connection flow**:
+
+1. `convert_mcp_to_tools()` accepts `MCPServerConfig` dicts and an `AsyncExitStack`.
+2. Converts configs to URL strings, creates `MultiServerMCPClient`, fetches tools, and applies filtering/overrides.
+3. The `AsyncExitStack` is stored on the adapter and cleaned up in `aclose()`, ensuring sessions remain alive for the agent's entire run.
+
+**Agent execution**:
+
+1. MCP tools (as LangChain Tool objects) and static tools are merged and passed to `create_deep_agent(tools=...)`.
+2. The deep agent runtime handles tool calling internally as part of its planning loop.
+
+**Cleanup**: The adapter's `aclose()` method closes the `AsyncExitStack`, which tears down all MCP sessions.
+
+**Unique features**:
+
+- Uses the `AsyncExitStack` pattern for correct MCP session lifetime (see above)
+- Combines MCP tools with static tools in a single tool list for the deep agent
 - Multi-provider support (any LangChain-compatible LLM)
 
 ### Claude Agent SDK Adapter
@@ -227,6 +276,7 @@ Each adapter captures traces in two formats:
 class Message:
     role: Role           # SYSTEM, USER, ASSISTANT, TOOL
     content: list[Content]  # TextContent, ToolUseContent, ToolResultContent, ThinkingContent
+    usage_metadata: dict[str, Any] | None = None  # Per-call token/cache accounting preserved into trace_messages
 ```
 
 Content block types:
@@ -236,7 +286,7 @@ Content block types:
 | `TextContent` | `text` | Plain text responses |
 | `ToolUseContent` | `id`, `name`, `input` | Tool invocation requests |
 | `ToolResultContent` | `tool_use_id`, `content`, `is_error` | Tool execution results |
-| `ThinkingContent` | `thinking` | Extended thinking blocks (Anthropic) |
+| `ThinkingContent` | `thinking`, `signature: str \| None = None` | Extended thinking blocks (Anthropic) |
 
 ### Adapter Message Conversion
 
@@ -286,12 +336,12 @@ The verification pipeline uses `trace_messages` (structured) by default. The `ra
 
 ## Transport Protocol Comparison
 
-| Transport | LangChain | Claude Agent SDK | Claude Tool |
-|-----------|-----------|-----------------|-------------|
-| **HTTP/SSE** | Via langchain-mcp-adapters `MultiServerMCPClient` | Native SDK support (`type="http"`) | Via core `mcp` package `streamablehttp_client` |
-| **Stdio** | Not supported (URL-based only) | Native SDK support (`command` + `args`) | Not supported (HTTP/SSE only) |
-| **Connection library** | langchain-mcp-adapters | Claude Agent SDK | mcp (Python package) |
-| **Cleanup** | `cleanup_mcp_client()` with fallback strategies | SDK-managed (context manager) | `AsyncExitStack` with registered cleanup |
+| Transport | LangChain | Deep Agents | Claude Agent SDK | Claude Tool |
+|-----------|-----------|-------------|-----------------|-------------|
+| **HTTP/SSE** | Via langchain-mcp-adapters `MultiServerMCPClient` | Via langchain-mcp-adapters `MultiServerMCPClient` | Native SDK support (`type="http"`) | Via core `mcp` package `streamablehttp_client` |
+| **Stdio** | Not supported (URL-based only) | Not supported (URL-based only) | Native SDK support (`command` + `args`) | Not supported (HTTP/SSE only) |
+| **Connection library** | langchain-mcp-adapters | langchain-mcp-adapters | Claude Agent SDK | mcp (Python package) |
+| **Cleanup** | `cleanup_mcp_client()` with fallback strategies | `AsyncExitStack` via `aclose()` | SDK-managed (context manager) | `AsyncExitStack` with registered cleanup |
 
 ---
 
@@ -302,6 +352,7 @@ Each adapter handles the agent exceeding its turn limit differently:
 | Adapter | Mechanism | Behavior |
 |---------|-----------|----------|
 | **LangChain** | Catches `GraphRecursionError` | Extracts partial state from `InMemorySaver` checkpointer. Returns what the agent produced so far. |
+| **Deep Agents** | Catches `GraphRecursionError` | Same LangGraph mechanism as LangChain. Returns partial state with `limit_reached=True`. |
 | **Claude Tool** | Turn counter in `_execute_agent_loop()` | Compares `turn` count against `config.max_turns`. Breaks the loop and returns partial results. |
 | **Claude Agent SDK** | `ResultMessage.subtype` field | The SDK signals limit reached via the result message. Sets `limit_reached=True` on `AgentResult`. |
 
@@ -319,6 +370,8 @@ In all cases, the pipeline's **RecursionLimitAutoFail** stage (Stage 3) checks `
 | `ports/messages.py` | Unified Message type and content blocks |
 | `adapters/langchain/mcp.py` | LangChain MCP client and tool loading |
 | `adapters/langchain/agent.py` | LangChain agent adapter with LangGraph |
+| `adapters/langchain_deep_agents/mcp.py` | Deep Agents MCP tool conversion with AsyncExitStack |
+| `adapters/langchain_deep_agents/agent.py` | Deep Agents agent adapter with create_deep_agent |
 | `adapters/claude_agent_sdk/mcp.py` | Claude SDK MCP config conversion |
 | `adapters/claude_agent_sdk/agent.py` | Claude SDK agent adapter |
 | `adapters/claude_tool/mcp.py` | Claude Tool MCP session management |

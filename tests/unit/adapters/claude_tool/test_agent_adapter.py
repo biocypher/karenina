@@ -6,7 +6,7 @@ Tests agent adapter functionality for multi-turn tool execution.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -210,10 +210,9 @@ class TestAgentAdapterRun:
         adapter = ClaudeToolAgentAdapter(model_config)
 
         mock_response = MockResponse(content=[MockTextBlock("Hello!")])
-        mock_iterator = MockAsyncIterator([mock_response])
 
         mock_client = MagicMock()
-        mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
 
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
             result = await adapter.arun(
@@ -226,9 +225,30 @@ class TestAgentAdapterRun:
             assert result.trace_messages is not None
 
     @pytest.mark.asyncio
-    async def test_run_uses_tool_runner(self, model_config: Any) -> None:
-        """Test run uses tool_runner for execution."""
+    async def test_run_without_tools_uses_messages_create(self, model_config: Any) -> None:
+        """Test run uses messages.create when no tools are provided."""
         adapter = ClaudeToolAgentAdapter(model_config)
+
+        mock_response = MockResponse()
+
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_async_client", return_value=mock_client):
+            await adapter.arun(messages=[Message.user("Hello")])
+
+            mock_client.messages.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_with_tools_uses_tool_runner(self, model_config: Any) -> None:
+        """Test run uses tool_runner when tools are provided."""
+        adapter = ClaudeToolAgentAdapter(model_config)
+
+        tool = Tool(
+            name="my_tool",
+            description="A tool",
+            input_schema={"type": "object", "properties": {}},
+        )
 
         mock_response = MockResponse()
         mock_iterator = MockAsyncIterator([mock_response])
@@ -236,8 +256,17 @@ class TestAgentAdapterRun:
         mock_client = MagicMock()
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
-        with patch.object(adapter, "_get_async_client", return_value=mock_client):
-            await adapter.arun(messages=[Message.user("Hello")])
+        with (
+            patch.object(adapter, "_get_async_client", return_value=mock_client),
+            patch("karenina.adapters.claude_tool.agent.wrap_static_tool") as mock_wrap,
+        ):
+            mock_wrapped = MagicMock()
+            mock_wrap.return_value = mock_wrapped
+
+            await adapter.arun(
+                messages=[Message.user("Hello")],
+                tools=[tool],
+            )
 
             mock_client.beta.messages.tool_runner.assert_called_once()
 
@@ -247,15 +276,14 @@ class TestAgentAdapterRun:
         adapter = ClaudeToolAgentAdapter(model_config)
 
         mock_response = MockResponse()
-        mock_iterator = MockAsyncIterator([mock_response])
 
         mock_client = MagicMock()
-        mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
 
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
             await adapter.arun(messages=[Message.user("Hello")])
 
-            call_kwargs = mock_client.beta.messages.tool_runner.call_args.kwargs
+            call_kwargs = mock_client.messages.create.call_args.kwargs
             assert call_kwargs["model"] == "claude-haiku-4-5"
             assert call_kwargs["max_tokens"] == 1024
 
@@ -356,10 +384,10 @@ class TestAgentAdapterWithMCPServers:
         }
 
         mock_response = MockResponse()
-        mock_iterator = MockAsyncIterator([mock_response])
 
         mock_client = MagicMock()
-        mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
+        # No MCP tools returned, so the no-tools path uses messages.create
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
 
         with (
             patch.object(adapter, "_get_async_client", return_value=mock_client),
@@ -378,7 +406,7 @@ class TestAgentAdapterWithMCPServers:
 
 
 class TestAgentAdapterExecuteLoop:
-    """Tests for agent loop execution."""
+    """Tests for agent loop execution with tools (tool_runner path)."""
 
     @pytest.mark.asyncio
     async def test_execute_loop_collects_messages(self, model_config: Any) -> None:
@@ -392,10 +420,11 @@ class TestAgentAdapterExecuteLoop:
         mock_client = MagicMock()
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
+        sentinel_tool = MagicMock()
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
             result = await adapter._execute_agent_loop(
                 messages=[Message.user("Hello")],
-                tools=[],
+                tools=[sentinel_tool],
                 config=AgentConfig(),
             )
 
@@ -412,13 +441,14 @@ class TestAgentAdapterExecuteLoop:
         mock_client = MagicMock()
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
+        sentinel_tool = MagicMock()
         with (
             patch.object(adapter, "_get_async_client", return_value=mock_client),
             pytest.raises(AgentResponseError, match="No messages received"),
         ):
             await adapter._execute_agent_loop(
                 messages=[Message.user("Hello")],
-                tools=[],
+                tools=[sentinel_tool],
                 config=AgentConfig(),
             )
 
@@ -433,15 +463,67 @@ class TestAgentAdapterExecuteLoop:
         mock_client = MagicMock()
         mock_client.beta.messages.tool_runner = MagicMock(return_value=mock_iterator)
 
+        sentinel_tool = MagicMock()
         with patch.object(adapter, "_get_async_client", return_value=mock_client):
             result = await adapter._execute_agent_loop(
                 messages=[Message.user("Hello")],
-                tools=[],
+                tools=[sentinel_tool],
                 config=AgentConfig(max_turns=3),
             )
 
             assert result.turns == 3
             assert result.limit_reached is True
+
+    @pytest.mark.asyncio
+    async def test_execute_loop_without_tools_uses_messages_create(self, model_config: Any) -> None:
+        """Test _execute_agent_loop uses messages.create when tools list is empty."""
+        adapter = ClaudeToolAgentAdapter(model_config)
+
+        mock_response = MockResponse(content=[MockTextBlock("Single turn")])
+
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+
+        with patch.object(adapter, "_get_async_client", return_value=mock_client):
+            result = await adapter._execute_agent_loop(
+                messages=[Message.user("Hello")],
+                tools=[],
+                config=AgentConfig(),
+            )
+
+            mock_client.messages.create.assert_called_once()
+            assert len(result.trace_messages) == 1
+            assert result.turns == 1
+            assert result.limit_reached is False
+            assert result.final_response == "Single turn"
+
+    @pytest.mark.asyncio
+    async def test_execute_loop_without_tools_applies_timeout(self, model_config: Any) -> None:
+        """Test _execute_agent_loop applies timeout to single-turn path.
+
+        When no tools are provided, the adapter falls back to
+        messages.create(). The timeout must still apply to this path.
+        """
+        import asyncio
+
+        adapter = ClaudeToolAgentAdapter(model_config)
+
+        async def slow_create(**kwargs: Any) -> MockResponse:
+            await asyncio.sleep(10)
+            return MockResponse()
+
+        mock_client = MagicMock()
+        mock_client.messages.create = slow_create
+
+        with (
+            patch.object(adapter, "_get_async_client", return_value=mock_client),
+            pytest.raises(TimeoutError),
+        ):
+            await adapter._execute_agent_loop(
+                messages=[Message.user("Hello")],
+                tools=[],
+                config=AgentConfig(timeout=0.01),
+            )
 
 
 class TestAgentAdapterSync:

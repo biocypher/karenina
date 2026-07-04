@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from pydantic import BaseModel
 
 from ._parallel_base import get_max_workers, read_async_config, sync_invoke_via_portal
+from .registry import aclose_adapter
 
 if TYPE_CHECKING:
     from ..ports import LLMPort, LLMResponse, Message
@@ -236,6 +237,7 @@ class LLMParallelInvoker:
             messages, model_class = tasks[index]
 
             async with semaphore:
+                structured_llm: LLMPort | None = None
                 try:
                     # Create structured output adapter and invoke
                     structured_llm = self.llm.with_structured_output(model_class)
@@ -255,6 +257,8 @@ class LLMParallelInvoker:
                     logger.debug(f"LLMParallelInvoker: Task {index} failed: {e}")
                     return index, None, None, e
                 finally:
+                    if structured_llm is not None and structured_llm is not self.llm:
+                        await aclose_adapter(structured_llm)
                     # Update progress
                     if progress_callback:
                         async with progress_lock:

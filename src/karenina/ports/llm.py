@@ -5,6 +5,8 @@ agent loops. Use this for simple text generation and structured output tasks.
 For multi-turn agent execution with tools/MCP, use AgentPort instead.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -23,6 +25,10 @@ class LLMResponse:
         content: The text content of the response.
         usage: Token usage and cost metadata.
         raw: Provider-specific raw response object for advanced use cases.
+        is_partial: Whether the response was truncated (e.g., due to streaming timeout).
+        usage_unavailable: Whether usage metadata could not be captured (e.g., streaming
+            timeout interrupted the final chunk that carries token counts). When True,
+            usage fields are zero but do not reflect actual consumption.
 
     Example:
         >>> response = LLMResponse(
@@ -37,6 +43,42 @@ class LLMResponse:
     content: str
     usage: UsageMetadata
     raw: Any = None
+    is_partial: bool = False
+    usage_unavailable: bool = False
+
+
+class StreamingLLMResponse:
+    """Accumulating response from a streaming LLM invocation.
+
+    Async-iterable: yields str chunks. Accumulates content internally.
+    On timeout or error, ``accumulated_content`` has whatever arrived.
+
+    Example:
+        >>> async with llm.astream(messages) as sr:
+        ...     async for chunk in sr:
+        ...         print(chunk, end="")
+        ...     print(f"\\nTotal: {len(sr.accumulated_content)} chars")
+    """
+
+    def __init__(self) -> None:
+        self.accumulated_content: str = ""
+        self.usage: UsageMetadata = UsageMetadata()
+        self.is_complete: bool = False
+        self._chunks: AsyncIterator[str] | None = None
+
+    def _set_chunk_source(self, chunks: AsyncIterator[str]) -> None:
+        """Set the async iterator that produces text chunks."""
+        self._chunks = chunks
+
+    def __aiter__(self) -> "StreamingLLMResponse":
+        return self
+
+    async def __anext__(self) -> str:
+        if self._chunks is None:
+            raise StopAsyncIteration
+        chunk = await self._chunks.__anext__()
+        self.accumulated_content += chunk
+        return chunk
 
 
 @runtime_checkable
@@ -115,7 +157,10 @@ class LLMPort(Protocol):
         Args:
             schema: A Pydantic model class defining the output structure.
             max_retries: Maximum retry attempts on validation failure.
-                Implementation depends on adapter (some may ignore this).
+                Not all adapters support this parameter. LangChain and Claude
+                Tool adapters respect it; Claude SDK and Deep Agents adapters
+                ignore it (with a warning). Check adapter documentation for
+                details.
 
         Returns:
             A new LLMPort instance configured for structured output.
@@ -125,5 +170,50 @@ class LLMPort(Protocol):
             ...     value: str
             ...     confidence: float
             >>> structured_llm = llm.with_structured_output(Answer)
+        """
+        ...
+
+    def astream(self, messages: list[Message]) -> AbstractAsyncContextManager[StreamingLLMResponse]:
+        """Open a streaming LLM connection.
+
+        Yields a StreamingLLMResponse that produces text chunks and accumulates
+        content. Check capabilities.supports_streaming before calling.
+
+        Args:
+            messages: List of messages forming the conversation.
+
+        Returns:
+            Async context manager yielding StreamingLLMResponse.
+
+        Raises:
+            NotImplementedError: If the adapter does not support streaming.
+        """
+        raise NotImplementedError
+
+    def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+        """Invoke the LLM with streaming and optional wall-clock timeout.
+
+        Sync wrapper that streams tokens and captures partial output on timeout.
+        Check capabilities.supports_streaming before calling.
+
+        Args:
+            messages: List of messages forming the conversation.
+            timeout: Wall-clock timeout in seconds. If exceeded, returns partial
+                content with is_partial=True.
+
+        Returns:
+            LLMResponse with content (possibly partial) and usage metadata.
+
+        Raises:
+            NotImplementedError: If the adapter does not support streaming.
+        """
+        raise NotImplementedError
+
+    async def aclose(self) -> None:
+        """Close underlying resources.
+
+        Implementations should release any held resources (HTTP connections,
+        file handles, MCP sessions). Safe to call multiple times. The default
+        is a no-op for adapters with no resources to clean up.
         """
         ...

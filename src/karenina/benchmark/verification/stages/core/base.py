@@ -23,13 +23,16 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
+from karenina.schemas.entities.rubric import DynamicRubric
 from karenina.schemas.verification import PromptConfig
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
     DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS,
     DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS,
     DEFAULT_RUBRIC_MAX_EXCERPTS,
+    DeepJudgmentRubricCustomConfig,
 )
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
 
 if TYPE_CHECKING:
     from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
@@ -61,6 +64,15 @@ class ArtifactKeys:
     USAGE_TRACKER = "usage_tracker"
     TRACE_MESSAGES = "trace_messages"
 
+    # Replay Injection (see karenina/replay)
+    REPLAY_ENTRY = "replay_entry"
+
+    # Per-pipeline retry counts keyed by ErrorCategory.value (e.g.
+    # {"timeout": 2, "connection": 1}). Populated by the orchestrator while
+    # executing a pipeline; consumed by FinalizeResultStage when assembling
+    # VerificationResultMetadata.retry_counts.
+    RETRY_COUNTS = "retry_counts"
+
     # Template Classes (from validate_template stage)
     ANSWER = "Answer"
     RAW_ANSWER = "RawAnswer"
@@ -81,9 +93,14 @@ class ArtifactKeys:
 
     # Core Verification
     VERIFY_RESULT = "verify_result"
+    TEMPLATE_VERIFICATION_PERFORMED = "template_verification_performed"
     VERIFY_GRANULAR_RESULT = "verify_granular_result"
     FIELD_VERIFICATION_RESULT = "field_verification_result"
+    FIELD_VERIFICATION_ERROR = "field_verification_error"
+    FIELD_RESULTS = "field_results"
+    COMPOSITION_STRATEGY = "composition_strategy"
     FINAL_RESULT = "final_result"
+    PARSE_DECISION_MALFORMED = "parse_decision_malformed"
 
     # Regex Verification
     REGEX_VERIFICATION_RESULTS = "regex_verification_results"
@@ -99,6 +116,10 @@ class ArtifactKeys:
 
     # Recursion Limit
     RECURSION_LIMIT_REACHED = "recursion_limit_reached"
+
+    # Streaming Timeout
+    RESPONSE_TIMEOUT_PARTIAL = "response_timeout_partial"
+    USAGE_UNAVAILABLE = "usage_unavailable"
 
     # Trace Validation
     MCP_ENABLED = "mcp_enabled"
@@ -132,10 +153,19 @@ class ArtifactKeys:
     EMBEDDING_MODEL_USED = "embedding_model_used"
 
     # ==========================================================================
+    # Scenario Context
+    # ==========================================================================
+
+    # Dict of node_results from ScenarioState, for conditional ground truth
+    SCENARIO_NODE_RESULTS = "scenario_node_results"
+    # Full conversation input sent to the LLM (system + prior turns + current question)
+    CONVERSATION_CONTEXT = "conversation_context"
+
+    # ==========================================================================
     # Deep Judgment (Template)
     # ==========================================================================
 
-    DEEP_JUDGMENT_ENABLED = "deep_judgment_enabled"
+    DEEP_JUDGMENT_MODE = "deep_judgment_mode"
     DEEP_JUDGMENT_PERFORMED = "deep_judgment_performed"
     EXTRACTED_EXCERPTS = "extracted_excerpts"
     ATTRIBUTE_REASONING = "attribute_reasoning"
@@ -144,6 +174,7 @@ class ArtifactKeys:
     DEEP_JUDGMENT_EXCERPT_RETRY_COUNT = "deep_judgment_excerpt_retry_count"
     ATTRIBUTES_WITHOUT_EXCERPTS = "attributes_without_excerpts"
     DEEP_JUDGMENT_SEARCH_ENABLED = "deep_judgment_search_enabled"
+    DEEP_JUDGMENT_REASONING_ONLY = "deep_judgment_reasoning_only"  # Inter-stage flag for reasoning-only mode
     HALLUCINATION_RISK_ASSESSMENT = "hallucination_risk_assessment"
 
     # ==========================================================================
@@ -188,6 +219,8 @@ class ArtifactKeys:
 
     TIMESTAMP = "timestamp"
     EXECUTION_TIME = "execution_time"
+    FAILED_STAGE = "failed_stage"
+    EVALUATION_MODE = "evaluation_mode"
 
     # ==========================================================================
     # Agentic Parsing
@@ -196,6 +229,16 @@ class ArtifactKeys:
     INVESTIGATION_TRACE = "investigation_trace"
     WORKSPACE_PATH = "workspace_path"
     AGENTIC_PARSING_PERFORMED = "agentic_parsing_performed"
+    AGENTIC_EXTRACTION_RECOVERY = "agentic_extraction_recovery"
+    AGENTIC_EXTRACTION_ERROR = "agentic_extraction_error"
+
+    # ==========================================================================
+    # Dynamic Parsing
+    # ==========================================================================
+
+    DYNAMIC_PARSING_PERFORMED = "dynamic_parsing_performed"
+    DYNAMIC_PARSE_DECISION = "dynamic_parse_decision"
+    DYNAMIC_DECISION_REASONING = "dynamic_decision_reasoning"
 
     # ==========================================================================
     # Agentic Rubric Evaluation
@@ -204,6 +247,14 @@ class ArtifactKeys:
     AGENTIC_RUBRIC_EVALUATION_PERFORMED = "agentic_rubric_evaluation_performed"
     AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
     AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
+    AGENTIC_TRAIT_EXTRACTION_METADATA = "agentic_trait_extraction_metadata"
+
+    # ==========================================================================
+    # Dynamic Rubric Presence Check
+    # ==========================================================================
+
+    DYNAMIC_RUBRIC_PROMOTED_TRAITS = "dynamic_rubric_promoted_traits"
+    DYNAMIC_RUBRIC_SKIPPED_TRAITS = "dynamic_rubric_skipped_traits"
 
 
 @dataclass
@@ -228,7 +279,7 @@ class VerificationContext:
         few_shot_enabled: Whether few-shot prompting is enabled.
         abstention_enabled: Whether abstention detection is enabled.
         sufficiency_enabled: Whether trace sufficiency detection is enabled.
-        deep_judgment_enabled: Whether deep-judgment parsing is enabled.
+        deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full").
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
             ("batch" or "sequential").
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
@@ -242,6 +293,9 @@ class VerificationContext:
             Used to share answers across multiple judges.
         artifacts: Dictionary storing stage outputs (raw_answer, parsed_answer, etc.).
         result_builder: Dictionary accumulating result fields.
+        error_registry: Pre-configured ErrorRegistry for classifying exceptions
+            into ErrorCategory values. Built from VerificationConfig.custom_error_patterns
+            by the runner before pipeline execution.
         error: Optional error message if pipeline fails.
         completed_without_errors: Whether pipeline completed successfully.
     """
@@ -256,6 +310,7 @@ class VerificationContext:
     answering_model: ModelConfig
     parsing_model: ModelConfig
     rubric: Rubric | None = None
+    dynamic_rubric: DynamicRubric | None = None
     keywords: list[str] | None = None
     raw_answer: str | None = None
 
@@ -267,10 +322,13 @@ class VerificationContext:
     few_shot_enabled: bool = False
     abstention_enabled: bool = False
     sufficiency_enabled: bool = False
-    deep_judgment_enabled: bool = False
+    deep_judgment_mode: str = "disabled"  # Template deep-judgment mode: "disabled", "reasoning_only", "full"
+    task_eval_mode: bool = False  # True when invoked via TaskEval; suppresses QUESTION slot in rubric prompts
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
+    rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
+    trait_provenance: dict[str, str] | None = None  # Trait provenance: "global", "question_specific", "dynamic"
 
     # Deep-Judgment Configuration
     deep_judgment_max_excerpts_per_attribute: int = DEFAULT_DEEP_JUDGMENT_MAX_EXCERPTS
@@ -282,7 +340,7 @@ class VerificationContext:
     # Deep-Judgment Rubric Configuration (NEW - runtime control of deep judgment for rubrics)
     deep_judgment_rubric_mode: str = "disabled"  # Mode: disabled, enable_all, use_checkpoint, custom
     deep_judgment_rubric_global_excerpts: bool = True  # For enable_all mode: enable/disable excerpts
-    deep_judgment_rubric_config: dict[str, Any] | None = None  # For custom mode: nested trait config
+    deep_judgment_rubric_config: DeepJudgmentRubricCustomConfig | None = None  # For custom mode: per-trait config
     deep_judgment_rubric_max_excerpts_default: int = DEFAULT_RUBRIC_MAX_EXCERPTS
     deep_judgment_rubric_fuzzy_match_threshold_default: float = DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD
     deep_judgment_rubric_excerpt_retry_attempts_default: int = DEFAULT_DEEP_JUDGMENT_RETRY_ATTEMPTS
@@ -301,22 +359,42 @@ class VerificationContext:
     # Trace Filtering Configuration (MCP Agent Evaluation)
     use_full_trace_for_template: bool = False  # Whether to use full trace for template parsing
     use_full_trace_for_rubric: bool = True  # Whether to use full trace for rubric evaluation
+    allow_partial_trace_scoring: bool = True
 
     # Answer Caching
     cached_answer_data: dict[str, Any] | None = None
 
     # Agentic Parsing Configuration
     agentic_parsing: bool = False
+    agentic_parsing_trigger: str = "always"
     agentic_judge_context: str = "workspace_only"
     agentic_parsing_max_turns: int = 15
     agentic_parsing_timeout: float = 120.0
+    agentic_parsing_materialize_trace: bool = False
+    agentic_parsing_persist_trace: bool = False
 
     # Agentic Rubric Configuration
     agentic_rubric_strategy: str = "individual"  # "individual" or "shared"
     agentic_rubric_parallel: bool = False
 
+    # Embedding Check Configuration
+    embedding_check_enabled: bool = False
+    embedding_check_model: str | None = None
+    embedding_check_threshold: float | None = None
+
     # Scenario
     scenario_turn: int | None = None
+    scenario_id: str | None = None
+    scenario_node: str | None = None
+    scenario_path: list[str] | None = None
+
+    # Scenario per-node visit count: populated by ScenarioManager before
+    # the post-turn increment, so retry loops get distinct values.
+    scenario_node_visit_index: int | None = None
+
+    # Replay layer (see karenina/replay)
+    replay_store: Any = None
+    replay_parse_on_hydration_mismatch: str = "fall_through"  # "fall_through" or "strict"
 
     # Workspace
     question_workspace_path: str | None = None  # Raw relative path from Question
@@ -325,6 +403,10 @@ class VerificationContext:
     workspace_root: Path | None = None
     workspace_copy: bool = True
     workspace_cleanup: bool = True
+    workspace_output_mode: str = "none"
+    workspace_output_dir: Path | None = None
+    workspace_output_exclude_patterns: list[str] = field(default_factory=list)
+    workspace_output_baseline: dict[str, dict[str, Any]] | None = None
 
     # Artifacts (populated by stages)
     artifacts: dict[str, Any] = field(default_factory=dict)
@@ -333,8 +415,13 @@ class VerificationContext:
     result_builder: dict[str, Any] = field(default_factory=dict)
 
     # Error Tracking
+    error_registry: ErrorRegistry = field(default_factory=ErrorRegistry)
     error: str | None = None
+    error_category: ErrorCategory | None = None
+    error_stage: str | None = None
+    last_run_stage: str | None = None
     completed_without_errors: bool = True
+    warnings: list[str] = field(default_factory=list)
 
     def set_artifact(self, key: str, value: Any) -> None:
         """Store an artifact produced by a stage."""
@@ -356,10 +443,63 @@ class VerificationContext:
         """Get a field from the result builder."""
         return self.result_builder.get(key, default)
 
-    def mark_error(self, error_message: str) -> None:
-        """Mark the context as failed with an error message."""
+    def mark_error(
+        self,
+        error_message: str,
+        *,
+        category: ErrorCategory = ErrorCategory.PERMANENT,
+        stage: str | None = None,
+    ) -> None:
+        """Mark the context as failed with an error message.
+
+        Args:
+            error_message: Human-readable error description.
+            category: Classification of the error for retry decisions.
+                Defaults to PERMANENT (non-retryable).
+            stage: Optional identifier of the stage that originated the error.
+                When omitted, falls back to ``last_run_stage`` which the
+                orchestrator updates via ``begin_stage`` before each stage
+                executes. Used by the failure classifier to attribute a
+                failure to its source stage.
+        """
+        if self.error is not None:
+            self.add_warning(f"Previous error overwritten: {self.error}")
         self.error = error_message
+        self.error_category = category
+        self.error_stage = stage if stage is not None else self.last_run_stage
         self.completed_without_errors = False
+
+    def begin_stage(self, name: str) -> None:
+        """Record the stage currently about to execute.
+
+        The orchestrator calls this once per stage iteration, before invoking
+        ``should_run`` / ``execute``. ``mark_error`` subsequently uses
+        ``last_run_stage`` as a fallback attribution when callers don't pass
+        an explicit ``stage`` kwarg.
+
+        Args:
+            name: Identifier of the stage about to run.
+        """
+        self.last_run_stage = name
+
+    def add_warning(self, message: str) -> None:
+        """Add a non-fatal warning. Capped at 50 entries.
+
+        Args:
+            message: Warning text to record.
+        """
+        if len(self.warnings) < 50:
+            self.warnings.append(message)
+        elif len(self.warnings) == 50:
+            self.warnings.append("(additional warnings truncated)")
+
+    def can_score_partial_timeout(self) -> bool:
+        """Whether downstream scoring may run on a timeout-truncated response."""
+        return (
+            self.allow_partial_trace_scoring
+            and self.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and (self.error is None or self.error_category == ErrorCategory.TIMEOUT)
+        )
 
 
 class VerificationStage(Protocol):

@@ -146,12 +146,12 @@ from karenina.schemas.config.models import (
 
 middleware = AgentMiddlewareConfig(
     limits=AgentLimitConfig(
-        model_call_limit=40,    # default: 25
-        tool_call_limit=80,     # default: 50
+        model_call_limit=40,  # default: 25
+        tool_call_limit=80,  # default: 50
     ),
     summarization=SummarizationConfig(
-        trigger_fraction=0.7,   # default: 0.8
-        keep_messages=30,       # default: 20
+        trigger_fraction=0.7,  # default: 0.8
+        keep_messages=30,  # default: 20
     ),
 )
 
@@ -167,7 +167,9 @@ model_config = ModelConfig(
 print(f"Model call limit: {middleware.limits.model_call_limit}")
 print(f"Tool call limit: {middleware.limits.tool_call_limit}")
 print(f"Exit behavior: {middleware.limits.exit_behavior}")
-print(f"Summarization: trigger at {middleware.summarization.trigger_fraction:.0%}, keep {middleware.summarization.keep_messages} messages")
+print(
+    f"Summarization: trigger at {middleware.summarization.trigger_fraction:.0%}, keep {middleware.summarization.keep_messages} messages"
+)
 print(f"Model retry: {middleware.model_retry.max_retries} retries, on_failure='{middleware.model_retry.on_failure}'")
 print(f"Tool retry: {middleware.tool_retry.max_retries} retries, on_failure='{middleware.tool_retry.on_failure}'")
 print(f"Prompt caching: enabled={middleware.prompt_caching.enabled}, ttl='{middleware.prompt_caching.ttl}'")
@@ -236,7 +238,7 @@ config = VerificationConfig(
     answering_models=[model_config],  # MCP-enabled model from Section 5
     parsing_models=[judge],
     use_full_trace_for_template=False,  # default: only final AI message for parsing
-    use_full_trace_for_rubric=True,     # default: full trace for rubric evaluation
+    use_full_trace_for_rubric=True,  # default: full trace for rubric evaluation
 )
 
 print(f"Template sees full trace: {config.use_full_trace_for_template}")
@@ -245,14 +247,14 @@ print(f"Rubric sees full trace: {config.use_full_trace_for_rubric}")
 
 | Field | Type | Default | Effect |
 |-------|------|---------|--------|
-| `use_full_trace_for_template` | `bool` | `False` | `True`: template parsing sees the complete trace. `False`: only the final AI message is passed to the Judge LLM. |
+| `use_full_trace_for_template` | `bool` | `False` | `True`: template parsing and the abstention/sufficiency checks see the full trace. `False`: they see only the final AI message. |
 | `use_full_trace_for_rubric` | `bool` | `True` | `True`: rubric evaluation sees the complete trace. `False`: only the final AI message is evaluated. |
 
 !!! note
 
     The full trace is **always captured and stored** regardless of these settings. These flags only control what input the parsing and evaluation models receive. If set to `False` and the trace does not end with an AI message, the corresponding verification stage will fail.
 
-The defaults reflect typical evaluation patterns: template parsing usually needs only the final answer (the model's conclusion after tool use), while rubric evaluation benefits from the full trace (to assess qualities like tool selection, reasoning process, or citation of retrieved information).
+The defaults reflect typical evaluation patterns: template parsing usually needs only the final answer (the model's conclusion after tool use), while rubric evaluation benefits from the full trace (to assess qualities like tool selection, reasoning process, or citation of retrieved information). Keep `use_full_trace_for_template=False` on long MCP runs: full traces can easily blow past a judge's context window.
 
 ## 8. MCP Execution Lifecycle
 

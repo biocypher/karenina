@@ -24,13 +24,21 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
-    "sqlalchemy.sql", "sqlalchemy.event",
-    "karenina.storage", "karenina.storage.base",
-    "karenina.storage.engine", "karenina.storage.db_config",
-    "karenina.storage.models", "karenina.storage.generated_models",
-    "karenina.storage.auto_mapper", "karenina.storage.operations",
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
 ]:
     mock_modules[mod] = MagicMock()
 
@@ -263,7 +271,7 @@ Every distinct LLM call in the pipeline is identified by a `PromptTask` enum val
 ```python
 from karenina.benchmark.verification.prompts.task_types import PromptTask
 
-# All 17 prompt task values, grouped by category
+# All 24 prompt task values, grouped by category
 for task in PromptTask:
     print(f"  {task.value:<40} ({task.name})")
 ```
@@ -274,22 +282,30 @@ The full mapping from task to pipeline stage:
 |----------|------|---------------|-------------|
 | **Generation** | `generation` | GenerateAnswer | Answering model generates a response |
 | **Parsing** | `parsing` | ParseTemplate | Judge LLM parses response into template schema |
+| **Agentic parsing** | `agentic_parsing_investigation` | AgenticParseTemplate | Investigation agent examines workspace/trace |
+| | `agentic_parsing_extraction` | AgenticParseTemplate | Extracts structured answer from investigation trace |
+| | `agentic_parsing_decision` | AgenticParseTemplate | Combined dynamic parsing decision and direct extraction call |
 | **Trace checks** | `abstention_detection` | AbstentionCheck | Detects model refusal or evasion |
 | | `sufficiency_detection` | SufficiencyCheck | Checks response completeness for template |
 | **Rubric evaluation** | `rubric_llm_trait_batch` | RubricEvaluation | All boolean/score LLM traits in one call |
 | | `rubric_llm_trait_single` | RubricEvaluation | One boolean/score LLM trait per call |
+| | `rubric_llm_trait_template` | RubricEvaluation | Template-kind LLM trait: LLM fills a Pydantic schema from the response |
 | | `rubric_literal_trait_batch` | RubricEvaluation | All literal traits in one call |
 | | `rubric_literal_trait_single` | RubricEvaluation | One literal trait per call |
 | | `rubric_metric_trait` | RubricEvaluation | Metric trait confusion matrix extraction |
+| **Agentic rubric** | `rubric_agentic_trait_investigation` | AgenticRubricEvaluation | Agent investigates response/workspace for rubric trait |
+| | `rubric_agentic_trait_extraction` | AgenticRubricEvaluation | Extracts score from agentic investigation trace |
+| **Dynamic rubric** | `rubric_dynamic_presence_check` | RubricEvaluation | Batch presence check for dynamic rubric trait concepts |
 | **Deep judgment (template)** | `dj_template_excerpt_extraction` | DeepJudgmentAutoFail | Extract verbatim excerpts per template attribute |
 | | `dj_template_hallucination` | DeepJudgmentAutoFail | Assess hallucination risk via search |
 | | `dj_template_reasoning` | DeepJudgmentAutoFail | Map excerpts to template attributes |
+| | `dj_template_reasoning_only` | DeepJudgmentAutoFail | Reasoning-only path: per-attribute reasoning directly from the response (no excerpts) |
 | **Deep judgment (rubric)** | `dj_rubric_excerpt_extraction` | DeepJudgmentRubric | Extract excerpts for rubric traits |
 | | `dj_rubric_hallucination` | DeepJudgmentRubric | Assess per-excerpt hallucination risk |
 | | `dj_rubric_reasoning` | DeepJudgmentRubric | Generate trait evaluation reasoning |
 | | `dj_rubric_score_extraction` | DeepJudgmentRubric | Extract final score from reasoning |
 
-17 distinct LLM call types. Each one can have its own adapter instructions and user instructions.
+24 distinct LLM call types. Each one can have its own adapter instructions and user instructions.
 
 ## 6. Customizing Prompts via PromptConfig
 
@@ -302,6 +318,7 @@ The full mapping from task to pipeline stage:
 | `abstention_detection` | `abstention_detection` | Adjust abstention sensitivity (domain-specific refusal patterns) |
 | `sufficiency_detection` | `sufficiency_detection` | Adjust sufficiency thresholds for your template |
 | `rubric_evaluation` | All `rubric_*` tasks | Shared instructions for all rubric trait evaluations |
+| `agentic_parsing` | All `agentic_parsing_*` tasks | Shared instructions for both agentic investigation and extraction |
 | `deep_judgment` | All `dj_*` tasks | Shared instructions for all deep judgment stages |
 
 ### Fallback Logic
@@ -309,7 +326,7 @@ The full mapping from task to pipeline stage:
 `PromptConfig` uses a two-level resolution strategy:
 
 1. **Direct match**: if a field name matches the task value exactly (e.g., `parsing` for `PromptTask.PARSING`), use it
-2. **Category fallback**: if no direct match, `rubric_*` tasks fall back to `rubric_evaluation`; `dj_*` tasks fall back to `deep_judgment`
+2. **Category fallback**: if no direct match, `rubric_*` tasks fall back to `rubric_evaluation`; `agentic_parsing_*` tasks fall back to `agentic_parsing`; `dj_*` tasks fall back to `deep_judgment`
 
 This means you can set `rubric_evaluation` once to affect all rubric LLM calls, or set individual task fields for fine-grained control. Direct matches take priority over fallbacks.
 
@@ -350,6 +367,7 @@ Enable debug logging on `karenina.benchmark.verification.prompts` to see the ass
 
 ```python
 import logging
+
 logging.getLogger("karenina.benchmark.verification.prompts").setLevel(logging.DEBUG)
 print("Debug logging enabled for prompt assembly.")
 ```
@@ -367,7 +385,7 @@ _ = _patcher.stop()
 
 ## 8. Next Steps
 
-- [Verification Pipeline](../verification-pipeline/): the 13 stages that use assembled prompts
+- [Verification Pipeline](../verification-pipeline/): the 13 stages (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard) that use assembled prompts
 - [Adapters](../../../core_concepts/adapters/): which LLM backends are available and how they differ
 - [Prompt Assembly Internals](../../../advanced-pipeline/prompt-assembly/): technical deep dive into `PromptAssembler`, `AdapterInstructionRegistry`, `PromptTask`, and `PortCapabilities`
 - [Prompt Config Reference](../../../reference/configuration/prompt-config/): full field documentation for `PromptConfig`

@@ -28,7 +28,7 @@ from typing import Literal
 from pydantic import Field
 
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import (
+from karenina.schemas.primitives import (
     BooleanMatch,
     ContainsAny,
     ExactMatch,
@@ -195,9 +195,9 @@ print(f"Granular score:   {parsed.verify_granular():.2f}")
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `description` | Yes | Instructions for the judge LLM on what to extract from the response |
+| `description` | Yes | Instructions for the judge LLM on what to extract from the response. Must be non-empty and non-whitespace; raises `ValueError` otherwise. |
 | `ground_truth` | Yes | The expected correct value |
-| `verify_with` | Yes | A verification primitive instance (`ExactMatch`, `BooleanMatch`, etc.) |
+| `verify_with` | Yes | A verification primitive instance (`ExactMatch`, `BooleanMatch`, etc.). Cannot be `None`; raises `ValueError` if omitted or explicitly set to `None`. |
 | `extraction_hint` | No | Optional guidance to help the judge parse ambiguous responses |
 | `weight` | No | Float (default 1.0) controlling this field's contribution to `verify_granular()` scoring |
 
@@ -287,8 +287,17 @@ print(f"Granular score:   {parsed.verify_granular():.2f}")
 
 
 class Answer(BaseAnswer):
-    mutation_type: Literal["missense", "nonsense", "frameshift", "silent"] = VerifiedField(
-        description="The type of point mutation described in the response.",
+    mutation_type: Literal["missense", "nonsense", "frameshift", "silent", "splice site", "other"] = VerifiedField(
+        description=(
+            "Select the type of point mutation the response identifies for SNP "
+            "rs28897696 in the BRCA1 gene. Choose 'missense' if the response describes "
+            "an amino acid substitution (also called nonsynonymous mutation or missense "
+            "variant). Choose 'nonsense' for a premature stop codon, 'silent' for no "
+            "amino acid change, 'frameshift' for an insertion or deletion causing a "
+            "reading frame shift, 'splice site' for splice junction disruption, or "
+            "'other' if the mutation type is not covered above. If the response does "
+            "not specify a mutation type, select 'other'."
+        ),
         ground_truth="missense",
         verify_with=LiteralMatch(),
     )
@@ -318,31 +327,34 @@ In form terms, this is a checkbox: "Check this box if the letter mentions X." Th
 
 
 class Answer(BaseAnswer):
-    identifies_tp53: bool = VerifiedField(
+    identifies_tp53_as_most_commonly_mutated: bool = VerifiedField(
         description=(
-            "True if the response identifies TP53 (including p53, TP53, or "
-            "'tumor protein p53') as the single most commonly mutated gene "
-            "in human cancers. False if TP53 is mentioned as one of several "
-            "commonly mutated genes without being singled out as the most "
-            "frequent (e.g., 'TP53, KRAS, and PIK3CA are commonly mutated')."
+            "True if the response identifies TP53 as the single most commonly "
+            "mutated gene in human cancers. Recognize all common aliases: 'p53', "
+            "'tumor protein p53', 'TP53'. False if the response names a different "
+            "gene as the most commonly mutated, if no gene is clearly identified, "
+            "or if TP53 is mentioned among multiple genes without being singled "
+            "out as the most frequent. If the response hedges by listing several "
+            "genes as equally common without designating TP53 as the top one, "
+            "return False."
         ),
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
 
 
-# The Judge LLM would extract identifies_tp53=True from that response.
-# Here we populate the field directly to demonstrate verify().
-parsed = Answer(identifies_tp53=True)
+# The Judge LLM would extract identifies_tp53_as_most_commonly_mutated=True
+# from that response. Here we populate the field directly to demonstrate verify().
+parsed = Answer(identifies_tp53_as_most_commonly_mutated=True)
 print(f"Correct answer verified: {parsed.verify()}")
 
-parsed_wrong = Answer(identifies_tp53=False)
+parsed_wrong = Answer(identifies_tp53_as_most_commonly_mutated=False)
 print(f"Wrong answer verified:   {parsed_wrong.verify()}")
 ```
 
 A boolean check avoids string matching entirely. Instead of extracting "TP53" as text and comparing it, we ask the judge "Did the response identify TP53 as the most common?" This is more reliable because the judge handles synonyms (TP53, p53, tumor protein p53) through its description.
 
-The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The `identifies_tp53` description explicitly states that merely listing TP53 alongside other cancer genes should return False; the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
+The key design decision is in the field description: it must be specific enough to disambiguate edge cases. The description explicitly states that merely listing TP53 alongside other cancer genes should return False; the response must single it out as the *most commonly mutated*. Without this, the judge would likely return True for "TP53, KRAS, and PIK3CA are frequently mutated in cancer," which mentions TP53 but doesn't actually answer the question. The field name itself (`identifies_tp53_as_most_commonly_mutated` rather than `tp53`) reinforces this intent. Invest time in writing precise descriptions; they are the instructions your judge LLM follows.
 
 Boolean templates use the same structure as other patterns. The difference is in the verification primitive: `BooleanMatch()` compares the extracted boolean against ground truth directly. This makes boolean the simplest template pattern, but it comes with an anchoring tradeoff: the judge sees the expected answer in the field description.
 
@@ -385,8 +397,7 @@ class Answer(BaseAnswer):
         ground_truth="O+",
         verify_with=ExactMatch(normalize=["lowercase", "strip"]),
         extraction_hint=(
-            "Look for blood type notation like 'O+', 'A-', 'O positive', etc. "
-            "Convert full names to shorthand notation."
+            "Look for blood type notation like 'O+', 'A-', 'O positive', etc. Convert full names to shorthand notation."
         ),
     )
 
@@ -399,6 +410,11 @@ for value in ["O+", "o+", " O+ "]:
 ```
 
 The `extraction_hint` parameter provides additional guidance to the judge for ambiguous responses without being as prominent as the main `description`. In this case, it helps the judge handle the normalization from "O positive" to "O+". Note that `ExactMatch` with `normalize=["lowercase", "strip"]` handles case insensitivity and whitespace automatically.
+
+<div class="admonition note">
+<p class="admonition-title">Auto-generated templates and extraction_hint</p>
+<p>The auto-generation pipeline places all guidance (what to extract, format, scope, disambiguation) directly in the <code>description</code> and does not produce <code>extraction_hint</code> values. The <code>extraction_hint</code> parameter remains available for manually authored templates. When used, it appears as supplementary guidance in the judge's system prompt, separate from the JSON schema.</p>
+</div>
 
 <div class="admonition tip">
 <p class="admonition-title">When to use string extraction</p>
@@ -670,16 +686,14 @@ class Answer(BaseAnswer):
     )
     mentions_kras: bool = VerifiedField(
         description=(
-            "True if the response names KRAS (or K-Ras, K-RAS) as part of the "
-            "signaling pathway. False otherwise."
+            "True if the response names KRAS (or K-Ras, K-RAS) as part of the signaling pathway. False otherwise."
         ),
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
     mentions_braf: bool = VerifiedField(
         description=(
-            "True if the response names BRAF (or B-Raf, B-RAF) as part of the "
-            "signaling pathway. False otherwise."
+            "True if the response names BRAF (or B-Raf, B-RAF) as part of the signaling pathway. False otherwise."
         ),
         ground_truth=True,
         verify_with=BooleanMatch(),
@@ -706,7 +720,12 @@ For complete parameter documentation and examples, see [Verification Primitives]
 | `SemanticMatch` | String | Embedding similarity check | `str` |
 | `NumericExact` | Numeric | Exact equality after float coercion | `int`, `float` |
 | `NumericTolerance` | Numeric | Within tolerance (relative or absolute) | `int`, `float` |
+| `NumericGraded` | Numeric | Distance-graded partial credit with a cutoff (see [verification primitives](verification-primitives.md)) | `int`, `float` |
 | `NumericRange` | Numeric | Within bounds | `int`, `float` |
+| `NumericRangeGraded` | Numeric | Within bounds, with graded partial credit on a soft shoulder outside the band | `int`, `float` |
+| `NumericMinimum` | Numeric | At least N | `int`, `float` |
+| `NumericMaximum` | Numeric | At most N | `int`, `float` |
+| `NumericThresholdGraded` | Numeric | Past a one-sided bound, with graded partial credit just on the wrong side | `int`, `float` |
 | `SetContainment` | List | Set comparison (exact, subset, superset, overlap) | `list[str]` |
 | `OrderedMatch` | List | Element-by-element comparison | `list[str]` |
 | `LiteralMatch` | Categorical | Exact equality | `Literal[...]` |
@@ -788,20 +807,33 @@ class Answer(BaseAnswer):
     )
 
     class VerificationStrategy:
-        verify_strategy = AnyOf(conditions=[
-            FieldCheck(field="target"),
-            AllOf(conditions=[
-                FieldCheck(field="mechanism"),
-                FieldCheck(field="is_approved"),
-            ]),
-        ])
+        verify_strategy = AnyOf(
+            conditions=[
+                FieldCheck(field="target"),
+                AllOf(
+                    conditions=[
+                        FieldCheck(field="mechanism"),
+                        FieldCheck(field="is_approved"),
+                    ]
+                ),
+            ]
+        )
 ```
 
 In this example, verification passes if the target is correct, *or* if both the mechanism and approval status are correct.
 
-### 6.2. Weighted Scoring Is Separate
+### 6.2. Composition-Aware Granular Scoring
 
-Composition rules control the pass/fail verdict from `verify()`. Weighted scoring from `verify_granular()` is computed independently using the `weight` parameter on each `VerifiedField`. The two mechanisms serve different purposes: `verify()` determines whether a response passes the benchmark question; `verify_granular()` provides a finer-grained score for analysis.
+Composition rules control the pass/fail verdict from `verify()`. The `verify_granular()` score is computed using the `weight` parameter on each `VerifiedField`, and its scoring logic honors the composition strategy:
+
+| Strategy | `verify_granular()` behavior |
+|----------|------------------------------|
+| Default (no strategy, implicit AllOf) | Flat weighted average: sum of passing weights / total weight |
+| `AnyOf` | Max single passing field weight / total weight |
+| `AtLeastN(n)` | Sum of top-N passing field weights / total weight |
+| `AllOf` (explicit) | Flat weighted average (same as default) |
+
+For example, with three equal-weight fields and `AnyOf`, if only one field passes, `verify()` returns `True` (AnyOf semantics) and `verify_granular()` returns `0.333` (one weight out of three). Without composition awareness, this was the same value, but the semantic alignment between `verify()` and `verify_granular()` is now consistent: both respect the strategy.
 
 ## 7. Writing Good Field Descriptions
 
@@ -837,7 +869,7 @@ This is a design tradeoff, not a right-or-wrong choice. Boolean fields are faste
 
 ### 7.3. Anatomy of a Good Description
 
-The judge receives a JSON schema generated from your template's fields. Each field's `description` is the judge's sole instruction for what to extract and how to format it. The field name and type provide structural hints, but the description carries the semantic weight. A vague description produces unpredictable extractions: the judge fills in whatever seems relevant, and verification fails for reasons that have nothing to do with the answering model's correctness.
+The judge receives a JSON schema generated from your template's fields. Each field's `description` is the judge's sole instruction for what to extract and how to format it. The field name and type provide structural hints, but the description carries the semantic weight. The auto-generation pipeline enforces this by placing all four elements (what to extract, format, scope, disambiguation) directly in the description. A vague description produces unpredictable extractions: the judge fills in whatever seems relevant, and verification fails for reasons that have nothing to do with the answering model's correctness.
 
 The three examples below show how ambiguous descriptions cause extraction failures for the most common field types, and how rewriting them eliminates the ambiguity.
 
@@ -1051,12 +1083,8 @@ For classic templates, `verify_granular()` is an optional method you define your
 
 ```python
 class Answer(BaseAnswer):
-    delivery_mechanism: str = Field(
-        description="The vaccine delivery mechanism described in the response"
-    )
-    target_protein: str = Field(
-        description="The protein that cells are instructed to produce"
-    )
+    delivery_mechanism: str = Field(description="The vaccine delivery mechanism described in the response")
+    target_protein: str = Field(description="The protein that cells are instructed to produce")
 
     def ground_truth(self):
         self.correct = {
@@ -1184,7 +1212,7 @@ The embedding check result is stored alongside the template result. When semanti
 
 | Scenario | What happens | Result |
 |----------|-------------|--------|
-| `verify()` raises an exception | Pipeline catches it, marks context as error | Not pass or fail; recorded as **error** |
+| `verify()` raises an exception | Pipeline catches it; error string stored in `field_verification_error` | `verify_result=False`, `verify_granular_result=None`, `metadata.failure` remains `None` (non-fatal) |
 | Judge returns `None` for a `str` field | Pydantic validation fails at parse time | Parsing failure; `verify()` never runs |
 | `verify_granular()` raises | Caught and logged as warning | Does NOT fail verification; granular score is absent |
 | Template validation fails (missing `verify()`, bad `self.correct`) | Stage 1 error; all subsequent stages skip | Error before any LLM calls |
@@ -1204,7 +1232,9 @@ def verify(self) -> bool:
 
 ### 10.3. VerifiedField pitfalls
 
-**Forgetting `description`**: Unlike `Field()`, the `description` parameter is mandatory on `VerifiedField`. Omitting it raises a `TypeError`. Every field needs a description because it serves as the judge's extraction instruction.
+**Empty or missing `description`**: The `description` parameter is mandatory on `VerifiedField` and must be a non-empty, non-whitespace string. Omitting it raises a `TypeError`; passing an empty string or whitespace-only string raises a `ValueError`. Every field needs a description because it serves as the judge's extraction instruction.
+
+**Passing `verify_with=None`**: The `verify_with` parameter must be a verification primitive instance. Passing `None` (whether explicitly or by omission) raises a `ValueError` with a message prompting you to provide a primitive such as `ExactMatch()` or `BooleanMatch()`.
 
 **Mismatched primitive and field type**: Each primitive expects certain field types. Using `BooleanMatch()` on a `str` field, or `NumericTolerance()` on a `bool` field, will produce unexpected results or errors during verification.
 
@@ -1214,7 +1244,7 @@ def verify(self) -> bool:
 
 ## 11. Next Steps
 
-- [Verification Primitives](verification-primitives.md): Full reference for all 18 verification primitives, including parameters and examples
+- [Verification Primitives](verification-primitives.md): Full reference for all 23 verification primitives, including parameters and examples
 - [Rubrics](../../../core_concepts/rubrics/): Assess response quality beyond correctness
 - [Evaluation Modes](../evaluation-modes/): Choose between template-only, rubric-only, or both
 - [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/): Step-by-step implementation of these patterns in a benchmark

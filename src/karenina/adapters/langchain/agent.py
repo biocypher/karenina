@@ -18,7 +18,6 @@ from karenina.ports import (
     AgentExecutionError,
     AgentPort,
     AgentResult,
-    AgentTimeoutError,
     MCPHttpServerConfig,
     MCPServerConfig,
     Message,
@@ -26,6 +25,7 @@ from karenina.ports import (
     Tool,
     UsageMetadata,
 )
+from karenina.ports.capabilities import PortCapabilities
 
 from .messages import LangChainMessageConverter
 from .usage import count_agent_turns, extract_langchain_usage, extract_usage_cumulative
@@ -34,6 +34,38 @@ if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+
+async def _aclose_model_http_clients(model: Any) -> None:
+    """Close a LangChain chat model's underlying httpx clients, best-effort.
+
+    Used as an AsyncExitStack cleanup callback for per-arun() chat models so
+    that the underlying httpx connection pools are released deterministically.
+    Without this, vLLM streaming connections accumulate in CLOSE_WAIT until
+    GC finalizes the model (issue 194).
+
+    The function never raises: cleanup must not mask agent execution errors.
+    Both ChatOpenAI-derived classes (sync .http_client and async
+    .http_async_client) and provider-native classes (which may not expose
+    these attributes) are tolerated.
+
+    Args:
+        model: A LangChain chat model instance, typically returned from
+            init_chat_model_unified().
+    """
+    async_client = getattr(model, "http_async_client", None)
+    if async_client is not None:
+        try:
+            await async_client.aclose()
+        except Exception as exc:
+            logger.warning("Failed to close async httpx client on model cleanup: %s", exc)
+
+    sync_client = getattr(model, "http_client", None)
+    if sync_client is not None:
+        try:
+            sync_client.close()
+        except Exception as exc:
+            logger.warning("Failed to close sync httpx client on model cleanup: %s", exc)
 
 
 def extract_partial_agent_state(
@@ -133,6 +165,15 @@ class LangChainAgentAdapter:
         self._config = model_config
         self._converter = LangChainMessageConverter()
 
+    @property
+    def capabilities(self) -> PortCapabilities:
+        """Declare adapter capabilities.
+
+        Returns:
+            PortCapabilities with system_prompt=True.
+        """
+        return PortCapabilities(supports_system_prompt=True)
+
     def _convert_mcp_servers_to_urls(
         self,
         mcp_servers: dict[str, MCPServerConfig] | None,
@@ -197,7 +238,7 @@ class LangChainAgentAdapter:
         self,
         tools: list[Any],
         kwargs: dict[str, Any],
-    ) -> Any:
+    ) -> tuple[Any, Any, list[Any]]:
         """Create a LangGraph agent with pre-loaded tools.
 
         This is the canonical agent creation path for the LangChain adapter.
@@ -213,7 +254,11 @@ class LangChainAgentAdapter:
             kwargs: Additional kwargs for model initialization.
 
         Returns:
-            A LangGraph agent ready for invocation.
+            A tuple of (agent, base_model, middleware). The base_model is
+            returned so the caller can register its httpx clients for
+            deterministic cleanup. The middleware list is returned so the
+            caller can size the LangGraph recursion_limit to account for
+            middleware-added supersteps.
         """
         from karenina.adapters.langchain.initialization import init_chat_model_unified
         from karenina.adapters.langchain.middleware import build_agent_middleware
@@ -235,8 +280,7 @@ class LangChainAgentAdapter:
             from langgraph.checkpoint.memory import InMemorySaver
         except ImportError as e:
             raise ImportError(
-                "langchain>=1.1.0 and langgraph are required. "
-                "Install with: uv add 'langchain>=1.1.0' langgraph"
+                "langchain>=1.1.0 and langgraph are required. Install with: uv add 'langchain>=1.1.0' langgraph"
             ) from e
 
         # Auto-detect context size for openai_endpoint interface if not explicitly configured
@@ -257,12 +301,15 @@ class LangChainAgentAdapter:
         # Build middleware from configuration
         # Pass base_model so summarization uses the same model by default
         # Pass provider to enable provider-specific middleware (e.g., Anthropic prompt caching)
+        # Pass request_timeout so PerCallTimeoutMiddleware can bound each
+        # individual model.ainvoke() inside the agent loop (issue 195).
         middleware = build_agent_middleware(
             config=self._config.agent_middleware,
             max_context_tokens=max_context_tokens,
             interface=self._config.interface or "langchain",
             base_model=base_model,
             provider=self._config.model_provider,
+            request_timeout=self._config.request_timeout,
         )
 
         # Create agent with tools, middleware, and checkpointer
@@ -277,7 +324,7 @@ class LangChainAgentAdapter:
 
         logger.info(f"Created agent with {len(tools)} MCP tools and {len(middleware)} middleware components")
 
-        return agent
+        return agent, base_model, middleware
 
     async def arun(
         self,
@@ -299,7 +346,6 @@ class LangChainAgentAdapter:
 
         Raises:
             AgentExecutionError: If the agent fails during execution.
-            AgentTimeoutError: If execution exceeds the timeout.
         """
         from karenina.adapters.langchain.trace import (
             extract_final_ai_message_from_response,
@@ -331,11 +377,16 @@ class LangChainAgentAdapter:
 
         # Prepare agent invocation
         recursion_limit_reached = False
+        timeout_reached = False
         agent_response: dict[str, Any] = {"messages": []}
 
-        # Use session-based thread_id for checkpointing
+        # Use session-based thread_id for checkpointing. The recursion_limit
+        # field is filled in after _create_agent() runs, once we know the
+        # middleware count (see below).
         thread_id = str(uuid.uuid4())
-        agent_config = {"configurable": {"thread_id": thread_id}}
+        agent_config: dict[str, Any] = {
+            "configurable": {"thread_id": thread_id},
+        }
 
         # LangGraph agent expects dict with "messages" key
         # Use usage metadata callback to reliably capture cumulative token usage
@@ -361,7 +412,9 @@ class LangChainAgentAdapter:
 
             try:
                 persistent_tools = await acreate_persistent_mcp_tools(
-                    mcp_urls, exit_stack, tool_filter,
+                    mcp_urls,
+                    exit_stack,
+                    tool_filter,
                     self._config.mcp_tool_description_overrides,
                 )
             except Exception as e:
@@ -371,10 +424,27 @@ class LangChainAgentAdapter:
             if deferred_error is None:
                 # Create agent with persistent tools
                 try:
-                    agent = self._create_agent(persistent_tools, kwargs)
+                    agent, base_model, middleware = self._create_agent(persistent_tools, kwargs)
                 except Exception as e:
                     deferred_error = AgentExecutionError(f"Failed to initialize agent: {e}")
                     deferred_error.__cause__ = e
+                else:
+                    # Register the base model's httpx clients for deterministic
+                    # cleanup. The model is created fresh per arun() call, and
+                    # without explicit close its underlying httpx pool stays
+                    # alive until GC finalizes it: this is the leak window
+                    # documented in issue 194 (vLLM CLOSE_WAIT accumulation
+                    # under concurrent MCP-equipped agents).
+                    exit_stack.push_async_callback(_aclose_model_http_clients, base_model)
+
+                    # Size the LangGraph recursion_limit for the actual graph
+                    # topology. A bare ReAct turn costs 2 supersteps (model
+                    # node + tool node), and each middleware that installs a
+                    # before_*/after_* hook adds up to 1 superstep per turn.
+                    # Budgeting max_turns * (2 + len(middleware)) upper-bounds
+                    # the per-turn cost so LangGraph's safety limit never
+                    # trips before karenina's own ModelCallLimitMiddleware.
+                    agent_config["recursion_limit"] = config.max_turns * (2 + len(middleware))
 
             if deferred_error is None:
                 if use_callback:
@@ -385,10 +455,12 @@ class LangChainAgentAdapter:
                                 try:
                                     agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
                                 except TimeoutError as e:
-                                    deferred_error = AgentTimeoutError(
-                                        f"Agent execution timed out after {config.timeout}s"
+                                    logger.warning(
+                                        "Agent timed out after %ss, attempting partial state recovery",
+                                        config.timeout,
                                     )
-                                    deferred_error.__cause__ = e
+                                    timeout_reached = True
+                                    agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
                             else:
                                 agent_response = await coro
                         except Exception as e:
@@ -414,10 +486,12 @@ class LangChainAgentAdapter:
                             try:
                                 agent_response = await asyncio.wait_for(coro, timeout=config.timeout)
                             except TimeoutError as e:
-                                deferred_error = AgentTimeoutError(
-                                    f"Agent execution timed out after {config.timeout}s"
+                                logger.warning(
+                                    "Agent timed out after %ss, attempting partial state recovery",
+                                    config.timeout,
                                 )
-                                deferred_error.__cause__ = e
+                                timeout_reached = True
+                                agent_response = extract_partial_agent_state(agent, lc_messages, e, agent_config)
                         else:
                             agent_response = await coro
                     except Exception as e:
@@ -446,12 +520,14 @@ class LangChainAgentAdapter:
         raw_trace = harmonize_agent_response(agent_response)
         if recursion_limit_reached:
             raw_trace += "\n\n[Note: Recursion limit reached - partial response shown]"
+        if timeout_reached:
+            raw_trace += "\n\n[Note: Agent timed out - partial response shown]"
 
         # Build trace_messages (new structured format)
         # Exclude user messages — the trace should only contain assistant and
         # tool messages, matching the claude_tool adapter behavior.
         all_trace_messages = self._converter.from_provider(response_messages)
-        trace_messages = [m for m in all_trace_messages if m.role != Role.USER]
+        trace_messages = [m for m in all_trace_messages if m.role not in (Role.USER, Role.SYSTEM)]
 
         # Extract final response
         final_response, error = extract_final_ai_message_from_response(agent_response)
@@ -480,6 +556,7 @@ class LangChainAgentAdapter:
             limit_reached=recursion_limit_reached,
             session_id=thread_id,
             actual_model=self._config.model_name,
+            timeout_reached=timeout_reached,
         )
 
     def run(
@@ -502,7 +579,6 @@ class LangChainAgentAdapter:
 
         Raises:
             AgentExecutionError: If the agent fails during execution.
-            AgentTimeoutError: If execution exceeds the timeout.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 
@@ -529,13 +605,15 @@ class LangChainAgentAdapter:
             return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
     async def aclose(self) -> None:
-        """Close underlying resources.
+        """Close underlying resources (no-op for the agent adapter).
 
-        LangChain adapters delegate to LangChain's model management which
-        handles its own HTTP client lifecycle. This is a no-op provided
-        for interface consistency with other adapters.
+        Unlike LangChainLLMAdapter, this adapter does not hold a long-lived
+        chat model. A fresh model is constructed inside each ``arun()`` call
+        and its httpx clients are closed deterministically via the
+        AsyncExitStack inside ``arun()`` (see _aclose_model_http_clients).
+        There is therefore nothing to release at adapter scope.
         """
-        pass
+        return None
 
 
 # Verify protocol compliance at import time

@@ -15,8 +15,8 @@
     ]
   },
   "response": {
-    "content": "A human somatic cell contains **46 chromosomes**.\n\nThese are organized as 23 pairs: 22 pairs of autosomes and 1 pair of sex chromosomes (XX for females, XY for males).",
-    "id": "lc_run--a8d87642-4c0a-4f02-95a2-a393f2b9931a-0",
+    "content": "A human somatic cell contains **46 chromosomes** (23 pairs).\n\nThese consist of 22 pairs of autosomes and 1 pair of sex chromosomes (XX or XY).",
+    "id": "lc_run--c2b438e0-c971-4639-9c15-ecdd8b05bd2f-0",
     "usage_metadata": {
       "input_tokens": 0,
       "output_tokens": 0,

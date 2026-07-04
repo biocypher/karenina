@@ -39,14 +39,15 @@ for result in results:
     print(f"Q: {meta.question_id} | Model: {meta.answering.model_name}")
 ```
 
-Each `VerificationResult` contains four sections:
+Each `VerificationResult` contains five sections:
 
 | Section | Contains | Present When |
 |---------|----------|--------------|
 | **metadata** | Question ID, model info, timing, execution status | Always |
 | **template** | Parsed answers, verify result, regex results, embedding similarity | Template evaluation ran |
-| **rubric** | Trait scores by type (LLM, regex, callable, metric) | Rubric evaluation ran |
-| **deep_judgment** | Excerpts, reasoning, hallucination risk | Deep judgment enabled |
+| **rubric** | Trait scores by type (LLM, regex, callable, metric, agentic) | Rubric evaluation ran |
+| **deep_judgment** | Template excerpts, attribute reasoning, hallucination risk | Deep judgment enabled for templates |
+| **deep_judgment_rubric** | Rubric trait excerpts, per-trait reasoning, deep-judgment scores | Deep judgment enabled for rubrics |
 
 [Understand the full result structure →](verification-result.md)
 
@@ -98,13 +99,15 @@ Each builder also supports filtering and aggregation with standard pandas operat
 
 ```python
 # Pass rate by model
-df.groupby("answering_model_name")["field_match"].mean()
+df.groupby("answering_model")["field_match"].mean()
 
 # Trait scores by question
 df_rubric.groupby("question_id")["trait_score"].mean()
 ```
 
 [Analyze results with DataFrames →](../../notebooks/analyzing-results/dataframe-analysis.ipynb)
+
+For qualitative, per-case inspection (passes and failures rendered as markdown files, bucketed by failure category, ready to hand to a coding agent), see [Error Analysis](error-analysis.md).
 
 ### 4. Persist to Database
 
@@ -130,12 +133,15 @@ Save results for sharing, external analysis, or archival:
 json_str = benchmark.export_verification_results(format="json")
 
 # Export to file (format inferred from extension)
-benchmark.export_verification_results_to_file("results.json")
-benchmark.export_verification_results_to_file("results.csv")
+from pathlib import Path
+benchmark.export_verification_results_to_file(Path("results.json"))
+benchmark.export_verification_results_to_file(Path("results.csv"))
 
 # Export DataFrames directly
 df.to_csv("template_analysis.csv", index=False)
 ```
+
+The `Benchmark.export_verification_results()` and `export_verification_results_to_file()` methods are deprecated in favor of `ResultsStore.export()` and `ResultsStore.export_to_file()`. See [Export results](exporting.md) for the current API.
 
 [Export results →](exporting.md)
 
@@ -164,7 +170,7 @@ The `VerificationResultSet` provides specialized accessors for different analysi
 | `filter(...)` | `VerificationResultSet` | Subset by question, model, or completion status |
 | `group_by_question()` | `dict[str, VerificationResultSet]` | Per-question analysis |
 | `group_by_model()` | `dict[str, VerificationResultSet]` | Cross-model comparison |
-| `group_by_replicate()` | `dict[int, VerificationResultSet]` | Replicate consistency |
+| `group_by_replicate()` | `dict[int \| None, VerificationResultSet]` | Replicate consistency |
 | `get_summary()` | `dict` | Aggregate statistics (counts, pass rates, timing) |
 
 ---

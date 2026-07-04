@@ -1,0 +1,417 @@
+"""Tests for streaming path and agent timeout handling in GenerateAnswerStage."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from karenina.benchmark.verification.stages.core.base import ArtifactKeys, VerificationContext
+from karenina.benchmark.verification.stages.pipeline.generate_answer import GenerateAnswerStage
+from karenina.ports.capabilities import PortCapabilities
+from karenina.ports.llm import LLMResponse
+from karenina.ports.usage import UsageMetadata
+from karenina.schemas.config import ModelConfig
+
+# The generate_answer stage imports AdapterRegistry inline (lazy import inside execute()),
+# so we must patch it at its source module rather than at the stage module.
+_REGISTRY_PATCH_TARGET = "karenina.adapters.registry.AdapterRegistry.get_spec"
+
+
+def _make_context() -> VerificationContext:
+    """Create a minimal VerificationContext for streaming/timeout tests."""
+    model = ModelConfig(
+        id="test",
+        model_name="test-model",
+        model_provider="openai",
+        system_prompt="You are helpful.",
+        request_timeout=30.0,
+    )
+    return VerificationContext(
+        question_id="q1",
+        template_id="t1",
+        question_text="What is 2+2?",
+        template_code="class Answer(BaseAnswer): value: str",
+        answering_model=model,
+        parsing_model=model,
+    )
+
+
+def _make_mock_llm(*, supports_streaming: bool = True) -> MagicMock:
+    """Create a mock LLMPort with configurable streaming support."""
+    mock = MagicMock()
+    mock.capabilities = PortCapabilities(supports_streaming=supports_streaming)
+    return mock
+
+
+def _make_agent_result(
+    *,
+    timeout_reached: bool = False,
+    raw_trace: str = "--- AI Message ---\nSome response",
+    turns: int = 1,
+    limit_reached: bool = False,
+) -> MagicMock:
+    """Create a mock AgentResult with configurable timeout behavior.
+
+    Note: real AgentResult has no ``usage_unavailable`` attribute; we set it
+    to False explicitly here because MagicMock auto-creates missing
+    attributes as truthy Mocks, which would make
+    ``should_mark_usage_unavailable`` always return True.
+    """
+    result = MagicMock()
+    result.timeout_reached = timeout_reached
+    result.raw_trace = raw_trace
+    result.limit_reached = limit_reached
+    result.turns = turns
+    result.usage = None
+    result.usage_unavailable = False
+    result.trace_messages = None
+    return result
+
+
+@pytest.mark.unit
+class TestStreamingLLMPath:
+    """Tests for the LLMPort streaming invocation path in generate_answer."""
+
+    def test_streaming_partial_response_sets_timeout_and_usage_artifacts(self) -> None:
+        """When stream_invoke returns a partial response, RESPONSE_TIMEOUT_PARTIAL
+        and USAGE_UNAVAILABLE artifacts should be set."""
+        ctx = _make_context()
+        stage = GenerateAnswerStage()
+        mock_llm = _make_mock_llm(supports_streaming=True)
+
+        partial_response = LLMResponse(
+            content="partial content here",
+            usage=UsageMetadata(),
+            is_partial=True,
+            usage_unavailable=True,
+        )
+        mock_llm.stream_invoke.return_value = partial_response
+
+        with (
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
+                return_value=mock_llm,
+            ),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            stage.execute(ctx)
+
+        # stream_invoke should have been called (not invoke)
+        mock_llm.stream_invoke.assert_called_once()
+        mock_llm.invoke.assert_not_called()
+
+        # Partial response artifacts
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is True
+        assert ctx.get_result_field("response_timeout_partial") is True
+
+        # Usage unavailable flag
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+
+        # Raw response should still be captured
+        assert "partial content here" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+        # Partial timeout is an error (timeout category)
+        assert ctx.completed_without_errors is False
+        assert ctx.error_category.value == "timeout"
+        assert "streaming timeout" in ctx.error.lower()
+
+    def test_streaming_empty_partial_marks_timeout_error(self) -> None:
+        """When stream_invoke returns partial with empty content, the stage marks
+        a timeout error on context (no retry loop; adapter handles retries)."""
+        ctx = _make_context()
+        stage = GenerateAnswerStage()
+        mock_llm = _make_mock_llm(supports_streaming=True)
+
+        empty_partial = LLMResponse(
+            content="",
+            usage=UsageMetadata(),
+            is_partial=True,
+            usage_unavailable=True,
+        )
+        mock_llm.stream_invoke.return_value = empty_partial
+
+        with (
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
+                return_value=mock_llm,
+            ),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            stage.execute(ctx)
+
+        # stream_invoke called exactly once (no retry loop)
+        assert mock_llm.stream_invoke.call_count == 1
+
+        # The is_partial check marks a timeout error on context
+        assert ctx.error is not None
+        assert "timeout" in ctx.error.lower() or "truncated" in ctx.error.lower()
+        assert ctx.completed_without_errors is False
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is True
+
+    def test_non_streaming_fallback_uses_invoke(self) -> None:
+        """When LLM does not support streaming, invoke() should be called
+        instead of stream_invoke()."""
+        ctx = _make_context()
+        stage = GenerateAnswerStage()
+        mock_llm = _make_mock_llm(supports_streaming=False)
+
+        normal_response = LLMResponse(
+            content="The answer is 4",
+            usage=UsageMetadata(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        mock_llm.invoke.return_value = normal_response
+
+        with (
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
+                return_value=mock_llm,
+            ),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            stage.execute(ctx)
+
+        # invoke() called, not stream_invoke()
+        mock_llm.invoke.assert_called_once()
+        mock_llm.stream_invoke.assert_not_called()
+
+        # Response should be stored normally
+        assert "The answer is 4" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        assert ctx.error is None
+
+    def test_streaming_complete_response_no_timeout_artifacts(self) -> None:
+        """A complete (non-partial) streaming response should not set
+        timeout or usage_unavailable artifacts."""
+        ctx = _make_context()
+        stage = GenerateAnswerStage()
+        mock_llm = _make_mock_llm(supports_streaming=True)
+
+        complete_response = LLMResponse(
+            content="The answer is 4",
+            usage=UsageMetadata(input_tokens=10, output_tokens=5, total_tokens=15),
+            is_partial=False,
+            usage_unavailable=False,
+        )
+        mock_llm.stream_invoke.return_value = complete_response
+
+        with (
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
+                return_value=mock_llm,
+            ),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            stage.execute(ctx)
+
+        # No timeout artifacts should be set
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is None
+        assert ctx.error is None
+
+    def test_streaming_passes_request_timeout(self) -> None:
+        """stream_invoke should receive the request_timeout from the model config."""
+        ctx = _make_context()
+        ctx.answering_model.request_timeout = 42.0
+        stage = GenerateAnswerStage()
+        mock_llm = _make_mock_llm(supports_streaming=True)
+
+        mock_llm.stream_invoke.return_value = LLMResponse(
+            content="ok",
+            usage=UsageMetadata(),
+        )
+
+        with (
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
+                return_value=mock_llm,
+            ),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            stage.execute(ctx)
+
+        call_kwargs = mock_llm.stream_invoke.call_args
+        assert call_kwargs[1]["timeout"] == 42.0
+
+
+@pytest.mark.unit
+class TestAgentTimeoutPath:
+    """Tests for agent timeout_reached handling in generate_answer."""
+
+    def _run_agent_stage(self, ctx: VerificationContext, agent_result: MagicMock) -> None:
+        """Helper to run GenerateAnswerStage with a mocked AgentPort.
+
+        Forces the use_agent path by setting an MCP URL on the model config
+        and patching get_agent to return a mock that yields the given result.
+        """
+        stage = GenerateAnswerStage()
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = agent_result
+
+        # Force the agent path by adding an MCP server URL
+        ctx.answering_model.mcp_urls_dict = {"test-server": "http://localhost:8080"}
+
+        with (
+            patch(
+                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_agent",
+                return_value=mock_agent,
+            ),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            stage.execute(ctx)
+
+    def test_agent_timeout_with_trace_and_no_usage_sets_usage_unavailable(self) -> None:
+        """When agent times out but has a partial trace, RESPONSE_TIMEOUT_PARTIAL
+        and USAGE_UNAVAILABLE should be set if usage is missing, the trace
+        stored, and the context marked as an error (transient timeout)."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=True,
+            raw_trace="--- AI Message ---\nPartial response from agent",
+            turns=3,
+        )
+
+        self._run_agent_stage(ctx, result)
+
+        # Timeout artifacts should be set
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is True
+        assert ctx.get_result_field("response_timeout_partial") is True
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+
+        # The partial trace should still be stored as the raw response
+        raw = ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        assert "Partial response from agent" in raw
+
+        # Partial timeout is an error (timeout category)
+        assert ctx.completed_without_errors is False
+        assert ctx.error_category.value == "timeout"
+        assert "timed out" in ctx.error.lower()
+
+    def test_agent_timeout_with_recovered_usage_does_not_mark_unavailable(self) -> None:
+        """A partial agent timeout can still carry trustworthy recovered usage.
+
+        The Claude Agent SDK may omit the final ResultMessage on wall-clock
+        timeout while still reporting per-assistant-message input tokens. In
+        that case the run should remain marked partial, but usage should not be
+        classified as unavailable.
+        """
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=True,
+            raw_trace="--- AI Message ---\nPartial response from agent",
+            turns=3,
+        )
+        result.usage = UsageMetadata(
+            input_tokens=606_981,
+            output_tokens=0,
+            total_tokens=606_981,
+        )
+
+        self._run_agent_stage(ctx, result)
+
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is True
+        assert ctx.get_result_field("response_timeout_partial") is True
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is None
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is None
+
+        raw = ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+        assert "Partial response from agent" in raw
+        assert ctx.completed_without_errors is False
+        assert ctx.error_category.value == "timeout"
+        assert "timed out" in ctx.error.lower()
+
+    def test_agent_timeout_with_no_trace_marks_error(self) -> None:
+        """When agent times out with no trace at all, the context should be
+        marked with an error and the pipeline should stop."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=True,
+            raw_trace="",
+            turns=0,
+        )
+
+        self._run_agent_stage(ctx, result)
+
+        # Error should be set
+        assert ctx.error is not None
+        assert "timed out" in ctx.error.lower()
+        assert ctx.completed_without_errors is False
+
+        # RAW_LLM_RESPONSE should be empty string (set explicitly in the early return)
+        assert ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE) == ""
+        assert ctx.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED) is False
+
+    def test_agent_no_timeout_does_not_set_timeout_artifacts(self) -> None:
+        """When agent completes normally (no timeout), no timeout artifacts
+        should be set."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        # Provide realistic non-zero usage so should_mark_usage_unavailable
+        # does not flag this as an unavailable-usage response. A real adapter
+        # returning a completed trace would report non-zero tokens; a mock
+        # with usage=None models the broken streaming-without-include-usage
+        # path that Commit 2 specifically wants to detect.
+        result.usage = UsageMetadata(input_tokens=8, output_tokens=4, total_tokens=12)
+
+        self._run_agent_stage(ctx, result)
+
+        # No timeout artifacts
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is None
+        assert ctx.error is None
+
+        # Normal response stored
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+    def test_agent_completes_with_none_usage_marks_usage_unavailable(self) -> None:
+        """When the agent completes normally but reports usage=None, the
+        stage should flip USAGE_UNAVAILABLE=True. This mirrors the LLMPort
+        branch's handling and closes the asymmetric coverage gap: the
+        3888/3888 masquerade bug affected both paths, so both paths must
+        be exercised end-to-end."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        # Explicit: the helper already defaults to usage=None, but we make
+        # the intent of this test obvious.
+        result.usage = None
+
+        self._run_agent_stage(ctx, result)
+
+        # Usage unavailable should be flipped through the stage's wiring
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+
+        # No timeout artifacts (the agent completed normally)
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.error is None
+
+        # Normal response still stored
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+    def test_agent_completes_with_zero_usage_marks_usage_unavailable(self) -> None:
+        """When the agent completes normally but reports all-zero usage
+        (0/0/0), the stage should flip USAGE_UNAVAILABLE=True. Zero counts
+        alone cannot distinguish "consumed nothing" from "adapter could
+        not capture usage", so the conservative mark is required."""
+        ctx = _make_context()
+        result = _make_agent_result(
+            timeout_reached=False,
+            raw_trace="--- AI Message ---\nComplete response",
+            turns=2,
+        )
+        result.usage = UsageMetadata(input_tokens=0, output_tokens=0, total_tokens=0)
+
+        self._run_agent_stage(ctx, result)
+
+        assert ctx.get_artifact(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_result_field(ArtifactKeys.USAGE_UNAVAILABLE) is True
+        assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
+        assert ctx.error is None
+        assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)

@@ -1,6 +1,6 @@
-# 13 Stages in Detail
+# Pipeline Stages in Detail
 
-This reference documents every stage in the verification pipeline. Each stage includes its purpose, when it runs, what it does, which configuration controls it, and how it affects the `VerificationResult`.
+This reference documents every stage in the verification pipeline. The pipeline package exposes **16 stage classes** organized as 13 numbered stages with sub-stages 7a/7b (template parsing) and 11a/11b (rubric evaluation), plus the always-on `PlaceholderRetryAutoFail` guard. Each stage entry includes its purpose, when it runs, what it does, which configuration controls it, and how it affects the `VerificationResult`.
 
 For an overview of how stages fit together, see [Advanced Pipeline Overview](index.md).
 
@@ -12,13 +12,16 @@ For an overview of how stages fit together, see [Advanced Pipeline Overview](ind
 | 2 | [GenerateAnswer](#2-generateanswer) | LLM Call | Always | — |
 | 3 | [RecursionLimitAutoFail](#3-recursionlimitautofail) | Guard | Always | Recursion not reached |
 | 4 | [TraceValidationAutoFail](#4-tracevalidationautofail) | Guard | Always | Non-MCP or manual trace |
+| 4b | [PlaceholderRetryAutoFail](#4b-placeholderretryautofail) | Guard | Always | Placeholder/retry sentinel not present |
 | 5 | [AbstentionCheck](#5-abstentioncheck) | Pre-Parse Check | `abstention_enabled` | Recursion limit hit |
 | 6 | [SufficiencyCheck](#6-sufficiencycheck) | Pre-Parse Check | `sufficiency_enabled` | Recursion, trace fail, or abstention |
-| 7 | [ParseTemplate](#7-parsetemplate) | LLM Call | Template modes | Recursion, trace fail, abstention, or insufficient |
+| 7a | [ParseTemplate](#7a-parsetemplate) | LLM Call | Template modes; `agentic_parsing=False` | Recursion, trace fail, abstention, or insufficient |
+| 7b | [AgenticParseTemplate](#7b-agenticparsetemplate) | Agentic LLM Call | Template modes; `agentic_parsing=True` | Same as 7a |
 | 8 | [VerifyTemplate](#8-verifytemplate) | Verification | Template modes | Recursion or abstention |
 | 9 | [EmbeddingCheck](#9-embeddingcheck) | Enhancement | Template modes | Field verification passed |
-| 10 | [DeepJudgmentAutoFail](#10-deepjudgmentautofail) | Enhancement | `deep_judgment_enabled` | Deep judgment not performed or no missing excerpts |
-| 11 | [RubricEvaluation](#11-rubricevaluation) | Evaluation | Rubric configured + mode | Trace validation failed (filtered mode) |
+| 10 | [DeepJudgmentAutoFail](#10-deepjudgmentautofail) | Enhancement | `deep_judgment_mode` != `"disabled"` | Deep judgment not performed or no missing excerpts |
+| 11a | [RubricEvaluation](#11a-rubricevaluation) | Evaluation | Rubric configured + mode | Trace validation failed (filtered mode) |
+| 11b | [AgenticRubricEvaluation](#11b-agenticrubricevaluation) | Agentic Evaluation | Agentic rubric traits configured | Trace validation failed (filtered mode) |
 | 12 | [DeepJudgmentRubricAutoFail](#12-deepjudgmentrubricautofail) | Enhancement | Rubric configured + mode | Deep judgment rubric not performed or no missing excerpts |
 | 13 | [FinalizeResult](#13-finalizeresult) | Finalization | Always | Never skips |
 
@@ -127,7 +130,7 @@ Auto-fails verification if the answering agent exceeded its maximum recursion (t
 
 1. Checks if `recursion_limit_reached` is True
 2. If true: sets `verify_result = False` and `field_verification_result = False`
-3. Does **not** set `completed_without_errors=False` — the trace and tokens are preserved for analysis
+3. Does **not** populate `metadata.failure`: the run remains a non-error auto-fail; the trace and tokens are preserved for analysis
 
 ### Result Fields
 
@@ -174,6 +177,31 @@ Determined by `answering_model.mcp_urls_dict` and `answering_model.interface`.
 
 ---
 
+## 4b. PlaceholderRetryAutoFail
+
+**Category**: Guard | **Class**: `PlaceholderRetryAutoFailStage`
+
+### Purpose
+
+Auto-fails verification when an answering run terminated by emitting a placeholder/retry sentinel string instead of a real answer. The orchestrator inserts this guard unconditionally between TraceValidationAutoFail and AbstentionCheck, so it runs in every pipeline regardless of evaluation mode or feature flags.
+
+### When It Runs
+
+- **Included**: All evaluation modes (always inserted by `StageOrchestrator.from_config`)
+- **Runtime skip**: If no placeholder/retry sentinel was emitted
+
+### What It Does
+
+1. Inspects the captured answer trace for the placeholder/retry sentinel produced by the executor when a task was requeued past `max_requeue_count`
+2. If the sentinel is present: sets `verify_result = False` and records the failure metadata so the run is treated as an executor-level abandonment, not as a content-level fail
+3. Allows downstream stages to short-circuit since parsing on the sentinel would be meaningless
+
+### Configuration
+
+No direct configuration. The behavior is governed by the executor's requeue policy (`max_requeue_count` on `VerificationConfig`); this stage only translates the sentinel into a structured auto-fail.
+
+---
+
 ## 5. AbstentionCheck
 
 **Category**: Pre-Parse Check | **Class**: `AbstentionCheckStage`
@@ -192,6 +220,8 @@ Detects whether the model refused to answer or abstained from responding. Runs b
 1. Sends the raw response to the parsing LLM with an abstention detection prompt
 2. The judge decides whether the response contains a genuine refusal or abstention
 3. If abstention detected: sets `verify_result = False` and signals downstream stages to skip parsing
+
+The stage honors `use_full_trace_for_template`: by default the judge sees only the final AI message, which matches `ParseTemplate` and keeps prompts small on long agent runs.
 
 ### Detection Patterns
 
@@ -249,6 +279,8 @@ Detects whether the response contains sufficient information to populate the tem
 3. The judge decides whether the response contains enough information to fill the schema
 4. If insufficient: sets `verify_result = False` and signals downstream stages to skip parsing
 
+The stage honors `use_full_trace_for_template`: by default the judge sees only the final AI message, which matches `ParseTemplate` and keeps prompts small on long agent runs.
+
 ### Result Fields
 
 | Field | Location | Description |
@@ -274,7 +306,7 @@ Non-fatal: if the check itself fails or schema extraction fails, logs a warning 
 
 ---
 
-## 7. ParseTemplate
+## 7a. ParseTemplate
 
 **Category**: LLM Call | **Class**: `ParseTemplateStage`
 
@@ -299,7 +331,7 @@ Uses the parsing (judge) LLM to extract structured data from the raw response in
 
 ### Deep Judgment Parsing
 
-When `deep_judgment_enabled=True`, parsing includes excerpt extraction:
+When `deep_judgment_mode` is `"full"` or `"reasoning_only"`, parsing includes deep judgment processing:
 
 - For each template attribute, the judge extracts text spans from the response that support its answer
 - Excerpts are validated using fuzzy matching against the original response
@@ -330,7 +362,7 @@ Deep judgment fields (when enabled):
 
 | Field | Purpose |
 |-------|---------|
-| `deep_judgment_enabled` | Enable excerpt extraction during parsing |
+| `deep_judgment_mode` | Template deep-judgment mode (`"disabled"`, `"reasoning_only"`, `"full"`) |
 | `deep_judgment_max_excerpts_per_attribute` | Max excerpts per field |
 | `deep_judgment_fuzzy_match_threshold` | Similarity threshold (0.0-1.0) |
 | `deep_judgment_excerpt_retry_attempts` | Retry count for failed excerpts |
@@ -342,6 +374,55 @@ Deep judgment fields (when enabled):
 ### Error Behavior
 
 Fatal: if parsing fails, sets `context.error` which halts subsequent stages.
+
+---
+
+## 7b. AgenticParseTemplate
+
+**Category**: Agentic LLM Call | **Class**: `AgenticParseTemplateStage`
+
+### Purpose
+
+Replaces the classical `ParseTemplate` step with an investigation agent that can use tools (filesystem, MCP, etc.) to independently inspect artifacts before extracting structured data into the template schema. Used when the answering model produced workspace artifacts the judge needs to corroborate (e.g., coding-task evaluations).
+
+### When It Runs
+
+- **Included**: `template_only` and `template_and_rubric` modes when `agentic_parsing=True` and the parsing model's adapter has `agent_tier='deep_agent'`
+- **Mutually exclusive with 7a**: When 7b is selected, the classical `ParseTemplateStage` is omitted from the pipeline
+- **Dynamic variant**: When [`agentic_parsing_trigger="dynamic"`](../reference/configuration/verification-config.md) is set alongside `agentic_parsing=True`, the orchestrator swaps in `DynamicParseTemplateStage` (stage name `DynamicParseTemplate`) at this position instead. It first attempts to parse the template directly from the final answer message and escalates to the full agentic investigation only when that direct parse is insufficient or malformed
+- **Runtime skip**: Same conditions as 7a (recursion, trace validation, abstention, or insufficiency)
+
+### What It Does
+
+1. Builds an investigation prompt scoped by `agentic_judge_context` (`workspace_only`, `trace_and_workspace`, or `trace_only`)
+2. Optionally materializes the answering trace to a file when `agentic_parsing_materialize_trace=True`
+3. Runs the investigation agent up to `agentic_parsing_max_turns` with `agentic_parsing_timeout` wall-clock
+4. Extracts structured `Answer` data from the agent's final state and stores `agentic_parsing_performed=True`, the investigation trace, and any materialized-trace bookkeeping
+5. Cleans up the materialized trace file in a finally block unless `agentic_parsing_persist_trace=True`
+
+### Configuration
+
+| Field | Purpose |
+|-------|---------|
+| `agentic_parsing` | Master toggle (default `False`) |
+| `agentic_judge_context` | `workspace_only` / `trace_and_workspace` / `trace_only` |
+| `agentic_parsing_max_turns` | Max turns for the investigation agent (default `15`) |
+| `agentic_parsing_timeout` | Wall-clock timeout in seconds (default `120.0`) |
+| `agentic_parsing_materialize_trace` | Write the answering trace to a file for the agent to read |
+| `agentic_parsing_persist_trace` | Keep the materialized trace file after extraction |
+| `prompt_config.agentic_parsing` | Custom instructions for the investigation agent |
+
+### Result Fields
+
+| Field | Location | Description |
+|-------|----------|-------------|
+| `agentic_parsing_performed` | `template` | Whether 7b ran |
+| `investigation_trace` | `template` | Structured trace from the investigation agent |
+| `parsed_llm_response` | `template` | Extracted `Answer` instance (same shape as 7a) |
+
+### Error Behavior
+
+Fatal: if the investigation or extraction fails, sets `context.error` which halts subsequent stages.
 
 ---
 
@@ -363,7 +444,8 @@ Runs the template's programmatic verification: compares parsed data against grou
 1. **Field verification**: Calls `evaluator.verify_fields(parsed_answer)` which runs the template's `verify()` method comparing parsed values to ground truth
 2. **Regex verification**: Calls `evaluator.verify_regex(parsed_answer, raw_llm_response)` which runs any regex traits defined on the template
 3. **Combination**: `verify_result = field_success AND regex_success`
-4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0)
+4. **Granular verification**: If the template defines `verify_granular()`, calls it to get a partial credit score (0.0-1.0). Skipped when `verify()` raised an exception (sets `verify_granular_result=None` to avoid contradictory signals). Granular scoring is composition-aware: AnyOf uses max passing field weight, AtLeastN uses top-N weights.
+5. **Error capture**: If `verify()` raises, the error string is stored in `field_verification_error` (non-fatal; `metadata.failure` remains `None`)
 
 ### Result Fields
 
@@ -371,7 +453,10 @@ Runs the template's programmatic verification: compares parsed data against grou
 |-------|----------|-------------|
 | `template_verification_performed` | `template` | Whether verification ran |
 | `verify_result` | `template` | Combined pass/fail (field AND regex) |
-| `verify_granular_result` | `template` | Partial credit score (0.0-1.0, if available) |
+| `verify_granular_result` | `template` | Partial credit score (0.0-1.0, if available). `None` when `verify()` raised |
+| `field_verification_error` | `template` | Error string if `verify()` raised an exception |
+| `field_results` | `template` | Per-field primitive pass/fail dict (from `_compute_field_results()`) |
+| `composition_strategy` | `template` | Composition strategy: `"all_of"`, `"any_of"`, `"at_least_n(N)"`, or `None` |
 | `field_verification_result` | internal | Field-only pass/fail |
 | `regex_validations_performed` | `template` | Whether regex checks ran |
 | `regex_validation_results` | `template` | Per-pattern pass/fail |
@@ -439,7 +524,7 @@ Auto-fails verification if deep-judgment parsing found attributes without corrob
 
 ### When It Runs
 
-- **Included**: When `deep_judgment_enabled=True` (template modes only)
+- **Included**: When `deep_judgment_mode` is `"full"` or `"reasoning_only"` (template modes only)
 - **Runtime skip**: If deep judgment was not performed, no attributes are missing excerpts, or abstention was detected
 
 ### What It Does
@@ -454,11 +539,11 @@ Modifies `verify_result` and `field_verification_result` — no new fields added
 
 ### Configuration
 
-No direct configuration — auto-included when `deep_judgment_enabled=True`.
+No direct configuration; auto-included when `deep_judgment_mode` is not `"disabled"`.
 
 ---
 
-## 11. RubricEvaluation
+## 11a. RubricEvaluation
 
 **Category**: Evaluation | **Class**: `RubricEvaluationStage`
 
@@ -473,11 +558,12 @@ Evaluates the response against qualitative rubric criteria. This stage is indepe
 
 ### What It Does
 
-1. Selects the evaluation input:
+1. **Dynamic rubric resolution** (if a [DynamicRubric](../core_concepts/rubrics/index.md#6-dynamic-rubric) is attached): before evaluating any traits, the stage runs a presence check. It collects all non-agentic traits from the dynamic rubric, sends them to the parsing LLM in a single batch call using `PresenceCheckPromptBuilder` and the `RUBRIC_DYNAMIC_PRESENCE_CHECK` [PromptTask](prompt-assembly.md#prompttask-values), and receives a `ConceptPresenceResult`. Traits whose concept is present are promoted into `context.rubric`; absent traits are recorded in `dynamic_rubric_skipped_traits`. Name conflicts between dynamic and static rubric traits raise `ValueError`.
+2. Selects the evaluation input:
    - Full trace (if `use_full_trace_for_rubric=True`)
    - Extracted final AI message only (if False)
-2. Resolves deep judgment configuration for LLM traits (per-trait settings based on mode)
-3. Evaluates each trait type:
+3. Resolves deep judgment configuration for LLM traits (per-trait settings based on mode)
+4. Evaluates each trait type:
 
 | Trait Type | Evaluation Method | Returns |
 |-----------|------------------|---------|
@@ -501,6 +587,8 @@ Evaluates the response against qualitative rubric criteria. This stage is indepe
 | `callable_trait_scores` | `rubric` | Results for callable traits |
 | `metric_trait_scores` | `rubric` | Precision/recall/F1 per metric trait |
 | `metric_trait_confusion_lists` | `rubric` | TP/FN/FP/TN lists per metric trait |
+| `dynamic_rubric_promoted_traits` | `rubric` | Names of dynamic traits that passed presence check |
+| `dynamic_rubric_skipped_traits` | `rubric` | Mapping of skipped trait names to skip reasons |
 
 Deep judgment rubric fields (when applicable):
 
@@ -526,6 +614,51 @@ Deep judgment rubric fields (when applicable):
 ### Error Behavior
 
 Non-fatal: if evaluation fails, sets `rubric_result=None`, logs a warning, and continues the pipeline.
+
+---
+
+## 11b. AgenticRubricEvaluation
+
+**Category**: Agentic Evaluation | **Class**: `AgenticRubricEvaluationStage`
+
+### Purpose
+
+Evaluates rubric traits whose `kind="agentic"` by giving each trait (or a shared session) an investigation agent that can use tools to gather evidence before scoring. Runs alongside `RubricEvaluation` (11a): non-agentic traits are scored by 11a, agentic traits are scored by 11b.
+
+### When It Runs
+
+- **Included**: When evaluation mode is `template_and_rubric` or `rubric_only` AND the rubric contains at least one agentic trait
+- **Runtime skip**: If trace validation failed and `use_full_trace_for_rubric=False`
+
+### What It Does
+
+1. Resolves the agentic traits from the active rubric (including any traits promoted by the dynamic-rubric presence check)
+2. Selects the evaluation strategy:
+   - `agentic_rubric_strategy="individual"` (default): one agent session per trait, isolated
+   - `agentic_rubric_strategy="shared"`: a single agent session evaluates all traits sharing the same parsing model
+3. If `agentic_rubric_parallel=True` and the strategy is `individual`, dispatches concurrent agent sessions across traits using a global LLM semaphore
+4. Each agent receives the trait description plus the configured context (final AI message or full trace) and returns a structured score
+5. Merges agentic trait scores into `agentic_trait_scores` on the rubric result, alongside the standard `llm_trait_scores` from 11a
+
+### Configuration
+
+| Field | Purpose |
+|-------|---------|
+| `agentic_rubric_strategy` | `individual` or `shared` |
+| `agentic_rubric_parallel` | Run individual agentic traits concurrently |
+| `use_full_trace_for_rubric` | Use full trace vs. extracted AI message |
+| `prompt_config.rubric_evaluation` | Custom instructions for agentic rubric agents |
+
+### Result Fields
+
+| Field | Location | Description |
+|-------|----------|-------------|
+| `agentic_trait_scores` | `rubric` | Scores for agentic traits |
+| `agentic_rubric_evaluation_performed` | `rubric` | Whether 11b ran |
+
+### Error Behavior
+
+Non-fatal: per-trait errors are recorded on the result, the pipeline continues.
 
 ---
 
@@ -592,7 +725,7 @@ Constructs the final `VerificationResult` object from all accumulated context ar
 
 ### Error Behavior
 
-Always succeeds — handles both success and error cases. If previous stages failed, the result still contains whatever data was collected, with `completed_without_errors=False` and the error message.
+Always succeeds: handles both success and error cases. If previous stages failed, the result still contains whatever data was collected, with `metadata.failure` populated as a structured `Failure`.
 
 ### Configuration
 
@@ -659,5 +792,5 @@ Errors are contained per-question:
 - [Deep Judgment: Templates](deep-judgment-templates.md) — Excerpt extraction and fuzzy matching details
 - [Deep Judgment: Rubrics](deep-judgment-rubrics.md) — Per-trait deep judgment configuration
 - [Prompt Assembly System](prompt-assembly.md) — How prompts are constructed for LLM calls
-- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All configuration fields
 - [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — Complete result hierarchy

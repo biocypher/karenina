@@ -31,6 +31,18 @@ from karenina.schemas import ModelConfig, VerificationConfig
 
 Templates answer "did the model get it right?" by parsing into a schema and running deterministic `verify()` code. Rubrics answer "was the response good?" by evaluating the raw response or trace with LLM, regex, callable, and metric traits. Evaluation mode decides whether a run activates one path or both.
 
+Dynamic agentic parsing is not an `evaluation_mode`. It is a trigger for template parsing inside `template_only` and `template_and_rubric`:
+
+```json
+{
+  "evaluation_mode": "template_only",
+  "agentic_parsing": true,
+  "agentic_parsing_trigger": "dynamic"
+}
+```
+
+`rubric_only` still skips template parsing and remains incompatible with `agentic_parsing`.
+
 Two litmus tests:
 
 - If you would struggle to write a defensible `verify()` method, prefer `rubric_only`.
@@ -70,6 +82,7 @@ At the orchestration layer, evaluation mode controls which stages `StageOrchestr
 | `GenerateAnswer` | Yes | Yes | Yes |
 | `RecursionLimitAutoFail` | Yes | Yes | Yes |
 | `TraceValidationAutoFail` | Yes | Yes | Yes |
+| `PlaceholderRetryAutoFail` | Yes | Yes | Yes |
 | `AbstentionCheck` | Optional | Optional | Optional |
 | `SufficiencyCheck` | Optional | Optional | No |
 | `ParseTemplate` | Yes | Yes | No |
@@ -81,11 +94,12 @@ At the orchestration layer, evaluation mode controls which stages `StageOrchestr
 | `DeepJudgmentRubricAutoFail` | No | Optional | Optional |
 | `FinalizeResult` | Yes | Yes | Yes |
 
-Three execution details matter in practice:
+Four execution details matter in practice:
 
 1. `rubric_only` truly skips template stages at the orchestrator level.
 2. `template_and_rubric` evaluates rubrics on the raw response, not on parsed template fields.
 3. Rubric stages are only added when a non-empty `Rubric` is actually attached.
+4. [DynamicRubric](../../../core_concepts/rubrics/) traits participate in `template_and_rubric` and `rubric_only` modes. In `template_only` mode, dynamic rubric traits are ignored because rubric evaluation does not run. The presence check that gates dynamic traits occurs at the start of Stage 11 (RubricEvaluation), so it only executes in modes that include rubric stages.
 
 That means `template_and_rubric` is not "template mode with nicer reporting." It is a combined run with two distinct evaluation paths:
 
@@ -144,39 +158,26 @@ template_and_rubric_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 
 rubric_only_config = VerificationConfig(
     answering_models=answering,
     parsing_models=parsing,
     evaluation_mode="rubric_only",
-    rubric_enabled=True,
 )
 ```
 
 ```python tags=["hide-cell"]
 assert template_only_config.evaluation_mode == "template_only"
-assert template_only_config.rubric_enabled is False
 assert template_and_rubric_config.evaluation_mode == "template_and_rubric"
-assert template_and_rubric_config.rubric_enabled is True
 assert rubric_only_config.evaluation_mode == "rubric_only"
-assert rubric_only_config.rubric_enabled is True
 ```
 
 ## 5. Detailed Reference
 
 ### Configuration rules
 
-`VerificationConfig` enforces these combinations:
-
-| `evaluation_mode` | Required `rubric_enabled` |
-|---|---|
-| `template_only` | `False` |
-| `template_and_rubric` | `True` |
-| `rubric_only` | `True` |
-
-If you use `VerificationConfig.from_overrides(...)`, setting `evaluation_mode` automatically sets `rubric_enabled` to the matching value.
+`evaluation_mode` alone controls which evaluation paths are active. Setting it to `template_and_rubric` or `rubric_only` automatically enables rubric evaluation; no separate flag is needed.
 
 ### Result-shape guidance
 
@@ -191,7 +192,7 @@ So in `rubric_only`, treat rubric scores as the primary output and `verify_resul
 
 ### Low-level runner behavior
 
-At the low-level `run_single_model_verification(...)` API, passing a non-empty rubric while leaving `evaluation_mode="template_only"` causes the runner to upgrade internally to `template_and_rubric`. `VerificationConfig` does not do that silently; it validates consistency up front.
+At the low-level `run_single_model_verification(...)` API, passing a non-empty rubric while leaving `evaluation_mode="template_only"` does not upgrade the mode. The runner logs a warning (`Rubric traits were provided but evaluation_mode='template_only'. Rubric evaluation will be skipped.`) and runs the template-only pipeline unchanged, so no [rubric evaluation](../../../core_concepts/rubrics/) stage is added and the rubric is ignored. Set `evaluation_mode="template_and_rubric"` to score the rubric.
 
 ### TaskEval behavior
 
@@ -203,7 +204,11 @@ At the low-level `run_single_model_verification(...)` API, passing a non-empty r
 
 In `rubric_only`, `TaskEval` can evaluate logs even when no explicit template is attached; internally it creates a minimal synthetic template so the shared pipeline can still run.
 
-## 6. Next Steps
+## 6. Mode Tracking in Results
+
+The `evaluation_mode` used for each verification is stored in `result.metadata.evaluation_mode`. This lets you distinguish results produced under different modes when analyzing a benchmark that mixes evaluation strategies across runs.
+
+## 7. Next Steps
 
 - [Templates vs Rubrics](../template-vs-rubric/): the conceptual distinction between correctness and quality
 - [Answer Templates](../answer-templates/): how parsing and `verify()` work

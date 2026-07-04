@@ -77,15 +77,24 @@ AnyOf.model_rebuild()
 AtLeastN.model_rebuild()
 
 
-def evaluate_strategy(node: StrategyNode, field_results: dict[str, bool]) -> bool:
+def evaluate_strategy(node: StrategyNode, field_results: dict[str, bool | None]) -> bool:
     """Evaluate a composition strategy tree against field results.
 
     Thin wrapper around ``evaluate_composition()`` that supplies the
     FieldCheck leaf evaluator for the template domain.
 
+    The leaf evaluator returns True only when ``field_results[leaf.field]``
+    is exactly ``True``. ``None`` (null extraction) is treated as
+    not-satisfied at composition time, equivalent to soft-False, so
+    AllOf / AnyOf / AtLeastN behave conservatively when a sub-field is
+    unanswered. Distinguishing None from False is preserved in
+    ``field_results`` for downstream consumers (granular scoring,
+    serialized result rows).
+
     Args:
         node: The root node of the strategy tree.
-        field_results: Mapping of field names to their pass/fail results.
+        field_results: Mapping of field names to their tri-valued result
+            (True / False / None).
 
     Returns:
         True if the strategy passes.
@@ -95,6 +104,6 @@ def evaluate_strategy(node: StrategyNode, field_results: dict[str, bool]) -> boo
     """
 
     def _field_check_evaluator(leaf: FieldCheck) -> bool:
-        return field_results[leaf.field]
+        return field_results[leaf.field] is True
 
     return evaluate_composition(node, _field_check_evaluator)

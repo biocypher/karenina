@@ -65,11 +65,15 @@ _qids = _benchmark.get_question_ids()
 
 # Pre-recorded responses (simulating cached LLM output)
 _traces = {
-    _qids[0]: "Venetoclax is a selective BCL2 inhibitor. It targets the BCL2 protein, which is overexpressed in certain cancers.",
+    _qids[
+        0
+    ]: "Venetoclax is a selective BCL2 inhibitor. It targets the BCL2 protein, which is overexpressed in certain cancers.",
     _qids[1]: "Humans have 23 pairs of chromosomes, for a total of 46 chromosomes.",
     _qids[2]: "The primary neurotransmitter of the sympathetic nervous system is norepinephrine (noradrenaline).",
     _qids[3]: "Insulin is produced by the beta cells of the islets of Langerhans in the pancreas.",
-    _qids[4]: "The half-life of caffeine in healthy adults is approximately 5 hours, though it can range from 3-7 hours.",
+    _qids[
+        4
+    ]: "The half-life of caffeine in healthy adults is approximately 5 hours, though it can range from 3-7 hours.",
 }
 
 _answering = ModelIdentity(model_name="manual", interface="manual")
@@ -83,24 +87,29 @@ def _make(qid, q_text, raw_ans, response, verified):
     rid = VerificationResultMetadata.compute_result_id(qid, _answering, _parsing, _ts)
     return VerificationResult(
         metadata=VerificationResultMetadata(
-            question_id=qid, template_id="tmpl_" + qid[:8],
-            completed_without_errors=True, question_text=q_text,
-            raw_answer=raw_ans, answering=_answering, parsing=_parsing,
-            execution_time=0.8, timestamp=_ts, result_id=rid,
+            question_id=qid,
+            template_id="tmpl_" + qid[:8],
+            failure=None,
+            caveats=[],
+            question_text=q_text,
+            raw_answer=raw_ans,
+            answering=_answering,
+            parsing=_parsing,
+            execution_time=0.8,
+            timestamp=_ts,
+            result_id=rid,
         ),
         template=VerificationResultTemplate(
             raw_llm_response=response,
-            verify_result=verified, template_verification_performed=True,
+            verify_result=verified,
+            template_verification_performed=True,
             parsed_gt_response={"answer": raw_ans},
             parsed_llm_response={"answer": raw_ans},
         ),
     )
 
 
-_mock_results = [
-    _make(qid, q, a, _traces[qid], v)
-    for qid, (q, a), v in zip(_qids, _questions, _pass_fail)
-]
+_mock_results = [_make(qid, q, a, _traces[qid], v) for qid, (q, a), v in zip(_qids, _questions, _pass_fail)]
 _mock_result_set = VerificationResultSet(results=_mock_results)
 _orig_run = Benchmark.run_verification
 Benchmark.run_verification = lambda self, config, **kw: _mock_result_set
@@ -241,7 +250,7 @@ config = VerificationConfig(
         ModelConfig(
             id="manual",
             model_name="manual",
-            model_provider="manual",
+            # model_provider is not needed: the manual adapter has requires_provider=False
             interface="manual",
             manual_traces=manual_traces,
         )
@@ -301,18 +310,26 @@ Evaluate the same responses with different parsing models:
 
 ```python
 parsing_models = [
-    ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                model_provider="anthropic", interface="langchain", temperature=0.0),
-    ModelConfig(id="sonnet-parser", model_name="claude-sonnet-4-5",
-                model_provider="anthropic", interface="langchain", temperature=0.0),
+    ModelConfig(
+        id="haiku-parser",
+        model_name="claude-haiku-4-5",
+        model_provider="anthropic",
+        interface="langchain",
+        temperature=0.0,
+    ),
+    ModelConfig(
+        id="sonnet-parser",
+        model_name="claude-sonnet-4-5",
+        model_provider="anthropic",
+        interface="langchain",
+        temperature=0.0,
+    ),
 ]
 
 for parser in parsing_models:
     parser_config = VerificationConfig(
         answering_models=[
-            ModelConfig(id="manual", model_name="manual",
-                        model_provider="manual", interface="manual",
-                        manual_traces=manual_traces)
+            ModelConfig(id="manual", model_name="manual", interface="manual", manual_traces=manual_traces)
         ],
         parsing_models=[parser],
         evaluation_mode="template_only",

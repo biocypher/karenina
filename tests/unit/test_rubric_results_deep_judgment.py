@@ -43,8 +43,8 @@ class TestRubricResultsStandardExport:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
-            completed_without_errors=True,
-            error=None,
+            failure=None,
+            caveats=[],
             question_text="What is photosynthesis?",
             keywords=["biology"],
             answering=_answering,
@@ -162,13 +162,9 @@ class TestRubricResultsStandardExport:
         assert isinstance(excerpts, list)
         assert len(excerpts) == 2
 
-        # trait_hallucination_risk should be JSON dict (or dict)
+        # trait_hallucination_risk is the overall_risk string (issue 123)
         risk = row["trait_hallucination_risk"]
-        if isinstance(risk, str):
-            risk = json.loads(risk)
-        assert isinstance(risk, dict)
-        assert "overall_risk" in risk
-        assert risk["overall_risk"] == "low"
+        assert risk == "low"
 
 
 class TestRubricJudgmentResultsCreation:
@@ -189,8 +185,8 @@ class TestRubricJudgmentResultsCreation:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
-            completed_without_errors=True,
-            error=None,
+            failure=None,
+            caveats=[],
             question_text="Test question",
             keywords=None,
             answering=_answering,
@@ -242,8 +238,8 @@ class TestRubricJudgmentResultsExcerptExplosion:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
-            completed_without_errors=True,
-            error=None,
+            failure=None,
+            caveats=[],
             question_text="Test question",
             keywords=None,
             answering=_answering,
@@ -366,8 +362,8 @@ class TestRubricJudgmentResultsMetadata:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
-            completed_without_errors=True,
-            error=None,
+            failure=None,
+            caveats=[],
             question_text="Test question",
             keywords=None,
             answering=_answering,
@@ -445,8 +441,8 @@ class TestRubricJudgmentResultsMixedTraits:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
-            completed_without_errors=True,
-            error=None,
+            failure=None,
+            caveats=[],
             question_text="Test question",
             keywords=None,
             answering=_answering,
@@ -514,8 +510,8 @@ class TestJSONSerializationComplexFields:
         return VerificationResultMetadata(
             question_id="q1",
             template_id="template1",
-            completed_without_errors=True,
-            error=None,
+            failure=None,
+            caveats=[],
             question_text="Test question",
             keywords=None,
             answering=_answering,

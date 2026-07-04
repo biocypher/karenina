@@ -85,6 +85,7 @@ _openrouter_spec = AdapterSpec(
     routes_to="langchain",  # Indicates this routes to langchain
     supports_mcp=True,
     supports_tools=True,
+    requires_provider=False,
 )
 
 AdapterRegistry.register(_openrouter_spec)
@@ -102,11 +103,14 @@ _openai_endpoint_spec = AdapterSpec(
     routes_to="langchain",  # Indicates this routes to langchain
     supports_mcp=True,
     supports_tools=True,
+    requires_provider=False,
 )
 
 AdapterRegistry.register(_openai_endpoint_spec)
 
 # Import prompt modules to trigger adapter instruction registration
+import karenina.adapters.langchain.prompts.abstention  # noqa: E402, F401
 import karenina.adapters.langchain.prompts.deep_judgment  # noqa: E402, F401
 import karenina.adapters.langchain.prompts.parsing  # noqa: E402, F401
 import karenina.adapters.langchain.prompts.rubric  # noqa: E402, F401
+import karenina.adapters.langchain.prompts.sufficiency  # noqa: E402, F401

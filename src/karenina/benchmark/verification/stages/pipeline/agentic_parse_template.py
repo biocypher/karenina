@@ -5,17 +5,22 @@ verifies artifacts in the workspace, then a parser extracts structured
 data from the investigation findings.
 """
 
-import json
 import logging
 from typing import Any
 
-from karenina.adapters import get_agent, get_parser
-from karenina.benchmark.verification.utils.schema_builder import build_parsing_schema
-from karenina.ports import AgentConfig, Message
-from karenina.schemas.entities.answer import BaseAnswer
+from karenina.benchmark.verification.utils.parser_resilience import classify_parser_exception
+from karenina.benchmark.verification.utils.schema_builder import (
+    build_parsing_schema,
+)
+from karenina.ports import UsageMetadata
 from karenina.schemas.verification.model_identity import ModelIdentity
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
+from ..helpers.agentic_parse_helpers import (
+    recover_extraction_from_investigation,
+    run_extraction,
+    run_investigation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +71,16 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
     def should_run(self, context: VerificationContext) -> bool:
         """Run only when agentic parsing is enabled and no prior errors."""
-        if not super().should_run(context):
+        if not super().should_run(context) and not context.can_score_partial_timeout():
             return False
         if not context.agentic_parsing:
             return False
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
+            return False
+        if (
+            context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and not context.allow_partial_trace_scoring
+        ):
             return False
         if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
             return False
@@ -81,55 +91,81 @@ class AgenticParseTemplateStage(BaseVerificationStage):
         return context.has_artifact(ArtifactKeys.RAW_LLM_RESPONSE) and context.has_artifact(ArtifactKeys.ANSWER)
 
     def execute(self, context: VerificationContext) -> None:
-        """Run investigation then extraction.
-
-        Args:
-            context: Verification context with workspace and config.
-        """
+        """Run investigation then extraction."""
         answer_class = context.get_artifact(ArtifactKeys.ANSWER)
         parsing_model = context.parsing_model
+        parsing_model_str = ModelIdentity.from_model_config(
+            parsing_model,
+            role="parsing",
+        ).display_string
+        usage_tracker = self.get_or_create_usage_tracker(context)
 
-        # Build schema once for both investigation and extraction
         clean_schema = build_parsing_schema(answer_class)
 
         # Step 1: Investigation
         try:
-            investigation_trace = self._run_investigation(context, clean_schema)
+            investigation_trace, investigation_limit_reached, investigation_usage = run_investigation(
+                context, clean_schema
+            )
         except Exception as e:
-            context.mark_error(f"Agentic investigation failed: {e}")
+            context.mark_error(
+                f"Agentic investigation failed: {e}",
+                category=context.error_registry.classify(e),
+            )
             return
 
+        self._track_usage(
+            usage_tracker,
+            "agentic_parsing_investigation",
+            parsing_model_str,
+            investigation_usage,
+        )
+        context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
         context.set_artifact(ArtifactKeys.INVESTIGATION_TRACE, investigation_trace)
+        context.set_result_field(
+            ArtifactKeys.INVESTIGATION_TRACE,
+            investigation_trace,
+        )
+        if investigation_limit_reached:
+            context.mark_error("Agentic investigation hit the turn limit before producing a reliable report")
+            return
 
         # Step 2: Extraction
         try:
-            parsed_answer = self._run_extraction(
+            parsed_answer, extraction_usage = run_extraction(
                 context,
                 answer_class,
                 investigation_trace,
                 clean_schema,
             )
         except Exception as e:
-            context.mark_error(f"Agentic extraction failed: {e}")
-            return
+            context.set_result_field(ArtifactKeys.AGENTIC_EXTRACTION_ERROR, str(e))
+            try:
+                parsed_answer = recover_extraction_from_investigation(answer_class, investigation_trace)
+            except Exception as recovery_error:
+                context.mark_error(
+                    f"Agentic extraction failed: {e}; local JSON recovery failed: {recovery_error}",
+                    category=classify_parser_exception(e, context.error_registry),
+                )
+                return
+            context.set_result_field(ArtifactKeys.AGENTIC_EXTRACTION_RECOVERY, "local_json")
+            context.add_warning(f"Agentic extraction recovered locally after parser error: {e}")
+        else:
+            self._track_usage(
+                usage_tracker,
+                "agentic_parsing_extraction",
+                parsing_model_str,
+                extraction_usage,
+            )
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
         # Store results
-        model_str = ModelIdentity.from_model_config(
-            parsing_model,
-            role="parsing",
-        ).display_string
-
         context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed_answer)
-        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, model_str)
+        context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, parsing_model_str)
         context.set_artifact(ArtifactKeys.AGENTIC_PARSING_PERFORMED, True)
         context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
         context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
 
-        # Result builder fields
-        context.set_result_field(
-            ArtifactKeys.INVESTIGATION_TRACE,
-            investigation_trace,
-        )
         context.set_result_field(
             ArtifactKeys.AGENTIC_PARSING_PERFORMED,
             True,
@@ -137,101 +173,14 @@ class AgenticParseTemplateStage(BaseVerificationStage):
 
         logger.info("Agentic parsing completed successfully")
 
-    def _run_investigation(
-        self,
-        context: VerificationContext,
-        clean_schema: dict[str, Any],
-    ) -> str:
-        """Run investigation agent with tools.
-
-        Args:
-            context: Verification context.
-            clean_schema: Pre-built JSON schema for the answer template.
-
-        Returns:
-            Raw trace from the investigation agent.
-        """
-        agent = get_agent(context.parsing_model)
-        schema_json = json.dumps(clean_schema, indent=2)
-
-        system_prompt = (
-            "You are a verification agent evaluating whether an AI coding "
-            "assistant correctly completed a task. You have access to the "
-            "file system and can execute code.\n\n"
-            "Your job is to evaluate the artifacts the assistant left in the "
-            "workspace (scripts, output files, logs, data). Read and inspect "
-            "these artifacts to determine the results. You may re-run existing "
-            "scripts to confirm their output, but do NOT re-implement the task "
-            "from scratch or write your own solution. If the workspace contains "
-            "no usable artifacts, report that you could not verify the results.\n\n"
-            "Report your findings as a JSON object matching this schema:\n"
-            f"{schema_json}"
-        )
-
-        # Build user prompt based on judge context mode
-        user_parts: list[str] = [f"Question: {context.question_text}"]
-
-        if context.agentic_judge_context in (
-            "trace_and_workspace",
-            "trace_only",
-        ):
-            raw_trace = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
-            user_parts.append(f"\n--- ANSWERING AGENT TRACE ---\n{raw_trace}\n--- END TRACE ---")
-
-        if context.workspace_path and context.agentic_judge_context != "trace_only":
-            user_parts.append(
-                f"\nWorkspace directory: {context.workspace_path}",
-            )
-
-        messages = [
-            Message.system(system_prompt),
-            Message.user("\n".join(user_parts)),
-        ]
-
-        agent_config = AgentConfig(
-            max_turns=context.agentic_parsing_max_turns,
-            timeout=context.agentic_parsing_timeout,
-            workspace_path=context.workspace_path,
-        )
-
-        result = agent.run(messages=messages, config=agent_config)
-        logger.info(
-            "Investigation completed in %d turns (limit_reached=%s)",
-            result.turns,
-            result.limit_reached,
-        )
-        return result.raw_trace
-
-    def _run_extraction(
-        self,
-        context: VerificationContext,
-        answer_class: type[BaseAnswer],
-        investigation_trace: str,
-        clean_schema: dict[str, Any],
-    ) -> BaseAnswer:
-        """Extract structured answer from investigation findings.
-
-        Args:
-            context: Verification context.
-            answer_class: The answer template class.
-            investigation_trace: Raw trace from investigation agent.
-            clean_schema: Pre-built JSON schema for the answer template.
-
-        Returns:
-            Parsed answer instance.
-        """
-        parser = get_parser(context.parsing_model)
-        schema_json = json.dumps(clean_schema, indent=2)
-
-        messages = [
-            Message.system(
-                "You are a structured data extraction assistant. "
-                "Extract the findings from the investigation report into "
-                "the exact JSON schema provided.\n\n"
-                f"Schema:\n{schema_json}"
-            ),
-            Message.user(f"Investigation report:\n\n{investigation_trace}"),
-        ]
-
-        parse_result = parser.parse_to_pydantic(messages, answer_class)
-        return parse_result.parsed
+    @staticmethod
+    def _track_usage(
+        usage_tracker: Any,
+        stage_name: str,
+        model_str: str,
+        usage: UsageMetadata,
+    ) -> None:
+        """Track non-empty token usage for one agentic parsing substage."""
+        usage_dict = usage.to_dict()
+        if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
+            usage_tracker.track_call(stage_name, model_str, usage_dict)

@@ -23,12 +23,12 @@ where structured output is needed, and regular LLMPort.invoke() for text generat
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
+from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts.assembler import PromptAssembler
 from karenina.benchmark.verification.prompts.deep_judgment.rubric.deep_judgment import DeepJudgmentPromptBuilder
 from karenina.benchmark.verification.prompts.task_types import PromptTask
@@ -129,17 +129,21 @@ class RubricDeepJudgmentHandler:
         rubric: Rubric,
         config: Any,  # VerificationConfig
         standard_evaluator_fn: Any,  # Callback for standard trait evaluation
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Evaluate rubric with deep judgment for enabled traits.
 
         Args:
-            question: The original question
-            answer: The LLM response to evaluate
-            rubric: The rubric containing evaluation traits
-            config: VerificationConfig with deep judgment settings
-            standard_evaluator_fn: Callback function to evaluate standard (non-DJ) traits
-                                   Signature: (question, answer, rubric) -> (scores, labels, usage_metadata_list)
+            question: The original question.
+            answer: The LLM response to evaluate.
+            rubric: The rubric containing evaluation traits.
+            config: VerificationConfig with deep judgment settings.
+            standard_evaluator_fn: Callback function to evaluate standard (non-DJ) traits.
+                Signature: (question, answer, rubric) -> (scores, labels, usage_metadata_list).
+            task_eval_mode: When True, omit the **Question** block from the
+                deep-judgment reasoning user prompt. Set automatically by TaskEval.
 
         Returns:
             Dictionary containing:
@@ -175,7 +179,9 @@ class RubricDeepJudgmentHandler:
         for trait in dj_traits:
             logger.debug(f"Evaluating deep judgment trait: {trait.name}")
             try:
-                trait_result = self._evaluate_single_trait_with_deep_judgment(question, answer, trait, config)
+                trait_result = self._evaluate_single_trait_with_deep_judgment(
+                    question, answer, trait, config, task_eval_mode=task_eval_mode
+                )
 
                 # Collect usage metadata from this trait
                 usage_metadata_list.extend(trait_result.get("usage_metadata_list", []))
@@ -238,7 +244,13 @@ class RubricDeepJudgmentHandler:
         }
 
     def _evaluate_single_trait_with_deep_judgment(
-        self, question: str, answer: str, trait: LLMRubricTrait, config: Any
+        self,
+        question: str,
+        answer: str,
+        trait: LLMRubricTrait,
+        config: Any,
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Evaluate a single trait using deep judgment (sequential multi-stage process).
@@ -258,13 +270,24 @@ class RubricDeepJudgmentHandler:
         # Determine flow based on excerpt_enabled
         if trait.deep_judgment_excerpt_enabled:
             # Flow 1: With excerpts (3-4 stages)
-            return self._evaluate_trait_with_excerpts(question, answer, trait, config, metadata)
+            return self._evaluate_trait_with_excerpts(
+                question, answer, trait, config, metadata, task_eval_mode=task_eval_mode
+            )
         else:
             # Flow 2: Without excerpts (2 stages)
-            return self._evaluate_trait_without_excerpts(question, answer, trait, config, metadata)
+            return self._evaluate_trait_without_excerpts(
+                question, answer, trait, config, metadata, task_eval_mode=task_eval_mode
+            )
 
     def _evaluate_trait_with_excerpts(
-        self, question: str, answer: str, trait: LLMRubricTrait, config: Any, metadata: dict[str, Any]
+        self,
+        question: str,
+        answer: str,
+        trait: LLMRubricTrait,
+        config: Any,
+        metadata: dict[str, Any],
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Evaluate trait with excerpt extraction (Flow 1: 3-4 stages).
@@ -307,7 +330,12 @@ class RubricDeepJudgmentHandler:
 
         # Stage 2: Generate reasoning based on excerpts
         reasoning_result = self._generate_reasoning_for_trait(
-            question, answer, trait, excerpts=excerpts, hallucination_risk=hallucination_risk
+            question,
+            answer,
+            trait,
+            excerpts=excerpts,
+            hallucination_risk=hallucination_risk,
+            task_eval_mode=task_eval_mode,
         )
         reasoning = reasoning_result["reasoning"]
         metadata["model_calls"] += 1
@@ -340,6 +368,8 @@ class RubricDeepJudgmentHandler:
         trait: LLMRubricTrait,
         config: Any,  # noqa: ARG002 - Kept for method signature consistency
         metadata: dict[str, Any],
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Evaluate trait without excerpt extraction (Flow 2: 2 stages).
@@ -352,7 +382,12 @@ class RubricDeepJudgmentHandler:
 
         # Stage 1: Generate reasoning (no excerpts)
         reasoning_result = self._generate_reasoning_for_trait(
-            question, answer, trait, excerpts=None, hallucination_risk=None
+            question,
+            answer,
+            trait,
+            excerpts=None,
+            hallucination_risk=None,
+            task_eval_mode=task_eval_mode,
         )
         reasoning = reasoning_result["reasoning"]
         metadata["model_calls"] += 1
@@ -431,6 +466,7 @@ class RubricDeepJudgmentHandler:
             )
 
             # Use LLMPort.with_structured_output() for parsing
+            structured_llm: LLMPort | None = None
             try:
                 structured_llm = self.llm.with_structured_output(TraitExcerptsOutput)
                 response = structured_llm.invoke(messages)
@@ -461,6 +497,9 @@ class RubricDeepJudgmentHandler:
                         "auto_fail": True,
                         "usage_metadata_list": usage_metadata_list,
                     }
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
             # Validate excerpts with fuzzy matching
             validated, failed = self._validate_trait_excerpts(raw_excerpts, answer, fuzzy_threshold)
@@ -530,24 +569,6 @@ class RubricDeepJudgmentHandler:
 
         return valid, failed
 
-    def _parse_excerpt_response(self, response: str) -> list[dict[str, Any]]:
-        """Parse the excerpt extraction response."""
-        # Try to extract JSON from response
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in response: {response[:200]}")
-
-        try:
-            result = json.loads(json_match.group())
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in response: {e}") from e
-
-        excerpts = result.get("excerpts", [])
-        if not isinstance(excerpts, list):
-            raise ValueError(f"'excerpts' must be a list, got {type(excerpts)}")
-
-        return excerpts
-
     def _assess_trait_hallucination(
         self, excerpts: list[dict[str, Any]], trait: LLMRubricTrait, config: Any
     ) -> dict[str, Any]:
@@ -606,6 +627,7 @@ class RubricDeepJudgmentHandler:
             # Use LLMPort.with_structured_output() for parsing
             from karenina.schemas.outputs import HallucinationRiskOutput
 
+            structured_llm: LLMPort | None = None
             try:
                 structured_llm = self.llm.with_structured_output(HallucinationRiskOutput)
                 response = structured_llm.invoke(messages)
@@ -624,6 +646,9 @@ class RubricDeepJudgmentHandler:
                 logger.warning(f"Failed to parse hallucination assessment: {e}")
                 risk = "medium"
                 justification = "Failed to parse"
+            finally:
+                if structured_llm is not None and structured_llm is not self.llm:
+                    close_adapter(structured_llm)
 
             # Update excerpt with search data
             excerpt["search_results"] = search_results[i] if i < len(search_results) else None
@@ -653,6 +678,8 @@ class RubricDeepJudgmentHandler:
         trait: LLMRubricTrait,
         excerpts: list[dict[str, Any]] | None = None,
         hallucination_risk: dict[str, Any] | None = None,
+        *,
+        task_eval_mode: bool = False,
     ) -> dict[str, Any]:
         """
         Generate reasoning explaining the trait score.
@@ -665,11 +692,13 @@ class RubricDeepJudgmentHandler:
         if excerpts is not None:
             # With excerpts
             user_prompt = self._prompt_builder.build_reasoning_user_prompt_with_excerpts(
-                question, trait, excerpts, hallucination_risk
+                question, trait, excerpts, hallucination_risk, task_eval_mode=task_eval_mode
             )
         else:
             # Without excerpts
-            user_prompt = self._prompt_builder.build_reasoning_user_prompt_without_excerpts(question, answer, trait)
+            user_prompt = self._prompt_builder.build_reasoning_user_prompt_without_excerpts(
+                question, answer, trait, task_eval_mode=task_eval_mode
+            )
 
         messages = self._assemble_messages(PromptTask.DJ_RUBRIC_REASONING, system_prompt, user_prompt)
 
@@ -699,7 +728,10 @@ class RubricDeepJudgmentHandler:
 
         schema_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
 
-        system_prompt = self._prompt_builder.build_score_extraction_system_prompt()
+        if trait.kind == "boolean":
+            system_prompt = self._prompt_builder.build_score_extraction_system_prompt_boolean()
+        else:
+            system_prompt = self._prompt_builder.build_score_extraction_system_prompt_numeric()
         user_prompt = self._prompt_builder.build_score_extraction_user_prompt(trait, reasoning)
 
         # Build instruction_context for adapter instructions
@@ -727,6 +759,7 @@ class RubricDeepJudgmentHandler:
         )
 
         # Use LLMPort.with_structured_output() for parsing
+        structured_llm: LLMPort | None = None
         try:
             structured_llm = self.llm.with_structured_output(schema_class)
             response = structured_llm.invoke(messages)
@@ -750,6 +783,9 @@ class RubricDeepJudgmentHandler:
             score = self._parse_trait_score_response(raw_response, trait)
             usage_metadata = asdict(response.usage) if response.usage else {}
             return {"score": score, "usage_metadata": usage_metadata}
+        finally:
+            if structured_llm is not None and structured_llm is not self.llm:
+                close_adapter(structured_llm)
 
     def _parse_trait_score_response(self, response: str, trait: LLMRubricTrait) -> int | bool:
         """Parse a trait score response."""

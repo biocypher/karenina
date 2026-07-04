@@ -82,6 +82,14 @@ config = VerificationConfig(
 
 Reads deep judgment settings from the trait objects loaded from the checkpoint. This is useful when traits have been pre-configured with deep judgment settings and saved to a `.jsonld` file.
 
+**Important:** `benchmark.save()` strips deep judgment configuration from traits by default. To persist deep judgment settings for this mode, save with `save_deep_judgment_config=True`:
+
+```python
+benchmark.save(Path("benchmark.jsonld"), save_deep_judgment_config=True)
+```
+
+Without this flag, all `deep_judgment_*` fields on traits will be removed from the saved file, and `use_checkpoint` mode will see every trait as having deep judgment disabled.
+
 Each `LLMRubricTrait` has these fields:
 
 | Field | Type | Default | Description |
@@ -209,7 +217,7 @@ All deep judgment rubric settings are on `VerificationConfig`:
 | `deep_judgment_rubric_fuzzy_match_threshold_default` | `float` | `0.80` | Default fuzzy match threshold (0.0–1.0) |
 | `deep_judgment_rubric_excerpt_retry_attempts_default` | `int` | `2` | Default retry attempts for excerpt extraction |
 | `deep_judgment_rubric_search_tool` | `str \| Callable` | `"tavily"` | Search tool: `"tavily"` or custom callable |
-| `deep_judgment_rubric_config` | `dict \| None` | `None` | Custom mode per-trait config dict |
+| `deep_judgment_rubric_config` | `DeepJudgmentRubricCustomConfig \| None` | `None` | Custom mode per-trait config dict |
 
 ### Via from_overrides
 
@@ -220,7 +228,6 @@ config = VerificationConfig.from_overrides(
     deep_judgment_rubric_max_excerpts=5,
     deep_judgment_rubric_fuzzy_threshold=0.90,
     deep_judgment_rubric_retry_attempts=3,
-    deep_judgment_rubric_search=True,
     deep_judgment_rubric_search_tool="tavily",
     answering_model="claude-haiku-4-5",
     answering_id="answering",
@@ -238,9 +245,10 @@ Override parameter to config field mapping:
 | `deep_judgment_rubric_max_excerpts` | `deep_judgment_rubric_max_excerpts_default` |
 | `deep_judgment_rubric_fuzzy_threshold` | `deep_judgment_rubric_fuzzy_match_threshold_default` |
 | `deep_judgment_rubric_retry_attempts` | `deep_judgment_rubric_excerpt_retry_attempts_default` |
-| `deep_judgment_rubric_search` | `deep_judgment_rubric_search_enabled` |
 | `deep_judgment_rubric_search_tool` | `deep_judgment_rubric_search_tool` |
 | `deep_judgment_rubric_config` | `deep_judgment_rubric_config` |
+
+The `from_overrides` signature also accepts `deep_judgment_rubric_search`, but it has no effect on the resulting config. `VerificationConfig` has no global rubric-search flag: `__init__` pops and discards `deep_judgment_rubric_search_enabled`. Enable search-enhanced hallucination detection per trait instead, via `LLMRubricTrait.deep_judgment_search_enabled`, or in custom mode via the per-trait `search_enabled` field of `deep_judgment_rubric_config`.
 
 ### Via CLI
 
@@ -331,7 +339,7 @@ Each trait's metadata in `trait_metadata` contains:
 | Pipeline stage | Stage 7 (ParseTemplate) | Stage 11 (RubricEvaluation) |
 | Auto-fail stage | Stage 10 (DeepJudgmentAutoFail) | Stage 12 (DeepJudgmentRubricAutoFail) |
 | Scope | Per-attribute (template fields) | Per-trait (rubric LLM traits) |
-| Configuration | Single toggle (`deep_judgment_enabled`) | Four modes with per-trait control |
+| Configuration | Single mode field (`deep_judgment_mode`) | Four modes with per-trait control |
 | Default max excerpts | 3 | 7 |
 | Result location | `result.deep_judgment` | `result.deep_judgment_rubric` |
 | Mixed evaluation | N/A (all-or-nothing for template) | Yes — some traits deep judgment, others standard |
@@ -363,7 +371,7 @@ Traits that exhaust all retries without valid excerpts are added to `traits_with
 ## Related
 
 - [Advanced Pipeline Overview](index.md) — Stage ordering and evaluation mode matrix
-- [13 Stages in Detail](stages.md) — Stage 11 (RubricEvaluation) and Stage 12 (DeepJudgmentRubricAutoFail)
+- [Pipeline Stages in Detail](stages.md) — Stages 11a (RubricEvaluation), 11b (AgenticRubricEvaluation), and 12 (DeepJudgmentRubricAutoFail)
 - [Deep Judgment: Templates](deep-judgment-templates.md) — The parallel system for template attributes
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — All configuration fields including deep judgment rubric settings
 - [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — Complete result hierarchy including `deep_judgment_rubric`

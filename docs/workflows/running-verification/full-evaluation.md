@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -68,11 +68,29 @@ _qids = _benchmark.get_question_ids()
 
 # Mock scenarios: normal, normal, abstention, insufficient, normal+embedding
 _scenarios = [
-    {"verified": True, "rubric": {"accuracy": 4, "completeness": True, "citation_format": True}, "abstention": False, "sufficiency": True, "embedding": None},
-    {"verified": True, "rubric": {"accuracy": 5, "completeness": True, "citation_format": True}, "abstention": False, "sufficiency": True, "embedding": None},
+    {
+        "verified": True,
+        "rubric": {"accuracy": 4, "completeness": True, "citation_format": True},
+        "abstention": False,
+        "sufficiency": True,
+        "embedding": None,
+    },
+    {
+        "verified": True,
+        "rubric": {"accuracy": 5, "completeness": True, "citation_format": True},
+        "abstention": False,
+        "sufficiency": True,
+        "embedding": None,
+    },
     {"verified": None, "rubric": None, "abstention": True, "sufficiency": None, "embedding": None},
     {"verified": None, "rubric": None, "abstention": False, "sufficiency": False, "embedding": None},
-    {"verified": True, "rubric": {"accuracy": 3, "completeness": False, "citation_format": True}, "abstention": False, "sufficiency": True, "embedding": 0.87},
+    {
+        "verified": True,
+        "rubric": {"accuracy": 3, "completeness": False, "citation_format": True},
+        "abstention": False,
+        "sufficiency": True,
+        "embedding": 0.87,
+    },
 ]
 
 
@@ -101,14 +119,18 @@ def _make(qid, q_text, raw_ans, scenario):
         rubric = VerificationResultRubric(
             rubric_evaluation_performed=True,
             rubric_evaluation_strategy="batch",
-            llm_trait_scores={"accuracy": scenario["rubric"]["accuracy"], "completeness": scenario["rubric"]["completeness"]},
+            llm_trait_scores={
+                "accuracy": scenario["rubric"]["accuracy"],
+                "completeness": scenario["rubric"]["completeness"],
+            },
             regex_trait_scores={"citation_format": scenario["rubric"]["citation_format"]},
         )
     return VerificationResult(
         metadata=VerificationResultMetadata(
             question_id=qid,
             template_id="tmpl_" + qid[:8],
-            completed_without_errors=True,
+            failure=None,
+            caveats=[],
             question_text=q_text,
             raw_answer=raw_ans,
             answering=_answering,
@@ -153,17 +175,19 @@ from karenina.schemas.config import ModelConfig
 
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     # Evaluation mode
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     # Quality checks
     abstention_enabled=True,
     sufficiency_enabled=True,
@@ -173,13 +197,12 @@ config = VerificationConfig(
 )
 
 print(f"Mode:       {config.evaluation_mode}")
-print(f"Rubric:     {config.rubric_enabled}")
 print(f"Abstention: {config.abstention_enabled}")
 print(f"Sufficiency:{config.sufficiency_enabled}")
 print(f"Embedding:  {config.embedding_check_enabled}")
 ```
 
-When abstention is detected, parsing and rubric stages are skipped — the result is auto-failed. When sufficiency is insufficient, the same skipping applies. See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for stage-skipping rules.
+When abstention is detected at Stage 5, the pipeline short-circuits subsequent parsing and rubric stages and records the outcome as structured `failure` / `caveat` metadata on the `VerificationResult`. The same applies when Stage 6 flags an insufficient response. These are recorded outcomes, not deep-judgment auto-fails. See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for stage-skipping rules.
 
 ---
 
@@ -197,16 +220,18 @@ prompt_config = PromptConfig(
 
 config_with_prompts = VerificationConfig(
     answering_models=[
-        ModelConfig(id="haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain")
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     prompt_config=prompt_config,
 )
 
@@ -234,14 +259,15 @@ print("Load with: VerificationConfig.from_preset(Path('presets/production.json')
 ```python
 # Apply overrides on top of a preset base
 config_override = VerificationConfig.from_overrides(
-    answering_id="haiku", answering_model="claude-haiku-4-5",
-    parsing_id="haiku-parser", parsing_model="claude-haiku-4-5",
+    answering_id="haiku",
+    answering_model="claude-haiku-4-5",
+    parsing_id="haiku-parser",
+    parsing_model="claude-haiku-4-5",
     evaluation_mode="template_and_rubric",
     abstention=True,
 )
 
 print(f"Mode: {config_override.evaluation_mode}")
-print(f"Rubric: {config_override.rubric_enabled}")
 ```
 
 ### CLI with Preset + Overrides
@@ -300,10 +326,71 @@ for result in results:
 for result in results:
     t = result.template
     if t and t.embedding_check_performed:
-        print(f"Q: {result.metadata.question_text[:40]}  "
-              f"Similarity: {t.embedding_similarity_score:.2f}  "
-              f"Override: {t.embedding_override_applied}")
+        print(
+            f"Q: {result.metadata.question_text[:40]}  "
+            f"Similarity: {t.embedding_similarity_score:.2f}  "
+            f"Override: {t.embedding_override_applied}"
+        )
 ```
+
+---
+
+## Dynamic Rubric
+
+A [DynamicRubric](../../core_concepts/rubrics/index.md#6-dynamic-rubric) allows conditional rubric evaluation: traits are only scored when their concept is detected in the response. Attach a `DynamicRubric` to individual questions so that traits irrelevant to a particular response are skipped rather than evaluated against unrelated content.
+
+```python
+from karenina.schemas.entities.rubric import DynamicRubric, LLMRubricTrait
+
+dynamic = DynamicRubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="interaction_safety",
+            summary="drug interaction warnings",
+            description="Answer True if the response includes drug interaction warnings.",
+            kind="boolean",
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="dosing_clarity",
+            summary="dosing instructions",
+            description="Rate dosing clarity from 1 to 5.",
+            kind="score",
+            higher_is_better=True,
+        ),
+    ],
+)
+
+# Attach as global dynamic rubric
+benchmark.set_global_dynamic_rubric(dynamic)
+
+# Add the question separately
+benchmark.add_question(
+    question="What is the recommended treatment for condition X?",
+    raw_answer="Drug A, 500mg twice daily",
+)
+
+# Run with rubric mode enabled
+config = VerificationConfig(
+    answering_models=[
+        ModelConfig(id="haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
+    ],
+    parsing_models=[
+        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain")
+    ],
+    evaluation_mode="template_and_rubric",
+)
+
+results = benchmark.run_verification(config)
+
+# Inspect dynamic rubric metadata
+for result in results:
+    if result.rubric:
+        print(f"Promoted: {result.rubric.dynamic_rubric_promoted_traits}")
+        print(f"Skipped:  {result.rubric.dynamic_rubric_skipped_traits}")
+```
+
+The presence check runs automatically at the start of Stage 11 (RubricEvaluation). Skipped traits do not incur evaluation cost. Static rubric traits (attached via `benchmark.set_global_rubric()`) are always evaluated; only dynamic rubric traits are gated by presence.
 
 ---
 

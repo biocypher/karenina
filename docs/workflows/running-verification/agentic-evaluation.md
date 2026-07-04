@@ -26,7 +26,7 @@ This scenario walks through a complete agentic evaluation end-to-end, using a re
 - Compare agentic vs trace-only parsing on the same answer
 - Combine agentic parsing with agentic rubric evaluation using `AgenticRubricTrait`
 
-For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/).
+For the conceptual background on how agentic evaluation works, see [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/). For pipeline internals (stage ordering, context modes, investigation prompts), see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation/).
 
 ```python tags=["hide-cell"]
 # Setup cell: creates mock data and patches run_verification so that all code
@@ -113,23 +113,24 @@ _mock_rubric = VerificationResultRubric(
 # ---------------------------------------------------------------------------
 _question_id = "mock-bix51-question-id"
 _result_id = VerificationResultMetadata.compute_result_id(
-    _question_id, _answering, _parsing, _ts,
+    _question_id,
+    _answering,
+    _parsing,
+    _ts,
 )
 
 _mock_result = VerificationResult(
     metadata=VerificationResultMetadata(
         question_id=_question_id,
         template_id="tmpl_bix51",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=(
             "Using the patient data in data.xlsx, perform logistic regression analysis "
             "to determine which demographics (age, BMI, gender) predict treatment "
             "remission."
         ),
-        raw_answer=(
-            "Age is significant (p=0.002), BMI is not (p=0.087). "
-            "P(remission|age=65)=0.395, AIC=104.1"
-        ),
+        raw_answer=("Age is significant (p=0.002), BMI is not (p=0.087). P(remission|age=65)=0.395, AIC=104.1"),
         answering=_answering,
         parsing=_parsing,
         execution_time=45.3,
@@ -149,7 +150,8 @@ _mock_result_template_only = VerificationResult(
     metadata=VerificationResultMetadata(
         question_id=_question_id,
         template_id="tmpl_bix51",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=_mock_result.metadata.question_text,
         raw_answer=_mock_result.metadata.raw_answer,
         answering=_answering,
@@ -184,7 +186,8 @@ _mock_trace_only_result = VerificationResult(
     metadata=VerificationResultMetadata(
         question_id=_question_id,
         template_id="tmpl_bix51",
-        completed_without_errors=True,
+        failure=None,
+        caveats=[],
         question_text=_mock_result.metadata.question_text,
         raw_answer=_mock_result.metadata.raw_answer,
         answering=_answering,
@@ -260,10 +263,10 @@ Each field uses a `VerifiedField` with a verification primitive that checks the 
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import BooleanMatch, NumericTolerance
+from karenina.schemas.primitives import BooleanMatch, NumericTolerance
 
-TEMPLATE_CODE = '''
-class LogisticRegressionAnswer(BaseAnswer):
+
+class Answer(BaseAnswer):
     """Template for logistic regression analysis task."""
 
     age_significant: bool = VerifiedField(
@@ -292,16 +295,14 @@ class LogisticRegressionAnswer(BaseAnswer):
     )
     age_model_aic: float = VerifiedField(
         description=(
-            "AIC (Akaike Information Criterion) for the logistic regression model "
-            "using age as the sole predictor."
+            "AIC (Akaike Information Criterion) for the logistic regression model using age as the sole predictor."
         ),
         ground_truth=104.14,
         verify_with=NumericTolerance(tolerance=1.0, mode="absolute"),
     )
-'''
 ```
 
-The template class name (`LogisticRegressionAnswer`) is arbitrary; the pipeline discovers the class by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
+The template class name (`Answer` by convention) is discovered by type inheritance from `BaseAnswer`. See [Answer Templates](../../core_concepts/answer-templates/) for the full `VerifiedField` API and available primitives.
 
 ---
 
@@ -335,7 +336,8 @@ question = Question(
     workspace_path="workspace",
 )
 
-question_id = benchmark.add_question(question, answer_template=TEMPLATE_CODE)
+question_id = benchmark.add_question(question)
+benchmark.update_template(question_id, Answer)
 ```
 
 The `workspace_path` on the `Question` is relative to the benchmark's `workspace_root`. The pipeline resolves the full path as `workspace_root / workspace_path`, giving the agent access to `my_benchmark/workspace/data.xlsx`.
@@ -344,7 +346,7 @@ The `workspace_path` on the `Question` is relative to the benchmark's `workspace
 
 ## Step 4: Configure Verification
 
-Two key configuration groups control agentic evaluation: the **answering model** (which must use a natively agentic interface) and the **agentic parsing** settings (which enable the investigation judge).
+Two key configuration groups control agentic evaluation: the **answering model** (which must use a deep agent interface) and the **agentic parsing** settings (which enable the investigation judge).
 
 ```python
 from karenina.schemas.verification.config import VerificationConfig
@@ -389,7 +391,7 @@ config = VerificationConfig(
 
 | Field | Value | Why |
 |-------|-------|-----|
-| `interface` | `"claude_agent_sdk"` | Natively agentic: the SDK manages tool use internally, producing a multi-turn trace. The pipeline detects this via the adapter's `natively_agentic=True` flag and routes through `AgentPort` instead of `LLMPort`. |
+| `interface` | `"claude_agent_sdk"` | Deep agent tier: the SDK manages tool use internally, producing a multi-turn trace. The pipeline detects this via the adapter's `agent_tier="deep_agent"` setting and routes through `AgentPort` instead of `LLMPort`. |
 | `agent_timeout` | `300` | Data analysis tasks can take several minutes. The default is 180s. |
 | `system_prompt` | *(custom)* | Tells the agent to work in the workspace, use Python, and save scripts and results to files. The judge inspects these workspace artifacts; if the agent only prints to stdout without saving files, the judge has nothing to evaluate in `workspace_only` mode. |
 | `agent_middleware` | `AgentMiddlewareConfig(limits=AgentLimitConfig(model_call_limit=50))` | Data analysis tasks typically need more than the default 25 turns: reading data, writing scripts, installing packages, running analysis, and saving results. |
@@ -421,7 +423,7 @@ results = benchmark.run_verification(config=config, run_name="agentic_eval")
 result = results.results[0]
 
 # Inspect results
-print(f"Completed: {result.metadata.completed_without_errors}")
+print(f"Completed: {(result.metadata.failure is None)}")
 print(f"Verify: {result.template.verify_result}")
 print(f"Agentic: {result.template.agentic_parsing_performed}")
 
@@ -446,15 +448,15 @@ Agentic: True
 
 Four stages do the substantive work in this configuration:
 
-1. **GenerateAnswer** (Stage 2): Detects that `claude_agent_sdk` is `natively_agentic` and uses `AgentPort`. Copies `workspace/` to `workspace_run_{timestamp}/`. The agent reads `data.xlsx`, writes Python scripts, executes them, and produces analysis output.
+1. **GenerateAnswer** (Stage 2): Detects that `claude_agent_sdk` has `agent_tier="deep_agent"` and uses `AgentPort`. Copies `workspace/` to `workspace_run_{timestamp}/`. The agent reads `data.xlsx`, writes Python scripts, executes them, and produces analysis output.
 
-2. **AgenticParseTemplate** (Stage 7b): The investigation agent independently examines the workspace. In `workspace_only` mode, it receives only the question text and workspace path (not the answering agent's trace). It reads the scripts and output files the answering agent left behind, optionally re-runs them to confirm their output, and reports structured findings. The judge does not re-implement the task from scratch. A separate extraction parser then converts these findings into the `LogisticRegressionAnswer` schema.
+2. **AgenticParseTemplate** (Stage 7b): The investigation agent independently examines the workspace. In `workspace_only` mode, it receives only the question text and workspace path (not the answering agent's trace). It reads the scripts and output files the answering agent left behind, optionally re-runs them to confirm their output, and reports structured findings. The judge does not re-implement the task from scratch. A separate extraction parser then converts these findings into the `Answer` schema.
 
 3. **VerifyTemplate** (Stage 8): Runs `BooleanMatch` and `NumericTolerance` primitives against the ground truth values declared in each `VerifiedField`.
 
 4. **FinalizeResult** (Stage 13): Stores the investigation trace in the result. Because `workspace_cleanup=False`, the working directory is preserved.
 
-For full details on stage ordering, context modes, and the two-step investigation/extraction architecture, see [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/).
+For full details on stage ordering, context modes, and the two-step investigation/extraction architecture, see [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation/).
 
 ---
 
@@ -513,7 +515,7 @@ In production, use `run_single_model_verification` with `cached_answer_data` to 
 # trace_only_result = run_single_model_verification(
 #     question_id=question_id,
 #     question_text=question.question,
-#     template_code=TEMPLATE_CODE,
+#     template_code=benchmark.get_template(question_id),
 #     answering_model=config.answering_models[0],
 #     parsing_model=config.parsing_models[0],
 #     agentic_parsing=False,
@@ -624,7 +626,6 @@ rubric_config = VerificationConfig(
         ),
     ],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
     agentic_rubric_strategy="individual",
     agentic_parsing=True,
     agentic_judge_context="workspace_only",
@@ -640,8 +641,8 @@ Three settings control agentic rubric evaluation:
 | Field | Value | Description |
 |-------|-------|-------------|
 | `evaluation_mode` | `"template_and_rubric"` | Runs both template verification (Stages 7/8) and rubric evaluation (Stage 11) |
-| `rubric_enabled` | `True` | Required when `evaluation_mode` includes rubric evaluation |
 | `agentic_rubric_strategy` | `"individual"` | Each agentic trait gets its own agent session. The alternative, `"shared"`, evaluates all agentic traits in a single session. |
+| `agentic_rubric_parallel` | `False` (default) | When `True` and strategy is `"individual"`, agentic trait sessions run concurrently. Ignored under the `"shared"` strategy. |
 
 ### Run Verification and Inspect Rubric Results
 
@@ -687,17 +688,17 @@ When `evaluation_mode="template_and_rubric"` with both `agentic_parsing=True` an
 
 Stage 7b and Stage 11b each launch independent agent sessions. The Stage 7b agent fills in the template schema; the Stage 11b agent(s) produce rubric scores. They do not share context or state with each other.
 
-For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../../advanced-pipeline/agentic-rubric-evaluation/). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/).
+For details on agentic rubric internals (investigation prompts, extraction, error handling), see [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation/). For the `AgenticRubricTrait` API, see [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/).
 
 ---
 
 ## Related Pages
 
 - [Agentic Evaluation (Concepts)](../../core_concepts/agentic-evaluation/): Conceptual overview, context modes, independence guarantees
-- [Agentic Evaluation (Advanced)](../../../advanced-pipeline/agentic-evaluation/): Pipeline internals, stage architecture, investigation prompts
+- [Agentic Evaluation (Advanced)](../../advanced-pipeline/agentic-evaluation/): Pipeline internals, stage architecture, investigation prompts
 - [Agentic Traits (Concepts)](../../core_concepts/rubrics/agentic-traits/): `AgenticRubricTrait` API, kinds, context modes
-- [Agentic Rubric Evaluation (Advanced)](../../../advanced-pipeline/agentic-rubric-evaluation/): Stage 11b internals, investigation prompts, extraction
+- [Agentic Rubric Evaluation (Advanced)](../../advanced-pipeline/agentic-rubric-evaluation/): Stage 11b internals, investigation prompts, extraction
 - [MCP Agent Evaluation](../mcp-agent-evaluation/): Evaluating tool-using agents with MCP servers
 - [Basic Verification](../basic-verification/): Simplest verification path (template-only, no agents)
 - [Answer Templates](../../core_concepts/answer-templates/): `VerifiedField` API and verification primitives
-- [VerificationConfig Reference](../../../reference/configuration/verification-config/): All configuration fields
+- [VerificationConfig Reference](../../reference/configuration/verification-config.md): All configuration fields

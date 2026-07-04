@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -39,10 +39,11 @@ from unittest.mock import MagicMock, patch
 from karenina import Benchmark
 from karenina.schemas.entities.question import Question
 from karenina.benchmark.authoring.answers.builder import AnswerBuilder
+from karenina.benchmark.benchmark_helpers import TemplateProgressEvent
 
 # Realistic generated template code (matches actual generator output format)
-_GENERATED_CODE = '''from karenina.schemas.entities import BaseAnswer, VerifiedField
-from karenina.schemas.entities.primitives import BooleanMatch
+_GENERATED_CODE = """from karenina.schemas.entities import BaseAnswer, VerifiedField
+from karenina.schemas.primitives import BooleanMatch
 
 class Answer(BaseAnswer):
     identifies_target: bool = VerifiedField(
@@ -55,11 +56,13 @@ class Answer(BaseAnswer):
         ground_truth=True,
         verify_with=BooleanMatch(),
     )
-'''
+"""
+
 
 def _mock_generate_answer_template(question_obj, **kwargs):
     """Return realistic generated template code without calling an LLM."""
     return _GENERATED_CODE
+
 
 def _mock_generate_all_templates(self, **kwargs):
     """Simulate batch template generation."""
@@ -71,9 +74,21 @@ def _mock_generate_all_templates(self, **kwargs):
         else:
             results[qid] = {"success": True, "skipped": True}
         if kwargs.get("progress_callback"):
+            processed = len(results)
+            total = len(self.get_question_ids())
             kwargs["progress_callback"](
-                len(results) / len(self.get_question_ids()) * 100,
-                f"Generated {len(results)}/{len(self.get_question_ids())}",
+                TemplateProgressEvent(
+                    event="task_completed",
+                    question_id=qid,
+                    processed_count=processed,
+                    total_count=total,
+                    successful_count=processed,
+                    failed_count=0,
+                    percentage=processed / total * 100,
+                    error=None,
+                    template_code=None,
+                    task_duration=None,
+                )
             )
     return results
 ```
@@ -183,7 +198,7 @@ edited_code = code_string.replace(
     '        description="True if the response identifies BCL2 as the primary pharmacological target of venetoclax.",\n'
     "        ground_truth=True,\n"
     "        verify_with=BooleanMatch(),",
-    '        description=(\n'
+    "        description=(\n"
     '            "True if the response identifies BCL2 (including Bcl-2, BCL-2, or "\n'
     '            "B-cell lymphoma 2) as the direct pharmacological target of venetoclax. "\n'
     '            "False if BCL2 is mentioned only as a pathway member."\n'
@@ -210,17 +225,20 @@ For minor edits (tweaking a description, adjusting a ground truth value, swappin
 builder = (
     AnswerBuilder()
     .add_attribute(
-        "identifies_target", "bool",
+        "identifies_target",
+        "bool",
         "True if the response identifies BCL2 as the primary target of venetoclax.",
         True,
     )
     .add_attribute(
-        "mentions_mechanism", "bool",
+        "mentions_mechanism",
+        "bool",
         "True if the response describes venetoclax as a BH3 mimetic.",
         True,
     )
     .add_attribute(
-        "specifies_indication", "bool",
+        "specifies_indication",
+        "bool",
         "True if the response mentions CLL or AML as an approved indication.",
         True,
     )
@@ -243,7 +261,8 @@ print(f"Builder state:\n{builder}")
 builder_with_regex = (
     AnswerBuilder()
     .add_attribute(
-        "identifies_drug_class", "bool",
+        "identifies_drug_class",
+        "bool",
         "True if the response identifies venetoclax as a BH3 mimetic or BCL2 inhibitor.",
         True,
     )
@@ -309,7 +328,7 @@ with patch.object(type(benchmark), "generate_all_templates", _mock_generate_all_
         model="claude-haiku-4-5",
         model_provider="anthropic",
         only_missing=True,
-        progress_callback=lambda pct, msg: print(f"  {pct:.0f}%: {msg}"),
+        progress_callback=lambda event: print(f"  {event.percentage:.0f}%: {event.event}"),
     )
 
 generated = sum(1 for r in results.values() if r["success"] and not r.get("skipped"))
@@ -319,7 +338,7 @@ print(f"Skipped (already had template): {skipped}")
 print(f"Progress: {benchmark.get_progress()}%")
 ```
 
-The `progress_callback` receives a percentage (0 to 100) and a status message, useful for displaying progress in scripts or the GUI. For production use, pass a real model and provider; the function calls `generate_answer_template()` internally for each question.
+On each invocation the `progress_callback` receives a single `TemplateProgressEvent` (from `karenina.benchmark.benchmark_helpers`). Read fields like `event.percentage` (0 to 100), `event.event` (the event type, such as `task_completed`), and the per-question counts to display progress in scripts or the GUI. For production use, pass a real model and provider. The function calls `generate_answer_template()` internally for each question.
 
 ---
 
@@ -377,6 +396,7 @@ This pattern scales to hundreds of questions. The initial bulk generation handle
 
 ```python
 import shutil
+
 shutil.rmtree(tmpdir, ignore_errors=True)
 ```
 
@@ -384,7 +404,7 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Answer Templates](../../core_concepts/answer-templates.md): Deep dive into template concepts, field types, and `verify()` patterns
+- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Deep dive into template concepts, field types, and `verify()` patterns
 - [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb): Hand-written template patterns (boolean, string, numeric, regex)
 - [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb): Bulk ingestion, ADeLe classification, and few-shot examples
 - [Running Verification](../running-verification/index.md): Execute the benchmark against LLMs

@@ -203,8 +203,8 @@ class ResultsManager:
                 "model_combinations": 0,
             }
 
-        successful_count = sum(1 for r in results.values() if r.metadata.completed_without_errors)
-        failed_count = sum(1 for r in results.values() if not r.metadata.completed_without_errors)
+        successful_count = sum(1 for r in results.values() if r.metadata.failure is None)
+        failed_count = sum(1 for r in results.values() if r.metadata.failure is not None)
         unique_questions = len({r.metadata.question_id for r in results.values()})
         total_execution_time = sum(r.metadata.execution_time for r in results.values() if r.metadata.execution_time)
         total_result_count = len(results)
@@ -392,8 +392,15 @@ class ResultsManager:
         else:
             raise ValueError(f"Unsupported file format: {file_path.suffix}. Supported formats: .json, .csv")
 
-        # Store in memory if run_name provided
-        if run_name:
-            self._in_memory_results[run_name] = results
+        # Group results by their metadata.run_name, falling back to caller-provided run_name
+        grouped: dict[str, dict[str, VerificationResult]] = {}
+        for key, result in results.items():
+            effective_run = result.metadata.run_name if result.metadata.run_name is not None else run_name
+            if effective_run:
+                grouped.setdefault(effective_run, {})[key] = result
+
+        # Store each group under its own run_name
+        for group_name, group_results in grouped.items():
+            self._in_memory_results[group_name] = group_results
 
         return results

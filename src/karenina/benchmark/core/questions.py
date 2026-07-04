@@ -60,7 +60,7 @@ class QuestionManager:
 
     def add_question(
         self,
-        question: Union[str, "Question"],
+        question: Union[str, dict[str, Any], "Question"],
         raw_answer: str | None = None,
         answer_template: str | type | None = None,
         question_id: str | None = None,
@@ -74,13 +74,17 @@ class QuestionManager:
         """
         Add a question to the benchmark.
 
-        This method supports three usage patterns:
+        This method supports four usage patterns:
         1. Traditional kwargs: add_question("What is 2+2?", "4", ...)
         2. Question object: add_question(Question(...), ...)
         3. Answer class: add_question("What is 2+2?", "4", answer_template=AnswerClass)
+        4. Dict: add_question({"question": "What is 2+2?", "raw_answer": "4", ...})
 
         Args:
-            question: Either the question text (str) or a Question object
+            question: The question text (str), a Question object, or a dict with
+                keys "question" and "raw_answer" (plus optional "answer_template",
+                "question_id", "finished", "author", "sources", "custom_metadata",
+                "few_shot_examples", "answer_notes")
             raw_answer: The expected answer text (required if question is str)
             answer_template: Optional Python code (str), Answer class (type), or None
             question_id: Optional question ID (will be generated if not provided)
@@ -96,13 +100,20 @@ class QuestionManager:
 
         Examples:
             # Traditional usage with kwargs
-            q_id = manager.add_question("What is Python?", "A programming language", answer_notes="A general-purpose language")
+            q_id = manager.add_question("What is Python?", "A programming language")
 
-            # New usage with Question object
-            q_obj = Question(question="What is Python?", raw_answer="A programming language", answer_notes="A general-purpose language")
+            # Dict usage
+            q_id = manager.add_question({
+                "question": "What is Python?",
+                "raw_answer": "A programming language",
+                "answer_notes": "A general-purpose language",
+            })
+
+            # Question object
+            q_obj = Question(question="What is Python?", raw_answer="A programming language")
             q_id = manager.add_question(q_obj)
 
-            # New usage with Answer class - automatically marked as finished
+            # Answer class (automatically marked as finished)
             class MyAnswer(BaseAnswer):
                 value: int
                 def verify(self): return self.value == 42
@@ -110,6 +121,29 @@ class QuestionManager:
         """
         # Import Question class here to avoid circular imports
         from karenina.schemas.entities import Question
+
+        # Handle dict input: extract fields and recurse with kwargs
+        if isinstance(question, dict):
+            data = question
+            if "question" not in data:
+                raise ValueError(
+                    "Dict input must contain a 'question' key. "
+                    "Expected keys: 'question', 'raw_answer', and optionally "
+                    "'answer_template', 'question_id', 'finished', 'author', "
+                    "'sources', 'custom_metadata', 'few_shot_examples', 'answer_notes'."
+                )
+            return self.add_question(
+                question=data["question"],
+                raw_answer=data.get("raw_answer", raw_answer),
+                answer_template=data.get("answer_template", answer_template),
+                question_id=data.get("question_id", question_id),
+                finished=data.get("finished", finished),
+                author=data.get("author", author),
+                sources=data.get("sources", sources),
+                custom_metadata=data.get("custom_metadata", custom_metadata),
+                few_shot_examples=data.get("few_shot_examples", few_shot_examples),
+                answer_notes=data.get("answer_notes", answer_notes),
+            )
 
         # Handle Question object input
         if isinstance(question, Question):
@@ -126,6 +160,15 @@ class QuestionManager:
             # Use answer notes from Question object if not overridden
             if answer_notes is None:
                 answer_notes = question.answer_notes
+            # Use author from Question object if not overridden
+            if author is None:
+                author = question.author
+            # Use sources from Question object if not overridden
+            if sources is None:
+                sources = question.sources
+            # Use custom_metadata from Question object if not overridden
+            if custom_metadata is None:
+                custom_metadata = question.custom_metadata
             # Extract workspace path for coding benchmarks
             workspace_path = question.workspace_path
         elif isinstance(question, str):
@@ -139,8 +182,11 @@ class QuestionManager:
             if raw_answer is None:
                 raise ValueError("raw_answer is required when question is a string")
         else:
-            # Invalid type
-            raise TypeError(f"question must be either a string or Question object, got {type(question)}")
+            raise TypeError(
+                f"question must be a string, dict, or Question object, got {type(question)}. "
+                f"Usage: add_question('text', 'answer') or "
+                f"add_question({{'question': 'text', 'raw_answer': 'answer'}})"
+            )
 
         # Handle Answer class input for answer_template
         if answer_template is not None:
@@ -609,30 +655,29 @@ class QuestionManager:
         self.base._checkpoint.dateModified = datetime.now().isoformat()
         return count
 
-    def add_questions_batch(self, questions_data: list[dict[str, Any]]) -> list[str]:
-        """
-        Add multiple questions at once.
+    def add_questions_batch(
+        self,
+        questions_data: "list[dict[str, Any] | Question]",
+    ) -> list[str]:
+        """Add multiple questions at once.
+
+        Accepts a list of dicts (passed to ``add_question()``), Question objects,
+        or a mix of both.
 
         Args:
-            questions_data: List of dictionaries with question data
+            questions_data: List of dicts or Question objects.
 
         Returns:
-            List of question IDs that were created
+            List of question IDs that were created.
         """
         question_ids = []
         for data in questions_data:
-            q_id = self.add_question(
-                question=data["question"],
-                raw_answer=data["raw_answer"],
-                answer_template=data.get("answer_template"),
-                question_id=data.get("question_id"),
-                finished=data.get("finished", False),
-                author=data.get("author"),
-                sources=data.get("sources"),
-                custom_metadata=data.get("custom_metadata"),
-            )
+            q_id = self.add_question(data)
             question_ids.append(q_id)
         return question_ids
+
+    # Convenience alias
+    add_questions = add_questions_batch
 
     def mark_finished(self, question_id: str) -> None:
         """Mark a question as finished."""

@@ -381,10 +381,10 @@ benchmark.run_verification(config)
 
 1. **Validation**: Must be list of `BaseMessage` objects (AIMessage, ToolMessage, etc.)
 2. **Metrics Extraction**:
-   - Calls `_extract_agent_metrics(response)` from `verification_utils.py`
+   - Calls `extract_agent_metrics_from_messages(messages)` from `trace_agent_metrics.py`
    - Extracts: tool calls, tool failures, iterations
 3. **Harmonization**:
-   - Calls `harmonize_agent_response(response)` from `mcp_utils.py`
+   - Calls `harmonize_agent_response(response)` from `adapters/langchain/trace.py`
    - Converts message list to unified string format
 4. **Storage**: Both harmonized trace and metrics stored together
 

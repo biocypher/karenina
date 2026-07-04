@@ -146,7 +146,7 @@ Evaluate qualitative aspects using all three rubric types:
 RubricTrait(name="clarity", description="...", kind="score", ...)
 
 # Regex-based traits
-RegexTrait(name="has_code", pattern=r"```", ...)
+RegexRubricTrait(name="has_code", pattern=r"```", ...)
 
 # Metric-based traits
 MetricRubricTrait(name="coverage", tp_instructions=[...], ...)
@@ -211,7 +211,7 @@ Here's a minimal example showing the task-centric workflow with both templates a
 
 ```python
 from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.entities import Rubric, RubricTrait, RegexTrait
+from karenina.schemas.entities import Rubric, RubricTrait, RegexRubricTrait
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 
@@ -260,7 +260,7 @@ task.add_rubric(Rubric(
         )
     ],
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="mentions_testing",
             description="Agent mentioned testing",
             pattern=r"(?i)(test|testing|verified)"
@@ -368,16 +368,16 @@ task.add_rubric(Rubric(
 #### Regex-Based Rubrics
 
 ```python
-from karenina.schemas.entities import RegexTrait
+from karenina.schemas.entities import RegexRubricTrait
 
 task.add_rubric(Rubric(
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_code_block",
             description="Contains code implementation",
             pattern=r"```[\s\S]*?```"
         ),
-        RegexTrait(
+        RegexRubricTrait(
             name="no_errors",
             description="No error mentions",
             pattern=r"(?i)(error|exception|failed)",
@@ -430,7 +430,7 @@ task.add_question({
 # Rubrics: Assess quality
 task.add_rubric(Rubric(
     traits=[RubricTrait(...)],        # LLM evaluation
-    manual_traits=[RegexTrait(...)],  # Regex checks
+    manual_traits=[RegexRubricTrait(...)],  # Regex checks
     metric_traits=[MetricRubricTrait(...)]   # Metrics
 ))
 
@@ -600,7 +600,7 @@ task.add_question({
 # Attach rubrics
 task.add_rubric(Rubric(
     traits=[RubricTrait(name="clarity", ...)],
-    manual_traits=[RegexTrait(name="has_errors", ...)]
+    manual_traits=[RegexRubricTrait(name="has_errors", ...)]
 ))
 
 # Evaluate - template_and_rubric mode
@@ -640,7 +640,7 @@ task = TaskEval(task_id="multi_step_agent")
 # Add step-specific rubrics
 planning_rubric = Rubric(
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_plan",
             description="Contains planning keywords",
             pattern=r"(?i)(plan|strategy|approach)"
@@ -651,7 +651,7 @@ task.add_rubric(planning_rubric, step_id="planning")
 
 execution_rubric = Rubric(
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_implementation",
             description="Contains implementation details",
             pattern=r"(?i)(implement|execute|build)"
@@ -923,7 +923,7 @@ task.log("I looked at the requirements, built something, and tested it")
 # ✅ Good: Mix of all three for comprehensive evaluation
 rubric = Rubric(
     traits=[RubricTrait(name="clarity", ...)],  # Subjective quality
-    manual_traits=[RegexTrait(name="has_code", ...)],  # Objective check
+    manual_traits=[RegexRubricTrait(name="has_code", ...)],  # Objective check
     metric_traits=[MetricRubricTrait(name="coverage", ...)]  # Quantitative
 )
 ```
@@ -980,7 +980,7 @@ for question_id, scores in aggregated.items():
 
 ```python
 from karenina.benchmark.task_eval import TaskEval
-from karenina.schemas.entities import Rubric, RubricTrait, RegexTrait, MetricRubricTrait
+from karenina.schemas.entities import Rubric, RubricTrait, RegexRubricTrait, MetricRubricTrait
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.verification import VerificationConfig
 
@@ -1024,12 +1024,12 @@ rubric = Rubric(
 
     # Deterministic checks
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="mentions_testing",
             description="Agent mentioned testing or verification",
             pattern=r"(?i)(test|testing|verification|validate)"
         ),
-        RegexTrait(
+        RegexRubricTrait(
             name="no_errors",
             description="No error indicators in output",
             pattern=r"(?i)(error|exception|failed|broken)",
@@ -1106,7 +1106,7 @@ planning_rubric = Rubric(
         )
     ],
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_plan",
             description="Contains planning keywords",
             pattern=r"(?i)(plan|strategy|approach|steps)"
@@ -1127,7 +1127,7 @@ execution_rubric = Rubric(
         )
     ],
     manual_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_implementation",
             description="Contains implementation details",
             pattern=r"(?i)(implement|execute|build|create)"

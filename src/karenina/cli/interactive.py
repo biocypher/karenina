@@ -142,7 +142,6 @@ def build_config_interactively(
         default="template_only",
     )
 
-    # Derive rubric_enabled from evaluation_mode
     rubric_enabled = evaluation_mode in ["template_and_rubric", "rubric_only"]
 
     abstention_enabled = Confirm.ask("Enable abstention detection?", default=False)
@@ -159,7 +158,11 @@ def build_config_interactively(
             "Embedding similarity threshold (0.0-1.0)", 0.0, 1.0, str(DEFAULT_EMBEDDING_THRESHOLD)
         )
 
-    deep_judgment_enabled = Confirm.ask("Enable deep judgment?", default=False)
+    deep_judgment_mode_str = Prompt.ask(
+        "Deep judgment mode",
+        choices=["disabled", "reasoning_only", "full"],
+        default="disabled",
+    )
 
     console.print("[green]✓ Features configured[/green]\n")
 
@@ -182,7 +185,7 @@ def build_config_interactively(
             traits_str = Prompt.ask("Rubric trait names (comma-separated)")
             rubric_trait_names = [t.strip() for t in traits_str.split(",")]
 
-        if deep_judgment_enabled:
+        if deep_judgment_mode_str != "disabled":
             dj = _configure_deep_judgment()
             deep_judgment_max_excerpts = dj["max_excerpts"]
             deep_judgment_fuzzy_threshold = dj["fuzzy_threshold"]
@@ -234,7 +237,6 @@ def build_config_interactively(
         answering_models=answering_models,
         parsing_models=parsing_models,
         replicate_count=replicate_count,
-        rubric_enabled=rubric_enabled,
         rubric_trait_names=rubric_trait_names,
         evaluation_mode=evaluation_mode,
         abstention_enabled=abstention_enabled,
@@ -242,7 +244,7 @@ def build_config_interactively(
         embedding_check_enabled=embedding_check_enabled,
         embedding_check_model=embedding_check_model,
         embedding_check_threshold=embedding_check_threshold,
-        deep_judgment_enabled=deep_judgment_enabled,
+        deep_judgment_mode=deep_judgment_mode_str,
         deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts,
         deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_threshold,
         deep_judgment_excerpt_retry_attempts=deep_judgment_retry_attempts,
@@ -270,7 +272,7 @@ def build_config_interactively(
     console.print(f"  Abstention: {'enabled' if abstention_enabled else 'disabled'}")
     console.print(f"  Sufficiency: {'enabled' if sufficiency_enabled else 'disabled'}")
     console.print(f"  Embedding check: {'enabled' if embedding_check_enabled else 'disabled'}")
-    console.print(f"  Deep judgment: {'enabled' if deep_judgment_enabled else 'disabled'}")
+    console.print(f"  Deep judgment: {deep_judgment_mode_str}")
 
     # Step 6: Optionally save as preset
     if Confirm.ask("\nSave this configuration as a preset?", default=False):
@@ -385,10 +387,13 @@ def _configure_deep_judgment_rubric(rubric_enabled: bool) -> dict[str, Any]:
         import json
         from pathlib import Path
 
+        from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
+
         try:
             config_path = Path(config_path_str)
             with open(config_path) as f:
-                result["config"] = json.load(f)
+                raw_dict = json.load(f)
+            result["config"] = DeepJudgmentRubricCustomConfig.model_validate(raw_dict)
             console.print(f"[green]✓ Loaded custom config from {config_path}[/green]")
         except Exception as e:
             cli_error(f"loading config: {e}", e)
@@ -407,11 +412,11 @@ def _configure_few_shot() -> Any:
 
     from karenina.schemas.config import FewShotConfig
 
-    few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom", "none"], default="all")
-    few_shot_mode = cast(Literal["all", "k-shot", "custom", "none"], few_shot_mode_str)
+    few_shot_mode_str = Prompt.ask("Few-shot mode", choices=["all", "k-shot", "custom"], default="all")
+    few_shot_mode = cast(Literal["all", "k-shot", "custom"], few_shot_mode_str)
     few_shot_k = _prompt_int_min("Few-shot k (number of examples)", min_val=1, default="3")
 
-    return FewShotConfig(enabled=True, global_mode=few_shot_mode, global_k=few_shot_k)
+    return FewShotConfig(source="both", pool_mode=few_shot_mode, pool_k=few_shot_k)
 
 
 def _configure_async() -> tuple[bool, int]:

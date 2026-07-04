@@ -1,17 +1,19 @@
 """Claude Agent SDK Parser adapter implementing the ParserPort interface.
 
-This module provides the ClaudeSDKParserAdapter class that implements the ParserPort
-interface using the Claude Agent SDK's query() function with structured output.
+This module provides the ClaudeSDKParserAdapter that uses direct API calls
+for structured output parsing, bypassing the Agent SDK's subprocess transport.
 
-IMPORTANT: This is NOT just JSON parsing. It invokes an LLM to interpret
-natural language responses and extract structured data according to a schema.
+The adapter detects the endpoint type from the model configuration:
 
-Key differences from LangChain:
-- Uses query() with output_format={'type': 'json_schema', 'schema': ...}
-- SDK's structured_output is already a Python dict, NOT a JSON string
-- Use schema.model_validate(result.structured_output) NOT json.loads()
-- SDK needs max_turns>=2 for internal structured output validation
-- System prompt passed via ClaudeAgentOptions.system_prompt (same as LLM adapter)
+- **Anthropic API** (no custom base URL): Uses ``anthropic.AsyncAnthropic``
+  with ``output_config`` for native constrained decoding.
+- **Custom endpoint** (vLLM, sglang): Uses ``openai.AsyncOpenAI`` with
+  ``response_format`` on the OpenAI-compatible endpoint (auto-derived from
+  the same host). Logs a warning on first use.
+
+This hybrid approach gives guaranteed schema enforcement on both endpoint
+types while keeping the Agent SDK's subprocess transport for agent and LLM
+operations (where it works correctly).
 """
 
 from __future__ import annotations
@@ -21,15 +23,16 @@ import concurrent.futures
 import json
 import logging
 from typing import TYPE_CHECKING, Any, TypeVar
+from urllib.parse import urlparse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
+from karenina.utils.json_extraction import extract_json_from_response
+from karenina.utils.retry_policy import RetryPolicy
 
 if TYPE_CHECKING:
-    from claude_agent_sdk import ClaudeAgentOptions, ResultMessage
-
     from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -37,21 +40,67 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+def _enforce_no_additional_properties(schema: dict[str, Any]) -> dict[str, Any]:
+    """Recursively set ``additionalProperties: false`` on all object types.
+
+    Anthropic's ``output_config`` requires this; Pydantic's
+    ``model_json_schema()`` omits it (defaulting to true per JSON Schema spec).
+
+    Args:
+        schema: A JSON schema dict (mutated in place and returned).
+
+    Returns:
+        The same schema dict with ``additionalProperties`` set on all objects.
+    """
+    if schema.get("type") == "object":
+        schema["additionalProperties"] = False
+
+    # Walk nested schemas: properties, items, $defs, allOf/anyOf/oneOf
+    for prop in schema.get("properties", {}).values():
+        _enforce_no_additional_properties(prop)
+    if "items" in schema and isinstance(schema["items"], dict):
+        _enforce_no_additional_properties(schema["items"])
+    for defn in schema.get("$defs", {}).values():
+        _enforce_no_additional_properties(defn)
+    for keyword in ("allOf", "anyOf", "oneOf"):
+        for sub in schema.get(keyword, []):
+            if isinstance(sub, dict):
+                _enforce_no_additional_properties(sub)
+
+    return schema
+
+
+def _derive_openai_base_url(anthropic_base_url: str) -> str:
+    """Derive an OpenAI-compatible base URL from an Anthropic base URL.
+
+    Both vLLM and sglang expose OpenAI and Anthropic endpoints on the same
+    host and port. This strips any path from the Anthropic URL and appends
+    ``/v1`` for the OpenAI endpoint.
+
+    Args:
+        anthropic_base_url: The custom Anthropic endpoint URL.
+
+    Returns:
+        OpenAI-compatible base URL (e.g. ``http://host:8000/v1``).
+    """
+    parsed = urlparse(anthropic_base_url)
+    return f"{parsed.scheme}://{parsed.netloc}/v1"
+
+
+def _configured_openai_base_url(model_config: ModelConfig) -> str | None:
+    """Return an explicit OpenAI-compatible parser endpoint override, if configured."""
+
+    extra_kwargs = getattr(model_config, "extra_kwargs", None) or {}
+    value = extra_kwargs.get("claude_sdk_parser_openai_base_url")
+    return str(value) if value else None
+
+
 class ClaudeSDKParserAdapter:
-    """Parser adapter using Claude Agent SDK's structured output capabilities.
+    """Parser adapter using direct API calls for structured output.
 
-    This adapter implements the ParserPort Protocol and provides LLM-based
-    structured output parsing. It invokes an LLM (the "judge" model) to
-    interpret natural language responses and extract structured data.
-
-    The parsing flow:
-    1. Build a prompt with the response text and instruction to extract data
-    2. Invoke the SDK's query() with output_format set to the JSON schema
-    3. The SDK constrains the LLM to output valid JSON matching the schema
-    4. Validate the result using Pydantic and return the model instance
-
-    IMPORTANT: Unlike LangChain, the SDK's structured_output is already a
-    Python dict. No json.loads() is needed - use model_validate() directly.
+    Bypasses the Agent SDK subprocess (which hangs on custom endpoints with
+    ``--json-schema``) by calling the API directly. Uses constrained decoding
+    for schema enforcement on both Anthropic API and custom endpoints.
 
     Example:
         >>> from karenina.schemas.config import ModelConfig
@@ -68,74 +117,81 @@ class ClaudeSDKParserAdapter:
         ...     interface="claude_agent_sdk"
         ... )
         >>> parser = ClaudeSDKParserAdapter(config)
-        >>> trace = "Based on my analysis, BCL2 is an anti-apoptotic gene..."
-        >>> answer = await parser.aparse_to_pydantic(trace, Answer)
-        >>> print(answer.gene_name)
-        'BCL2'
+        >>> answer = await parser.aparse_to_pydantic(messages, Answer)
     """
 
-    # Default max_turns for structured output (minimum needed for SDK validation)
-    DEFAULT_STRUCTURED_MAX_TURNS = 2
-
-    def __init__(self, model_config: ModelConfig, *, max_turns: int | None = None) -> None:
+    def __init__(self, model_config: ModelConfig) -> None:
         """Initialize the Claude SDK parser adapter.
 
         Args:
             model_config: Configuration specifying model, provider, and interface.
-            max_turns: Maximum turns for SDK structured output validation.
-                Default is 2 (minimum needed for structured output).
         """
         self._config = model_config
-        self._max_turns = max_turns if max_turns is not None else self.DEFAULT_STRUCTURED_MAX_TURNS
+        self._is_custom_endpoint = bool(model_config.anthropic_base_url)
+        self._anthropic_client: Any | None = None
+        self._openai_client: Any | None = None
+        self._warned_custom_endpoint = False
 
     @property
     def capabilities(self) -> PortCapabilities:
         """Declare what prompt features this parser adapter supports.
-
-        Claude Agent SDK supports native structured output via output_format
-        and system prompts via ClaudeAgentOptions.system_prompt.
 
         Returns:
             PortCapabilities with system prompt and structured output support.
         """
         return PortCapabilities(supports_system_prompt=True, supports_structured_output=True)
 
-    def _build_options(self, schema: type[BaseModel], system_prompt: str) -> ClaudeAgentOptions:
-        """Build ClaudeAgentOptions for structured output parsing.
+    def _get_anthropic_client(self) -> Any:
+        """Get or create the async Anthropic client (for Anthropic API)."""
+        if self._anthropic_client is None:
+            import anthropic
 
-        Args:
-            schema: The Pydantic schema to use for structured output.
-            system_prompt: System prompt text extracted from messages.
+            kwargs: dict[str, Any] = {}
+            if self._config.anthropic_api_key:
+                kwargs["api_key"] = self._config.anthropic_api_key.get_secret_value()
+            if self._config.request_timeout is not None:
+                kwargs["timeout"] = self._config.request_timeout
 
-        Returns:
-            Configured ClaudeAgentOptions with output_format and system_prompt set.
-        """
-        from claude_agent_sdk import ClaudeAgentOptions
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
 
-        # Generate JSON schema from the Pydantic model
-        json_schema = schema.model_json_schema()
+            self._anthropic_client = anthropic.AsyncAnthropic(**kwargs)
+        return self._anthropic_client
 
-        options_kwargs: dict[str, Any] = {
-            # Use bypassPermissions for batch/automated calls
-            "permission_mode": "bypassPermissions",
-            # No tools needed for parsing
-            "allowed_tools": [],
-            # Set structured output format
-            "output_format": {
-                "type": "json_schema",
-                "schema": json_schema,
-            },
-            # SDK needs internal turns for structured output validation
-            "max_turns": self._max_turns,
-            # System prompt from pre-assembled messages
-            "system_prompt": system_prompt,
-        }
+    def _get_openai_client(self) -> Any:
+        """Get or create the async OpenAI client (for custom endpoints)."""
+        if self._openai_client is None:
+            from openai import AsyncOpenAI
 
-        # Add model specification if provided
-        if self._config.model_name:
-            options_kwargs["model"] = self._config.model_name
+            base_url = _configured_openai_base_url(self._config) or _derive_openai_base_url(
+                self._config.anthropic_base_url  # type: ignore[arg-type]
+            )
+            api_key = self._config.anthropic_api_key.get_secret_value() if self._config.anthropic_api_key else "EMPTY"
+            kwargs: dict[str, Any] = {
+                "api_key": api_key,
+                "base_url": base_url,
+            }
+            if self._config.request_timeout is not None:
+                kwargs["timeout"] = self._config.request_timeout
 
-        return ClaudeAgentOptions(**options_kwargs)
+            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
+            retry_policy = self._config.retry_policy or RetryPolicy()
+            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+
+            self._openai_client = AsyncOpenAI(**kwargs)
+
+            if not self._warned_custom_endpoint:
+                logger.warning(
+                    "Custom Anthropic endpoint detected (%s). "
+                    "Parsing will use the OpenAI-compatible endpoint (%s) "
+                    "for schema enforcement via response_format. "
+                    "This is compatible with vLLM and sglang.",
+                    self._config.anthropic_base_url,
+                    base_url,
+                )
+                self._warned_custom_endpoint = True
+        return self._openai_client
 
     @staticmethod
     def _extract_from_messages(messages: list[Message]) -> tuple[str, str]:
@@ -156,91 +212,178 @@ class ClaudeSDKParserAdapter:
                 user_parts.append(msg.text)
         return system_text, "\n\n".join(user_parts)
 
+    async def _parse_via_anthropic(
+        self,
+        system_text: str,
+        user_text: str,
+        schema: type[T],
+    ) -> ParsePortResult[T]:
+        """Parse via Anthropic API with output_config (constrained decoding).
+
+        Args:
+            system_text: System prompt text.
+            user_text: User prompt text.
+            schema: Pydantic model class for the expected structure.
+
+        Returns:
+            ParsePortResult with the validated model instance.
+        """
+        client = self._get_anthropic_client()
+        json_schema = _enforce_no_additional_properties(schema.model_json_schema())
+
+        kwargs: dict[str, Any] = {
+            "model": self._config.model_name,
+            "max_tokens": self._config.max_tokens or 4096,
+            "messages": [{"role": "user", "content": user_text}],
+            "output_config": {
+                "format": {"type": "json_schema", "schema": json_schema},
+            },
+        }
+        if system_text:
+            kwargs["system"] = system_text
+        if self._config.temperature is not None:
+            kwargs["temperature"] = self._config.temperature
+
+        try:
+            response = await client.messages.create(**kwargs)
+        except Exception as e:
+            raise ParseError(f"Anthropic API call failed during parsing: {e}") from e
+
+        text_parts = [b.text for b in response.content if hasattr(b, "text")]
+        raw_text = "\n".join(text_parts)
+
+        usage = UsageMetadata(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            total_tokens=response.usage.input_tokens + response.usage.output_tokens,
+            cache_read_tokens=getattr(response.usage, "cache_read_input_tokens", None),
+            cache_creation_tokens=getattr(response.usage, "cache_creation_input_tokens", None),
+            model=getattr(response, "model", None) or self._config.model_name,
+        )
+
+        return self._validate_json_response(raw_text, schema, usage)
+
+    async def _parse_via_openai(
+        self,
+        system_text: str,
+        user_text: str,
+        schema: type[T],
+    ) -> ParsePortResult[T]:
+        """Parse via OpenAI-compatible endpoint with response_format (constrained decoding).
+
+        Args:
+            system_text: System prompt text.
+            user_text: User prompt text.
+            schema: Pydantic model class for the expected structure.
+
+        Returns:
+            ParsePortResult with the validated model instance.
+        """
+        client = self._get_openai_client()
+        json_schema = _enforce_no_additional_properties(schema.model_json_schema())
+
+        messages: list[dict[str, str]] = []
+        if system_text:
+            messages.append({"role": "system", "content": system_text})
+        messages.append({"role": "user", "content": user_text})
+
+        kwargs: dict[str, Any] = {
+            "model": self._config.model_name,
+            "max_tokens": self._config.max_tokens or 4096,
+            "messages": messages,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.__name__,
+                    "schema": json_schema,
+                    "strict": True,
+                },
+            },
+        }
+        if self._config.temperature is not None:
+            kwargs["temperature"] = self._config.temperature
+
+        try:
+            response = await client.chat.completions.create(**kwargs)
+        except Exception as e:
+            raise ParseError(f"OpenAI API call failed during parsing: {e}") from e
+
+        raw_text = response.choices[0].message.content or ""
+
+        usage = UsageMetadata(
+            input_tokens=getattr(response.usage, "prompt_tokens", 0),
+            output_tokens=getattr(response.usage, "completion_tokens", 0),
+            total_tokens=getattr(response.usage, "total_tokens", 0),
+            model=getattr(response, "model", None) or self._config.model_name,
+        )
+
+        return self._validate_json_response(raw_text, schema, usage)
+
+    def _validate_json_response(
+        self,
+        raw_text: str,
+        schema: type[T],
+        usage: UsageMetadata,
+    ) -> ParsePortResult[T]:
+        """Extract JSON from response text and validate against the schema.
+
+        Tries direct ``json.loads`` first (expected when constrained decoding
+        is active), then falls back to ``extract_json_from_response`` for
+        responses wrapped in code fences or mixed with reasoning text.
+
+        Args:
+            raw_text: Raw text from the API response.
+            schema: Pydantic model class to validate against.
+            usage: Pre-built usage metadata.
+
+        Returns:
+            ParsePortResult with the validated model instance.
+        """
+        if not raw_text.strip():
+            raise ParseError("Empty response from API during parsing")
+
+        try:
+            data = json.loads(raw_text.strip())
+        except json.JSONDecodeError:
+            try:
+                json_str = extract_json_from_response(raw_text)
+                data = json.loads(json_str)
+            except (ValueError, json.JSONDecodeError) as e:
+                raise ParseError(f"Failed to extract JSON from response: {e}. Raw text: {raw_text[:300]}") from e
+
+        try:
+            return ParsePortResult(parsed=schema.model_validate(data), usage=usage)
+        except ValidationError as e:
+            raise ParseError(
+                f"Schema validation failed for {schema.__name__}: {e}. Extracted data: {json.dumps(data)[:300]}"
+            ) from e
+
     async def aparse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
-        """Parse using pre-assembled prompt messages into a structured Pydantic model.
+        """Parse pre-assembled prompt messages into a structured Pydantic model.
+
+        Routes to the Anthropic API (with ``output_config``) or the
+        OpenAI-compatible endpoint (with ``response_format``) based on
+        whether a custom base URL is configured.
 
         Args:
             messages: Pre-assembled prompt messages (system + user).
             schema: A Pydantic model class defining the expected structure.
-                    Field descriptions guide the LLM on what to extract.
 
         Returns:
             ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
-            ParseError: If the LLM fails to extract valid structured data.
-            PortError: If the underlying LLM invocation fails.
+            ParseError: If the LLM fails to produce valid structured data.
         """
-        from claude_agent_sdk import ResultMessage, query
-        from pydantic import ValidationError
-
-        # Extract system and user text from pre-assembled messages
         system_text, user_text = self._extract_from_messages(messages)
 
-        # Build prompt and options
-        prompt = user_text
-        options = self._build_options(schema, system_text)
-
-        # Execute query and collect result
-        result: ResultMessage | None = None
-
-        try:
-            async for message in query(prompt=prompt, options=options):
-                if isinstance(message, ResultMessage):
-                    result = message
-                    # Don't break - let iteration complete naturally per SDK best practices
-
-        except Exception as e:
-            raise ParseError(f"SDK query failed during parsing: {e}") from e
-
-        if result is None:
-            raise ParseError("No ResultMessage received from SDK")
-
-        # Extract usage from ResultMessage if available
-        usage = UsageMetadata()
-        if hasattr(result, "usage") and result.usage:
-            ru = result.usage
-            usage = UsageMetadata(
-                input_tokens=getattr(ru, "input_tokens", 0),
-                output_tokens=getattr(ru, "output_tokens", 0),
-                total_tokens=getattr(ru, "input_tokens", 0) + getattr(ru, "output_tokens", 0),
-                model=self._config.model_name,
-            )
-
-        # Check for structured output failure
-        # SDK returns subtype='error_max_structured_output_retries' on validation failure
-        if result.subtype and "error" in result.subtype.lower():
-            error_msg = f"Structured output extraction failed: {result.subtype}"
-            if result.result:
-                error_msg += f" - {result.result}"
-            raise ParseError(error_msg)
-
-        # Extract structured output
-        # IMPORTANT: SDK's structured_output is already a Python dict, NOT JSON string
-        if result.structured_output is None:
-            # Fallback: try to parse result.result as JSON if no structured output
-            if result.result:
-                try:
-                    data = json.loads(result.result)
-                    return ParsePortResult(parsed=schema.model_validate(data), usage=usage)
-                except (json.JSONDecodeError, ValidationError) as e:
-                    logger.debug(f"Fallback JSON parsing failed: {e}")
-
-            raise ParseError(
-                f"No structured output in SDK response. "
-                f"Subtype: {result.subtype}, Result: {result.result[:100] if result.result else 'None'}"
-            )
-
-        # Validate and return the structured output
-        try:
-            return ParsePortResult(parsed=schema.model_validate(result.structured_output), usage=usage)
-        except ValidationError as e:
-            raise ParseError(f"Structured output validation failed: {e}. Raw output: {result.structured_output}") from e
+        if self._is_custom_endpoint:
+            return await self._parse_via_openai(system_text, user_text, schema)
+        return await self._parse_via_anthropic(system_text, user_text, schema)
 
     def parse_to_pydantic(self, messages: list[Message], schema: type[T]) -> ParsePortResult[T]:
         """Parse using pre-assembled prompt messages (sync).
 
-        This is a convenience wrapper around aparse_to_pydantic() for sync code.
         Uses the shared async portal if available, otherwise falls back to
         asyncio.run() with proper event loop handling.
 
@@ -252,8 +395,7 @@ class ClaudeSDKParserAdapter:
             ParsePortResult containing the parsed model and usage metadata.
 
         Raises:
-            ParseError: If the LLM fails to extract valid structured data.
-            PortError: If the underlying LLM invocation fails.
+            ParseError: If parsing fails.
         """
         from karenina.benchmark.verification.executor import get_async_portal
 
@@ -262,7 +404,6 @@ class ClaudeSDKParserAdapter:
         if portal is not None:
             return portal.call(self.aparse_to_pydantic, messages, schema)
 
-        # No portal available - check if we're already in an async context
         try:
             asyncio.get_running_loop()
 
@@ -271,29 +412,23 @@ class ClaudeSDKParserAdapter:
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(run_in_thread)
-                return future.result(timeout=300)  # 5 minute timeout
+                return future.result(timeout=300)
 
         except RuntimeError:
-            # No event loop running, safe to use asyncio.run
             return asyncio.run(self.aparse_to_pydantic(messages, schema))
 
     async def aclose(self) -> None:
-        """Close underlying resources.
-
-        The Claude SDK parser adapter uses query() which doesn't hold persistent
-        connections, so this is a no-op. Provided for interface consistency
-        with other adapters that do require cleanup.
-        """
-        pass
+        """Close underlying HTTP clients."""
+        if self._anthropic_client is not None:
+            await self._anthropic_client.close()
+            self._anthropic_client = None
+        if self._openai_client is not None:
+            await self._openai_client.close()
+            self._openai_client = None
 
 
 # Verify protocol compliance at import time
 def _verify_protocol_compliance() -> None:
     """Verify ClaudeSDKParserAdapter implements ParserPort protocol."""
-    # This is a static check - if this fails, it means the adapter
-    # doesn't properly implement the protocol
     adapter_instance: ParserPort = None  # type: ignore[assignment]
-
-    # The following would fail mypy if the protocol wasn't properly implemented
-    # We don't actually run this, it's just for static analysis
-    _ = adapter_instance  # Suppress unused warning
+    _ = adapter_instance

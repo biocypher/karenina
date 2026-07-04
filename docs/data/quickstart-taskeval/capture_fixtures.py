@@ -116,7 +116,7 @@ def run_taskeval_quickstart():
     from karenina.benchmark.task_eval import TaskEval
     from karenina.schemas.config.models import ModelConfig
     from karenina.schemas.entities import BaseAnswer, VerifiedField
-    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait, Rubric
+    from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait, Rubric
     from karenina.schemas.primitives import BooleanMatch
     from karenina.schemas.verification.config import VerificationConfig
 
@@ -173,7 +173,7 @@ def run_taskeval_quickstart():
             ),
         ],
         regex_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="Has Citations",
                 description="The response includes numbered citations in bracket notation (e.g., [1]).",
                 pattern=r"\[\d+\]",
@@ -220,29 +220,32 @@ def run_taskeval_quickstart():
         step_id="retrieval",
     )
     multi_task.log(
-        "BCL2 is the primary target of venetoclax. It selectively inhibits BCL2, "
-        "triggering apoptosis in CLL cells.",
+        "BCL2 is the primary target of venetoclax. It selectively inhibits BCL2, triggering apoptosis in CLL cells.",
         step_id="synthesis",
     )
 
     multi_task.add_rubric(
-        Rubric(llm_traits=[
-            LLMRubricTrait(
-                name="retrieval_quality",
-                kind="boolean",
-                description="True if relevant sources were found for the query.",
-            )
-        ]),
+        Rubric(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="retrieval_quality",
+                    kind="boolean",
+                    description="True if relevant sources were found for the query.",
+                )
+            ]
+        ),
         step_id="retrieval",
     )
     multi_task.add_rubric(
-        Rubric(llm_traits=[
-            LLMRubricTrait(
-                name="synthesis_accuracy",
-                kind="boolean",
-                description="True if the synthesis accurately reflects the retrieved information.",
-            )
-        ]),
+        Rubric(
+            llm_traits=[
+                LLMRubricTrait(
+                    name="synthesis_accuracy",
+                    kind="boolean",
+                    description="True if the synthesis accurately reflects the retrieved information.",
+                )
+            ]
+        ),
         step_id="synthesis",
     )
 

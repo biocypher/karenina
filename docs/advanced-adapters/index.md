@@ -45,11 +45,11 @@ The hexagonal pattern solves this with three benefits:
     │  Implementations  │    │Implementations│    │ Implementations│
     └─────────┬────────┘    └──────┬───────┘    └────────┬───────┘
               │                     │                     │
-   ┌──────┬──┴──┬──────┐          ...                   ...
-   │      │     │      │
-   ▼      ▼     ▼      ▼
- Lang  Claude Claude Manual
- Chain  SDK   Tool
+   ┌──────┬──┴──┬──────┬──────┐    ...                   ...
+   │      │     │      │      │
+   ▼      ▼     ▼      ▼      ▼
+ Lang  Deep  Claude Claude Manual
+ Chain Agents  SDK   Tool
 ```
 
 The pipeline interacts **only** with the three port protocols. The adapter factory (`get_agent`, `get_parser`, `get_llm`) selects the correct implementation based on the `interface` field in `ModelConfig`.
@@ -83,7 +83,20 @@ The `AdapterRegistry` maps interface strings to `AdapterSpec` objects. Each spec
 - A fallback interface to use when the primary isn't available
 - Capability flags (`supports_mcp`, `supports_tools`)
 
-Registration happens lazily — adapter modules are imported on first registry access, keeping startup lightweight.
+Registration happens lazily via two mechanisms on first registry access, keeping startup lightweight:
+
+1. **Built-in adapters**: The registry imports each built-in adapter's `registration.py` module (`langchain`, `claude_agent_sdk`, `manual`, `claude_tool`, `langchain_deep_agents`, `taskeval`). Each import triggers `AdapterRegistry.register()` with that adapter's `AdapterSpec`. Missing optional dependencies (e.g., `deepagents` not installed) are caught per-adapter and do not block other registrations.
+
+2. **External adapters via entry points**: After loading built-ins, the registry calls `entry_points(group="karenina.adapters")` to discover third-party adapter packages. Each entry point's `load()` function is called, which should register an `AdapterSpec`. Entry points whose name conflicts with a built-in interface are skipped with a warning.
+
+To register an external adapter, add an entry point to your package's `pyproject.toml`:
+
+```toml
+[project.entry-points."karenina.adapters"]
+my_provider = "my_package.registration"
+```
+
+The entry point module must call `AdapterRegistry.register()` with an `AdapterSpec` when imported. See [Writing Custom Adapters](writing-adapters.md) for the full implementation guide.
 
 ### The Factory
 
@@ -123,24 +136,26 @@ llm = get_llm(config)       # Returns ClaudeSDKLLMAdapter (or LangChain fallback
 When an adapter's dependencies are missing, the factory transparently falls back:
 
 ```
-claude_agent_sdk (Claude CLI not found) → falls back to langchain
-claude_tool (anthropic package missing) → falls back to langchain
-langchain (langchain_core not installed) → no fallback (raises error)
-manual — always available, no fallback needed
+claude_agent_sdk (Claude CLI not found)       → falls back to langchain
+claude_tool (anthropic package missing)       → falls back to langchain
+langchain_deep_agents (deepagents not found)  → no fallback (raises error)
+langchain (langchain_core not installed)      → no fallback (raises error)
+manual                                        → always available, no fallback needed
 ```
 
 ---
 
 ## Supported Interfaces
 
-| Interface | Backend | MCP | Tools | Structured Output | Fallback |
-|-----------|---------|:---:|:-----:|:-----------------:|----------|
-| `langchain` | LangChain (multi-provider) | Yes | Yes | No (JSON fallback) | None |
-| `openrouter` | OpenRouter API (routes to langchain) | Yes | Yes | No (JSON fallback) | None |
-| `openai_endpoint` | OpenAI-compatible (routes to langchain) | Yes | Yes | No (JSON fallback) | None |
-| `claude_agent_sdk` | Anthropic Agent SDK | Yes | Yes | Yes (native) | `langchain` |
-| `claude_tool` | Anthropic Python SDK | Yes | Yes | Yes (native) | `langchain` |
-| `manual` | Pre-recorded traces | No | No | No | None |
+| Interface | Backend | MCP | Tools | Structured Output | Agent Tier | Fallback |
+|-----------|---------|:---:|:-----:|:-----------------:|:----------:|----------|
+| `langchain` | LangChain (multi-provider) | Yes | Yes | No (JSON fallback) | `tool_loop` | None |
+| `langchain_deep_agents` | LangChain Deep Agents (multi-provider) | Yes | Yes | Yes (native) | `deep_agent` | None |
+| `openrouter` | OpenRouter API (routes to langchain) | Yes | Yes | No (JSON fallback) | `tool_loop` | None |
+| `openai_endpoint` | OpenAI-compatible (routes to langchain) | Yes | Yes | No (JSON fallback) | `tool_loop` | None |
+| `claude_agent_sdk` | Anthropic Agent SDK | Yes | Yes | Yes (native) | `deep_agent` | `langchain` |
+| `claude_tool` | Anthropic Python SDK | Yes | Yes | Yes (native) | `tool_loop` | `langchain` |
+| `manual` | Pre-recorded traces | No | No | No | `tool_loop` | None |
 
 `openrouter` and `openai_endpoint` are **routing interfaces** — they resolve to the `langchain` adapter at creation time, sharing the same implementation with interface-specific configuration (API keys, base URLs).
 

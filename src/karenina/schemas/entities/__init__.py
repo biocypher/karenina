@@ -20,7 +20,12 @@ from karenina.schemas.primitives import (
     LiteralMatch,
     Normalizer,
     NumericExact,
+    NumericGraded,
+    NumericMaximum,
+    NumericMinimum,
     NumericRange,
+    NumericRangeGraded,
+    NumericThresholdGraded,
     NumericTolerance,
     OrderedMatch,
     RegexMatch,
@@ -38,16 +43,19 @@ from karenina.schemas.primitives import (
 
 from .answer import BaseAnswer, capture_answer_source
 from .composition import AllOf, AnyOf, AtLeastN, FieldCheck, evaluate_strategy
+from .conditional import ConditionalGroundTruth, GroundTruthCase
 from .question import Question, QuestionRegistryEntry
 from .rubric import (
     AgenticRubricTrait,
-    CallableTrait,
+    CallableRubricTrait,
+    DynamicRubric,
     LLMRubricTrait,
     MetricRubricTrait,
-    RegexTrait,
+    RegexRubricTrait,
     Rubric,
     RubricEvaluation,
     TraitKind,
+    merge_dynamic_rubrics,
     merge_rubrics,
 )
 from .template_spec import TemplateFieldSpec, TemplateSpec, VerifyStrategySpec
@@ -60,6 +68,9 @@ __all__ = [
     # VerifiedField system
     "VerifiedField",
     "VerificationMeta",
+    # Conditional ground truth
+    "ConditionalGroundTruth",
+    "GroundTruthCase",
     # Primitives
     "VerificationPrimitive",
     "TracePrimitive",
@@ -70,8 +81,13 @@ __all__ = [
     "RegexMatch",
     "SemanticMatch",
     "NumericExact",
+    "NumericGraded",
+    "NumericMaximum",
+    "NumericMinimum",
     "NumericTolerance",
+    "NumericThresholdGraded",
     "NumericRange",
+    "NumericRangeGraded",
     "SetContainment",
     "OrderedMatch",
     "LiteralMatch",
@@ -101,12 +117,14 @@ __all__ = [
     "QuestionRegistryEntry",
     # Rubrics
     "Rubric",
+    "DynamicRubric",
     "LLMRubricTrait",
-    "RegexTrait",
-    "CallableTrait",
+    "RegexRubricTrait",
+    "CallableRubricTrait",
     "AgenticRubricTrait",
     "MetricRubricTrait",
     "RubricEvaluation",
     "TraitKind",
     "merge_rubrics",
+    "merge_dynamic_rubrics",
 ]

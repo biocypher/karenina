@@ -2,7 +2,7 @@
 
 This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) and [Adapters Overview](../../core_concepts/adapters.md).
 
-`ModelConfig` is a Pydantic model with **19 fields** organized into 7 categories below. Import: `from karenina.schemas import ModelConfig`.
+`ModelConfig` is a Pydantic model with **22 fields** organized into the categories below. Import: `from karenina.schemas import ModelConfig`. Field counts can drift slightly with new releases; the source of truth is `karenina/schemas/config/models.py`.
 
 ---
 
@@ -13,7 +13,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 | `id` | `str \| None` | `None` | Unique identifier for this model configuration. **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. Used in results to identify which model produced each result. |
 | `model_name` | `str \| None` | `None` | Model name passed to the underlying provider (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-20250514"`, `"gemini-2.0-flash"`). **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. |
 | `model_provider` | `str \| None` | `None` | LLM provider name (e.g., `"openai"`, `"anthropic"`, `"google_genai"`). **Required** only for the `langchain` interface (passed to `init_chat_model()`). Not required for other interfaces. |
-| `interface` | `Literal["langchain", "openrouter", "openai_endpoint", "claude_agent_sdk", "claude_tool", "manual"]` | `"langchain"` | Which adapter backend to use. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
+| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values: `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
 
 **Validation rules:**
 
@@ -28,7 +28,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `temperature` | `float` | `0.1` | Sampling temperature. Lower values (0.0–0.3) produce more deterministic output; higher values (0.7–1.0) increase creativity. |
-| `max_tokens` | `int` | `8192` | Maximum tokens for model response. |
+| `max_tokens` | `int` | `16384` | Maximum tokens for model response. |
 | `system_prompt` | `str \| None` | `None` | Custom system prompt. When `None`, a default is applied based on context: answering models get an expert assistant prompt, parsing models get a validation assistant prompt. |
 | `max_retries` | `int` | `2` | Maximum retry attempts for model calls during template generation. |
 
@@ -105,7 +105,7 @@ Controls automatic retry behavior for failed model calls with exponential backof
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `max_retries` | `int` | `2` | Maximum retry attempts (total calls = max_retries + 1 initial). |
+| `max_retries` | `int` | `2` | Maximum retry attempts (total calls = max_retries + 1 initial). Must be >= 0. |
 | `backoff_factor` | `float` | `2.0` | Multiplier for exponential backoff between retries. |
 | `initial_delay` | `float` | `2.0` | Initial delay in seconds before first retry. |
 | `max_delay` | `float` | `10.0` | Maximum delay in seconds between retries. |
@@ -118,7 +118,7 @@ Controls automatic retry behavior for failed tool calls with exponential backoff
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `max_retries` | `int` | `3` | Maximum retry attempts for tool calls. |
+| `max_retries` | `int` | `3` | Maximum retry attempts for tool calls. Must be >= 0. |
 | `backoff_factor` | `float` | `2.0` | Multiplier for exponential backoff between retries. |
 | `initial_delay` | `float` | `1.0` | Initial delay in seconds before first retry. |
 | `on_failure` | `Literal["return_message", "raise"]` | `"return_message"` | `"return_message"`: returns error as message. `"raise"`: raises exception. |
@@ -130,7 +130,7 @@ Automatically summarizes conversation history when approaching token limits.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `bool` | `True` | Enable automatic summarization (default: `True` for MCP agents). |
-| `model` | `str \| None` | `None` | Model for summarization (defaults to a lightweight model like claude-haiku-4-5). |
+| `model` | `str \| None` | `None` | Model for summarization. When unset, the middleware reuses the agent's own base model. |
 | `trigger_fraction` | `float` | `0.8` | Fraction of context window that triggers summarization (0.0–1.0). |
 | `trigger_tokens` | `int \| None` | `None` | Number of tokens that triggers summarization (overrides `trigger_fraction`). |
 | `keep_messages` | `int` | `20` | Number of recent messages to preserve after summarization. |
@@ -157,7 +157,18 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 **Validation rules:**
 
 - `interface="manual"` requires `manual_traces` to be set
+- `manual_traces` must be a `ManualTraces` instance, not a plain `bool`. Passing `True` or `False` raises a `ValueError` prompting you to create a `ManualTraces` instance.
 - `interface="manual"` does not support MCP (`mcp_urls_dict` must be `None`)
+
+---
+
+## Agent Execution
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `agent_timeout` | `int \| None` | `None` | Timeout in seconds for agent execution. Overrides the default timeout (180s) used in answer generation. Set higher for complex questions with many tool calls. |
+| `request_timeout` | `float \| None` | `None` | HTTP request timeout in seconds for individual LLM API calls on this model. Typically stamped by the pipeline from `VerificationConfig.request_timeout`. `None` means use the provider SDK default (no timeout). |
+| `retry_policy` | `RetryPolicy \| None` | `None` | Per-category retry policy for transient LLM errors on this model. Typically stamped by the pipeline from `VerificationConfig.retry_policy`. `None` means inherit the pipeline-level policy. |
 
 ---
 
@@ -165,7 +176,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific API keys, custom parameters, or provider-specific settings not covered by other fields. |
+| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific API keys, custom parameters, or provider-specific settings not covered by other fields. Recognized keys include the `agent_runtime` sub-dict that configures [sandboxed agent runtimes](../../notebooks/core_concepts/agentic-evaluation.ipynb#10-sandboxed-runtime-backends) (`backend`, `access_mode`, `container_runtime`, `container_image`, `container_network`, `container_add_hosts`, `sandbox_enabled`) for the `claude_agent_sdk` and `langchain_deep_agents` interfaces, `endpoint_base_url_mode` (`"auto_v1"` / `"raw"`) for the `openai_endpoint` and `langchain_deep_agents` interfaces, `claude_sdk_parser_openai_base_url` (explicit OpenAI-compatible parser endpoint for `claude_agent_sdk`), and `effort` (extended-thinking tier) for Anthropic `langchain_deep_agents` models. See [Available Adapters](../../advanced-adapters/available-adapters.md). |
 
 ---
 

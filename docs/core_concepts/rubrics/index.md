@@ -21,7 +21,7 @@ Unlike templates, which operate on parsed structured data, rubrics evaluate the 
 A `Rubric` in Karenina is a collector object that gathers traits of different types into separate lists:
 
 ```python
-from karenina.schemas.entities.rubric import Rubric, LLMRubricTrait, RegexTrait
+from karenina.schemas.entities.rubric import Rubric, LLMRubricTrait, RegexRubricTrait
 
 rubric = Rubric(
     llm_traits=[
@@ -33,7 +33,7 @@ rubric = Rubric(
         ),
     ],
     regex_traits=[
-        RegexTrait(
+        RegexRubricTrait(
             name="has_citations",
             description="The response includes at least one citation.",
             pattern=r"\[\d+\]",
@@ -67,8 +67,9 @@ Given the question "Which is the putative target of venetoclax?", a [template](.
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (boolean) | `bool` | Yes | "Mentions safety profile of the drug" | Supports optional [deep judgment](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) for evidence-based evaluation |
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (score) | `int` | Yes | "Rate clarity from 1-5" | Configurable range |
 | [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (literal) | `int` | Yes | "Classify tone as formal/casual/technical" | Returns index based on class order; `higher_is_better` controls direction |
-| [**RegexTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
-| [**CallableTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
+| [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (template kind) | structured `dict` | Yes | "Audit citation style across several fields at once" | Pass a Pydantic class as `kind`; judge fills the schema in one call; see [template kind](../../notebooks/core_concepts/rubrics/llm-traits.ipynb#7-template-kind) |
+| [**RegexRubricTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
+| [**CallableRubricTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
 | [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
 | [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
 | [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (template kind) | structured `dict` | Yes (agent) | "Audit code quality across multiple dimensions" | Agent investigates and populates a Pydantic template you define; captures multi-field evaluation findings in a single trait |
@@ -85,10 +86,10 @@ See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipyn
 |------|-----------|-----------------|
 | Subjective quality (clarity, conciseness, tone) | LLMRubricTrait (boolean or score) | [LLM score trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-1-subjective-quality-llm-score) |
 | Categorical classification (quality tiers, tone levels) | LLMRubricTrait (literal) | [LLM literal trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-2-categorical-classification-llm-literal) |
-| Exact keyword or format validation | RegexTrait | [Regex trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-3-exact-keywordformat-validation-regex) |
-| Complex validation logic (word counts, structure) | CallableTrait | [Callable trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-4-complex-validation-logic-callable) |
+| Exact keyword or format validation | RegexRubricTrait | [Regex trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-3-exact-keywordformat-validation-regex) |
+| Complex validation logic (word counts, structure) | CallableRubricTrait | [Callable trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-4-complex-validation-logic-callable) |
 | Precision/recall/F1 measurement | MetricRubricTrait | [Metric trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-5-precisionrecallf1-metric-trait) |
-| Deterministic, reproducible check | RegexTrait, or CallableTrait if your function is pure local code | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
+| Deterministic, reproducible check | RegexRubricTrait, or CallableRubricTrait if your function is pure local code | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
 | Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment | [Deep judgment](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-7-evidence-based-with-excerpts-llm-boolean--deep-judgment) |
 
 For a hands-on tutorial that walks through each of these needs with a complete example, see [Choosing the Right Rubric Trait Type](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb).
@@ -110,12 +111,12 @@ For a hands-on tutorial that walks through each of these needs with a complete e
       │
       ├─ NO: Can it be expressed as a single regex pattern?
       │   │
-      │   ├─ YES → RegexTrait
+      │   ├─ YES → RegexRubricTrait
       │   │        Check presence: higher_is_better=True
       │   │        Check absence:  invert_result=True
       │   │
       │   └─ NO (multiple patterns, numeric logic, conditionals)
-      │       → CallableTrait
+      │       → CallableRubricTrait
       │         Accepts one str, returns bool or int.
       │
       └─ YES: Is it a checklist of items the response should cover?
@@ -127,7 +128,10 @@ For a hands-on tutorial that walks through each of these needs with a complete e
           └─ NO: What kind of judgment?
               │
               ├─ Yes/no → LLMRubricTrait (kind="boolean")
-              │           Need traceable evidence? Add deep_judgment_enabled=True
+              │           Need traceable evidence? Set deep_judgment_enabled=True
+              │           on the trait, then opt the run in via
+              │           VerificationConfig.deep_judgment_rubric_mode (per-trait
+              │           enablement vs. global pipeline mode are independent)
               │
               ├─ Named tiers with observable boundaries
               │   → LLMRubricTrait (kind="literal")
@@ -142,7 +146,7 @@ For a hands-on tutorial that walks through each of these needs with a complete e
 
 ## 5. The `higher_is_better` Field
 
-All trait types (except MetricRubricTrait, where metrics are inherently "higher is better") include a `higher_is_better` field that controls directionality:
+All trait types include a `higher_is_better` field (`bool | None`) that controls directionality. A value of `None` means directionality does not apply.
 
 - **Boolean traits**: `True` means `True` is a positive outcome
 - **Score traits**: `True` means higher scores indicate better performance
@@ -151,7 +155,84 @@ All trait types (except MetricRubricTrait, where metrics are inherently "higher 
 
 This field is used by analysis tools and DataFrame builders to correctly interpret and aggregate rubric results. It is also crucial for the GEPA optimization procedure, which relies on `higher_is_better` to determine the direction of improvement when optimizing prompts against rubric scores. GEPA documentation is forthcoming.
 
-## 6. Next Steps
+## 6. Dynamic Rubric
+
+A **DynamicRubric** is a conditional rubric whose traits are only evaluated when their concept is detected in the response. Before rubric evaluation begins, the pipeline sends the response to the parsing LLM with a batch presence check. For each trait, the LLM determines whether the concept described by that trait is meaningfully present. Traits whose concept is absent are skipped entirely; traits whose concept is present are promoted into the standard rubric and evaluated normally.
+
+This is useful when a rubric covers concepts that may or may not appear in a given response. For example, a pharmacology rubric might include traits for drug interactions, dosing information, and contraindications. If the response only discusses dosing, the interaction and contraindication traits are skipped rather than evaluated against irrelevant content.
+
+### The `summary` Field
+
+All five trait types (LLM, regex, callable, metric, agentic) support an optional `summary` field: a short concept label used by the presence check prompt. The presence check prefers `summary` over `description` because it is concise and purpose-built for concept detection. If `summary` is not set, the presence check falls back to `description`. If neither is set, validation raises a `ValueError`.
+
+### How It Works
+
+1. The `DynamicRubric` is attached to a question (or globally to the benchmark).
+2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11a-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
+3. The LLM returns a structured `ConceptPresenceResult` indicating which concepts are present.
+4. Traits with `present=True` are promoted into `context.rubric` and evaluated by the standard rubric evaluators.
+5. Traits with `present=False` are recorded in `dynamic_rubric_skipped_traits` with the reason `"concept not present in response"`.
+6. The `dynamic_rubric_promoted_traits` and `dynamic_rubric_skipped_traits` fields are stored on the `VerificationResultRubric` and surfaced in the [rubric DataFrame](../../workflows/analyzing-results/dataframe-analysis.md) as `{trait_name}_skipped` columns.
+
+### Example
+
+```python
+from karenina.schemas.entities.rubric import (
+    DynamicRubric,
+    LLMRubricTrait,
+    RegexRubricTrait,
+)
+
+dynamic = DynamicRubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="interaction_safety",
+            summary="drug interaction warnings",
+            description=(
+                "Answer True if the response includes warnings about potential "
+                "drug interactions. Answer False if no interaction information "
+                "is provided."
+            ),
+            kind="boolean",
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="dosing_clarity",
+            summary="dosing instructions",
+            description=(
+                "Rate the clarity of dosing information from 1 (unclear or missing "
+                "key details) to 5 (precise, unambiguous, includes route, frequency, "
+                "and duration)."
+            ),
+            kind="score",
+            higher_is_better=True,
+        ),
+    ],
+    regex_traits=[
+        RegexRubricTrait(
+            name="has_contraindications",
+            summary="contraindication list",
+            pattern=r"(?i)contraindicated?\b",
+            higher_is_better=True,
+        ),
+    ],
+)
+
+# Attach globally to the benchmark (applies to every question)
+benchmark.set_global_dynamic_rubric(dynamic)
+```
+
+`add_question` does not accept a `dynamic_rubric` parameter; the only public facade method for dynamic rubrics is `set_global_dynamic_rubric`. To scope a `DynamicRubric` to a single question, build a [`Question`](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) with its `question_dynamic_rubric` field set (a dict, e.g. `dynamic.model_dump()`); the pipeline merges global and per-question dynamic rubrics at evaluation time.
+
+If the response discusses dosing but not interactions or contraindications, only `dosing_clarity` is evaluated. The other two traits appear in results as skipped.
+
+### Validation Rules
+
+- Every trait must have at least one of `summary` or `description`.
+- Trait names must not conflict with any static rubric trait names on the same question; collisions raise `ValueError`.
+- The `rubric_trait_names` filter (if configured) is applied after the presence check: a present trait excluded by the filter is recorded as skipped with reason `"excluded by rubric_trait_names filter"`.
+
+## 7. Next Steps
 
 - [LLM traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): boolean and score kinds with deep judgment
 - [Literal traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): ordered categorical classification (part of LLM traits)

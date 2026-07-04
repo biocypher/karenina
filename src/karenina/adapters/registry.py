@@ -24,15 +24,22 @@ from __future__ import annotations
 
 import logging
 import threading
+import weakref
 from collections.abc import Callable
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
+from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from anyio.from_thread import BlockingPortal
+
     from karenina.ports import AgentPort, LLMPort, ParserPort
     from karenina.schemas.config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+ADAPTER_CLOSE_TIMEOUT = 10.0
 
 # ============================================================================
 # Adapter Instance Tracking for Resource Cleanup
@@ -47,6 +54,15 @@ _adapters_lock = threading.Lock()
 # Lock for thread-safe lazy initialization of the AdapterRegistry
 _registry_lock = threading.RLock()
 
+# Per-portal adapter tracking for loop-affine teardown. When an adapter is
+# created inside a worker thread that has an active BlockingPortal, we record
+# a (weakref, portal) pair here so the executor can call adapter.aclose() on
+# the portal's own event loop before the portal is torn down. This prevents
+# "Event loop is closed" errors from httpx.AsyncClient.aclose() running on a
+# different loop than the one that opened its transports.
+_adapter_portal_refs: list[tuple[weakref.ref[Any], BlockingPortal]] = []
+_adapter_portal_lock = threading.Lock()
+
 
 def register_adapter(adapter: Any) -> None:
     """Register an adapter instance for cleanup tracking.
@@ -59,6 +75,56 @@ def register_adapter(adapter: Any) -> None:
     """
     with _adapters_lock:
         _active_adapters.append(adapter)
+
+    # Record loop affinity when the creating thread has an active portal.
+    # Late import avoids a circular import with benchmark.verification.executor.
+    try:
+        from karenina.benchmark.verification.executor import get_async_portal
+    except ImportError:
+        return
+
+    portal = get_async_portal()
+    if portal is None:
+        return
+    with _adapter_portal_lock:
+        _adapter_portal_refs.append((weakref.ref(adapter), portal))
+
+
+def snapshot_adapters_for_portal(portal: BlockingPortal) -> list[Any]:
+    """Return live adapters registered while this portal was active.
+
+    The copy is taken under the portal-adapter lock, but the lock is released
+    before the caller invokes aclose. This prevents a stray register_adapter
+    call on another thread from deadlocking against a stuck portal aclose.
+
+    Args:
+        portal: The BlockingPortal to look up.
+
+    Returns:
+        List of adapter instances (may be empty) that are still alive.
+    """
+    result: list[Any] = []
+    with _adapter_portal_lock:
+        for adapter_ref, portal_ref in _adapter_portal_refs:
+            if portal_ref is portal:
+                adapter = adapter_ref()
+                if adapter is not None:
+                    result.append(adapter)
+    return result
+
+
+def clear_portal_adapter_refs(portal: BlockingPortal) -> None:
+    """Drop all tracked (adapter, portal) pairs for the given portal.
+
+    Call this after a portal has been torn down, or on a sequential-mode
+    finally, to prevent the module-global tracking list from leaking entries
+    across runs.
+
+    Args:
+        portal: The BlockingPortal whose entries should be removed.
+    """
+    with _adapter_portal_lock:
+        _adapter_portal_refs[:] = [pair for pair in _adapter_portal_refs if pair[1] is not portal]
 
 
 def unregister_adapter(adapter: Any) -> None:
@@ -73,6 +139,70 @@ def unregister_adapter(adapter: Any) -> None:
     with _adapters_lock:
         if adapter in _active_adapters:
             _active_adapters.remove(adapter)
+    with _adapter_portal_lock:
+        _adapter_portal_refs[:] = [
+            pair for pair in _adapter_portal_refs if (tracked := pair[0]()) is not None and tracked is not adapter
+        ]
+
+
+async def aclose_adapter(adapter: Any, *, unregister: bool = True) -> None:
+    """Close one adapter immediately and optionally remove it from tracking.
+
+    This is intended for adapters with a short, local lifetime. Batch-level
+    cleanup remains as a fallback for adapters that are intentionally shared or
+    whose close fails here.
+    """
+    aclose = getattr(adapter, "aclose", None)
+    if not callable(aclose):
+        if unregister:
+            unregister_adapter(adapter)
+        return
+
+    await aclose()
+    if unregister:
+        unregister_adapter(adapter)
+
+
+def close_adapter(adapter: Any, *, timeout: float = ADAPTER_CLOSE_TIMEOUT, unregister: bool = True) -> None:
+    """Synchronously close one adapter using the active worker portal when available."""
+    aclose = getattr(adapter, "aclose", None)
+    if not callable(aclose):
+        if unregister:
+            unregister_adapter(adapter)
+        return
+
+    try:
+        from karenina.benchmark.verification.executor import get_async_portal
+    except ImportError:
+        portal = None
+    else:
+        portal = get_async_portal()
+
+    try:
+        if portal is not None:
+            future = portal.start_task_soon(aclose)
+            future.result(timeout=timeout)
+        else:
+            import asyncio
+
+            asyncio.run(aclose())
+    except FutureTimeoutError:
+        logger.warning(
+            "Immediate adapter close timed out on %s (>%ss); leaving it registered for batch cleanup",
+            type(adapter).__name__,
+            timeout,
+        )
+        return
+    except Exception as exc:
+        logger.debug(
+            "Immediate adapter close failed on %s; leaving it registered for batch cleanup: %s",
+            type(adapter).__name__,
+            exc,
+        )
+        return
+
+    if unregister:
+        unregister_adapter(adapter)
 
 
 async def cleanup_all_adapters() -> None:
@@ -138,6 +268,9 @@ class AdapterSpec:
         availability_checker: Function to check if this adapter is available.
         fallback_interface: Interface to fall back to if this one is unavailable.
         routes_to: If set, this interface routes to another (e.g., "openrouter" -> "langchain").
+        runtime_profile: Optional runtime behavior profile for shared agent
+            prompt/capability helpers. External adapters can provide this to
+            integrate with sandbox path mapping without changing core code.
 
     Example:
         >>> spec = AdapterSpec(
@@ -165,17 +298,26 @@ class AdapterSpec:
     # Routing (for interfaces that delegate to another)
     routes_to: str | None = None
 
+    # Optional runtime behavior extension hook. Kept as Any to avoid coupling
+    # the adapter registry to agent-only helper types at import time.
+    runtime_profile: Any | None = None
+
     # Additional metadata
     supports_mcp: bool = False
     supports_tools: bool = False
 
-    # True when the underlying runtime is itself an agent with built-in tools
-    # (e.g. Claude Code). For these adapters, the LLMPort path loses tool
-    # call traces because the runtime executes tools internally. The pipeline
-    # should prefer the AgentPort path to capture the full conversation.
-    # False for scaffolded adapters (LangChain, Claude Tool) where the adapter
-    # explicitly orchestrates each tool call turn.
-    natively_agentic: bool = False
+    # Agent capability tier:
+    # - "tool_loop": Basic tool-calling loop (e.g. LangChain ReAct). The adapter
+    #   orchestrates each tool call turn explicitly.
+    # - "deep_agent": Full agent runtime with built-in tools (e.g. Claude Code,
+    #   LangChain Deep Agents). The runtime handles tool loops internally;
+    #   GenerateAnswer should prefer the AgentPort path to capture the full trace.
+    agent_tier: str = "tool_loop"
+
+    # If False, model_provider is not required for this interface.
+    # Used by validate_model_config() to replace the hardcoded
+    # INTERFACES_NO_PROVIDER_REQUIRED list.
+    requires_provider: bool = True
 
 
 class AdapterRegistry:
@@ -206,6 +348,7 @@ class AdapterRegistry:
 
     _specs: dict[str, AdapterSpec] = {}
     _initialized: bool = False
+    _initializing: bool = False
 
     @classmethod
     def register(cls, spec: AdapterSpec, *, force: bool = False) -> AdapterSpec:
@@ -232,6 +375,10 @@ class AdapterRegistry:
             logger.warning(f"Overwriting existing adapter spec for interface: {spec.interface}")
 
         cls._specs[spec.interface] = spec
+        if spec.runtime_profile is not None:
+            from karenina.adapters.agent_runtime import register_agent_runtime_profile
+
+            register_agent_runtime_profile(spec.interface, spec.runtime_profile, force=force)
         logger.debug(f"Registered adapter: {spec.interface} ({spec.description})")
         return spec
 
@@ -315,37 +462,87 @@ class AdapterRegistry:
         Uses double-checked locking to be thread-safe without paying the lock
         cost on every call after initialization is complete.
         """
-        if cls._initialized:
+        if cls._initialized or cls._initializing:
             return
 
         with _registry_lock:
-            # Double-check after acquiring the lock
-            if cls._initialized:
+            if cls._initialized or cls._initializing:
                 return
 
-            # Import registration modules to trigger self-registration
-            # This happens lazily on first registry access
+            cls._initializing = True
             try:
-                from karenina.adapters.langchain import registration as _lc  # noqa: F401
-            except ImportError:
-                logger.debug("LangChain registration module not available")
+                cls._load_builtins()
+                cls._discover_entry_points()
+                cls._initialized = True
+            finally:
+                cls._initializing = False
 
+    @classmethod
+    def _load_builtins(cls) -> None:
+        """Import built-in registration modules.
+
+        Each module calls AdapterRegistry.register() at import time.
+        ImportError is caught per-adapter so missing optional dependencies
+        do not block other adapters.
+        """
+        try:
+            from karenina.adapters.langchain import registration as _lc  # noqa: F401
+        except ImportError:
+            logger.debug("LangChain registration module not available")
+
+        try:
+            from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
+        except ImportError:
+            logger.debug("Claude Agent SDK registration module not available")
+
+        try:
+            from karenina.adapters.manual import registration as _manual  # noqa: F401
+        except ImportError:
+            logger.debug("Manual registration module not available")
+
+        try:
+            from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
+        except ImportError:
+            logger.debug("Claude Tool registration module not available")
+
+        try:
+            from karenina.adapters.langchain_deep_agents import registration as _da  # noqa: F401
+        except ImportError:
+            logger.debug("LangChain Deep Agents registration module not available")
+
+        try:
+            from karenina.adapters.taskeval import registration as _te  # noqa: F401
+        except ImportError:
+            logger.debug("TaskEval registration module not available")
+
+    @classmethod
+    def _discover_entry_points(cls) -> None:
+        """Discover and load external adapters via ``karenina.adapters`` entry points.
+
+        Entry points whose name conflicts with an already-registered
+        (built-in) interface are skipped with a warning.
+        """
+        for ep in entry_points(group="karenina.adapters"):
+            if ep.name in cls._specs:
+                logger.warning(
+                    "External adapter '%s' conflicts with built-in interface, skipping",
+                    ep.name,
+                )
+                continue
             try:
-                from karenina.adapters.claude_agent_sdk import registration as _cas  # noqa: F401
-            except ImportError:
-                logger.debug("Claude Agent SDK registration module not available")
-
-            try:
-                from karenina.adapters.manual import registration as _manual  # noqa: F401
-            except ImportError:
-                logger.debug("Manual registration module not available")
-
-            try:
-                from karenina.adapters.claude_tool import registration as _ct  # noqa: F401
-            except ImportError:
-                logger.debug("Claude Tool registration module not available")
-
-            cls._initialized = True
+                ep.load()
+                logger.debug("Loaded external adapter: %s", ep.name)
+            except ValueError:
+                logger.warning(
+                    "External adapter '%s' conflicts with another external adapter, skipping",
+                    ep.name,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to load external adapter '%s'",
+                    ep.name,
+                    exc_info=True,
+                )
 
     @classmethod
     def _reset(cls) -> None:
@@ -353,3 +550,4 @@ class AdapterRegistry:
         with _registry_lock:
             cls._specs.clear()
             cls._initialized = False
+            cls._initializing = False

@@ -35,7 +35,7 @@ from karenina.benchmark.verification.stages import (
     VerifyTemplateStage,
 )
 from karenina.schemas.config import ModelConfig
-from karenina.schemas.entities import LLMRubricTrait, RegexTrait, Rubric
+from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait, Rubric
 
 # =============================================================================
 # Test Fixtures
@@ -46,7 +46,7 @@ from karenina.schemas.entities import LLMRubricTrait, RegexTrait, Rubric
 def minimal_model_config() -> ModelConfig:
     """Return a minimal ModelConfig for testing."""
     return ModelConfig(
-        id="test-model",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,
@@ -105,7 +105,7 @@ def rubric_with_regex() -> Rubric:
     """Return a rubric with regex traits."""
     return Rubric(
         regex_traits=[
-            RegexTrait(
+            RegexRubricTrait(
                 name="has_citation",
                 pattern=r"\[\d+\]",
                 description="Response contains citations",
@@ -481,8 +481,8 @@ class TestErrorPropagation:
 
         result = minimal_context.get_artifact("final_result")
         assert result is not None
-        assert result.metadata.completed_without_errors is False
-        assert result.metadata.error == "Something went wrong"
+        assert result.metadata.failure is not None
+        assert result.metadata.failure.reason == "Something went wrong"
 
     def test_recursion_limit_preserves_trace(self, minimal_context: VerificationContext):
         """RecursionLimitAutoFail should fail verification but preserve trace."""
@@ -547,11 +547,14 @@ class TestArtifactDependencies:
 
         # Mock get_llm (no MCP URLs → LLMPort path, not AgentPort)
         with patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm") as mock_get_llm:
+            from karenina.ports.capabilities import PortCapabilities
+
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = LLMResponse(
                 content="The capital is Paris.",
                 usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
+            mock_llm.capabilities = PortCapabilities(supports_streaming=False)
             mock_get_llm.return_value = mock_llm
 
             stage = GenerateAnswerStage()
@@ -613,11 +616,14 @@ class TestPipelineIntegration:
             patch("karenina.benchmark.verification.stages.pipeline.parse_template.TemplateEvaluator") as MockEvaluator,
         ):
             # Answer generation mock - return LLMResponse
+            from karenina.ports.capabilities import PortCapabilities
+
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = LLMResponse(
                 content="The capital of France is Paris.",
                 usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
+            mock_llm.capabilities = PortCapabilities(supports_streaming=False)
             mock_get_llm.return_value = mock_llm
 
             # Template parsing mock - use proper return types
@@ -658,7 +664,7 @@ class TestPipelineIntegration:
             result = orchestrator.execute(minimal_context)
 
         assert result is not None
-        assert result.metadata.completed_without_errors is True
+        assert result.metadata.failure is None
         assert result.template is not None
 
     def test_pipeline_with_abstention_early_exit(self, minimal_context: VerificationContext):
@@ -693,11 +699,14 @@ class TestPipelineIntegration:
             ) as mock_abstention,
         ):
             # Generate a refusal response - return LLMResponse (no MCP URLs → LLMPort path)
+            from karenina.ports.capabilities import PortCapabilities
+
             mock_llm = MagicMock()
             mock_llm.invoke.return_value = LLMResponse(
                 content="I'm sorry, but I cannot provide information about that topic.",
                 usage=UsageMetadata(input_tokens=10, output_tokens=10, total_tokens=20),
             )
+            mock_llm.capabilities = PortCapabilities(supports_streaming=False)
             mock_get_llm.return_value = mock_llm
 
             # Abstention detector returns (detected, check_performed, reasoning, usage_metadata)

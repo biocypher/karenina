@@ -1,7 +1,7 @@
-"""Unit tests for CallableTrait evaluation rules.
+"""Unit tests for CallableRubricTrait evaluation rules.
 
 Tests cover:
-- CallableTrait creation and validation
+- CallableRubricTrait creation and validation
 - from_callable() classmethod (boolean and score)
 - Function signature validation
 - Score parameter validation
@@ -19,23 +19,23 @@ import cloudpickle
 import pytest
 from pydantic import ValidationError
 
-from karenina.schemas.entities import CallableTrait
+from karenina.schemas.entities import CallableRubricTrait
 
 # =============================================================================
-# CallableTrait Creation Tests
+# CallableRubricTrait Creation Tests
 # =============================================================================
 
 
 @pytest.mark.unit
 def test_callable_trait_minimal_boolean() -> None:
-    """Test CallableTrait with minimal boolean fields."""
+    """Test CallableRubricTrait with minimal boolean fields."""
 
     def func(text):
         return len(text) > 10
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="min_length",
         kind="boolean",
         callable_code=code,
@@ -52,14 +52,14 @@ def test_callable_trait_minimal_boolean() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_minimal_score() -> None:
-    """Test CallableTrait with minimal score fields."""
+    """Test CallableRubricTrait with minimal score fields."""
 
     def func(text):
         return min(len(text), 100)
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="length_score",
         kind="score",
         callable_code=code,
@@ -76,14 +76,14 @@ def test_callable_trait_minimal_score() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_with_all_fields() -> None:
-    """Test CallableTrait with all fields."""
+    """Test CallableRubricTrait with all fields."""
 
     def func(text):
         return len(text.split())
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="word_count",
         kind="score",
         callable_code=code,
@@ -107,7 +107,7 @@ def test_callable_trait_default_invert_result() -> None:
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="always_true",
         kind="boolean",
         callable_code=code,
@@ -127,7 +127,7 @@ def test_callable_trait_extra_fields_forbidden() -> None:
     code = cloudpickle.dumps(func)
 
     with pytest.raises(ValidationError):
-        CallableTrait(
+        CallableRubricTrait(
             name="test",
             kind="boolean",
             callable_code=code,
@@ -146,7 +146,7 @@ def test_callable_trait_kind_must_be_valid() -> None:
     code = cloudpickle.dumps(func)
 
     with pytest.raises(ValidationError):
-        CallableTrait(
+        CallableRubricTrait(
             name="test",
             kind="invalid",
             callable_code=code,
@@ -168,7 +168,7 @@ def test_callable_trait_code_from_bytes() -> None:
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="has_keyword",
         kind="boolean",
         callable_code=code,
@@ -188,7 +188,7 @@ def test_callable_trait_code_from_base64_string() -> None:
     code = cloudpickle.dumps(func)
     code_b64 = base64.b64encode(code).decode("ascii")
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="has_test",
         kind="boolean",
         callable_code=code_b64,
@@ -208,7 +208,7 @@ def test_callable_trait_serializes_to_base64() -> None:
 
     code = cloudpickle.dumps(func)
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="length",
         kind="boolean",
         callable_code=code,
@@ -228,7 +228,7 @@ def test_callable_trait_serializes_to_base64() -> None:
 def test_callable_trait_invalid_code_type_raises_error() -> None:
     """Test that invalid callable_code type raises ValidationError."""
     with pytest.raises(ValidationError) as exc_info:
-        CallableTrait(
+        CallableRubricTrait(
             name="test",
             kind="boolean",
             callable_code=12345,
@@ -250,7 +250,7 @@ def test_from_callable_boolean_simple() -> None:
     def func(text):
         return len(text) > 50
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="long_enough",
         func=func,
         kind="boolean",
@@ -269,7 +269,7 @@ def test_from_callable_boolean_with_description() -> None:
     def func(text):
         return "important" in text.lower()
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="has_important",
         func=func,
         kind="boolean",
@@ -286,7 +286,7 @@ def test_from_callable_boolean_with_invert() -> None:
     def func(text):
         return "error" in text.lower()
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="no_errors",
         func=func,
         kind="boolean",
@@ -304,7 +304,7 @@ def test_from_callable_score_simple() -> None:
     def func(text):
         return min(len(text), 100)
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="length_score",
         func=func,
         kind="score",
@@ -324,7 +324,7 @@ def test_from_callable_score_with_bounds() -> None:
     def func(text):
         return min(len(text.split()), 10)
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="word_score",
         func=func,
         kind="score",
@@ -344,7 +344,7 @@ def test_from_callable_lower_is_better() -> None:
     def func(text):
         return text.count("error")
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="error_count",
         func=func,
         kind="score",
@@ -364,7 +364,7 @@ def test_from_callable_function_with_closure() -> None:
     def count_function(text: str) -> bool:
         return len(text) > threshold
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="check_length",
         func=count_function,
         kind="boolean",
@@ -381,7 +381,7 @@ def test_from_callable_lambda_with_expression() -> None:
     def func(text):
         return sum(1 for c in text if c.isupper())
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="uppercase_count",
         func=func,
         kind="score",
@@ -406,7 +406,7 @@ def test_from_callable_no_parameters_raises_error() -> None:
         return True
 
     with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
+        CallableRubricTrait.from_callable(
             name="bad",
             func=no_params,
             kind="boolean",
@@ -423,7 +423,7 @@ def test_from_callable_two_parameters_raises_error() -> None:
         return True
 
     with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(
+        CallableRubricTrait.from_callable(
             name="bad",
             func=two_params,
             kind="boolean",
@@ -472,7 +472,7 @@ def test_from_callable_score_validation_errors(
         kwargs["max_score"] = max_score
 
     with pytest.raises(ValueError) as exc_info:
-        CallableTrait.from_callable(**kwargs)
+        CallableRubricTrait.from_callable(**kwargs)
 
     assert error_msg in str(exc_info.value)
 
@@ -489,7 +489,7 @@ def test_deserialize_callable_returns_function() -> None:
     def original_func(text):
         return text.count("word")
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="word_counter",
         func=original_func,
         kind="boolean",
@@ -508,7 +508,7 @@ def test_deserialize_callable_preserves_function_logic() -> None:
         words = text.split()
         return len([w for w in words if len(w) > 5])
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="long_word_count",
         func=complex_func,
         kind="score",
@@ -531,7 +531,7 @@ def test_deserialize_callable_with_closure() -> None:
     def multiply(text: str) -> int:
         return len(text) * multiplier
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="double_length",
         func=multiply,
         kind="score",
@@ -549,7 +549,7 @@ def test_deserialize_callable_invalid_code_raises_error() -> None:
     # Create invalid "bytes" (not actually pickled data)
     invalid_code = b"not a pickle"
 
-    trait = CallableTrait(
+    trait = CallableRubricTrait(
         name="bad",
         kind="boolean",
         callable_code=invalid_code,
@@ -570,7 +570,7 @@ def test_deserialize_callable_invalid_code_raises_error() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_returns_true() -> None:
     """Test evaluate() with boolean function returning True."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="is_long",
         func=lambda text: len(text) > 10,
         kind="boolean",
@@ -583,7 +583,7 @@ def test_evaluate_boolean_returns_true() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_returns_false() -> None:
     """Test evaluate() with boolean function returning False."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="has_keyword",
         func=lambda text: "forbidden" in text.lower(),
         kind="boolean",
@@ -596,7 +596,7 @@ def test_evaluate_boolean_returns_false() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_invert_result() -> None:
     """Test evaluate() with invert_result=True for boolean."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="has_long_word",
         func=lambda text: any(len(w) > 5 for w in text.split()),
         kind="boolean",
@@ -617,7 +617,7 @@ def test_evaluate_boolean_with_complex_logic() -> None:
         lower = text.lower()
         return "apple" in lower and "banana" in lower
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="has_both_fruits",
         func=has_both_keywords,
         kind="boolean",
@@ -630,7 +630,7 @@ def test_evaluate_boolean_with_complex_logic() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_empty_string() -> None:
     """Test evaluate() boolean with empty string."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="is_nonempty",
         func=lambda text: len(text) > 0,
         kind="boolean",
@@ -643,7 +643,7 @@ def test_evaluate_boolean_empty_string() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_with_newlines() -> None:
     """Test evaluate() boolean with multiline text."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="has_multiple_lines",
         func=lambda text: text.count("\n") >= 2,
         kind="boolean",
@@ -656,7 +656,7 @@ def test_evaluate_boolean_with_newlines() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_case_insensitive_check() -> None:
     """Test evaluate() boolean with case insensitive logic."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="has_error",
         func=lambda text: "error" in text.lower(),
         kind="boolean",
@@ -672,7 +672,7 @@ def test_evaluate_boolean_regex_like() -> None:
     """Test evaluate() boolean with regex-like pattern matching."""
     import re
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="matches_pattern",
         func=lambda text: bool(re.search(r"\d{4}", text)),
         kind="boolean",
@@ -690,7 +690,7 @@ def test_evaluate_boolean_regex_like() -> None:
 @pytest.mark.unit
 def test_evaluate_score_returns_int() -> None:
     """Test evaluate() with score function returning int."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="length",
         func=lambda text: len(text),
         kind="score",
@@ -703,9 +703,9 @@ def test_evaluate_score_returns_int() -> None:
 
 
 @pytest.mark.unit
-def test_evaluate_score_returns_float_converts_to_int() -> None:
-    """Test evaluate() converts float return to int."""
-    trait = CallableTrait.from_callable(
+def test_evaluate_score_returns_float_preserves_float() -> None:
+    """Test evaluate() preserves float return values for score kind."""
+    trait = CallableRubricTrait.from_callable(
         name="ratio",
         func=lambda text: len(text) / 2,
         kind="score",
@@ -714,14 +714,14 @@ def test_evaluate_score_returns_float_converts_to_int() -> None:
     )
 
     result = trait.evaluate("hello")  # len=5, 5/2=2.5
-    assert isinstance(result, int)
-    assert result == 2
+    assert isinstance(result, float)
+    assert result == 2.5
 
 
 @pytest.mark.unit
 def test_evaluate_score_within_bounds() -> None:
     """Test evaluate() with score within min/max bounds."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="score_1_to_10",
         func=lambda text: min(len(text), 10),
         kind="score",
@@ -736,7 +736,7 @@ def test_evaluate_score_within_bounds() -> None:
 @pytest.mark.unit
 def test_evaluate_score_at_lower_bound() -> None:
     """Test evaluate() with score at min_score."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="non_negative",
         func=lambda text: max(len(text), 0),
         kind="score",
@@ -750,7 +750,7 @@ def test_evaluate_score_at_lower_bound() -> None:
 @pytest.mark.unit
 def test_evaluate_score_at_upper_bound() -> None:
     """Test evaluate() with score at max_score."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="max_100",
         func=lambda text: min(len(text), 100),
         kind="score",
@@ -770,7 +770,7 @@ def test_evaluate_score_complex_calculation() -> None:
         avg_length = sum(len(w) for w in words) / len(words) if words else 0
         return int(avg_length * 10)
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="avg_length_score",
         func=calculate_score,
         kind="score",
@@ -785,7 +785,7 @@ def test_evaluate_score_complex_calculation() -> None:
 @pytest.mark.unit
 def test_evaluate_score_word_count() -> None:
     """Test evaluate() with word count score."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="word_count_score",
         func=lambda text: len(text.split()),
         kind="score",
@@ -800,7 +800,7 @@ def test_evaluate_score_word_count() -> None:
 @pytest.mark.unit
 def test_evaluate_score_char_count() -> None:
     """Test evaluate() with character count score."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="char_count_score",
         func=lambda text: len(text),
         kind="score",
@@ -819,7 +819,7 @@ def test_evaluate_score_char_count() -> None:
 @pytest.mark.unit
 def test_evaluate_boolean_returns_non_bool_raises_error() -> None:
     """Test that boolean trait returning non-bool raises RuntimeError."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="bad",
         func=lambda text: len(text),  # Returns int, not bool
         kind="boolean",
@@ -835,7 +835,7 @@ def test_evaluate_boolean_returns_non_bool_raises_error() -> None:
 @pytest.mark.unit
 def test_evaluate_score_returns_non_numeric_raises_error() -> None:
     """Test that score trait returning non-numeric raises RuntimeError."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="bad",
         func=lambda _text: "not a number",
         kind="score",
@@ -853,7 +853,7 @@ def test_evaluate_score_returns_non_numeric_raises_error() -> None:
 @pytest.mark.unit
 def test_evaluate_score_below_min_raises_error() -> None:
     """Test that score below min_score raises RuntimeError."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="bad",
         func=lambda _text: -1,
         kind="score",
@@ -871,7 +871,7 @@ def test_evaluate_score_below_min_raises_error() -> None:
 @pytest.mark.unit
 def test_evaluate_score_above_max_raises_error() -> None:
     """Test that score above max_score raises RuntimeError."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="bad",
         func=lambda _text: 15,
         kind="score",
@@ -893,7 +893,7 @@ def test_evaluate_runtime_error_propagates() -> None:
     def buggy_func(text: str) -> int:
         raise ValueError("Something went wrong!")
 
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="buggy",
         func=buggy_func,
         kind="score",
@@ -914,8 +914,8 @@ def test_evaluate_runtime_error_propagates() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_higher_is_better_true() -> None:
-    """Test CallableTrait with higher_is_better=True."""
-    trait = CallableTrait.from_callable(
+    """Test CallableRubricTrait with higher_is_better=True."""
+    trait = CallableRubricTrait.from_callable(
         name="more_is_better",
         func=lambda text: len(text),
         kind="score",
@@ -929,8 +929,8 @@ def test_callable_trait_higher_is_better_true() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_higher_is_better_false() -> None:
-    """Test CallableTrait with higher_is_better=False."""
-    trait = CallableTrait.from_callable(
+    """Test CallableRubricTrait with higher_is_better=False."""
+    trait = CallableRubricTrait.from_callable(
         name="less_is_better",
         func=lambda text: text.count("error"),
         kind="score",
@@ -945,7 +945,7 @@ def test_callable_trait_higher_is_better_false() -> None:
 @pytest.mark.unit
 def test_callable_trait_default_higher_is_better() -> None:
     """Test that higher_is_better defaults to True."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="default",
         func=lambda _text: True,
         kind="boolean",
@@ -961,12 +961,12 @@ def test_callable_trait_default_higher_is_better() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_roundtrip() -> None:
-    """Test that CallableTrait survives serialize/deserialize roundtrip."""
+    """Test that CallableRubricTrait survives serialize/deserialize roundtrip."""
 
     def original_func(text: str) -> bool:
         return "success" in text.lower()
 
-    original_trait = CallableTrait.from_callable(
+    original_trait = CallableRubricTrait.from_callable(
         name="has_success",
         func=original_func,
         kind="boolean",
@@ -976,7 +976,7 @@ def test_callable_trait_roundtrip() -> None:
     data = original_trait.model_dump()
 
     # Deserialize
-    restored_trait = CallableTrait(**data)
+    restored_trait = CallableRubricTrait(**data)
 
     # Function should work after roundtrip
     assert restored_trait.evaluate("SUCCESS!") is True
@@ -985,12 +985,12 @@ def test_callable_trait_roundtrip() -> None:
 
 @pytest.mark.unit
 def test_callable_trait_json_roundtrip() -> None:
-    """Test CallableTrait through JSON serialize/deserialize."""
+    """Test CallableRubricTrait through JSON serialize/deserialize."""
 
     def score_func(text: str) -> int:
         return len(text.split())
 
-    original = CallableTrait.from_callable(
+    original = CallableRubricTrait.from_callable(
         name="word_count",
         func=score_func,
         kind="score",
@@ -1002,7 +1002,7 @@ def test_callable_trait_json_roundtrip() -> None:
     json_str = original.model_dump_json()
 
     # Deserialize from JSON
-    restored = CallableTrait.model_validate_json(json_str)
+    restored = CallableRubricTrait.model_validate_json(json_str)
 
     # Should evaluate correctly
     assert restored.evaluate("one two three") == 3
@@ -1011,7 +1011,7 @@ def test_callable_trait_json_roundtrip() -> None:
 @pytest.mark.unit
 def test_callable_trait_description_preserved() -> None:
     """Test that description is preserved through roundtrip."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="test",
         func=lambda _text: True,
         kind="boolean",
@@ -1019,7 +1019,7 @@ def test_callable_trait_description_preserved() -> None:
     )
 
     data = trait.model_dump()
-    restored = CallableTrait(**data)
+    restored = CallableRubricTrait(**data)
 
     assert restored.description == "This is a test trait"
 
@@ -1027,7 +1027,7 @@ def test_callable_trait_description_preserved() -> None:
 @pytest.mark.unit
 def test_callable_trait_invert_result_preserved() -> None:
     """Test that invert_result is preserved through roundtrip."""
-    trait = CallableTrait.from_callable(
+    trait = CallableRubricTrait.from_callable(
         name="test",
         func=lambda _text: True,
         kind="boolean",
@@ -1035,7 +1035,7 @@ def test_callable_trait_invert_result_preserved() -> None:
     )
 
     data = trait.model_dump()
-    restored = CallableTrait(**data)
+    restored = CallableRubricTrait(**data)
 
     assert restored.invert_result is True
 
@@ -1046,13 +1046,27 @@ def test_callable_trait_invert_result_preserved() -> None:
 
 
 @pytest.mark.unit
-def test_callable_trait_higher_is_better_none_defaults_to_true() -> None:
-    """Test that higher_is_better=None defaults to True (old checkpoint data)."""
-    trait = CallableTrait(
+def test_callable_trait_higher_is_better_none_preserved() -> None:
+    """Test that explicit higher_is_better=None is preserved (directionality not applicable)."""
+    trait = CallableRubricTrait(
         name="test",
         kind="boolean",
         callable_code=cloudpickle.dumps(lambda _t: True),
         higher_is_better=None,
+    )
+
+    assert trait.higher_is_better is None
+
+
+@pytest.mark.unit
+def test_callable_trait_higher_is_better_missing_defaults_to_true() -> None:
+    """Test that missing higher_is_better defaults to True (old checkpoint data)."""
+    trait = CallableRubricTrait.model_validate(
+        {
+            "name": "test",
+            "kind": "boolean",
+            "callable_code": cloudpickle.dumps(lambda _t: True),
+        }
     )
 
     assert trait.higher_is_better is True

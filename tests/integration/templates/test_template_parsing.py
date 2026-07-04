@@ -36,7 +36,7 @@ from karenina.schemas.entities import BaseAnswer
 def parsing_model_config() -> ModelConfig:
     """Return a ModelConfig for parsing models."""
     return ModelConfig(
-        id="test-parser",
+        id="claude-haiku-4-5",
         model_provider="anthropic",
         model_name="claude-haiku-4-5",
         temperature=0.0,
@@ -100,7 +100,7 @@ class TestTemplateEvaluatorInitialization:
 
             # Standard langchain interface
             config = ModelConfig(
-                id="test",
+                id="claude-haiku-4-5",
                 model_provider="anthropic",
                 model_name="claude-haiku-4-5",
                 interface="langchain",
@@ -110,7 +110,7 @@ class TestTemplateEvaluatorInitialization:
 
             # OpenRouter interface (no provider in string)
             config_openrouter = ModelConfig(
-                id="test",
+                id="anthropic/claude-haiku-4-5",
                 model_name="anthropic/claude-haiku-4-5",
                 interface="openrouter",
             )

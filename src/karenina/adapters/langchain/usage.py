@@ -214,26 +214,65 @@ def extract_usage_cumulative(
     )
 
 
+def extract_usage_from_chunk(chunk: Any, *, model_name: str | None = None) -> UsageMetadata:
+    """Extract usage metadata from a LangChain AIMessageChunk.
+
+    During streaming, usage metadata typically arrives on the final chunk
+    via the ``usage_metadata`` attribute.
+
+    Args:
+        chunk: LangChain AIMessageChunk with optional usage_metadata.
+        model_name: Optional model name to include in metadata.
+
+    Returns:
+        UsageMetadata with extracted token counts.
+    """
+    meta: dict[str, Any] = {}
+    if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+        um = chunk.usage_metadata
+        meta = (
+            um
+            if isinstance(um, dict)
+            else {
+                "input_tokens": getattr(um, "input_tokens", 0),
+                "output_tokens": getattr(um, "output_tokens", 0),
+                "cache_read_input_tokens": getattr(um, "cache_read_input_tokens", None),
+                "cache_creation_input_tokens": getattr(um, "cache_creation_input_tokens", None),
+            }
+        )
+    return _build_usage_metadata(meta, model_name)
+
+
 def _extract_from_response(response: Any) -> dict[str, Any]:
     """Extract usage dict from a response object.
 
-    Handles both response_metadata (newer) and usage_metadata attributes.
+    Probes, in order:
+      1. response_metadata["token_usage"] (non-streaming OpenAI/Anthropic path)
+      2. response_metadata["usage"] (some providers use this key)
+      3. response.usage_metadata (LangChain normalized; populated under streaming
+         when stream_usage=True and the one reliable path for vLLM streaming)
+
+    This revision pins the probe order with explicit tests (see
+    tests/test_usage_extraction_streaming.py) so future edits cannot regress
+    to "None at step 1 stops probing". The production streaming-usage bug
+    is closed by ChatOpenAIEndpoint defaulting stream_usage=True; this
+    function guards the path that reads the resulting usage_metadata.
     """
     usage_data: dict[str, Any] = {}
 
-    # Try response_metadata first (newer LangChain versions)
+    # Step 1 and 2: response_metadata (populated in non-streaming mode)
     if hasattr(response, "response_metadata") and response.response_metadata:
         metadata = response.response_metadata
-        # Anthropic/OpenAI style: token_usage or usage
-        usage_data = metadata.get("token_usage") or metadata.get("usage") or {}
+        candidate = metadata.get("token_usage") or metadata.get("usage")
+        if candidate:
+            usage_data = candidate
 
-    # Fallback to usage_metadata attribute
+    # Step 3: usage_metadata (populated under streaming with stream_usage=True)
     if not usage_data and hasattr(response, "usage_metadata") and response.usage_metadata:
         um = response.usage_metadata
         if isinstance(um, dict):
             usage_data = um
         else:
-            # UsageMetadata object - convert to dict
             usage_data = {
                 "input_tokens": getattr(um, "input_tokens", 0),
                 "output_tokens": getattr(um, "output_tokens", 0),

@@ -30,6 +30,7 @@ from .embedding_check import EmbeddingCheckStage
 from .finalize_result import FinalizeResultStage
 from .generate_answer import GenerateAnswerStage
 from .parse_template import ParseTemplateStage
+from .placeholder_retry_autofail import PlaceholderRetryAutoFailStage
 from .recursion_limit_autofail import RecursionLimitAutoFailStage
 from .rubric_evaluation import RubricEvaluationStage
 from .sufficiency_check import SufficiencyCheckStage
@@ -42,6 +43,7 @@ __all__ = [
     "GenerateAnswerStage",
     "RecursionLimitAutoFailStage",
     "TraceValidationAutoFailStage",
+    "PlaceholderRetryAutoFailStage",
     "AbstentionCheckStage",
     "SufficiencyCheckStage",
     "ParseTemplateStage",

@@ -8,6 +8,7 @@ a ScenarioDefinition after running structural checks.
 from __future__ import annotations
 
 import logging
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -165,6 +166,7 @@ class Scenario:
         model_override: ModelOverride | None = None,
         tool_filter: ToolFilter | None = None,
         state_update: Any = None,
+        agent_identity: str | None = None,
         **metadata: Any,
     ) -> None:
         """Add a node to the scenario graph.
@@ -175,13 +177,19 @@ class Scenario:
             model_override: Optional per-node model override.
             tool_filter: Optional tool filter for this node.
             state_update: Optional state update callable, lambda, or source string.
+            agent_identity: Optional identity label for this node's agent. The
+                reserved value ``"__user__"`` is used internally for scenario
+                prompts and cannot be assigned here.
             **metadata: Extra metadata key-value pairs stored on the node.
 
         Raises:
-            ValueError: If node_id already exists.
+            ValueError: If node_id already exists or agent_identity is reserved.
         """
         if node_id in self._nodes:
             raise ValueError(f"Node '{node_id}' already exists")
+
+        if agent_identity == "__user__":
+            raise ValueError("agent_identity='__user__' is reserved for scenario prompts. Choose a different identity.")
 
         # Deep copy the question to prevent external mutation
         question_copy = question.model_copy(deep=True)
@@ -203,6 +211,7 @@ class Scenario:
             model_override=model_override,
             tool_filter=tool_filter,
             metadata=metadata,
+            agent_identity=agent_identity,
             state_update=state_update_fn,
             state_update_source=state_update_source,
         )
@@ -213,6 +222,7 @@ class Scenario:
         target: str,
         *,
         when: dict[str, Any] | list[dict[str, Any]] | StateCheck | Any | None = None,
+        handover: str | Callable[..., Any] | None = None,
     ) -> None:
         """Add an edge between two nodes.
 
@@ -226,9 +236,12 @@ class Scenario:
                 - StateCheck: used directly
                 - callable: condition callable with source extraction
                 - str: compiled to callable
+            handover: Optional handover strategy for transcript transfer between
+                agents. Accepts a string strategy name (``"transcript_prepend"``,
+                ``"transcript_append"``) or a callable ``(msgs, state) -> msgs``.
 
         Raises:
-            ValueError: If condition form is invalid.
+            ValueError: If condition form or handover strategy is invalid.
         """
         condition: EdgeCondition | None = None
         condition_callable = None
@@ -251,6 +264,29 @@ class Scenario:
         else:
             raise ValueError(f"Unsupported 'when' type: {type(when).__name__}")
 
+        # Handover dispatch
+        handover_str: str | None = None
+        handover_callable_fn = None
+
+        if handover is not None:
+            if isinstance(handover, str):
+                _KNOWN_STRATEGIES = {"transcript_prepend", "transcript_append", "transcript_materialize"}
+                if handover not in _KNOWN_STRATEGIES:
+                    raise ValueError(
+                        f"Unknown handover strategy '{handover}'. Known strategies: {sorted(_KNOWN_STRATEGIES)}"
+                    )
+                handover_str = handover
+            elif callable(handover):
+                warnings.warn(
+                    "Callable handover will not be serialized to checkpoints. "
+                    "Use a string strategy for checkpoint persistence.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                handover_callable_fn = handover
+            else:
+                raise ValueError(f"Unsupported handover type: {type(handover).__name__}")
+
         self._edges.append(
             ScenarioEdge(
                 source=source,
@@ -258,6 +294,8 @@ class Scenario:
                 condition=condition,
                 condition_callable=condition_callable,
                 condition_source=condition_source,
+                handover=handover_str,
+                handover_callable=handover_callable_fn,
             )
         )
 

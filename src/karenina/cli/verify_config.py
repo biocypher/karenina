@@ -29,10 +29,10 @@ def build_config_from_cli_args(
     temperature: float | None,
     interface: str | None,
     replicate_count: int | None,
-    abstention: bool,
-    sufficiency: bool,
-    embedding_check: bool,
-    deep_judgment: bool,
+    abstention: bool | None,
+    sufficiency: bool | None,
+    embedding_check: bool | None,
+    deep_judgment: bool | None,
     deep_judgment_rubric_mode: str,
     deep_judgment_rubric_excerpts: bool,
     deep_judgment_rubric_max_excerpts: int,
@@ -44,10 +44,13 @@ def build_config_from_cli_args(
     use_full_trace_for_template: bool,
     use_full_trace_for_rubric: bool,
     evaluation_mode: str,
-    embedding_threshold: float,
-    embedding_model: str,
+    embedding_threshold: float | None,
+    embedding_model: str | None,
     async_execution: bool,
     async_workers: int | None,
+    workspace_output_mode: str | None = None,
+    workspace_output_dir: Path | None = None,
+    workspace_output_exclude_patterns: list[str] | None = None,
     preset_config: VerificationConfig | None = None,
     manual_traces_obj: object | None = None,
 ) -> VerificationConfig:
@@ -86,6 +89,9 @@ def build_config_from_cli_args(
         embedding_model: Model to use for embedding similarity.
         async_execution: Whether to run verification asynchronously.
         async_workers: Number of async workers.
+        workspace_output_mode: Workspace sidecar capture mode.
+        workspace_output_dir: Directory for workspace sidecars.
+        workspace_output_exclude_patterns: Additional workspace sidecar excludes.
         preset_config: Optional preset configuration to use as base.
         manual_traces_obj: Optional pre-loaded manual traces object.
 
@@ -93,13 +99,16 @@ def build_config_from_cli_args(
         VerificationConfig with CLI overrides applied
     """
     # CLI-specific: load custom rubric config JSON if a file path was provided
-    rubric_config_dict = None
+    rubric_config_obj = None
     if deep_judgment_rubric_config is not None:
         import json
 
+        from karenina.schemas.verification.config import DeepJudgmentRubricCustomConfig
+
         try:
             with open(deep_judgment_rubric_config) as f:
-                rubric_config_dict = json.load(f)
+                raw_dict = json.load(f)
+            rubric_config_obj = DeepJudgmentRubricCustomConfig.model_validate(raw_dict)
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Failed to load custom rubric config from {deep_judgment_rubric_config}: {e}") from e
 
@@ -127,7 +136,7 @@ def build_config_from_cli_args(
         abstention=abstention,
         sufficiency=sufficiency,
         embedding_check=embedding_check,
-        deep_judgment=deep_judgment,
+        deep_judgment_mode="full" if deep_judgment is True else ("disabled" if deep_judgment is False else None),
         # Evaluation settings
         evaluation_mode=evaluation_mode,
         embedding_threshold=embedding_threshold,
@@ -145,7 +154,10 @@ def build_config_from_cli_args(
         deep_judgment_rubric_retry_attempts=deep_judgment_rubric_retry_attempts,
         deep_judgment_rubric_search=deep_judgment_rubric_search,
         deep_judgment_rubric_search_tool=deep_judgment_rubric_search_tool,
-        deep_judgment_rubric_config=rubric_config_dict,
+        deep_judgment_rubric_config=rubric_config_obj,
+        workspace_output_mode=workspace_output_mode,  # type: ignore[arg-type]
+        workspace_output_dir=workspace_output_dir,
+        workspace_output_exclude_patterns=workspace_output_exclude_patterns,
     )
 
 
@@ -170,7 +182,8 @@ def validate_cli_config_requirements(
             "--interface is required when not using a preset (langchain/openrouter/openai_endpoint)"
         )
 
-    if not answering_model:
+    # Manual interface doesn't need an answering model (traces replace generation)
+    if not answering_model and interface != "manual":
         validation_errors.append("--answering-model is required when not using a preset")
 
     if not parsing_model:
@@ -280,10 +293,10 @@ def build_config_non_interactive(
     parsing_id: str,
     temperature: float | None,
     replicate_count: int | None,
-    abstention: bool,
-    sufficiency: bool,
-    embedding_check: bool,
-    deep_judgment: bool,
+    abstention: bool | None,
+    sufficiency: bool | None,
+    embedding_check: bool | None,
+    deep_judgment: bool | None,
     deep_judgment_rubric_mode: str,
     deep_judgment_rubric_excerpts: bool,
     deep_judgment_rubric_max_excerpts: int,
@@ -295,10 +308,13 @@ def build_config_non_interactive(
     use_full_trace_for_template: bool,
     use_full_trace_for_rubric: bool,
     evaluation_mode: str,
-    embedding_threshold: float,
-    embedding_model: str,
+    embedding_threshold: float | None,
+    embedding_model: str | None,
     async_execution: bool,
     async_workers: int | None,
+    workspace_output_mode: str | None,
+    workspace_output_dir: Path | None,
+    workspace_output_exclude_patterns: list[str] | None,
     manual_traces: Path | None,
     benchmark: Benchmark,
     progressive_save: bool,
@@ -371,6 +387,9 @@ def build_config_non_interactive(
             embedding_model=embedding_model,
             async_execution=async_execution,
             async_workers=async_workers,
+            workspace_output_mode=workspace_output_mode,
+            workspace_output_dir=workspace_output_dir,
+            workspace_output_exclude_patterns=workspace_output_exclude_patterns,
             preset_config=preset_config,
             manual_traces_obj=manual_traces_obj,
         )
@@ -394,6 +413,9 @@ def build_config_non_interactive(
                     embedding_model,
                     async_execution,
                     async_workers,
+                    workspace_output_mode,
+                    workspace_output_dir,
+                    workspace_output_exclude_patterns,
                 ]
             )
             if has_cli_overrides:

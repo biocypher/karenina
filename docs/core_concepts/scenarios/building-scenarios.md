@@ -6,7 +6,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.19.1
+      jupytext_version: 1.18.1
   kernelspec:
     display_name: Python 3
     language: python
@@ -37,6 +37,7 @@ END: str = "__end__"
 
 class Question(BaseModel):
     """Minimal Question stand-in for documentation examples."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     question: str
     raw_answer: str
@@ -46,6 +47,7 @@ class Question(BaseModel):
 
 class StateCheck(BaseModel):
     """Check a ScenarioState field using a comparison primitive."""
+
     field: str
     expected: Any = None
     verify_with: Any = None
@@ -53,6 +55,7 @@ class StateCheck(BaseModel):
 
 class ScenarioDefinition(BaseModel):
     """Frozen scenario graph returned by Scenario.validate()."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
     name: str
     description: str = ""
@@ -60,10 +63,6 @@ class ScenarioDefinition(BaseModel):
     edges: list = []
     entry_node: str = ""
     outcome_criteria: list = []
-
-    @property
-    def node_ids(self) -> list[str]:
-        return list(self.nodes.keys())
 
 
 class _Edge:
@@ -82,6 +81,7 @@ class Scenario:
         self._nodes: dict[str, Any] = {}
         self._edges: list[_Edge] = []
         self._entry_node: str | None = None
+        self._outcome_criteria: list[Any] = []
 
     def add_node(
         self,
@@ -91,11 +91,18 @@ class Scenario:
         model_override: Any = None,
         tool_filter: Any = None,
         state_update: Any = None,
+        agent_identity: str | None = None,
         **metadata: Any,
     ) -> None:
         if node_id in self._nodes:
             raise ValueError(f"Node '{node_id}' already exists")
-        self._nodes[node_id] = {"node_id": node_id, "question": deepcopy(question)}
+        if agent_identity == "__user__":
+            raise ValueError("agent_identity='__user__' is reserved")
+        self._nodes[node_id] = {
+            "node_id": node_id,
+            "question": deepcopy(question),
+            "agent_identity": agent_identity,
+        }
 
     def add_edge(
         self,
@@ -103,8 +110,27 @@ class Scenario:
         target: str,
         *,
         when: Any = None,
+        handover: Any = None,
     ) -> None:
-        self._edges.append(_Edge(source=source, target=target, condition=when))
+        if isinstance(handover, str):
+            _KNOWN_STRATEGIES = {
+                "transcript_prepend",
+                "transcript_append",
+                "transcript_materialize",
+            }
+            if handover not in _KNOWN_STRATEGIES:
+                raise ValueError(f"Unknown handover strategy '{handover}'")
+        edge = _Edge(source=source, target=target, condition=when)
+        edge.handover = handover
+        self._edges.append(edge)
+
+    def add_outcome(self, name: str, check: Any, *, description: str = "") -> None:
+        self._outcome_criteria = getattr(self, "_outcome_criteria", [])
+        self._outcome_criteria.append({"name": name, "description": description, "check": check})
+
+    def add_outcome_criterion(self, criterion: Any) -> None:
+        self._outcome_criteria = getattr(self, "_outcome_criteria", [])
+        self._outcome_criteria.append(criterion)
 
     def set_entry(self, node_id: str) -> None:
         if node_id not in self._nodes:
@@ -120,6 +146,7 @@ class Scenario:
             nodes=dict(self._nodes),
             edges=[{"source": e.source, "target": e.target} for e in self._edges],
             entry_node=self._entry_node,
+            outcome_criteria=list(self._outcome_criteria),
         )
 
 
@@ -176,13 +203,13 @@ q_followup = Question(
 s = Scenario("bcl2-mechanism", description="Two-turn mechanism check")
 s.add_node("initial", question=q_initial)
 s.add_node("followup", question=q_followup)
-s.add_edge("initial", "followup")   # unconditional: always proceed
-s.add_edge("followup", END)         # unconditional: then terminate
+s.add_edge("initial", "followup")  # unconditional: always proceed
+s.add_edge("followup", END)  # unconditional: then terminate
 s.set_entry("initial")
 
 defn = s.validate()
 print(f"Scenario: {defn.name}")
-print(f"Nodes: {defn.node_ids}")
+print(f"Nodes: {list(defn.nodes.keys())}")
 print(f"Entry: {defn.entry_node}")
 ```
 
@@ -190,8 +217,10 @@ Builder method summary:
 
 | Method | Purpose |
 |--------|---------|
-| `add_node(node_id, *, question, ...)` | Register a node with a question |
-| `add_edge(source, target, *, when=None)` | Connect two nodes, optionally with a condition |
+| `add_node(node_id, *, question, ...)` | Register a node with a question (optionally with `agent_identity`, `state_update`, `model_override`, `tool_filter`) |
+| `add_edge(source, target, *, when=None, handover=None)` | Connect two nodes, optionally with a condition and a handover strategy |
+| `add_outcome(name, check, *, description="")` | Sugar for attaching a declarative outcome criterion |
+| `add_outcome_criterion(criterion)` | Attach a pre-built `ScenarioOutcomeCriterion` (escape hatch for callable outcomes) |
 | `set_entry(node_id)` | Set the starting node |
 | `validate()` | Run graph checks; return frozen `ScenarioDefinition` |
 
@@ -252,18 +281,84 @@ Accepted `when` forms:
 | `dict` | `when={"verify_result": True}` | Shorthand converted to `StateCheck` |
 | `list[dict]` | `when=[{"verify_result": True}, {"turn": 2}]` | AND of multiple `StateCheck`s |
 | `StateCheck` | `when=StateCheck(...)` | Used directly |
-| `callable` | `when=lambda acc, p: ...` | Evaluated against runtime state |
+| `callable` | `when=lambda state: ...` | Evaluated against runtime `ScenarioState` |
 
 ### 4.3 Validation
 
-`validate()` runs four structural checks before freezing the graph:
+`validate()` enforces three hard-fail structural checks before freezing the graph, plus one explicit allowance and one warning:
 
 1. Edge sources and targets must reference registered nodes (or `END`).
 2. All nodes must be reachable from the entry node via BFS.
 3. Every node with conditional edges must also have at least one unconditional fallback edge.
-4. Nodes with no outbound edges are valid implicit terminals (they terminate the scenario without an explicit `END` edge).
+4. *(Allowance, not a failure)* Nodes with no outbound edges are valid implicit terminals; they terminate the scenario without an explicit `END` edge.
+5. *(Warning, not a failure)* If a node has multiple unconditional edges, a `UserWarning` is emitted. Only the first unconditional edge will be used; the rest are silently ignored. This almost always indicates a graph construction error.
 
-If any check fails, `validate()` raises `ValueError` with a description of the problem.
+If any of the three hard-fail checks (1, 2, or 3) fails, `validate()` raises `ValueError` with a description of the problem.
+
+### 4.4 Agent Identity (Multi-Agent Scenarios)
+
+Each node can declare an `agent_identity` label. The label tags every message the node's agent produces in the scenario's tagged-message log (`TaggedMessage.agent_id`), and it controls when the runtime fires a handover. When an edge crosses a node-to-node boundary whose `agent_identity` changes, the matched edge's `handover` strategy decides how the next agent sees the prior conversation. See [Handover](handover.md) for the four strategies and the `TaggedMessage` shape, and [State and Routing](state-and-routing.md) for how the runtime emits tagged messages each turn.
+
+```python
+s_multi = Scenario("multi-agent")
+s_multi.add_node("triage_question", question=q, agent_identity="triage")
+s_multi.add_node("specialist_question", question=q, agent_identity="specialist")
+```
+
+The string `"__user__"` is reserved for scenario-internal user prompts and cannot be used here. Nodes that do not set `agent_identity` execute without an identity tag, and edges between such nodes require no handover.
+
+### 4.5 Tool Filter (Restricting MCP Tools per Node)
+
+`tool_filter` is an optional per-node setting that removes specific MCP tools from the answering model's tool set when this node runs. It is built as a `ToolFilter` containing one or more `ToolFilterEntry` records: each entry names a server, and optionally a tool on that server. Omitting the `tool` field removes every tool from the named server. This is most useful when a scenario wants the same model to behave differently at successive turns: e.g., grant search tools at turn 0, then strip them at turn 1 to test recall under tool removal.
+
+```python
+# ToolFilter and ToolFilterEntry are real Pydantic schemas; the mock cell
+# above does not import them, so we sketch the call site only.
+
+# from karenina.schemas.scenario.types import ToolFilter, ToolFilterEntry
+#
+# tool_filter = ToolFilter(remove=[
+#     ToolFilterEntry(server="pubmed", tool="search_articles"),
+#     ToolFilterEntry(server="filesystem"),  # remove every tool from this server
+# ])
+#
+# s_filter = Scenario("tool-controlled")
+# s_filter.add_node("with_tools", question=q)  # full MCP tool set available
+# s_filter.add_node("without_tools", question=q, tool_filter=tool_filter)
+print("ToolFilter / ToolFilterEntry: karenina.schemas.scenario.types")
+```
+
+`ToolFilter` is fully serialized in the SchemaOrg checkpoint and round-trips through `scenario_to_schema_org` / `schema_org_to_scenario`. For how MCP tools are wired into the answering model in the first place, see the [MCP Integration](../../notebooks/advanced/mcp-integration.ipynb) page.
+
+### 4.6 Handover Strategies
+
+When an edge crosses an `agent_identity` boundary (or whenever you want explicit control over how the next agent sees prior turns), `add_edge` accepts a `handover` parameter. Three string strategies are recognised:
+
+| Strategy | What it does |
+|----------|--------------|
+| `"transcript_prepend"` | Prepends the prior agent's transcript before the next agent's first message |
+| `"transcript_append"` | Appends the prior agent's transcript after the next agent's prompt |
+| `"transcript_materialize"` | Materializes the prior agent's tagged trace as a flattened transcript fed to the next agent |
+
+A callable `(messages, state) -> messages` may also be passed. Callable handovers are not serialized to checkpoints and emit a `UserWarning`; prefer string strategies when you intend to persist the scenario.
+
+```python
+s_handoff = Scenario("with-handover")
+s_handoff.add_node("first", question=q, agent_identity="agent_a")
+s_handoff.add_node("second", question=q, agent_identity="agent_b")
+s_handoff.add_edge("first", "second", handover="transcript_append")
+```
+
+The full semantics of each strategy (what the rendered transcript looks like, how `transcript_materialize` writes traces under `<turn_dir>/traces/`, and how callable handovers receive `tagged_messages` and `state`) live in [Handover](handover.md).
+
+### 4.7 Attaching Outcome Criteria
+
+Outcome criteria run after every turn completes and assert over the full execution. Two methods attach them to a scenario:
+
+- `add_outcome(name, check, *, description="")`: sugar that wraps a declarative `OutcomeNode` (e.g., `TurnCheck`, `ResultCheck`, `AllOf`, `CountTurns`) into a `ScenarioOutcomeCriterion`. This is the primary path; fully serializable.
+- `add_outcome_criterion(criterion)`: attach a pre-built `ScenarioOutcomeCriterion` directly. Use this when you need the callable `evaluate=` escape hatch.
+
+Outcome criteria are explained in depth on the [Outcome Criteria](outcome-criteria.md) page; this section only documents the attachment surface on the builder.
 
 ## 5. Patterns
 
@@ -289,7 +384,7 @@ linear.add_edge("b", "c")
 linear.add_edge("c", END)
 linear.set_entry("a")
 linear_defn = linear.validate()
-print(f"Linear scenario: {linear_defn.node_ids}")
+print(f"Linear scenario: {list(linear_defn.nodes.keys())}")
 ```
 
 ### Branching
@@ -307,7 +402,9 @@ A -----> B --> END
 ```python
 q_main = Question(question="What drug class does venetoclax belong to?", raw_answer="BCL-2 inhibitor")
 q_correct_path = Question(question="Good. What is the clinical indication?", raw_answer="CLL, SLL, AML")
-q_incorrect_path = Question(question="Let us revisit. Venetoclax targets BCL-2. What class is that?", raw_answer="BCL-2 inhibitor")
+q_incorrect_path = Question(
+    question="Let us revisit. Venetoclax targets BCL-2. What class is that?", raw_answer="BCL-2 inhibitor"
+)
 
 branching = Scenario("branching-example")
 branching.add_node("main", question=q_main)
@@ -355,7 +452,7 @@ looping.add_edge("probe", END)
 
 looping.set_entry("probe")
 loop_defn = looping.validate()
-print(f"Looping scenario: {loop_defn.node_ids}")
+print(f"Looping scenario: {list(loop_defn.nodes.keys())}")
 ```
 
 Note: looping scenarios require a fallback edge on the looping node. Without it, `validate()` raises a `ValueError` because the node has conditional edges with no unconditional fallback.
@@ -371,7 +468,24 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 | `model_override` | `ModelOverride \| None` | No | Per-node override for answering and/or parsing models |
 | `tool_filter` | `ToolFilter \| None` | No | Removes specific MCP tools from the answering model at this node |
 | `state_update` | `callable \| str \| None` | No | Called after the turn to update accumulated state; accepts a lambda or source string |
+| `agent_identity` | `str \| None` | No | Identity label for this node's agent. The reserved value `"__user__"` is rejected. Used to drive transcript handover between agents. |
 | `**metadata` | `Any` | No | Arbitrary key-value pairs stored on the node for reference |
+
+### `add_edge()` Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `source` | `str` | Yes | Source node id (must be a registered node) |
+| `target` | `str` | Yes | Target node id, or `END` |
+| `when` | `dict \| list[dict] \| StateCheck \| callable \| str \| None` | No | Edge condition (see Edge Condition Formats) |
+| `handover` | `str \| callable \| None` | No | Transcript handover strategy. String values: `"transcript_prepend"`, `"transcript_append"`, `"transcript_materialize"`. Callable form `(messages, state) -> messages` is allowed but is not serialized to checkpoints. |
+
+### Outcome Attachment
+
+| Method | Signature | Use when |
+|--------|-----------|----------|
+| `add_outcome` | `add_outcome(name, check, *, description="")` | You have a declarative `OutcomeNode` (TurnCheck, ResultCheck, AllOf, etc.). Fully serializable. |
+| `add_outcome_criterion` | `add_outcome_criterion(criterion: ScenarioOutcomeCriterion)` | You need the `evaluate=` callable escape hatch on `ScenarioOutcomeCriterion`. |
 
 ### Edge Condition Formats
 
@@ -381,7 +495,7 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 | `{"field": value}` | `dict` | Single-key shorthand; converted to a `StateCheck` with an automatically chosen primitive |
 | `[{"f1": v1}, {"f2": v2}]` | `list[dict]` | Multiple `StateCheck`s; edge fires only when all checks pass (AND semantics) |
 | `StateCheck(...)` | `StateCheck` | Used directly; gives explicit control over the comparison primitive |
-| `lambda acc, p: ...` | `callable` | Evaluated at runtime with the accumulated state and the current turn's parsed result |
+| `lambda state: ...` | `callable` | Evaluated at runtime with the full `ScenarioState`; returns `bool` |
 
 ### State Field Paths (for dict shorthand and `StateCheck`)
 
@@ -414,4 +528,4 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 
 - [Outcome Criteria](outcome-criteria.md): declarative assertions evaluated after the scenario completes
 - [State and Routing](state-and-routing.md): how runtime state accumulates and how edges are resolved
-- [Sycophancy Tutorial](../../../workflows/scenarios/sycophancy-tutorial.md): end-to-end walkthrough building a sycophancy resistance scenario
+- [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough building a sycophancy resistance scenario

@@ -8,10 +8,10 @@ This section provides exhaustive reference documentation for all configuration o
 
 | Page | What It Covers | Fields |
 |------|---------------|--------|
-| [Environment Variables](env-vars.md) | All environment variables recognized by karenina | 15+ vars |
-| [VerificationConfig](verification-config.md) | Complete verification pipeline configuration | 33 fields |
-| [ModelConfig](model-config.md) | Model identity, parameters, MCP, and middleware | 19 fields |
-| [PromptConfig](prompt-config.md) | Custom instruction injection into pipeline LLM calls | 6 fields |
+| [Environment Variables](env-vars.md) | All environment variables recognized by karenina | ~18 vars |
+| [VerificationConfig](verification-config.md) | Complete verification pipeline configuration | ~38 fields |
+| [ModelConfig](model-config.md) | Model identity, parameters, MCP, and middleware | ~22 fields |
+| [PromptConfig](prompt-config.md) | Custom instruction injection into pipeline LLM calls | 7 fields |
 | [Preset Schema](preset-schema.md) | JSON format for saved configuration presets | Metadata + config |
 | [DBConfig](verification-config.md#dbconfig-fields) | Database connection for auto-saving results | 8 fields |
 

@@ -8,6 +8,7 @@ from typing import Any
 
 from karenina.benchmark.verification.evaluators import TemplateEvaluator
 from karenina.benchmark.verification.utils.template_parsing_helpers import is_regex_only_template
+from karenina.replay.exceptions import ReplayHydrationError
 from karenina.schemas.entities.answer import BaseAnswer
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -110,10 +111,23 @@ class ParseTemplateStage(BaseVerificationStage):
 
         Inherits error-checking from BaseVerificationStage.
         """
-        if not super().should_run(context):
+        if not super().should_run(context) and not context.can_score_partial_timeout():
             return False
         # Skip parsing if recursion limit was reached (response is truncated/unreliable)
         if context.get_artifact(ArtifactKeys.RECURSION_LIMIT_REACHED, False):
+            return False
+        # Skip parsing if response was truncated by streaming timeout
+        if (
+            context.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL, False)
+            and not context.allow_partial_trace_scoring
+        ):
+            return False
+        entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
+        if (
+            entry is not None
+            and getattr(entry, "verify_result", None) is not None
+            and getattr(entry, "parsed_answer_fields", None) is None
+        ):
             return False
         # Skip parsing if trace validation failed (trace doesn't end with AI message)
         if context.get_artifact(ArtifactKeys.TRACE_VALIDATION_FAILED, False):
@@ -171,6 +185,38 @@ class ParseTemplateStage(BaseVerificationStage):
             context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
             return
 
+        # --- Replay parse bypass ---
+        # Sits after the existing regex-only and trace-only fast paths so
+        # those keep priority. When a ReplayEntry has parsed_answer_fields
+        # we hydrate the current Answer class via model_validate. On a
+        # ValidationError the default fall_through policy logs and falls
+        # back to the live judge; the strict policy raises ReplayHydrationError.
+        entry = context.get_artifact(ArtifactKeys.REPLAY_ENTRY)
+        if entry is not None and getattr(entry, "parsed_answer_fields", None):
+            try:
+                parsed = Answer.model_validate(entry.parsed_answer_fields)
+            except Exception as validation_error:  # noqa: BLE001  # pydantic.ValidationError, ValueError, TypeError
+                policy = context.replay_parse_on_hydration_mismatch
+                if policy == "strict":
+                    raise ReplayHydrationError(
+                        "Replay parsed_answer_fields failed validation",
+                        captured_fields=entry.parsed_answer_fields,
+                        inner=validation_error,
+                    ) from validation_error
+                logger.warning(
+                    "Replay parsed_answer_fields failed validation; falling through to live parse",
+                    exc_info=True,
+                )
+            else:
+                logger.debug("Using injected parsed_answer_fields for template parsing")
+                context.set_artifact(ArtifactKeys.PARSED_ANSWER, parsed)
+                context.set_artifact(ArtifactKeys.TEMPLATE_EVALUATOR, None)
+                context.set_artifact(ArtifactKeys.PARSING_MODEL_STR, "replay (no LLM)")
+                context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, False)
+                context.set_result_field(ArtifactKeys.USED_FULL_TRACE, context.use_full_trace_for_template)
+                context.set_result_field(ArtifactKeys.TRACE_EXTRACTION_ERROR, None)
+                return
+
         parsing_model = context.parsing_model
         raw_llm_response = context.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
         RawAnswer = context.get_artifact(ArtifactKeys.RAW_ANSWER)
@@ -193,7 +239,7 @@ class ParseTemplateStage(BaseVerificationStage):
         except Exception as e:
             error_msg = f"Failed to create TemplateEvaluator: {type(e).__name__}: {e}"
             logger.error(error_msg)
-            context.mark_error(error_msg)
+            context.mark_error(error_msg, category=context.error_registry.classify(e))
             return
 
         # Store evaluator for reuse by verify stage
@@ -202,20 +248,21 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Build deep judgment config
         deep_judgment_config: dict[str, Any] = {}
-        if context.deep_judgment_enabled:
+        if context.deep_judgment_mode != "disabled":
             deep_judgment_config = {
                 "max_excerpts_per_attribute": context.deep_judgment_max_excerpts_per_attribute,
                 "fuzzy_match_threshold": context.deep_judgment_fuzzy_match_threshold,
                 "excerpt_retry_attempts": context.deep_judgment_excerpt_retry_attempts,
                 "search_enabled": context.deep_judgment_search_enabled,
                 "search_tool": context.deep_judgment_search_tool,
+                "reasoning_only": context.deep_judgment_mode == "reasoning_only",
             }
 
         # Step 2: Parse response using evaluator
         parse_result = evaluator.parse_response(
             raw_response=raw_llm_response,
             question_text=context.question_text,
-            deep_judgment_enabled=context.deep_judgment_enabled,
+            deep_judgment_enabled=context.deep_judgment_mode != "disabled",
             deep_judgment_config=deep_judgment_config,
             use_full_trace=use_full_trace,
             usage_tracker=usage_tracker,
@@ -223,7 +270,16 @@ class ParseTemplateStage(BaseVerificationStage):
 
         # Step 3: Handle parse result
         if not parse_result.success:
-            context.mark_error(parse_result.error or "Parsing failed")
+            # Classify the underlying exception when available so that
+            # transient parser failures (timeout, connection, rate limit)
+            # land in the correct retry-policy bucket. Without this, every
+            # parsing failure defaults to PERMANENT and bypasses the
+            # user-configured retry budgets. See issue 191.
+            if parse_result.error_exception is not None:
+                error_category = context.error_registry.classify(parse_result.error_exception)
+                context.mark_error(parse_result.error or "Parsing failed", category=error_category)
+            else:
+                context.mark_error(parse_result.error or "Parsing failed")
             # Store trace extraction error for diagnostics
             context.set_artifact(ArtifactKeys.TRACE_EXTRACTION_ERROR, parse_result.error)
             context.set_result_field(ArtifactKeys.USED_FULL_TRACE, use_full_trace)
@@ -246,6 +302,10 @@ class ParseTemplateStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.ATTRIBUTES_WITHOUT_EXCERPTS, parse_result.attributes_without_excerpts)
         context.set_artifact(ArtifactKeys.HALLUCINATION_RISK_ASSESSMENT, parse_result.hallucination_risk_assessment)
 
+        # Store reasoning-only flag so downstream stages (e.g., DeepJudgmentAutoFail) can check it
+        if context.deep_judgment_mode == "reasoning_only":
+            context.set_artifact(ArtifactKeys.DEEP_JUDGMENT_REASONING_ONLY, True)
+
         # Update usage tracker with any usage from parsing
         for usage_meta in parse_result.usage_metadata_list:
             if usage_meta:
@@ -253,7 +313,7 @@ class ParseTemplateStage(BaseVerificationStage):
         context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
         # Store in result builder
-        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_ENABLED, context.deep_judgment_enabled)
+        context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_MODE, context.deep_judgment_mode)
         context.set_result_field(ArtifactKeys.DEEP_JUDGMENT_PERFORMED, parse_result.deep_judgment_performed)
         context.set_result_field(ArtifactKeys.EXTRACTED_EXCERPTS, parse_result.extracted_excerpts)
         context.set_result_field(ArtifactKeys.ATTRIBUTE_REASONING, parse_result.attribute_reasoning)

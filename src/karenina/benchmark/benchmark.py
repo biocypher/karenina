@@ -10,17 +10,19 @@ conversion is in benchmark_helpers.py.
 """
 
 import logging
+import threading
+import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.entities import Question
 
-from ..schemas.entities import CallableTrait, LLMRubricTrait, MetricRubricTrait, RegexTrait, Rubric
-from ..schemas.entities.rubric import AgenticRubricTrait
+from ..schemas.entities import CallableRubricTrait, LLMRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
+from ..schemas.entities.rubric import AgenticRubricTrait, DynamicRubric
 from ..schemas.results import VerificationResultSet
 from ..schemas.scenario.definition import ScenarioDefinition
 from ..schemas.verification import (
@@ -42,6 +44,188 @@ from .core import (
 from .core.questions import _NOT_PROVIDED
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_scenario_ordering(
+    combos: list[tuple[Any, Any, Any, int | None]],
+    config: VerificationConfig,
+) -> list[tuple[Any, Any, Any, int | None]]:
+    """Apply resolved task_ordering to a scenario combo list.
+
+    Routes through ``_resolve_task_ordering`` so scenario runs honor the
+    ``auto`` default introduced by the multi-endpoint scheduling work, matching
+    the QA path in :func:`karenina.benchmark.verification.batch_runner._apply_task_ordering`.
+
+    Combo shape: ``(scenario_def, answering_model, parsing_model, replicate)``.
+
+    Args:
+        combos: List of scenario combo tuples. Mutated in place for
+            ``prefix_cache`` and ``random``.
+        config: Verification config. ``config.task_ordering`` is resolved via
+            ``_resolve_task_ordering`` so ``auto`` collapses to
+            ``distribute_answerers`` (2+ answerer identities) or
+            ``prefix_cache`` (single identity).
+
+    Returns:
+        The same ``combos`` list (possibly re-sorted in place) for
+        ``prefix_cache``, ``random``, and ``generation_order``. A new list for
+        ``distribute_answerers``.
+    """
+    from itertools import zip_longest
+
+    from karenina.benchmark.verification.batch_runner import _resolve_task_ordering
+    from karenina.benchmark.verification.utils.task_helpers import model_sort_key
+    from karenina.schemas.verification.model_identity import ModelIdentity
+
+    strategy = _resolve_task_ordering(config)
+
+    def _within_group_key(c: tuple[Any, Any, Any, int | None]) -> tuple[Any, ...]:
+        # None-safe replicate sort key: None runs sort before integer
+        # replicates, integers sort numerically. Python 3 cannot compare
+        # int with None directly.
+        return (
+            c[0].name,  # scenario name
+            model_sort_key(c[2]),  # parsing_model
+            (0, 0) if c[3] is None else (1, c[3]),  # replicate tiebreaker
+        )
+
+    if strategy == "prefix_cache":
+        combos.sort(key=lambda c: (model_sort_key(c[1]),) + _within_group_key(c))
+        return combos
+    if strategy == "distribute_answerers":
+        groups: dict[str, list[tuple[Any, Any, Any, int | None]]] = {}
+        for combo in combos:
+            key = ModelIdentity.from_model_config(combo[1], role="answering").canonical_key
+            groups.setdefault(key, []).append(combo)
+        for group in groups.values():
+            group.sort(key=_within_group_key)
+        return [c for row in zip_longest(*groups.values()) for c in row if c is not None]
+    if strategy == "random":
+        import random
+
+        random.shuffle(combos)
+        return combos
+    # "generation_order": no-op, preserve original list comprehension order
+    return combos
+
+
+def _reconstruct_scenario_results_from_sink_rows(
+    rows: list[VerificationResult],
+    *,
+    combo_by_key: dict[tuple[str, str, str, int | None], tuple[Any, Any, Any, int | None]],
+    skipped_combo_keys: set[tuple[str, str, str, int | None]],
+) -> list[Any]:
+    """Rebuild skipped scenario summaries from per-turn sink rows."""
+    from contextlib import suppress
+
+    from karenina.ports.messages import Message
+    from karenina.scenario.manager import _evaluate_outcome_criteria
+    from karenina.schemas.scenario.state import (
+        ScenarioExecutionResult,
+        ScenarioState,
+        ScenarioTerminalFailure,
+        TurnRecord,
+    )
+    from karenina.utils.progressive_save import TaskIdentifier
+
+    grouped: dict[tuple[str, str, str, int | None], list[VerificationResult]] = {}
+    for row in rows:
+        meta = row.metadata
+        if meta.scenario_id is None:
+            continue
+        task = TaskIdentifier.from_result(row)
+        key = (
+            task.question_id,
+            task.answering_canonical_key,
+            task.parsing_canonical_key,
+            task.replicate,
+        )
+        if key in skipped_combo_keys:
+            grouped.setdefault(key, []).append(row)
+
+    reconstructed: list[Any] = []
+    for key in sorted(grouped, key=lambda item: item[0]):
+        scenario, _, _, replicate = combo_by_key[key]
+        turn_rows = sorted(grouped[key], key=lambda row: row.metadata.scenario_turn or 0)
+        history: list[TurnRecord] = []
+        node_results: dict[str, dict[str, Any]] = {}
+
+        for row in turn_rows:
+            meta = row.metadata
+            template = row.template
+            trace_messages = []
+            for message in (template.trace_messages if template is not None else []) or []:
+                with suppress(Exception):
+                    trace_messages.append(Message.from_dict(message))
+
+            parsed_fields = template.parsed_llm_response if template is not None else None
+            parsed_fields = dict(parsed_fields or {})
+            verify_result = template.verify_result if template is not None else None
+            node_id = meta.scenario_node or ""
+            record = TurnRecord(
+                node_id=node_id,
+                question_text=meta.question_text,
+                question_messages=[Message.user(meta.question_text)],
+                trace_messages=trace_messages,
+                raw_response=template.raw_llm_response if template is not None else "",
+                parsed_answer=None,
+                parsed_fields=parsed_fields,
+                verify_result=verify_result,
+                verification_result_id=meta.result_id,
+            )
+            history.append(record)
+            node_results[node_id] = {
+                "verify_result": verify_result,
+                "parsed": parsed_fields,
+                "rubric": {},
+            }
+
+        path = [turn.node_id for turn in history]
+        last_row = turn_rows[-1] if turn_rows else None
+        last_failure = last_row.metadata.failure if last_row is not None else None
+        failure_group = getattr(getattr(last_failure, "group", None), "value", getattr(last_failure, "group", None))
+        failure_category = getattr(
+            getattr(last_failure, "category", None),
+            "value",
+            getattr(last_failure, "category", None),
+        )
+        is_content_failure = failure_group == "content" or failure_category == "content"
+        status: Literal["completed", "error"] = (
+            "error" if last_failure is not None and not is_content_failure else "completed"
+        )
+        final_state = ScenarioState(
+            turn=len(history),
+            current_node=path[-1] if path else "",
+            verify_result=history[-1].verify_result if history else None,
+            parsed=history[-1].parsed_fields if history else {},
+            node_visits={node: path.count(node) for node in set(path)},
+            history=history,
+            accumulated={},
+            node_results=node_results,
+        )
+        result = ScenarioExecutionResult(
+            scenario_id=scenario.name,
+            status=status,
+            path=path,
+            turn_count=len(history),
+            history=history,
+            turn_results=turn_rows,
+            final_state=final_state,
+            outcome_results={},
+            terminal_failure=ScenarioTerminalFailure(
+                node_id=path[-1] if path else "",
+                category=failure_category or "",
+                stage=last_failure.stage,
+                reason=last_failure.reason,
+            )
+            if status == "error" and last_failure is not None
+            else None,
+            replicate=replicate,
+        )
+        result.outcome_results = _evaluate_outcome_criteria(scenario, result)
+        reconstructed.append(result)
+
+    return reconstructed
 
 
 class Benchmark:
@@ -161,9 +345,16 @@ class Benchmark:
         instance._init_managers()
         return instance
 
-    def save(self, path: Path) -> None:
-        """Save the benchmark to a JSON-LD file."""
-        self._base.save(path)
+    def save(self, path: Path, save_deep_judgment_config: bool = False) -> None:
+        """Save the benchmark to a JSON-LD file.
+
+        Args:
+            path: Path where to save the benchmark.
+            save_deep_judgment_config: If True, include deep judgment
+                configuration in LLM rubric traits. If False (default),
+                deep judgment settings are stripped before saving.
+        """
+        self._base.save(path, save_deep_judgment_config=save_deep_judgment_config)
 
     def save_to_db(self, storage: str, checkpoint_path: Path | None = None) -> "Benchmark":
         """Save this benchmark to a database."""
@@ -186,7 +377,7 @@ class Benchmark:
 
     def add_question(
         self,
-        question: Union[str, "Question"],
+        question: Union[str, dict[str, Any], "Question"],
         raw_answer: str | None = None,
         answer_template: str | type | None = None,
         question_id: str | None = None,
@@ -198,6 +389,9 @@ class Benchmark:
         answer_notes: str | None = None,
     ) -> str:
         """Add a question to the benchmark.
+
+        Accepts a question string, a Question object, or a dict with keys
+        ``question`` and ``raw_answer`` (plus any optional kwargs).
 
         Raises:
             ValueError: If scenarios already exist (homogeneous enforcement).
@@ -219,6 +413,30 @@ class Benchmark:
             few_shot_examples,
             answer_notes=answer_notes,
         )
+
+    def add_questions(
+        self,
+        questions_data: "list[dict[str, Any] | Question]",
+    ) -> list[str]:
+        """Add multiple questions at once.
+
+        Accepts a list of dicts, Question objects, or a mix of both.
+
+        Args:
+            questions_data: List of dicts or Question objects.
+
+        Returns:
+            List of question IDs that were created.
+
+        Raises:
+            ValueError: If scenarios already exist (homogeneous enforcement).
+        """
+        if self._scenarios:
+            raise ValueError(
+                "Cannot add standalone questions to a scenario benchmark. "
+                "Scenarios and standalone questions cannot coexist in the same benchmark."
+            )
+        return self._question_manager.add_questions(questions_data)
 
     def get_question_ids(self) -> list[str]:
         """Get all question IDs in the benchmark."""
@@ -292,7 +510,7 @@ class Benchmark:
         """Remove all questions from the benchmark."""
         return self._question_manager.clear_questions()
 
-    def add_questions_batch(self, questions_data: list[dict[str, Any]]) -> list[str]:
+    def add_questions_batch(self, questions_data: "list[dict[str, Any] | Question]") -> list[str]:
         """Add multiple questions at once."""
         return self._question_manager.add_questions_batch(questions_data)
 
@@ -522,8 +740,8 @@ class Benchmark:
     def generate_template_for_question(
         self,
         question_id: str,
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
@@ -546,14 +764,16 @@ class Benchmark:
     def generate_templates(
         self,
         question_ids: list[str],
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
-        progress_callback: Callable[[float, str], None] | None = None,
+        progress_callback: "Callable[[_helpers.TemplateProgressEvent], None] | None" = None,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        max_workers: int | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> dict[str, dict[str, Any]]:
         """Generate templates for multiple questions using LLM."""
         return _helpers.generate_templates(
@@ -567,21 +787,47 @@ class Benchmark:
             progress_callback,
             endpoint_base_url,
             endpoint_api_key,
+            max_workers=max_workers,
+            cancel_event=cancel_event,
         )
 
     def generate_all_templates(
         self,
-        model: str = "gemini-2.0-flash",
-        model_provider: str = "google_genai",
+        model: str = "claude-haiku-4-5",
+        model_provider: str = "anthropic",
         temperature: float = 0,
         interface: str = "langchain",
         force_regenerate: bool = False,
-        progress_callback: Callable[[float, str], None] | None = None,
+        progress_callback: "Callable[[_helpers.TemplateProgressEvent], None] | None" = None,
         only_missing: bool = True,
         endpoint_base_url: str | None = None,
         endpoint_api_key: str | None = None,
+        progressive_backup: bool = True,
+        backup_path: Path | None = None,
+        max_workers: int | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> dict[str, dict[str, Any]]:
-        """Generate templates for all questions in the benchmark using LLM."""
+        """Generate templates for all questions in the benchmark using LLM.
+
+        Args:
+            model: Model name.
+            model_provider: Model provider.
+            temperature: Generation temperature.
+            interface: Adapter interface.
+            force_regenerate: If True, regenerate existing templates.
+            progress_callback: Optional progress callback.
+            only_missing: If True, only generate for questions without templates.
+            endpoint_base_url: Optional custom endpoint URL.
+            endpoint_api_key: Optional API key for custom endpoint.
+            progressive_backup: If True (default), save generated templates to a
+                backup file after each successful generation so interrupted runs
+                can be resumed.
+            backup_path: Path for the backup file. Defaults to
+                ``{benchmark_name}_templates_backup.json`` in the current directory.
+            max_workers: Number of parallel workers. None reads from
+                KARENINA_ASYNC_MAX_WORKERS env var (default 1). 1 = sequential.
+            cancel_event: If set, stops generation after the current task(s) complete.
+        """
         return _helpers.generate_all_templates(
             self,
             model,
@@ -593,6 +839,10 @@ class Benchmark:
             only_missing,
             endpoint_base_url,
             endpoint_api_key,
+            progressive_backup,
+            backup_path,
+            max_workers=max_workers,
+            cancel_event=cancel_event,
         )
 
     def export_generated_templates(self, file_path: Path) -> None:
@@ -606,7 +856,7 @@ class Benchmark:
     # ── Rubric management ────────────────────────────────────────────────
 
     def add_global_rubric_trait(
-        self, trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait
+        self, trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait
     ) -> None:
         """Add a global rubric trait to the benchmark."""
         self._rubric_manager.add_global_rubric_trait(trait)
@@ -614,42 +864,44 @@ class Benchmark:
     def add_question_rubric_trait(
         self,
         question_id: str,
-        trait: LLMRubricTrait | RegexTrait | CallableTrait | MetricRubricTrait | AgenticRubricTrait,
+        trait: LLMRubricTrait | RegexRubricTrait | CallableRubricTrait | MetricRubricTrait | AgenticRubricTrait,
     ) -> None:
         """Add a question-specific rubric trait."""
         self._rubric_manager.add_question_rubric_trait(question_id, trait)
 
     def set_global_rubric(self, rubric: Rubric) -> None:
         """Set the complete global rubric (replaces existing)."""
-        self.clear_global_rubric()
-        for trait in rubric.llm_traits:
-            self.add_global_rubric_trait(trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_global_rubric_trait(regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_global_rubric_trait(callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_global_rubric_trait(metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_global_rubric_trait(agentic_trait)
+        self._rubric_manager.set_global_rubric(rubric)
 
     def set_question_rubric(self, question_id: str, rubric: Rubric) -> None:
         """Set the complete question-specific rubric (replaces existing)."""
-        self.remove_question_rubric(question_id)
-        for trait in rubric.llm_traits:
-            self.add_question_rubric_trait(question_id, trait)
-        for regex_trait in rubric.regex_traits:
-            self.add_question_rubric_trait(question_id, regex_trait)
-        for callable_trait in rubric.callable_traits:
-            self.add_question_rubric_trait(question_id, callable_trait)
-        for metric_trait in rubric.metric_traits:
-            self.add_question_rubric_trait(question_id, metric_trait)
-        for agentic_trait in rubric.agentic_traits:
-            self.add_question_rubric_trait(question_id, agentic_trait)
+        self._rubric_manager.set_question_rubric(question_id, rubric)
 
     def get_global_rubric(self) -> Rubric | None:
         """Get the global rubric from the benchmark."""
         return self._rubric_manager.get_global_rubric()
+
+    def get_question_rubric(self, question_id: str) -> Rubric | None:
+        """Get the question-specific rubric for a question.
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Rubric containing the question-specific traits, or None.
+        """
+        raw = self._rubric_manager.get_question_rubric(question_id)
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return Rubric(
+                llm_traits=raw.get("llm_traits", []),
+                regex_traits=raw.get("regex_traits", []),
+                callable_traits=raw.get("callable_traits", []),
+                metric_traits=raw.get("metric_traits", []),
+                agentic_traits=raw.get("agentic_traits", []),
+            )
+        return Rubric.from_traits(raw)
 
     def clear_global_rubric(self) -> bool:
         """Remove the global rubric."""
@@ -663,9 +915,44 @@ class Benchmark:
         """Remove all rubrics (global and question-specific)."""
         return self._rubric_manager.clear_all_rubrics()
 
-    def validate_rubrics(self) -> tuple[bool, list[str]]:
+    def validate_rubrics(self) -> tuple[bool, list[dict[str, str]]]:
         """Validate all rubrics are properly configured."""
         return self._rubric_manager.validate_rubrics()
+
+    # ── Dynamic rubric management ──────────────────────────────────────
+
+    def get_global_dynamic_rubric(self) -> DynamicRubric | None:
+        """Get the global dynamic rubric from the benchmark."""
+        return self._rubric_manager.get_global_dynamic_rubric()
+
+    def set_global_dynamic_rubric(self, dynamic_rubric: DynamicRubric | None) -> None:
+        """Set or clear the global dynamic rubric.
+
+        Persists the rubric to the checkpoint so it survives save/load cycles.
+
+        Args:
+            dynamic_rubric: The DynamicRubric to set, or None to clear.
+        """
+        self._base._global_dynamic_rubric = dynamic_rubric
+        if dynamic_rubric is not None:
+            self._rubric_manager.set_global_dynamic_rubric_in_checkpoint(dynamic_rubric)
+        else:
+            # Clear from checkpoint: remove dynamic rubric ratings
+            if self._base._checkpoint.rating:
+                self._base._checkpoint.rating = [
+                    r for r in self._base._checkpoint.rating if r.additionalType != "karenina:GlobalDynamicRubricTrait"
+                ]
+
+    def get_merged_dynamic_rubric_for_question(self, question_id: str) -> DynamicRubric | None:
+        """Get merged dynamic rubric for a question (global + question-specific).
+
+        Args:
+            question_id: The question ID.
+
+        Returns:
+            Merged DynamicRubric or None if neither global nor question-level exists.
+        """
+        return self._rubric_manager.get_merged_dynamic_rubric_for_question(question_id)
 
     # ── Verification ─────────────────────────────────────────────────────
 
@@ -676,19 +963,58 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
     ) -> VerificationResultSet:
         """Run verification on the benchmark using existing execution system.
 
         For scenario benchmarks, dispatches to ``_run_scenario_verification``
         which iterates over the scenario x model cross-product.
         For standalone question benchmarks, delegates to VerificationManager.
+
+        Args:
+            config: Verification configuration.
+            question_ids: Optional filter for which questions to run.
+            run_name: Optional run label.
+            async_enabled: Whether to run in parallel.
+            progress_callback: Optional UI progress callback.
+            sink: Optional :class:`ResultSink` for progressive save and
+                crash recovery. Pass a :class:`ProgressiveFileSink` to get
+                ``--resume``-compatible sidecars written incrementally, or a
+                :class:`CompositeSink` to combine multiple persistence
+                strategies. Scenario mode stores per-turn verification rows
+                and skips already-completed scenario/model/parser combos on
+                resume.
         """
+        # Auto-build replay store from legacy interface="manual" models.
+        # The benchmark is only reachable here (not from VerificationConfig
+        # validators), so this is the right layer for the translation.
+        # The resulting store is strict so existing manual semantics are
+        # preserved bit-identically.
+        if config.replay_store is None:
+            manual_model = next(
+                (m for m in config.answering_models if getattr(m, "interface", None) == "manual"),
+                None,
+            )
+            if manual_model is not None and getattr(manual_model, "manual_traces", None) is not None:
+                from karenina.replay import ReplayStore
+
+                config = config.model_copy(
+                    update={
+                        "replay_store": ReplayStore.from_manual_traces(
+                            manual_model.manual_traces,
+                            benchmark=self,
+                            miss_policy="strict",
+                        ),
+                    }
+                )
+
         if self.is_scenario_benchmark:
             return self._run_scenario_verification(
                 config=config,
                 run_name=run_name,
                 async_enabled=async_enabled,
                 progress_callback=progress_callback,
+                sink=sink,
             )
         return self._verification_manager.run_verification(
             config,
@@ -697,6 +1023,54 @@ class Benchmark:
             async_enabled,
             progress_callback,
             workspace_root=self._workspace_root,
+            sink=sink,
+        )
+
+    def resume_verification(
+        self,
+        state_path: "str | Path",
+        *,
+        config: VerificationConfig | None = None,
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> VerificationResultSet:
+        """Resume a progressive-save run from its ``.state`` file.
+
+        Reconstructs a :class:`ProgressiveFileSink` from ``state_path``,
+        populates ``config.skip_triples`` via the sink, and delegates to
+        :meth:`run_verification`. The config stored in the state file is
+        used unless ``config`` is provided explicitly (useful for tweaking
+        e.g. ``request_timeout`` before the retry pass).
+
+        Args:
+            state_path: Path to the ``.state`` sidecar from a prior run.
+            config: Optional override config; defaults to the one snapshot
+                in the state file.
+            question_ids: Optional subset of questions.
+            run_name: Optional run label (defaults to the state's label).
+            async_enabled: Override for async execution.
+            progress_callback: UI progress callback.
+
+        Returns:
+            The batch's :class:`VerificationResultSet`. Previously-completed
+            results remain in the sink's buffer; the returned set reflects
+            whatever the executor produced in this resume pass.
+        """
+        from karenina.benchmark.verification.sinks import ProgressiveFileSink
+
+        sink = ProgressiveFileSink.load_for_resume(Path(state_path))
+        sink.set_global_rubric(self._rubric_manager.get_global_rubric())
+
+        effective_config = config if config is not None else sink.config
+        return self.run_verification(
+            config=effective_config,
+            question_ids=question_ids,
+            run_name=run_name,
+            async_enabled=async_enabled,
+            progress_callback=progress_callback,
+            sink=sink,
         )
 
     def _run_scenario_verification(
@@ -705,124 +1079,421 @@ class Benchmark:
         run_name: str | None = None,
         async_enabled: bool | None = None,
         progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
     ) -> VerificationResultSet:
         """Run verification for scenario benchmarks.
 
-        Creates a ScenarioManager and iterates over the cross-product of
-        scenarios, answering models, and parsing models. When ``async_enabled``
-        is True and there are multiple task combinations, uses
-        ``asyncio.gather`` with ``manager.arun()`` for parallel execution.
+        Delegates to ScenarioExecutor for parallel/sequential dispatch,
+        answer caching, and global LLM semaphore management.
 
         Args:
             config: Verification configuration.
             run_name: Optional run name for tracking.
-            async_enabled: If True, run combinations in parallel via asyncio.
+            async_enabled: If True, run combinations in parallel.
             progress_callback: Optional callback for progress updates.
+            sink: Optional :class:`ResultSink` for progressive save / resume.
+                Combo-atomic: each scenario combo (scenario_id, ans, parse,
+                replicate) is persisted as a single completed task once its
+                turn_results are emitted. Interrupted combos re-run from
+                turn 1 on resume.
 
         Returns:
             VerificationResultSet containing all per-turn results.
         """
-        from ..scenario.manager import ScenarioManager
+        from ..benchmark.verification.scenario_executor import ScenarioCombo, ScenarioExecutor, ScenarioExecutorConfig
+        from ..benchmark.verification.utils.task_helpers import stamp_agentic_trait_overrides
+        from ..schemas.scenario.types import ModelOverride, ScenarioNode
 
-        manager = ScenarioManager()
         global_rubric = self._rubric_manager.get_global_rubric()
-        all_results: list[VerificationResult] = []
+        # Stamp pipeline-level retry policy and request timeout onto any
+        # agentic rubric trait model_override so that AgenticTraitEvaluator
+        # picks up the same defaults the top-level answering and parsing
+        # models receive. Returns the original instance unchanged when no
+        # stamping is needed (no agentic traits, no overrides, or all
+        # override fields already set).
+        global_rubric = stamp_agentic_trait_overrides(global_rubric, config)
 
-        # Build the list of (scenario, answering_model, parsing_model) combos
-        combos = [
-            (scenario_def, ans_model, parse_model)
+        def _apply_timeout(model: Any) -> Any:
+            if config.request_timeout is not None and model.request_timeout is None:
+                return model.model_copy(update={"request_timeout": config.request_timeout})
+            return model
+
+        def _apply_retry(model: Any) -> Any:
+            if config.retry_policy is not None and model.retry_policy is None:
+                return model.model_copy(update={"retry_policy": config.retry_policy})
+            return model
+
+        def _prepare_model(model: Any) -> Any:
+            return _apply_retry(_apply_timeout(model))
+
+        def _prepare_override(override: ModelOverride | None) -> ModelOverride | None:
+            """Stamp pipeline-level timeout and retry policy onto a node override.
+
+            Mirrors :func:`_prepare_model` for ``ModelOverride.answering_model``
+            and ``ModelOverride.parsing_model`` so that per-node overrides
+            inherit the same defaults the top-level answering and parsing
+            models receive. Fields that are already set on the override are
+            preserved (matching the ``is None`` guard in ``_prepare_model``).
+
+            Returns the original instance unchanged when no stamping is needed
+            so frozen scenario definitions are not rebuilt unnecessarily.
+            """
+            if override is None:
+                return None
+            updates: dict[str, Any] = {}
+            if override.answering_model is not None:
+                stamped_ans = _prepare_model(override.answering_model)
+                if stamped_ans is not override.answering_model:
+                    updates["answering_model"] = stamped_ans
+            if override.parsing_model is not None:
+                stamped_parse = _prepare_model(override.parsing_model)
+                if stamped_parse is not override.parsing_model:
+                    updates["parsing_model"] = stamped_parse
+            if not updates:
+                return override
+            return override.model_copy(update=updates)
+
+        def _prepare_scenario(scenario_def: ScenarioDefinition) -> ScenarioDefinition:
+            """Return a scenario definition with stamped per-node overrides.
+
+            Walks each node in ``scenario_def.nodes`` and replaces any
+            ``ModelOverride`` whose answering or parsing model is missing the
+            pipeline-level ``request_timeout`` or ``retry_policy``. The
+            scenario definition is frozen, so a new instance is constructed
+            via ``model_copy``. The original definition is returned unchanged
+            when no nodes need stamping, avoiding rebuild costs in the common
+            case where no per-node overrides are configured.
+            """
+            new_nodes: dict[str, ScenarioNode] | None = None
+            for node_id, node in scenario_def.nodes.items():
+                prepared_override = _prepare_override(node.model_override)
+                if prepared_override is node.model_override:
+                    continue
+                if new_nodes is None:
+                    new_nodes = dict(scenario_def.nodes)
+                new_nodes[node_id] = node.model_copy(update={"model_override": prepared_override})
+            if new_nodes is None:
+                return scenario_def
+            return scenario_def.model_copy(update={"nodes": new_nodes})
+
+        def _replicate_values(count: int) -> list[int | None]:
+            """Expand the replicate axis for scenario combos.
+
+            Returns ``[None]`` for the default single-replicate case (preserves
+            today's metadata and cache-key shape) and ``1..N`` otherwise.
+            Mirrors the QA convention at ``batch_runner.py:117-119``.
+            """
+            return [None] if count == 1 else list(range(1, count + 1))
+
+        combos: list[ScenarioCombo] = [
+            (
+                _prepare_scenario(scenario_def),
+                _prepare_model(ans_model),
+                _prepare_model(parse_model),
+                replicate,
+            )
             for scenario_def in self._scenarios.values()
             for ans_model in config.answering_models
             for parse_model in config.parsing_models
+            for replicate in _replicate_values(config.replicate_count)
         ]
 
-        if async_enabled and len(combos) > 1:
-            all_results = self._run_scenario_parallel(
-                manager=manager,
-                combos=combos,
-                config=config,
-                run_name=run_name,
-                global_rubric=global_rubric,
-                progress_callback=progress_callback,
-            )
-        else:
-            for scenario_def, ans_model, parse_model in combos:
-                exec_result = manager.run(
-                    scenario=scenario_def,
-                    config=config,
-                    base_answering_model=ans_model,
-                    base_parsing_model=parse_model,
-                    run_name=run_name,
-                    global_rubric=global_rubric,
-                    progress_callback=progress_callback,
-                )
-                all_results.extend(exec_result.turn_results)
+        # Apply task ordering to scenario combos (routes auto/prefix_cache/
+        # distribute_answerers/random/generation_order through the shared helper).
+        combos = _apply_scenario_ordering(combos, config)
 
-        return VerificationResultSet(results=all_results)
+        # Honor config.skip_triples at combo level. For scenarios, slot-0
+        # of the triple holds the scenario_id (not question_id), matching
+        # metadata.scenario_id on turn_results stored by ProgressiveFileSink.
+        # See TaskIdentifier.from_result. This mirrors the QA path where
+        # generate_task_queue drops triples listed in skip_triples before
+        # execution. Gate strictly on concrete frozenset/set instances so
+        # MagicMock configs in legacy tests do not trigger the key-compute
+        # path (they cannot be passed to ModelIdentity.from_model_config).
+        cfg_skip = getattr(config, "skip_triples", None)
+        has_cfg_skip = isinstance(cfg_skip, set | frozenset) and len(cfg_skip) > 0
+        need_keys = sink is not None or has_cfg_skip
+        skipped_combo_keys: set[tuple[str, str, str, int | None]] = set()
+        combo_by_key: dict[tuple[str, str, str, int | None], ScenarioCombo] = {}
+        if need_keys:
+            from karenina.schemas.verification.model_identity import ModelIdentity
+            from karenina.utils.progressive_save import TaskIdentifier
 
-    def _run_scenario_parallel(
+            def _combo_key(combo: ScenarioCombo) -> tuple[str, str, str, int | None]:
+                scen, ans, parse, rep = combo
+                ans_key = ModelIdentity.from_model_config(ans, role="answering").canonical_key
+                parse_key = ModelIdentity.from_model_config(parse, role="parsing").canonical_key
+                return (scen.name, ans_key, parse_key, rep)
+
+            combo_by_key = {_combo_key(c): c for c in combos}
+            full_manifest: list[str] = [
+                TaskIdentifier(
+                    question_id=k[0],
+                    answering_canonical_key=k[1],
+                    parsing_canonical_key=k[2],
+                    replicate=k[3],
+                ).to_key()
+                for k in combo_by_key
+            ]
+
+            skip_set: set[tuple[str, str, str, int | None]] = set()
+            if sink is not None:
+                sink_triples = sink.completed_triples()
+                if sink_triples:
+                    skip_set |= set(sink_triples)
+                    logger.info(
+                        "Scenario sink reports %d already-completed combos",
+                        len(sink_triples),
+                    )
+            if has_cfg_skip:
+                skip_set |= set(cfg_skip)  # type: ignore[arg-type]  # narrowed by isinstance gate above
+
+            if skip_set:
+                skipped_combo_keys = skip_set & set(combo_by_key)
+                combos = [c for c in combos if _combo_key(c) not in skip_set]
+                logger.info("Skipping %d scenario combos; %d remain", len(skip_set), len(combos))
+
+            if sink is not None:
+                sink.on_start(full_manifest, config)
+
+        prior_sink_results: list[VerificationResult] = []
+        prior_scenario_results: list[Any] = []
+        if sink is not None:
+            iterator = getattr(sink, "iter_results", None)
+            if iterator is not None:
+                prior_sink_results = list(iterator())
+                if prior_sink_results and skipped_combo_keys:
+                    prior_scenario_results = _reconstruct_scenario_results_from_sink_rows(
+                        prior_sink_results,
+                        combo_by_key=combo_by_key,
+                        skipped_combo_keys=skipped_combo_keys,
+                    )
+
+        executor = ScenarioExecutor(
+            parallel=bool(async_enabled) and len(combos) > 1,
+            config=ScenarioExecutorConfig(
+                max_workers=config.async_max_workers,
+                max_concurrent_requests=config.max_concurrent_requests,
+                enable_cache=True,
+            ),
+        )
+
+        # Adapt the facade callback (float, str) to the executor callback
+        # (completed: int, total: int, result_or_none). Also fan out each
+        # completed combo's turn_results to the sink so it can persist them
+        # incrementally.
+        total = len(combos)
+
+        def _adapter(completed: int, _total: int, exec_result: Any) -> None:
+            if sink is not None and exec_result is not None:
+                for tr in getattr(exec_result, "turn_results", []) or []:
+                    try:
+                        sink.on_result(tr)
+                    except Exception:  # noqa: BLE001
+                        logger.warning("Scenario sink on_result raised; continuing", exc_info=True)
+            if progress_callback is not None and total > 0:
+                pct = completed / total if total > 0 else 1.0
+                progress_callback(pct, f"Scenario {completed}/{total}")
+
+        executor_callback = _adapter if (progress_callback is not None or sink is not None) else None
+
+        exec_results, errors = executor.run_batch(
+            combos=combos,
+            config=config,
+            global_rubric=global_rubric,
+            run_name=run_name,
+            progress_callback=executor_callback,
+            workspace_root=self._workspace_root,
+        )
+
+        if sink is not None:
+            all_complete = not errors and len(exec_results) == len(combos)
+            try:
+                sink.on_finalize(all_complete=all_complete)
+            except Exception:  # noqa: BLE001
+                logger.warning("Scenario sink on_finalize raised; continuing", exc_info=True)
+
+        all_turn_results: list[VerificationResult] = list(prior_sink_results)
+        for er in exec_results:
+            all_turn_results.extend(er.turn_results)
+
+        return VerificationResultSet(
+            results=all_turn_results,
+            scenario_results=[*prior_scenario_results, *exec_results]
+            if (prior_scenario_results or exec_results)
+            else None,
+            errors=[(d, e) for d, e in errors] if errors else None,
+        )
+
+    def extend_template(
         self,
-        manager: Any,
-        combos: list[tuple[Any, Any, Any]],
+        prior_results: VerificationResultSet,
         config: VerificationConfig,
-        run_name: str | None,
-        global_rubric: "Rubric | None",
-        progress_callback: Callable[..., None] | None,
-    ) -> list[VerificationResult]:
-        """Run scenario combinations in parallel via asyncio.gather.
+        *,
+        run_name: str | None = None,
+        question_ids: list[str] | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
+        store: bool = True,
+    ) -> VerificationResultSet:
+        """Extend a prior verification run along any combination of three axes.
+
+        Axes, all optional and composable in a single call:
+
+        1. New judges (``config.parsing_models``).
+        2. New answerers (``config.answering_models``).
+        3. More replicates (higher ``config.replicate_count``).
+
+        Prior ``(question, answerer, replicate)`` answering traces are served
+        from a :class:`~karenina.replay.ReplayStore`; new answerers, new
+        replicates, or any combination thereof run answering live. Parsing
+        always runs live. Triples already present in ``prior_results`` are
+        skipped so prior rows pass through verbatim. The merged output matches
+        a joint run over the full ``(answerers × judges × replicates)`` matrix.
 
         Args:
-            manager: ScenarioManager instance.
-            combos: List of (scenario, answering_model, parsing_model) tuples.
-            config: Verification configuration.
-            run_name: Optional run name.
-            global_rubric: Optional global rubric.
-            progress_callback: Optional progress callback.
+            prior_results: Result set from an earlier ``run_verification``
+                call to extend.
+            config: Verification configuration describing the **final**
+                state (full union, not deltas): every judge in
+                ``parsing_models``, every answerer in ``answering_models``,
+                and the final ``replicate_count`` (must be ``>=`` observed
+                in ``prior_results``). ``config.replay_store`` must be
+                ``None``.
+            run_name: Optional override for the merged run name. Defaults to
+                the run name carried by ``prior_results``.
+            question_ids: Optional subset of question IDs to re-judge.
+                Defaults to every question present in ``prior_results``.
+            async_enabled: Optional async control forwarded to
+                ``run_verification``.
+            progress_callback: Optional progress callback forwarded to
+                ``run_verification``.
+            sink: Optional :class:`~karenina.benchmark.verification.sinks.ResultSink`
+                forwarded to ``run_verification`` so newly produced rows are
+                persisted as they complete. Prior rows pass through the merge
+                verbatim and never reach the sink. Pair with
+                :class:`~karenina.benchmark.verification.sinks.ProgressiveFileSink`
+                to make the extension resumable.
+            store: When True (default), also store the merged set into the
+                in-memory results manager under ``run_name`` so it is
+                available to ``get_verification_results`` and the exporters.
 
         Returns:
-            Flat list of all per-turn VerificationResults.
+            Merged ``VerificationResultSet`` with the prior rows plus the
+            newly-produced rows, all stamped with the effective ``run_name``.
         """
-        import asyncio
+        from .verification.extension import extend_template_run
 
-        async def _gather() -> list[VerificationResult]:
-            coros = [
-                manager.arun(
-                    scenario=scenario_def,
-                    config=config,
-                    base_answering_model=ans_model,
-                    base_parsing_model=parse_model,
-                    run_name=run_name,
-                    global_rubric=global_rubric,
-                    progress_callback=progress_callback,
-                )
-                for scenario_def, ans_model, parse_model in combos
-            ]
-            exec_results = await asyncio.gather(*coros, return_exceptions=True)
-            results: list[VerificationResult] = []
-            for er in exec_results:
-                if isinstance(er, BaseException):
-                    logger.warning(
-                        "Scenario execution raised an exception: %s",
-                        er,
-                    )
-                    continue
-                results.extend(er.turn_results)
-            return results
+        merged = extend_template_run(
+            self,
+            prior_results,
+            config,
+            run_name=run_name,
+            question_ids=question_ids,
+            async_enabled=async_enabled,
+            progress_callback=progress_callback,
+            sink=sink,
+        )
+        if store:
+            results_dict: dict[str, VerificationResult] = {}
+            for idx, row in enumerate(merged.results):
+                md = row.metadata
+                key = f"{md.question_id}_{md.answering_model}_{md.parsing_model}"
+                if md.replicate is not None:
+                    key += f"_rep{md.replicate}"
+                if md.timestamp:
+                    key += f"_{md.timestamp}"
+                if key in results_dict:
+                    key += f"_{idx}"
+                results_dict[key] = row
+            effective_run_name = merged.results[0].metadata.run_name if merged.results else run_name
+            self._results_manager.store_verification_results(results_dict, effective_run_name)
+        return merged
 
-        # If there is already a running event loop, run in a thread
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+    def extend_rubric(
+        self,
+        prior_results: VerificationResultSet,
+        config: VerificationConfig,
+        *,
+        run_name: str | None = None,
+        question_ids: list[str] | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+        sink: Any = None,
+        store: bool = True,
+    ) -> VerificationResultSet:
+        """Attach a new rubric to a prior verification run.
 
-        if loop is not None:
-            from concurrent.futures import ThreadPoolExecutor
+        Enriches every row of ``prior_results`` with rubric scores
+        produced against the rubric currently attached to this benchmark
+        (global and per-question). Answering is replayed from the prior
+        traces; template parsing and verification are skipped. Row count
+        is preserved: the merged set has the same shape as
+        ``prior_results`` with a populated ``rubric`` sub-object on each
+        row.
 
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, _gather())
-                return future.result()
-        else:
-            return asyncio.run(_gather())
+        Trait scores are unioned with any rubric fields already present
+        on prior rows. Same-name trait collisions raise ``ValueError``.
+
+        Args:
+            prior_results: Result set from an earlier ``run_verification``
+                call.
+            config: Verification configuration matching the shape of
+                ``prior_results``. ``answering_models``,
+                ``parsing_models``, and ``replicate_count`` must equal
+                the values observed in ``prior_results``.
+                ``replay_store`` must be ``None``;
+                ``evaluation_mode`` must be ``"template_only"`` or
+                ``"rubric_only"`` (the helper rewrites it internally).
+            run_name: Optional override for the merged run name.
+            question_ids: Optional subset of question IDs.
+            async_enabled: Forwarded to ``run_verification``.
+            progress_callback: Forwarded to ``run_verification``.
+            sink: Optional :class:`~karenina.benchmark.verification.sinks.ResultSink`
+                forwarded to ``run_verification``. The sink receives the
+                ``rubric_only`` rows produced by the extension pipeline (one
+                per prior triple); it does not see the enriched rows returned
+                to the caller. Pair with
+                :class:`~karenina.benchmark.verification.sinks.ProgressiveFileSink`
+                to make rubric extension resumable.
+            store: When True (default), write the merged set into the
+                results manager.
+
+        Returns:
+            ``VerificationResultSet`` of enriched prior rows.
+
+        Raises:
+            ValueError: On input validation failure; see
+                :func:`~karenina.benchmark.verification.extension.extend_rubric_run`.
+        """
+        from .verification.extension import extend_rubric_run
+
+        merged = extend_rubric_run(
+            self,
+            prior_results,
+            config,
+            run_name=run_name,
+            question_ids=question_ids,
+            async_enabled=async_enabled,
+            progress_callback=progress_callback,
+            sink=sink,
+        )
+        if store:
+            results_dict: dict[str, VerificationResult] = {}
+            for idx, row in enumerate(merged.results):
+                md = row.metadata
+                key = f"{md.question_id}_{md.answering_model}_{md.parsing_model}"
+                if md.replicate is not None:
+                    key += f"_rep{md.replicate}"
+                if md.timestamp:
+                    key += f"_{md.timestamp}"
+                if key in results_dict:
+                    key += f"_{idx}"
+                results_dict[key] = row
+            effective_run_name = merged.results[0].metadata.run_name if merged.results else run_name
+            self._results_manager.store_verification_results(results_dict, effective_run_name)
+        return merged
 
     # ── Results management ───────────────────────────────────────────────
 
@@ -832,6 +1503,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> None:
         """Store verification results in the benchmark metadata."""
+        warnings.warn(
+            "store_verification_results is deprecated. Use ResultsStore.add() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         _helpers.store_verification_results(self, results, run_name)
 
     def get_verification_results(
@@ -840,10 +1516,20 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Get verification results for specific questions and/or runs."""
+        warnings.warn(
+            "get_verification_results is deprecated. Use ResultsStore.get_by_run() or ResultsStore.get_latest() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_results(question_ids, run_name)
 
     def get_verification_history(self, question_id: str | None = None) -> dict[str, dict[str, VerificationResult]]:
         """Get verification history organized by run name."""
+        warnings.warn(
+            "get_verification_history is deprecated. Use ResultsStore.get_by_question() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_history(question_id)
 
     def clear_verification_results(
@@ -852,6 +1538,11 @@ class Benchmark:
         run_name: str | None = None,
     ) -> int:
         """Clear verification results."""
+        warnings.warn(
+            "clear_verification_results is deprecated. Use ResultsStore.clear() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.clear_verification_results(question_ids, run_name)
 
     def export_verification_results(
@@ -862,6 +1553,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> str:
         """Export verification results in specified format."""
+        warnings.warn(
+            "export_verification_results is deprecated. Use ResultsStore.export() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.export_verification_results(question_ids, run_name, format, global_rubric)
 
     def export_verification_results_to_file(
@@ -873,6 +1569,11 @@ class Benchmark:
         global_rubric: "Rubric | None" = None,
     ) -> None:
         """Export verification results directly to a file."""
+        warnings.warn(
+            "export_verification_results_to_file is deprecated. Use ResultsStore.export_to_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._results_manager.export_results_to_file(file_path, question_ids, run_name, format, global_rubric)
 
     def load_verification_results_from_file(
@@ -881,18 +1582,38 @@ class Benchmark:
         run_name: str | None = None,
     ) -> dict[str, VerificationResult]:
         """Load verification results from a previously exported file."""
+        warnings.warn(
+            "load_verification_results_from_file is deprecated. Use ResultsStore.from_file() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.load_results_from_file(file_path, run_name)
 
     def get_verification_summary(self, run_name: str | None = None) -> dict[str, Any]:
         """Get summary statistics for verification results."""
+        warnings.warn(
+            "get_verification_summary is deprecated. Use ResultsStore.get_summary() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_verification_summary(run_name)
 
     def get_all_run_names(self) -> list[str]:
         """Get all verification run names."""
+        warnings.warn(
+            "get_all_run_names is deprecated. Use ResultsStore.get_all_runs() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_all_run_names()
 
     def get_results_statistics_by_run(self) -> dict[str, dict[str, Any]]:
         """Get verification statistics for each run."""
+        warnings.warn(
+            "get_results_statistics_by_run is deprecated. Use ResultsStore.get_statistics_by_run() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._results_manager.get_results_statistics_by_run()
 
     # ── GEPA optimization (delegated to benchmark_helpers) ───────────────

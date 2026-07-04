@@ -13,10 +13,15 @@ with a multi-stage approach:
    - Determines what value the attribute should have based on the evidence
 
 3. Stage 3: Parse final attribute values (standard parsing logic)
-   - Uses PydanticOutputParser with the same schema to extract structured values
+   - Uses ParserPort with the same schema to extract structured values
 
 The feature gracefully handles missing excerpts (refusals, no corroborating evidence)
 and provides detailed metadata about the parsing process.
+
+A reasoning-only mode is also available (``deep_judgment_mode="reasoning_only"``), which
+skips excerpt extraction entirely. It generates per-attribute reasoning directly from
+the response (1 LLM call) then feeds that reasoning to ParserPort for parameter
+extraction (1 more call), totalling 2 model calls instead of the standard 3+.
 """
 
 from __future__ import annotations
@@ -26,7 +31,29 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from karenina.benchmark.verification.prompts.assembler import PromptAssembler
+from karenina.benchmark.verification.prompts.deep_judgment.template import (
+    build_assessment_system_prompt,
+    build_assessment_user_prompt,
+    build_excerpt_system_prompt,
+    build_excerpt_user_prompt,
+    build_reasoning_system_prompt,
+    build_reasoning_user_prompt,
+)
+from karenina.benchmark.verification.prompts.deep_judgment.template.reasoning_only import (
+    build_reasoning_only_system_prompt,
+    build_reasoning_only_user_prompt,
+)
 from karenina.benchmark.verification.prompts.task_types import PromptTask
+from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
+from karenina.benchmark.verification.utils.search_provider import create_search_tool
+from karenina.benchmark.verification.utils.template_parsing_helpers import (
+    _extract_attribute_descriptions,
+    _extract_attribute_names_from_class,
+    _format_search_results_for_llm,
+    format_excerpts_for_reasoning,
+    format_reasoning_for_parsing,
+)
+from karenina.benchmark.verification.utils.trace_fuzzy_match import fuzzy_match_excerpt
 from karenina.ports import LLMPort, ParserPort
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
@@ -37,37 +64,172 @@ from karenina.utils.json_extraction import strip_markdown_fences as _strip_markd
 
 if TYPE_CHECKING:
     from karenina.schemas.verification.prompt_config import PromptConfig
-from karenina.benchmark.verification.prompts.deep_judgment.template import (
-    build_assessment_system_prompt,
-    build_assessment_user_prompt,
-    build_excerpt_system_prompt,
-    build_excerpt_user_prompt,
-    build_reasoning_system_prompt,
-    build_reasoning_user_prompt,
-)
-from karenina.benchmark.verification.utils.search_provider import create_search_tool
-from karenina.benchmark.verification.utils.template_parsing_helpers import (
-    _extract_attribute_descriptions,
-    _extract_attribute_names_from_class,
-    _format_search_results_for_llm,
-    format_excerpts_for_reasoning,
-    format_reasoning_for_parsing,
-)
-from karenina.benchmark.verification.utils.trace_fuzzy_match import fuzzy_match_excerpt
 
 logger = logging.getLogger(__name__)
+
+
+def _reasoning_only_parse(
+    raw_llm_response: str,
+    RawAnswer: type[BaseAnswer],
+    parsing_llm: LLMPort,
+    parser: ParserPort,
+    question_text: str,
+    config: VerificationConfig,  # noqa: ARG001 - Kept for interface consistency with deep_judgment_parse
+    generic_system_prompt: str,
+    attr_guidance: str,
+    attribute_names: list[str],
+    usage_tracker: Any | None,
+    parsing_model_str: str | None,
+    prompt_config: PromptConfig | None,
+    parsing_model: ModelConfig,
+    combined_system_prompt: str,
+) -> tuple[BaseAnswer, dict[str, list[dict[str, Any]]], dict[str, str], dict[str, Any]]:
+    """Execute reasoning-only deep-judgment parsing: reasoning -> parameters.
+
+    Skips excerpt extraction entirely. Generates per-attribute reasoning directly
+    from the response (1 LLM call), then feeds the reasoning to ParserPort for
+    parameter extraction (1 more call).
+
+    Args:
+        raw_llm_response: Raw trace from answering model.
+        RawAnswer: Answer template class (BaseAnswer subclass).
+        parsing_llm: LLMPort adapter for reasoning generation.
+        parser: ParserPort adapter for parameter extraction.
+        question_text: Original question text for context.
+        config: Verification configuration (unused, kept for interface consistency).
+        attr_guidance: Formatted attribute descriptions, one per line.
+        attribute_names: List of attribute names to reason about.
+        usage_tracker: Optional usage tracker.
+        parsing_model_str: Model string identifier for usage tracking.
+        prompt_config: Optional prompt configuration for user instructions.
+        parsing_model: Parsing model configuration.
+        combined_system_prompt: Base system prompt for the parser stage.
+
+    Returns:
+        Tuple of (parsed_answer, excerpts, reasoning, metadata) where
+        excerpts is always an empty dict.
+    """
+    model_calls = 0
+    stages_completed: list[str] = []
+
+    logger.info(
+        "Reasoning-only mode: skipping excerpt extraction for %d attributes",
+        len(attribute_names),
+    )
+
+    # ==========================================
+    # STAGE 1: REASONING GENERATION (direct from response)
+    # ==========================================
+    reasoning_system = build_reasoning_only_system_prompt(
+        generic_system_prompt=generic_system_prompt,
+        attr_guidance=attr_guidance,
+    )
+    reasoning_user = build_reasoning_only_user_prompt(
+        question_text=question_text,
+        raw_llm_response=raw_llm_response,
+    )
+
+    reasoning_assembler = PromptAssembler(
+        task=PromptTask.DJ_TEMPLATE_REASONING_ONLY,
+        interface=parsing_model.interface,
+        capabilities=PortCapabilities(),
+    )
+    reasoning_messages = reasoning_assembler.assemble(
+        system_text=reasoning_system,
+        user_text=reasoning_user,
+        user_instructions=(
+            prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_REASONING_ONLY.value) if prompt_config else None
+        ),
+    )
+
+    llm_response = parsing_llm.invoke(reasoning_messages)
+    raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
+    model_calls += 1
+
+    if usage_tracker and usage_metadata and parsing_model_str:
+        usage_tracker.track_call("deep_judgment_reasoning", parsing_model_str, usage_metadata)
+
+    cleaned_response = _strip_markdown_fences(raw_response)
+
+    try:
+        reasoning_raw = {} if cleaned_response is None else json.loads(cleaned_response)
+    except json.JSONDecodeError as e:
+        logger.warning("Failed to parse reasoning-only JSON: %s", e)
+        reasoning_raw = {}
+
+    # Extract reasoning text per attribute
+    reasoning: dict[str, str] = {}
+    for attr, value in reasoning_raw.items():
+        reasoning[attr] = str(value) if not isinstance(value, dict) else value.get("reasoning", "")
+
+    stages_completed.append("reasoning")
+    logger.info(
+        "Reasoning-only stage completed: generated reasoning for %d attributes",
+        len(reasoning),
+    )
+
+    # ==========================================
+    # STAGE 2: PARAMETER EXTRACTION (via ParserPort)
+    # ==========================================
+    reasoning_text = f"""Original Question: {question_text}
+
+Reasoning Traces (explaining how the response informs each attribute value):
+
+{format_reasoning_for_parsing(reasoning)}"""
+
+    stage2_assembler = PromptAssembler(
+        task=PromptTask.PARSING,
+        interface=parsing_model.interface,
+        capabilities=parser.capabilities,
+    )
+    stage2_messages = stage2_assembler.assemble(
+        system_text=combined_system_prompt,
+        user_text=reasoning_text,
+        user_instructions=(prompt_config.get_for_task(PromptTask.PARSING.value) if prompt_config else None),
+        instruction_context={"json_schema": RawAnswer.model_json_schema()},
+    )
+
+    parse_port_result = parse_to_pydantic_resilient(
+        parser,
+        stage2_messages,
+        RawAnswer,
+        retry_policy=parsing_model.retry_policy,
+    )
+    parsed_answer = parse_port_result.parsed
+    model_calls += 1
+
+    if usage_tracker is not None and parse_port_result.usage:
+        usage_dict = parse_port_result.usage.to_dict()
+        if usage_dict.get("input_tokens", 0) > 0 or usage_dict.get("output_tokens", 0) > 0:
+            usage_tracker.track_call("parsing", parsing_model_str, usage_dict)
+
+    stages_completed.append("parameters")
+    logger.info(
+        "Reasoning-only parsing completed (total %d model calls)",
+        model_calls,
+    )
+
+    metadata: dict[str, Any] = {
+        "stages_completed": stages_completed,
+        "model_calls": model_calls,
+        "excerpt_retry_count": 0,
+        "attributes_without_excerpts": [],
+        "reasoning_only": True,
+    }
+
+    return parsed_answer, {}, reasoning, metadata
 
 
 def deep_judgment_parse(
     raw_llm_response: str,
     RawAnswer: type[BaseAnswer],
-    parsing_model: ModelConfig,  # noqa: ARG001 - Kept for interface consistency with standard parsing
+    parsing_model: ModelConfig,
     parsing_llm: LLMPort,
     parser: ParserPort,
     question_text: str,
     config: VerificationConfig,
     format_instructions: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
-    combined_system_prompt: str,  # noqa: ARG001 - No longer needed, ParserPort builds its own
+    combined_system_prompt: str,
     usage_tracker: Any | None = None,
     parsing_model_str: str | None = None,
     prompt_config: PromptConfig | None = None,
@@ -86,8 +248,8 @@ def deep_judgment_parse(
         parser: ParserPort adapter for Stage 3 (parameter extraction with retry)
         question_text: Original question text for context
         config: Verification configuration with deep-judgment settings
-        format_instructions: Kept for interface consistency (ParserPort builds its own)
-        combined_system_prompt: Kept for interface consistency (ParserPort builds its own)
+        format_instructions: Unused; kept for interface consistency (ParserPort builds its own)
+        combined_system_prompt: Base system prompt used for excerpt extraction and search stages
         usage_tracker: Optional usage tracker to record token usage for each stage
         parsing_model_str: Model string identifier for usage tracking
 
@@ -130,10 +292,7 @@ def deep_judgment_parse(
     # PREPARE PROMPTS
     # ==========================================
     # Generate JSON schema with field descriptions from the template class
-    from langchain_core.output_parsers import PydanticOutputParser
-
-    temp_parser = PydanticOutputParser(pydantic_object=RawAnswer)
-    json_schema = temp_parser.get_format_instructions()
+    json_schema = json.dumps(RawAnswer.model_json_schema(), indent=2)
 
     # The combined_system_prompt is now format-agnostic (no format_instructions section).
     # Use it directly as the generic system prompt for stages 1&2.
@@ -143,6 +302,27 @@ def deep_judgment_parse(
     # Extract attribute descriptions for guidance (without the full schema format)
     attribute_descriptions = _extract_attribute_descriptions(json_schema, attribute_names)
     attr_guidance = "\n".join([f"- {attr}: {desc}" for attr, desc in attribute_descriptions.items()])
+
+    # ==========================================
+    # REASONING-ONLY BRANCH (skip excerpts entirely)
+    # ==========================================
+    if config.deep_judgment_mode == "reasoning_only":
+        return _reasoning_only_parse(
+            raw_llm_response=raw_llm_response,
+            RawAnswer=RawAnswer,
+            parsing_llm=parsing_llm,
+            parser=parser,
+            question_text=question_text,
+            config=config,
+            generic_system_prompt=generic_system_prompt,
+            attr_guidance=attr_guidance,
+            attribute_names=attribute_names,
+            usage_tracker=usage_tracker,
+            parsing_model_str=parsing_model_str,
+            prompt_config=prompt_config,
+            parsing_model=parsing_model,
+            combined_system_prompt=combined_system_prompt,
+        )
 
     excerpt_system_prompt = build_excerpt_system_prompt(
         generic_system_prompt=generic_system_prompt,
@@ -368,91 +548,99 @@ def deep_judgment_parse(
     )
 
     if search_performed:
-        logger.info("Stage 1.5: Assessing hallucination risk for each excerpt")
+        try:
+            logger.info("Stage 1.5: Assessing hallucination risk for each excerpt")
 
-        # Assign unique IDs to excerpts for matching
-        excerpt_id_counter = 0
-        excerpts_with_search = []
+            # Assign unique IDs to excerpts for matching
+            excerpt_id_counter = 0
+            excerpts_with_search = []
 
-        for attr_name, excerpt_list in excerpts.items():
-            for excerpt_obj in excerpt_list:
-                if "search_results" in excerpt_obj:
-                    excerpt_obj["_id"] = str(excerpt_id_counter)
-                    excerpt_obj["_attribute"] = attr_name
-                    excerpts_with_search.append((attr_name, excerpt_obj))
-                    excerpt_id_counter += 1
+            for attr_name, excerpt_list in excerpts.items():
+                for excerpt_obj in excerpt_list:
+                    if "search_results" in excerpt_obj:
+                        excerpt_obj["_id"] = str(excerpt_id_counter)
+                        excerpt_obj["_attribute"] = attr_name
+                        excerpts_with_search.append((attr_name, excerpt_obj))
+                        excerpt_id_counter += 1
 
-        if excerpts_with_search:
-            # Build batch assessment prompt
-            assessment_system_prompt = build_assessment_system_prompt(
-                generic_system_prompt=generic_system_prompt,
-            )
-
-            assessment_prompt = build_assessment_user_prompt(
-                excerpts_with_search=excerpts_with_search,
-                format_search_results_fn=_format_search_results_for_llm,
-            )
-
-            # Invoke LLM for batch assessment
-            assessment_assembler = PromptAssembler(
-                task=PromptTask.DJ_TEMPLATE_HALLUCINATION,
-                interface=parsing_model.interface,
-                capabilities=PortCapabilities(),
-            )
-            assessment_messages = assessment_assembler.assemble(
-                system_text=assessment_system_prompt,
-                user_text=assessment_prompt,
-                user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_HALLUCINATION.value)
-                if prompt_config
-                else None,
-                instruction_context={
-                    "json_schema": None,  # Template DJ uses inline format in system prompt
-                    "parsing_notes": (
-                        '- The "hallucination_risk" field must be one of: "none", "low", "medium", "high"'
-                    ),
-                },
-            )
-
-            try:
-                llm_response = parsing_llm.invoke(assessment_messages)
-                raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
-                model_calls += 1
-                # Track usage for hallucination assessment
-                if usage_tracker and usage_metadata and parsing_model_str:
-                    usage_tracker.track_call(
-                        "deep_judgment_hallucination_assessment", parsing_model_str, usage_metadata
-                    )
-                cleaned_response = _strip_markdown_fences(raw_response)
-                assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
-
-                # Match assessments back to excerpts
-                for assessment in assessment_data.get("excerpt_assessments", []):
-                    excerpt_id = assessment["excerpt_id"]
-                    hallucination_risk = assessment.get("hallucination_risk", "high")
-                    justification = assessment.get("justification", "")
-
-                    # Find and update the excerpt
-                    for excerpt_list in excerpts.values():
-                        for excerpt_obj in excerpt_list:
-                            if excerpt_obj.get("_id") == excerpt_id:
-                                excerpt_obj["hallucination_risk"] = hallucination_risk
-                                excerpt_obj["hallucination_justification"] = justification
-                                break
-
-                logger.info(
-                    f"Stage 1.5 complete: Assessed {len(assessment_data.get('excerpt_assessments', []))} excerpts"
+            if excerpts_with_search:
+                # Build batch assessment prompt
+                assessment_system_prompt = build_assessment_system_prompt(
+                    generic_system_prompt=generic_system_prompt,
                 )
-                stages_completed.append("excerpt_hallucination_assessment")
 
-            except (json.JSONDecodeError, Exception) as e:
-                # Fail the entire deep-judgment process if hallucination assessment fails
-                logger.error(f"Stage 1.5 hallucination assessment failed: {e}")
-                raise ValueError(
-                    f"Failed to assess per-excerpt hallucination risk: {e}. "
-                    "Deep-judgment cannot continue without risk assessment."
-                ) from e
+                assessment_prompt = build_assessment_user_prompt(
+                    excerpts_with_search=excerpts_with_search,
+                    format_search_results_fn=_format_search_results_for_llm,
+                )
 
-            # Clean up temporary IDs
+                # Invoke LLM for batch assessment
+                assessment_assembler = PromptAssembler(
+                    task=PromptTask.DJ_TEMPLATE_HALLUCINATION,
+                    interface=parsing_model.interface,
+                    capabilities=PortCapabilities(),
+                )
+                assessment_messages = assessment_assembler.assemble(
+                    system_text=assessment_system_prompt,
+                    user_text=assessment_prompt,
+                    user_instructions=prompt_config.get_for_task(PromptTask.DJ_TEMPLATE_HALLUCINATION.value)
+                    if prompt_config
+                    else None,
+                    instruction_context={
+                        "json_schema": None,  # Template DJ uses inline format in system prompt
+                        "parsing_notes": (
+                            '- The "hallucination_risk" field must be one of: "none", "low", "medium", "high"'
+                        ),
+                    },
+                )
+
+                try:
+                    llm_response = parsing_llm.invoke(assessment_messages)
+                    raw_response, usage_metadata = llm_response.content, llm_response.usage.to_dict()
+                    model_calls += 1
+                    # Track usage for hallucination assessment
+                    if usage_tracker and usage_metadata and parsing_model_str:
+                        usage_tracker.track_call(
+                            "deep_judgment_hallucination_assessment", parsing_model_str, usage_metadata
+                        )
+                    cleaned_response = _strip_markdown_fences(raw_response)
+                    assessment_data = {} if cleaned_response is None else json.loads(cleaned_response)
+
+                    # Match assessments back to excerpts
+                    for assessment in assessment_data.get("excerpt_assessments", []):
+                        excerpt_id = assessment["excerpt_id"]
+                        hallucination_risk = assessment.get("hallucination_risk", "high")
+                        justification = assessment.get("justification", "")
+
+                        # Find and update the excerpt
+                        for excerpt_list in excerpts.values():
+                            for excerpt_obj in excerpt_list:
+                                if excerpt_obj.get("_id") == excerpt_id:
+                                    excerpt_obj["hallucination_risk"] = hallucination_risk
+                                    excerpt_obj["hallucination_justification"] = justification
+                                    break
+
+                    logger.info(
+                        "Stage 1.5 complete: Assessed %d excerpts",
+                        len(assessment_data.get("excerpt_assessments", [])),
+                    )
+                    stages_completed.append("excerpt_hallucination_assessment")
+
+                except Exception:
+                    logger.warning(
+                        "Stage 1.5 hallucination assessment failed. "
+                        "Continuing without per-excerpt risk scores (Stage 2 defaults to 'high').",
+                        exc_info=True,
+                    )
+
+        except Exception:
+            logger.warning(
+                "Stage 1.5 hallucination assessment setup failed. Continuing without per-excerpt risk scores.",
+                exc_info=True,
+            )
+
+        finally:
+            # Clean up temporary IDs regardless of success or failure
             for excerpt_list in excerpts.values():
                 for excerpt_obj in excerpt_list:
                     excerpt_obj.pop("_id", None)
@@ -572,7 +760,12 @@ Reasoning Traces (explaining how excerpts inform each attribute value):
     )
 
     # Use ParserPort for parsing - it handles LLM call, JSON parsing, and retry logic internally
-    parse_port_result = parser.parse_to_pydantic(stage3_messages, RawAnswer)
+    parse_port_result = parse_to_pydantic_resilient(
+        parser,
+        stage3_messages,
+        RawAnswer,
+        retry_policy=parsing_model.retry_policy,
+    )
     parsed_answer = parse_port_result.parsed
     model_calls += 1  # ParserPort makes at least one LLM call
 

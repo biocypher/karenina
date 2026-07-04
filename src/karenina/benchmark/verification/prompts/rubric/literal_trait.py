@@ -63,16 +63,19 @@ Your task is to classify a given answer into categories for multiple classificat
         question: str,
         answer: str,
         traits: list["LLMRubricTrait"],
+        *,
+        task_eval_mode: bool = False,
     ) -> str:
         """Build user prompt for batch literal trait evaluation.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            traits: List of literal kind LLM traits to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            traits: List of literal kind LLM traits to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block entirely.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
         """
         traits_description = []
 
@@ -92,13 +95,12 @@ Your task is to classify a given answer into categories for multiple classificat
             )
             traits_description.append(trait_desc)
 
+        question_block = "" if task_eval_mode else f"\n\n**QUESTION:**\n{question}"
+
         return f"""Classify the following answer for each trait:
 
 **TRAITS TO CLASSIFY:**
-{chr(10).join(traits_description)}
-
-**QUESTION:**
-{question}
+{chr(10).join(traits_description)}{question_block}
 
 **ANSWER TO CLASSIFY:**
 {answer}"""
@@ -161,29 +163,31 @@ Your task is to classify a given answer into categories for multiple classificat
         question: str,
         answer: str,
         trait: "LLMRubricTrait",
+        *,
+        task_eval_mode: bool = False,
     ) -> str:
         """Build user prompt for single literal trait evaluation.
 
         Args:
-            question: The original question asked
-            answer: The LLM's response to evaluate
-            trait: The literal kind LLM trait to evaluate
+            question: The original question asked.
+            answer: The LLM's response to evaluate.
+            trait: The literal kind LLM trait to evaluate.
+            task_eval_mode: When True, omit the **QUESTION:** block entirely.
 
         Returns:
-            Formatted user prompt string
+            Formatted user prompt string.
 
         Raises:
-            ValueError: If trait is not a literal kind trait
+            ValueError: If trait is not a literal kind trait.
         """
         if trait.kind != "literal" or trait.classes is None:
             raise ValueError(f"Trait '{trait.name}' is not a literal kind trait")
 
         class_names = list(trait.classes.keys())
 
-        return f"""**QUESTION:**
-{question}
+        question_block = "" if task_eval_mode else f"**QUESTION:**\n{question}\n\n"
 
-**ANSWER TO CLASSIFY:**
+        return f"""{question_block}**ANSWER TO CLASSIFY:**
 {answer}
 
 **TRAIT:** {trait.name}

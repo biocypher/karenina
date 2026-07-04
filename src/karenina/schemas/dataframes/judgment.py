@@ -11,30 +11,48 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..verification import VerificationResult
+    from ..verification.result_components import VerificationResultMetadata
+
+
+def _failure_columns(metadata: VerificationResultMetadata) -> dict[str, Any]:
+    """Return the unified ``success``/``failure_*``/``caveats`` columns.
+
+    Args:
+        metadata: The verification result metadata to translate.
+
+    Returns:
+        Mapping with six keys: ``success`` (bool), ``failure_category``,
+        ``failure_group``, ``failure_stage``, ``failure_reason`` (each a
+        ``str | None``), and ``caveats`` (comma-joined, possibly empty).
+    """
+    failure = metadata.failure
+    return {
+        "success": failure is None,
+        "failure_category": failure.category.value if failure else None,
+        "failure_group": failure.group.value if failure else None,
+        "failure_stage": failure.stage if failure else None,
+        "failure_reason": failure.reason if failure else None,
+        "caveats": ",".join(c.value for c in metadata.caveats),
+    }
 
 
 class JudgmentDataFrameBuilder:
-    """
-    Builder for converting deep judgment results to pandas DataFrames.
+    """Builder for converting deep judgment results to pandas DataFrames.
 
     Handles the conversion of VerificationResult objects with deep judgment data
-    into structured DataFrames with one row per (attribute × excerpt) combination.
+    into structured DataFrames with one row per (attribute x excerpt) combination.
 
-    This class is typically accessed via the `dataframe_builder` property of
+    This class is typically accessed via the ``dataframe_builder`` property of
     JudgmentResults rather than instantiated directly.
-
-    Attributes:
-        results: List of VerificationResult objects to convert
     """
 
     def __init__(self, results: list[VerificationResult]) -> None:
-        """
-        Initialize the builder with verification results.
+        """Initialize the builder with verification results.
 
         Args:
-            results: List of VerificationResult objects containing deep judgment data
+            results: List of VerificationResult objects containing deep judgment data.
         """
-        self.results = results
+        self._results = results
 
     def build_dataframe(self) -> Any:
         """
@@ -44,11 +62,12 @@ class JudgmentDataFrameBuilder:
         Attributes with no excerpts get one row with excerpt data as None.
 
         Column ordering:
-            1. Status: completed_without_errors, error, recursion_limit_reached
-            2. Identification: question_id, template_id, question_text, keywords, replicate, answering_mcp_servers
+            1. Status: success, failure_category, failure_group, failure_stage,
+               failure_reason, caveats, recursion_limit_reached
+            2. Identification: question_id, template_id, question_text, keywords, replicate, answering_mcp_servers, scenario_id, scenario_node, scenario_turn, scenario_path
             3. Model Config: answering_model, parsing_model, system_prompts
             4. Response Data: raw_llm_response, parsed_gt_response, parsed_llm_response
-            5. Deep Judgment Config: deep_judgment_enabled, deep_judgment_performed, deep_judgment_search_enabled
+            5. Deep Judgment Config: deep_judgment_mode, deep_judgment_performed, deep_judgment_search_enabled
             6. Attribute Data: attribute_name, gt_attribute_value, llm_attribute_value, attribute_match
             7. Excerpt Data: excerpt_index, excerpt_text, excerpt_confidence, excerpt_similarity_score
             8. Search Enhancement: excerpt_search_results, excerpt_hallucination_risk, excerpt_hallucination_justification
@@ -69,7 +88,7 @@ class JudgmentDataFrameBuilder:
 
         rows = []
 
-        for result_idx, result in enumerate(self.results):
+        for result_idx, result in enumerate(self._results):
             if result.deep_judgment is None or not result.deep_judgment.deep_judgment_performed:
                 # No deep judgment data - create single row with minimal info
                 row = self._create_empty_judgment_row(result)
@@ -156,7 +175,10 @@ class JudgmentDataFrameBuilder:
                     row["result_index"] = result_idx
                     rows.append(row)
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        if "replicate" in df.columns:
+            df["replicate"] = df["replicate"].astype(pd.Int64Dtype())
+        return df
 
     def _create_judgment_row(
         self,
@@ -169,7 +191,7 @@ class JudgmentDataFrameBuilder:
         attribute_reasoning: str | None,
         attribute_risk: str | None,
     ) -> dict[str, Any]:
-        """Create DataFrame row for judgment (attribute × excerpt)."""
+        """Create DataFrame row for judgment (attribute x excerpt)."""
         metadata = result.metadata
         template = result.template
         deep_judgment = result.deep_judgment
@@ -197,8 +219,7 @@ class JudgmentDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
+            **_failure_columns(metadata),
             "recursion_limit_reached": template.recursion_limit_reached if template else None,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
@@ -207,6 +228,10 @@ class JudgmentDataFrameBuilder:
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
             "answering_mcp_servers": template.answering_mcp_servers if template else None,
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -217,7 +242,7 @@ class JudgmentDataFrameBuilder:
             "parsed_gt_response": template.parsed_gt_response if template else None,
             "parsed_llm_response": template.parsed_llm_response if template else None,
             # === Deep Judgment Configuration ===
-            "deep_judgment_enabled": deep_judgment.deep_judgment_enabled if deep_judgment else False,
+            "deep_judgment_mode": deep_judgment.deep_judgment_mode if deep_judgment else None,
             "deep_judgment_performed": deep_judgment.deep_judgment_performed if deep_judgment else False,
             "deep_judgment_search_enabled": deep_judgment.deep_judgment_search_enabled if deep_judgment else False,
             # === Attribute Information ===
@@ -256,8 +281,7 @@ class JudgmentDataFrameBuilder:
 
         return {
             # === Status ===
-            "completed_without_errors": metadata.completed_without_errors,
-            "error": metadata.error,
+            **_failure_columns(metadata),
             "recursion_limit_reached": template.recursion_limit_reached if template else None,
             # === Identification Metadata ===
             "question_id": metadata.question_id,
@@ -266,6 +290,10 @@ class JudgmentDataFrameBuilder:
             "keywords": metadata.keywords,
             "replicate": metadata.replicate,
             "answering_mcp_servers": template.answering_mcp_servers if template else None,
+            "scenario_id": metadata.scenario_id,
+            "scenario_node": metadata.scenario_node,
+            "scenario_turn": metadata.scenario_turn,
+            "scenario_path": metadata.scenario_path,
             # === Model Configuration ===
             "answering_model": metadata.answering_model,
             "parsing_model": metadata.parsing_model,
@@ -276,7 +304,7 @@ class JudgmentDataFrameBuilder:
             "parsed_gt_response": template.parsed_gt_response if template else None,
             "parsed_llm_response": template.parsed_llm_response if template else None,
             # === Deep Judgment Configuration ===
-            "deep_judgment_enabled": deep_judgment.deep_judgment_enabled if deep_judgment else False,
+            "deep_judgment_mode": deep_judgment.deep_judgment_mode if deep_judgment else None,
             "deep_judgment_performed": deep_judgment.deep_judgment_performed if deep_judgment else False,
             "deep_judgment_search_enabled": deep_judgment.deep_judgment_search_enabled if deep_judgment else False,
             # === Attribute Information ===

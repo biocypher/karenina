@@ -138,7 +138,7 @@ class TestMetricComputation:
         from karenina.schemas.config import ModelConfig
 
         model_config = ModelConfig(
-            id="test-metric",
+            id="claude-haiku-4-5",
             model_provider="anthropic",
             model_name="claude-haiku-4-5",
             temperature=0.0,
@@ -366,7 +366,7 @@ class TestMetricRubricTraitWithRubric:
 
     def test_rubric_with_mixed_trait_types(self):
         """Verify Rubric can contain metric traits alongside other trait types."""
-        from karenina.schemas.entities import RegexTrait
+        from karenina.schemas.entities import RegexRubricTrait
 
         metric_trait = MetricRubricTrait(
             name="entity_check",
@@ -374,7 +374,7 @@ class TestMetricRubricTraitWithRubric:
             metrics=["f1"],
             tp_instructions=["BCL2"],
         )
-        regex_trait = RegexTrait(
+        regex_trait = RegexRubricTrait(
             name="has_citations",
             pattern=r"\[\d+\]",
             description="Has numeric citations",
@@ -505,7 +505,7 @@ class TestMetricFormulas:
         from karenina.schemas.config import ModelConfig
 
         model_config = ModelConfig(
-            id="test-metric",
+            id="claude-haiku-4-5",
             model_provider="anthropic",
             model_name="claude-haiku-4-5",
             temperature=0.0,
