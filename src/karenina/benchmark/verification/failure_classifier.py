@@ -135,7 +135,13 @@ def classify_failure(ctx: VerificationContext) -> Failure | None:
             stage="abstention_check",
             reason=_trim(ctx.get_result_field(ArtifactKeys.ABSTENTION_REASONING)) or "model abstained",
         )
-    if ctx.get_result_field(ArtifactKeys.SUFFICIENCY_DETECTED):
+    # Sufficiency polarity is inverted relative to abstention: detected=True
+    # means the response IS sufficient. The guard fails the row when the check
+    # ran and detected is False (see SufficiencyCheckStage._should_trigger_override).
+    if (
+        ctx.get_result_field(ArtifactKeys.SUFFICIENCY_CHECK_PERFORMED)
+        and ctx.get_result_field(ArtifactKeys.SUFFICIENCY_DETECTED) is False
+    ):
         return Failure(
             category=FailureCategory.SUFFICIENCY,
             stage="sufficiency_check",

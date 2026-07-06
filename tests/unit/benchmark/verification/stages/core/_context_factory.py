@@ -29,6 +29,7 @@ _RESULT_FIELD_KWARGS: dict[str, str] = {
     "embedding_override_applied": ArtifactKeys.EMBEDDING_OVERRIDE_APPLIED,
     "abstention_detected": ArtifactKeys.ABSTENTION_DETECTED,
     "abstention_reasoning": ArtifactKeys.ABSTENTION_REASONING,
+    "sufficiency_check_performed": ArtifactKeys.SUFFICIENCY_CHECK_PERFORMED,
     "sufficiency_detected": ArtifactKeys.SUFFICIENCY_DETECTED,
     "sufficiency_reasoning": ArtifactKeys.SUFFICIENCY_REASONING,
 }
