@@ -90,10 +90,9 @@ paper-analysis = [
     "arviz>=0.23.4",
     "pymc>=5.28.5",
 ]
-# webapp extra disabled until karenina-server is published to PyPI
-# webapp = [
-#     "karenina-server>=0.1.0",  # Webapp server with bundled GUI
-# ]
+webapp = [
+    "karenina-server>=0.1.1",  # Webapp server with bundled GUI
+]
 embeddings = [
     "sentence-transformers>=5.4.1",  # For embedding similarity checks
 ]
@@ -114,13 +113,11 @@ Documentation = "https://karenina.readthedocs.io"
 "Source Code" = "https://github.com/yourusername/karenina"
 "Issue Tracker" = "https://github.com/yourusername/karenina/issues"
 
+[tool.uv.sources]
+karenina-server = { git = "https://github.com/biocypher/karenina-server.git", branch = "dev" }
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/karenina"]
-
-# Include ADeLe rubric data files and error-analysis packaged prompts in the wheel
-[tool.hatch.build.targets.wheel.force-include]
-"src/karenina/integrations/adele/data" = "karenina/integrations/adele/data"
-"src/karenina/benchmark/error_analysis/prompts" = "karenina/benchmark/error_analysis/prompts"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

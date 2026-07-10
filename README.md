@@ -399,12 +399,19 @@ This installs the core package with all required dependencies, including MCP cli
 | `dev` | Development and testing tools (pytest, ruff, mypy, mkdocs) |
 | `search` | Web search integration for agentic verification (Tavily) |
 | `examples` | Running example notebooks (Jupyter) |
+| `webapp` | Install the FastAPI server and bundled GUI for `karenina serve` |
 | `embeddings` | Embedding similarity checks (SentenceTransformers) |
 | `gepa` | GEPA prompt optimization integration |
 
 ```bash
 # Example: install with embedding support
 uv pip install "karenina[embeddings] @ git+https://github.com/biocypher/karenina.git"
+
+# Example: install the existing web GUI/server stack from GitHub with uv
+uv pip install --no-sources-package karenina \
+  "karenina[webapp] @ git+https://github.com/biocypher/karenina.git"
+karenina init
+karenina serve --port 8080
 ```
 
 ### Environment Setup
