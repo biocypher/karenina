@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from ..integrations.gepa import FrontierType, KareninaOutput, ObjectiveConfig, OptimizationRun
+    from ..question_qc import QcConfig, QcResultSet
     from ..schemas.checkpoint import SchemaOrgQuestion
     from ..schemas.entities import Question
 
@@ -953,6 +954,73 @@ class Benchmark:
             Merged DynamicRubric or None if neither global nor question-level exists.
         """
         return self._rubric_manager.get_merged_dynamic_rubric_for_question(question_id)
+
+    # ── Question quality control ─────────────────────────────────────────
+
+    def run_qc(
+        self,
+        config: "QcConfig",
+        question_ids: list[str] | None = None,
+        run_name: str | None = None,
+        async_enabled: bool | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> "QcResultSet":
+        """Run evidence-backed question quality control on the Q/A set.
+
+        Same argument pattern as :meth:`run_verification`. Evaluates whether
+        each question's expected answer is supported via multi-role agents
+        and evidence tools — not how a model answered.
+
+        Args:
+            config: QC configuration (roles, runtime). Analogue of VerificationConfig.
+            question_ids: Optional subset. Default: all questions with a non-empty
+                ``raw_answer`` (including default stub templates).
+            run_name: Optional run label for tracking.
+            async_enabled: Parallel execution (defaults to KARENINA_ASYNC_ENABLED).
+            progress_callback: Optional ``(percent, message)`` progress hook.
+
+        Returns:
+            QcResultSet with per-question classifications and witnesses.
+        """
+        from karenina.question_qc import QcQuestion, run_qc_batch
+
+        if self.is_scenario_benchmark:
+            raise ValueError(
+                "run_qc is not supported for scenario benchmarks; use a question-based benchmark checkpoint."
+            )
+
+        if question_ids is None:
+            question_ids = [
+                q_id
+                for q_id, q_data in self._base._questions_cache.items()
+                if str(q_data.get("raw_answer") or "").strip()
+            ]
+
+        questions: list[QcQuestion] = []
+        for q_id in question_ids:
+            if q_id not in self._base._questions_cache:
+                raise ValueError(f"Question not found: {q_id}")
+            q_data = self._base._questions_cache[q_id]
+            metadata: dict[str, Any] = {}
+            for key in ("area", "subcategory", "complexity", "keywords", "custom_metadata"):
+                if q_data.get(key) is not None:
+                    metadata[key] = q_data[key]
+            questions.append(
+                QcQuestion(
+                    question_id=q_id,
+                    question=str(q_data.get("question") or ""),
+                    expected_answer=str(q_data.get("raw_answer") or ""),
+                    metadata=metadata,
+                )
+            )
+
+        return run_qc_batch(
+            questions,
+            config,
+            run_name=run_name,
+            async_enabled=async_enabled,
+            progress_callback=progress_callback,
+        )
 
     # ── Verification ─────────────────────────────────────────────────────
 
