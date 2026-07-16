@@ -376,5 +376,5 @@ The five patterns above form a toolkit for factual verification. Most real bench
 
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Add rubric traits for quality assessment
 - [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation without templates
-- [Scaled Authoring](scaled-authoring.ipynb): Bulk workflows and auto-generation
+- [Scaled Benchmark Creation](scaled-benchmark-creation.ipynb): Bulk workflows and auto-generation
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Deep dive into template concepts

@@ -17,7 +17,7 @@ jupyter:
 
 This page covers the full operational API for working with `Benchmark` objects: creating, populating, inspecting, querying, and checking readiness. Think of it as a reference for everything you can do with a benchmark before running verification.
 
-For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb). For end-to-end authoring scenarios, see the other pages in this section ([Factual QA](factual-qa-benchmark.md), [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md), [Scaled Authoring](scaled-authoring.md)).
+For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb). For end-to-end benchmark creation scenarios, see the other pages in this section ([Factual QA](factual-qa-benchmark.md), [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md), [Scaled Benchmark Creation](scaled-benchmark-creation.md)).
 
 ```python tags=["hide-cell"]
 # Setup cell: hidden in rendered documentation.
@@ -500,5 +500,5 @@ Slicing is also supported: `benchmark[0:2]` returns a list of `SchemaOrgQuestion
 - [Factual QA Benchmark](factual-qa-benchmark.md): hand-written templates for factual verification
 - [Full Evaluation Benchmark](full-evaluation-benchmark.md): templates combined with rubric traits
 - [Quality Assessment](quality-assessment-benchmark.md): rubric-only evaluation for subjective tasks
-- [Scaled Authoring](scaled-authoring.md): bulk ingestion and automatic template generation
+- [Scaled Benchmark Creation](scaled-benchmark-creation.md): bulk ingestion and automatic template generation
 - [Running Verification](../running-verification/index.md): execute the benchmark against LLMs

@@ -20,7 +20,7 @@ class GroundTruthCase(BaseModel):
         value: The ground truth value for this case.
         verify_with: Optional verification primitive override. When provided,
             replaces the field's default primitive for this case. Accepts a
-            primitive instance at authoring time; serialized to dict with
+            primitive instance at definition time; serialized to dict with
             ``type`` key for storage.
     """
 

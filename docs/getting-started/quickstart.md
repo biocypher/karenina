@@ -224,7 +224,7 @@ benchmark.update_template(question_ids[1], Answer)
 print("Updated template for Venetoclax question with class-based definition")
 ```
 
-> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Authoring](../notebooks/creating-benchmarks/scaled-authoring.ipynb) · [Answer Templates (Concepts)](../notebooks/core_concepts/answer-templates.ipynb)
+> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Benchmark Creation](../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) · [Answer Templates (Concepts)](../notebooks/core_concepts/answer-templates.ipynb)
 
 ---
 

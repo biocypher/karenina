@@ -1,1 +1,1 @@
-"""Unit tests for benchmark authoring utilities."""
+"""Unit tests for benchmark construction utilities."""

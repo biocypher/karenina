@@ -337,5 +337,5 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 - [Factual QA Benchmark](factual-qa-benchmark.ipynb): Template-only evaluation for factual correctness
 - [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Combine templates and rubrics
-- [Scaled Authoring](scaled-authoring.ipynb): Bulk workflows and auto-generation
+- [Scaled Benchmark Creation](scaled-benchmark-creation.ipynb): Bulk workflows and auto-generation
 - [Rubrics Overview](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts

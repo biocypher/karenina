@@ -13,7 +13,7 @@ jupyter:
     name: python3
 ---
 
-# Scaled Authoring
+# Scaled Benchmark Creation
 
 When building large benchmarks with dozens or hundreds of questions, manual question entry and template writing don't scale. This scenario demonstrates the power-user workflow: bulk question ingestion, automated template generation, programmatic template construction, ADeLe question classification, and few-shot example injection.
 

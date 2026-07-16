@@ -79,7 +79,7 @@ See [Advanced Adapters](advanced-adapters/index.md) for the full guide, includin
 
 ```
 src/karenina/
-├── benchmark/          # Core benchmarking (verification pipeline, authoring)
+├── benchmark/          # Core benchmarking (verification pipeline, construction)
 ├── ports/              # Protocol interfaces (LLMPort, AgentPort, ParserPort)
 ├── adapters/           # Backend implementations (LangChain, Claude SDK, etc.)
 ├── schemas/            # Pydantic models (config, entities, results)

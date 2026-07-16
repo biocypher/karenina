@@ -206,7 +206,7 @@ class Answer(BaseAnswer):
 ## 5. Detailed Reference: Metadata and Special Fields
 
 ### 5.1. Metadata for Organization and Context
-*   **`answer_notes`**: A free-text field for edge cases ("Accept 'Bcl2' but not 'BCL-XL'"), reasoning, or reviewer instructions. The automatic [template generator](../../../creating-benchmarks/scaled-authoring/) uses these notes to produce more robust `verify()` methods.
+*   **`answer_notes`**: A free-text field for edge cases ("Accept 'Bcl2' but not 'BCL-XL'"), reasoning, or reviewer instructions. The automatic [template generator](../../../creating-benchmarks/scaled-benchmark-creation/) uses these notes to produce more robust `verify()` methods.
 *   **`keywords`**: Pure metadata for filtering and grouping. They never reach an LLM and have no effect on pipeline execution (see [Benchmark Operations](../../../../workflows/creating-benchmarks/benchmark-operations/)).
 *   **`author` & `sources`**: Provenance tracking (who wrote it, where the answer came from). Preserved in [checkpoints](../../../../core_concepts/questions-and-benchmarks/checkpoints/) and exports for audit trails.
 *   **`custom_metadata`**: An open dictionary for any domain-specific attributes (e.g., "difficulty": "hard").

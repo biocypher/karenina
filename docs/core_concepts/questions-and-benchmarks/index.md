@@ -86,4 +86,4 @@ The benchmark defines *what* to evaluate: which questions to ask, how to verify 
 - [Checkpoints](checkpoints.md): how benchmarks are persisted as JSON-LD files
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): how correctness verification works
 - [Rubrics](../rubrics/index.md): how quality assessment works
-- [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): step-by-step authoring workflow
+- [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): step-by-step benchmark creation workflow

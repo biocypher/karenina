@@ -37,8 +37,8 @@ exclude_docs: |
   workflows/creating-benchmarks/full-evaluation-benchmark.md
   workflows/creating-benchmarks/quality-assessment-benchmark.md
   workflows/creating-benchmarks/choosing-rubric-traits.md
-  workflows/creating-benchmarks/scaled-authoring.md
-  workflows/creating-benchmarks/ai-assisted-authoring.md
+  workflows/creating-benchmarks/scaled-benchmark-creation.md
+  workflows/creating-benchmarks/ai-assisted-template-construction.md
   workflows/creating-benchmarks/adele-classification.md
   workflows/creating-benchmarks/benchmark-operations.md
   workflows/running-verification/basic-verification.md
@@ -261,8 +261,8 @@ nav:
       - Full Evaluation Benchmark: notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb
       - Quality Assessment: notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb
       - Choosing Rubric Traits: notebooks/creating-benchmarks/choosing-rubric-traits.ipynb
-      - Scaled Authoring: notebooks/creating-benchmarks/scaled-authoring.ipynb
-      - AI-Assisted Authoring: notebooks/creating-benchmarks/ai-assisted-authoring.ipynb
+      - Scaled Benchmark Creation: notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb
+      - AI-Assisted Template Construction: notebooks/creating-benchmarks/ai-assisted-template-construction.ipynb
       - ADeLe Classification: notebooks/creating-benchmarks/adele-classification.ipynb
       - Benchmark Operations: notebooks/creating-benchmarks/benchmark-operations.ipynb
     - Running Verification:

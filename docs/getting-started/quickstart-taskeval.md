@@ -232,7 +232,7 @@ task.add_template(Answer)
 print("Attached answer template with 2 verification fields")
 ```
 
-> **Learn more**: [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) · [Template Authoring](../workflows/creating-benchmarks/index.md)
+> **Learn more**: [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) · [Template Construction](../workflows/creating-benchmarks/index.md)
 
 ---
 

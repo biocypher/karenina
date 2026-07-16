@@ -129,7 +129,7 @@ This matters for benchmark design and analysis:
 - **Stratified analysis**: break down verification results by reasoning depth, domain specificity, or novelty to see where a model struggles
 - **Targeted filtering**: run expensive verification only on questions above a complexity threshold
 - **Benchmark characterization**: understand what your question set tests before spending compute on evaluation
-- **Balanced authoring**: identify gaps in your question coverage (too many rote recall questions, too few requiring metacognition)
+- **Balanced benchmark design**: identify gaps in your question coverage (too many rote recall questions, too few requiring metacognition)
 
 ADeLe is LLM-based: the `QuestionClassifier` sends each question to an LLM along with the 18 dimension rubrics, and the LLM returns a classification per dimension. This means results are not perfectly deterministic, but the structured rubrics and low temperature (default `0.0`) provide high consistency.
 
@@ -436,7 +436,7 @@ The LLM is lazily initialized on first use. If you pass `llm`, it is used direct
 
 ## 9. Next Steps
 
-- [Scaled Authoring](../../creating-benchmarks/scaled-authoring/): ADeLe classification in the benchmark authoring workflow
+- [Scaled Benchmark Creation](../../creating-benchmarks/scaled-benchmark-creation/): ADeLe classification in the benchmark creation workflow
 - [LLM rubric traits (literal kind)](../rubrics/llm-traits/): the trait type ADeLe dimensions use internally
 - [Rubrics](../../../core_concepts/rubrics/): how trait-based evaluation works
 - [Running verification](../../../workflows/running-verification/): evaluate your benchmark after filtering by ADeLe scores

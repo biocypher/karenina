@@ -13,8 +13,8 @@ Each tutorial is a complete, self-contained scenario. Choose the one that matche
 | [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
 | [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates: quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
 | [Choosing Rubric Traits](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb) | Template + rubric | Need-driven trait selection: 7 evaluation needs mapped to the right trait type, decision flowchart |
-| [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
-| [AI-Assisted Authoring](../../notebooks/creating-benchmarks/ai-assisted-authoring.ipynb) | Template generation | `generate_answer_template()`, `AnswerBuilder`, two-phase generation, batch `generate_all_templates()` |
+| [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
+| [AI-Assisted Template Construction](../../notebooks/creating-benchmarks/ai-assisted-template-construction.ipynb) | Template generation | `generate_answer_template()`, `AnswerBuilder`, two-phase generation, batch `generate_all_templates()` |
 | [ADeLe Classification](../../notebooks/creating-benchmarks/adele-classification.ipynb) | Question profiling | 18-dimension classification, `QuestionClassifier`, batch scoring, ADeLe rubrics, complexity filtering |
 
 ---
@@ -80,8 +80,8 @@ Reload and verify round-trip
 | Create benchmark | `Benchmark.create(name, description, version)` | All scenarios |
 | Add question | `benchmark.add_question(question, raw_answer, answer_template=...)` | All scenarios |
 | Add template to existing question | `benchmark.add_answer_template(question_id, code_string)` | [Factual QA](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) |
-| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) |
-| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb) |
+| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) |
+| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) |
 | Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
 | Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
 | Check readiness | `benchmark.check_readiness()` | [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) |
