@@ -9,16 +9,37 @@
 
 **Structured LLM evaluation: from factual Q&A to agentic coding tasks**
 
-[About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
+[Paper](#-the-paper) • [About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
-> **⚠️ Experimental Project:** Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
+---
+
+## 📄 The Paper
+
+<div align="center">
+
+<img src="docs/assets/graphical-abstract.png" alt="Karenina graphical abstract: expert-led benchmark design feeds three evaluation settings and yields a multidimensional model profile" width="100%">
+
+<em>From expert-defined evaluation intent to a multi-dimensional model profile, across question answering, multi-turn interaction, and agentic tasks.</em>
+
+</div>
+
+Karenina is the framework behind a forthcoming paper on expert-built, multi-axis evaluation of biomedical AI:
+
+> Large language models and autonomous agents are becoming embedded in biomedical research, and the insights they generate will increasingly shape research directions and clinical decisions. However, their outputs are variable and open-ended, complicating reliable evaluation and reproducibility. Existing benchmarks fall short of addressing this, measuring narrow, static tasks that poorly reflect real-world capabilities. Closing this gap demands tailored, multi-dimensional evaluations and the means for domain experts to build them. Here we introduce Karenina, an open-source framework for multi-dimensional evaluation at scale. We apply it across settings of increasing agency: drug-discovery questions, multi-turn interactions, and autonomous bioinformatics tasks. These evaluations revealed that similar scores concealed consequential differences: answers that were correct yet ungrounded in the retrieved evidence; errors of biological reasoning rather than of workflow setup and execution; models that abandoned correct answers when challenged with false claims. These findings establish expert-built, multi-dimensional evaluation as essential for trustworthy AI in biomedicine.
+
+**Status:** the manuscript is in preparation. The title, author list, and a link to the preprint will be added here once it is out.
+
+Every evaluation reported in the paper was run with this library, using the workflows that are already documented here: [answer templates](docs/core_concepts/answer-templates.md) and [rubrics](docs/core_concepts/rubrics/index.md) over [MCP tool access](docs/core_concepts/mcp-overview.md) for the drug-discovery questions, [scenarios](docs/core_concepts/scenarios/index.md) for the multi-turn interactions, and [agentic evaluation](docs/core_concepts/agentic-evaluation.md) with workspace-inspecting judges for the bioinformatics tasks. The benchmark definitions and analysis code needed to reproduce the published figures and tables will be released shortly, and linked from here.
+
+The rest of this README explains how these pieces fit together, starting with [what Karenina is](#-about-karenina) and [the problem it solves](#-the-problem).
 
 ---
 
 ## 📑 Table of Contents
 
+- [The Paper](#-the-paper)
 - [About Karenina](#-about-karenina)
   - [Why This Approach](#why-this-approach)
 - [The Problem](#-the-problem)
@@ -34,6 +55,7 @@
 - [Installation](#-installation)
 - [Documentation](#-documentation)
 - [Contributing](#-contributing)
+- [Project Status](#%EF%B8%8F-project-status)
 
 ---
 
@@ -469,3 +491,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 ## 🤝 Contributing
 
 We welcome contributions to Karenina! Please see our contributing guidelines for more information on how to get involved.
+
+## ⚠️ Project Status
+
+Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
