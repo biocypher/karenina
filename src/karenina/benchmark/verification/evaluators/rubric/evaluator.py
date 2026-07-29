@@ -23,6 +23,7 @@ from karenina.adapters.registry import close_adapter
 from karenina.ports import LLMPort
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import CallableRubricTrait, MetricRubricTrait, RegexRubricTrait, Rubric
+from karenina.schemas.entities.rubric import RubricCallable
 
 from .deep_judgment import RubricDeepJudgmentHandler
 from .llm_trait import LLMTraitEvaluator
@@ -51,6 +52,7 @@ class RubricEvaluator:
         model_config: ModelConfig,
         evaluation_strategy: str = "batch",
         prompt_config: "PromptConfig | None" = None,
+        callable_registry: dict[str, RubricCallable] | None = None,
     ):
         """
         Initialize the rubric evaluator with an LLM model.
@@ -61,6 +63,8 @@ class RubricEvaluator:
                 - "batch": Evaluate all traits in single LLM call (efficient)
                 - "sequential": Evaluate traits one-by-one (reliable)
             prompt_config: Optional per-task-type user instructions for prompt assembly.
+            callable_registry: Runtime callable overrides keyed by trait name.
+                Matching functions take precedence over serialized trait callables.
 
         Raises:
             ValueError: If model configuration is invalid (validated by adapter factory)
@@ -69,6 +73,7 @@ class RubricEvaluator:
         self.model_config = model_config
         self.evaluation_strategy = evaluation_strategy
         self._prompt_config = prompt_config
+        self.callable_registry = callable_registry or {}
 
         # Note: ValueError from validate_model_config propagates directly;
         # only runtime errors (adapter unavailable, etc.) are wrapped.
@@ -288,7 +293,20 @@ class RubricEvaluator:
         Returns:
             Dictionary mapping trait names to boolean or int results (depending on trait kind)
         """
-        return self._evaluate_deterministic_traits(answer, callable_traits, "callable")
+        results: dict[str, bool | int | float] = {}
+
+        for trait in callable_traits:
+            try:
+                result = trait.evaluate(
+                    answer,
+                    callable_override=self.callable_registry.get(trait.name),
+                )
+                results[trait.name] = result
+            except Exception as e:
+                logger.warning("Failed to evaluate callable trait '%s': %s", trait.name, e)
+                results[trait.name] = None  # type: ignore[assignment]
+
+        return results
 
     # ========== Metric Trait Evaluation Methods ==========
 

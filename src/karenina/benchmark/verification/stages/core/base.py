@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
-from karenina.schemas.entities.rubric import DynamicRubric
+from karenina.schemas.entities.rubric import DynamicRubric, RubricCallable
 from karenina.schemas.verification import PromptConfig
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -282,6 +282,7 @@ class VerificationContext:
         deep_judgment_mode: Template deep-judgment mode ("disabled", "reasoning_only", "full").
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits
             ("batch" or "sequential").
+        callable_registry: Runtime callable overrides keyed by callable trait name.
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute.
         deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts.
         deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation.
@@ -327,6 +328,7 @@ class VerificationContext:
 
     # Rubric Configuration
     rubric_evaluation_strategy: str = "batch"  # "batch" or "sequential"
+    callable_registry: dict[str, RubricCallable] | None = None  # Runtime overrides for callable traits
     rubric_trait_names: list[str] | None = None  # Optional filter for specific traits
     trait_provenance: dict[str, str] | None = None  # Trait provenance: "global", "question_specific", "dynamic"
 

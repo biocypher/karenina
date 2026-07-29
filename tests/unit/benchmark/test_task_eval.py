@@ -929,3 +929,78 @@ class TestImports:
         assert task.global_logs[0].text == "text entry"
         assert task.global_logs[1].trace_messages is not None
         assert task.global_logs[2].trace_messages is not None
+
+
+@pytest.mark.unit
+class TestCallableRegistry:
+    """Verify TaskEval owns and forwards runtime callable overrides."""
+
+    def test_constructor_copies_registry(self) -> None:
+        registry = {"check": lambda _text: True}
+        task = TaskEval(callable_registry=registry)
+
+        registry["later"] = lambda _text: False
+
+        assert set(task.callable_registry) == {"check"}
+
+    def test_register_callable_accepts_all_trait_result_types(self) -> None:
+        task = TaskEval()
+
+        task.register_callable("boolean", lambda _text: True)
+        task.register_callable("score", lambda _text: 3.5)
+        task.register_callable("literal", lambda _text: "formal")
+
+        assert set(task.callable_registry) == {"boolean", "score", "literal"}
+
+    def test_registry_is_forwarded_to_verification_runner(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.entities.rubric import CallableRubricTrait, Rubric
+        from karenina.schemas.verification import VerificationConfig
+
+        def registered(_text: str) -> bool:
+            return True
+
+        task = TaskEval(callable_registry={"short": registered})
+        task.log("a short answer")
+        task.add_rubric(
+            Rubric(
+                callable_traits=[
+                    CallableRubricTrait.from_callable(
+                        name="short",
+                        func=lambda _text: False,
+                        kind="boolean",
+                    )
+                ]
+            )
+        )
+
+        mock_result = TestEvaluationLoop()._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*_args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task.evaluate(
+            VerificationConfig(
+                parsing_models=[
+                    ModelConfig(
+                        id="mock",
+                        model_provider="mock",
+                        model_name="mock",
+                        interface="langchain",
+                    )
+                ],
+                parsing_only=True,
+            )
+        )
+
+        assert call_kwargs[0]["callable_registry"] == {"short": registered}

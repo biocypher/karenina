@@ -193,7 +193,7 @@ task = TaskEval(
 
 The global scope evaluates all logs together. Per-step scopes evaluate only the logs, templates, and rubrics attached to that step. When you call `evaluate()` without a `step_id`, TaskEval runs global evaluation first, then automatically evaluates each step that has data.
 
-The constructor accepts two additional parameters: `merge_strategy` (see [Merge Strategies](#8-merge-strategies)) and `callable_registry`, a `dict[str, Callable]` for pre-registering functions used by [callable rubric traits](../rubrics/callable-traits/).
+The constructor accepts two additional parameters: `merge_strategy` (see [Merge Strategies](#8-merge-strategies)) and `callable_registry`, a `dict[str, Callable]` of runtime overrides for [callable rubric traits](../rubrics/callable-traits/). When a registry key exactly matches a callable trait name, TaskEval uses the registered function instead of deserializing the function stored on that trait.
 
 ## 6. Attaching Evaluation Criteria
 
@@ -230,11 +230,13 @@ task.add_rubric(
 <p><code>add_template()</code> extracts the source code of your <code>BaseAnswer</code> subclass using <code>inspect.getsource()</code>. The class must be defined in a <code>.py</code> file or Jupyter notebook, not constructed dynamically at runtime. For dynamically defined templates, use <code>add_question()</code> with template source code passed as a string in the <code>answer_template</code> field.</p>
 </div>
 
-If your rubric includes [callable traits](../rubrics/callable-traits/), register the callable functions before calling `evaluate()`:
+[Callable traits](../rubrics/callable-traits/) created with `CallableRubricTrait.from_callable()` carry a serialized function and do not require registration. You can override that function at evaluation time by registering a callable under the same trait name:
 
 ```python
 task.register_callable("under_150_words", lambda text: len(text.split()) < 150)
 ```
+
+Unmatched callable traits fall back to their serialized functions. A registry therefore avoids deserialization for matching traits, but it is not by itself a security boundary for an otherwise untrusted rubric.
 
 When multiple rubrics are attached to the same scope, TaskEval merges them into a single rubric. Trait names must be unique across all rubrics in the same scope; duplicate names raise a `ValueError`.
 
