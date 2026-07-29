@@ -67,6 +67,43 @@ def extract_usage_from_response(response: Any, model: str | None = None) -> Usag
     return extract_usage(usage, model=model)
 
 
+def merge_stream_usage(current: UsageMetadata, usage: Any, model: str | None = None) -> UsageMetadata:
+    """Merge a streaming usage payload into already-captured usage.
+
+    Anthropic streaming spreads usage across events: ``message_start``
+    carries ``input_tokens`` (and cache fields), while ``message_delta``
+    carries the cumulative ``output_tokens``. This helper overlays
+    whichever fields the event reports onto the current snapshot, so a
+    mid-stream interruption still leaves the usage that arrived so far.
+
+    Args:
+        current: The usage captured so far (fields not reported by this
+            event are preserved).
+        usage: The usage object from a streaming event. Attributes that
+            are absent or None leave the current value untouched.
+        model: Optional model name to include in metadata.
+
+    Returns:
+        A new UsageMetadata with the merged values.
+    """
+    input_tokens = getattr(usage, "input_tokens", None)
+    output_tokens = getattr(usage, "output_tokens", None)
+    cache_read = getattr(usage, "cache_read_input_tokens", None)
+    cache_creation = getattr(usage, "cache_creation_input_tokens", None)
+
+    merged_input = input_tokens if input_tokens is not None else current.input_tokens
+    merged_output = output_tokens if output_tokens is not None else current.output_tokens
+
+    return UsageMetadata(
+        input_tokens=merged_input,
+        output_tokens=merged_output,
+        total_tokens=(merged_input or 0) + (merged_output or 0),
+        cache_read_tokens=cache_read if cache_read is not None else current.cache_read_tokens,
+        cache_creation_tokens=cache_creation if cache_creation is not None else current.cache_creation_tokens,
+        model=model if model is not None else current.model,
+    )
+
+
 def aggregate_usage(base: UsageMetadata, new: UsageMetadata) -> UsageMetadata:
     """Aggregate multiple usage metadata objects.
 

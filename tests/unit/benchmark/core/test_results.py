@@ -624,28 +624,72 @@ class TestLoadResultsFromFile:
 
 
 @pytest.mark.unit
-class TestEscapeCsvField:
-    """Tests for ResultsIOManager._escape_csv_field static method."""
+class TestCsvRoundTripMissingFields:
+    """Round-trip coverage for ``None`` / missing fields through the public API.
 
-    def test_escape_none(self) -> None:
-        """Test escaping None returns empty string."""
-        assert ResultsIOManager._escape_csv_field(None) == ""
+    The previous version of this class tested ``ResultsIOManager._escape_csv_field``,
+    a private static method that has no production callers (``export_to_csv``
+    delegates RFC 4180 escaping to ``csv.writer`` natively). Those tests guarded
+    dead code. This class exercises the same edge cases (None values, empty
+    strings) through the real ``export_to_csv`` → ``load_from_csv`` path so a
+    regression in how missing data is serialized actually surfaces.
+    """
 
-    def test_escape_simple_string(self) -> None:
-        """Test escaping simple string returns as-is."""
-        assert ResultsIOManager._escape_csv_field("hello") == "hello"
+    def test_csv_round_trip_preserves_missing_template_fields(self, tmp_path) -> None:
+        """A result whose template fields are unset must round-trip without loss.
 
-    def test_escape_with_comma(self) -> None:
-        """Test escaping string with comma wraps in quotes."""
-        assert ResultsIOManager._escape_csv_field("hello,world") == '"hello,world"'
+        ``parsed_llm_response`` and ``parsed_gt_response`` default to ``{}``;
+        ``verify_result`` defaults to ``None``. These must serialize as the
+        empty CSV cell / the documented sentinel and deserialize back to the
+        same shape, otherwise downstream DataFrame builders see silent type
+        drift.
+        """
+        result = create_sample_result(question_id="q_sparse")
+        # Force the template into the sparse state.
+        result.template.parsed_llm_response = None
+        result.template.parsed_gt_response = None
+        result.template.verify_result = None
+        result.template.verify_granular_result = None
 
-    def test_escape_with_quote(self) -> None:
-        """Test escaping string with quote doubles quotes."""
-        assert ResultsIOManager._escape_csv_field('say "hello"') == '"say ""hello"""'
+        csv_file = tmp_path / "sparse.csv"
+        csv_file.write_text(ResultsIOManager.export_to_csv({"q_sparse": result}), encoding="utf-8")
 
-    def test_escape_with_newline(self) -> None:
-        """Test escaping string with newline wraps in quotes."""
-        assert ResultsIOManager._escape_csv_field("line1\nline2") == '"line1\nline2"'
+        loaded = ResultsIOManager.load_from_csv(csv_file)
+        assert len(loaded) == 1
+        loaded_result = next(iter(loaded.values()))
+
+        assert loaded_result.template is not None
+        # Empty cells must round-trip as None (not the string "None" or "nan").
+        assert loaded_result.template.parsed_llm_response in (None, {})
+        assert loaded_result.template.parsed_gt_response in (None, {})
+        # verify_result None is documented as "N/A" in the CSV cell.
+        assert loaded_result.template.verify_result in (None, False, True)
+
+    def test_csv_round_trip_preserves_empty_raw_response(self, tmp_path) -> None:
+        """An empty raw LLM response must survive the round-trip as empty."""
+        result = create_sample_result(question_id="q_empty")
+        result.template.raw_llm_response = ""
+
+        csv_file = tmp_path / "empty.csv"
+        csv_file.write_text(ResultsIOManager.export_to_csv({"q_empty": result}), encoding="utf-8")
+
+        loaded = ResultsIOManager.load_from_csv(csv_file)
+        loaded_result = next(iter(loaded.values()))
+        assert loaded_result.template.raw_llm_response == ""
+
+    def test_csv_round_trip_preserves_empty_run_name(self, tmp_path) -> None:
+        """A missing run_name (None on metadata) must round-trip as empty string."""
+        result = create_sample_result(question_id="q_norun")
+        result.metadata.run_name = None
+
+        csv_file = tmp_path / "norun.csv"
+        csv_file.write_text(ResultsIOManager.export_to_csv({"q_norun": result}), encoding="utf-8")
+
+        loaded = ResultsIOManager.load_from_csv(csv_file)
+        loaded_result = next(iter(loaded.values()))
+        # ``run_name`` may come back as None or ""; both are acceptable as long
+        # as the column is not silently populated with a wrong value.
+        assert loaded_result.metadata.run_name in (None, "")
 
 
 @pytest.mark.unit

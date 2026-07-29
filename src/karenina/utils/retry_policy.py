@@ -16,6 +16,7 @@ import asyncio
 import contextvars
 import logging
 import random
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -42,8 +43,16 @@ T = TypeVar("T")
 # Context-local active retry tracker. Set by track_retries() and read by
 # RetryExecutor every time a retry decision is made. Using contextvars makes
 # the tracker visible across both sync and async paths within the same logical
-# execution context, while remaining isolated between concurrent worker threads
-# and asyncio tasks.
+# execution context, while remaining isolated between concurrent trackers
+# bound in unrelated contexts.
+#
+# Propagation guarantee: the tracker follows the caller's context wherever
+# that context is carried. anyio's BlockingPortal.call copies the caller's
+# contextvars into the portal task (measured, see the async-consistency
+# baseline), and the adapters' ThreadPoolExecutor fallbacks explicitly
+# capture and re-enter the caller's context via contextvars.copy_context()
+# (see adapters/_parallel_base.run_coro_in_thread). A tracker can therefore
+# be shared across threads. Increments are guarded by _RECORD_RETRY_LOCK.
 #
 # Tracker shape: {category_name: {"used": int, "budget": int}}
 # where category_name is one of "connection", "timeout", "rate_limit",
@@ -56,6 +65,11 @@ _active_retry_tracker: contextvars.ContextVar[RetryTracker | None] = contextvars
     "_active_retry_tracker",
     default=None,
 )
+
+# Guards tracker increments: one tracker can be visible to several threads
+# at once (portal tasks and thread-pool fallbacks share the caller's
+# context), and dict read-modify-write is not atomic.
+_RECORD_RETRY_LOCK = threading.Lock()
 
 
 def _build_initial_tracker(policy: RetryPolicy | None) -> RetryTracker:
@@ -83,6 +97,14 @@ def track_retries(policy: RetryPolicy | None = None) -> Iterator[RetryTracker]:
     increments ``used`` for the matching category. The tracker is yielded so
     the caller can read counts and budgets after exiting the block.
 
+    Propagation: recording works wherever the binding context travels.
+    This includes async code on the same loop, ``BlockingPortal.call``
+    dispatch (anyio copies the caller's contextvars into the portal task),
+    and the adapters' sync wrappers' ThreadPoolExecutor fallbacks (which
+    re-enter a copy of the caller's context in the fresh thread). Code
+    that spawns threads without copying the caller's context will not
+    record into this tracker. Increments are thread-safe.
+
     Example:
         >>> with track_retries(RetryPolicy()) as tracker:
         ...     adapter.stream_invoke(messages)
@@ -98,13 +120,19 @@ def track_retries(policy: RetryPolicy | None = None) -> Iterator[RetryTracker]:
 
 
 def _record_retry(category: ErrorCategory) -> None:
-    """Increment the active retry tracker for ``category`` if one is bound."""
+    """Increment the active retry tracker for ``category`` if one is bound.
+
+    Thread-safe: a tracker can be shared across threads (portal tasks and
+    thread-pool fallbacks carry the caller's context), so the increment is
+    guarded by a module-level lock.
+    """
     tracker = _active_retry_tracker.get()
     if tracker is None:
         return
     entry = tracker.get(category.value)
     if entry is not None:
-        entry["used"] += 1
+        with _RECORD_RETRY_LOCK:
+            entry["used"] += 1
 
 
 class CategoryRetryConfig(BaseModel):

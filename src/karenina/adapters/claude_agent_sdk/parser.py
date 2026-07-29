@@ -14,12 +14,18 @@ The adapter detects the endpoint type from the model configuration:
 This hybrid approach gives guaranteed schema enforcement on both endpoint
 types while keeping the Agent SDK's subprocess transport for agent and LLM
 operations (where it works correctly).
+
+Retry Logic:
+    API calls route through RetryExecutor with per-category retry budgets
+    for transient errors (connection errors, timeouts, rate limits, 5xx
+    errors). The SDK clients run with max_retries=0 so RetryExecutor is
+    the sole retry layer and retry telemetry via track_retries() is
+    accurate.
 """
 
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import json
 import logging
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -27,10 +33,14 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ValidationError
 
+from karenina.adapters._parallel_base import run_coro_in_thread
+from karenina.adapters._timeouts import PARSE_INTERNAL_CALL_SEQUENCES, compute_sync_wrapper_timeout
+from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
+from karenina.utils.errors import ErrorRegistry
 from karenina.utils.json_extraction import extract_json_from_response
-from karenina.utils.retry_policy import RetryPolicy
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 if TYPE_CHECKING:
     from karenina.schemas.config import ModelConfig
@@ -132,6 +142,9 @@ class ClaudeSDKParserAdapter:
         self._openai_client: Any | None = None
         self._warned_custom_endpoint = False
 
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
+
     @property
     def capabilities(self) -> PortCapabilities:
         """Declare what prompt features this parser adapter supports.
@@ -152,9 +165,11 @@ class ClaudeSDKParserAdapter:
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
 
-            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
-            retry_policy = self._config.retry_policy or RetryPolicy()
-            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+            # Suppress SDK-level retries. RetryExecutor is the sole retry
+            # layer (design decision D1). Known cost: the SDK's honoring of
+            # server retry-after headers is dropped. Deliberate deferred
+            # follow-up for first-party Anthropic endpoints.
+            kwargs["max_retries"] = 0
 
             self._anthropic_client = anthropic.AsyncAnthropic(**kwargs)
         return self._anthropic_client
@@ -175,9 +190,10 @@ class ClaudeSDKParserAdapter:
             if self._config.request_timeout is not None:
                 kwargs["timeout"] = self._config.request_timeout
 
-            # Derive SDK max_retries from RetryPolicy so retry budgets are consistent
-            retry_policy = self._config.retry_policy or RetryPolicy()
-            kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+            # Suppress SDK-level retries. RetryExecutor is the sole retry
+            # layer (design decision D1, see _get_anthropic_client for the
+            # deferred retry-after follow-up).
+            kwargs["max_retries"] = 0
 
             self._openai_client = AsyncOpenAI(**kwargs)
 
@@ -245,7 +261,16 @@ class ClaudeSDKParserAdapter:
             kwargs["temperature"] = self._config.temperature
 
         try:
-            response = await client.messages.create(**kwargs)
+            # This parser calls the Anthropic SDK directly (it does not
+            # delegate to an LLM adapter ainvoke), so it borrows its own
+            # GlobalLLMLimiter permit per attempt inside
+            # _acall_with_timeout.
+            response = await self._retry_executor.aexecute_with_timeout(
+                self._acall_with_timeout,
+                client.messages.create,
+                timeout=self._config.request_timeout,
+                **kwargs,
+            )
         except Exception as e:
             raise ParseError(f"Anthropic API call failed during parsing: {e}") from e
 
@@ -304,7 +329,14 @@ class ClaudeSDKParserAdapter:
             kwargs["temperature"] = self._config.temperature
 
         try:
-            response = await client.chat.completions.create(**kwargs)
+            # Direct OpenAI SDK call: borrows its own permit per attempt
+            # inside _acall_with_timeout (see the Anthropic path above).
+            response = await self._retry_executor.aexecute_with_timeout(
+                self._acall_with_timeout,
+                client.chat.completions.create,
+                timeout=self._config.request_timeout,
+                **kwargs,
+            )
         except Exception as e:
             raise ParseError(f"OpenAI API call failed during parsing: {e}") from e
 
@@ -318,6 +350,56 @@ class ClaudeSDKParserAdapter:
         )
 
         return self._validate_json_response(raw_text, schema, usage)
+
+    async def _acall_with_timeout(
+        self,
+        call: Any,
+        *,
+        timeout: float | None = None,
+        **call_kwargs: Any,
+    ) -> Any:
+        """Run an async SDK call under a wall-clock timeout as a guardrail.
+
+        The SDK client already carries an httpx-level timeout from
+        ``request_timeout``, but that does not catch every stall, so this
+        karenina-layer ``asyncio.wait_for`` enforces a hard per-attempt
+        wall-clock budget (mirrors the langchain adapter's helper).
+
+        A fired timeout raises a stock ``asyncio.TimeoutError``, which
+        ``ErrorRegistry`` classifies as ``TIMEOUT`` via the built-in MRO
+        check, so the timeout retry budget applies inside
+        ``RetryExecutor.aexecute_with_timeout``. Note that
+        ``RetryPolicy.timeout_escalation`` only extends this guard on
+        TIMEOUT retries. The SDK client's own timeout stays pinned at
+        ``request_timeout`` from construction, so the SDK may cut the
+        request before an escalated guard fires.
+
+        Args:
+            call: The bound async SDK method to invoke (for example
+                ``client.messages.create``).
+            timeout: Optional per-call wall-clock timeout in seconds.
+                When None, falls back to ``self._config.request_timeout``.
+                When that is also None, the call is made without a wrapper.
+            **call_kwargs: Keyword arguments forwarded to ``call``.
+
+        Returns:
+            The raw SDK response object.
+
+        Each attempt holds one GlobalLLMLimiter permit for the wire call
+        only (uniform per-attempt policy), so retry backoff sleeps never
+        hold a permit. The permit wait itself is NOT bounded by the
+        attempt timeout: a saturated limiter delays the attempt rather
+        than timing it out, matching the legacy semaphore semantics.
+
+        Raises:
+            asyncio.TimeoutError: If the call exceeds the effective timeout.
+        """
+        async with get_global_llm_limiter().borrow():
+            if timeout is None:
+                timeout = self._config.request_timeout
+            if timeout is None:
+                return await call(**call_kwargs)
+            return await asyncio.wait_for(call(**call_kwargs), timeout=timeout)
 
     def _validate_json_response(
         self,
@@ -406,13 +488,14 @@ class ClaudeSDKParserAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> ParsePortResult[T]:
-                return asyncio.run(self.aparse_to_pydantic(messages, schema))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=300)
+            # Fresh thread with the caller's context propagated, so
+            # track_retries telemetry survives the dispatch.
+            thread_timeout = compute_sync_wrapper_timeout(
+                self._config.request_timeout,
+                retry_policy=self._config.retry_policy,
+                internal_call_sequences=PARSE_INTERNAL_CALL_SEQUENCES,
+            )
+            return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=thread_timeout)
 
         except RuntimeError:
             return asyncio.run(self.aparse_to_pydantic(messages, schema))

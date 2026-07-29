@@ -56,8 +56,15 @@ class TestGetAsyncPortalHealthCheck:
     def test_returns_none_when_no_portal_set(self) -> None:
         assert get_async_portal() is None
 
-    def test_portal_without_thread_id_attr_returned_as_is(self) -> None:
-        """Portal missing _event_loop_thread_id (not anyio) is returned as-is."""
+    def test_portal_without_thread_id_attr_treated_as_stale(self) -> None:
+        """Portal missing _event_loop_thread_id is treated as stale.
+
+        If anyio renames the private attribute, the health check can no
+        longer prove the loop is alive, so the portal is cleared instead of
+        being trusted blindly (T10 sentinel fix).
+        """
         portal = MagicMock(spec=[])  # No attributes at all
         set_async_portal(portal)
-        assert get_async_portal() is portal
+        assert get_async_portal() is None
+        # The stale reference is cleared, subsequent calls stay None.
+        assert get_async_portal() is None

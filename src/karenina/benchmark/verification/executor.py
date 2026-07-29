@@ -5,7 +5,9 @@ tasks either sequentially or in parallel using ThreadPoolExecutor with asyncio
 BlockingPortal for proper async event loop management.
 
 The thread-local portal storage allows worker threads to share async execution
-context without passing the portal through all function signatures.
+context without passing the portal through all function signatures. The portal
+storage, the global LLM semaphore, and the pre-teardown aclose bound live in
+the async_lifecycle leaf module and are re-exported here for back-compat.
 """
 
 from __future__ import annotations
@@ -14,7 +16,6 @@ import logging
 import os
 import threading
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -23,16 +24,43 @@ from anyio.from_thread import start_blocking_portal
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from anyio.from_thread import BlockingPortal
-
 from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.config import DEFAULT_ASYNC_MAX_WORKERS
 from karenina.utils.answer_cache import AnswerTraceCache
 
-logger = logging.getLogger(__name__)
+# Async lifecycle primitives moved to the async_lifecycle leaf module.
+# Re-exported here (with explicit aliases) so that
+# karenina.benchmark.verification.executor.<name> remains a valid import path
+# and monkeypatch target for existing callers and tests.
+from .async_lifecycle import (
+    _SENTINEL as _SENTINEL,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    PRE_TEARDOWN_ACLOSE_TIMEOUT as PRE_TEARDOWN_ACLOSE_TIMEOUT,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    GlobalLLMLimiter as GlobalLLMLimiter,  # noqa: PLC0414
+)
+from .async_lifecycle import aclose_portal_adapters
+from .async_lifecycle import (
+    get_async_portal as get_async_portal,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    get_global_llm_limiter as get_global_llm_limiter,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    get_global_llm_semaphore as get_global_llm_semaphore,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    set_async_portal as set_async_portal,  # noqa: PLC0414
+)
+from .async_lifecycle import (
+    set_global_llm_semaphore as set_global_llm_semaphore,  # noqa: PLC0414
+)
+from .portal_pool import ExecutionTuning, run_in_portal_pool, sequential_portal
 
-_SENTINEL = object()  # Distinguishes "attribute missing" from "attribute is None"
+logger = logging.getLogger(__name__)
 
 # Failure categories whose answerer trace is generally not worth hydrating into
 # the workspace cache. Timeout rows are a special case below: when the adapter
@@ -51,81 +79,6 @@ _INFRA_FAILURE_CATEGORIES: frozenset[FailureCategory] = frozenset(
 
 def _is_parser_stage(stage: str | None) -> bool:
     return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate"}
-
-
-# Bound (seconds) on each adapter.aclose() call issued via the worker portal
-# before the portal is torn down. A stuck aclose must not wedge the finally
-# block. Mirrors the pattern in langchain/parser.py:297-312. Tests can
-# monkey-patch this to a shorter value to exercise the timeout branch.
-PRE_TEARDOWN_ACLOSE_TIMEOUT = 5.0
-
-# ============================================================================
-# Thread-Local Portal Storage
-# ============================================================================
-
-_portal_storage = threading.local()
-
-
-def get_async_portal() -> BlockingPortal | None:
-    """Get the current async portal for running async code from threads.
-
-    Each worker thread has its own thread-local portal reference.
-    Returns None (and clears the stale reference) if the portal's event loop
-    has ended, allowing callers to fall back to asyncio.run().
-
-    Returns:
-        The BlockingPortal if one is active for this thread, None otherwise
-    """
-    portal = getattr(_portal_storage, "portal", None)
-    if portal is not None:
-        thread_id = getattr(portal, "_event_loop_thread_id", _SENTINEL)
-        if thread_id is None:
-            logger.warning("Clearing stale portal reference (event loop thread ended)")
-            _portal_storage.portal = None
-            return None
-    return portal
-
-
-def set_async_portal(portal: BlockingPortal | None) -> None:
-    """Set the async portal for the current thread.
-
-    Args:
-        portal: The BlockingPortal to use, or None to clear
-    """
-    _portal_storage.portal = portal
-
-
-# ============================================================================
-# Global LLM Semaphore
-# ============================================================================
-
-_global_llm_semaphore: threading.Semaphore | None = None
-
-
-def get_global_llm_semaphore() -> threading.Semaphore | None:
-    """Get the global LLM request semaphore.
-
-    Module-level (not thread-local) because the semaphore must be visible
-    from any thread, including the BlockingPortal event loop thread.
-    The semaphore itself is thread-safe.
-
-    Returns:
-        The active Semaphore if set, None otherwise.
-    """
-    return _global_llm_semaphore
-
-
-def set_global_llm_semaphore(sem: threading.Semaphore | None) -> None:
-    """Set the global LLM request semaphore.
-
-    Called by ScenarioExecutor before spawning workers and cleared after
-    all workers finish.
-
-    Args:
-        sem: The Semaphore to use, or None to clear.
-    """
-    global _global_llm_semaphore  # noqa: PLW0603
-    _global_llm_semaphore = sem
 
 
 # ============================================================================
@@ -162,6 +115,20 @@ class ExecutorConfig:
     max_requeue_count: int = 5
     answerer_concurrency_limits: dict[str, int] | None = None
 
+    def to_tuning(self) -> ExecutionTuning:
+        """Derive the shared :class:`ExecutionTuning` for the portal pool.
+
+        ``enable_cache`` stays QA-executor-local (it shapes the worker
+        callable, not the pool).
+        """
+        return ExecutionTuning(
+            max_workers=self.max_workers,
+            timeout_seconds=self.timeout_seconds,
+            retry_wait_seconds=self.retry_wait_seconds,
+            max_requeue_count=self.max_requeue_count,
+            answerer_concurrency_limits=self.answerer_concurrency_limits,
+        )
+
 
 # ============================================================================
 # Executor
@@ -191,6 +158,9 @@ class VerificationExecutor:
         self.config = config or ExecutorConfig()
         self._endpoint_semaphores: dict[str, threading.Semaphore] = {}
         self._endpoint_semaphores_lock = threading.Lock()
+        # Answerer ids already logged as running without a configured cap,
+        # so the debug line fires once per id instead of once per task.
+        self._uncapped_answerer_ids_logged: set[str] = set()
 
     def _get_endpoint_semaphore(self, ans_id: str, limit: int) -> threading.Semaphore:
         """Return the semaphore for ``ans_id``, creating it on first access.
@@ -209,6 +179,36 @@ class VerificationExecutor:
                 self._endpoint_semaphores[ans_id] = existing
             return existing
 
+    def _resolve_endpoint_semaphore(self, task: dict[str, Any]) -> threading.Semaphore | None:
+        """Resolve the per-answerer cap semaphore for ``task``, if any.
+
+        Returns ``None`` when caps are disabled or when the task's answerer
+        has no configured cap. The no-cap-for-this-id case logs once per
+        answerer id at DEBUG so operators can see that a configured limits
+        dict silently lets some answerers run unthrottled (typically an id
+        typo or a model added after the limits were written).
+        """
+        limits = self.config.answerer_concurrency_limits
+        if not limits:
+            return None
+
+        ans_id: str | None = getattr(task["answering_model"], "id", None)
+        limit = limits.get(ans_id) if ans_id else None
+        if limit is None or ans_id is None:
+            label = ans_id if ans_id is not None else "<missing id>"
+            with self._endpoint_semaphores_lock:
+                should_log = label not in self._uncapped_answerer_ids_logged
+                if should_log:
+                    self._uncapped_answerer_ids_logged.add(label)
+            if should_log:
+                logger.debug(
+                    "answerer_concurrency_limits is configured but answerer id %s has no cap, running unthrottled",
+                    label,
+                )
+            return None
+
+        return self._get_endpoint_semaphore(ans_id, limit)
+
     def _execute_task_with_cap(
         self,
         task: dict[str, Any],
@@ -218,20 +218,17 @@ class VerificationExecutor:
     ) -> tuple[str, VerificationResult]:
         """Run ``execute_task`` with optional per-answerer concurrency capping.
 
-        Imports ``execute_task`` lazily to avoid circular imports.
+        Imports ``execute_task`` lazily to avoid circular imports. The
+        parallel cache-requeue loop manages the same semaphore manually (it
+        must release the permit while waiting on another worker's
+        IN_PROGRESS entry). This helper serves the simpler call sites
+        (sequential, cache disabled, and the force-fresh fallback).
         """
         from .batch_runner import execute_task
 
-        limits = self.config.answerer_concurrency_limits
-        if not limits:
+        sem = self._resolve_endpoint_semaphore(task)
+        if sem is None:
             return execute_task(task, answer_cache, cache_status, cached_answer_data)
-
-        ans_id: str | None = getattr(task["answering_model"], "id", None)
-        limit = limits.get(ans_id) if ans_id else None
-        if limit is None or ans_id is None:
-            return execute_task(task, answer_cache, cache_status, cached_answer_data)
-
-        sem = self._get_endpoint_semaphore(ans_id, limit)
         with sem:
             return execute_task(task, answer_cache, cache_status, cached_answer_data)
 
@@ -388,11 +385,16 @@ class VerificationExecutor:
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
         prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
-        """Execute tasks one at a time.
+        """Execute tasks one at a time on a shared BlockingPortal.
 
         On failure, logs the error, records it, and continues processing the
         remaining tasks. If any tasks failed, raises VerificationBatchError
-        with partial results after the loop completes.
+        with partial results after the loop completes. The portal lifecycle
+        (shared event loop plus pre-teardown adapter aclose) comes from
+        :func:`sequential_portal`; the factory and sweep closures resolve
+        ``start_blocking_portal`` / ``aclose_portal_adapters`` /
+        ``PRE_TEARDOWN_ACLOSE_TIMEOUT`` from this module's globals at call
+        time so existing monkeypatch targets keep working.
 
         Args:
             tasks: List of task dictionaries
@@ -419,43 +421,28 @@ class VerificationExecutor:
         errors: list[tuple[str, BaseException]] = []
         total = len(tasks)
 
-        # Use a shared BlockingPortal so that sync invoke() calls reuse the
-        # same event loop instead of creating/destroying one per call via
-        # asyncio.run(). This prevents httpx connection pool errors caused
-        # by closed event loops.
-        with start_blocking_portal(backend="asyncio") as portal:
-            set_async_portal(portal)
-            try:
-                for idx, task in enumerate(tasks, 1):
-                    # Call progress callback BEFORE starting task (with preview result)
-                    if progress_callback:
-                        preview_result = create_preview_result(task)
-                        progress_callback(idx, total, preview_result)
+        with sequential_portal(
+            portal_factory=lambda: start_blocking_portal(backend="asyncio"),
+            pre_teardown=lambda portal: aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT),
+        ):
+            for idx, task in enumerate(tasks, 1):
+                # Call progress callback BEFORE starting task (with preview result)
+                if progress_callback:
+                    preview_result = create_preview_result(task)
+                    progress_callback(idx, total, preview_result)
 
-                    try:
-                        # Execute the task with answer cache
-                        result_key, result = self._execute_task_with_cap(task, answer_cache, None, None)
-                        results[result_key] = result
-                    except Exception as e:
-                        logger.error("Sequential task %s failed: %s", task["question_id"], e)
-                        errors.append((task["question_id"], e))
-                        continue
+                try:
+                    # Execute the task with answer cache
+                    result_key, result = self._execute_task_with_cap(task, answer_cache, None, None)
+                    results[result_key] = result
+                except Exception as e:
+                    logger.error("Sequential task %s failed: %s", task["question_id"], e)
+                    errors.append((task["question_id"], e))
+                    continue
 
-                    # Call progress callback AFTER completion (with actual result)
-                    if progress_callback:
-                        progress_callback(idx, total, result)
-            finally:
-                # Drop per-portal adapter tracking so a sequential run does
-                # not leak entries into the module-global map across batches.
-                # The shared portal is about to be torn down by the enclosing
-                # `with` statement, and downstream cleanup_resources() will
-                # still close the adapters (on its own fresh loop). Sequential
-                # mode was never affected by the parallel teardown ordering
-                # bug, so there is no need to pre-close here.
-                from karenina.adapters.registry import clear_portal_adapter_refs
-
-                clear_portal_adapter_refs(portal)
-                set_async_portal(None)
+                # Call progress callback AFTER completion (with actual result)
+                if progress_callback:
+                    progress_callback(idx, total, result)
 
         # Log cache statistics
         if answer_cache:
@@ -476,11 +463,14 @@ class VerificationExecutor:
         progress_callback: Callable[[int, int, VerificationResult | None], None] | None,
         prior_results: Iterable[VerificationResult] | None = None,
     ) -> dict[str, VerificationResult]:
-        """Execute tasks in parallel using ThreadPoolExecutor.
+        """Execute tasks in parallel via the shared portal pool.
 
-        Each task is submitted as a separate Future with its own BlockingPortal.
-        Cache retry logic runs internally within each callable. Every submission
-        produces a Future, so no task can be silently lost.
+        The pooled skeleton (per-worker portals, timeout sweep,
+        post-shutdown drain, drop detection, pre-teardown aclose, progress
+        serialization) lives in :func:`run_in_portal_pool`. This method
+        keeps the QA specifics: the cache requeue loop, per-answerer
+        concurrency caps, cache hydration, the preview callback, and the
+        ``VerificationBatchError`` contract.
 
         Args:
             tasks: List of task dictionaries
@@ -500,8 +490,7 @@ class VerificationExecutor:
         from .utils.cache_helpers import generate_answer_cache_key, log_cache_stats
         from .utils.task_helpers import create_preview_result
 
-        max_workers = self.config.max_workers
-        logger.info("Parallel execution: %d tasks with %d workers", len(tasks), max_workers)
+        logger.info("Parallel execution: %d tasks with %d workers", len(tasks), self.config.max_workers)
 
         answer_cache = AnswerTraceCache() if self.config.enable_cache else None
         if answer_cache is not None and prior_results is not None:
@@ -510,74 +499,53 @@ class VerificationExecutor:
         max_requeue = self.config.max_requeue_count
         retry_wait = self.config.retry_wait_seconds
 
-        # Thread-safe progress tracking
-        progress_lock = threading.Lock()
-        completed_count = [0]
+        def execute_task_with_retry(_idx: int, task: dict[str, Any]) -> tuple[str, VerificationResult]:
+            """Execute a single verification task with cache retry.
 
-        # Per-worker portal management: each worker thread creates one portal
-        # that is reused across all tasks on that thread. This preserves httpx
-        # connection pools and avoids "Event loop is closed" errors from rapid
-        # portal churn.
-        #
-        # Each entry is (context_manager, portal). The portal reference is
-        # kept separately so the finally block can look up adapters tracked
-        # against that portal in the registry and call their aclose() on the
-        # portal's own event loop BEFORE the portal is torn down.
-        _portal_resources: list[tuple[Any, BlockingPortal]] = []
-        _portal_init_lock = threading.Lock()
-
-        def _ensure_worker_portal() -> None:
-            """Lazily create a BlockingPortal for this worker thread."""
-            if get_async_portal() is not None:
-                return
-            cm = start_blocking_portal(backend="asyncio")
-            portal = cm.__enter__()
-            set_async_portal(portal)
-            with _portal_init_lock:
-                _portal_resources.append((cm, portal))
-
-        def execute_task_with_retry(idx: int, task: dict[str, Any]) -> tuple[int, tuple[str, VerificationResult]]:
-            """Execute a single verification task with cache retry."""
-            _ensure_worker_portal()
-
-            # Call preview progress callback
-            if progress_callback:
-                preview_result = create_preview_result(task)
-                with progress_lock:
-                    progress_callback(completed_count[0] + 1, total, preview_result)
+            The per-answerer cap permit wraps the cache reservation AND the
+            execution: a surplus worker blocked on the cap must not reserve
+            an IN_PROGRESS cache entry while merely waiting for a permit.
+            The wait-for-another-worker branch (someone else owns the
+            IN_PROGRESS reservation) deliberately does NOT hold the permit
+            while sleeping, so a capped answerer's permits stay available to
+            workers that can actually make progress.
+            """
+            from .batch_runner import execute_task
 
             if not answer_cache:
-                return idx, self._execute_task_with_cap(task, answer_cache, None, None)
+                return self._execute_task_with_cap(task, answer_cache, None, None)
 
+            sem = self._resolve_endpoint_semaphore(task)
             cache_key = generate_answer_cache_key(task)
             for attempt in range(max_requeue + 1):
-                status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                if sem is not None:
+                    sem.acquire()
+                try:
+                    status, cached_answer_data = answer_cache.get_or_reserve(cache_key)
+                    if status != "IN_PROGRESS":
+                        # MISS or HIT: reserve-and-execute under the permit.
+                        return execute_task(task, answer_cache, status, cached_answer_data)
+                finally:
+                    if sem is not None:
+                        sem.release()
 
-                if status == "IN_PROGRESS":
-                    if attempt == 0:
-                        logger.debug(
-                            "Task %s in progress (retry=%d), retrying immediately",
-                            cache_key,
-                            attempt,
-                        )
-                        continue
-
-                    completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
-                    if not completed:
-                        logger.debug(
-                            "Task %s still in progress after %ss, retrying",
-                            cache_key,
-                            retry_wait,
-                        )
+                # IN_PROGRESS: another worker owns the reservation. Wait
+                # for it WITHOUT holding the permit.
+                if attempt == 0:
+                    logger.debug(
+                        "Task %s in progress (retry=%d), retrying immediately",
+                        cache_key,
+                        attempt,
+                    )
                     continue
 
-                # MISS or HIT: execute
-                return idx, self._execute_task_with_cap(
-                    task,
-                    answer_cache,
-                    status,
-                    cached_answer_data,
-                )
+                completed = answer_cache.wait_for_completion(cache_key, timeout=retry_wait)
+                if not completed:
+                    logger.debug(
+                        "Task %s still in progress after %ss, retrying",
+                        cache_key,
+                        retry_wait,
+                    )
 
             # Exceeded max requeue: force reset, generate fresh
             logger.warning(
@@ -586,164 +554,53 @@ class VerificationExecutor:
                 max_requeue,
             )
             answer_cache.force_reset(cache_key)
-            return idx, self._execute_task_with_cap(task, answer_cache, None, None)
+            return self._execute_task_with_cap(task, answer_cache, None, None)
 
-        # Preserve incoming order (ordering is controlled by task_ordering config)
-        indexed_tasks = list(enumerate(tasks))
+        # Progress hooks. The preview fires from the worker thread before
+        # the task runs; the completion hook fires from the collector. Both
+        # are serialized under the pool's single progress lock.
+        on_item_start: Callable[[int, int, dict[str, Any]], None] | None = None
+        on_progress: Callable[[int, int, tuple[str, VerificationResult]], None] | None = None
+        if progress_callback is not None:
+            caller_progress = progress_callback
 
-        results_by_index: dict[int, tuple[str, VerificationResult]] = {}
-        failed_tasks: list[tuple[str, BaseException]] = []
+            def _preview(current: int, total_: int, task: dict[str, Any]) -> None:
+                caller_progress(current, total_, create_preview_result(task))
 
-        pool = ThreadPoolExecutor(max_workers=max_workers)
-        try:
-            # Submit all tasks
-            future_to_meta: dict[Future[tuple[int, tuple[str, VerificationResult]]], tuple[int, str]] = {}
-            for idx, task in indexed_tasks:
-                future = pool.submit(execute_task_with_retry, idx, task)
-                future_to_meta[future] = (idx, task["question_id"])
+            def _completed(current: int, total_: int, value: tuple[str, VerificationResult]) -> None:
+                caller_progress(current, total_, value[1])
 
-            # Collect results as they complete
-            collected: set[Future[tuple[int, tuple[str, VerificationResult]]]] = set()
-            timed_out = False
-            try:
-                for future in as_completed(future_to_meta, timeout=self.config.timeout_seconds):
-                    collected.add(future)
-                    idx, question_id = future_to_meta[future]
-                    try:
-                        result_idx, (result_key, verification_result) = future.result()
-                        results_by_index[result_idx] = (result_key, verification_result)
+            on_item_start = _preview
+            on_progress = _completed
 
-                        if progress_callback:
-                            with progress_lock:
-                                completed_count[0] += 1
-                                progress_callback(completed_count[0], total, verification_result)
-                    except BaseException as e:
-                        logger.error("Parallel task %s failed: %s", question_id, e)
-                        failed_tasks.append((question_id, e))
-            except TimeoutError:
-                timed_out = True
-                # Sweep futures that completed between last yield and timeout
-                for future, (_idx, question_id) in future_to_meta.items():
-                    if future.done() and future not in collected:
-                        collected.add(future)
-                        try:
-                            result_idx, (result_key, verification_result) = future.result()
-                            results_by_index[result_idx] = (result_key, verification_result)
-                        except BaseException as e:
-                            failed_tasks.append((question_id, e))
-        finally:
-            # Always wait for pool workers to finish before tearing down
-            # worker portals. With wait=False, in-flight workers could
-            # outlive their portals and crash on callback dispatch with
-            # "cannot schedule new futures after shutdown", or set Future
-            # results that are never harvested (silent drop).
-            pool.shutdown(wait=True, cancel_futures=timed_out)
-
-            # Post-shutdown sweep: after wait=True returns, every future is
-            # in a terminal state. Harvest any futures that finished while
-            # the pool was draining, so in-flight tasks are reflected in
-            # partial_results or errors instead of being silently dropped.
-            if timed_out:
-                for future, (_idx, question_id) in future_to_meta.items():
-                    if future in collected:
-                        continue
-                    if future.cancelled():
-                        failed_tasks.append(
-                            (
-                                question_id,
-                                TimeoutError(f"Task cancelled before start: {question_id}"),
-                            )
-                        )
-                        collected.add(future)
-                        continue
-                    try:
-                        result_idx, (result_key, verification_result) = future.result()
-                        results_by_index[result_idx] = (result_key, verification_result)
-                    except BaseException as e:
-                        failed_tasks.append((question_id, e))
-                    collected.add(future)
-
-            # Drop-detection invariant. After pool.shutdown(wait=True) every
-            # future must be in a terminal state, so the sweeps above should
-            # have covered everything. If this fires, the shutdown race has
-            # reopened and tasks were being lost.
-            uncollected = [(future, meta) for future, meta in future_to_meta.items() if future not in collected]
-            if uncollected:
-                logger.error(
-                    "Parallel executor dropped %d tasks after pool.shutdown(wait=True). "
-                    "Emitting synthetic failure entries.",
-                    len(uncollected),
-                )
-                for future, (_idx, question_id) in uncollected:
-                    failed_tasks.append(
-                        (
-                            question_id,
-                            TimeoutError(f"Task left uncollected by parallel executor: {question_id}"),
-                        )
-                    )
-                    collected.add(future)
-
-            # Pre-teardown aclose: close adapter-owned httpx clients on the
-            # portal loop that opened them, BEFORE the portal is torn down.
-            # Without this, the downstream cleanup_resources() call in
-            # batch_runner runs on a fresh loop and httpx raises
-            # "Event loop is closed" because its transports are pinned to
-            # the dead portal loop. Bounded timeout mirrors the
-            # start_task_soon + future.result pattern in
-            # langchain/parser.py:297-312 to avoid wedging the finally
-            # block on a stuck aclose.
-            from karenina.adapters.registry import (
-                clear_portal_adapter_refs,
-                snapshot_adapters_for_portal,
-            )
-
-            for _cm, portal in _portal_resources:
-                for adapter in snapshot_adapters_for_portal(portal):
-                    if not hasattr(adapter, "aclose"):
-                        continue
-                    future = portal.start_task_soon(adapter.aclose)
-                    try:
-                        future.result(timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT)
-                    except TimeoutError:
-                        # Cancel the abandoned coroutine so the portal's loop
-                        # does not block the context manager's __exit__
-                        # waiting for it to finish.
-                        future.cancel()
-                        logger.warning(
-                            "Pre-teardown aclose timed out on %s (>%ss); proceeding with portal teardown",
-                            type(adapter).__name__,
-                            PRE_TEARDOWN_ACLOSE_TIMEOUT,
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "Pre-teardown aclose failed on %s: %s",
-                            type(adapter).__name__,
-                            exc,
-                        )
-                clear_portal_adapter_refs(portal)
-
-            # Clean up worker portals (event loops) only after workers have
-            # fully exited, so no worker can still be using a portal when
-            # its context manager exits.
-            for cm, _portal in _portal_resources:
-                try:
-                    cm.__exit__(None, None, None)
-                except Exception:
-                    logger.debug("Portal cleanup error", exc_info=True)
+        outcome = run_in_portal_pool(
+            tasks,
+            execute_task_with_retry,
+            tuning=self.config.to_tuning(),
+            on_progress=on_progress,
+            on_item_start=on_item_start,
+            describe=lambda _idx, task: str(task["question_id"]),
+            # Closures over this module's globals so monkeypatches on
+            # executor.start_blocking_portal / executor.aclose_portal_adapters
+            # / executor.PRE_TEARDOWN_ACLOSE_TIMEOUT keep working.
+            portal_factory=lambda: start_blocking_portal(backend="asyncio"),
+            pre_teardown=lambda portal: aclose_portal_adapters(portal, timeout=PRE_TEARDOWN_ACLOSE_TIMEOUT),
+            item_noun="Task",
+        )
 
         # Restore original order and convert to dictionary
         results: dict[str, VerificationResult] = {}
-        for idx in sorted(results_by_index.keys()):
-            result_key, verification_result = results_by_index[idx]
+        for idx in sorted(outcome.results_by_index.keys()):
+            result_key, verification_result = outcome.results_by_index[idx]
             results[result_key] = verification_result
 
         # Log cache statistics
         if answer_cache:
             log_cache_stats(answer_cache, mode="parallel mode")
 
-        # Handle timeout. as_completed only raises TimeoutError when a finite
+        # Handle timeout. The pool only sets timed_out when a finite
         # timeout was passed, so timeout_seconds is guaranteed non-None here.
-        if timed_out:
+        if outcome.timed_out:
             timeout_label = (
                 f"{self.config.timeout_seconds:.0f} seconds"
                 if self.config.timeout_seconds is not None
@@ -752,15 +609,15 @@ class VerificationExecutor:
             raise VerificationBatchError(
                 f"Parallel batch timed out after {timeout_label} ({len(results)} of {total} tasks completed)",
                 partial_results=results,
-                errors=failed_tasks,
+                errors=outcome.failed_items,
             )
 
         # Handle partial failures
-        if failed_tasks:
+        if outcome.failed_items:
             raise VerificationBatchError(
-                f"{len(failed_tasks)} of {total} verification tasks failed",
+                f"{len(outcome.failed_items)} of {total} verification tasks failed",
                 partial_results=results,
-                errors=failed_tasks,
+                errors=outcome.failed_items,
             )
 
         return results

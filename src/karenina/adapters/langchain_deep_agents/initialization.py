@@ -113,7 +113,6 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
         if model_config.anthropic_api_key is not None:
             model_kwargs["api_key"] = model_config.anthropic_api_key
 
-    if model_config.model_provider == "anthropic":
         adapter_extras = model_config.extra_kwargs or {}
         effort = adapter_extras.get("effort")
         if effort:

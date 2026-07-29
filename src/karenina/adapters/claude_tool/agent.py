@@ -65,6 +65,12 @@ class ClaudeToolAgentAdapter:
     - Dual trace output (raw_trace string and trace_messages list)
     - Usage metadata aggregation across turns
 
+    Global concurrency cap: ``max_concurrent_requests`` (GlobalLLMLimiter)
+    gates single-turn LLM adapter calls and langchain-based agent model
+    calls only. This agent's internal model calls run outside that cap.
+    They were never semaphore-gated, so this is the honest current state
+    rather than a regression.
+
     Example:
         >>> from karenina.schemas.config import ModelConfig
         >>> config = ModelConfig(

@@ -251,7 +251,46 @@ def _invoke_tool(
         else:  # callable
             return tool(query)
     else:
-        # Asynchronous invocation - run in separate thread with new event loop
+        from karenina.adapters._timeouts import SEARCH_PROVIDER_FLOOR, compute_sync_wrapper_timeout
+        from karenina.benchmark.verification.async_lifecycle import get_async_portal
+
+        # No model config is available here, so the bound is the historical
+        # search floor.
+        dispatch_timeout = compute_sync_wrapper_timeout(None, floor=SEARCH_PROVIDER_FLOOR)
+
+        if method == "ainvoke":
+            async_fn = tool.ainvoke
+        elif method == "arun":
+            async_fn = tool.arun
+        else:  # async callable
+            async_fn = tool
+
+        # Loop affinity: prefer the shared BlockingPortal when one is active
+        # for this thread, so the async tool runs on the same event loop as
+        # the adapters (httpx clients opened on the portal loop stay usable).
+        # Guard against nesting: if a loop is already running in this thread,
+        # blocking on the portal future could deadlock (we might BE on the
+        # portal's loop), so fall through to the thread fallback instead.
+        portal = get_async_portal()
+        if portal is not None:
+            on_running_loop = True
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                on_running_loop = False
+            if not on_running_loop:
+                portal_future = portal.start_task_soon(async_fn, query)
+                try:
+                    return portal_future.result(timeout=dispatch_timeout)
+                except concurrent.futures.TimeoutError:
+                    # Cancel the abandoned coroutine so it cannot linger on
+                    # the portal's loop, then surface the timeout to the
+                    # caller (search_function logs and returns []).
+                    portal_future.cancel()
+                    raise
+
+        # Asynchronous invocation fallback: run in a separate thread with a
+        # new event loop (no portal active, or already on a running loop).
         if executor is None:
             raise ValueError("Executor required for async tool invocation")
 
@@ -286,6 +325,7 @@ def _invoke_tool(
                 with contextlib.suppress(RuntimeError):
                     asyncio.set_event_loop(None)
 
-        # Submit to thread pool and wait for result
+        # Submit to thread pool and wait for result, bounded by the same
+        # historical search floor as the portal dispatch above.
         future = executor.submit(run_async_in_thread)
-        return future.result(timeout=60)  # 60 second timeout for search
+        return future.result(timeout=dispatch_timeout)

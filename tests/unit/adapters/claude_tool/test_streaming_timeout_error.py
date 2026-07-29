@@ -39,7 +39,9 @@ class TestClaudeToolStreamingTimeoutError:
         adapter = ClaudeToolLLMAdapter(_make_config())
 
         @asynccontextmanager
-        async def _mock_astream(messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:
+        async def _mock_astream_impl(
+            messages: list[Message], *, establishment_retry: bool = False
+        ) -> AsyncIterator[StreamingLLMResponse]:
             sr = StreamingLLMResponse()
 
             async def _slow_chunks() -> AsyncIterator[str]:
@@ -53,7 +55,7 @@ class TestClaudeToolStreamingTimeoutError:
             yield sr
 
         with (
-            patch.object(adapter, "astream", _mock_astream),
+            patch.object(adapter, "_astream_impl", _mock_astream_impl),
             pytest.raises(StreamingTimeoutError, match="timed out after 0.01s"),
         ):
             await adapter._astream_with_timeout(
@@ -67,7 +69,9 @@ class TestClaudeToolStreamingTimeoutError:
         adapter = ClaudeToolLLMAdapter(_make_config())
 
         @asynccontextmanager
-        async def _mock_astream(messages: list[Message]) -> AsyncIterator[StreamingLLMResponse]:
+        async def _mock_astream_impl(
+            messages: list[Message], *, establishment_retry: bool = False
+        ) -> AsyncIterator[StreamingLLMResponse]:
             sr = StreamingLLMResponse()
 
             async def _slow_chunks() -> AsyncIterator[str]:
@@ -81,7 +85,7 @@ class TestClaudeToolStreamingTimeoutError:
             yield sr
 
         with (
-            patch.object(adapter, "astream", _mock_astream),
+            patch.object(adapter, "_astream_impl", _mock_astream_impl),
             pytest.raises(StreamingTimeoutError) as exc_info,
         ):
             await adapter._astream_with_timeout(

@@ -33,12 +33,16 @@ logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [
+    "acleanup_mcp_client",
     "acreate_mcp_client_and_tools",
     "acreate_persistent_mcp_tools",
     "create_mcp_client_and_tools",
     "cleanup_mcp_client",
     "apply_tool_description_overrides",
 ]
+
+# Wall-clock bound for awaited MCP client teardown from sync contexts.
+MCP_CLEANUP_TIMEOUT = 30.0
 
 
 def _schema_dict(args_schema: Any) -> dict[str, Any] | None:
@@ -420,14 +424,121 @@ def create_mcp_client_and_tools(
     return asyncio.run(acreate_mcp_client_and_tools(mcp_urls_dict, tool_filter, tool_description_overrides))
 
 
-def cleanup_mcp_client(client: Any) -> None:
-    """Clean up MCP client connections gracefully.
+async def acleanup_mcp_client(client: Any) -> None:
+    """Clean up MCP client connections, awaiting async teardown.
 
-    This function attempts to close MCP client connections that might keep
-    background threads or event loops alive after usage is complete.
+    Prefer this over cleanup_mcp_client whenever you are already inside an
+    async context: it awaits client.aclose() directly, so teardown is
+    deterministic and resources are released before the function returns.
 
     Args:
         client: MCP client instance (MultiServerMCPClient or similar)
+    """
+    if client is None:
+        return
+
+    if hasattr(client, "aclose"):
+        try:
+            await client.aclose()
+            logger.debug("MCP client closed (awaited aclose)")
+        except Exception:
+            logger.warning("MCP client aclose() failed during cleanup", exc_info=True)
+        return
+
+    if hasattr(client, "close"):
+        try:
+            client.close()
+            logger.debug("MCP client closed (sync close)")
+        except Exception:
+            logger.warning("MCP client close() failed during cleanup", exc_info=True)
+        return
+
+    if hasattr(client, "__exit__"):
+        try:
+            client.__exit__(None, None, None)
+            logger.debug("MCP client exited (context manager)")
+        except Exception:
+            logger.warning("MCP client __exit__ failed during cleanup", exc_info=True)
+        return
+
+    logger.debug("No cleanup method found for MCP client")
+
+
+def _close_async_client(client: Any, loop: asyncio.AbstractEventLoop | None) -> None:
+    """Run client.aclose() to completion from a synchronous context.
+
+    Dispatch order: the own-running-loop guard comes first (the close
+    cannot block there without deadlocking, so a warning directs callers
+    to acleanup_mcp_client). Then the explicitly provided loop (the
+    client's home loop) via run_coroutine_threadsafe, then the shared
+    portal via a bounded start_task_soon, then asyncio.run(). Every
+    dispatch is awaited with a wall-clock bound. The coroutine is never
+    created and dropped.
+    """
+    # Own-running-loop guard first: any other branch would block this
+    # thread's loop (or raise from inside it), so this case must short
+    # circuit before portal or loop dispatch is even considered.
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        logger.warning(
+            "cleanup_mcp_client called from a running event loop. The close cannot "
+            "block here without deadlocking, so the client was NOT closed. "
+            "Use 'await acleanup_mcp_client(client)' from async contexts instead."
+        )
+        return
+
+    # Prefer the client's home loop when the caller provided it: the
+    # client's resources live on that loop, so closing there is the most
+    # correct dispatch.
+    if loop is not None and loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(client.aclose(), loop)
+        future.result(timeout=MCP_CLEANUP_TIMEOUT)
+        logger.debug("MCP client closed (awaited via run_coroutine_threadsafe)")
+        return
+
+    portal = None
+    try:
+        from karenina.benchmark.verification.executor import get_async_portal
+
+        portal = get_async_portal()
+    except ImportError:
+        logger.debug("Verification executor unavailable, skipping portal-based MCP cleanup")
+
+    if portal is not None:
+        # Bound the portal dispatch so a stalled close cannot wedge the
+        # calling thread (mirrors fetch_tool_descriptions in
+        # utils/mcp/tools.py).
+        portal_future = portal.start_task_soon(client.aclose)
+        try:
+            portal_future.result(timeout=MCP_CLEANUP_TIMEOUT)
+        except concurrent.futures.TimeoutError:
+            portal_future.cancel()
+            raise
+        logger.debug("MCP client closed (awaited via portal)")
+        return
+
+    asyncio.run(client.aclose())
+    logger.debug("MCP client closed (awaited via asyncio.run)")
+
+
+def cleanup_mcp_client(client: Any, loop: asyncio.AbstractEventLoop | None = None) -> None:
+    """Clean up MCP client connections gracefully from a synchronous context.
+
+    Async teardown is always awaited to completion with a wall-clock
+    bound (via run_coroutine_threadsafe against the provided loop, the
+    shared portal, or asyncio.run), never scheduled and dropped. If this
+    function is called on a running event loop's own thread it cannot
+    block on the close, so it logs a warning and returns without
+    closing. Call acleanup_mcp_client from async contexts.
+
+    Args:
+        client: MCP client instance (MultiServerMCPClient or similar)
+        loop: Optional event loop the client belongs to. When the loop is
+            running in another thread, the close is submitted to it with
+            run_coroutine_threadsafe and awaited with a timeout.
 
     Example:
         >>> client, tools = create_mcp_client_and_tools(mcp_urls)
@@ -438,46 +549,22 @@ def cleanup_mcp_client(client: Any) -> None:
         return
 
     try:
-        # Try synchronous close first
         if hasattr(client, "close"):
             client.close()
             logger.debug("MCP client closed (sync)")
             return
 
-        # Try async close
         if hasattr(client, "aclose"):
-            try:
-                # Try to use the shared portal if available
-                from karenina.benchmark.verification.executor import get_async_portal
-
-                portal = get_async_portal()
-                if portal is not None:
-                    portal.call(client.aclose)
-                    logger.debug("MCP client closed (via portal)")
-                    return
-            except (ImportError, Exception):
-                pass
-
-            try:
-                # Check if we're in an async context
-                loop = asyncio.get_running_loop()
-                # We're in an async context - schedule close
-                loop.create_task(client.aclose())
-                logger.debug("MCP client close scheduled (async)")
-            except RuntimeError:
-                # No event loop running - run async close in new loop
-                asyncio.run(client.aclose())
-                logger.debug("MCP client closed (async new loop)")
+            _close_async_client(client, loop)
             return
 
-        # Try __exit__ if it's a context manager
         if hasattr(client, "__exit__"):
             client.__exit__(None, None, None)
             logger.debug("MCP client exited (context manager)")
             return
 
-    except Exception as e:
-        logger.warning(f"Failed to cleanup MCP client: {e}")
+    except Exception:
+        logger.warning("Failed to cleanup MCP client", exc_info=True)
+        return
 
-    # If no cleanup method found, log a warning
     logger.debug("No cleanup method found for MCP client")
