@@ -130,6 +130,8 @@ def _convert_callable_trait_to_rating(trait: CallableRubricTrait, rubric_type: s
             additional_props.append(SchemaOrgPropertyValue(name="max_score", value=trait.max_score))
     if trait.summary is not None:
         additional_props.append(SchemaOrgPropertyValue(name="summary", value=trait.summary))
+    if trait.classes is not None:
+        additional_props.append(SchemaOrgPropertyValue(name="classes", value=trait.classes))
 
     # Determine best/worst rating based on kind
     if trait.kind == "boolean":
@@ -442,19 +444,20 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableRubric
     """Convert SchemaOrgRating to CallableRubricTrait."""
     # Extract configuration from additionalProperty
     callable_code = b""
-    kind: Literal["boolean", "score"] = "boolean"
+    kind: TraitKind = "boolean"
     invert_result = False
     min_score = None
     max_score = None
     higher_is_better = True  # Legacy default
     summary: str | None = None
+    classes: dict[str, str] | None = None
 
     if rating.additionalProperty:
         for prop in rating.additionalProperty:
             if prop.name == "callable_code":
                 callable_code = base64.b64decode(prop.value)
             elif prop.name == "kind":
-                kind = cast(Literal["boolean", "score"], prop.value)
+                kind = cast(TraitKind, prop.value)
             elif prop.name == "invert_result":
                 invert_result = prop.value
             elif prop.name == "min_score":
@@ -465,6 +468,14 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableRubric
                 higher_is_better = prop.value
             elif prop.name == "summary":
                 summary = prop.value
+            elif prop.name == "classes":
+                if isinstance(prop.value, dict):
+                    classes = prop.value
+                elif isinstance(prop.value, str):
+                    try:
+                        classes = json.loads(prop.value)
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse classes JSON for trait '%s'", rating.name)
 
     return CallableRubricTrait(
         name=rating.name,
@@ -476,7 +487,7 @@ def _convert_rating_to_callable_trait(rating: SchemaOrgRating) -> CallableRubric
         max_score=max_score,
         invert_result=invert_result,
         higher_is_better=higher_is_better,
-        classes=None,
+        classes=classes,
     )
 
 
