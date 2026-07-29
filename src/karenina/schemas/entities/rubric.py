@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TraitKind = Literal["boolean", "score", "literal"]
+CallableResult = bool | int | float | str
+RubricCallable = Callable[[str], CallableResult]
 
 
 class LLMRubricTrait(BaseModel):
@@ -436,7 +438,7 @@ class CallableRubricTrait(BaseModel):
     def from_callable(
         cls,
         name: str,
-        func: Callable[[str], bool | int | float | str],
+        func: RubricCallable,
         kind: TraitKind,
         description: str | None = None,
         summary: str | None = None,
@@ -502,7 +504,7 @@ class CallableRubricTrait(BaseModel):
             classes=classes,
         )
 
-    def deserialize_callable(self) -> Callable[[str], bool | int | float | str]:
+    def deserialize_callable(self) -> RubricCallable:
         """
         Deserialize the callable function from stored bytes.
 
@@ -522,17 +524,25 @@ class CallableRubricTrait(BaseModel):
                 category=UserWarning,
                 stacklevel=2,
             )
-            callable_func: Callable[[str], bool | int | float | str] = cloudpickle.loads(self.callable_code)
+            callable_func: RubricCallable = cloudpickle.loads(self.callable_code)
             return callable_func
         except Exception as e:
             raise RuntimeError(f"Failed to deserialize callable for trait '{self.name}': {e}") from e
 
-    def evaluate(self, text: str) -> bool | int | float:
+    def evaluate(
+        self,
+        text: str,
+        *,
+        callable_override: RubricCallable | None = None,
+    ) -> bool | int | float:
         """
         Evaluate the trait against the provided text.
 
         Args:
             text: The text to evaluate (verification trace or answer text).
+            callable_override: Optional trusted runtime callable to use instead of
+                deserializing ``callable_code``. Result validation and conversion
+                are applied identically to embedded and override callables.
 
         Returns:
             For kind='boolean': bool result (possibly inverted).
@@ -544,7 +554,7 @@ class CallableRubricTrait(BaseModel):
             ValueError: If return type does not match kind or value is out of range.
         """
         try:
-            func = self.deserialize_callable()
+            func = callable_override if callable_override is not None else self.deserialize_callable()
             result = func(text)
 
             if self.kind == "boolean":

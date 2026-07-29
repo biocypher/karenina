@@ -13,7 +13,7 @@ jupyter:
     name: python3
 ---
 
-# AI-Assisted Template Authoring
+# AI-Assisted Template Construction
 
 When building benchmarks with many questions, hand-writing every answer template gives full control but scales poorly. AI-assisted generation speeds up the process: generate a draft from the question and its reference answer, review the output, and refine where needed. For cases where you want programmatic control without writing raw class code, `AnswerBuilder` provides a fluent interface for constructing templates from attribute and regex specifications.
 
@@ -406,5 +406,5 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 - [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Deep dive into template concepts, field types, and `verify()` patterns
 - [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb): Hand-written template patterns (boolean, string, numeric, regex)
-- [Scaled Authoring](../../notebooks/creating-benchmarks/scaled-authoring.ipynb): Bulk ingestion, ADeLe classification, and few-shot examples
+- [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb): Bulk ingestion, ADeLe classification, and few-shot examples
 - [Running Verification](../running-verification/index.md): Execute the benchmark against LLMs

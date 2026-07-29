@@ -74,7 +74,7 @@ The core challenge Karenina addresses is making the formulation of domain-specif
 
 2. **Self-contained benchmarks.** Each question carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single [portable checkpoint](docs/core_concepts/questions-and-benchmarks/checkpoints.md) that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.
 
-3. **Spreadsheet-to-benchmark in minutes.** LLMs [translate plain-text questions and answers](docs/workflows/creating-benchmarks/scaled-authoring.md) into runnable evaluation code, accelerating benchmark creation from hours of manual work to minutes. This shifts human effort from writing boilerplate to curating high-quality evaluation criteria. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
+3. **Spreadsheet-to-benchmark in minutes.** LLMs [translate plain-text questions and answers](docs/workflows/creating-benchmarks/scaled-benchmark-creation.md) into runnable evaluation code, accelerating benchmark creation from hours of manual work to minutes. This shifts human effort from writing boilerplate to curating high-quality evaluation criteria. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
 
 4. **Expressivity.** Templates combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic).
 

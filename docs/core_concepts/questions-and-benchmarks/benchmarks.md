@@ -123,7 +123,7 @@ This separation is powerful: it means you can run the exact same benchmark again
 
 ## 4. A Benchmark's Journey
 
-### 4.1. Authoring & Populating
+### 4.1. Creating & Populating
 You start by creating a benchmark and adding questions. At this stage, questions are often marked `finished=False` while you refine their [answer templates](../../answer-templates/) and [rubrics](../../../../core_concepts/rubrics/).
 
 ### 4.2. Persisting (Saving)

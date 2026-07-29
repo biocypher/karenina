@@ -32,7 +32,7 @@ class VerificationMeta(BaseModel):
 def _warn_ground_truth_mismatch(ground_truth: Any, verify_with: Any) -> None:
     """Log a warning if ground_truth obviously mismatches the primitive's expected type.
 
-    This catches common authoring mistakes early. Only flags obvious
+    This catches common definition mistakes early. Only flags obvious
     mismatches; ambiguous cases are left to runtime verification.
 
     Args:

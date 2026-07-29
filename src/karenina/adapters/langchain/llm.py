@@ -157,6 +157,8 @@ class LangChainLLMAdapter:
             interface=self._config.interface,
             endpoint_base_url=self._config.endpoint_base_url,
             endpoint_api_key=self._config.endpoint_api_key,
+            anthropic_base_url=self._config.anthropic_base_url,
+            anthropic_api_key=self._config.anthropic_api_key,
             max_context_tokens=self._config.max_context_tokens,
             # Note: We don't pass MCP config here - simple LLM invocation
             # For agents with MCP, use LangChainAgentAdapter instead

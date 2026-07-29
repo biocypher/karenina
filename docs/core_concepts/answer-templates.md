@@ -1192,7 +1192,7 @@ print(f"Individual checks:     {result['results']}")
 
 ## 9. Embedding Check
 
-While not part of template authoring itself, the embedding check is a pipeline feature that template authors should be aware of. It only runs when `verify()` fails.
+While not part of template construction itself, the embedding check is a pipeline feature that template authors should be aware of. It only runs when `verify()` fails.
 
 When `embedding_check_enabled` is set in `VerificationConfig`, the pipeline runs a **semantic similarity check** (stage 9) after `verify()`. This uses a SentenceTransformer model to compare the judge's parsed response fields against the expected answer fields, providing a secondary signal when string-based verification is too strict. The embedding check only runs when field verification (`verify()`) has failed; if `verify()` passes, this stage is skipped entirely.
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +14,7 @@ from karenina.benchmark.verification.stages.pipeline.rubric_evaluation import (
     RubricEvaluationStage,
 )
 from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
+from karenina.schemas.entities.rubric import CallableRubricTrait, LLMRubricTrait, Rubric
 
 
 def _make_context_with_rubric() -> VerificationContext:
@@ -117,3 +117,41 @@ class TestRubricEvaluationWarnings:
 
         assert ctx.warnings == []
         assert ctx.get_artifact(ArtifactKeys.RUBRIC_RESULT) == {"clarity": 1.0}
+
+    def test_callable_registry_is_forwarded_to_evaluator(self) -> None:
+        """The pipeline stage gives runtime callable overrides to RubricEvaluator."""
+        model = ModelConfig(id="test", model_name="test-model")
+
+        def runtime_callable(_text: str) -> bool:
+            return True
+
+        ctx = VerificationContext(
+            question_id="q1",
+            question_text="",
+            raw_answer="answer",
+            template_code="class Answer: pass",
+            answering_model=model,
+            parsing_model=model,
+            template_id="tpl1",
+            rubric=Rubric(
+                callable_traits=[
+                    CallableRubricTrait.from_callable(
+                        name="check",
+                        func=lambda _text: False,
+                        kind="boolean",
+                    )
+                ]
+            ),
+            callable_registry={"check": runtime_callable},
+        )
+        ctx.set_artifact(ArtifactKeys.RAW_LLM_RESPONSE, "answer")
+
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate_rubric.return_value = ({"check": True}, None, [])
+        with patch(
+            "karenina.benchmark.verification.stages.pipeline.rubric_evaluation.RubricEvaluator",
+            return_value=mock_evaluator,
+        ) as evaluator_class:
+            RubricEvaluationStage().execute(ctx)
+
+        assert evaluator_class.call_args.kwargs["callable_registry"] == {"check": runtime_callable}

@@ -12,13 +12,12 @@ Example:
 """
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
     from karenina.schemas.entities import Question, Rubric
-    from karenina.schemas.entities.rubric import DynamicRubric
+    from karenina.schemas.entities.rubric import DynamicRubric, RubricCallable
 
 from karenina.exceptions import KareninaError
 from karenina.schemas.config import ModelConfig
@@ -48,7 +47,7 @@ class TaskEval:
         self,
         task_id: str | None = None,
         metadata: dict[str, Any] | None = None,
-        callable_registry: dict[str, Callable[[str], bool]] | None = None,
+        callable_registry: dict[str, "RubricCallable"] | None = None,
         merge_strategy: Literal["concatenate", "traces_only"] = "concatenate",
     ) -> None:
         """Initialize TaskEval instance.
@@ -56,14 +55,16 @@ class TaskEval:
         Args:
             task_id: Optional task identifier for tracking
             metadata: Optional metadata dictionary
-            callable_registry: Registry of callable functions for manual trait evaluation
+            callable_registry: Runtime callable overrides keyed by callable trait
+                name. Registered functions take precedence over serialized
+                callables stored on matching traits.
             merge_strategy: Default strategy for merging logs before evaluation.
                 "concatenate" combines text and trace logs; "traces_only" uses
                 only logs with trace_messages.
         """
         self.task_id = task_id
         self.metadata = metadata or {}
-        self.callable_registry = callable_registry or {}
+        self.callable_registry = dict(callable_registry or {})
         self.merge_strategy: Literal["concatenate", "traces_only"] = merge_strategy
 
         # Storage for logs, questions, rubrics, and dynamic rubrics
@@ -284,12 +285,13 @@ class TaskEval:
         else:
             self.global_dynamic_rubrics.append(dynamic_rubric)
 
-    def register_callable(self, name: str, func: Callable[[str], bool]) -> None:
-        """Register a callable function for manual trait evaluation.
+    def register_callable(self, name: str, func: "RubricCallable") -> None:
+        """Register a runtime override for a callable rubric trait.
 
         Args:
-            name: Name to register the function under
-            func: Function that takes a string and returns a boolean
+            name: Callable trait name to override.
+            func: Function that takes a string and returns a boolean, numeric
+                score, or literal class label.
 
         Raises:
             ValueError: If function doesn't have correct signature
@@ -866,6 +868,7 @@ class Answer(BaseAnswer):
             rubric_evaluation_strategy="batch",
             evaluation_mode=evaluation_mode,
             task_eval_mode=True,
+            callable_registry=self.callable_registry,
         )
 
         return verification_result

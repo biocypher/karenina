@@ -120,7 +120,7 @@ If your function is pure local code, evaluation is deterministic: the same strin
 
 ## 4. Why `from_callable()` Matters
 
-Always use `CallableRubricTrait.from_callable()` rather than constructing a trait directly. It is the normal authoring interface because it validates the function signature and handles serialization for you.
+Always use `CallableRubricTrait.from_callable()` rather than constructing a trait directly. It is the normal definition interface because it validates the function signature and handles serialization for you.
 
 ```python
 from karenina.schemas import CallableRubricTrait
@@ -255,7 +255,7 @@ Use literal callables when you have a programmatic classifier that maps response
 
 Callable traits are portable because the function is serialized with cloudpickle when you call `from_callable()`. This is powerful, but it introduces real constraints.
 
-**Authoring constraints:**
+**Definition constraints:**
 
 - lambda functions are fine for simple logic
 - module-level named functions are usually better for more complex logic

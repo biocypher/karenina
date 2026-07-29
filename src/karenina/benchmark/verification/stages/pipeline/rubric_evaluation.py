@@ -198,6 +198,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                 context.parsing_model,
                 evaluation_strategy=context.rubric_evaluation_strategy,
                 prompt_config=context.prompt_config,
+                callable_registry=context.callable_registry,
             )
 
             # Apply deep judgment configuration resolution to LLM traits

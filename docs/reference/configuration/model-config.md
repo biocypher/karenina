@@ -47,7 +47,10 @@ These fields apply only when `interface="openai_endpoint"`.
 
 ## Interface-Specific: Anthropic
 
-These fields apply when `interface="claude_agent_sdk"` or `interface="claude_tool"`.
+These fields apply when `interface="claude_agent_sdk"` or `interface="claude_tool"`, and for
+`model_provider="anthropic"` on the `langchain` and `langchain_deep_agents` interfaces. For
+other interfaces or providers, supplying either field raises a validation error rather than
+silently falling back to environment credentials.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
