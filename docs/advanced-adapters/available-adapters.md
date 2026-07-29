@@ -51,6 +51,28 @@ config = ModelConfig(
 
 **Environment variables**: Provider-specific API key (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`)
 
+### Custom Anthropic-Compatible Endpoint
+
+For an Anthropic-compatible gateway or proxy, configure its URL and key on
+`ModelConfig` instead of relying on `ANTHROPIC_API_KEY` from the environment:
+
+```python
+config = ModelConfig(
+    id="gateway-model",
+    model_name="gateway-model",
+    model_provider="anthropic",
+    interface="langchain",
+    anthropic_base_url="https://gateway.example/anthropic",
+    anthropic_api_key="gateway-key",
+)
+```
+
+Both fields are forwarded to LangChain's Anthropic model as `base_url` and
+`api_key`. They require `model_provider="anthropic"`; configuring either on a
+different provider or unsupported interface raises a validation error. Do not
+also set `extra_kwargs["base_url"]` or `extra_kwargs["api_key"]`, as ambiguous
+connection settings are rejected.
+
 ### Parser Behavior
 
 The LangChain parser does **not** use native structured output (`supports_structured_output = False`). Instead, it uses a two-stage approach:
@@ -194,6 +216,11 @@ config = ModelConfig(
 **Required fields**: `id`, `model_name`, `model_provider`
 
 **Environment variables**: Provider-specific API key (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
+
+For Anthropic-compatible gateways, use the same `anthropic_base_url` and
+`anthropic_api_key` fields shown in the `langchain` configuration above. They
+are forwarded to the underlying LangChain Anthropic model and require
+`model_provider="anthropic"`.
 
 **Install**: `pip install deepagents langchain-mcp-adapters`
 

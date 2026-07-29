@@ -81,8 +81,8 @@ When a preset is saved, each model in `answering_models` and `parsing_models` is
 | `max_retries` | Present in config | Retry attempts |
 | `endpoint_base_url` | `interface == "openai_endpoint"` and value non-empty | Custom endpoint URL |
 | `endpoint_api_key` | `interface == "openai_endpoint"` and value non-empty | Custom API key |
-| `anthropic_base_url` | `interface` in `("claude_tool", "claude_agent_sdk")` and value non-empty | Custom Anthropic endpoint |
-| `anthropic_api_key` | `interface` in `("claude_tool", "claude_agent_sdk")` and value non-empty | Custom Anthropic API key |
+| `anthropic_base_url` | `interface` is `claude_tool` or `claude_agent_sdk`, or `interface` is `langchain` / `langchain_deep_agents` with `model_provider == "anthropic"`; value non-empty | Custom Anthropic endpoint |
+| `anthropic_api_key` | `interface` is `claude_tool` or `claude_agent_sdk`, or `interface` is `langchain` / `langchain_deep_agents` with `model_provider == "anthropic"`; value non-empty | Custom Anthropic API key |
 | `mcp_urls_dict` | Non-empty dict | MCP server URLs |
 | `mcp_tool_filter` | Non-empty list | Tool inclusion filter |
 | `agent_middleware` | Non-empty dict | Agent middleware config |

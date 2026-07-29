@@ -14,7 +14,7 @@ This is the exhaustive reference for every environment variable recognized by ka
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `OPENAI_API_KEY` | `str` | — | OpenAI API key. Required when using the `langchain` interface with OpenAI models. |
-| `ANTHROPIC_API_KEY` | `str` | — | Anthropic API key. Required when using `claude_agent_sdk`, `claude_tool`, or `langchain` with Anthropic models. Loaded via `dotenv` in Claude adapters. |
+| `ANTHROPIC_API_KEY` | `str` | — | Anthropic API key. Used when no explicit `anthropic_api_key` is configured for an Anthropic model on `langchain`, `langchain_deep_agents`, `claude_agent_sdk`, or `claude_tool`. The dedicated model field takes precedence and can be paired with `anthropic_base_url` for an Anthropic-compatible gateway. Claude adapters load this variable via `dotenv`. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `str` | — | Claude subscription OAuth token (created by `claude setup-token`). When neither `ANTHROPIC_API_KEY` nor a model-level `anthropic_api_key` is configured, the `claude_agent_sdk` adapter forwards this from the host environment to the SDK subprocess, so the agent can authenticate through a Claude subscription instead of an API key. |
 | `ANTHROPIC_AUTH_TOKEN` | `str` | — | Alternative Anthropic auth token forwarded alongside `CLAUDE_CODE_OAUTH_TOKEN` by the `claude_agent_sdk` adapter when no API key is configured. |
 | `GOOGLE_API_KEY` | `str` | — | Google AI API key. Required when using the `langchain` interface with Google models (e.g., `google_genai` provider). |

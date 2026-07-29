@@ -563,7 +563,7 @@ class ModelConfig(BaseModel):
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key
-    # Anthropic-specific configuration (for claude_tool and claude_agent_sdk interfaces)
+    # Anthropic-specific configuration (for Anthropic models on supported interfaces)
     anthropic_base_url: str | None = None  # Custom Anthropic API endpoint (for proxies, self-hosted)
     anthropic_api_key: SecretStr | None = None  # Override ANTHROPIC_API_KEY env var
     # Extra keyword arguments to pass to the underlying model interface.
@@ -628,6 +628,50 @@ class ModelConfig(BaseModel):
                 raise ValueError("id is required for non-manual interfaces")
             if self.model_name is None:
                 raise ValueError("model_name is required for non-manual interfaces")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_anthropic_connection_fields(self) -> "ModelConfig":
+        """Prevent Anthropic credentials from being silently ignored.
+
+        The dedicated fields are consumed by the Claude adapters and by
+        Anthropic-backed LangChain adapters. Other interfaces must reject them
+        so a configured credential can never fall back to the environment at a
+        different host.
+        """
+        if self.anthropic_base_url is None and self.anthropic_api_key is None:
+            return self
+
+        supported_interfaces = {
+            "claude_agent_sdk",
+            "claude_tool",
+            "langchain",
+            "langchain_deep_agents",
+        }
+        if self.interface not in supported_interfaces:
+            raise ValueError(
+                "anthropic_base_url and anthropic_api_key are only supported for "
+                f"interfaces {sorted(supported_interfaces)}, got {self.interface!r}"
+            )
+
+        if self.interface in {"langchain", "langchain_deep_agents"} and self.model_provider != "anthropic":
+            raise ValueError(
+                "anthropic_base_url and anthropic_api_key require model_provider='anthropic' "
+                f"for interface={self.interface!r}"
+            )
+
+        extra_kwargs = self.extra_kwargs or {}
+        conflicting_fields = [
+            field
+            for field, value in (("base_url", self.anthropic_base_url), ("api_key", self.anthropic_api_key))
+            if value is not None and extra_kwargs.get(field) is not None
+        ]
+        if conflicting_fields:
+            raise ValueError(
+                "anthropic_base_url/anthropic_api_key conflict with extra_kwargs "
+                f"values for {conflicting_fields}. Configure each connection setting only once."
+            )
 
         return self
 
