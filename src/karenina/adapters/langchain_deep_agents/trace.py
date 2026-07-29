@@ -56,9 +56,7 @@ def _extract_ai_usage_metadata(msg: Any) -> dict[str, int] | None:
     resp_meta = getattr(msg, "response_metadata", None)
     if resp_meta and isinstance(resp_meta, dict):
         token_usage = resp_meta.get("token_usage")
-        if isinstance(token_usage, dict) and (
-            "prompt_tokens" in token_usage or "completion_tokens" in token_usage
-        ):
+        if isinstance(token_usage, dict) and ("prompt_tokens" in token_usage or "completion_tokens" in token_usage):
             return {
                 "input_tokens": int(token_usage.get("prompt_tokens", 0) or 0),
                 "output_tokens": int(token_usage.get("completion_tokens", 0) or 0),

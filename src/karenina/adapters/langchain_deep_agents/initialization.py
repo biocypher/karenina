@@ -108,14 +108,18 @@ def create_chat_model(model_config: ModelConfig, **kwargs: Any) -> Any:
         )
 
     if model_config.model_provider == "anthropic":
+        if model_config.anthropic_base_url is not None:
+            model_kwargs["base_url"] = model_config.anthropic_base_url
+        if model_config.anthropic_api_key is not None:
+            model_kwargs["api_key"] = model_config.anthropic_api_key
+
         adapter_extras = model_config.extra_kwargs or {}
         effort = adapter_extras.get("effort")
         if effort:
             budget = _ANTHROPIC_EFFORT_BUDGET_TOKENS.get(effort)
             if budget is None:
                 raise AdapterUnavailableError(
-                    f"unknown effort {effort!r}; expected one of "
-                    f"{sorted(_ANTHROPIC_EFFORT_BUDGET_TOKENS)}",
+                    f"unknown effort {effort!r}; expected one of {sorted(_ANTHROPIC_EFFORT_BUDGET_TOKENS)}",
                     reason="invalid_effort",
                 )
             # Anthropic requires max_tokens > thinking.budget_tokens.

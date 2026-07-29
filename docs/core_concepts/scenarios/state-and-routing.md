@@ -36,18 +36,24 @@ from typing import Any, Literal
 # Minimal primitives
 # ---------------------------------------------------------------------------
 
+
 class BooleanMatch:
     type: str = "boolean_match"
+
     def check(self, value: Any, expected: Any) -> bool:
         return bool(value) == bool(expected)
 
+
 class ExactMatch:
     type: str = "exact_match"
+
     def check(self, value: Any, expected: Any) -> bool:
         return value == expected
 
+
 class NumericExact:
     type: str = "numeric_exact"
+
     def check(self, value: Any, expected: Any) -> bool:
         return value == expected
 
@@ -56,8 +62,10 @@ class NumericExact:
 # StateCheck and ScenarioEdge mocks
 # ---------------------------------------------------------------------------
 
+
 class StateCheck:
     type: str = "state_check"
+
     def __init__(self, field: str, expected: Any = None, verify_with: Any = None) -> None:
         self.field = field
         self.expected = expected
@@ -65,10 +73,14 @@ class StateCheck:
 
 
 class ScenarioEdge:
-    def __init__(self, source: str, target: str,
-                 condition: StateCheck | list[StateCheck] | None = None,
-                 condition_callable: Any | None = None,
-                 condition_source: str | None = None) -> None:
+    def __init__(
+        self,
+        source: str,
+        target: str,
+        condition: StateCheck | list[StateCheck] | None = None,
+        condition_callable: Any | None = None,
+        condition_source: str | None = None,
+    ) -> None:
         self.source = source
         self.target = target
         self.condition = condition
@@ -107,6 +119,7 @@ class ScenarioState:
 # ---------------------------------------------------------------------------
 # Edge resolution mock
 # ---------------------------------------------------------------------------
+
 
 def _resolve_dot_path(path: str, state: ScenarioState) -> Any:
     parts = path.split(".", 1)
@@ -159,24 +172,30 @@ def _edge_matches(edge: ScenarioEdge, state: ScenarioState) -> bool:
     return evaluate_state_check(condition, state)
 
 
-def resolve_next_node(edges: list[ScenarioEdge], state: ScenarioState) -> str | None:
+def resolve_next_node(
+    edges: list[ScenarioEdge],
+    state: ScenarioState,
+) -> tuple[str | None, ScenarioEdge | None]:
     if not edges:
-        return None
+        return None, None
     fallback_target: str | None = None
+    fallback_edge: ScenarioEdge | None = None
     for edge in edges:
         is_unconditional = edge.condition is None and edge.condition_callable is None
         if is_unconditional:
             if fallback_target is None:
                 fallback_target = edge.target
+                fallback_edge = edge
             continue
         if _edge_matches(edge, state):
-            return edge.target
-    return fallback_target
+            return edge.target, edge
+    return fallback_target, fallback_edge
 
 
 # ---------------------------------------------------------------------------
 # Scenario builder mock (routing methods only)
 # ---------------------------------------------------------------------------
+
 
 class Scenario:
     """Lightweight mock for state and routing documentation examples."""
@@ -186,9 +205,9 @@ class Scenario:
         self.description = description
         self._edges: list[ScenarioEdge] = []
 
-    def add_edge(self, source: str, target: str, *,
-                 when: dict[str, Any] | None = None,
-                 when_callable: Any | None = None) -> None:
+    def add_edge(
+        self, source: str, target: str, *, when: dict[str, Any] | None = None, when_callable: Any | None = None
+    ) -> None:
         if when is not None:
             conditions = []
             for f, v in when.items():
@@ -199,17 +218,17 @@ class Scenario:
                 else:
                     prim = NumericExact()
                 conditions.append(StateCheck(field=f, expected=v, verify_with=prim))
-            condition: StateCheck | list[StateCheck] | None = (
-                conditions[0] if len(conditions) == 1 else conditions
-            )
+            condition: StateCheck | list[StateCheck] | None = conditions[0] if len(conditions) == 1 else conditions
         else:
             condition = None
-        self._edges.append(ScenarioEdge(
-            source=source,
-            target=target,
-            condition=condition,
-            condition_callable=when_callable,
-        ))
+        self._edges.append(
+            ScenarioEdge(
+                source=source,
+                target=target,
+                condition=condition,
+                condition_callable=when_callable,
+            )
+        )
 
     def edges_from(self, node_id: str) -> list[ScenarioEdge]:
         return [e for e in self._edges if e.source == node_id]
@@ -265,27 +284,28 @@ The first conditional edge whose condition matches the current state wins. If no
 
 ## 4. How It Works
 
-Each turn follows this sequence:
+Each turn follows this sequence (matches `karenina/scenario/manager.py`):
 
 1. Set `state.current_node` to the current node id.
 2. Execute the node: run the answering model, then the verification pipeline.
-3. Write `state.verify_result` with the template result from this turn.
-4. Write `state.parsed` with the parsed template fields from this turn.
-5. Increment `state.node_visits[current_node]`.
-6. Write `state.node_results[current_node]` with a dict containing `verify_result`, `parsed`, and `rubric`.
-7. If the node has a `state_update` callback, call it with the current accumulated dict and parsed fields to produce the new accumulated dict.
-8. Append a `TurnRecord` to `state.history`.
+3. Build a `TurnRecord` capturing the question, trace, raw response, parsed answer, and turn-level `verify_result`.
+4. Write `state.node_results[current_node]` with a dict containing `verify_result`, `parsed` (template fields), and `rubric` (trait scores). Last write wins on revisits.
+5. If the node has a `state_update` callback, call it with the current `accumulated` dict and parsed fields. The engine snapshots `accumulated` first; if the callback raises, the snapshot is restored.
+6. Increment `state.turn` by 1.
+7. Increment `state.node_visits[current_node]` by 1.
+8. Append the `TurnRecord` to `state.history`.
+9. Write `state.verify_result` and `state.parsed` from this turn (these reflect the *latest* turn for downstream edge conditions).
 
-After updating state, the engine calls `resolve_next_node` with the outbound edges from the current node and the updated state.
+After updating state, the engine calls `resolve_next_node` with the outbound edges from the current node and the updated state. The function returns a `(target, edge)` tuple; the runner uses both the target node id and the matched edge (e.g., to inspect a `handover` strategy when crossing an `agent_identity` boundary).
 
 **Edge resolution algorithm:**
 
 1. Collect all edges where `source == current_node`.
 2. Iterate in definition order.
-3. Save the first unconditional edge (no `condition` and no `condition_callable`) as the fallback.
-4. For each conditional edge, evaluate its condition against the current state. Return the target of the first matching edge.
-5. If no conditional edge matched, return the fallback target.
-6. If no fallback exists, return `None` (implicit terminal; execution ends).
+3. Save the first unconditional edge (no `condition` and no `condition_callable`) as the fallback (its target plus the edge object itself).
+4. For each conditional edge, evaluate its condition against the current state. Return `(edge.target, edge)` for the first matching edge.
+5. If no conditional edge matched, return the saved fallback `(target, edge)`.
+6. If no fallback exists, return `(None, None)` (implicit terminal; execution ends).
 
 ```python
 # Dot-path conditions passed to add_edge() become StateCheck objects internally.
@@ -310,7 +330,7 @@ state = ScenarioState(
 )
 
 ask_edges = scenario.edges_from("ask")
-next_node = resolve_next_node(ask_edges, state)
+next_node, _ = resolve_next_node(ask_edges, state)
 print(f"Next node after failed ask: {next_node}")
 
 # Simulate state after a successful turn with high confidence
@@ -325,7 +345,7 @@ state2 = ScenarioState(
     node_results={},
 )
 
-next_node2 = resolve_next_node(ask_edges, state2)
+next_node2, _ = resolve_next_node(ask_edges, state2)
 print(f"Next node after successful ask with high confidence: {next_node2}")
 ```
 
@@ -344,20 +364,28 @@ scenario_a.add_edge("ask", END)  # unconditional fallback: reached only if verif
 scenario_a.add_edge("retry", END)
 
 state_pass = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=True, parsed={},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=True,
+    parsed={},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 state_fail = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=False, parsed={},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=False,
+    parsed={},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 
-print(f"Pass path: {resolve_next_node(scenario_a.edges_from('ask'), state_pass)}")
-print(f"Fail path: {resolve_next_node(scenario_a.edges_from('ask'), state_fail)}")
+print(f"Pass path: {resolve_next_node(scenario_a.edges_from('ask'), state_pass)[0]}")
+print(f"Fail path: {resolve_next_node(scenario_a.edges_from('ask'), state_fail)[0]}")
 ```
 
 ### b. Routing on parsed fields
@@ -371,20 +399,28 @@ scenario_b.add_edge("ask", "clarify", when={"parsed.confidence": "low"})
 scenario_b.add_edge("ask", END)  # fallback for any other confidence value
 
 state_low = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=True, parsed={"confidence": "low"},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=True,
+    parsed={"confidence": "low"},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 state_high = ScenarioState(
-    turn=0, current_node="ask",
-    verify_result=True, parsed={"confidence": "high"},
-    node_visits={"ask": 1}, history=[],
-    accumulated={}, node_results={},
+    turn=0,
+    current_node="ask",
+    verify_result=True,
+    parsed={"confidence": "high"},
+    node_visits={"ask": 1},
+    history=[],
+    accumulated={},
+    node_results={},
 )
 
-print(f"Low confidence path: {resolve_next_node(scenario_b.edges_from('ask'), state_low)}")
-print(f"High confidence path: {resolve_next_node(scenario_b.edges_from('ask'), state_high)}")
+print(f"Low confidence path: {resolve_next_node(scenario_b.edges_from('ask'), state_low)[0]}")
+print(f"High confidence path: {resolve_next_node(scenario_b.edges_from('ask'), state_high)[0]}")
 ```
 
 ### c. Custom accumulated state via state_update
@@ -397,9 +433,11 @@ Before calling the callback, the engine takes a `deepcopy` snapshot of `accumula
 # In real usage, state_update is attached to a ScenarioNode.
 # Here we demonstrate the accumulation pattern directly.
 
+
 def track_attempts(accumulated: dict, parsed_fields: dict) -> dict:
     """Increment attempt counter on each visit."""
     return {**accumulated, "attempts": accumulated.get("attempts", 0) + 1}
+
 
 # Simulate three visits
 acc: dict = {}
@@ -414,14 +452,16 @@ scenario_c.add_edge("probe", END, when={"accumulated.attempts": 3})
 scenario_c.add_edge("probe", "probe")  # fallback: loop back
 
 state_3 = ScenarioState(
-    turn=2, current_node="probe",
-    verify_result=None, parsed={},
+    turn=2,
+    current_node="probe",
+    verify_result=None,
+    parsed={},
     node_visits={"probe": 3},
     history=[],
     accumulated={"attempts": 3},
     node_results={},
 )
-print(f"At 3 attempts, next node: {resolve_next_node(scenario_c.edges_from('probe'), state_3)}")
+print(f"At 3 attempts, next node: {resolve_next_node(scenario_c.edges_from('probe'), state_3)[0]}")
 ```
 
 ### d. Cross-node result lookups via node_results
@@ -436,8 +476,10 @@ scenario_d.add_edge("synthesize", "explain", when={"node_results.ask.verify_resu
 scenario_d.add_edge("synthesize", END)
 
 state_ask_failed = ScenarioState(
-    turn=2, current_node="synthesize",
-    verify_result=True, parsed={},
+    turn=2,
+    current_node="synthesize",
+    verify_result=True,
+    parsed={},
     node_visits={"ask": 1, "synthesize": 1},
     history=[],
     accumulated={},
@@ -446,8 +488,10 @@ state_ask_failed = ScenarioState(
     },
 )
 state_ask_passed = ScenarioState(
-    turn=2, current_node="synthesize",
-    verify_result=True, parsed={},
+    turn=2,
+    current_node="synthesize",
+    verify_result=True,
+    parsed={},
     node_visits={"ask": 1, "synthesize": 1},
     history=[],
     accumulated={},
@@ -456,8 +500,8 @@ state_ask_passed = ScenarioState(
     },
 )
 
-print(f"ask failed: next is {resolve_next_node(scenario_d.edges_from('synthesize'), state_ask_failed)}")
-print(f"ask passed: next is {resolve_next_node(scenario_d.edges_from('synthesize'), state_ask_passed)}")
+print(f"ask failed: next is {resolve_next_node(scenario_d.edges_from('synthesize'), state_ask_failed)[0]}")
+print(f"ask passed: next is {resolve_next_node(scenario_d.edges_from('synthesize'), state_ask_passed)[0]}")
 ```
 
 ## 6. Reference
@@ -494,13 +538,25 @@ Missing keys return `None`, except `node_visits.<node_id>`, which returns `0`.
 | Field | Type | Description |
 |---|---|---|
 | `scenario_id` | `str` | Identifier for the scenario |
-| `status` | `"completed" \| "limit_reached" \| "error"` | How execution terminated |
+| `status` | `"completed" \| "limit_reached" \| "error" \| "timeout"` | How execution terminated. `ScenarioManager` only ever emits `"completed"`, `"limit_reached"`, or `"error"`. `"timeout"` is a reserved schema value that the manager does not currently produce. |
 | `path` | `list[str]` | Ordered list of node ids visited |
 | `turn_count` | `int` | Total number of turns executed |
 | `history` | `list[TurnRecord]` | Full turn history |
 | `turn_results` | `list[VerificationResult]` | Per-turn verification result objects |
 | `final_state` | `ScenarioState` | State as of the last turn |
 | `outcome_results` | `dict[str, bool \| int \| float]` | Evaluated outcome criteria, keyed by name |
+| `terminal_failure` | `ScenarioTerminalFailure \| None` | Populated only when `status="error"`, otherwise `None`. Carries the structured reason the run stopped early. |
+
+When a scenario stops with `status="error"`, `terminal_failure` holds a `ScenarioTerminalFailure` describing why. It is a small dataclass exported from `karenina.schemas.scenario` with four fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `node_id` | `str` | The node whose turn raised the terminal failure |
+| `category` | `str` | Failure category (the classified failure kind) |
+| `stage` | `str` | Pipeline stage where the failure surfaced |
+| `reason` | `str` | Human-readable explanation of the stop |
+
+A `"completed"` or `"limit_reached"` run leaves `terminal_failure` as `None`, so checking it is the reliable way to distinguish a real error from a normal stop.
 
 ### Turn limit
 
@@ -510,8 +566,35 @@ Missing keys return `None`, except `node_visits.<node_id>`, which returns `0`.
 
 Scenarios auto-detect evaluation mode per turn based on whether a rubric is present (per-question rubric or global rubric). Setting `evaluation_mode='rubric_only'` on `VerificationConfig` has no effect in scenarios: the ScenarioManager ignores it and emits a `UserWarning` explaining why. If you need rubric-only evaluation, attach rubrics to your questions without answer templates and the auto-detection will select `template_and_rubric` or `template_only` as appropriate.
 
+### `state_update` snapshot and rollback
+
+A `state_update` callback attached to a `ScenarioNode` can mutate the `accumulated` dict freely. The runtime guards against buggy callbacks with a deepcopy snapshot and rollback:
+
+1. Before invoking `state_update(accumulated, parsed_fields)`, the runtime takes a `copy.deepcopy(accumulated)` snapshot.
+2. If the callback returns normally, the returned dict replaces the prior `accumulated`.
+3. If the callback raises any exception, the snapshot is restored, the exception is logged at `warning` level (with traceback), and execution continues at the next turn with the pre-callback `accumulated` state.
+
+This guarantee means a callback that fails on one turn cannot corrupt the accumulated state seen by subsequent turns, and never aborts the scenario by itself; downstream edge conditions on `accumulated.<field>` will read consistent values regardless of whether the callback succeeded.
+
+### `condition_callable` failure semantics
+
+Edge `condition_callable` lambdas (the form passed as `when=lambda state: ...`) are wrapped in a `try`/`except` in `_edge_matches`. If the callable raises any exception, the runtime logs at `warning` level (with traceback) and treats the edge as unmatched (returns `False`). The scenario continues; resolution falls through to the next conditional edge or the unconditional fallback. A buggy callable cannot crash a run, but it can silently mis-route execution: prefer declarative `StateCheck` `when={...}` forms when you can express the condition that way.
+
+### Public API
+
+`evaluate_state_check` and `resolve_next_node` are re-exported from `karenina.scenario` and form the public surface of edge resolution.
+
+| Symbol | Purpose |
+|--------|---------|
+| `karenina.scenario.evaluate_state_check(check, state)` | Evaluate a single `StateCheck` against a `ScenarioState`. Resolves the dot-path `field` and applies `check.verify_with.check(value, expected)`. Returns `bool`. |
+| `karenina.scenario.resolve_next_node(edges, state)` | Choose the next node given outbound edges. Returns `(target_node_id, matched_edge)`. The `matched_edge` is needed by the runner to inspect `handover` settings on the followed edge (see [Handover](handover.md)). Returns `(None, None)` when no edge matches and there is no fallback (implicit terminal). |
+
+Both helpers are useful in tests and when prototyping conditions outside a full scenario run.
+
 ## 7. Next Steps
 
-- [Sycophancy Tutorial](../../../workflows/scenarios/sycophancy-tutorial.md): end-to-end walkthrough of a sycophancy resistance scenario that uses state-driven routing
+- [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough of a sycophancy resistance scenario that uses state-driven routing
+- [Handover](handover.md): per-edge context routing fired when a matched edge carries a `handover` setting; documents `TaggedMessage`, transcript strategies, and callable handovers
+- [Execution](execution.md): the `ScenarioExecutor` and `ScenarioExecutorConfig` that host scenario runs, parallel/sequential modes, replicates, and SchemaOrg checkpoint persistence
 - Scenario Internals: contributor-level detail on the execution engine is in the karenina-guide skill reference at `references/advanced/scenario-internals.md`, not a separate docs page
 - [Building Scenarios](building-scenarios.md): constructing the graph, adding nodes and edges, serialization

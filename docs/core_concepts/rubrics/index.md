@@ -128,7 +128,10 @@ For a hands-on tutorial that walks through each of these needs with a complete e
           └─ NO: What kind of judgment?
               │
               ├─ Yes/no → LLMRubricTrait (kind="boolean")
-              │           Need traceable evidence? Enable via deep_judgment_rubric_mode
+              │           Need traceable evidence? Set deep_judgment_enabled=True
+              │           on the trait, then opt the run in via
+              │           VerificationConfig.deep_judgment_rubric_mode (per-trait
+              │           enablement vs. global pipeline mode are independent)
               │
               ├─ Named tiers with observable boundaries
               │   → LLMRubricTrait (kind="literal")
@@ -165,7 +168,7 @@ All five trait types (LLM, regex, callable, metric, agentic) support an optional
 ### How It Works
 
 1. The `DynamicRubric` is attached to a question (or globally to the benchmark).
-2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
+2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11a-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
 3. The LLM returns a structured `ConceptPresenceResult` indicating which concepts are present.
 4. Traits with `present=True` are promoted into `context.rubric` and evaluated by the standard rubric evaluators.
 5. Traits with `present=False` are recorded in `dynamic_rubric_skipped_traits` with the reason `"concept not present in response"`.
@@ -215,13 +218,11 @@ dynamic = DynamicRubric(
     ],
 )
 
-# Attach to a question
-benchmark.add_question(
-    question="What is the recommended treatment for condition X?",
-    raw_answer="Drug A, 500mg twice daily",
-    dynamic_rubric=dynamic,
-)
+# Attach globally to the benchmark (applies to every question)
+benchmark.set_global_dynamic_rubric(dynamic)
 ```
+
+`add_question` does not accept a `dynamic_rubric` parameter; the only public facade method for dynamic rubrics is `set_global_dynamic_rubric`. To scope a `DynamicRubric` to a single question, build a [`Question`](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) with its `question_dynamic_rubric` field set (a dict, e.g. `dynamic.model_dump()`); the pipeline merges global and per-question dynamic rubrics at evaluation time.
 
 If the response discusses dosing but not interactions or contraindications, only `dosing_clarity` is evaluated. The other two traits appear in results as skipped.
 

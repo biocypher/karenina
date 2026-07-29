@@ -13,10 +13,10 @@ Concepts are ordered to follow the evaluation pipeline — from what you're eval
 | **TaskEval** | Evaluate any free text output using karenina's templates and rubrics (open-loop mode) | [TaskEval](../notebooks/core_concepts/task-eval.ipynb) |
 | **Scenarios** | Multi-turn scenario benchmarks: evaluate LLM behavior across branching conversation graphs | [Scenarios](scenarios/index.md) |
 | **Answer Templates** | Pydantic models that define how a Judge LLM parses and verifies responses | [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) |
-| **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric) | [Rubrics](rubrics/index.md) |
+| **Rubrics** | Trait-based evaluation of response quality (LLM, regex, callable, metric, agentic) | [Rubrics](rubrics/index.md) |
 | **Templates vs Rubrics** | The two evaluation units: correctness (templates) vs quality (rubrics) | [Templates vs Rubrics](../notebooks/core_concepts/template-vs-rubric.ipynb) |
 | **Evaluation Modes** | Three modes controlling which evaluation units run (`template_only`, `template_and_rubric`, `rubric_only`) | [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) |
-| **Verification Pipeline** | The 13-stage engine that executes evaluation end to end | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) |
+| **Verification Pipeline** | The 13-stage engine (with sub-stages 7a/7b and 11a/11b) that executes evaluation end to end | [Verification Pipeline](../notebooks/core_concepts/verification-pipeline.ipynb) |
 | **Prompt Assembly** | How prompts are constructed for pipeline LLM calls (tri-section pattern) | [Prompt Assembly](../notebooks/core_concepts/prompt-assembly.ipynb) |
 | **Results & Scoring** | What verification produces: pass/fail, scores, traits, and metrics | [Results & Scoring](../notebooks/core_concepts/results-and-scoring.ipynb) |
 | **Extending Runs** | Reuse prior traces to add judges/answerers/replicates (`extend_template`) or attach a new rubric (`extend_rubric`) | [Extending Runs](../notebooks/core_concepts/extending-runs.ipynb) |
@@ -54,7 +54,7 @@ Questions & Benchmarks         Scenario Graph                    Logged Outputs
                                 │
                                 ▼
                         Verification Pipeline   ← 13-stage execution engine
-                         ├── Prompt Assembly     ← constructs all LLM prompts
+                         ├── Prompt Assembly     ← constructs all LLM prompts (with sub-stages 7a/7b, 11a/11b)
                          └── Stage by stage      ← generate*, parse, verify, evaluate
                                 │                  (*skipped in TaskEval)
                                 ▼
@@ -67,7 +67,7 @@ Questions & Benchmarks         Scenario Graph                    Logged Outputs
 2. **Rubric traits** evaluate quality dimensions of the raw response (safety, clarity, format compliance, etc.)
 3. The **evaluation mode** determines whether templates, rubrics, or both are used
 4. An **adapter** connects to the LLM backend that parses responses
-5. The **verification pipeline** orchestrates 13 stages from generation through scoring
+5. The **verification pipeline** orchestrates 13 stages (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) from generation through scoring
 6. **Prompt assembly** constructs all LLM prompts using a tri-section pattern
 7. **Results** capture everything that happened: pass/fail, scores, excerpts, and metadata
 
@@ -111,7 +111,7 @@ Multi-turn scenarios evaluate conversation dynamics: sycophancy resistance, erro
 
 ### Rubrics
 
-**Rubrics** evaluate qualitative traits of the raw response, independent of whether the answer is factually correct. Karenina provides four trait types: LLM traits, regex traits, callable traits, and metric traits. Rubrics can be applied globally (all questions) or per-question.
+**Rubrics** evaluate qualitative traits of the raw response, independent of whether the answer is factually correct. Karenina provides five trait types: LLM traits, regex traits, callable traits, metric traits, and agentic traits. Rubrics can be applied globally (all questions) or per-question.
 
 [Read more about rubrics →](rubrics/index.md)
 
@@ -135,7 +135,7 @@ Karenina supports three evaluation modes that control which units run during ver
 
 ### Verification Pipeline
 
-The **verification pipeline** is a 13-stage execution engine. Stages are grouped into setup, generation, guards, template processing, rubric evaluation, and finalization. The evaluation mode controls which stages are active.
+The **verification pipeline** is a 13-stage execution engine (with sub-stages 7a/7b for parsing and 11a/11b for rubric evaluation, plus an always-on placeholder-retry guard inserted between stages 4 and 5). Stages are grouped into setup, generation, guards, template processing, rubric evaluation, and finalization. The evaluation mode controls which stages are active.
 
 [Read more about the verification pipeline →](../notebooks/core_concepts/verification-pipeline.ipynb)
 
@@ -158,6 +158,7 @@ The pipeline produces a **`VerificationResult`** per question containing templat
 | Interface | Description |
 |-----------|-------------|
 | `langchain` | Default adapter — supports all LLMs via LangChain |
+| `langchain_deep_agents` | LangChain Deep Agents (natively agentic, routes through LangChain providers) |
 | `openrouter` | OpenRouter API (routes through LangChain) |
 | `openai_endpoint` | OpenAI-compatible endpoints (routes through LangChain) |
 | `claude_agent_sdk` | Native Anthropic Agent SDK |
@@ -180,7 +181,7 @@ The **manual interface** allows you to evaluate pre-recorded LLM traces instead 
 
 ### ADeLe
 
-**ADeLe** (Annotated Demand Levels; [Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and answer format. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
+**ADeLe** (Annotated Demand Levels; [Zhou et al., 2025](https://arxiv.org/abs/2503.06378)) is an 18-dimension question classification system that characterizes questions along axes like reasoning depth, domain specificity, and metacognitive demand. Classifications are stored in checkpoint metadata and can guide template design and evaluation strategy.
 
 [Read more about ADeLe →](../notebooks/core_concepts/adele.ipynb)
 

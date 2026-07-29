@@ -3,7 +3,7 @@
 Karenina reads environment variables to configure API keys, file paths, execution behavior, and verification features. This page groups variables by purpose and shows practical usage patterns. For an exhaustive reference table, see [Environment Variables Reference](../../reference/configuration/env-vars.md).
 
 !!! note "Precedence"
-    Environment variables are the **third priority** in the configuration hierarchy — they're overridden by CLI arguments and preset values. See [Configuration Hierarchy](index.md) for details.
+    Environment variables are the **third priority** in the configuration hierarchy; they're overridden by CLI arguments and preset values. See [Configuration Hierarchy](index.md) for details.
 
 ---
 
@@ -151,14 +151,14 @@ The embedding check runs after template verification and provides an additional 
 | `AUTOSAVE_DATABASE` | Automatically save verification results to the database | `true` |
 | `KARENINA_EXPOSE_GROUND_TRUTH` | Include ground truth values in the judge LLM prompt during template evaluation | `false` |
 
-**`AUTOSAVE_DATABASE`** — When enabled, verification results are automatically persisted to the SQLite database after each run. Disable this if you only want in-memory results:
+**`AUTOSAVE_DATABASE`**: When enabled, verification results are automatically persisted to the SQLite database after each run. Disable this if you only want in-memory results:
 
 ```bash
 # .env
 AUTOSAVE_DATABASE=false
 ```
 
-**`KARENINA_EXPOSE_GROUND_TRUTH`** — When enabled, the ground truth answer is included in the prompt sent to the judge LLM during template evaluation. This is intended for debugging — it helps you understand whether parsing failures are due to ambiguous instructions or genuinely wrong answers. **Do not enable this for production benchmarking**, as it biases the judge.
+**`KARENINA_EXPOSE_GROUND_TRUTH`**: When enabled, the ground truth answer is included in the prompt sent to the judge LLM during template evaluation. This is intended for debugging; it helps you understand whether parsing failures are due to ambiguous instructions or genuinely wrong answers. **Do not enable this for production benchmarking**, as it biases the judge.
 
 ```bash
 # .env
@@ -171,15 +171,17 @@ KARENINA_EXPOSE_GROUND_TRUTH=true  # Debugging only
 
 Environment variables that accept boolean values recognize these truthy strings (case-insensitive):
 
-- **True**: `true`, `1`, `yes`, `on`
+- **True**: `true`, `1`, `yes` (recognized by every boolean variable)
 - **False**: anything else (including `false`, `0`, `no`, `off`)
+
+A few variables (`EMBEDDING_CHECK`, `KARENINA_EXPOSE_GROUND_TRUTH`) also treat `on` as truthy, but most do not. Use `true`, `1`, or `yes` for values that behave consistently across every variable.
 
 ---
 
 ## Next Steps
 
-- [Configuration Hierarchy](index.md) — How environment variables fit into the precedence system
-- [Presets](presets.md) — Reusable configuration files that override environment variables
-- [Workspace Initialization](../../getting-started/workspace-init.md) — `karenina init` creates default directories and `.env` template
-- [Environment Variables Reference](../../reference/configuration/env-vars.md) — Exhaustive table of all variables
-- [Running Verification](../running-verification/index.md) — Putting configuration into practice
+- [Configuration Hierarchy](index.md): How environment variables fit into the precedence system
+- [Presets](presets.md): Reusable configuration files that override environment variables
+- [Workspace Initialization](../../getting-started/workspace-init.md): `karenina init` creates default directories and `.env` template
+- [Environment Variables Reference](../../reference/configuration/env-vars.md): Exhaustive table of all variables
+- [Running Verification](../running-verification/index.md): Putting configuration into practice

@@ -91,6 +91,7 @@ The default prompt ships inside the package. Substituted placeholders:
 - `$ANSWERING_MODEL` (comma-joined when multiple)
 - `$TOTAL`, `$PASSED`, `$FAILED`
 - `$FAILURE_CATEGORIES`
+- `$RUN_TIMESTAMP` (latest verification timestamp in the result set)
 
 Override by passing `--prompt path/to/custom.md` on the CLI (or `prompt_path=...` in Python). A user prompt that contains no placeholders is copied unchanged.
 
@@ -120,7 +121,7 @@ Contract the launcher must honor: read the materialized files under `analysis_di
 
 ## Trace size handling
 
-Long trace content is offloaded to per-case artifact files via the same mechanism the scenario handover uses. Offloaded chunks land in `case_assets/<case_id>/traces/artifacts/`; the inline trace carries a `[Content offloaded: N chars] File: <absolute path>` pointer. Threshold: `KARENINA_TRACE_TRUNCATION_THRESHOLD` environment variable (default 2000 characters). Override per analysis with `--max-trace-chars N`.
+Long trace content is offloaded to per-case artifact files via the same mechanism the scenario handover uses. Offloaded chunks land in `case_assets/<case_id>/traces/artifacts/`. The inline trace carries a `[Content offloaded: N chars]` marker followed by a `File: <absolute path>` line (a newline separates the two, and the character count is comma-grouped). Threshold: `KARENINA_TRACE_TRUNCATION_THRESHOLD` environment variable (default 2000 characters). Override per analysis with `--max-trace-chars N`.
 
 ## Limits
 

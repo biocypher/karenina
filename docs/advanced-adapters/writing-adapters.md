@@ -576,10 +576,188 @@ config = VerificationConfig(
 | `availability_checker` | `Callable \| None` | `None` | Returns `AdapterAvailability`. `None` means always available. |
 | `fallback_interface` | `str \| None` | `None` | Interface to fall back to when unavailable |
 | `routes_to` | `str \| None` | `None` | Interface this one delegates to (for routing interfaces) |
+| `runtime_profile` | `Any \| None` | `None` | Optional runtime-behavior extension hook. External adapters can supply a profile to plug into the shared agent prompt and capability helpers (for example, sandbox path mapping) without changing core code. Kept as `Any` to avoid coupling the registry to agent-only helper types. |
 | `supports_mcp` | `bool` | `False` | Whether the adapter can connect to MCP servers |
 | `supports_tools` | `bool` | `False` | Whether the adapter supports tool use |
 | `agent_tier` | `str` | `"tool_loop"` | Agent capability tier. `"tool_loop"`: basic tool-calling loop (e.g., LangChain ReAct), the adapter orchestrates each tool call turn. `"deep_agent"`: full agent runtime with built-in tools (e.g., Claude Code, LangChain Deep Agents), the runtime handles tool loops internally and `GenerateAnswer` prefers the `AgentPort` path to capture the full trace. |
 | `requires_provider` | `bool` | `True` | If `False`, `model_provider` is not required for this interface. Used by `validate_model_config()` to determine whether to require the provider field. |
+
+---
+
+## Wiring Retries and Error Classification
+
+Every LLM and parser adapter must route its provider calls through a `RetryExecutor` constructed from `model_config.retry_policy`. This is the central retry layer for the entire pipeline; adapters must not add their own retry decorators on top.
+
+For the full rationale and the system's design (categories, budgets, tracking), see [Error Handling and Retries](../advanced-pipeline/error-handling.md). This section covers only the adapter-side wiring.
+
+### Construction
+
+Build the executor in `__init__` from the policy stamped on `ModelConfig`:
+
+```python
+from karenina.utils.errors import ErrorRegistry
+from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
+
+
+class MyProviderLLMAdapter:
+    def __init__(self, model_config: ModelConfig) -> None:
+        self._config = model_config
+        retry_policy = model_config.retry_policy or RetryPolicy()
+        self._retry_executor = RetryExecutor(retry_policy, ErrorRegistry())
+```
+
+The pipeline stamps `model_config.retry_policy` from `VerificationConfig.retry_policy` before tasks run, so a single setting at the top governs all per-model adapter calls. The pipeline also installs custom error patterns onto the shared `ErrorRegistry` it threads through `VerificationContext`. If your adapter needs to participate in that customization, accept a registry from outside; otherwise constructing a fresh `ErrorRegistry()` here is fine for built-in classification.
+
+### Routing Calls Through the Executor
+
+`RetryExecutor` exposes four entry points; pick by sync/async and by whether you want timeout escalation.
+
+| Method | Sync/Async | Timeout escalation |
+|--------|------------|--------------------|
+| `execute(fn, *args, **kwargs)` | sync | no |
+| `aexecute(fn, *args, **kwargs)` | async | no |
+| `execute_with_timeout(fn, *args, timeout=..., **kwargs)` | sync | yes |
+| `aexecute_with_timeout(fn, *args, timeout=..., **kwargs)` | async | yes |
+
+The `_with_timeout` variants forward `timeout=current_timeout` into the wrapped callable on every attempt and grow it on `TIMEOUT` retries when `policy.timeout_escalation` is set. Use them for streaming and any path where a per-attempt wall-clock guard matters.
+
+```python
+async def ainvoke(self, messages: list[Message]) -> LLMResponse:
+    return await self._retry_executor.aexecute(self._ainvoke_once, messages)
+
+async def _ainvoke_once(self, messages: list[Message]) -> LLMResponse:
+    """Single attempt; called by RetryExecutor on each retry."""
+    response = await self._client.chat(self._convert_messages(messages))
+    return LLMResponse(content=response.text, ...)
+
+
+def stream_invoke(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+    return self._retry_executor.execute_with_timeout(
+        self._stream_invoke_once, messages, timeout=timeout
+    )
+
+def _stream_invoke_once(self, messages: list[Message], timeout: float | None = None) -> LLMResponse:
+    """Single streaming attempt; receives the (possibly escalated) timeout."""
+    ...
+```
+
+The wrapped `_*_once` callables must be idempotent (they will run multiple times) and must propagate provider exceptions unchanged so the executor's classifier can see them.
+
+### Avoiding Double Retry at the SDK Level
+
+Provider SDKs (Anthropic, OpenAI, ...) ship their own retry loops. With `RetryExecutor` already retrying, those SDK retries multiply the effective budget and cause the provider to back off in ways the executor cannot see. Suppress them.
+
+Two safe approaches exist.
+
+Set the SDK's `max_retries=0` when constructing the client, making `RetryExecutor` the only retry layer:
+
+```python
+# Inside the LangChain adapter's _initialize_model
+kwargs["max_retries"] = 0
+model = init_chat_model_unified(**kwargs)
+```
+
+Or, when the SDK's retry path is preferable for some calls (e.g., parsing-only flows), derive a single `max_retries` value from the policy via `RetryPolicy.derive_sdk_max_retries()`:
+
+```python
+retry_policy = self._config.retry_policy or RetryPolicy()
+kwargs["max_retries"] = retry_policy.derive_sdk_max_retries()
+```
+
+`derive_sdk_max_retries` returns `max(connection.max_attempts, timeout.max_attempts, rate_limit.max_attempts, server_error.max_attempts)` so no category is starved by a too-low SDK cap. Pick one of the two approaches per call surface; do not stack them.
+
+### Rule: No Adapter-Side Retry Decorators
+
+Do not wrap your adapter methods (or the underlying SDK client) with `tenacity`, `backoff`, or any other retry decorator. The legacy `tenacity` decorators on the LangChain LLM/parser, deep agents, and the streaming-timeout retry decorator have been removed precisely because they compounded with `RetryExecutor` and produced opaque retry counts. See [Error Handling and Retries](../advanced-pipeline/error-handling.md) for the broader story and what was deleted.
+
+When in doubt, the rule is: if a transient failure should be retried, it should be retried by `RetryExecutor`. Anything else is a bug.
+
+---
+
+## Adapter Lifecycle and Cleanup Tracking
+
+Adapters can hold async resources (`httpx.AsyncClient`, MCP sessions, SDK clients) that must be released before their owning event loop is closed. The registry provides a small lifecycle subsystem so the pipeline can shut adapters down on the right loop, even when verification ran across worker threads.
+
+### What the Registry Tracks
+
+`karenina.adapters.registry` keeps two module-level structures:
+
+| Structure | Type | Purpose |
+|-----------|------|---------|
+| `_active_adapters` | `list[Any]` | Every adapter handed out by the factory functions, used by `cleanup_all_adapters()` for global teardown. |
+| `_adapter_portal_refs` | `list[tuple[weakref.ref, BlockingPortal]]` | Per-portal weak references, recorded only when the creating thread has an active `anyio.from_thread.BlockingPortal`. Used for loop-affine teardown. |
+
+Each structure has its own lock (`_adapters_lock`, `_adapter_portal_lock`). The lock hierarchy is: take `_adapter_portal_lock` only while building a snapshot list, then release it before invoking `aclose()`. This keeps `register_adapter()` calls on other threads from deadlocking against an in-progress shutdown.
+
+### Registration Functions
+
+| Function | Purpose |
+|----------|---------|
+| `register_adapter(adapter)` | Append to `_active_adapters`; if a `BlockingPortal` is active in the creating thread (via `karenina.benchmark.verification.executor.get_async_portal`), also record a weak `(adapter, portal)` pair for loop-affine cleanup. |
+| `unregister_adapter(adapter)` | Remove from `_active_adapters` (used when an adapter is closed manually). |
+| `cleanup_all_adapters()` | Async function: snapshot `_active_adapters`, clear the list, and call `aclose()` on every entry that defines it. Exceptions are logged and suppressed so one failing adapter does not block the others. Safe to call multiple times. |
+| `snapshot_adapters_for_portal(portal)` | Return the live adapters whose recorded portal matches `portal`. The lock is dropped before the caller invokes `aclose()`. |
+| `clear_portal_adapter_refs(portal)` | Drop all `(adapter, portal)` entries for the given portal after its scoped teardown completes; prevents the module-global list from leaking entries across runs. |
+
+### Loop-Affine Teardown
+
+`httpx.AsyncClient.aclose()` (and several SDK clients built on it) raises "Event loop is closed" if it runs on a different loop than the one that opened its transports. Karenina's verification executor runs work through a portal, and the portal's loop is torn down at the end of the run. The portal-keyed weakref list lets the executor:
+
+1. Build the per-portal list with `snapshot_adapters_for_portal(portal)`.
+2. Schedule each `aclose()` on the portal's own loop, before the portal exits.
+3. Call `clear_portal_adapter_refs(portal)` to drop the entries.
+
+Adapters that do not run inside a portal (sync code paths, single-shot tests) skip the per-portal tracking entirely; only the global `_active_adapters` list applies and `cleanup_all_adapters()` is enough.
+
+### When `aclose()` Runs
+
+Adapters' `aclose()` is invoked in two places:
+
+1. Per-portal teardown inside the verification executor, on the originating loop, before the portal closes.
+2. The global `cleanup_all_adapters()` at the end of a run, which closes anything left in `_active_adapters` (e.g., adapters created on the main loop without a portal).
+
+Implementations must be idempotent: each adapter's `aclose()` can run more than once without raising.
+
+### Portal-Affinity Guarantee
+
+When an adapter is recorded with a portal, its `aclose()` is guaranteed to run on the portal's loop before the portal is torn down. Adapters created without a portal are closed on whichever loop runs `cleanup_all_adapters()`. The factory functions (`get_llm`, `get_agent`, `get_parser`) call `register_adapter(adapter)` automatically, so adapters obtained through the public API always participate in this contract.
+
+### Custom Adapters with Lazy Async Resources
+
+The factory's `register_adapter()` call happens once, at construction time. If your adapter constructs `httpx.AsyncClient`, an MCP session, or any other loop-bound resource lazily on the first call (rather than in `__init__`), call `register_adapter(self)` again from the path that creates the resource so the portal binding is correct for the loop that opened it. Adapters that allocate everything in `__init__` do not need to do anything: the factory has already registered them.
+
+For testing utilities related to the registry, see [Testing Utilities](#testing-utilities) below.
+
+---
+
+## Testing Utilities
+
+The registry layer exposes two helpers that exist solely for tests; do not use them in production code.
+
+| Helper | Module | Purpose |
+|--------|--------|---------|
+| `AdapterRegistry._reset()` | `karenina.adapters.registry` | Clear `_specs`, reset `_initialized` and `_initializing`. Use in fixtures that need to register a custom `AdapterSpec` without colliding with built-ins. |
+| `AdapterInstructionRegistry.clear()` | `karenina.ports.adapter_instruction` | Clear all `(interface, task)` factory mappings. Use when a test needs a clean slate for prompt instructions. |
+
+A typical pytest fixture pairs the two:
+
+```python
+import pytest
+
+from karenina.adapters.registry import AdapterRegistry
+from karenina.ports.adapter_instruction import AdapterInstructionRegistry
+
+
+@pytest.fixture
+def clean_adapter_registry():
+    AdapterRegistry._reset()
+    AdapterInstructionRegistry.clear()
+    yield
+    AdapterRegistry._reset()
+    AdapterInstructionRegistry.clear()
+```
+
+Both helpers are module-global mutators: never call them from library code, and never leave them invoked outside a fixture's setup/teardown.
 
 ---
 

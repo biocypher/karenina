@@ -217,6 +217,16 @@ class TestCacheHydration:
                 reason="Request timed out",
             ),
         )
+        timeout_without_trace = _make_result(
+            question_id="qt-empty",
+            answering_name="ans-timeout-empty",
+            raw_llm_response="",
+            failure=Failure(
+                category=FailureCategory.TIMEOUT,
+                stage="GenerateAnswer",
+                reason="Request timed out before producing a trace",
+            ),
+        )
         server_error_failure = _make_result(
             question_id="qs",
             answering_name="ans-server",
@@ -259,6 +269,7 @@ class TestCacheHydration:
             connection_failure,
             rate_limit_failure,
             timeout_failure,
+            timeout_without_trace,
             server_error_failure,
             unexpected_failure,
             trace_validation_failure,
@@ -276,12 +287,18 @@ class TestCacheHydration:
         assert data is not None
         assert data["raw_llm_response"] == "--- AI Message ---\ngood"
 
-        # Each failure row's key must be a MISS (i.e., never hydrated).
+        timeout_key = _expected_cache_key(timeout_failure)
+        status, data = cache.get_or_reserve(timeout_key)
+        assert status == "HIT"
+        assert data is not None
+        assert data["raw_llm_response"] == "--- AI Message ---\nThe answer is 4."
+
+        # Infra failures without a reusable trace still must not hydrate.
         # Use a fresh cache so the prior get_or_reserve does not pollute counts.
         for skipped_row in (
             connection_failure,
             rate_limit_failure,
-            timeout_failure,
+            timeout_without_trace,
             server_error_failure,
             unexpected_failure,
             trace_validation_failure,

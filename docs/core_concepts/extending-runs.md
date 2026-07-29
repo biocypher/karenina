@@ -17,7 +17,7 @@ jupyter:
 
 A verification run captures enough state on every result row that later runs can reuse parts of it instead of re-executing the whole pipeline. Two facades on `Benchmark` expose this reuse as a first-class operation:
 
-- [`Benchmark.extend_template`](../verification-pipeline/) extends a prior run along the template-verification axes: new judges, new answerers, more replicates. Prior `(question, answerer, replicate)` traces are served from a [ReplayStore](../../reference/replay/) so no answering tokens are spent twice; parsing runs live against new judges.
+- [`Benchmark.extend_template`](../verification-pipeline/) extends a prior run along the template-verification axes: new judges, new answerers, more replicates. Prior `(question, answerer, replicate)` traces are served from a [ReplayStore](../../advanced-pipeline/replay-store/) so no answering tokens are spent twice; parsing runs live against new judges.
 - [`Benchmark.extend_rubric`](../rubrics/) attaches a new rubric to a prior run and scores every existing trace against it. Answering is replayed, template parsing and verification are skipped entirely, and the new trait scores are merged onto copies of the prior rows.
 
 ```python tags=["hide-cell"]
@@ -36,11 +36,13 @@ from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait, Rubric
 | Attach a rubric to a prior run that didn't have one | `extend_rubric` | prior rows enriched in-place; row count unchanged |
 | Add a trait to a rubric you already ran | `extend_rubric` | prior rows enriched; `rubric.*_trait_scores` unioned by trait name |
 
-Composing both: if you need new judges *and* new rubric traits on top of a single prior run, call `extend_template` first, then `extend_rubric` on the merged result. The two facades do not compose in a single call.
+Composing both: if you need new judges *and* new rubric traits on top of a single prior run, call `extend_template` first, then `extend_rubric` on the merged result. The two facades do not compose in a single call. See [Section 8](#8-composing-extend_template-with-extend_rubric) for a worked chain.
+
+For a runnable, end-to-end workflow that walks the full extension lifecycle (initial run, save, load, extend, persist), see the [Extending a Prior Run tutorial](../../notebooks/running-verification/extending-a-prior-run.ipynb).
 
 ## 2. Shared Mechanics
 
-Both facades build a [ReplayStore](../../reference/replay/) from the prior `VerificationResultSet` and pass it through `VerificationConfig.replay_store`. At the generate-answer stage, any `(question, answering_model, replicate)` triple that hits the store replays the captured trace instead of invoking the LLM. Anything that misses runs live.
+Both facades build a [ReplayStore](../../advanced-pipeline/replay-store/) from the prior `VerificationResultSet` and pass it through `VerificationConfig.replay_store`. At the generate-answer stage, any `(question, answering_model, replicate)` triple that hits the store replays the captured trace instead of invoking the LLM. Anything that misses runs live.
 
 | Field captured in the store | `extend_template` | `extend_rubric` |
 |---|---|---|
@@ -69,9 +71,9 @@ phase_a = VerificationConfig(answering_models=[answerer], parsing_models=[judge_
 # prior = bench.run_verification(config=phase_a, run_name="demo")
 
 phase_b = VerificationConfig(
-    answering_models=[answerer],              # same as prior
-    parsing_models=[judge_a, judge_b],        # old + new, full union
-    replicate_count=1,                        # same as prior
+    answering_models=[answerer],  # same as prior
+    parsing_models=[judge_a, judge_b],  # old + new, full union
+    replicate_count=1,  # same as prior
 )
 # merged = bench.extend_template(prior_results=prior, config=phase_b, run_name="demo")
 ```
@@ -84,8 +86,8 @@ After the call, `merged.results` has the shape of a joint run with `parsing_mode
 other_answerer = ModelConfig(id="other", model_provider="openai", model_name="gpt-4.1-mini")
 
 phase_b = VerificationConfig(
-    answering_models=[answerer, other_answerer],   # union: old + new
-    parsing_models=[judge_a],                       # same as prior
+    answering_models=[answerer, other_answerer],  # union: old + new
+    parsing_models=[judge_a],  # same as prior
     replicate_count=1,
 )
 # merged = bench.extend_template(prior_results=prior, config=phase_b)
@@ -99,7 +101,7 @@ phase_b = VerificationConfig(
 phase_b = VerificationConfig(
     answering_models=[answerer],
     parsing_models=[judge_a],
-    replicate_count=3,                              # prior had 2
+    replicate_count=3,  # prior had 2
 )
 # merged = bench.extend_template(prior_results=prior, config=phase_b)
 ```
@@ -160,9 +162,9 @@ bench.set_global_rubric(
 )
 
 phase_b = VerificationConfig(
-    answering_models=[answerer],        # must match prior
-    parsing_models=[judge_a],           # must match prior
-    replicate_count=1,                  # must match prior
+    answering_models=[answerer],  # must match prior
+    parsing_models=[judge_a],  # must match prior
+    replicate_count=1,  # must match prior
 )
 # merged = bench.extend_rubric(prior_results=prior, config=phase_b)
 ```
@@ -200,7 +202,7 @@ Supported trait types: LLM, regex, callable, agentic, plus `DynamicRubric` prese
 
 - `prior_results` is empty.
 - `config.replay_store` is pre-populated.
-- `config.evaluation_mode` is set to `"template_and_rubric"` (the caller should not preset a conflicting mode; the helper rewrites it to `"rubric_only"` internally).
+- `config.evaluation_mode` is anything other than `"template_only"` or `"rubric_only"` (for example, `"template_and_rubric"`); the helper rewrites the mode to `"rubric_only"` internally, so it only accepts those two starting values.
 - The benchmark has no rubric attached anywhere (global or per-question) for any question in `prior_results`.
 - Any attached rubric contains metric traits.
 - `config.answering_models`, `config.parsing_models`, or `config.replicate_count` disagree with the observed prior shape.
@@ -223,9 +225,125 @@ The `run_name` on every row is stamped to the effective name: the `run_name=` ov
 
 Both facades accept `store: bool = True`. When true, the merged set is written to the benchmark's results manager under the effective `run_name` so `bench.get_verification_results(run_name=...)` can retrieve it. Set `store=False` for exploratory use where you only want the returned object.
 
-## 7. Further Reading
+## 7. Resumability via `ProgressiveFileSink`
 
-- [Verification Pipeline](../verification-pipeline/): the 13-stage engine both facades drive.
+Both facades accept a `sink=` argument that they forward to `Benchmark.run_verification`. Pair it with a [`ProgressiveFileSink`](../../reference/api/sinks/) to make the extension itself resumable: the sink's `seed_prior_results` hook (invoked before the pipeline starts) pre-populates the JSONL and the `.state` manifest with the prior rows, and the new rows stream through `on_result` as they complete. If the extension run is interrupted, [`Benchmark.resume_verification`](../../reference/api/sinks/) picks up where it stopped and the final export contains both the prior rows and the new ones.
+
+```python
+# from pathlib import Path
+# from karenina.benchmark.verification.sinks import ProgressiveFileSink
+#
+# sink = ProgressiveFileSink(
+#     output_path=Path("merged.json"),
+#     config=phase_b,
+#     benchmark_path="checkpoint.jsonld",
+# )
+# merged = bench.extend_template(prior_results=prior, config=phase_b, sink=sink)
+```
+
+Without a sink, the extension still runs to completion in memory; resumability is the only feature you lose. For sink internals, see [Sinks reference](../../reference/api/sinks/) and the [Progressive Save tutorial](../../notebooks/running-verification/progressive-save.ipynb).
+
+## 8. Composing `extend_template` with `extend_rubric`
+
+The two facades do not compose in a single call, but they chain cleanly: run `extend_template` first to settle the row shape (judges, answerers, replicates), then `extend_rubric` on the merged result to attach traits. The `replicate_count` constraint matters in this chain: `extend_rubric` requires `config.replicate_count` to *equal* the observed fan-out of its input, so the rubric phase must use the same `replicate_count` that was used in the final template phase.
+
+```python
+# Phase 1: prior run.
+# prior = bench.run_verification(config=phase_a, run_name="demo")
+
+# Phase 2: extend along template axes; bumps replicates from 1 to 2.
+phase_b = VerificationConfig(
+    answering_models=[answerer],
+    parsing_models=[judge_a, judge_b],
+    replicate_count=2,
+)
+# template_extended = bench.extend_template(prior_results=prior, config=phase_b)
+
+# Phase 3: attach rubric to the merged result.
+# bench.set_global_rubric(my_rubric)
+phase_c = VerificationConfig(
+    answering_models=[answerer],  # match the merged shape
+    parsing_models=[judge_a, judge_b],  # match the merged shape
+    replicate_count=2,  # MUST equal phase_b's replicate_count
+)
+# rubric_extended = bench.extend_rubric(prior_results=template_extended, config=phase_c)
+```
+
+If you need a different `replicate_count` across phases you must rerun the rubric phase against a fresh `extend_template` output. The rubric phase cannot reduce replicates and cannot grow them either: it preserves shape exactly.
+
+## 9. Failure Mode: Prior Results Without a Captured Replay Store
+
+`extend_template` and `extend_rubric` build their internal [ReplayStore](../../advanced-pipeline/replay-store/) by calling `capture_from_result_set(prior_results, ...)`. Capture walks each `VerificationResult` and pulls the captured `raw_trace` (and, for `extend_rubric`, structured agent metrics) off `metadata.captured_trace`. If `prior_results` was not produced by `Benchmark.run_verification` (for example, you constructed the result set by hand, replayed it through a custom executor, or post-processed it through transformations that drop the captured trace), the resulting store will be empty or partial.
+
+A miss in the internal store is silent. Both facades default the store to `miss_policy="fall_through"`, so every triple that does not match runs the answering stage live, spending answering tokens for traces the original run already paid for. For long extensions this surfaces as a much larger token bill than expected and as wall-clock time that scales with the prior set rather than the new work.
+
+The contract that prevents this: only call `extend_template` / `extend_rubric` with result sets returned directly from `Benchmark.run_verification` (or a `Benchmark.resume_verification` of the same). Result sets loaded from a database or from a JSON export retain captured traces and remain safe; result sets fabricated for tests do not. If you need to chain extensions through a non-runner step, capture the replay store explicitly with `capture_from_result_set(...)` first and persist it alongside the JSON export so the next step can rebuild from a known-good source.
+
+For the cross-cutting guarantees and on-disk format of captures, see [Replay Store: Capturing live runs](../../advanced-pipeline/replay-store/#capturing-live-runs).
+
+## 10. Cross-Reference: Multi-turn Extension via Scenarios
+
+When the prior run is a scenario benchmark, capture goes through a different path: `ScenarioExecutionResult.to_replay_store(*, answering_model_id, ...)` walks each turn and emits scenario-mode keys. The resulting store can then be passed back through `extend_template` / `extend_rubric` exactly like a QA capture, with `(scenario_id, scenario_node)` lookups handling the multi-turn shape. See [Scenarios: Execution](../scenarios/execution/) for the full surface.
+
+If your prior run mixed QA questions with scenarios in the same `VerificationResultSet`, `capture_from_result_set` handles both modes in one pass; the resulting store carries QA-mode entries and scenario-mode entries in the same `entries` list and serves them via the corresponding lookup index.
+
+## 11. Lower-Level Engine Functions
+
+Both facades on `Benchmark` are thin wrappers around two module-level engine functions:
+
+- `karenina.benchmark.verification.extension.extend_template_run(benchmark, prior_results, config, *, run_name=None, question_ids=None, async_enabled=None, progress_callback=None, sink=None) -> VerificationResultSet`
+- `karenina.benchmark.verification.extension.extend_rubric_run(benchmark, prior_results, config, *, run_name=None, question_ids=None, async_enabled=None, progress_callback=None, sink=None) -> VerificationResultSet`
+
+The facade adds the `store: bool = True` flag (which writes the merged set into `Benchmark._results_manager`); the engine functions skip that step. Use the engine functions directly when you need the merged set as a return value but do not want it tracked under `bench.get_verification_results(run_name=...)`. Both functions accept the same arguments as the facade equivalents and raise the same `ValueError` on validation failure.
+
+## 12. Validation Reference
+
+Every `ValueError` raised by `extend_template` and `extend_rubric` in one place. `extend_template`'s checks all run before the pipeline starts, so a validation failure leaves the prior result set untouched. `extend_rubric` runs its input checks up front as well, but its trait-collision and shape-corruption checks fire at merge time, after the rubric-only pipeline has already executed (spending tokens and time).
+
+### `extend_template`
+
+| Condition | Message gist |
+|---|---|
+| `prior_results.results` is empty | "prior_results must contain at least one VerificationResult" |
+| `config.parsing_models` is empty | "config.parsing_models must be non-empty (supply the new judges)" |
+| `config.answering_models` is empty | "config.answering_models must be non-empty" |
+| `config.replay_store` is not `None` | "config.replay_store must be None; extend_template builds the replay store internally from prior_results" |
+| Configured answering identities do not cover prior | "config.answering_models does not cover the answering identities in prior_results" |
+| `config.replicate_count` is below the observed fan-out | "config.replicate_count=... is lower than the replicate fan-out observed in prior_results" |
+| Prior rows have no `run_name` and no override | "prior_results rows have no run_name; pass run_name= explicitly to extend_template" |
+| Prior rows carry inconsistent `run_name`s and no override | "prior_results rows carry inconsistent run_names" |
+
+### `extend_rubric`
+
+| Condition | Message gist |
+|---|---|
+| `prior_results.results` is empty | "prior_results must contain at least one VerificationResult" |
+| `config.answering_models` is empty | "config.answering_models must be non-empty" |
+| `config.parsing_models` is empty | "config.parsing_models must be non-empty" |
+| `config.replay_store` is not `None` | "config.replay_store must be None; extend_rubric builds the replay store internally from prior_results" |
+| `config.evaluation_mode` is anything other than `"template_only"` or `"rubric_only"` | "config.evaluation_mode must be 'template_only' or 'rubric_only' for extend_rubric" |
+| Configured answering identities differ from prior | "config.answering_models does not cover the answering identities in prior_results" |
+| Configured parsing identities differ from prior | "config.parsing_models does not match the parsing identities in prior_results" |
+| `config.replicate_count` does not equal the observed fan-out | "config.replicate_count=... does not match the replicate fan-out observed in prior_results" |
+| No rubric attached anywhere on the benchmark for any prior question | "benchmark has no rubric attached (global or per-question) for any question in prior_results" |
+| Attached rubric contains metric traits | "Metric traits are not supported by extend_rubric in v1" |
+| Same-name trait collision during merge | "extend_rubric: trait name collision in <bucket> for traits [...]" |
+| Rubric-only pipeline produced duplicate rows for a prior triple | "extend_rubric: rubric-only run produced duplicate rows for triple ...; shape corruption" |
+| Rubric-only pipeline failed to produce a row for a prior triple | "extend_rubric: no rubric-only row produced for prior triple ...; shape corruption" |
+
+The first two raises in each table protect the engine from degenerate inputs. The middle block enforces the shape contract that lets the merge step align rows. The final block guards the rubric-specific invariants. Match the exact message text in tests via substring matches; the format string parameters carry the diagnostic detail.
+
+## 13. ScenarioReplayBuilder and Replicate Canonicalization
+
+When the prior run is a scenario benchmark and you want to project a QA-mode capture across many scenario variants before extending, [`ScenarioReplayBuilder`](../../advanced-pipeline/replay-store/#projecting-qa-stores-onto-scenarios) is the right tool. The constraint that propagates to the extension call: `ScenarioReplayBuilder` requires QA stores captured with `replicate_selector="first"` or `"last"` (which emit `replicate=None`). A QA store captured with `replicate_selector="all"` is rejected at `add_qa` time because the 3-axis specificity ladder does not fall through from a `replicate=None` probe to integer-replicate entries. See [Replay Store: Replicate canonicalization](../../advanced-pipeline/replay-store/#replicate-canonicalization).
+
+## 14. Further Reading
+
+- [Verification Pipeline](../verification-pipeline/): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that both facades drive.
 - [Evaluation Modes](../evaluation-modes/): how `rubric_only` differs from `template_only` and `template_and_rubric`.
 - [Rubrics](../../../core_concepts/rubrics/): trait types and `DynamicRubric`.
+- [Replay Store](../../advanced-pipeline/replay-store/): the cache layer the extensions build internally.
+- [Sinks reference](../../reference/api/sinks/): `ResultSink.seed_prior_results`, `ProgressiveFileSink`, `CompositeSink`.
+- [Scenarios: Execution](../scenarios/execution/): `ScenarioExecutionResult.to_replay_store` for multi-turn captures.
+- [Extending a Prior Run tutorial](../../notebooks/running-verification/extending-a-prior-run.ipynb): runnable end-to-end workflow.
 - `karenina/src/karenina/benchmark/verification/extension.py`: the helper implementations (`extend_template_run`, `extend_rubric_run`) if you need to read the exact validation and merge code.

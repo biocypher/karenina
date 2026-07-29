@@ -73,6 +73,8 @@ Choose the kind based on the shape of the judgment:
 - Use **literal** when you can define distinct named categories.
 - Use **[template](#7-template-kind)** when one evaluation naturally produces several related fields that you would otherwise split across multiple scalar traits.
 
+In addition to `name`, `description`, and `kind`, every `LLMRubricTrait` accepts an optional `summary: str | None` field (a short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset).
+
 ## 3. Why the `description` Field Matters
 
 LLM traits are evaluated during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). During evaluation, the [prompt assembler](../../../../advanced-pipeline/prompt-assembly/) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response trace, and your trait definition.
@@ -275,8 +277,8 @@ The `validate_score` method checks whether a given value is valid for a trait:
 
 ```python
 # Score trait: accepts integers in [min_score, max_score]
-print(conciseness_trait.validate_score(3))     # True - valid score
-print(conciseness_trait.validate_score(6))     # False - above max_score
+print(conciseness_trait.validate_score(3))  # True - valid score
+print(conciseness_trait.validate_score(6))  # False - above max_score
 print(conciseness_trait.validate_score(True))  # False - booleans rejected for score traits
 ```
 
@@ -459,12 +461,12 @@ Literal traits validate scores the same way as score traits: the value must be a
 
 ```python
 # Valid scores
-print(f"Is 0 valid? {quality_trait.validate_score(0)}")   # First class
-print(f"Is 3 valid? {quality_trait.validate_score(3)}")   # Last class
+print(f"Is 0 valid? {quality_trait.validate_score(0)}")  # First class
+print(f"Is 3 valid? {quality_trait.validate_score(3)}")  # Last class
 print(f"Is -1 valid? {quality_trait.validate_score(-1)}")  # Error state
 
 # Invalid scores
-print(f"Is 4 valid? {quality_trait.validate_score(4)}")    # Out of range
+print(f"Is 4 valid? {quality_trait.validate_score(4)}")  # Out of range
 print(f"Is True valid? {quality_trait.validate_score(True)}")  # Boolean rejected
 ```
 
@@ -496,12 +498,8 @@ from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
 class CitationFindings(BaseModel):
     """The judge reads the response and fills this in."""
 
-    cites_named_trial: bool = Field(
-        description="True if the response names at least one specific clinical trial."
-    )
-    citation_count: int = Field(
-        description="Number of distinct named sources (trials, authors, guidelines) cited."
-    )
+    cites_named_trial: bool = Field(description="True if the response names at least one specific clinical trial.")
+    citation_count: int = Field(description="Number of distinct named sources (trials, authors, guidelines) cited.")
     cited_sources: list[str] = Field(
         description="Short labels for each named source (e.g., 'KEYNOTE-189', 'NCCN 2024')."
     )
@@ -531,7 +529,7 @@ Template traits flatten their structured output into `VerificationResultRubric.l
 
 For the example above, a successful evaluation stores:
 
-```python
+```text
 result.rubric.llm_trait_scores == {
     "citation_audit.cites_named_trial": True,
     "citation_audit.citation_count": 2,

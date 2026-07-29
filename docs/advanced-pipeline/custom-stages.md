@@ -2,7 +2,7 @@
 
 This page explains how to extend the verification pipeline with custom stages. Custom stages let you add domain-specific checks, additional evaluations, or integration with external systems — all within the standard pipeline execution flow.
 
-For the built-in stage reference, see [13 Stages in Detail](stages.md).
+For the built-in stage reference, see [Pipeline Stages in Detail](stages.md).
 
 ## The Stage Interface
 
@@ -120,7 +120,7 @@ Use the `ArtifactKeys` constants instead of raw strings to reference artifacts. 
 | `RAW_ANSWER` | Answer class before question ID injection |
 | `USAGE_TRACKER` | Token usage tracker |
 | `VERIFY_RESULT` | Boolean verification outcome |
-| `VERIFY_GRANULAR_RESULT` | Per-field verification results dict |
+| `VERIFY_GRANULAR_RESULT` | Partial-credit score (float 0.0-1.0) from `verify_granular()` |
 
 **Detection results:**
 
@@ -325,7 +325,7 @@ class ToxicityCheckStage(BaseVerificationStage):
 
 ## Next Steps
 
-- [13 Stages in Detail](stages.md) — reference for all built-in stages
+- [Pipeline Stages in Detail](stages.md) — reference for all built-in stages
 - [Prompt Assembly](prompt-assembly.md) — how prompts are constructed for LLM-calling stages
 - [Deep Judgment Templates](deep-judgment-templates.md) — deep verification internals
 - [Adapter Architecture](../advanced-adapters/index.md) — the ports and adapters system used by LLM-calling stages

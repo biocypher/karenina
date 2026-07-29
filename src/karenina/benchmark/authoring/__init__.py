@@ -1,4 +1,4 @@
-"""Authoring tools for Karenina benchmarks.
+"""Benchmark-construction tools for Karenina benchmarks.
 
 This package provides tools for creating benchmark content:
 - Question extraction from files (CSV, Excel, TSV)

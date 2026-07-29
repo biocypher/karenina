@@ -117,4 +117,5 @@ class TestClaudeSDKParserOpenAIRetrySuppression:
             parser._get_openai_client()
 
             _, kwargs = mock_cls.call_args
+            assert kwargs["max_retries"] == 0
             assert kwargs["base_url"] == "https://api.z.ai/api/coding/paas/v4"

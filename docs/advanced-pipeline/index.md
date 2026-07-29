@@ -11,41 +11,46 @@ Most users can work entirely with the interfaces described in [Running Verificat
 - **Customize prompts**: Understand how the tri-section prompt assembly system works
 - **Extend the pipeline**: Write custom verification stages
 
-## The 13-Stage Pipeline
+## The 13-Stage Pipeline (with 7a/7b and 11a/11b sub-stages)
 
-Every verification run executes a subset of 13 stages in a fixed order. The `StageOrchestrator` builds the stage list based on [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) and feature flags.
+Every verification run executes a subset of 13 numbered stages in a fixed order, with sub-stages 7a/7b (template parsing) and 11a/11b (rubric evaluation) selecting between classical and agentic variants. The orchestrator also unconditionally inserts a `PlaceholderRetryAutoFail` guard between TraceValidationAutoFail and AbstentionCheck. In total the pipeline package exposes **16 stage classes**; `StageOrchestrator.from_config` builds the stage list based on [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) and feature flags.
 
 ```
- ┌─────────────────────────────────────────────────────────────┐
- │  1. ValidateTemplate         [always*]     Setup            │
- │  2. GenerateAnswer            [always]     LLM Call         │
- │  3. RecursionLimitAutoFail    [always]     Guard            │
- │  4. TraceValidationAutoFail   [always]     Guard            │
- │  5. AbstentionCheck          [optional]    Pre-Parse Check  │
- │  6. SufficiencyCheck         [optional]    Pre-Parse Check  │
- │  7. ParseTemplate            [always*]     LLM Call         │
- │  8. VerifyTemplate           [always*]     Verification     │
- │  9. EmbeddingCheck           [always*]     Enhancement      │
- │ 10. DeepJudgmentAutoFail     [optional]    Enhancement      │
- │ 11. RubricEvaluation         [optional]    Evaluation       │
- │ 12. DeepJudgmentRubric       [optional]    Enhancement      │
- │ 13. FinalizeResult            [always]     Finalization     │
- └─────────────────────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────────┐
+ │  1.  ValidateTemplate          [always*]    Setup               │
+ │  2.  GenerateAnswer             [always]    LLM Call            │
+ │  3.  RecursionLimitAutoFail     [always]    Guard               │
+ │  4.  TraceValidationAutoFail    [always]    Guard               │
+ │  4b. PlaceholderRetryAutoFail   [always]    Guard               │
+ │  5.  AbstentionCheck           [optional]   Pre-Parse Check     │
+ │  6.  SufficiencyCheck          [optional]   Pre-Parse Check     │
+ │  7a. ParseTemplate             [always*]    LLM Call            │
+ │  7b. AgenticParseTemplate      [optional]   Agentic LLM Call    │
+ │  8.  VerifyTemplate            [always*]    Verification        │
+ │  9.  EmbeddingCheck            [always*]    Enhancement         │
+ │ 10.  DeepJudgmentAutoFail      [optional]   Enhancement         │
+ │ 11a. RubricEvaluation          [optional]   Evaluation          │
+ │ 11b. AgenticRubricEvaluation   [optional]   Agentic Evaluation  │
+ │ 12.  DeepJudgmentRubric        [optional]   Enhancement         │
+ │ 13.  FinalizeResult             [always]    Finalization        │
+ └─────────────────────────────────────────────────────────────────┘
 
  * Skipped in rubric_only mode
 ```
+
+Stages 7a and 7b are mutually exclusive (selected by `agentic_parsing`); 11a and 11b run on disjoint trait sets within the same RubricEvaluation step. The PlaceholderRetry guard is always present after TraceValidationAutoFail.
 
 ### Stage Categories
 
 | Category | Stages | Purpose |
 |----------|--------|---------|
 | Setup | ValidateTemplate | Validate template code before execution |
-| LLM Calls | GenerateAnswer, ParseTemplate | Call answering and parsing LLMs |
-| Guards | RecursionLimitAutoFail, TraceValidationAutoFail | Auto-fail on structural problems |
+| LLM Calls | GenerateAnswer, ParseTemplate, AgenticParseTemplate | Call answering and parsing LLMs |
+| Guards | RecursionLimitAutoFail, TraceValidationAutoFail, PlaceholderRetryAutoFail | Auto-fail on structural problems |
 | Pre-Parse Checks | AbstentionCheck, SufficiencyCheck | Skip parsing when unnecessary |
 | Verification | VerifyTemplate | Run the template's `verify()` method |
 | Enhancements | EmbeddingCheck, DeepJudgmentAutoFail, DeepJudgmentRubric | Optional verification refinements |
-| Evaluation | RubricEvaluation | Evaluate rubric traits on the raw trace |
+| Evaluation | RubricEvaluation, AgenticRubricEvaluation | Evaluate rubric traits on the raw trace |
 | Finalization | FinalizeResult | Build the `VerificationResult` object |
 
 ### What Each Stage Does
@@ -56,13 +61,16 @@ Every verification run executes a subset of 13 stages in a fixed order. The `Sta
 | 2 | GenerateAnswer | Sends question to answering LLM, captures trace | Always runs |
 | 3 | RecursionLimitAutoFail | Auto-fails if agent hit recursion limit | Always runs |
 | 4 | TraceValidationAutoFail | Auto-fails if trace doesn't end with AI message | Always runs |
+| 4b | PlaceholderRetryAutoFail | Auto-fails if a placeholder/retry sentinel survived agent generation | Always runs |
 | 5 | AbstentionCheck | Detects model refusal/abstention, skips parsing | `abstention_enabled` |
 | 6 | SufficiencyCheck | Detects insufficient responses, skips parsing | `sufficiency_enabled` |
-| 7 | ParseTemplate | Judge LLM parses response into template schema | Always runs (template modes) |
+| 7a | ParseTemplate | Judge LLM parses response into template schema | Template modes; default parsing path |
+| 7b | AgenticParseTemplate | Investigation agent inspects workspace/trace, then extracts | Template modes; `agentic_parsing=True` |
 | 8 | VerifyTemplate | Runs `verify()` and `verify_granular()` | Always runs (template modes) |
 | 9 | EmbeddingCheck | Compares embeddings if field verification failed | `embedding_check_enabled` + own logic |
 | 10 | DeepJudgmentAutoFail | Excerpt extraction + fuzzy matching for templates | `deep_judgment_mode` != `"disabled"` |
-| 11 | RubricEvaluation | Evaluates LLM/regex/callable/metric traits | `template_and_rubric` or `rubric_only` mode |
+| 11a | RubricEvaluation | Evaluates LLM/regex/callable/metric traits | `template_and_rubric` or `rubric_only` mode |
+| 11b | AgenticRubricEvaluation | Evaluates agentic rubric traits via dedicated agent sessions | Agentic traits configured on the rubric |
 | 12 | DeepJudgmentRubric | Deep judgment for rubric trait scores | Rubric traits with deep judgment config |
 | 13 | FinalizeResult | Assembles `VerificationResult` from context | Always runs |
 
@@ -76,13 +84,16 @@ The evaluation mode determines which stages are included in the pipeline:
 | GenerateAnswer | Yes | Yes | Yes |
 | RecursionLimitAutoFail | Yes | Yes | Yes |
 | TraceValidationAutoFail | Yes | Yes | Yes |
+| PlaceholderRetryAutoFail | Yes | Yes | Yes |
 | AbstentionCheck | If enabled | If enabled | If enabled |
 | SufficiencyCheck | If enabled | If enabled | — |
-| ParseTemplate | Yes | Yes | — |
+| ParseTemplate (7a) | Yes (when `agentic_parsing=False`) | Yes (when `agentic_parsing=False`) | — |
+| AgenticParseTemplate (7b) | If `agentic_parsing=True` | If `agentic_parsing=True` | — |
 | VerifyTemplate | Yes | Yes | — |
 | EmbeddingCheck | Yes | Yes | — |
 | DeepJudgmentAutoFail | If enabled | If enabled | — |
-| RubricEvaluation | — | Yes | Yes |
+| RubricEvaluation (11a) | — | Yes | Yes |
+| AgenticRubricEvaluation (11b) | — | If agentic traits configured | If agentic traits configured |
 | DeepJudgmentRubric | — | Yes | Yes |
 | FinalizeResult | Yes | Yes | Yes |
 
@@ -112,7 +123,7 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 
 | Page | What It Covers |
 |------|---------------|
-| [13 Stages in Detail](stages.md) | Each stage's purpose, conditions, behavior, and configuration |
+| [Pipeline Stages in Detail](stages.md) | Each stage's purpose, conditions, behavior, and configuration |
 | [Deep Judgment: Templates](deep-judgment-templates.md) | Excerpt extraction, fuzzy matching, retry logic, search-enhanced verification |
 | [Deep Judgment: Rubrics](deep-judgment-rubrics.md) | Per-trait deep judgment configuration and modes |
 | [Prompt Assembly System](prompt-assembly.md) | Tri-section prompt pattern, `PromptAssembler`, `AdapterInstructionRegistry` |
@@ -125,4 +136,4 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 - [VerificationConfig Tutorial](../notebooks/running-verification/basic-verification.ipynb) — Configuring pipeline features
 - [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) — How modes affect stage selection
 - [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — What the pipeline produces
-- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All 33 configuration fields
+- [VerificationConfig Reference](../reference/configuration/verification-config.md) — All configuration fields

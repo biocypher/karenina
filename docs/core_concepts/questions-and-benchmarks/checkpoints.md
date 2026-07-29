@@ -135,6 +135,7 @@ The `@context` tells JSON-LD processors how to interpret property names. Karenin
     "acceptedAnswer": { "@id": "acceptedAnswer", "@type": "@id" },
     "rating": { "@id": "contentRating", "@container": "@set" },
     "additionalProperty": { "@id": "additionalProperty", "@container": "@set" },
+    "hasPart": { "@id": "hasPart", "@container": "@set" },
     "keywords": { "@id": "keywords", "@container": "@set" }
   }
 }

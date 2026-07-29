@@ -120,6 +120,34 @@ class TestDeepAgentsSDKRetrySuppression:
 
         assert captured_kwargs.get("max_retries") == 3
 
+    def test_create_chat_model_forwards_explicit_anthropic_connection_settings(self, monkeypatch):
+        captured_kwargs: dict = {}
+
+        def _capture_init(*, model, model_provider, **kwargs):
+            captured_kwargs.update(kwargs)
+            return MagicMock()
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.initialization.init_chat_model",
+            _capture_init,
+        )
+
+        from karenina.adapters.langchain_deep_agents.initialization import create_chat_model
+
+        create_chat_model(
+            ModelConfig(
+                id="gateway-model",
+                model_name="gateway-model",
+                model_provider="anthropic",
+                interface="langchain_deep_agents",
+                anthropic_base_url="https://gateway.example/anthropic",
+                anthropic_api_key="gateway-key",
+            )
+        )
+
+        assert captured_kwargs["base_url"] == "https://gateway.example/anthropic"
+        assert captured_kwargs["api_key"].get_secret_value() == "gateway-key"
+
 
 @pytest.mark.unit
 class TestDeepAgentsEndpointBaseUrlMode:

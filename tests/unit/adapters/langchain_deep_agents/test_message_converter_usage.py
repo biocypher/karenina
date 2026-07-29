@@ -115,9 +115,7 @@ class TestDeepAgentsConverterUsageMetadata:
         msg = AIMessage(
             content="both",
             usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-            response_metadata={
-                "token_usage": {"prompt_tokens": 999, "completion_tokens": 888}
-            },
+            response_metadata={"token_usage": {"prompt_tokens": 999, "completion_tokens": 888}},
         )
 
         converter = DeepAgentsMessageConverter()

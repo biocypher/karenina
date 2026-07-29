@@ -28,13 +28,21 @@ from unittest.mock import MagicMock, patch
 
 mock_modules = {}
 for mod in [
-    "sqlalchemy", "sqlalchemy.orm", "sqlalchemy.ext",
-    "sqlalchemy.ext.declarative", "sqlalchemy.engine",
-    "sqlalchemy.sql", "sqlalchemy.event",
-    "karenina.storage", "karenina.storage.base",
-    "karenina.storage.engine", "karenina.storage.db_config",
-    "karenina.storage.models", "karenina.storage.generated_models",
-    "karenina.storage.auto_mapper", "karenina.storage.operations",
+    "sqlalchemy",
+    "sqlalchemy.orm",
+    "sqlalchemy.ext",
+    "sqlalchemy.ext.declarative",
+    "sqlalchemy.engine",
+    "sqlalchemy.sql",
+    "sqlalchemy.event",
+    "karenina.storage",
+    "karenina.storage.base",
+    "karenina.storage.engine",
+    "karenina.storage.db_config",
+    "karenina.storage.models",
+    "karenina.storage.generated_models",
+    "karenina.storage.auto_mapper",
+    "karenina.storage.operations",
 ]:
     mock_modules[mod] = MagicMock()
 
@@ -59,22 +67,45 @@ answering_a = ModelIdentity(interface="langchain", model_name="claude-sonnet-4-6
 answering_b = ModelIdentity(interface="langchain", model_name="gpt-4.1-mini-2025-04-14")
 parsing = ModelIdentity(interface="langchain", model_name="claude-haiku-4-5-20251001")
 
+
 def _make_result(
-    qid, qtxt, raw_ans, answering_model, verify, llm_scores, regex_scores,
-    metric_scores=None, metric_confusion=None, callable_scores=None,
-    llm_labels=None, exec_time=1.2, ts="2025-06-15T10:00:00Z",
-    abstention=False, embedding_score=None,
+    qid,
+    qtxt,
+    raw_ans,
+    answering_model,
+    verify,
+    llm_scores,
+    regex_scores,
+    metric_scores=None,
+    metric_confusion=None,
+    callable_scores=None,
+    llm_labels=None,
+    exec_time=1.2,
+    ts="2025-06-15T10:00:00Z",
+    abstention=False,
+    embedding_score=None,
 ):
     """Helper to build a realistic VerificationResult for examples."""
     result_id = VerificationResultMetadata.compute_result_id(
-        question_id=qid, answering=answering_model, parsing=parsing,
-        timestamp=ts, replicate=1,
+        question_id=qid,
+        answering=answering_model,
+        parsing=parsing,
+        timestamp=ts,
+        replicate=1,
     )
     meta = VerificationResultMetadata(
-        question_id=qid, template_id="abc123", question_text=qtxt,
-        raw_answer=raw_ans, answering=answering_model, parsing=parsing,
-        execution_time=exec_time, timestamp=ts, result_id=result_id,
-        failure=None, caveats=[], replicate=1,
+        question_id=qid,
+        template_id="abc123",
+        question_text=qtxt,
+        raw_answer=raw_ans,
+        answering=answering_model,
+        parsing=parsing,
+        execution_time=exec_time,
+        timestamp=ts,
+        result_id=result_id,
+        failure=None,
+        caveats=[],
+        replicate=1,
     )
     tmpl = VerificationResultTemplate(
         raw_llm_response="The target is BCL2, also known as B-cell lymphoma 2.",
@@ -99,34 +130,55 @@ def _make_result(
     )
     return VerificationResult(metadata=meta, template=tmpl, rubric=rubric)
 
+
 results_list = [
     _make_result(
-        "q1", "What is the putative target of venetoclax?", "BCL2",
-        answering_a, True,
-        {"safety": True, "clarity": 4}, {"has_citations": True},
+        "q1",
+        "What is the putative target of venetoclax?",
+        "BCL2",
+        answering_a,
+        True,
+        {"safety": True, "clarity": 4},
+        {"has_citations": True},
         metric_scores={"drug_coverage": {"tp": 3, "fn": 1, "fp": 0, "precision": 1.0, "recall": 0.75, "f1": 0.857}},
-        metric_confusion={"drug_coverage": {"tp": ["aspirin", "ibuprofen", "acetaminophen"], "fn": ["naproxen"], "fp": [], "tn": []}},
+        metric_confusion={
+            "drug_coverage": {"tp": ["aspirin", "ibuprofen", "acetaminophen"], "fn": ["naproxen"], "fp": [], "tn": []}
+        },
         callable_scores={"under_150w": True},
         llm_labels={"response_type": "Factual"},
         embedding_score=0.92,
     ),
     _make_result(
-        "q1", "What is the putative target of venetoclax?", "BCL2",
-        answering_b, False,
-        {"safety": True, "clarity": 3}, {"has_citations": False},
-        ts="2025-06-15T10:01:00Z", exec_time=2.1,
+        "q1",
+        "What is the putative target of venetoclax?",
+        "BCL2",
+        answering_b,
+        False,
+        {"safety": True, "clarity": 3},
+        {"has_citations": False},
+        ts="2025-06-15T10:01:00Z",
+        exec_time=2.1,
     ),
     _make_result(
-        "q2", "What chromosome is TP53 located on?", "Chromosome 17",
-        answering_a, True,
-        {"safety": True, "clarity": 5}, {"has_citations": True},
+        "q2",
+        "What chromosome is TP53 located on?",
+        "Chromosome 17",
+        answering_a,
+        True,
+        {"safety": True, "clarity": 5},
+        {"has_citations": True},
         ts="2025-06-15T10:02:00Z",
     ),
     _make_result(
-        "q2", "What chromosome is TP53 located on?", "Chromosome 17",
-        answering_b, True,
-        {"safety": True, "clarity": 4}, {"has_citations": True},
-        ts="2025-06-15T10:03:00Z", exec_time=1.8,
+        "q2",
+        "What chromosome is TP53 located on?",
+        "Chromosome 17",
+        answering_b,
+        True,
+        {"safety": True, "clarity": 4},
+        {"has_citations": True},
+        ts="2025-06-15T10:03:00Z",
+        exec_time=1.8,
     ),
 ]
 
@@ -196,11 +248,18 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `run_name` | `str \| None` | Organizing label for verification runs |
 | `replicate` | `int \| None` | Replicate number (1, 2, 3, ...) for repeated runs |
 | `keywords` | `list[str] \| None` | Keywords associated with the question |
-| `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason` |
-| `caveats` | `list[Caveat]` | Informational flags attached to the run (e.g. `partial_content`, `embedding_override`, `retries_used`) |
+| `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason`. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md) for the full taxonomy |
+| `caveats` | `list[Caveat]` | Informational flags attached to the run, orthogonal to pass/fail. Four values: `partial_content` (streaming response truncated), `embedding_override` (similarity fallback flipped a verdict), `retries_used` (at least one retry attempt was made), `parse_decision_malformed` (a parse-decision call returned unparseable output). A passing result can carry caveats. See the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) for trigger conditions |
 | `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
 | `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
 | `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |
+| `warnings` | `list[str]` | Non-fatal warning messages collected during the run |
+| `partial_content` | `str \| None` | Truncated response payload preserved when generation was cut short (e.g., streaming timeout) |
+| `retry_counts` | `dict[str, dict[str, int]] \| None` | Per-`ErrorCategory` retry usage and budget; each entry is `{"used": int, "budget": int}`. `None` when retry tracking was inactive |
+| `scenario_id` | `str \| None` | Scenario identifier when the result is part of a scenario; `None` for standalone questions |
+| `scenario_node` | `str \| None` | Scenario node id that produced this result |
+| `scenario_turn` | `int \| None` | 1-indexed turn position within the scenario path |
+| `scenario_path` | `list[str] \| None` | Sequence of node ids traversed before this turn |
 
 ```python
 meta = result.metadata
@@ -219,7 +278,7 @@ Models are identified by a composite `ModelIdentity` object, not a plain string.
 
 | Field | Description |
 |-------|-------------|
-| `interface` | The adapter interface (e.g., `"langchain"`, `"claude_sdk"`) |
+| `interface` | The adapter interface (e.g., `"langchain"`, `"claude_agent_sdk"`) |
 | `model_name` | The model name (e.g., `"claude-sonnet-4-6"`) |
 | `tools` | Sorted list of MCP server names (answering models only; always `[]` for parsing) |
 
@@ -239,12 +298,18 @@ Each result gets a `result_id`: a 16-character SHA256 hash computed from `(quest
 ```python
 # Same inputs always produce the same ID
 id1 = VerificationResultMetadata.compute_result_id(
-    question_id="q1", answering=answering_a, parsing=parsing,
-    timestamp="2025-06-15T10:00:00Z", replicate=1,
+    question_id="q1",
+    answering=answering_a,
+    parsing=parsing,
+    timestamp="2025-06-15T10:00:00Z",
+    replicate=1,
 )
 id2 = VerificationResultMetadata.compute_result_id(
-    question_id="q1", answering=answering_a, parsing=parsing,
-    timestamp="2025-06-15T10:00:00Z", replicate=1,
+    question_id="q1",
+    answering=answering_a,
+    parsing=parsing,
+    timestamp="2025-06-15T10:00:00Z",
+    replicate=1,
 )
 print(f"ID 1:  {id1}")
 print(f"ID 2:  {id2}")
@@ -322,10 +387,10 @@ The `rubric` sub-object (`VerificationResultRubric`) is present whenever rubric 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `llm_trait_scores` | `dict[str, int \| bool] \| None` | LLM-evaluated traits (boolean or 1-5 scale) |
+| `llm_trait_scores` | `dict[str, Any] \| None` | LLM-evaluated traits. Scalar kinds (boolean, score, literal) store an `int`/`bool` value; template-kind traits inject dotted-key entries (`trait.field`) whose values follow the user-defined schema (string, list, dict, numeric, bool) |
 | `llm_trait_labels` | `dict[str, str] \| None` | Class labels for literal-kind LLM traits (index-to-name mapping) |
 | `regex_trait_scores` | `dict[str, bool] \| None` | Regex trait pass/fail results |
-| `callable_trait_scores` | `dict[str, bool \| int] \| None` | Callable trait results |
+| `callable_trait_scores` | `dict[str, bool \| int \| float] \| None` | Callable trait results (score may be a float in `[min_score, max_score]`) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric trait metrics (precision, recall, F1, etc.) |
 | `metric_trait_confusion_lists` | `dict[str, dict[str, list[str]]] \| None` | Per-metric confusion lists (tp, tn, fp, fn containing excerpts) |
 | `rubric_evaluation_strategy` | `str \| None` | `"batch"` or `"sequential"` |
@@ -392,8 +457,8 @@ The `deep_judgment_rubric` sub-object (`VerificationResultDeepJudgmentRubric`) r
 |-------|------|-------------|
 | `extracted_rubric_excerpts` | `dict[str, list[dict]]` | Per-trait excerpts (only for traits with `deep_judgment_excerpt_enabled=True`) |
 | `rubric_trait_reasoning` | `dict[str, str]` | Per-trait reasoning (all deep-judgment-enabled traits) |
-| `deep_judgment_rubric_scores` | `dict[str, int \| bool]` | Scores from deep-judgment evaluation |
-| `standard_rubric_scores` | `dict[str, int \| bool]` | Scores for non-deep-judgment traits (for comparison) |
+| `deep_judgment_rubric_scores` | `dict[str, int \| bool] \| None` | Scores from deep-judgment evaluation |
+| `standard_rubric_scores` | `dict[str, int \| bool] \| None` | Scores for non-deep-judgment traits (for comparison) |
 | `traits_without_valid_excerpts` | `list[str]` | Traits that exhausted retries without valid excerpts |
 | `trait_metadata` | `dict[str, dict]` | Per-trait tracking (stages completed, model calls, retry counts) |
 
@@ -479,8 +544,7 @@ All containers support standard Python iteration:
 
 ```python
 for r in result_set:
-    print(f"  {r.metadata.question_id}: verify={r.template.verify_result}, "
-          f"model={r.metadata.answering.model_name}")
+    print(f"  {r.metadata.question_id}: verify={r.template.verify_result}, model={r.metadata.answering.model_name}")
 
 print(f"\nTotal results: {len(result_set)}")
 print(f"First result question: {result_set[0].metadata.question_text}")
@@ -523,8 +587,9 @@ print(df[["question_id", "field_name", "gt_value", "llm_value", "field_match", "
 | `"llm_binary"` | LLM traits with boolean scores |
 | `"llm_literal"` | LLM traits with categorical classification |
 | `"regex"` | Regex traits (boolean) |
-| `"callable"` | Callable traits (boolean or integer) |
+| `"callable"` | Callable traits (boolean, integer, or float) |
 | `"metric"` | Metric traits (exploded by metric name) |
+| `"agentic"` | Agentic traits (boolean or score) |
 
 Key columns: `trait_name`, `trait_score`, `trait_label` (for literal kinds), `trait_type`, `metric_name` (for metrics), `confusion_tp`/`fp`/`fn`/`tn` (for metrics).
 
@@ -597,9 +662,11 @@ Register custom aggregation strategies by implementing the `ResultAggregator` pr
 ```python
 class WeightedMeanAggregator:
     """Custom aggregator that computes a weighted mean."""
+
     def aggregate(self, series, **kwargs):
         # Simple mean as fallback (weights would come from kwargs)
         return series.mean()
+
 
 rubric_results.register_aggregator("weighted_mean", WeightedMeanAggregator())
 weighted = rubric_results.aggregate_llm_traits(strategy="weighted_mean", by="question_id")

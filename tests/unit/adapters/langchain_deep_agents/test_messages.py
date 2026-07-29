@@ -123,8 +123,6 @@ class TestDeepAgentsMessageConverter:
         """Whitespace-only reasoning must NOT produce an empty ThinkingContent."""
         from langchain_core.messages import AIMessage
 
-        from karenina.ports import ThinkingContent
-
         lc_messages = [
             AIMessage(
                 content="Answer.",

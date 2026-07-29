@@ -85,7 +85,7 @@ The `AdapterRegistry` maps interface strings to `AdapterSpec` objects. Each spec
 
 Registration happens lazily via two mechanisms on first registry access, keeping startup lightweight:
 
-1. **Built-in adapters**: The registry imports each built-in adapter's `registration.py` module (`langchain`, `langchain_deep_agents`, `claude_agent_sdk`, `claude_tool`, `manual`). Each import triggers `AdapterRegistry.register()` with that adapter's `AdapterSpec`. Missing optional dependencies (e.g., `deepagents` not installed) are caught per-adapter and do not block other registrations.
+1. **Built-in adapters**: The registry imports each built-in adapter's `registration.py` module (`langchain`, `claude_agent_sdk`, `manual`, `claude_tool`, `langchain_deep_agents`, `taskeval`). Each import triggers `AdapterRegistry.register()` with that adapter's `AdapterSpec`. Missing optional dependencies (e.g., `deepagents` not installed) are caught per-adapter and do not block other registrations.
 
 2. **External adapters via entry points**: After loading built-ins, the registry calls `entry_points(group="karenina.adapters")` to discover third-party adapter packages. Each entry point's `load()` function is called, which should register an `AdapterSpec`. Entry points whose name conflicts with a built-in interface are skipped with a warning.
 

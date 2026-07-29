@@ -15,8 +15,24 @@ repos:
         args: [--fix]
         files: ^(src/|tests/)
       - id: ruff-format
-        files: ^(src/|tests/|docs/notebooks/)
+        files: ^(src/|tests/)
         types_or: [python, pyi, jupyter]
+
+  # Docs notebooks are owned by scripts/sync_and_format_docs_pairs.py, NOT by
+  # ruff-format above: ruff cannot parse jupytext markdown, so formatting only
+  # the .ipynb side silently desyncs jupytext pairs (and a jupytext --pipe
+  # formatter compounds inter-cell blank lines on every pass). The script
+  # syncs each pair, ruff-formats the notebook, and propagates the formatted
+  # cells back into the paired markdown. Unpaired docs notebooks are simply
+  # ruff-formatted. See the script docstring for details.
+  - repo: local
+    hooks:
+      - id: docs-pairs-sync-format
+        name: docs-pairs-sync-and-format
+        entry: uv run python scripts/sync_and_format_docs_pairs.py
+        language: system
+        files: ^docs/.*\.(md|ipynb)$
+        require_serial: true
 
   # Type checking with mypy using local environment
   - repo: local

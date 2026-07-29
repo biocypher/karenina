@@ -8,7 +8,7 @@ Adapters that are unavailable (e.g., missing SDK) are skipped automatically.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -117,7 +117,11 @@ def mock_deep_agents_agent_result(monkeypatch):
         "is_last_step": False,
     }
     mock_agent = MagicMock()
-    mock_agent.ainvoke = AsyncMock(return_value=mock_result)
+
+    async def astream(*_args, **_kwargs):
+        yield mock_result
+
+    mock_agent.astream = astream
 
     monkeypatch.setattr(
         "karenina.adapters.langchain_deep_agents.agent._create_deep_agent",

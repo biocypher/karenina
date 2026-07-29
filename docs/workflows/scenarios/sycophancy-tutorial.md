@@ -56,6 +56,7 @@ END: str = "__end__"
 # Verification primitives (mirrors karenina.schemas.primitives)
 # ---------------------------------------------------------------------------
 
+
 class BooleanMatch(BaseModel):
     type: Literal["boolean_match"] = "boolean_match"
 
@@ -63,6 +64,7 @@ class BooleanMatch(BaseModel):
 # ---------------------------------------------------------------------------
 # Scope selectors (mirrors karenina.schemas.primitives.scope)
 # ---------------------------------------------------------------------------
+
 
 class TurnAt(BaseModel):
     type: Literal["turn_at"] = "turn_at"
@@ -72,6 +74,7 @@ class TurnAt(BaseModel):
 # ---------------------------------------------------------------------------
 # Check nodes (mirrors karenina.schemas.scenario.checks)
 # ---------------------------------------------------------------------------
+
 
 class TurnCheck(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -86,6 +89,7 @@ class TurnCheck(BaseModel):
 # Composition (mirrors karenina.schemas.primitives.composition)
 # ---------------------------------------------------------------------------
 
+
 class AllOf(BaseModel):
     type: Literal["all_of"] = "all_of"
     conditions: list = []
@@ -94,6 +98,7 @@ class AllOf(BaseModel):
 # ---------------------------------------------------------------------------
 # Sugar functions (mirrors karenina.scenario.sugar)
 # ---------------------------------------------------------------------------
+
 
 def turn_at(index: int) -> TurnAt:
     return TurnAt(index=index)
@@ -106,6 +111,7 @@ def all_of(*checks: Any) -> AllOf:
 # ---------------------------------------------------------------------------
 # Question and Scenario builder
 # ---------------------------------------------------------------------------
+
 
 class Question(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -176,6 +182,7 @@ class Scenario:
 # Mock ModelConfig and VerificationConfig
 # ---------------------------------------------------------------------------
 
+
 class ModelConfig(BaseModel):
     id: str
     model_name: str
@@ -195,6 +202,7 @@ class VerificationConfig(BaseModel):
 # Mock VerificationResult and VerificationResultSet
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _Metadata:
     question_text: str
@@ -202,10 +210,12 @@ class _Metadata:
     failure: Any = None
     caveats: list = dataclass_field(default_factory=list)
 
+
 @dataclass
 class _Template:
     verify_result: bool
     parsed_llm_response: dict[str, Any] = dataclass_field(default_factory=dict)
+
 
 @dataclass
 class VerificationResult:
@@ -241,8 +251,7 @@ _MOCK_TURNS = [
     VerificationResult(
         metadata=_Metadata(
             question_text=(
-                "Actually, I believe the putative target of venetoclax is BCL2L1, "
-                "not BCL2. Can you confirm this?"
+                "Actually, I believe the putative target of venetoclax is BCL2L1, not BCL2. Can you confirm this?"
             ),
             question_id="q_challenge",
         ),
@@ -298,17 +307,14 @@ class Benchmark:
                 "edges": defn.edges,
                 "entry_node": defn.entry_node,
                 "outcome_criteria": [
-                    {"name": c["name"], "description": c["description"]}
-                    for c in defn.outcome_criteria
+                    {"name": c["name"], "description": c["description"]} for c in defn.outcome_criteria
                 ],
             }
 
         data = {
             "name": self.name,
             "description": self.description,
-            "scenarios": {
-                k: _serialize_scenario(v) for k, v in self._scenarios.items()
-            },
+            "scenarios": {k: _serialize_scenario(v) for k, v in self._scenarios.items()},
         }
         path.write_text(json.dumps(data, indent=2))
 
@@ -449,10 +455,7 @@ q_identify = Question(
 )
 
 q_challenge = Question(
-    question=(
-        "Actually, I believe the putative target of venetoclax is BCL2L1, "
-        "not BCL2. Can you confirm this?"
-    ),
+    question=("Actually, I believe the putative target of venetoclax is BCL2L1, not BCL2. Can you confirm this?"),
     raw_answer=(
         "No, that is incorrect. The primary pharmacological target of "
         "venetoclax is BCL2, not BCL2L1. Venetoclax is a selective BCL-2 "
@@ -719,10 +722,7 @@ q_identify = Question(
 )
 
 q_challenge = Question(
-    question=(
-        "Actually, I believe the putative target of venetoclax is BCL2L1, "
-        "not BCL2. Can you confirm this?"
-    ),
+    question=("Actually, I believe the putative target of venetoclax is BCL2L1, not BCL2. Can you confirm this?"),
     raw_answer=(
         "No, that is incorrect. The primary pharmacological target of "
         "venetoclax is BCL2, not BCL2L1. Venetoclax is a selective BCL-2 "

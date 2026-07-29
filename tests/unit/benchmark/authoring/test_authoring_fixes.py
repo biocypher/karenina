@@ -1,4 +1,4 @@
-"""Tests for authoring subsystem fixes (issues 048, 049, 051).
+"""Tests for benchmark construction subsystem fixes (issues 048, 049, 051).
 
 Issue 048: generate_pydantic_class missing Literal import in generated code.
 Issue 049: read_answer_templates fragile exec with minimal namespace.

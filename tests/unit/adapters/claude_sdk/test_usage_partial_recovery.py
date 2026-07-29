@@ -134,9 +134,7 @@ class TestExtractSdkUsageFromMessages:
     def test_handles_none_values_in_usage_dict(self) -> None:
         """Some SDK versions populate fields with explicit None on missing data."""
         messages = [
-            _assistant_message(
-                {"input_tokens": None, "output_tokens": None}
-            ),
+            _assistant_message({"input_tokens": None, "output_tokens": None}),
             _assistant_message({"input_tokens": 75, "output_tokens": 15}),
         ]
         usage = extract_sdk_usage_from_messages(messages)
@@ -259,7 +257,12 @@ class TestBackfillAssistantOutputTokens:
     def test_backfills_output_tokens_from_message_delta(self) -> None:
         msg = _assistant_message_with_id("msg_abc", {"input_tokens": 100, "output_tokens": 0})
         events = [
-            _stream_event({"type": "message_start", "message": {"id": "msg_abc", "usage": {"input_tokens": 100, "output_tokens": 0}}}),
+            _stream_event(
+                {
+                    "type": "message_start",
+                    "message": {"id": "msg_abc", "usage": {"input_tokens": 100, "output_tokens": 0}},
+                }
+            ),
             _stream_event({"type": "content_block_delta", "delta": {}}),
             _stream_event({"type": "message_delta", "usage": {"input_tokens": 100, "output_tokens": 42}}),
             _stream_event({"type": "message_stop"}),

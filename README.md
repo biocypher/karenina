@@ -9,16 +9,37 @@
 
 **Structured LLM evaluation: from factual Q&A to agentic coding tasks**
 
-[About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
+[Paper](#-the-paper) • [About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
-> **⚠️ Experimental Project:** Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
+---
+
+## 📄 The Paper
+
+<div align="center">
+
+<img src="docs/assets/graphical-abstract.png" alt="Karenina graphical abstract: expert-led benchmark design feeds three evaluation settings and yields a multidimensional model profile" width="100%">
+
+<em>From expert-defined evaluation intent to a multi-dimensional model profile, across question answering, multi-turn interaction, and agentic tasks.</em>
+
+</div>
+
+Karenina is the framework behind a forthcoming paper on expert-built, multi-axis evaluation of biomedical AI:
+
+> Large language models and autonomous agents are becoming embedded in biomedical research, and the insights they generate will increasingly shape research directions and clinical decisions. However, their outputs are variable and open-ended, complicating reliable evaluation and reproducibility. Existing benchmarks fall short of addressing this, measuring narrow, static tasks that poorly reflect real-world capabilities. Closing this gap demands tailored, multi-dimensional evaluations and the means for domain experts to build them. Here we introduce Karenina, an open-source framework for multi-dimensional evaluation at scale. We apply it across settings of increasing agency: drug-discovery questions, multi-turn interactions, and autonomous bioinformatics tasks. These evaluations revealed that similar scores concealed consequential differences: answers that were correct yet ungrounded in the retrieved evidence; errors of biological reasoning rather than of workflow setup and execution; models that abandoned correct answers when challenged with false claims. These findings establish expert-built, multi-dimensional evaluation as essential for trustworthy AI in biomedicine.
+
+**Status:** the manuscript is in preparation. The title, author list, and a link to the preprint will be added here once it is out.
+
+Every evaluation reported in the paper was run with this library, using the workflows that are already documented here: [answer templates](docs/core_concepts/answer-templates.md) and [rubrics](docs/core_concepts/rubrics/index.md) over [MCP tool access](docs/core_concepts/mcp-overview.md) for the drug-discovery questions, [scenarios](docs/core_concepts/scenarios/index.md) for the multi-turn interactions, and [agentic evaluation](docs/core_concepts/agentic-evaluation.md) with workspace-inspecting judges for the bioinformatics tasks. The benchmark definitions and analysis code needed to reproduce the published figures and tables will be released shortly, and linked from here.
+
+The rest of this README explains how these pieces fit together, starting with [what Karenina is](#-about-karenina) and [the problem it solves](#-the-problem).
 
 ---
 
 ## 📑 Table of Contents
 
+- [The Paper](#-the-paper)
 - [About Karenina](#-about-karenina)
   - [Why This Approach](#why-this-approach)
 - [The Problem](#-the-problem)
@@ -34,6 +55,7 @@
 - [Installation](#-installation)
 - [Documentation](#-documentation)
 - [Contributing](#-contributing)
+- [Project Status](#%EF%B8%8F-project-status)
 
 ---
 
@@ -42,7 +64,7 @@
 
 Karenina is an open-source Python framework for defining, running, and sharing LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions via [MCP](docs/core_concepts/mcp-overview.md), and fully [agentic coding and data analysis tasks](docs/core_concepts/agentic-evaluation.md) where both the answering model and the judge operate in a real workspace with file and code access.
 
-It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, and metric traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
+It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, metric, and agentic traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
 
 The core challenge Karenina addresses is making the formulation of domain-specific benchmarks accessible to non-LLM-technical experts, allowing them to focus their time and expertise on knowledge rather than infrastructure. LLM-assisted template generation automates most code writing, and a JSON-LD format (building on schema.org vocabularies) provides seamless portability between the Python library, REST API, and web GUI.
 
@@ -52,7 +74,7 @@ The core challenge Karenina addresses is making the formulation of domain-specif
 
 2. **Self-contained benchmarks.** Each question carries its own verification logic and quality checks. A benchmark bundles questions, evaluation criteria, and metadata into a single [portable checkpoint](docs/core_concepts/questions-and-benchmarks/checkpoints.md) that anyone can reload, re-run against different models, or extend with new questions. Evaluation criteria travel with the data.
 
-3. **Spreadsheet-to-benchmark in minutes.** LLMs [translate plain-text questions and answers](docs/workflows/creating-benchmarks/scaled-authoring.md) into runnable evaluation code, accelerating benchmark creation from hours of manual work to minutes. This shifts human effort from writing boilerplate to curating high-quality evaluation criteria. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
+3. **Spreadsheet-to-benchmark in minutes.** LLMs [translate plain-text questions and answers](docs/workflows/creating-benchmarks/scaled-benchmark-creation.md) into runnable evaluation code, accelerating benchmark creation from hours of manual work to minutes. This shifts human effort from writing boilerplate to curating high-quality evaluation criteria. Quality checks are defined declaratively, so adding them requires no custom infrastructure.
 
 4. **Expressivity.** Templates combine natural-language field descriptions with programmatic verification logic, allowing flexible definitions of what it means to "pass": multiple attributes of different types, combined with arbitrary rules (exact match, normalization, numeric tolerance, partial credit, or any custom Python logic).
 
@@ -199,15 +221,15 @@ Rubrics support five trait types (LLM traits have three sub-kinds: boolean, scor
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (boolean) | `bool` | Yes | Binary quality judgment (safety, conciseness) |
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (score) | `int` | Yes | Numeric rating within a configurable range |
 | **[LLMRubricTrait](docs/core_concepts/rubrics/llm-traits.md)** (literal) | `int` | Yes | Classification into ordered categories (e.g., tone: formal/casual/technical) |
-| **[RegexTrait](docs/core_concepts/rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
-| **[CallableTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
+| **[RegexRubricTrait](docs/core_concepts/rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
+| **[CallableRubricTrait](docs/core_concepts/rubrics/callable-traits.md)** | `bool`, `int`, or `float` | No | Custom Python logic (word count, readability, structure checks) |
 | **[MetricRubricTrait](docs/core_concepts/rubrics/metric-traits.md)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
 | **[AgenticRubricTrait](docs/core_concepts/agentic-evaluation.md#9-agentic-rubric-evaluation)** | `bool` or `int` | Yes | Agent investigates workspace artifacts before scoring (code quality, test coverage) |
 
 Here is how a complete evaluation looks for our venetoclax question, combining the template above with two rubric traits:
 
 ```python
-from karenina.schemas.entities.rubric import LLMRubricTrait, RegexTrait
+from karenina.schemas.entities.rubric import LLMRubricTrait, RegexRubricTrait
 
 # Template (from above): verifies BCL2 is identified as the target → PASS/FAIL
 
@@ -224,7 +246,7 @@ mechanism_trait = LLMRubricTrait(
 )
 
 # Regex trait: does the response include citations?
-citation_trait = RegexTrait(
+citation_trait = RegexRubricTrait(
     name="has_citations",
     description="The response includes at least one numbered citation.",
     pattern=r"\[\d+\]",
@@ -242,7 +264,7 @@ Together, templates and rubrics give you both a correctness verdict and a qualit
 | Evaluates | Correctness against ground truth | Observable qualities of the response |
 | Operates on | Parsed, structured data (Pydantic schema) | Raw response trace (full text) |
 | Requires ground truth | Yes (`self.correct`) | No (judges by reading the response alone) |
-| Method | Judge LLM parses into schema, then `verify()` checks | Trait evaluators assess the raw text (LLM, regex, callable, or metric) |
+| Method | Judge LLM parses into schema, then `verify()` checks | Trait evaluators assess the raw text (LLM, regex, callable, metric, or agentic) |
 | Output | Pass/fail | Boolean, integer score, or metrics dict |
 
 [Answer Templates](docs/core_concepts/answer-templates.md) | [Rubrics](docs/core_concepts/rubrics/index.md) | [Templates vs Rubrics](docs/core_concepts/template-vs-rubric.md)
@@ -279,7 +301,6 @@ config = VerificationConfig(
         model_provider="anthropic", interface="langchain", temperature=0.0,
     )],
     evaluation_mode="template_and_rubric",
-    rubric_enabled=True,
 )
 results = benchmark.run_verification(config)
 
@@ -324,7 +345,7 @@ karenina serve --port 8080
 - **[Agentic evaluation](docs/core_concepts/agentic-evaluation.md)**: evaluate coding and data analysis tasks where models and judges operate in workspaces with tool access
 - **[5 rubric trait types](docs/core_concepts/rubrics/index.md)**: LLM (boolean, score, literal), regex, callable, metric, agentic
 - **[2 evaluation modes](docs/core_concepts/evaluation-modes.md)**: Benchmark (closed-loop) and TaskEval (open-loop, pre-recorded outputs)
-- **[6 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`
+- **[7 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `langchain_deep_agents`, `claude_agent_sdk`, `claude_tool`, `openrouter`, `openai_endpoint`, `manual`
 - **[13-stage configurable verification pipeline](docs/core_concepts/verification-pipeline.md)**: each stage can be enabled or disabled independently
 - **[MCP integration](docs/core_concepts/mcp-overview.md)**: Model Context Protocol servers with tool use tracking
 - **[Few-shot prompting](docs/core_concepts/few-shot.md)**: global or per-question examples with flexible selection modes
@@ -420,7 +441,7 @@ export GOOGLE_API_KEY="AI..."
 export OPENROUTER_API_KEY="sk-or-..."  # Required for openrouter interface
 ```
 
-Alternatively, use `karenina init` to generate a `.env` template with all supported variables. See the [Configuration Guide](docs/reference/configuration/index.md) for the full configuration hierarchy.
+Alternatively, use `karenina init` to generate a `.env` template with common configuration settings and placeholders for the core provider keys (OpenAI, Anthropic, Google). See the [Configuration Guide](docs/reference/configuration/index.md) for the full configuration hierarchy.
 
 ### Verify Installation
 
@@ -452,7 +473,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 
 ### Core Concepts
 - [**Answer Templates**](docs/core_concepts/answer-templates.md): Structured correctness verification
-- [**Rubrics**](docs/core_concepts/rubrics/index.md): Quality assessment with four trait types
+- [**Rubrics**](docs/core_concepts/rubrics/index.md): Quality assessment with five trait types
 - [**Templates vs Rubrics**](docs/core_concepts/template-vs-rubric.md): When to use which
 - [**Verification Pipeline**](docs/core_concepts/verification-pipeline.md): The 13-stage evaluation engine
 - [**Agentic Evaluation**](docs/core_concepts/agentic-evaluation.md): Workspace-based evaluation for coding and data analysis tasks
@@ -470,3 +491,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 ## 🤝 Contributing
 
 We welcome contributions to Karenina! Please see our contributing guidelines for more information on how to get involved.
+
+## ⚠️ Project Status
+
+Karenina is still experimental and under active, fast-paced development. APIs and features may change without notice. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.

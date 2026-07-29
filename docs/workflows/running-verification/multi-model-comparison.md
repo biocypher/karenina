@@ -113,6 +113,7 @@ for model_key, profile in _profiles.items():
 # Also build replicate results (3 replicates x 5 questions for claude-haiku)
 _replicate_results = []
 import random
+
 random.seed(42)
 for rep in range(1, 4):
     for i, (qid, (q, a)) in enumerate(zip(_qids, _questions)):
@@ -151,21 +152,29 @@ benchmark = Benchmark.load(str(_tmp))
 
 config = VerificationConfig(
     answering_models=[
-        ModelConfig(id="claude-haiku", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain"),
-        ModelConfig(id="claude-sonnet", model_name="claude-sonnet-4-5",
-                    model_provider="anthropic", interface="langchain"),
+        ModelConfig(
+            id="claude-haiku", model_name="claude-haiku-4-5", model_provider="anthropic", interface="langchain"
+        ),
+        ModelConfig(
+            id="claude-sonnet", model_name="claude-sonnet-4-5", model_provider="anthropic", interface="langchain"
+        ),
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     evaluation_mode="template_only",
 )
 
 print(f"Answering models: {len(config.answering_models)}")
-print(f"Total verifications: {len(config.answering_models)} models x {benchmark.question_count} questions = {len(config.answering_models) * benchmark.question_count}")
+print(
+    f"Total verifications: {len(config.answering_models)} models x {benchmark.question_count} questions = {len(config.answering_models) * benchmark.question_count}"
+)
 ```
 
 ---
@@ -201,7 +210,7 @@ by_model = results.group_by_model()
 for model_key, model_results in by_model.items():
     passed = sum(1 for r in model_results if r.template and r.template.verify_result)
     total = len(model_results)
-    print(f"{model_key}: {passed}/{total} passed ({100*passed/total:.0f}%)")
+    print(f"{model_key}: {passed}/{total} passed ({100 * passed / total:.0f}%)")
 ```
 
 ### Group by Question
@@ -247,20 +256,27 @@ Use `replicate_count` to run each model-question pair multiple times, measuring 
 ```python
 config_with_replicates = VerificationConfig(
     answering_models=[
-        ModelConfig(id="claude-sonnet", model_name="claude-sonnet-4-5",
-                    model_provider="anthropic", interface="langchain"),
+        ModelConfig(
+            id="claude-sonnet", model_name="claude-sonnet-4-5", model_provider="anthropic", interface="langchain"
+        ),
     ],
     parsing_models=[
-        ModelConfig(id="haiku-parser", model_name="claude-haiku-4-5",
-                    model_provider="anthropic", interface="langchain",
-                    temperature=0.0)
+        ModelConfig(
+            id="haiku-parser",
+            model_name="claude-haiku-4-5",
+            model_provider="anthropic",
+            interface="langchain",
+            temperature=0.0,
+        )
     ],
     evaluation_mode="template_only",
     replicate_count=3,
 )
 
 print(f"Replicates: {config_with_replicates.replicate_count}")
-print(f"Total verifications: {config_with_replicates.replicate_count} x {benchmark.question_count} = {config_with_replicates.replicate_count * benchmark.question_count}")
+print(
+    f"Total verifications: {config_with_replicates.replicate_count} x {benchmark.question_count} = {config_with_replicates.replicate_count * benchmark.question_count}"
+)
 ```
 
 ### Analyze Replicate Variance

@@ -79,9 +79,7 @@ class TestTraceUsageMetadataDA:
                 "output_tokens": 7,
                 "total_tokens": 12,
             },
-            response_metadata={
-                "token_usage": {"prompt_tokens": 999, "completion_tokens": 999}
-            },
+            response_metadata={"token_usage": {"prompt_tokens": 999, "completion_tokens": 999}},
         )
 
         trace = _to_trace([msg])
@@ -139,9 +137,7 @@ class TestTraceUsageMetadataDA:
 
         trace = _to_trace([msg])
         assert trace[0]["role"] == "assistant"
-        assert trace[0]["tool_calls"] == [
-            {"id": "call_1", "name": "search", "input": {"q": "BCL2"}}
-        ]
+        assert trace[0]["tool_calls"] == [{"id": "call_1", "name": "search", "input": {"q": "BCL2"}}]
         assert trace[0]["usage_metadata"] == {"input_tokens": 30, "output_tokens": 6}
 
     def test_tool_message_does_not_get_usage_metadata(self) -> None:
