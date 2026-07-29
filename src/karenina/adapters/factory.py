@@ -445,6 +445,11 @@ def build_llm_kwargs(
         kwargs["endpoint_base_url"] = model_config.endpoint_base_url
         kwargs["endpoint_api_key"] = model_config.endpoint_api_key.get_secret_value()
 
+    elif model_config.interface == "langchain":
+        if model_config.model_provider == "anthropic":
+            kwargs["anthropic_base_url"] = model_config.anthropic_base_url
+            kwargs["anthropic_api_key"] = model_config.anthropic_api_key
+
     elif model_config.interface == "manual":
         if question_hash is not None:
             kwargs["question_hash"] = question_hash

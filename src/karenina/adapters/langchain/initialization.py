@@ -35,6 +35,8 @@ def init_chat_model_unified(
     interface: str = "langchain",
     endpoint_base_url: str | None = None,
     endpoint_api_key: str | SecretStr | None = None,
+    anthropic_base_url: str | None = None,
+    anthropic_api_key: str | SecretStr | None = None,
     **kwargs: Any,
 ) -> Any:
     """Initialize a chat model using the unified interface.
@@ -54,6 +56,8 @@ def init_chat_model_unified(
         endpoint_base_url: Base URL for openai_endpoint interface. Required.
         endpoint_api_key: API key for openai_endpoint interface. Required.
             Must be explicitly provided; does NOT read from environment.
+        anthropic_base_url: Base URL for an Anthropic model on the langchain interface.
+        anthropic_api_key: API key for an Anthropic model on the langchain interface.
         **kwargs: Additional args passed to underlying model (temperature, etc.)
 
     Returns:
@@ -82,6 +86,14 @@ def init_chat_model_unified(
     filtered_kwargs = {k: v for k, v in kwargs.items() if k != "max_context_tokens"}
 
     if interface == "langchain":
+        # ChatAnthropic uses the generic LangChain argument names ``base_url``
+        # and ``api_key``. ModelConfig validates that these dedicated fields
+        # are only supplied for Anthropic-backed LangChain models.
+        if provider == "anthropic":
+            if anthropic_base_url is not None:
+                filtered_kwargs["base_url"] = anthropic_base_url
+            if anthropic_api_key is not None:
+                filtered_kwargs["api_key"] = anthropic_api_key
         return init_chat_model(model=model, model_provider=provider, **filtered_kwargs)
 
     if interface == "openrouter":

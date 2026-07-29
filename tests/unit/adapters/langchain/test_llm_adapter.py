@@ -179,6 +179,23 @@ class TestLangChainLLMAdapter:
             assert adapter._converter is not None
             mock_init.assert_called_once()
 
+    def test_adapter_forwards_explicit_anthropic_connection_settings(self) -> None:
+        config = ModelConfig(
+            id="gateway-model",
+            model_name="gateway-model",
+            model_provider="anthropic",
+            interface="langchain",
+            anthropic_base_url="https://gateway.example/anthropic",
+            anthropic_api_key="gateway-key",
+        )
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+            LangChainLLMAdapter(config)
+
+        _, kwargs = mock_init.call_args
+        assert kwargs["base_url"] == "https://gateway.example/anthropic"
+        assert kwargs["api_key"].get_secret_value() == "gateway-key"
+
     @pytest.mark.asyncio
     async def test_ainvoke_basic(self, model_config: Any) -> None:
         """Test basic async invocation."""
