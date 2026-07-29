@@ -384,15 +384,19 @@ class TestTimeoutSafetyNet:
         results = executor.run_batch(tasks)
         assert len(results) == 1
 
-    def test_timeout_config_parameter_exists(self) -> None:
-        """ExecutorConfig accepts a timeout_seconds parameter."""
-        config = ExecutorConfig(timeout_seconds=30.0)
-        assert config.timeout_seconds == 30.0
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [({}, None), ({"timeout_seconds": 30.0}, 30.0)],
+        ids=["default_none", "explicit_float"],
+    )
+    def test_timeout_seconds_round_trips(self, kwargs, expected) -> None:
+        """ExecutorConfig accepts timeout_seconds and defaults to None.
 
-    def test_default_timeout_is_none(self) -> None:
-        """Default timeout is None (no batch-level ceiling)."""
-        config = ExecutorConfig()
-        assert config.timeout_seconds is None
+        The behavioral consequences of None vs a positive float are covered
+        by the batch runner plumbing tests in test_batch_timeout_wiring.py;
+        this just pins the field round-trip.
+        """
+        assert ExecutorConfig(**kwargs).timeout_seconds == expected
 
 
 # ============================================================================
@@ -558,15 +562,18 @@ class TestSequentialPortalManagement:
 class TestExecutorRequeueBound:
     """Tests for max_requeue_count in ExecutorConfig."""
 
-    def test_executor_config_default_requeue_count(self) -> None:
-        """Test ExecutorConfig has max_requeue_count defaulting to 5."""
-        config = ExecutorConfig()
-        assert config.max_requeue_count == 5
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [({}, 5), ({"max_requeue_count": 10}, 10)],
+        ids=["default_five", "explicit"],
+    )
+    def test_max_requeue_count_round_trips(self, kwargs, expected) -> None:
+        """ExecutorConfig defaults max_requeue_count to 5 and accepts overrides.
 
-    def test_executor_config_custom_requeue_count(self) -> None:
-        """Test ExecutorConfig accepts custom max_requeue_count."""
-        config = ExecutorConfig(max_requeue_count=10)
-        assert config.max_requeue_count == 10
+        The behavioral consequence (force_reset after the limit is reached)
+        is covered by TestForceResetOnRequeueLimit below.
+        """
+        assert ExecutorConfig(**kwargs).max_requeue_count == expected
 
 
 @pytest.mark.unit
@@ -959,16 +966,15 @@ class TestPreTeardownAclose:
 class TestAnswererConcurrencyLimitsPlumbing:
     """Config plumbing and lazy semaphore accessor on VerificationExecutor."""
 
-    def test_default_is_none(self) -> None:
+    @pytest.mark.parametrize(
+        ("limits", "expected"),
+        [(None, None), ({"m1": 3}, {"m1": 3})],
+        ids=["default_none", "explicit_map"],
+    )
+    def test_config_round_trips_limit_map(self, limits, expected) -> None:
         from karenina.benchmark.verification.executor import ExecutorConfig
 
-        assert ExecutorConfig().answerer_concurrency_limits is None
-
-    def test_can_be_set(self) -> None:
-        from karenina.benchmark.verification.executor import ExecutorConfig
-
-        cfg = ExecutorConfig(answerer_concurrency_limits={"m1": 3})
-        assert cfg.answerer_concurrency_limits == {"m1": 3}
+        assert ExecutorConfig(answerer_concurrency_limits=limits).answerer_concurrency_limits == expected
 
     def test_get_endpoint_semaphore_caches(self) -> None:
         from karenina.benchmark.verification.executor import (

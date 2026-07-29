@@ -53,12 +53,17 @@ def _build_fake_sdk() -> types.ModuleType:
             self.total_cost_usd = total_cost_usd
             self.structured_output = structured_output
 
+    class StreamEvent:
+        def __init__(self, event: dict[str, Any] | None = None) -> None:
+            self.event = event or {}
+
     mod = types.ModuleType("claude_agent_sdk")
     for _name, _obj in [
         ("ClaudeAgentOptions", ClaudeAgentOptions),
         ("TextBlock", TextBlock),
         ("AssistantMessage", AssistantMessage),
         ("ResultMessage", ResultMessage),
+        ("StreamEvent", StreamEvent),
         # query is a sentinel; every test replaces it via monkeypatch before use.
         ("query", None),
     ]:
@@ -201,3 +206,65 @@ class TestClaudeSDKStreaming:
             await adapter._astream_with_timeout([Message.user("Hi")], timeout=0.05)
 
         assert "First" in exc_info.value.partial_content
+
+    @pytest.mark.asyncio
+    async def test_astream_captures_usage_from_stream_events(
+        self, model_config: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Raw StreamEvent message_start and message_delta usage is captured inline.
+
+        No ResultMessage is emitted (as on a mid-stream cut), so the
+        inline StreamEvent snapshot is the only usage signal.
+        """
+
+        async def fake_query(prompt: str, options: Any) -> Any:
+            yield _SDK.StreamEvent(
+                event={
+                    "type": "message_start",
+                    "message": {"id": "msg_1", "usage": {"input_tokens": 75, "output_tokens": 1}},
+                }
+            )
+            yield _SDK.AssistantMessage(content=[_SDK.TextBlock("partial text")])
+            yield _SDK.StreamEvent(event={"type": "message_delta", "usage": {"output_tokens": 42}})
+
+        monkeypatch.setattr(_SDK, "query", fake_query)
+
+        adapter = ClaudeSDKLLMAdapter(model_config)
+
+        async with adapter.astream([Message.user("Hi")]) as sr:
+            async for _ in sr:
+                pass
+
+        assert sr.accumulated_content == "partial text"
+        assert sr.usage.input_tokens == 75
+        assert sr.usage.output_tokens == 42
+
+    @pytest.mark.asyncio
+    async def test_astream_result_message_overrides_stream_event_usage(
+        self, model_config: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """On the success path the ResultMessage usage wins over inline events."""
+
+        async def fake_query(prompt: str, options: Any) -> Any:
+            yield _SDK.StreamEvent(
+                event={
+                    "type": "message_start",
+                    "message": {"id": "msg_1", "usage": {"input_tokens": 75, "output_tokens": 1}},
+                }
+            )
+            yield _SDK.AssistantMessage(content=[_SDK.TextBlock("done")])
+            yield _SDK.ResultMessage(
+                result="done",
+                usage={"input_tokens": 80, "output_tokens": 20},
+            )
+
+        monkeypatch.setattr(_SDK, "query", fake_query)
+
+        adapter = ClaudeSDKLLMAdapter(model_config)
+
+        async with adapter.astream([Message.user("Hi")]) as sr:
+            async for _ in sr:
+                pass
+
+        assert sr.usage.input_tokens == 80
+        assert sr.usage.output_tokens == 20

@@ -308,3 +308,66 @@ class TestStreamingTimeoutErrorClassification:
         registry.register(StreamingTimeoutError, ErrorCategory.SERVER_ERROR)
         exc = StreamingTimeoutError("timed out", partial_content="")
         assert registry.classify(exc) == ErrorCategory.SERVER_ERROR
+
+
+@pytest.mark.unit
+class TestProviderSDKExceptionClassification:
+    """Real Anthropic and OpenAI SDK exceptions classify to retryable categories.
+
+    Audit for design decision D1 (T2): with SDK max_retries=0, RetryExecutor
+    is the sole retry layer for claude_tool and the claude_agent_sdk parser,
+    so every transient SDK exception must classify via the built-in MRO
+    type-name rules instead of falling through to PERMANENT.
+    """
+
+    @staticmethod
+    def _request():
+        import httpx
+
+        return httpx.Request("POST", "http://localhost:8000/v1/messages")
+
+    @staticmethod
+    def _response(status_code: int):
+        import httpx
+
+        return httpx.Response(status_code, request=httpx.Request("POST", "http://localhost:8000/v1/messages"))
+
+    def test_anthropic_api_connection_error(self) -> None:
+        anthropic = pytest.importorskip("anthropic")
+        exc = anthropic.APIConnectionError(request=self._request())
+        assert ErrorRegistry().classify(exc) == ErrorCategory.CONNECTION
+
+    def test_anthropic_api_timeout_error(self) -> None:
+        anthropic = pytest.importorskip("anthropic")
+        exc = anthropic.APITimeoutError(request=self._request())
+        assert ErrorRegistry().classify(exc) == ErrorCategory.TIMEOUT
+
+    def test_anthropic_rate_limit_error(self) -> None:
+        anthropic = pytest.importorskip("anthropic")
+        exc = anthropic.RateLimitError("rate limited", response=self._response(429), body=None)
+        assert ErrorRegistry().classify(exc) == ErrorCategory.RATE_LIMIT
+
+    def test_anthropic_internal_server_error(self) -> None:
+        anthropic = pytest.importorskip("anthropic")
+        exc = anthropic.InternalServerError("server exploded", response=self._response(500), body=None)
+        assert ErrorRegistry().classify(exc) == ErrorCategory.SERVER_ERROR
+
+    def test_openai_api_connection_error(self) -> None:
+        openai = pytest.importorskip("openai")
+        exc = openai.APIConnectionError(request=self._request())
+        assert ErrorRegistry().classify(exc) == ErrorCategory.CONNECTION
+
+    def test_openai_api_timeout_error(self) -> None:
+        openai = pytest.importorskip("openai")
+        exc = openai.APITimeoutError(request=self._request())
+        assert ErrorRegistry().classify(exc) == ErrorCategory.TIMEOUT
+
+    def test_openai_rate_limit_error(self) -> None:
+        openai = pytest.importorskip("openai")
+        exc = openai.RateLimitError("rate limited", response=self._response(429), body=None)
+        assert ErrorRegistry().classify(exc) == ErrorCategory.RATE_LIMIT
+
+    def test_openai_internal_server_error(self) -> None:
+        openai = pytest.importorskip("openai")
+        exc = openai.InternalServerError("server exploded", response=self._response(500), body=None)
+        assert ErrorRegistry().classify(exc) == ErrorCategory.SERVER_ERROR

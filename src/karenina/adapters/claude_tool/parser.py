@@ -12,12 +12,13 @@ Key features:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import logging
 from typing import TypeVar
 
 from pydantic import BaseModel
 
+from karenina.adapters._parallel_base import run_coro_in_thread
+from karenina.adapters._timeouts import PARSE_INTERNAL_CALL_SEQUENCES, compute_sync_wrapper_timeout
 from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, UsageMetadata
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
@@ -143,13 +144,14 @@ class ClaudeToolParserAdapter:
 
         try:
             asyncio.get_running_loop()
-
-            def run_in_thread() -> ParsePortResult[T]:
-                return asyncio.run(self.aparse_to_pydantic(messages, schema))
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_thread)
-                return future.result(timeout=300)
+            # Fresh thread with the caller's context propagated, so
+            # track_retries telemetry survives the dispatch.
+            thread_timeout = compute_sync_wrapper_timeout(
+                self._config.request_timeout,
+                retry_policy=self._config.retry_policy,
+                internal_call_sequences=PARSE_INTERNAL_CALL_SEQUENCES,
+            )
+            return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=thread_timeout)
 
         except RuntimeError:
             return asyncio.run(self.aparse_to_pydantic(messages, schema))

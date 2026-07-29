@@ -1,0 +1,37 @@
+# Minimal Claude Code CLI image for karenina live tests against vLLM.
+#
+# Pin the Claude Code CLI version. Letting npm float to latest changed
+# agent-visible behavior mid-experiment: 2.1.170 appends system-role messages
+# to the Anthropic messages array (bundled-skills advertisement at session
+# start, plus further mid-session injections), and vLLM's /v1/messages rejects
+# any system role inside messages with HTTP 400. 2.1.146 is the version the
+# retained May CSDK runs used. Override the build arg only when a CLI upgrade
+# is intended and revalidated. See paper_examples/bix_bench/build_claude_sif.sh
+# for the original pin rationale.
+#
+# The claude_agent_sdk container backend (docker_cli_wrapper.py) launches the
+# CLI via /bin/sh -lc with a PATH that includes /usr/local/bin. npm -g on the
+# official node images installs into /usr/local/bin, so a bare `claude`
+# resolves without extra symlinks. Validated at build time below.
+
+FROM node:20-slim
+
+ARG CLAUDE_CODE_VERSION=2.1.146
+
+LABEL org.opencontainers.image.title="karenina-live-claude-cli" \
+      org.opencontainers.image.description="Claude Code CLI pinned for karenina live tests" \
+      org.opencontainers.image.version="${CLAUDE_CODE_VERSION}"
+
+# git and ca-certificates are cheap and useful at runtime (the CLI shells out
+# to git for repo context and needs CA certs for HTTPS endpoints). ripgrep is
+# bundled with the CLI package, so it is not installed here.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+    && npm cache clean --force \
+    && test -x /usr/local/bin/claude \
+    && /bin/sh -lc 'claude --version'
+
+WORKDIR /workspace

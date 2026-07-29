@@ -1,15 +1,18 @@
 """Tests for resource cleanup helper functions."""
 
 import asyncio
-from unittest.mock import AsyncMock
+import concurrent.futures
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from anyio.from_thread import start_blocking_portal
 
 from karenina.adapters.registry import (
     _active_adapters,
     _adapters_lock,
     register_adapter,
 )
+from karenina.benchmark.verification.async_lifecycle import set_async_portal
 from karenina.benchmark.verification.utils.resource_helpers import cleanup_resources
 
 
@@ -28,6 +31,14 @@ def _clear_adapters():
     yield
     with _adapters_lock:
         _active_adapters.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clean_portal():
+    """Keep thread-local portal state clean around each test."""
+    set_async_portal(None)
+    yield
+    set_async_portal(None)
 
 
 def test_cleanup_awaits_adapter_close_no_loop():
@@ -82,6 +93,52 @@ def test_cleanup_clears_adapter_list():
 
     with _adapters_lock:
         assert len(_active_adapters) == 0
+
+
+def test_cleanup_uses_portal_loop_when_active(monkeypatch):
+    """With an active portal and no running loop in the calling thread,
+    cleanup runs on the portal's own event loop (loop affinity)."""
+    ran_on: list[asyncio.AbstractEventLoop] = []
+
+    async def fake_cleanup():
+        ran_on.append(asyncio.get_running_loop())
+
+    monkeypatch.setattr("karenina.adapters.registry.cleanup_all_adapters", fake_cleanup)
+
+    with start_blocking_portal(backend="asyncio") as portal:
+        set_async_portal(portal)
+        portal_loop = portal.call(asyncio.get_running_loop)
+        cleanup_resources()
+
+    assert ran_on == [portal_loop], "Adapter cleanup must run on the shared portal's loop"
+
+
+def test_cleanup_running_loop_guard_skips_portal(monkeypatch):
+    """With a loop running in the calling thread, the portal is NOT used:
+    the existing run_coroutine_threadsafe path is kept to avoid nesting."""
+    calls: dict = {}
+
+    def fake_run_coroutine_threadsafe(coro, loop):
+        calls["loop"] = loop
+        coro.close()
+        future: concurrent.futures.Future = concurrent.futures.Future()
+        future.set_result(None)
+        return future
+
+    monkeypatch.setattr(asyncio, "run_coroutine_threadsafe", fake_run_coroutine_threadsafe)
+
+    stub_portal = MagicMock()
+    stub_portal._event_loop_thread_id = 12345
+
+    async def main():
+        set_async_portal(stub_portal)
+        cleanup_resources()
+
+    asyncio.run(main())
+
+    assert "loop" in calls, "Expected the run_coroutine_threadsafe path with a running loop"
+    stub_portal.start_task_soon.assert_not_called()
+    stub_portal.call.assert_not_called()
 
 
 def test_cleanup_resources_noop_after_pre_teardown_aclose():

@@ -1,10 +1,11 @@
-"""Tests verifying GenerateAnswerStage has no streaming timeout retry loop.
+"""Tests verifying GenerateAnswerStage invokes its adapter exactly once.
 
-After the retry-error-harmonization refactor, the adapter handles retries
-internally via RetryExecutor. StreamingTimeoutError propagates up to the
-stage's exception handler which calls context.mark_error(). The stage
-itself should make exactly one call to stream_invoke or invoke, with no
-retry loop.
+After the retry-error-harmonization refactor, the adapter returned by
+``get_llm`` handles retries internally via ``RetryExecutor``.
+``StreamingTimeoutError`` propagates up to the stage's exception handler,
+which calls ``context.mark_error()``. The stage itself must make exactly
+one call to ``stream_invoke`` or ``invoke`` — any in-stage retry loop is a
+regression. These tests pin that contract by counting real invocations.
 """
 
 from unittest.mock import MagicMock, patch
@@ -118,32 +119,3 @@ class TestNoRetryLoopInGenerateAnswer:
         # Error should be marked on context
         assert ctx.completed_without_errors is False
         assert ctx.error is not None
-
-    def test_no_retry_policy_attribute_access_in_llm_path(self) -> None:
-        """The LLM path should not access retry_policy from the model config,
-        since retries are now handled by the adapter internally."""
-        ctx = _make_context()
-        stage = GenerateAnswerStage()
-        mock_llm = _make_mock_llm(supports_streaming=True)
-
-        mock_llm.stream_invoke.return_value = LLMResponse(
-            content="ok",
-            usage=UsageMetadata(),
-        )
-
-        with (
-            patch(
-                "karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm",
-                return_value=mock_llm,
-            ),
-            patch(_REGISTRY_PATCH_TARGET, return_value=None),
-        ):
-            stage.execute(ctx)
-
-        # Verify no retry loop variables exist in the stage source
-        import inspect
-
-        source = inspect.getsource(GenerateAnswerStage.execute)
-        assert "max_attempts" not in source
-        assert "for attempt" not in source
-        assert "range(1," not in source
