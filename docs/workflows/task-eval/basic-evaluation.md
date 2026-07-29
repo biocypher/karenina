@@ -219,7 +219,7 @@ print(f"Created TaskEval: {task.task_id}")
 | `task_id` | `str \| None` | `None` | Identifier for tracking |
 | `metadata` | `dict \| None` | `None` | Arbitrary metadata dict |
 | `merge_strategy` | `"concatenate" \| "traces_only"` | `"concatenate"` | How to combine logs before evaluation (see [Merge Strategies](#merge-strategies)) |
-| `callable_registry` | `dict[str, Callable]` | `None` | Registry for callable trait evaluation (see [Rubrics](../../core_concepts/rubrics/index.md)) |
+| `callable_registry` | `dict[str, Callable]` | `None` | Runtime overrides keyed by callable trait name (see [Rubrics](../../core_concepts/rubrics/index.md)) |
 
 ---
 

@@ -23,7 +23,7 @@ This tutorial shows how to evaluate response quality using rubrics without an an
 - Define LLM traits: boolean and ordinal score kinds
 - Define regex traits for pattern detection
 - Define callable traits for custom Python checks
-- Register callables with `callable_registry`
+- Override serialized callables with `callable_registry`
 - Combine multiple trait types in a single rubric
 - Inspect rubric scores by trait type
 - Compare quality across multiple logged outputs
@@ -311,9 +311,9 @@ print(f"check_word_count: {check_word_count.__doc__.strip()}")
 print(f"count_sentences: {count_sentences.__doc__.strip()}")
 ```
 
-### Register Callables
+### Override Callable Implementations
 
-Callable traits require registration in a `callable_registry` so TaskEval can find them at evaluation time. Pass the registry at construction:
+`CallableRubricTrait.from_callable()` stores a serialized copy of its function, so registration is not required. A `callable_registry` lets TaskEval use a runtime implementation instead when a registry key exactly matches the trait name. Pass overrides at construction:
 
 ```python
 registry = {
@@ -330,7 +330,7 @@ task_with_callables = TaskEval(
 print(f"Registry has {len(registry)} callable(s)")
 ```
 
-Or register after construction:
+Or register overrides after construction:
 
 ```python
 task.register_callable("check_word_count", check_word_count)
@@ -338,6 +338,8 @@ task.register_callable("count_sentences", count_sentences)
 
 print("Registered callables on existing TaskEval")
 ```
+
+Registered functions bypass deserialization for matching traits. Traits without a matching registry entry still use their serialized functions, so a partial registry does not make an otherwise untrusted rubric safe to evaluate.
 
 ### Create CallableTraits
 

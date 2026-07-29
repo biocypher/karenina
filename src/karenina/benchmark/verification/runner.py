@@ -9,7 +9,7 @@ from typing import Any
 
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import Rubric
-from karenina.schemas.entities.rubric import DynamicRubric
+from karenina.schemas.entities.rubric import DynamicRubric, RubricCallable
 from karenina.schemas.verification import PromptConfig, VerificationResult
 from karenina.schemas.verification.config import (
     DEFAULT_DEEP_JUDGMENT_FUZZY_THRESHOLD,
@@ -120,6 +120,8 @@ def run_single_model_verification(
     replay_parse_on_hydration_mismatch: str = "fall_through",
     # TaskEval signal (set by TaskEval entry; suppresses QUESTION slot in rubric prompts)
     task_eval_mode: bool = False,
+    # Runtime callable overrides (used by TaskEval)
+    callable_registry: dict[str, RubricCallable] | None = None,
 ) -> VerificationResult:
     """
     Run verification for a single question with specific answering and parsing models.
@@ -147,6 +149,7 @@ def run_single_model_verification(
         rubric_evaluation_strategy: Strategy for evaluating LLM rubric traits:
             - "batch": All traits evaluated in single LLM call (default, efficient)
             - "sequential": Traits evaluated one-by-one (reliable, more expensive)
+        callable_registry: Runtime callable overrides keyed by callable trait name.
         deep_judgment_max_excerpts_per_attribute: Max excerpts per attribute (deep-judgment)
         deep_judgment_fuzzy_match_threshold: Similarity threshold for excerpts (deep-judgment)
         deep_judgment_excerpt_retry_attempts: Retry attempts for excerpt validation (deep-judgment)
@@ -194,6 +197,7 @@ def run_single_model_verification(
         deep_judgment_mode=deep_judgment_mode,
         # Rubric Configuration
         rubric_evaluation_strategy=rubric_evaluation_strategy,
+        callable_registry=callable_registry,
         # Deep-Judgment Configuration
         deep_judgment_max_excerpts_per_attribute=deep_judgment_max_excerpts_per_attribute,
         deep_judgment_fuzzy_match_threshold=deep_judgment_fuzzy_match_threshold,
