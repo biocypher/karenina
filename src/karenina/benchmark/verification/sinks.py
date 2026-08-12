@@ -39,7 +39,7 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -60,6 +60,11 @@ logger = logging.getLogger(__name__)
 # State file schema version for ProgressiveFileSink. Bump when on-disk shape
 # changes in an incompatible way.
 STATE_FORMAT_VERSION = "2.0"
+
+# Literal pydantic writes for SecretStr fields when a config is serialized
+# into the .state file. A resumed config still carrying this value would
+# send the mask itself as an API key.
+MASKED_SECRET = "**********"
 
 # Canonical 4-tuple used by VerificationConfig.skip_triples.
 TripleKey = tuple[str, str, str, int | None]
@@ -376,12 +381,16 @@ class ProgressiveFileSink:
         state_path: Path,
         *,
         global_rubric: Rubric | None = None,
+        config_updater: Callable[[VerificationConfig], VerificationConfig] | None = None,
     ) -> ProgressiveFileSink:
         """Reconstruct a sink from an existing ``.state`` + JSONL pair.
 
         Args:
             state_path: Path to the ``.state`` file on disk.
             global_rubric: Rubric to attach to the sink for final export.
+            config_updater: Optional transform applied to the rehydrated
+                stored config, for example to re-inject secrets that
+                pydantic masked when serializing the state file.
 
         Returns:
             A ``ProgressiveFileSink`` whose :meth:`completed_triples` returns
@@ -404,6 +413,14 @@ class ProgressiveFileSink:
 
         output_path = Path(state_data["output_path"])
         config = VerificationConfig(**state_data["config"])
+        if config_updater is not None:
+            config = config_updater(config)
+        if _has_masked_secrets(config):
+            logger.warning(
+                "Resumed sink config contains masked secrets from the state file. "
+                "Pass a fresh config to run_verification or supply config_updater "
+                "to re-inject credentials."
+            )
         benchmark_path = state_data["benchmark_path"]
 
         sink = cls(output_path, config, benchmark_path, global_rubric=global_rubric)
@@ -428,6 +445,43 @@ class ProgressiveFileSink:
             len(sink._failed),
         )
         return sink
+
+    @classmethod
+    def open_or_resume(
+        cls,
+        output_path: Path,
+        config: VerificationConfig,
+        benchmark_path: str,
+        *,
+        global_rubric: Rubric | None = None,
+        config_updater: Callable[[VerificationConfig], VerificationConfig] | None = None,
+    ) -> ProgressiveFileSink:
+        """Resume from an existing state sidecar or create a fresh sink.
+
+        Resumes when the ``.state`` sidecar for ``output_path`` exists,
+        otherwise creates parent directories and a fresh sink. On resume,
+        ``config`` is not used for the sink itself (the stored config is
+        rehydrated), but callers that rebuild their config each run should
+        keep passing the fresh config to ``run_verification``, which
+        overwrites the sink's copy on start.
+
+        Args:
+            output_path: Destination results file.
+            config: Config for a fresh run.
+            benchmark_path: Benchmark checkpoint path recorded in state.
+            global_rubric: Optional global rubric to attach.
+            config_updater: Optional transform applied to the rehydrated
+                stored config on resume, for example to re-inject secrets.
+
+        Returns:
+            A fresh or resumed sink.
+        """
+        state_path = output_path.with_suffix(output_path.suffix + ".state")
+        if state_path.exists():
+            logger.info("Resuming progressive save from %s", state_path)
+            return cls.load_for_resume(state_path, global_rubric=global_rubric, config_updater=config_updater)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        return cls(output_path, config, benchmark_path, global_rubric=global_rubric)
 
     # -- Seeding ----------------------------------------------------------
 
@@ -741,12 +795,15 @@ class AgenticProgressiveFileSink(ProgressiveFileSink):
         state_path: Path,
         *,
         global_rubric: Rubric | None = None,
+        config_updater: Callable[[VerificationConfig], VerificationConfig] | None = None,
         trace_output_dir: Path | None = None,
         trace_layout: str = "question",
         keep_progress_sidecars: bool = False,
         write_partial_export: bool = True,
     ) -> AgenticProgressiveFileSink:
-        base = ProgressiveFileSink.load_for_resume(state_path, global_rubric=global_rubric)
+        base = ProgressiveFileSink.load_for_resume(
+            state_path, global_rubric=global_rubric, config_updater=config_updater
+        )
         sink = cls(
             output_path=base.output_path,
             config=base.config,
@@ -1233,6 +1290,15 @@ def _compute_config_hash(config: VerificationConfig) -> str:
     """MD5 of the config JSON, excluding transient ``manual_traces``."""
     payload = config.model_dump_json(exclude={"manual_traces"})
     return hashlib.md5(payload.encode()).hexdigest()
+
+
+def _has_masked_secrets(config: VerificationConfig) -> bool:
+    """Whether any model credential still holds pydantic's SecretStr mask."""
+    for model in [*config.answering_models, *config.parsing_models]:
+        for secret in (model.endpoint_api_key, model.anthropic_api_key):
+            if secret is not None and secret.get_secret_value() == MASKED_SECRET:
+                return True
+    return False
 
 
 def _fmt_utc(ts: float) -> str:
