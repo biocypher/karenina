@@ -95,6 +95,16 @@ class LLMRubricTrait(BaseModel):
         description="Enable search-enhanced hallucination detection for excerpts (only if excerpt_enabled=True)",
     )
 
+    # Ground-truth exposure field
+    include_ground_truth: bool = Field(
+        default=False,
+        description=(
+            "If True, the judge prompt for this trait includes the question's "
+            "reference answer in a REFERENCE ANSWER block. Opt-in: most traits "
+            "must stay judgeable from the response alone."
+        ),
+    )
+
     # Directionality field
     higher_is_better: bool | None = Field(
         default=True,

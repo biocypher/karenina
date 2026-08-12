@@ -17,6 +17,13 @@ question), the **QUESTION:** block is omitted entirely from the rendered
 prompt. When False (the verification path), the QUESTION block is rendered
 as before. This is the only place the flag affects rendering; system prompts
 do not branch on it.
+
+The user-prompt builders also accept a ``ground_truth`` string. A
+**REFERENCE ANSWER:** block is rendered only when the ground truth is
+non-empty and the trait (or, in batch mode, any trait in the call) has
+``include_ground_truth=True``. The block renders even in ``task_eval_mode``:
+question suppression is about redundancy with the logged context, while
+ground truth is never redundant.
 """
 
 import json
@@ -72,6 +79,7 @@ class LLMTraitPromptBuilder:
         traits: list["LLMRubricTrait"],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> str:
         """Build user prompt for batch evaluation of boolean/score traits.
 
@@ -80,6 +88,8 @@ class LLMTraitPromptBuilder:
             answer: The LLM's response to evaluate.
             traits: List of LLM traits to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block entirely.
+            ground_truth: Reference answer rendered in a **REFERENCE ANSWER:**
+                block when non-empty and any trait has include_ground_truth=True.
 
         Returns:
             Formatted user prompt string.
@@ -97,10 +107,14 @@ class LLMTraitPromptBuilder:
 
         question_block = "" if task_eval_mode else f"\n\n**QUESTION:**\n{question}"
 
+        reference_block = ""
+        if ground_truth and any(trait.include_ground_truth for trait in traits):
+            reference_block = f"\n\n**REFERENCE ANSWER:**\n{ground_truth}"
+
         return f"""Evaluate the following answer against these traits:
 
 **TRAITS TO EVALUATE:**
-{chr(10).join(traits_description)}{question_block}
+{chr(10).join(traits_description)}{question_block}{reference_block}
 
 **ANSWER TO EVALUATE:**
 {answer}"""
@@ -177,6 +191,7 @@ class LLMTraitPromptBuilder:
         trait: "LLMRubricTrait",
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> str:
         """Build user prompt for single trait evaluation.
 
@@ -185,12 +200,17 @@ class LLMTraitPromptBuilder:
             answer: The LLM's response to evaluate.
             trait: The LLM trait to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block entirely.
+            ground_truth: Reference answer rendered in a **REFERENCE ANSWER:**
+                block when non-empty and the trait has include_ground_truth=True.
 
         Returns:
             Formatted user prompt string.
         """
         question_block = "" if task_eval_mode else f"**QUESTION:**\n{question}\n\n"
-        return f"""{question_block}**ANSWER TO EVALUATE:**
+        reference_block = ""
+        if ground_truth and trait.include_ground_truth:
+            reference_block = f"**REFERENCE ANSWER:**\n{ground_truth}\n\n"
+        return f"""{question_block}{reference_block}**ANSWER TO EVALUATE:**
 {answer}
 
 **TRAIT:** {trait.name}
@@ -223,6 +243,7 @@ class LLMTraitPromptBuilder:
         trait: "LLMRubricTrait",
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> str:
         """Build user prompt for template-kind trait evaluation.
 
@@ -231,9 +252,14 @@ class LLMTraitPromptBuilder:
             answer: The LLM's response to evaluate.
             trait: The LLM trait to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block entirely.
+            ground_truth: Reference answer rendered in a **REFERENCE ANSWER:**
+                block when non-empty and the trait has include_ground_truth=True.
         """
         question_block = "" if task_eval_mode else f"**QUESTION:**\n{question}\n\n"
-        return f"""{question_block}**ANSWER TO EVALUATE:**
+        reference_block = ""
+        if ground_truth and trait.include_ground_truth:
+            reference_block = f"**REFERENCE ANSWER:**\n{ground_truth}\n\n"
+        return f"""{question_block}{reference_block}**ANSWER TO EVALUATE:**
 {answer}
 
 **TRAIT:** {trait.name}

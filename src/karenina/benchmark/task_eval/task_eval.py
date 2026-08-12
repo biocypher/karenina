@@ -862,6 +862,7 @@ class Answer(BaseAnswer):
             parsing_model=parsing_model,
             rubric=rubric,
             dynamic_rubric=dynamic_rubric,
+            raw_answer=question_dict.get("raw_answer", ""),
             cached_answer_data=cached_answer_data,
             run_name=run_name,
             replicate=replicate,
