@@ -560,6 +560,12 @@ class ModelConfig(BaseModel):
     mcp_tool_description_overrides: dict[str, str] | None = (
         None  # Optional tool description overrides for GEPA optimization
     )
+    # HTTP timeout in seconds for MCP streamable HTTP connections.
+    # None uses the MCP SDK default (30 seconds).
+    mcp_http_timeout: float | None = None
+    # SSE read timeout in seconds for MCP streamable HTTP connections.
+    # Governs in-session tool-call reads. None uses the MCP SDK default (300 seconds).
+    mcp_sse_read_timeout: float | None = None
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key

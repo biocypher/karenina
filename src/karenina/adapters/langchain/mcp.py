@@ -195,6 +195,9 @@ async def acreate_mcp_client_and_tools(
     mcp_urls_dict: dict[str, str],
     tool_filter: list[str] | None = None,
     tool_description_overrides: dict[str, str] | None = None,
+    *,
+    http_timeout: float | None = None,
+    sse_read_timeout: float | None = None,
 ) -> tuple[Any, list[Any]]:
     """Create an MCP client and fetch LangChain-compatible tools.
 
@@ -209,6 +212,11 @@ async def acreate_mcp_client_and_tools(
         tool_description_overrides: Optional dict mapping tool names to custom
             descriptions. Used by GEPA optimization to test different
             tool descriptions.
+        http_timeout: Optional HTTP timeout in seconds for the streamable
+            HTTP transport. None uses the MCP SDK default (30 seconds).
+        sse_read_timeout: Optional SSE read timeout in seconds, governing
+            in-session tool-call reads. None uses the MCP SDK default
+            (300 seconds).
 
     Returns:
         Tuple of (client, tools) where:
@@ -240,7 +248,12 @@ async def acreate_mcp_client_and_tools(
     # Configure servers with streamable_http transport
     server_config = {}
     for tool_name, url in mcp_urls_dict.items():
-        server_config[tool_name] = {"transport": "streamable_http", "url": url}
+        connection: dict[str, Any] = {"transport": "streamable_http", "url": url}
+        if http_timeout is not None:
+            connection["timeout"] = http_timeout
+        if sse_read_timeout is not None:
+            connection["sse_read_timeout"] = sse_read_timeout
+        server_config[tool_name] = connection
 
     try:
         # Create client and fetch tools with timeout
@@ -281,6 +294,9 @@ async def acreate_persistent_mcp_tools(
     exit_stack: AsyncExitStack,
     tool_filter: list[str] | None = None,
     tool_description_overrides: dict[str, str] | None = None,
+    *,
+    http_timeout: float | None = None,
+    sse_read_timeout: float | None = None,
 ) -> list[Any]:
     """Create LangChain tools bound to persistent MCP sessions.
 
@@ -296,6 +312,11 @@ async def acreate_persistent_mcp_tools(
         tool_filter: Optional list of tool names to include.
         tool_description_overrides: Optional dict mapping tool names to custom
             descriptions.
+        http_timeout: Optional HTTP timeout in seconds for the streamable
+            HTTP transport. None uses the MCP SDK default (30 seconds).
+        sse_read_timeout: Optional SSE read timeout in seconds, governing
+            in-session tool-call reads. None uses the MCP SDK default
+            (300 seconds).
 
     Returns:
         List of LangChain-compatible Tool objects bound to persistent sessions.
@@ -319,6 +340,10 @@ async def acreate_persistent_mcp_tools(
     try:
         for server_name, url in mcp_urls_dict.items():
             config: MCPHttpServerConfig = {"type": "http", "url": url}
+            if http_timeout is not None:
+                config["timeout"] = http_timeout
+            if sse_read_timeout is not None:
+                config["sse_read_timeout"] = sse_read_timeout
 
             # Create persistent session (registered with exit_stack for cleanup)
             session = await asyncio.wait_for(

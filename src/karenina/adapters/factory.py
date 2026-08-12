@@ -420,6 +420,10 @@ def build_llm_kwargs(
         kwargs["mcp_tool_filter"] = model_config.mcp_tool_filter
     if model_config.mcp_tool_description_overrides:
         kwargs["mcp_tool_description_overrides"] = model_config.mcp_tool_description_overrides
+    if model_config.mcp_http_timeout is not None:
+        kwargs["mcp_http_timeout"] = model_config.mcp_http_timeout
+    if model_config.mcp_sse_read_timeout is not None:
+        kwargs["mcp_sse_read_timeout"] = model_config.mcp_sse_read_timeout
 
     # Agent middleware config (for MCP-enabled agents)
     if model_config.agent_middleware is not None:
