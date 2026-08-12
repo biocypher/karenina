@@ -331,6 +331,67 @@ class TestEvaluationLoop:
         assert result.global_eval is not None
         assert len(result.global_eval.verification_results) > 0
 
+    def _make_rubric_only_regex_task(self):
+        """Create a TaskEval with one regex trait so mode detection yields rubric_only."""
+        from karenina.schemas.entities.rubric import RegexRubricTrait, Rubric
+
+        task = TaskEval(task_id="test")
+        task.add_rubric(Rubric(regex_traits=[RegexRubricTrait(name="empty_trace", pattern=r"^\s*$")]))
+        return task
+
+    def _rubric_only_config_with_regex_trait(self):
+        """Build the parsing-only VerificationConfig used by the empty-log tests."""
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.verification import VerificationConfig
+
+        return VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+    def test_rubric_only_with_empty_log_produces_row(self, monkeypatch):
+        """An empty logged output must still reach evaluation as one row."""
+        mock_result = self._make_mock_verification_result()
+        captured: dict[str, Any] = {}
+
+        def mock_run(*args, **kwargs):
+            captured.update(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = self._make_rubric_only_regex_task()
+        task.log("")
+        result = task.evaluate(self._rubric_only_config_with_regex_trait())
+        assert result.global_eval is not None
+        assert len(result.global_eval.verification_results) == 1
+        assert captured  # the pipeline was invoked for the empty row
+
+    def test_rubric_only_with_whitespace_log_produces_row(self, monkeypatch):
+        """Whitespace-only text logs are dropped by merge but still yield a row."""
+        mock_result = self._make_mock_verification_result()
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            lambda *_args, **_kwargs: mock_result,
+        )
+
+        task = self._make_rubric_only_regex_task()
+        task.log("   \n  ")
+        result = task.evaluate(self._rubric_only_config_with_regex_trait())
+        assert result.global_eval is not None
+        assert len(result.global_eval.verification_results) == 1
+
     def test_template_and_rubric_mode(self, monkeypatch):
         """template_and_rubric mode passes both template and rubric."""
         from karenina.schemas.entities.rubric import LLMRubricTrait, Rubric
