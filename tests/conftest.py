@@ -19,6 +19,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "rubric: Rubric evaluation tests")
     config.addinivalue_line("markers", "storage: Checkpoint I/O tests")
     config.addinivalue_line("markers", "cli: CLI command tests")
+    config.addinivalue_line("markers", "paper_replay: paper reproduction replay-equivalence tests")
 
 
 # =============================================================================

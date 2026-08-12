@@ -121,6 +121,9 @@ Documentation = "https://karenina.readthedocs.io"
 # uses, which hatchling rejects. See tests/test_packaging.py.
 packages = ["src/karenina"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["paper/"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -143,6 +146,7 @@ markers = [
     "cli: CLI command tests",
     "deep_judgment: marks tests that use deep judgment verification mode",
     "live: tests that require a reachable live LLM endpoint (opt-in via KARENINA_LIVE_TESTS=1)",
+    "paper_replay: paper reproduction replay-equivalence tests (skip unless KARENINA_PAPER_DATA is set)",
 ]
 
 [tool.coverage.run]
