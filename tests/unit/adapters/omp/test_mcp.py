@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("acp", reason="OMP optional dependency not installed")
+
 from karenina.adapters.omp.mcp import convert_mcp_servers
 from karenina.ports import AgentExecutionError
 
