@@ -144,9 +144,28 @@ def sanitize_model_config(model: dict[str, Any]) -> dict[str, Any]:
         "system_prompt": model["system_prompt"],
     }
 
+    # Include max_tokens if present
+    if "max_tokens" in model:
+        sanitized["max_tokens"] = model["max_tokens"]
+
     # Include max_retries if present
     if "max_retries" in model:
         sanitized["max_retries"] = model["max_retries"]
+
+    # Include request/timeout settings if present (LLM call timeout, agent
+    # execution timeout, and MCP streamable HTTP timeouts)
+    if "request_timeout" in model and model["request_timeout"] is not None:
+        sanitized["request_timeout"] = model["request_timeout"]
+    if "agent_timeout" in model and model["agent_timeout"] is not None:
+        sanitized["agent_timeout"] = model["agent_timeout"]
+    if "mcp_http_timeout" in model and model["mcp_http_timeout"] is not None:
+        sanitized["mcp_http_timeout"] = model["mcp_http_timeout"]
+    if "mcp_sse_read_timeout" in model and model["mcp_sse_read_timeout"] is not None:
+        sanitized["mcp_sse_read_timeout"] = model["mcp_sse_read_timeout"]
+
+    # Include per-category retry policy if present
+    if "retry_policy" in model and model["retry_policy"] is not None:
+        sanitized["retry_policy"] = model["retry_policy"]
 
     # Only include endpoint fields for openai_endpoint interface
     if model["interface"] == "openai_endpoint":
@@ -165,6 +184,8 @@ def sanitize_model_config(model: dict[str, Any]) -> dict[str, Any]:
     # Only include MCP fields if they have values
     if "mcp_urls_dict" in model and model["mcp_urls_dict"]:
         sanitized["mcp_urls_dict"] = model["mcp_urls_dict"]
+    if "mcp_tool_description_overrides" in model and model["mcp_tool_description_overrides"]:
+        sanitized["mcp_tool_description_overrides"] = model["mcp_tool_description_overrides"]
     if "mcp_tool_filter" in model and model["mcp_tool_filter"]:
         sanitized["mcp_tool_filter"] = model["mcp_tool_filter"]
 

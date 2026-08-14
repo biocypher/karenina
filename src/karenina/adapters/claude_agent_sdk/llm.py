@@ -400,9 +400,11 @@ class ClaudeSDKLLMAdapter:
         from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, query
 
         try:
-            from claude_agent_sdk import StreamEvent  # type: ignore[attr-defined]
+            from claude_agent_sdk import StreamEvent
+
+            stream_event_cls: type[StreamEvent] | None = StreamEvent
         except ImportError:
-            StreamEvent = None
+            stream_event_cls = None
 
         prompt_string = self._converter.to_prompt_string(messages)
         system_prompt = self._converter.extract_system_prompt(messages)
@@ -454,7 +456,7 @@ class ClaudeSDKLLMAdapter:
                 elif isinstance(message, ResultMessage):
                     # Final message carries the authoritative usage data
                     response.usage = extract_sdk_usage(message, model=self._config.model_name)
-                elif StreamEvent is not None and isinstance(message, StreamEvent):
+                elif stream_event_cls is not None and isinstance(message, stream_event_cls):
                     event = getattr(message, "event", None) or {}
                     event_type = event.get("type")
                     if event_type == "message_start":

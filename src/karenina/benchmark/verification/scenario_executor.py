@@ -85,6 +85,18 @@ class ScenarioExecutorConfig:
         )
 
 
+class ScenarioExecutionFailure(RuntimeError):
+    """A scenario execution that returned ``status='error'`` instead of raising.
+
+    ScenarioManager converts terminal pipeline failures (e.g. adapter
+    auth errors exhausted after retries) into in-band results with
+    ``status='error'`` and a populated ``terminal_failure``. This
+    exception wraps that terminal failure so the executor's error list
+    distinguishes in-band scenario failures from raised exceptions while
+    still carrying the scenario id, node, and failure reason.
+    """
+
+
 # ============================================================================
 # Executor
 # ============================================================================
@@ -159,7 +171,35 @@ class ScenarioExecutor:
                 compact_manifest(config.workspace_output_dir)
             except Exception:  # noqa: BLE001
                 logger.warning("Workspace capture manifest compaction raised; continuing", exc_info=True)
+
+        errors.extend(self._terminal_failure_errors(results))
         return results, errors
+
+    @staticmethod
+    def _terminal_failure_errors(
+        results: list[ScenarioExecutionResult],
+    ) -> list[tuple[str, BaseException]]:
+        """Build error entries for results that stopped with ``status='error'``.
+
+        ScenarioManager returns these as in-band results rather than
+        raising, so they never reach the per-combo exception handlers.
+        Surfacing them here keeps callers that branch on the batch error
+        list (e.g. ``VerificationResultSet.errors``) from missing
+        per-scenario failures. Each entry is a
+        ``(description, ScenarioExecutionFailure)`` tuple whose message
+        carries the scenario id, failing node, and failure reason.
+        """
+        entries: list[tuple[str, BaseException]] = []
+        for res in results:
+            if res.status != "error" or res.terminal_failure is None:
+                continue
+            tf = res.terminal_failure
+            desc = (
+                f"Scenario '{res.scenario_id}' stopped at node '{tf.node_id}' "
+                f"({tf.category} in stage '{tf.stage or 'unknown'}'): {tf.reason}"
+            )
+            entries.append((desc, ScenarioExecutionFailure(desc)))
+        return entries
 
     @staticmethod
     def _describe_combo(combo: ScenarioCombo) -> str:

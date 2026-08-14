@@ -707,6 +707,112 @@ def test_sanitize_model_config_excludes_endpoint_fields_for_non_openai_endpoint(
 
 
 @pytest.mark.unit
+def test_sanitize_model_config_preserves_token_and_timeout_fields() -> None:
+    """Token limits, timeouts, and retry policy survive preset sanitization."""
+    from karenina.utils.retry_policy import RetryPolicy
+
+    model = {
+        "id": "test-model",
+        "model_provider": "openai",
+        "model_name": "gpt-4",
+        "temperature": 0.5,
+        "interface": "langchain",
+        "system_prompt": "test",
+        "max_tokens": 1024,
+        "request_timeout": 30.0,
+        "agent_timeout": 600,
+        "mcp_http_timeout": 12.5,
+        "mcp_sse_read_timeout": 120.0,
+        "retry_policy": RetryPolicy().model_dump(mode="json"),
+    }
+
+    result = VerificationConfig.sanitize_model_config(model)
+
+    assert result["max_tokens"] == 1024
+    assert result["request_timeout"] == 30.0
+    assert result["agent_timeout"] == 600
+    assert result["mcp_http_timeout"] == 12.5
+    assert result["mcp_sse_read_timeout"] == 120.0
+    assert result["retry_policy"] == RetryPolicy().model_dump(mode="json")
+
+
+@pytest.mark.unit
+def test_save_preset_round_trip_preserves_model_fields(tmp_path: Path) -> None:
+    """save_preset/from_preset round-trip preserves model token and timeout settings."""
+    from karenina.utils.retry_policy import RetryPolicy
+
+    model = ModelConfig(
+        id="test-model",
+        model_provider="openai",
+        model_name="gpt-4",
+        interface="langchain",
+        max_tokens=1024,
+        request_timeout=30.0,
+        agent_timeout=600,
+        mcp_http_timeout=12.5,
+        mcp_sse_read_timeout=120.0,
+        mcp_tool_description_overrides={"search": "Search the web"},
+        retry_policy=RetryPolicy(),
+    )
+    config = VerificationConfig(answering_models=[model], parsing_models=[model])
+
+    metadata = config.save_preset("Round Trip Preset", presets_dir=tmp_path)
+    loaded = VerificationConfig.from_preset(Path(metadata["filepath"]))
+    loaded_model = loaded.answering_models[0]
+
+    assert loaded_model.max_tokens == 1024
+    assert loaded_model.request_timeout == 30.0
+    assert loaded_model.agent_timeout == 600
+    assert loaded_model.mcp_http_timeout == 12.5
+    assert loaded_model.mcp_sse_read_timeout == 120.0
+    assert loaded_model.mcp_tool_description_overrides == {"search": "Search the web"}
+    assert loaded_model.retry_policy == RetryPolicy()
+
+
+@pytest.mark.unit
+def test_from_preset_legacy_model_without_new_fields_loads(tmp_path: Path) -> None:
+    """Presets saved before token/timeout fields were preserved still load with defaults."""
+    legacy_preset = {
+        "id": "legacy-preset",
+        "name": "Legacy",
+        "description": None,
+        "config": {
+            "answering_models": [
+                {
+                    "id": "test-model",
+                    "model_provider": "openai",
+                    "model_name": "gpt-4",
+                    "temperature": 0.5,
+                    "interface": "langchain",
+                    "system_prompt": "test",
+                }
+            ],
+            "parsing_models": [
+                {
+                    "id": "test-model",
+                    "model_provider": "openai",
+                    "model_name": "gpt-4",
+                    "temperature": 0.5,
+                    "interface": "langchain",
+                    "system_prompt": "test",
+                }
+            ],
+        },
+        "created_at": "2025-01-01T00:00:00Z",
+        "updated_at": "2025-01-01T00:00:00Z",
+    }
+    preset_file = tmp_path / "legacy.json"
+    preset_file.write_text(json.dumps(legacy_preset))
+
+    loaded = VerificationConfig.from_preset(preset_file)
+    loaded_model = loaded.answering_models[0]
+
+    assert loaded_model.max_tokens == 16384
+    assert loaded_model.request_timeout is None
+    assert loaded_model.retry_policy is None
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "input_name,expected_output",
     [

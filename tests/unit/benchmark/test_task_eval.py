@@ -1065,3 +1065,227 @@ class TestCallableRegistry:
         )
 
         assert call_kwargs[0]["callable_registry"] == {"short": registered}
+
+
+# =============================================================================
+# Regression Tests: steps-only evaluation and merge_strategy validation
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestStepsOnlyEvaluation:
+    """Verify evaluate() when only step-specific contexts have content."""
+
+    def test_steps_only_evaluate_runs_per_step(self, monkeypatch):
+        """evaluate() with no global templates/rubrics evaluates steps only."""
+        from pydantic import Field
+
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.entities import BaseAnswer
+        from karenina.schemas.verification import VerificationConfig
+
+        class StepAnswer(BaseAnswer):
+            target: str = Field(default="BCL2", description="The drug target")
+
+            def verify(self) -> bool:
+                return self.target.upper() == "BCL2"
+
+        mock_result = TestEvaluationLoop()._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*_args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = TaskEval(task_id="steps-only")
+        task.log("The target is BCL2", step_id="s1", target="step")
+        task.add_template(StepAnswer, step_id="s1")
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        result = task.evaluate(config)
+
+        assert result.global_eval is None  # empty global context: skipped
+        assert set(result.per_step) == {"s1"}
+        assert result.per_step["s1"].verification_results
+        assert len(call_kwargs) == 1
+        assert call_kwargs[0]["evaluation_mode"] == "template_only"
+
+    def test_empty_global_without_steps_still_raises(self):
+        """No content in any context still raises the informative ValueError."""
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.verification import VerificationConfig
+
+        task = TaskEval()
+        task.log("some output")
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        with pytest.raises(ValueError, match="Must provide either answer templates"):
+            task.evaluate(config)
+
+
+@pytest.mark.unit
+class TestMergeStrategyValidation:
+    """merge_strategy must be validated at construction time."""
+
+    def test_invalid_merge_strategy_raises(self):
+        """An unknown merge_strategy raises ValueError listing valid values."""
+        with pytest.raises(ValueError, match="merge_strategy must be one of"):
+            TaskEval(task_id="x", merge_strategy="bogus")  # pyright: ignore[reportArgumentType]
+
+    def test_invalid_merge_strategy_override_raises(self):
+        """An unknown evaluate() merge_strategy override raises ValueError."""
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.verification import VerificationConfig
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        task = TaskEval(task_id="x")
+        with pytest.raises(ValueError, match="merge_strategy must be one of"):
+            task.evaluate(config, merge_strategy="bogus")  # pyright: ignore[reportArgumentType]
+
+    @pytest.mark.parametrize("strategy", ["concatenate", "traces_only"])
+    def test_valid_strategies_construct(self, strategy):
+        """Both documented strategies are accepted."""
+        task = TaskEval(task_id="x", merge_strategy=strategy)
+        assert task.merge_strategy == strategy
+
+
+@pytest.mark.unit
+class TestFullTraceFlagForwarding:
+    """VerificationConfig full-trace flags must reach the verification runner."""
+
+    def test_use_full_trace_flags_forwarded_to_runner(self, monkeypatch):
+        """use_full_trace_for_template/rubric from the config reach run_single_model_verification."""
+        from pydantic import Field
+
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.entities import BaseAnswer
+        from karenina.schemas.verification import VerificationConfig
+
+        class Answer(BaseAnswer):
+            target: str = Field(default="BCL2", description="The drug target")
+
+            def verify(self) -> bool:
+                return self.target.upper() == "BCL2"
+
+        mock_result = TestEvaluationLoop()._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*_args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = TaskEval(task_id="full-trace")
+        task.log("first message", target="step", step_id="s1")
+        task.log("second message", target="step", step_id="s1")
+        task.add_template(Answer, step_id="s1")
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+            use_full_trace_for_template=True,
+            use_full_trace_for_rubric=False,
+        )
+
+        task.evaluate(config)
+
+        assert len(call_kwargs) == 1
+        assert call_kwargs[0]["use_full_trace_for_template"] is True
+        assert call_kwargs[0]["use_full_trace_for_rubric"] is False
+
+    def test_defaults_forward_runner_defaults(self, monkeypatch):
+        """Without config flags, runner defaults (False/True) are forwarded."""
+        from pydantic import Field
+
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.entities import BaseAnswer
+        from karenina.schemas.verification import VerificationConfig
+
+        class Answer(BaseAnswer):
+            target: str = Field(default="BCL2", description="The drug target")
+
+            def verify(self) -> bool:
+                return self.target.upper() == "BCL2"
+
+        mock_result = TestEvaluationLoop()._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*_args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = TaskEval(task_id="defaults")
+        task.log("a message")
+        task.add_template(Answer)
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        task.evaluate(config)
+
+        assert len(call_kwargs) == 1
+        assert call_kwargs[0]["use_full_trace_for_template"] is False
+        assert call_kwargs[0]["use_full_trace_for_rubric"] is True

@@ -50,6 +50,8 @@ from .trace import deep_agents_messages_to_raw_trace
 from .usage import extract_actual_model, extract_deep_agents_usage
 
 if TYPE_CHECKING:
+    from langchain_core.runnables import RunnableConfig
+
     from karenina.schemas.config import ModelConfig
 
 # Lazy import: resolved at first arun() call. Allows module to load
@@ -437,7 +439,7 @@ class DeepAgentsAgentAdapter:
 
                 # LangGraph config for recursion limit
                 # Each tool call + response = 2 steps, so double max_turns
-                langgraph_config: dict[str, Any] = {
+                langgraph_config: RunnableConfig = {
                     "recursion_limit": config.max_turns * 2,
                 }
 

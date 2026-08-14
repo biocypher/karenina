@@ -19,7 +19,7 @@ RUN_MANIFEST_SCHEMA_VERSION = "1.0"
 RUN_MANIFEST_FILENAME = "run_manifest.json"
 RESULTS_FILENAME = "results.json"
 _SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_SECRET_FRAGMENTS = ("api_key", "apikey", "password", "secret", "token")
+_SECRET_KEY_SUFFIXES = ("api_key", "apikey", "password", "secret", "token")
 _MASKED_VALUE = "**********"
 
 RunStatus = Literal["running", "completed", "interrupted", "failed"]
@@ -117,7 +117,7 @@ def _format_time(value: datetime) -> str:
 
 def _mask_configuration(value: JsonValue, *, key: str = "") -> JsonValue:
     lowered = key.lower()
-    if any(fragment in lowered for fragment in _SECRET_FRAGMENTS):
+    if any(lowered.endswith(suffix) for suffix in _SECRET_KEY_SUFFIXES):
         return _MASKED_VALUE if value is not None else None
     if isinstance(value, dict):
         return {str(child_key): _mask_configuration(child, key=str(child_key)) for child_key, child in value.items()}

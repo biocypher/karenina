@@ -642,6 +642,60 @@ def test_dynamic_rubric_rejects_duplicate_llm_trait_names() -> None:
         DynamicRubric(llm_traits=[t1, t2])
 
 
+@pytest.mark.unit
+def test_rubric_rejects_dotted_trait_name() -> None:
+    """Trait names containing '.' are rejected because they collide with dot-notation keys."""
+    dotted = LLMRubricTrait(name="a.b", kind="boolean", higher_is_better=True)
+    with pytest.raises(ValidationError, match="LLM trait name 'a.b' contains '.'"):
+        Rubric(llm_traits=[dotted])
+
+
+@pytest.mark.unit
+def test_dynamic_rubric_rejects_dotted_trait_name() -> None:
+    """DynamicRubric rejects dotted trait names the same way Rubric does."""
+    from karenina.schemas.entities.rubric import DynamicRubric
+
+    dotted = LLMRubricTrait(name="a.b", kind="boolean", higher_is_better=True, summary="s")
+    with pytest.raises(ValidationError, match="LLM trait name 'a.b' contains '.'"):
+        DynamicRubric(llm_traits=[dotted])
+
+
+@pytest.mark.unit
+def test_dynamic_rubric_rejects_dotted_regex_trait_name() -> None:
+    """Dotted names are rejected across all trait types in a DynamicRubric."""
+    from karenina.schemas.entities.rubric import DynamicRubric
+
+    dotted = RegexRubricTrait(name="has.email", pattern=r"\S+@\S+", higher_is_better=True, summary="s")
+    with pytest.raises(ValidationError, match="Regex trait name 'has.email' contains '.'"):
+        DynamicRubric(regex_traits=[dotted])
+
+
+@pytest.mark.unit
+def test_dynamic_rubric_rejects_cross_type_same_name() -> None:
+    """Same name across different types is rejected in a DynamicRubric."""
+    from karenina.schemas.entities.rubric import DynamicRubric
+
+    llm = LLMRubricTrait(name="quality", kind="boolean", higher_is_better=True, summary="s")
+    regex = RegexRubricTrait(name="quality", pattern=r"quality", higher_is_better=True, summary="s")
+    with pytest.raises(ValidationError, match="Duplicate trait name 'quality' across different trait types"):
+        DynamicRubric(llm_traits=[llm], regex_traits=[regex])
+
+
+@pytest.mark.unit
+def test_dynamic_rubric_accepts_clean_trait_names() -> None:
+    """Clean (dot-free, unique) trait names still validate on both rubric kinds."""
+    from karenina.schemas.entities.rubric import DynamicRubric
+
+    llm = LLMRubricTrait(name="safety", kind="boolean", higher_is_better=True, summary="s")
+    regex = RegexRubricTrait(name="has_citation", pattern=r"\[\d+\]", higher_is_better=True, summary="s")
+
+    rubric = Rubric(llm_traits=[llm], regex_traits=[regex])
+    assert rubric.get_trait_names() == ["safety", "has_citation"]
+
+    dynamic = DynamicRubric(llm_traits=[llm], regex_traits=[regex])
+    assert dynamic.get_trait_names() == ["safety", "has_citation"]
+
+
 # =============================================================================
 # Cross-Type Merge Allowed (Issue 183)
 # =============================================================================

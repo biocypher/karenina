@@ -1,6 +1,7 @@
 """Results I/O manager for verification result export and import."""
 
 import csv
+import hashlib
 import json
 import logging
 from collections.abc import Iterator
@@ -23,6 +24,17 @@ from karenina.schemas.verification.result_components import (
     VerificationResultTemplate,
 )
 
+# Legacy export formats (pre-ModelIdentity, flat model strings, no result_id)
+LEGACY_FORMAT_VERSIONS = frozenset({"2.0", "2.1"})
+LEGACY_METADATA_KEYS = frozenset(
+    {
+        "answering_model",
+        "parsing_model",
+        "answering_replicate",
+        "parsing_replicate",
+        "completed_without_errors",
+    }
+)
 logger = logging.getLogger(__name__)
 
 
@@ -392,6 +404,134 @@ class ResultsIOManager:
             scenario_results=scenario_results or None,
             metadata=metadata,
         )
+
+    @staticmethod
+    def load_legacy_result_set(file_path: Path) -> VerificationResultSet:
+        """Load a legacy (v2.0/v2.1) verification export, migrating rows to the current schema.
+
+        Legacy exports predate nested ModelIdentity metadata and deterministic
+        result IDs, so ``load_result_set_from_json`` rejects their rows
+        (forbidden flat keys, missing ``answering``/``parsing``/``result_id``).
+        This loader migrates each row instead: the forbidden flat keys are
+        dropped, ``answering_model``/``parsing_model`` strings
+        (``"provider/model"``) become ModelIdentity objects,
+        ``answering_replicate``/``parsing_replicate`` fold into ``replicate``,
+        and a deterministic ``result_id`` is synthesized from question,
+        models, timestamp, and replicate when absent.
+
+        Non-legacy exports are delegated to ``load_result_set_from_json``
+        unchanged.
+
+        Args:
+            file_path: Path to a legacy (v2.0/v2.1) or current JSON export.
+
+        Returns:
+            A validated result set built from the migrated rows.
+
+        Raises:
+            ValueError: If any row fails migration; the message names every
+                failing row index with its reason.
+        """
+        with open(file_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+
+        if not ResultsIOManager._is_legacy_export(data):
+            return ResultsIOManager.load_result_set_from_json(file_path)
+
+        rows = data["results"]
+        metadata = data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            raise ValueError("Invalid legacy export: metadata must be an object")
+
+        results: list[VerificationResult] = []
+        errors: list[str] = []
+        seen_result_ids: set[str] = set()
+        for index, row in enumerate(rows):
+            try:
+                results.append(ResultsIOManager._migrate_legacy_row(row, index, seen_result_ids))
+            except Exception as e:
+                errors.append(f"index {index}: {e}")
+
+        if errors:
+            raise ValueError(
+                f"Legacy export migration failed for {len(errors)} of {len(rows)} rows: " + "; ".join(errors)
+            )
+
+        return VerificationResultSet(results=results, metadata=dict(metadata))
+
+    @staticmethod
+    def _is_legacy_export(data: Any) -> bool:
+        """Detect whether a parsed export uses the legacy (v2.0/v2.1) row shape."""
+        if not isinstance(data, dict):
+            return False
+        version = data.get("format_version")
+        if isinstance(version, str):
+            return version in LEGACY_FORMAT_VERSIONS
+        rows = data.get("results")
+        if not isinstance(rows, list) or not rows:
+            return False
+        first_row = rows[0]
+        if not isinstance(first_row, dict):
+            return False
+        row_metadata = first_row.get("metadata")
+        return isinstance(row_metadata, dict) and bool(LEGACY_METADATA_KEYS & row_metadata.keys())
+
+    @staticmethod
+    def _migrate_legacy_row(row: Any, index: int, seen_result_ids: set[str]) -> VerificationResult:
+        """Migrate one legacy row into a VerificationResult, or raise with a reason."""
+        if not isinstance(row, dict):
+            raise ValueError("row must be an object")
+        legacy_metadata = row.get("metadata")
+        if not isinstance(legacy_metadata, dict):
+            raise ValueError("row metadata must be an object")
+
+        metadata = dict(legacy_metadata)
+        answering = ResultsIOManager._legacy_model_identity(metadata.pop("answering_model", None))
+        parsing = ResultsIOManager._legacy_model_identity(metadata.pop("parsing_model", None))
+        metadata["answering"] = answering
+        metadata["parsing"] = parsing
+
+        answering_replicate = metadata.pop("answering_replicate", None)
+        parsing_replicate = metadata.pop("parsing_replicate", None)
+        replicate = answering_replicate if answering_replicate is not None else parsing_replicate
+        if replicate is not None:
+            metadata["replicate"] = replicate
+
+        # Dropped legacy fields with no current-schema equivalent.
+        metadata.pop("completed_without_errors", None)
+        metadata.pop("error", None)
+
+        question_id = metadata.get("question_id")
+        timestamp = metadata.get("timestamp")
+        if not isinstance(question_id, str) or not isinstance(timestamp, str):
+            raise ValueError("metadata.question_id and metadata.timestamp must be strings")
+        if not metadata.get("result_id"):
+            result_id = VerificationResultMetadata.compute_result_id(
+                question_id, answering, parsing, timestamp, replicate
+            )
+            if result_id in seen_result_ids:
+                # Identical legacy rows (same question, models, timestamp, and
+                # replicate) hash identically; disambiguate with the row index.
+                result_id = hashlib.sha256(f"{result_id}:{index}".encode()).hexdigest()[:16]
+            metadata["result_id"] = result_id
+        seen_result_ids.add(metadata["result_id"])
+
+        migrated = dict(row)
+        migrated["metadata"] = metadata
+        try:
+            return VerificationResult.model_validate(migrated)
+        except Exception as e:
+            raise ValueError(str(e)) from e
+
+    @staticmethod
+    def _legacy_model_identity(model_string: Any) -> ModelIdentity:
+        """Build a ModelIdentity from a legacy flat ``"provider/model"`` string."""
+        if not isinstance(model_string, str) or not model_string:
+            return ModelIdentity(interface="unknown", model_name="unknown")
+        provider, _, model_name = model_string.partition("/")
+        if not model_name:
+            return ModelIdentity(interface="unknown", model_name=model_string)
+        return ModelIdentity(interface=provider, model_name=model_name)
 
     @staticmethod
     def iter_from_json(

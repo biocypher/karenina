@@ -27,6 +27,13 @@ from .helpers import merge_logs_and_traces
 from .models import LogEvent, StepEval, TaskEvalResult
 
 logger = logging.getLogger(__name__)
+_MERGE_STRATEGIES: tuple[str, str] = ("concatenate", "traces_only")
+
+
+def _validate_merge_strategy(merge_strategy: str) -> None:
+    """Raise ValueError if merge_strategy is not a supported strategy."""
+    if merge_strategy not in _MERGE_STRATEGIES:
+        raise ValueError(f"merge_strategy must be one of {_MERGE_STRATEGIES}, got {merge_strategy!r}")
 
 
 class TaskEval:
@@ -61,10 +68,14 @@ class TaskEval:
             merge_strategy: Default strategy for merging logs before evaluation.
                 "concatenate" combines text and trace logs; "traces_only" uses
                 only logs with trace_messages.
+
+        Raises:
+            ValueError: If merge_strategy is not "concatenate" or "traces_only".
         """
         self.task_id = task_id
         self.metadata = metadata or {}
         self.callable_registry = dict(callable_registry or {})
+        _validate_merge_strategy(merge_strategy)
         self.merge_strategy: Literal["concatenate", "traces_only"] = merge_strategy
 
         # Storage for logs, questions, rubrics, and dynamic rubrics
@@ -320,7 +331,8 @@ class TaskEval:
             config: Verification configuration (parsing models only)
             step_id: Optional step ID to evaluate specific step (otherwise global)
             merge_strategy: Optional override for the instance merge_strategy.
-                If None, uses the instance default.
+                If None, uses the instance default. Must be "concatenate" or
+                "traces_only".
             answering_model: Optional model identity to record for the answering
                 stage. When None, a sentinel with interface="taskeval" is used.
             run_name: Optional run name for result tracking. When None, an
@@ -350,6 +362,9 @@ class TaskEval:
         if config.is_few_shot_enabled():
             logger.debug("FewShotConfig has no effect in TaskEval mode")
 
+        if merge_strategy is not None:
+            _validate_merge_strategy(merge_strategy)
+
         effective_strategy = merge_strategy or self.merge_strategy
 
         if step_id:
@@ -378,7 +393,9 @@ class TaskEval:
         """Evaluate all global logs against global questions and rubrics.
 
         After completing global evaluation, automatically evaluates all
-        available steps as well.
+        available steps as well. When the global context has no templates or
+        rubrics but step-specific contexts do, global evaluation is skipped
+        and only the steps are evaluated.
 
         Args:
             config: Verification configuration with parsing models
@@ -389,14 +406,24 @@ class TaskEval:
         Returns:
             TaskEvalResult with both global evaluation results and all step evaluations
         """
-        step_eval = self._run_evaluation_loop(
-            config,
-            step_id=None,
-            merge_strategy=merge_strategy,
-            answering_model=answering_model,
-            run_name=run_name,
-        )
-
+        global_context = self._get_evaluation_context(step_id=None)
+        step_eval: StepEval | None = None
+        try:
+            self._detect_evaluation_mode(global_context)
+        except ValueError:
+            if not self._get_available_step_ids():
+                raise
+            logger.debug(
+                "Skipping global evaluation: no global templates or rubrics; evaluating step-specific contexts only"
+            )
+        else:
+            step_eval = self._run_evaluation_loop(
+                config,
+                step_id=None,
+                merge_strategy=merge_strategy,
+                answering_model=answering_model,
+                run_name=run_name,
+            )
         task_result = TaskEvalResult(
             task_id=self.task_id,
             metadata=self.metadata,
@@ -637,6 +664,8 @@ class TaskEval:
         # Extract guard flags from config
         abstention_enabled = config.abstention_enabled
         sufficiency_enabled = config.sufficiency_enabled
+        use_full_trace_for_template = config.use_full_trace_for_template
+        use_full_trace_for_rubric = config.use_full_trace_for_rubric
 
         # Build step prefix for synthetic question IDs and error messages
         step_prefix = f"step_{step_id}_" if step_id else ""
@@ -672,6 +701,8 @@ class TaskEval:
                     replicate=replicate,
                     abstention_enabled=abstention_enabled,
                     sufficiency_enabled=sufficiency_enabled,
+                    use_full_trace_for_template=use_full_trace_for_template,
+                    use_full_trace_for_rubric=use_full_trace_for_rubric,
                 )
 
             for question in context.questions:
@@ -705,6 +736,8 @@ class TaskEval:
                     replicate=replicate,
                     abstention_enabled=abstention_enabled,
                     sufficiency_enabled=sufficiency_enabled,
+                    use_full_trace_for_template=use_full_trace_for_template,
+                    use_full_trace_for_rubric=use_full_trace_for_rubric,
                 )
 
         return step_eval
@@ -726,6 +759,8 @@ class TaskEval:
         replicate: int | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
+        use_full_trace_for_template: bool = False,
+        use_full_trace_for_rubric: bool = True,
     ) -> None:
         """Evaluate a single question and store the result.
 
@@ -745,6 +780,10 @@ class TaskEval:
             replicate: Replicate index (1-based), or None for single-replicate runs
             abstention_enabled: Whether abstention detection is enabled
             sufficiency_enabled: Whether sufficiency detection is enabled
+            use_full_trace_for_template: Parse the template from the full trace
+                instead of only the final AI message
+            use_full_trace_for_rubric: Evaluate rubric traits against the full
+                trace instead of only the final AI message
         """
         question_id = question_dict.get("id", "unknown")
         assert isinstance(question_id, str), "Question ID must be a string"
@@ -764,6 +803,8 @@ class TaskEval:
                 replicate=replicate,
                 abstention_enabled=abstention_enabled,
                 sufficiency_enabled=sufficiency_enabled,
+                use_full_trace_for_template=use_full_trace_for_template,
+                use_full_trace_for_rubric=use_full_trace_for_rubric,
             )
 
             if question_id not in step_eval.verification_results:
@@ -795,6 +836,8 @@ class TaskEval:
         replicate: int | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
+        use_full_trace_for_template: bool = False,
+        use_full_trace_for_rubric: bool = True,
     ) -> Any:
         """Evaluate response using main verification pipeline with cached answer data.
 
@@ -868,7 +911,8 @@ class Answer(BaseAnswer):
             replicate=replicate,
             abstention_enabled=abstention_enabled,
             sufficiency_enabled=sufficiency_enabled,
-            rubric_evaluation_strategy="batch",
+            use_full_trace_for_template=use_full_trace_for_template,
+            use_full_trace_for_rubric=use_full_trace_for_rubric,
             evaluation_mode=evaluation_mode,
             task_eval_mode=True,
             callable_registry=self.callable_registry,
