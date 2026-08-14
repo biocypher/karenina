@@ -8,14 +8,14 @@ Each tutorial is a complete, self-contained scenario. Choose the one that matche
 
 | Scenario | Evaluation Strategy | What You'll Learn |
 |----------|-------------------|-------------------|
-| [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) | All | Full Benchmark API: creating, populating, templates, rubrics, readiness, filtering, collection protocols |
-| [Factual QA Benchmark](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) | Template-only | Hand-written templates: boolean check, string normalization, numeric tolerance, regex in `verify()`, partial credit |
-| [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
-| [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) | Rubric-only | No templates: quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
-| [Choosing Rubric Traits](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb) | Template + rubric | Need-driven trait selection: 7 evaluation needs mapped to the right trait type, decision flowchart |
-| [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
-| [AI-Assisted Template Construction](../../notebooks/creating-benchmarks/ai-assisted-template-construction.ipynb) | Template generation | `generate_answer_template()`, `AnswerBuilder`, two-phase generation, batch `generate_all_templates()` |
-| [ADeLe Classification](../../notebooks/creating-benchmarks/adele-classification.ipynb) | Question profiling | 18-dimension classification, `QuestionClassifier`, batch scoring, ADeLe rubrics, complexity filtering |
+| [Benchmark Operations](benchmark-operations.md) | All | Full Benchmark API: creating, populating, templates, rubrics, readiness, filtering, collection protocols |
+| [Factual QA Benchmark](factual-qa-benchmark.md) | Template-only | Hand-written templates: boolean check, string normalization, numeric tolerance, regex in `verify()`, partial credit |
+| [Full Evaluation Benchmark](full-evaluation-benchmark.md) | Template + rubric | Custom templates combined with all 6 rubric trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) |
+| [Quality Assessment](quality-assessment-benchmark.md) | Rubric-only | No templates: quality evaluation for tasks with no single correct answer (safety, empathy, clarity) |
+| [Choosing Rubric Traits](choosing-rubric-traits.md) | Template + rubric | Need-driven trait selection: 7 evaluation needs mapped to the right trait type, decision flowchart |
+| [Scaled Benchmark Creation](scaled-benchmark-creation.md) | Power user | Bulk ingestion, `generate_all_templates()`, `AnswerBuilder`, ADeLe classification, few-shot examples |
+| [AI-Assisted Template Construction](ai-assisted-template-construction.md) | Template generation | `generate_answer_template()`, `AnswerBuilder`, two-phase generation, batch `generate_all_templates()` |
+| [ADeLe Classification](adele-classification.md) | Question profiling | 18-dimension classification, `QuestionClassifier`, batch scoring, ADeLe rubrics, complexity filtering |
 
 ---
 
@@ -49,7 +49,7 @@ Karenina supports three evaluation strategies. Every benchmark uses one of these
 | **Template + rubric** | Questions, templates, rubrics | ADeLe, few-shot | Comprehensive evaluation (correctness + quality) |
 | **Rubric-only** | Questions, rubrics | ADeLe, few-shot | Subjective tasks, communication, safety |
 
-See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for details on how these strategies map to pipeline behavior.
+See [Evaluation Modes](../../core_concepts/evaluation-modes.md) for details on how these strategies map to pipeline behavior.
 
 ---
 
@@ -79,13 +79,13 @@ Reload and verify round-trip
 |-----------|--------|------------|
 | Create benchmark | `Benchmark.create(name, description, version)` | All scenarios |
 | Add question | `benchmark.add_question(question, raw_answer, answer_template=...)` | All scenarios |
-| Add template to existing question | `benchmark.add_answer_template(question_id, code_string)` | [Factual QA](../../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) |
-| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) |
-| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) |
-| Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
-| Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb), [Quality Assessment](../../notebooks/creating-benchmarks/quality-assessment-benchmark.ipynb) |
-| Check readiness | `benchmark.check_readiness()` | [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) |
-| Filter questions | `benchmark.filter_questions(finished=True, has_template=True)` | [Benchmark Operations](../../notebooks/creating-benchmarks/benchmark-operations.ipynb) |
+| Add template to existing question | `benchmark.add_answer_template(question_id, code_string)` | [Factual QA](factual-qa-benchmark.md) |
+| Generate templates automatically | `benchmark.generate_all_templates(model, model_provider)` | [Scaled Benchmark Creation](scaled-benchmark-creation.md) |
+| Build templates programmatically | `AnswerBuilder().add_attribute(...).compile()` | [Scaled Benchmark Creation](scaled-benchmark-creation.md) |
+| Add global rubric trait | `benchmark.add_global_rubric_trait(trait)` | [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md) |
+| Add per-question rubric trait | `benchmark.add_question_rubric_trait(question_id, trait)` | [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md) |
+| Check readiness | `benchmark.check_readiness()` | [Benchmark Operations](benchmark-operations.md) |
+| Filter questions | `benchmark.filter_questions(finished=True, has_template=True)` | [Benchmark Operations](benchmark-operations.md) |
 | Save checkpoint | `benchmark.save("path.jsonld")` | All scenarios |
 | Load checkpoint | `Benchmark.load("path.jsonld")` | All scenarios |
 
@@ -95,12 +95,12 @@ Reload and verify round-trip
 
 These concept pages provide the foundational knowledge that the scenarios build on:
 
-- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): What templates are, field types, `verify()` semantics
+- [Answer Templates](../../core_concepts/answer-templates.md): What templates are, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md): Trait types (LLM, regex, callable, metric), global vs per-question
 - [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md): JSON-LD format, save/load behavior
-- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How template-only, template+rubric, and rubric-only map to pipeline stages
-- [ADeLe Classification](../../notebooks/core_concepts/adele.ipynb): Question complexity dimensions
-- [Few-Shot Examples](../../notebooks/core_concepts/few-shot.ipynb): Configuration modes and example selection
+- [Evaluation Modes](../../core_concepts/evaluation-modes.md): How template-only, template+rubric, and rubric-only map to pipeline stages
+- [ADeLe Classification](../../core_concepts/adele.md): Question complexity dimensions
+- [Few-Shot Examples](../../core_concepts/few-shot.md): Configuration modes and example selection
 
 ---
 

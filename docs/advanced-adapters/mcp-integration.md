@@ -1,6 +1,6 @@
 # MCP Integration Deep Dive
 
-This page documents **how** adapters handle MCP servers internally — the connection lifecycle, tool schema transformation, agent execution loops, trace capture, and message conversion. For MCP **configuration and usage**, see the [MCP overview](../notebooks/core_concepts/mcp-overview.ipynb) and [MCP-enabled verification](../notebooks/running-verification/mcp-agent-evaluation.ipynb).
+This page documents **how** adapters handle MCP servers internally — the connection lifecycle, tool schema transformation, agent execution loops, trace capture, and message conversion. For MCP **configuration and usage**, see the [MCP overview](../core_concepts/mcp-overview.md) and [MCP-enabled verification](../workflows/running-verification/mcp-agent-evaluation.md).
 
 ---
 
@@ -43,6 +43,36 @@ The `karenina.utils.mcp` module provides adapter-agnostic utilities for MCP serv
 | `get_all_mcp_tools(sessions)` | Call `list_tools()` on each session. Returns `list[tuple[server_name, session, mcp_tool]]`. |
 
 These utilities use the core `mcp` Python package (`mcp.client.streamable_http.streamablehttp_client`) for HTTP transport. The Claude Tool and Deep Agents adapters reuse these directly; other adapters have their own connection mechanisms.
+
+### Managed Local Servers (`utils/mcp/server.py`)
+
+Karenina can own a local server process for the duration of a verification:
+
+```python
+from pathlib import Path
+
+from karenina.utils.mcp import McpServerSpec, managed_mcp_server
+
+spec = McpServerSpec(
+    name="Open Targets",
+    command=("otp-mcp", "--transport", "http", "--port", "8765"),
+    port=8765,
+    log_path=Path("logs/otp-mcp.log"),
+)
+
+with managed_mcp_server(spec) as server:
+    model_config = model_config.model_copy(
+        update={"mcp_urls_dict": {"otp": server.url}}
+    )
+    config = config.model_copy(update={"answering_models": [model_config]})
+    benchmark.run_verification(config)
+```
+
+The context manager starts the process in its own process group, waits until
+the configured TCP port accepts connections, and stops the complete process
+group on exit. If graceful termination exceeds the shutdown timeout, it forces
+the process group to stop. `managed_mcp_servers()` provides the same lifecycle
+for several server specifications and cleans them up in reverse startup order.
 
 ### AsyncExitStack Pattern
 
@@ -383,8 +413,8 @@ In all cases, the pipeline's **RecursionLimitAutoFail** stage (Stage 3) checks `
 
 ## Related
 
-- [MCP overview](../notebooks/core_concepts/mcp-overview.ipynb) — Configuration and when to use MCP
-- [MCP-enabled verification](../notebooks/running-verification/mcp-agent-evaluation.ipynb) — Running MCP verification workflows
+- [MCP overview](../core_concepts/mcp-overview.md) — Configuration and when to use MCP
+- [MCP-enabled verification](../workflows/running-verification/mcp-agent-evaluation.md) — Running MCP verification workflows
 - [Adapter architecture](index.md) — Hexagonal architecture and port/adapter pattern
 - [Port types](ports.md) — Complete AgentPort protocol reference
 - [Available adapters](available-adapters.md) — Per-adapter features and configuration

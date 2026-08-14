@@ -21,6 +21,7 @@ from .checkpoint import (
     validate_jsonld_benchmark,
 )
 from .code import extract_and_combine_codeblocks
+from .endpoint_probe import EndpointProbeResult, probe_openai_endpoint, select_openai_endpoint
 from .errors import ErrorCategory, ErrorRegistry, is_retryable_error
 from .file_ops import atomic_write
 from .json_extraction import extract_json_from_response
@@ -52,6 +53,10 @@ __all__ = [
     "ErrorCategory",
     "ErrorRegistry",
     "is_retryable_error",
+    # Endpoint probing
+    "EndpointProbeResult",
+    "probe_openai_endpoint",
+    "select_openai_endpoint",
     # JSON extraction
     "extract_json_from_response",
     # Message utilities

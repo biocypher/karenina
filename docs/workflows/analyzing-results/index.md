@@ -105,7 +105,7 @@ df.groupby("answering_model")["field_match"].mean()
 df_rubric.groupby("question_id")["trait_score"].mean()
 ```
 
-[Analyze results with DataFrames →](../../notebooks/analyzing-results/dataframe-analysis.ipynb)
+[Analyze results with DataFrames →](dataframe-analysis.md)
 
 For qualitative, per-case inspection (passes and failures rendered as markdown files, bucketed by failure category, ready to hand to a coding agent), see [Error Analysis](error-analysis.md).
 
@@ -122,7 +122,7 @@ save_benchmark(benchmark, db_config)
 save_verification_results(results_dict, db_config, run_id="run-001", benchmark_name="my-benchmark")
 ```
 
-[Persist results to database →](../../notebooks/analyzing-results/database-persistence.ipynb)
+[Persist results to database →](database-persistence.md)
 
 ### 5. Export Results
 
@@ -177,7 +177,7 @@ The `VerificationResultSet` provides specialized accessors for different analysi
 
 ## What You Get by Evaluation Mode
 
-The data available in results depends on which [evaluation mode](../../notebooks/core_concepts/evaluation-modes.ipynb) you used:
+The data available in results depends on which [evaluation mode](../../core_concepts/evaluation-modes.md) you used:
 
 | Evaluation Mode | Template Results | Rubric Results | Deep Judgment |
 |----------------|-----------------|----------------|---------------|

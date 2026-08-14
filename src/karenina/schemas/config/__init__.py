@@ -12,6 +12,7 @@ from .models import (
     INTERFACE_OPENROUTER,
     AgentLimitConfig,
     AgentMiddlewareConfig,
+    AgentRuntimeConfig,
     FewShotConfig,
     ModelConfig,
     ModelRetryConfig,
@@ -29,6 +30,7 @@ __all__ = [
     "INTERFACE_OPENAI_ENDPOINT",
     # Model configuration
     "ModelConfig",
+    "AgentRuntimeConfig",
     "FewShotConfig",
     "QuestionFewShotConfig",
     # Agent middleware configuration

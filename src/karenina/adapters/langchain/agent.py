@@ -418,6 +418,8 @@ class LangChainAgentAdapter:
                     exit_stack,
                     tool_filter,
                     self._config.mcp_tool_description_overrides,
+                    http_timeout=self._config.mcp_http_timeout,
+                    sse_read_timeout=self._config.mcp_sse_read_timeout,
                 )
             except Exception as e:
                 deferred_error = AgentExecutionError(f"Failed to load MCP tools: {e}")

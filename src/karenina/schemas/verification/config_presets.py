@@ -172,6 +172,10 @@ def sanitize_model_config(model: dict[str, Any]) -> dict[str, Any]:
     if "extra_kwargs" in model and model["extra_kwargs"]:
         sanitized["extra_kwargs"] = model["extra_kwargs"]
 
+    # Preserve the typed execution settings for agent adapters.
+    if "agent_runtime" in model and model["agent_runtime"]:
+        sanitized["agent_runtime"] = model["agent_runtime"]
+
     # Include agent_middleware if present (for MCP-enabled agents)
     if "agent_middleware" in model and model["agent_middleware"]:
         sanitized["agent_middleware"] = model["agent_middleware"]

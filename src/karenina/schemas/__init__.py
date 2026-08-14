@@ -45,6 +45,7 @@ from .config import (
     INTERFACE_LANGCHAIN,
     INTERFACE_MANUAL,
     INTERFACE_OPENROUTER,
+    AgentRuntimeConfig,
     FewShotConfig,
     ModelConfig,
     QuestionFewShotConfig,
@@ -184,6 +185,7 @@ __all__ = [
     "TraitKind",
     "merge_rubrics",
     # Configuration models
+    "AgentRuntimeConfig",
     "ModelConfig",
     "FewShotConfig",
     "QuestionFewShotConfig",

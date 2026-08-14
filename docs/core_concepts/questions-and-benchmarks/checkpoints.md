@@ -8,7 +8,7 @@ Think of a checkpoint as the **Memory** of your evaluation. It doesn't just stor
 
 Karenina uses checkpoints to solve the "it works on my machine" problem in LLM evaluation. A checkpoint is designed to be:
 
-*   **Self-Contained**: It includes the actual Python source code of your [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb). You don't need a central repository to run a checkpoint; the logic travels with the data.
+*   **Self-Contained**: It includes the actual Python source code of your [Answer Templates](../answer-templates.md). You don't need a central repository to run a checkpoint; the logic travels with the data.
 *   **Human-Readable**: Even though it's a machine-interpretable format, you can open a checkpoint in any text editor and understand exactly what is being evaluated.
 *   **Semantically Rich**: By using **JSON-LD**, we anchor our evaluation data in the global [Schema.org](https://schema.org) standard, making your benchmarks interoperable with other AI safety and evaluation tools.
 
@@ -18,8 +18,8 @@ A checkpoint organizes your benchmark into a clear, nested hierarchy. When you l
 
 1.  **Benchmark Metadata**: The identity (name, version, creator) and the timeline (when it was born and last modified).
 2.  **The Global Standards**: [Rubric traits](../rubrics/index.md) that apply to every question in the set.
-3.  **The Questions**: A collection of [Question objects](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb), each wrapped in a unique identity.
-4.  **The Local Logic**: The specific [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb) and question-specific rubrics attached to individual prompts.
+3.  **The Questions**: A collection of [Question objects](questions.md), each wrapped in a unique identity.
+4.  **The Local Logic**: The specific [Answer Templates](../answer-templates.md) and question-specific rubrics attached to individual prompts.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -210,7 +210,7 @@ Old checkpoints without the `karenina:` prefix are normalized automatically on l
 
 ## 6. Next Steps
 
-*   [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Understanding how the code inside a checkpoint is executed.
+*   [Answer Templates](../answer-templates.md): Understanding how the code inside a checkpoint is executed.
 *   [Rubrics](../rubrics/index.md): How different trait types are represented as `Rating` objects.
-*   [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How to run the evaluation defined in your checkpoint.
+*   [Evaluation Modes](../evaluation-modes.md): How to run the evaluation defined in your checkpoint.
 *   [Creating Benchmarks](../../workflows/creating-benchmarks/index.md): Step-by-step guides for building your first checkpoint.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -324,6 +325,46 @@ class TestProgressiveFileSink:
         sink.on_start(["k1", "k2"], sink.config)
         sink.on_start(["k2"], sink.config)
         assert sink.total_tasks == 2
+
+
+@pytest.mark.unit
+class TestOpenOrResume:
+    def test_creates_fresh_sink_when_no_state(self, tmp_path: Path):
+        output_path = tmp_path / "nested" / "run.json"
+        sink = ProgressiveFileSink.open_or_resume(output_path, _config(), "bench.jsonld")
+        assert output_path.parent.is_dir()
+        assert sink.completed_triples() == set()
+
+    def test_resumes_when_state_exists(self, tmp_path: Path):
+        output_path = tmp_path / "run.json"
+        first = ProgressiveFileSink(output_path=output_path, config=_config(), benchmark_path="bench.jsonld")
+        result = _result("q1")
+        first.on_start(_manifest_from_results([result]), first.config)
+        first.on_result(result)
+
+        resumed = ProgressiveFileSink.open_or_resume(output_path, _config(), "bench.jsonld")
+        assert resumed.completed_triples() == first.completed_triples()
+        assert len(resumed.completed_triples()) == 1
+
+    def test_config_updater_transforms_stored_config(self, tmp_path: Path):
+        output_path = tmp_path / "run.json"
+        first = ProgressiveFileSink(output_path=output_path, config=_config(), benchmark_path="bench.jsonld")
+        first.on_start(_manifest_from_results([_result("q1")]), first.config)
+
+        def updater(config: VerificationConfig) -> VerificationConfig:
+            return config.model_copy(update={"replicate_count": 7})
+
+        resumed = ProgressiveFileSink.open_or_resume(output_path, _config(), "bench.jsonld", config_updater=updater)
+        assert resumed.config.replicate_count == 7
+
+    def test_warns_on_masked_secrets_without_updater(self, tmp_path: Path, caplog: pytest.LogCaptureFixture):
+        output_path = tmp_path / "run.json"
+        first = ProgressiveFileSink(output_path=output_path, config=_config(), benchmark_path="bench.jsonld")
+        first.on_start(_manifest_from_results([_result("q1")]), first.config)
+
+        with caplog.at_level(logging.WARNING):
+            ProgressiveFileSink.open_or_resume(output_path, _config(), "bench.jsonld")
+        assert any("masked secrets" in record.message for record in caplog.records)
 
 
 @pytest.mark.unit

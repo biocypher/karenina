@@ -11,6 +11,7 @@ karenina.adapters.claude_tool.mcp and were removed. Use those instead.
 """
 
 from .client import connect_mcp_session
+from .server import ManagedMcpServer, McpServerSpec, managed_mcp_server, managed_mcp_servers
 from .tools import (
     afetch_tool_descriptions,
     apply_tool_description_overrides,
@@ -20,6 +21,10 @@ from .tools import (
 __all__ = [
     # Client session management
     "connect_mcp_session",
+    "ManagedMcpServer",
+    "McpServerSpec",
+    "managed_mcp_server",
+    "managed_mcp_servers",
     # Tool description utilities
     "afetch_tool_descriptions",
     "fetch_tool_descriptions",

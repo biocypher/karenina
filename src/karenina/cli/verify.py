@@ -13,7 +13,7 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 
-from karenina.benchmark import Benchmark
+from karenina.benchmark import Benchmark, RunDirectory, create_run_directory
 from karenina.benchmark.verification.sinks import ProgressiveFileSink
 from karenina.schemas import FinishedTemplate, VerificationConfig, VerificationResultSet
 from karenina.schemas.verification.config import (
@@ -163,6 +163,14 @@ def verify(
     _mode: Annotated[str, typer.Option("--mode", help="Interactive mode (basic or advanced)")] = "basic",
     # Output and filtering
     output: Annotated[Path | None, typer.Option(help="Output file (.json or .csv)")] = None,
+    run_root: Annotated[
+        Path | None,
+        typer.Option(help="Create a timestamped run directory below this path"),
+    ] = None,
+    run_label: Annotated[
+        str,
+        typer.Option(help="Label for a timestamped run directory"),
+    ] = "verification",
     questions: Annotated[str | None, typer.Option(help="Question indices (e.g., '0,1,2' or '5-10')")] = None,
     question_ids: Annotated[str | None, typer.Option(help="Comma-separated question IDs")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", help="Show progress bar")] = False,
@@ -327,6 +335,7 @@ def verify(
         # With manual traces
         karenina verify checkpoint.jsonld --interface manual --manual-traces traces/my_traces.json --parsing-model gpt-4.1-mini --parsing-provider openai
     """
+    run_directory: RunDirectory | None = None
     try:
         # Convert no_async to async_execution
         async_execution = not no_async
@@ -432,11 +441,6 @@ def verify(
             console.print(f"[dim]Loading replay store from {replay}[/dim]")
             config = config.model_copy(update={"replay_store": ReplayStore.load(replay)})
 
-        if config.workspace_output_mode != "none" and config.workspace_output_dir is None:
-            if output is None or output_format != "json":
-                cli_error("--workspace-output-dir is required when workspace capture is enabled without JSON output")
-            config = config.model_copy(update={"workspace_output_dir": output.parent / "workspaces"})
-
         # Step 5: Get and filter templates
         ids_filter = None
         if question_ids:
@@ -445,6 +449,29 @@ def verify(
         if ids_filter:
             console.print(f"[dim]Filtered to {len(all_templates)} question(s) by IDs[/dim]")
         templates = _filter_templates(all_templates, selected_question_indices, questions)
+
+        if run_root is not None:
+            if resume is not None:
+                cli_error("--run-root cannot be combined with --resume")
+            if output is not None:
+                cli_error("--run-root cannot be combined with --output")
+            run_directory = create_run_directory(
+                run_root,
+                run_label,
+                benchmark_path=benchmark_path,
+                config=config,
+                run_name=run_label,
+                selected_question_count=len(templates),
+            )
+            output = run_directory.results_path
+            output_format = "json"
+            progressive_save = True
+
+        if config.workspace_output_mode != "none" and config.workspace_output_dir is None:
+            if output is None or output_format != "json":
+                cli_error("--workspace-output-dir is required when workspace capture is enabled without JSON output")
+            workspace_dir = run_directory.workspaces_path if run_directory else output.parent / "workspaces"
+            config = config.model_copy(update={"workspace_output_dir": workspace_dir})
 
         # Step 6: Prompt for output in interactive mode (if not already specified)
         if not output and interactive:
@@ -498,16 +525,25 @@ def verify(
         # Step 11: Display summary
         display_summary(final_results, duration)
 
+        if run_directory is not None:
+            run_directory.update_status("completed")
+
         raise typer.Exit(code=0)
 
     except KeyboardInterrupt:
+        if run_directory is not None:
+            run_directory.update_status("interrupted")
         console.print("\n[yellow]Interrupted by user.[/yellow]")
         if progressive_sink is not None and output is not None:
             console.print(f"[dim]To resume: karenina verify --resume {progressive_sink.state_path}[/dim]")
         raise typer.Exit(code=130) from None
-    except typer.Exit:
+    except typer.Exit as e:
+        if run_directory is not None and run_directory.manifest.status == "running":
+            run_directory.update_status("failed", error=e)
         raise
     except Exception as e:
+        if run_directory is not None:
+            run_directory.update_status("failed", error=e)
         console.print(f"\n[red]Unexpected error: {e}[/red]")
         if verbose:
             import traceback

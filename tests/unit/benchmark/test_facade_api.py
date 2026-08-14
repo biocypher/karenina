@@ -17,6 +17,11 @@ import pytest
 
 from karenina import Benchmark
 from karenina.benchmark import Benchmark as BenchmarkAlias
+from karenina.benchmark import (
+    ResultsIOManager,
+    count_deep_judgment_reasoning_tokens,
+    evaluate_rubric_on_results,
+)
 from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationResult,
@@ -58,6 +63,21 @@ def _make_result(question_id: str = "q1", passed: bool = True) -> VerificationRe
         ),
         template=VerificationResultTemplate(raw_llm_response="answer"),
     )
+
+
+@pytest.mark.unit
+class TestPublicResultsAPI:
+    def test_results_io_manager_is_exported_from_benchmark(self) -> None:
+        """Users can import the standard results loader from the public module."""
+        assert ResultsIOManager.__name__ == "ResultsIOManager"
+
+    def test_post_hoc_evaluation_is_exported_from_benchmark(self) -> None:
+        """Stored-result evaluation is available beside the standard loader."""
+        assert evaluate_rubric_on_results.__name__ == "evaluate_rubric_on_results"
+
+    def test_deep_judgment_token_counter_is_exported_from_benchmark(self) -> None:
+        """Users can preflight the complete first-stage judge prompt."""
+        assert count_deep_judgment_reasoning_tokens.__name__ == "count_deep_judgment_reasoning_tokens"
 
 
 @pytest.mark.unit

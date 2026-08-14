@@ -88,6 +88,10 @@ class MCPHttpServerConfig(TypedDict, total=False):
         type: Transport type - "http" for streamable HTTP, "sse" for SSE.
         url: Server URL endpoint.
         headers: HTTP headers (e.g., Authorization).
+        timeout: HTTP timeout in seconds. Omitted means the MCP SDK
+            default (30 seconds).
+        sse_read_timeout: SSE read timeout in seconds, governing in-session
+            tool-call reads. Omitted means the MCP SDK default (300 seconds).
 
     Example:
         >>> config: MCPHttpServerConfig = {
@@ -100,6 +104,8 @@ class MCPHttpServerConfig(TypedDict, total=False):
     type: Literal["http", "sse"]
     url: str
     headers: dict[str, str]
+    timeout: float
+    sse_read_timeout: float
 
 
 # Union type for MCP server configuration

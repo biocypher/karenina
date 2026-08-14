@@ -468,8 +468,8 @@ print("CLI: --deep-judgment, --deep-judgment-rubric-mode, --deep-judgment-rubric
 
 ## Related Pages
 
-- [Full Evaluation](full-evaluation.ipynb) — Template+rubric without deep judgment
-- [Basic Verification](basic-verification.ipynb) — Simplest verification path
+- [Full Evaluation](full-evaluation.md) — Template+rubric without deep judgment
+- [Basic Verification](basic-verification.md) — Simplest verification path
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All DJ configuration fields
 - [Advanced Pipeline](../../core_concepts/verification-pipeline.md) — Pipeline stage details
 

@@ -27,9 +27,9 @@ Log outputs → Attach criteria → Evaluate → Inspect results
 
 | Scenario | Focus Area | What You'll Learn |
 |----------|-----------|-------------------|
-| [Basic Evaluation](../../notebooks/task-eval/basic-evaluation.ipynb) | Template + rubric | Create TaskEval, log text/traces, attach templates and rubrics, configure `VerificationConfig`, inspect results |
-| [Quality Assessment](../../notebooks/task-eval/quality-assessment.ipynb) | Rubric-only | LLM, regex, and callable traits, rubric-only evaluation, compare scores across outputs |
-| [Multi-Step Evaluation](../../notebooks/task-eval/multi-step-evaluation.ipynb) | Step-scoped | Named steps, `target` routing, step-scoped criteria, per-step vs global evaluation |
+| [Basic Evaluation](basic-evaluation.md) | Template + rubric | Create TaskEval, log text/traces, attach templates and rubrics, configure `VerificationConfig`, inspect results |
+| [Quality Assessment](quality-assessment.md) | Rubric-only | LLM, regex, and callable traits, rubric-only evaluation, compare scores across outputs |
+| [Multi-Step Evaluation](multi-step-evaluation.md) | Step-scoped | Named steps, `target` routing, step-scoped criteria, per-step vs global evaluation |
 
 ---
 
@@ -58,14 +58,14 @@ Evaluate and inspect results
 | Operation | Method | Covered In |
 |-----------|--------|------------|
 | Create instance | `TaskEval(task_id=..., metadata=...)` | All scenarios |
-| Log text | `task.log(text)` | [Basic Evaluation](../../notebooks/task-eval/basic-evaluation.ipynb) |
-| Log traces | `task.log_trace(messages)` | [Basic Evaluation](../../notebooks/task-eval/basic-evaluation.ipynb), [Multi-Step](../../notebooks/task-eval/multi-step-evaluation.ipynb) |
-| Add template | `task.add_template(AnswerClass)` | [Basic Evaluation](../../notebooks/task-eval/basic-evaluation.ipynb), [Multi-Step](../../notebooks/task-eval/multi-step-evaluation.ipynb) |
+| Log text | `task.log(text)` | [Basic Evaluation](basic-evaluation.md) |
+| Log traces | `task.log_trace(messages)` | [Basic Evaluation](basic-evaluation.md), [Multi-Step](multi-step-evaluation.md) |
+| Add template | `task.add_template(AnswerClass)` | [Basic Evaluation](basic-evaluation.md), [Multi-Step](multi-step-evaluation.md) |
 | Add rubric | `task.add_rubric(rubric)` | All scenarios |
 | Evaluate globally | `task.evaluate(config)` | All scenarios |
-| Evaluate one step | `task.evaluate(config, step_id="...")` | [Multi-Step](../../notebooks/task-eval/multi-step-evaluation.ipynb) |
+| Evaluate one step | `task.evaluate(config, step_id="...")` | [Multi-Step](multi-step-evaluation.md) |
 | Inspect results | `result.summary()`, `result.display()` | All scenarios |
-| Export results | `result.export_json()`, `result.export_markdown()` | [Basic Evaluation](../../notebooks/task-eval/basic-evaluation.ipynb) |
+| Export results | `result.export_json()`, `result.export_markdown()` | [Basic Evaluation](basic-evaluation.md) |
 
 ---
 
@@ -74,9 +74,9 @@ Evaluate and inspect results
 These concept pages provide the foundational knowledge that the scenarios build on:
 
 - [TaskEval](../../core_concepts/task-eval.md): Object structure, pipeline integration, merge strategies
-- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Template structure, field types, `verify()` semantics
+- [Answer Templates](../../core_concepts/answer-templates.md): Template structure, field types, `verify()` semantics
 - [Rubrics](../../core_concepts/rubrics/index.md): Trait types (LLM, regex, callable, metric), global vs per-question
-- [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb): How template-only, template+rubric, and rubric-only map to pipeline stages
+- [Evaluation Modes](../../core_concepts/evaluation-modes.md): How template-only, template+rubric, and rubric-only map to pipeline stages
 - [Verification Pipeline](../../core_concepts/verification-pipeline.md): The 13-stage engine (with sub-stages 7a/7b and 11a/11b) that TaskEval feeds into
 
 ---

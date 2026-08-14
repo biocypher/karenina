@@ -259,3 +259,37 @@ class TestLangChainLLMAdapter:
             assert structured_adapter is not adapter
             assert structured_adapter._structured_schema == TestSchema
             assert structured_adapter._model == mock_structured_model
+
+    @pytest.mark.asyncio
+    async def test_structured_adapter_does_not_close_borrowed_clients(
+        self,
+        model_config: Any,
+    ) -> None:
+        """The base adapter owns clients shared with structured wrappers."""
+        with patch("karenina.adapters.langchain.initialization.init_chat_model") as mock_init:
+            async_client = AsyncMock()
+            sync_client = MagicMock()
+            mock_model = MagicMock(
+                http_async_client=async_client,
+                http_client=sync_client,
+            )
+            mock_structured_model = MagicMock(
+                http_async_client=async_client,
+                http_client=sync_client,
+            )
+            mock_model.with_structured_output.return_value = mock_structured_model
+            mock_init.return_value = mock_model
+
+            class TestSchema(BaseModel):
+                value: str
+
+            adapter = LangChainLLMAdapter(model_config)
+            structured_adapter = adapter.with_structured_output(TestSchema)
+
+            await structured_adapter.aclose()
+            async_client.aclose.assert_not_awaited()
+            sync_client.close.assert_not_called()
+
+            await adapter.aclose()
+            async_client.aclose.assert_awaited_once()
+            sync_client.close.assert_called_once()

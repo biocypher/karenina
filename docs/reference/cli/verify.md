@@ -106,7 +106,7 @@ Feature flags are tri-state: passing `--flag` enables the feature, `--no-flag` d
 
 ### Workspace Capture
 
-For agentic and workspace benchmarks, `verify` can save each run's final [workspace](../../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) as a sidecar artifact next to the results.
+For agentic and workspace benchmarks, `verify` can save each run's final [workspace](../../core_concepts/agentic-evaluation.md) as a sidecar artifact next to the results.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -120,7 +120,7 @@ When `--workspace-output-mode` is not `none`, a destination must be resolvable: 
 --workspace-output-dir is required when workspace capture is enabled without JSON output
 ```
 
-Inside the output directory, each captured run is written to a `<question_id>__<result_id>/` folder, indexed by a `manifest.jsonl` file that is compacted into `manifest.json` when the run completes. Progressive agentic runs stream results through [`AgenticProgressiveFileSink`](../api/sinks.md). See [Agentic Evaluation](../../notebooks/core_concepts/agentic-evaluation.ipynb#2-workspaces) for what a workspace is and the `workspace_output_*` fields in the [VerificationConfig reference](../configuration/verification-config.md).
+Inside the output directory, each captured run is written to a `<question_id>__<result_id>/` folder, indexed by a `manifest.jsonl` file that is compacted into `manifest.json` when the run completes. Progressive agentic runs stream results through [`AgenticProgressiveFileSink`](../api/sinks.md). See [Agentic Evaluation](../../core_concepts/agentic-evaluation.md) for what a workspace is and the `workspace_output_*` fields in the [VerificationConfig reference](../configuration/verification-config.md).
 
 ### Manual Traces
 
@@ -339,7 +339,7 @@ karenina verify checkpoint.jsonld --interactive --mode advanced
 - Filtering specific rubric trait names (when rubrics are enabled)
 - Tuning deep-judgment template parameters (max excerpts, fuzzy threshold, retry attempts, search-based validation, search tool) when the template deep-judgment mode is not `disabled`
 - Configuring rubric deep-judgment (mode, global excerpt toggle, per-trait defaults, search settings, custom config)
-- [Few-shot](../../notebooks/core_concepts/few-shot.ipynb) prompting configuration
+- [Few-shot](../../core_concepts/few-shot.md) prompting configuration
 - Async execution settings (enabled flag, max workers)
 
 Per-model prompts are also richer in advanced mode: MCP tool configuration is offered for the answering model only when `--mode advanced` is set and the chosen interface is not `manual`.
@@ -350,8 +350,8 @@ Source: `karenina/src/karenina/cli/interactive.py:78` (`build_config_interactive
 
 ## Related
 
-- [Running Verification](../../notebooks/running-verification/basic-verification.ipynb) — Step-by-step guide for common verification workflows
-- [Basic Verification (Python API)](../../notebooks/running-verification/basic-verification.ipynb) — Programmatic verification alternative
+- [Running Verification](../../workflows/running-verification/basic-verification.md) — Step-by-step guide for common verification workflows
+- [Basic Verification (Python API)](../../workflows/running-verification/basic-verification.md) — Programmatic verification alternative
 - [VerificationConfig Reference](../configuration/verification-config.md) — All configuration fields
 - [Configuration Hierarchy](../../workflows/configuration/index.md) — How CLI, presets, and env vars interact
-- [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) — Preset loading and overrides
+- [Full Evaluation](../../workflows/running-verification/full-evaluation.md) — Preset loading and overrides

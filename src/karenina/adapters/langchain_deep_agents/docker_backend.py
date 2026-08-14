@@ -5,7 +5,6 @@ from __future__ import annotations
 import subprocess
 import uuid
 from pathlib import Path
-from typing import cast
 
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.backends.protocol import ExecuteResponse, SandboxBackendProtocol
@@ -15,11 +14,12 @@ from karenina.adapters.agent_runtime import (
     ContainerRuntimeConfig,
     build_container_command,
     preflight_container_runtime,
+    preflight_container_workspace,
 )
 from karenina.ports import AdapterUnavailableError
 
 
-class ContainerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # type: ignore[misc]
+class ContainerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):
     """DeepAgents backend that maps a host workspace to `/workspace` in a container."""
 
     def __init__(
@@ -42,6 +42,7 @@ class ContainerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # typ
                 reason="missing_workspace",
             )
         preflight_container_runtime(container_config)
+        preflight_container_workspace(container_config, self._host_workspace)
 
         super().__init__(
             root_dir=self._host_workspace,
@@ -70,7 +71,7 @@ class ContainerSandboxBackend(FilesystemBackend, SandboxBackendProtocol):  # typ
         return path
 
     def _resolve_path(self, key: str) -> Path:
-        return cast(Path, super()._resolve_path(self._strip_workspace_prefix(key)))
+        return super()._resolve_path(self._strip_workspace_prefix(key))
 
     def _to_virtual_path(self, path: Path) -> str:
         virtual_path = super()._to_virtual_path(path)

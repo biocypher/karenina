@@ -12,7 +12,7 @@ conversion is in benchmark_helpers.py.
 import logging
 import threading
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Union
 
@@ -416,7 +416,8 @@ class Benchmark:
 
     def add_questions(
         self,
-        questions_data: "list[dict[str, Any] | Question]",
+        questions_data: "Sequence[dict[str, Any] | Question]",
+        finished: bool | object = _NOT_PROVIDED,
     ) -> list[str]:
         """Add multiple questions at once.
 
@@ -424,6 +425,9 @@ class Benchmark:
 
         Args:
             questions_data: List of dicts or Question objects.
+            finished: Default finished state for items that do not define one.
+                Pass False when importing items for template drafting and
+                curator review. Omission preserves the existing default.
 
         Returns:
             List of question IDs that were created.
@@ -436,7 +440,7 @@ class Benchmark:
                 "Cannot add standalone questions to a scenario benchmark. "
                 "Scenarios and standalone questions cannot coexist in the same benchmark."
             )
-        return self._question_manager.add_questions(questions_data)
+        return self._question_manager.add_questions(questions_data, finished=finished)
 
     def get_question_ids(self) -> list[str]:
         """Get all question IDs in the benchmark."""
@@ -510,9 +514,13 @@ class Benchmark:
         """Remove all questions from the benchmark."""
         return self._question_manager.clear_questions()
 
-    def add_questions_batch(self, questions_data: "list[dict[str, Any] | Question]") -> list[str]:
-        """Add multiple questions at once."""
-        return self._question_manager.add_questions_batch(questions_data)
+    def add_questions_batch(
+        self,
+        questions_data: "Sequence[dict[str, Any] | Question]",
+        finished: bool | object = _NOT_PROVIDED,
+    ) -> list[str]:
+        """Add multiple questions at once with an optional finished state."""
+        return self._question_manager.add_questions_batch(questions_data, finished=finished)
 
     def mark_finished(self, question_id: str) -> None:
         """Mark a question as finished."""

@@ -12,6 +12,7 @@ from .executor import (
     set_async_portal,
 )
 from .extension import extend_template_run
+from .repair import RepairOutcome, RepairSelection, repair_results_export, select_repair_rows, splice_repaired_rows
 from .sinks import (
     AgenticProgressiveFileSink,
     CompositeSink,
@@ -36,6 +37,11 @@ __all__ = [
     "auto_save_results",
     # Extension
     "extend_template_run",
+    "RepairOutcome",
+    "RepairSelection",
+    "repair_results_export",
+    "select_repair_rows",
+    "splice_repaired_rows",
     # Executor
     "VerificationExecutor",
     "ExecutorConfig",

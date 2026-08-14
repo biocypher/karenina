@@ -66,28 +66,40 @@ class RubricEvaluator:
             callable_registry: Runtime callable overrides keyed by trait name.
                 Matching functions take precedence over serialized trait callables.
 
-        Raises:
-            ValueError: If model configuration is invalid (validated by adapter factory)
-            RuntimeError: If LLM initialization fails
+        The model adapter is initialized lazily. Regex and callable traits do
+        not need an LLM, so deterministic-only rubrics avoid adapter setup and
+        teardown entirely.
         """
         self.model_config = model_config
         self.evaluation_strategy = evaluation_strategy
         self._prompt_config = prompt_config
         self.callable_registry = callable_registry or {}
 
-        # Note: ValueError from validate_model_config propagates directly;
-        # only runtime errors (adapter unavailable, etc.) are wrapped.
-        try:
-            # Use the adapter factory to get an LLMPort implementation
-            self.llm: LLMPort = get_llm(model_config)
-        except ValueError:
-            raise  # Let validation errors propagate
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {e}") from e
+        self._llm: LLMPort | None = None
 
         # Initialize specialized evaluators (lazy - only when needed)
         self._llm_trait_evaluator: LLMTraitEvaluator | None = None
         self._metric_trait_evaluator: MetricTraitEvaluator | None = None
+
+    @property
+    def llm(self) -> LLMPort:
+        """Get or lazily create the model adapter for model-backed traits.
+
+        Returns:
+            The adapter used for LLM and metric rubric evaluation.
+
+        Raises:
+            ValueError: If the model configuration is invalid.
+            RuntimeError: If adapter initialization fails.
+        """
+        if self._llm is None:
+            try:
+                self._llm = get_llm(self.model_config)
+            except ValueError:
+                raise
+            except Exception as error:
+                raise RuntimeError(f"Failed to initialize LLM for rubric evaluation: {error}") from error
+        return self._llm
 
     @property
     def llm_trait_evaluator(self) -> LLMTraitEvaluator:
@@ -109,7 +121,8 @@ class RubricEvaluator:
 
     def close(self) -> None:
         """Release adapter resources held by this evaluator."""
-        close_adapter(self.llm)
+        if self._llm is not None:
+            close_adapter(self._llm)
 
     def evaluate_rubric(
         self,
@@ -118,6 +131,7 @@ class RubricEvaluator:
         rubric: Rubric,
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, str] | None, list[dict[str, Any]]]:
         """
         Evaluate an answer against a rubric's traits (LLM, regex, and callable).
@@ -128,6 +142,9 @@ class RubricEvaluator:
             rubric: The rubric containing evaluation traits.
             task_eval_mode: When True, omit the **QUESTION:** block from
                 rendered LLM-trait user prompts. Set automatically by TaskEval.
+            ground_truth: The question's reference answer. Rendered in a
+                REFERENCE ANSWER block only for LLM traits that set
+                include_ground_truth=True. Deterministic traits ignore it.
 
         Returns:
             Tuple of (results, llm_trait_labels, usage_metadata_list) where:
@@ -168,7 +185,7 @@ class RubricEvaluator:
             if template_traits:
                 try:
                     template_results, template_usage_list = self.llm_trait_evaluator.evaluate_template(
-                        question, answer, template_traits, task_eval_mode=task_eval_mode
+                        question, answer, template_traits, task_eval_mode=task_eval_mode, ground_truth=ground_truth
                     )
                     results.update(template_results)
                     usage_metadata_list.extend(template_usage_list)
@@ -181,7 +198,11 @@ class RubricEvaluator:
                 if self.evaluation_strategy == "batch":
                     try:
                         llm_results, usage_metadata = self.llm_trait_evaluator.evaluate_batch(
-                            question, answer, non_literal_traits, task_eval_mode=task_eval_mode
+                            question,
+                            answer,
+                            non_literal_traits,
+                            task_eval_mode=task_eval_mode,
+                            ground_truth=ground_truth,
                         )
                         results.update(llm_results)
                         if usage_metadata:
@@ -192,7 +213,11 @@ class RubricEvaluator:
                 else:  # "sequential"
                     try:
                         llm_results, seq_usage_metadata_list = self.llm_trait_evaluator.evaluate_sequential(
-                            question, answer, non_literal_traits, task_eval_mode=task_eval_mode
+                            question,
+                            answer,
+                            non_literal_traits,
+                            task_eval_mode=task_eval_mode,
+                            ground_truth=ground_truth,
                         )
                         results.update(llm_results)
                         usage_metadata_list.extend(seq_usage_metadata_list)
@@ -206,7 +231,11 @@ class RubricEvaluator:
                     try:
                         literal_scores, literal_labels, usage_metadata = (
                             self.llm_trait_evaluator.evaluate_literal_batch(
-                                question, answer, literal_traits, task_eval_mode=task_eval_mode
+                                question,
+                                answer,
+                                literal_traits,
+                                task_eval_mode=task_eval_mode,
+                                ground_truth=ground_truth,
                             )
                         )
                         results.update(literal_scores)
@@ -220,7 +249,11 @@ class RubricEvaluator:
                     try:
                         literal_scores, literal_labels, seq_usage_metadata_list = (
                             self.llm_trait_evaluator.evaluate_literal_sequential(
-                                question, answer, literal_traits, task_eval_mode=task_eval_mode
+                                question,
+                                answer,
+                                literal_traits,
+                                task_eval_mode=task_eval_mode,
+                                ground_truth=ground_truth,
                             )
                         )
                         results.update(literal_scores)
@@ -344,6 +377,7 @@ class RubricEvaluator:
         config: Any,  # VerificationConfig
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> dict[str, Any]:
         """
         Evaluate rubric with deep judgment for enabled traits.
@@ -359,6 +393,9 @@ class RubricEvaluator:
             task_eval_mode: When True, omit the **Question** block from the
                 deep-judgment reasoning user prompt and from the standard
                 evaluator's user prompts. Set automatically by TaskEval.
+            ground_truth: The question's reference answer, forwarded to the
+                standard evaluator for traits with include_ground_truth=True.
+                Deep-judgment prompts themselves do not render it.
 
         Returns:
             Dictionary containing:
@@ -375,9 +412,9 @@ class RubricEvaluator:
         # Create handler with the same LLM instance
         handler = RubricDeepJudgmentHandler(self.llm, self.model_config, prompt_config=self._prompt_config)
 
-        # Bake the flag into the standard-evaluator callback so the deep-judgment
-        # handler can call it without knowing about task_eval_mode.
-        standard_fn = partial(self.evaluate_rubric, task_eval_mode=task_eval_mode)
+        # Bake the flags into the standard-evaluator callback so the deep-judgment
+        # handler can call it without knowing about task_eval_mode or ground_truth.
+        standard_fn = partial(self.evaluate_rubric, task_eval_mode=task_eval_mode, ground_truth=ground_truth)
 
         # Delegate to handler, providing a callback for standard trait evaluation
         return handler.evaluate_rubric_with_deep_judgment(

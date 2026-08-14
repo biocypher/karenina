@@ -382,5 +382,5 @@ print(f"Cleaned up: {_tmpdir}")
 
 - [Verification Result Structure](verification-result.md): Understand the fields available in each result
 - [Exporting Results](exporting.md): Save results as JSON or CSV for sharing
-- [DataFrame Analysis](../../notebooks/analyzing-results/dataframe-analysis.ipynb): Convert results to pandas DataFrames for deeper analysis
+- [DataFrame Analysis](dataframe-analysis.md): Convert results to pandas DataFrames for deeper analysis
 - [Checkpoints](../../core_concepts/questions-and-benchmarks/checkpoints.md): File-based persistence with JSON-LD

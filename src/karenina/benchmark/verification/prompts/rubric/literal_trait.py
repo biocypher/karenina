@@ -65,6 +65,7 @@ Your task is to classify a given answer into categories for multiple classificat
         traits: list["LLMRubricTrait"],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> str:
         """Build user prompt for batch literal trait evaluation.
 
@@ -73,6 +74,8 @@ Your task is to classify a given answer into categories for multiple classificat
             answer: The LLM's response to evaluate.
             traits: List of literal kind LLM traits to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block entirely.
+            ground_truth: Reference answer rendered in a **REFERENCE ANSWER:**
+                block when non-empty and any trait has include_ground_truth=True.
 
         Returns:
             Formatted user prompt string.
@@ -97,10 +100,14 @@ Your task is to classify a given answer into categories for multiple classificat
 
         question_block = "" if task_eval_mode else f"\n\n**QUESTION:**\n{question}"
 
+        reference_block = ""
+        if ground_truth and any(trait.include_ground_truth for trait in traits):
+            reference_block = f"\n\n**REFERENCE ANSWER:**\n{ground_truth}"
+
         return f"""Classify the following answer for each trait:
 
 **TRAITS TO CLASSIFY:**
-{chr(10).join(traits_description)}{question_block}
+{chr(10).join(traits_description)}{question_block}{reference_block}
 
 **ANSWER TO CLASSIFY:**
 {answer}"""
@@ -165,6 +172,7 @@ Your task is to classify a given answer into categories for multiple classificat
         trait: "LLMRubricTrait",
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> str:
         """Build user prompt for single literal trait evaluation.
 
@@ -173,6 +181,8 @@ Your task is to classify a given answer into categories for multiple classificat
             answer: The LLM's response to evaluate.
             trait: The literal kind LLM trait to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block entirely.
+            ground_truth: Reference answer rendered in a **REFERENCE ANSWER:**
+                block when non-empty and the trait has include_ground_truth=True.
 
         Returns:
             Formatted user prompt string.
@@ -186,8 +196,11 @@ Your task is to classify a given answer into categories for multiple classificat
         class_names = list(trait.classes.keys())
 
         question_block = "" if task_eval_mode else f"**QUESTION:**\n{question}\n\n"
+        reference_block = ""
+        if ground_truth and trait.include_ground_truth:
+            reference_block = f"**REFERENCE ANSWER:**\n{ground_truth}\n\n"
 
-        return f"""{question_block}**ANSWER TO CLASSIFY:**
+        return f"""{question_block}{reference_block}**ANSWER TO CLASSIFY:**
 {answer}
 
 **TRAIT:** {trait.name}

@@ -19,7 +19,7 @@ The **verification pipeline** is the execution engine that turns a question and 
 
 The most important idea is that the pipeline is a **result-producing machine**: it always returns a `VerificationResult`, even when the model fails, abstains, or a stage throws an exception. Individual stages may skip, fail, or override earlier outcomes, but the pipeline itself never crashes without producing an output.
 
-The pipeline does **not** define what correctness means (that is the [answer template](../answer-templates/)'s job), what quality criteria matter (that is the [rubric](../../../core_concepts/rubrics/)'s job), or which models to use (that is [VerificationConfig](../../../reference/configuration/verification-config/)'s job). The pipeline orchestrates those components in a specific order and manages the flow of data between them.
+The pipeline does **not** define what correctness means (that is the [answer template](answer-templates.md)'s job), what quality criteria matter (that is the [rubric](rubrics/index.md)'s job), or which models to use (that is [VerificationConfig](../reference/configuration/verification-config.md)'s job). The pipeline orchestrates those components in a specific order and manages the flow of data between them.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -95,7 +95,7 @@ The pipeline groups its stages into functional categories. Within each category,
   Finalization      13. FinalizeResult                  Yes (always last)
 ```
 
-**"Template modes"** means `template_only` or `template_and_rubric`. In `rubric_only` mode, stages 1 and 6 through 10 are omitted entirely at the orchestrator level. See [Evaluation Modes](../evaluation-modes/) for the full matrix and decision guidance.
+**"Template modes"** means `template_only` or `template_and_rubric`. In `rubric_only` mode, stages 1 and 6 through 10 are omitted entirely at the orchestrator level. See [Evaluation Modes](evaluation-modes.md) for the full matrix and decision guidance.
 
 **PlaceholderRetryAutoFail** is an always-on guard appended by `StageOrchestrator.from_config` between `TraceValidationAutoFail` and `AbstentionCheck`, in every evaluation mode. It catches the case where the final trace message is a `ModelRetryMiddleware` exhaustion placeholder (a sentinel inserted when the adapter's retry policy ran out) and auto-fails the result with a structured `Failure`. This covers both the trivial case (the first model call exhausts retries) and the mid-trace case (the model runs tools successfully but the final synthesis call fails). It has no feature flag and no per-stage config.
 
@@ -259,7 +259,7 @@ The rubric evaluation input depends on `use_full_trace_for_rubric`: the full tra
 
 When any LLM trait has deep judgment enabled (via the rubric deep judgment mode), the stage switches to a deep-judgment path that extracts verbatim excerpts supporting each trait assessment.
 
-**AgenticRubricEvaluation** (stage 11b) runs when the rubric includes agentic traits. It deploys an agent per trait to investigate workspace artifacts, then extracts a structured score from the investigation findings. See [agentic rubric traits](rubrics/agentic-traits.md) and [Stage 11b internals](../../advanced-pipeline/agentic-rubric-evaluation.md).
+**AgenticRubricEvaluation** (stage 11b) runs when the rubric includes agentic traits. It deploys an agent per trait to investigate workspace artifacts, then extracts a structured score from the investigation findings. See [agentic rubric traits](rubrics/agentic-traits.md) and [Stage 11b internals](../advanced-pipeline/agentic-rubric-evaluation.md).
 
 **DeepJudgmentRubricAutoFail** (stage 12) mirrors stage 10 for rubric traits. If any trait lacks valid supporting excerpts after deep-judgment evaluation, it overrides `verify_result` to `False`. Abstention detection takes priority and skips this stage.
 
@@ -309,7 +309,7 @@ In `template_and_rubric` mode, both paths execute. A rubric failure does not aff
 
 ## 6. How Evaluation Mode Shapes the Pipeline
 
-The [evaluation mode](../evaluation-modes/) controls which stages `StageOrchestrator.from_config()` includes. The rubric must have at least one trait for rubric stages to be added.
+The [evaluation mode](evaluation-modes.md) controls which stages `StageOrchestrator.from_config()` includes. The rubric must have at least one trait for rubric stages to be added.
 
 ```python
 # Build a rubric to demonstrate mode differences
@@ -402,7 +402,7 @@ The five `FailureGroup` values are:
 | `abstained` | The pre-parse guards detected refusal or insufficient response |
 | `system` | Karenina-side or template-side problem: invalid template, parse exception, unexpected error |
 
-Each group expands into one or more leaf categories (14 in total) that pinpoint the exact failure mode. The full enumeration, the eight-rule classifier priority, and the conventions for `Failure.details` and `Caveat` flags live in the [Failure and Caveats reference](../../reference/api/failure-and-caveats.md).
+Each group expands into one or more leaf categories (14 in total) that pinpoint the exact failure mode. The full enumeration, the eight-rule classifier priority, and the conventions for `Failure.details` and `Caveat` flags live in the [Failure and Caveats reference](../reference/api/failure-and-caveats.md).
 
 ### How `should_run()` Works
 
@@ -494,9 +494,9 @@ The cap is applied at task start (around the whole pipeline run for each task), 
 
 ## 10. Next Steps
 
-- [Evaluation Modes](../evaluation-modes/): how the three modes shape which stages run
-- [Prompt Assembly](../prompt-assembly/): how prompts are constructed for the Judge LLM and rubric evaluators
-- [Results and Scoring](../results-and-scoring/): what the pipeline produces and how to read it
-- [Answer Templates](../answer-templates/): writing the `verify()` logic that stage 8 executes
-- [Rubrics](../../../core_concepts/rubrics/): defining the traits that stage 11 evaluates
-- [Pipeline Internals](../../../advanced-pipeline/): deep dive into each stage, deep judgment, and custom stages
+- [Evaluation Modes](evaluation-modes.md): how the three modes shape which stages run
+- [Prompt Assembly](prompt-assembly.md): how prompts are constructed for the Judge LLM and rubric evaluators
+- [Results and Scoring](results-and-scoring.md): what the pipeline produces and how to read it
+- [Answer Templates](answer-templates.md): writing the `verify()` logic that stage 8 executes
+- [Rubrics](rubrics/index.md): defining the traits that stage 11 evaluates
+- [Pipeline Internals](../advanced-pipeline/index.md): deep dive into each stage, deep judgment, and custom stages

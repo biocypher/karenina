@@ -132,6 +132,31 @@ class TestDeepAgentsParserAdapter:
 
         assert result.parsed.value == "fallback"
 
+    @pytest.mark.asyncio
+    async def test_aparse_fallback_uses_fresh_model(self, deep_agents_model_config, monkeypatch):
+        """Text fallback must not reuse loop-affine structured client state."""
+        from langchain_core.messages import AIMessage
+
+        structured_model = MagicMock()
+        structured_model.with_structured_output = MagicMock(side_effect=TypeError("not supported"))
+        fallback_model = MagicMock()
+        fallback_model.ainvoke = AsyncMock(return_value=AIMessage(content='{"value": "fresh"}'))
+        models = iter((structured_model, fallback_model))
+
+        monkeypatch.setattr(
+            "karenina.adapters.langchain_deep_agents.parser.create_chat_model",
+            lambda _config, **_kw: next(models),
+        )
+
+        adapter = DeepAgentsParserAdapter(deep_agents_model_config)
+        result = await adapter.aparse_to_pydantic(
+            [Message.user("Parse this")],
+            SimpleAnswer,
+        )
+
+        assert result.parsed.value == "fresh"
+        fallback_model.ainvoke.assert_awaited_once()
+
     def test_capabilities_supports_structured_output(self, deep_agents_model_config):
         """Capabilities should declare structured output support."""
         adapter = DeepAgentsParserAdapter(deep_agents_model_config)

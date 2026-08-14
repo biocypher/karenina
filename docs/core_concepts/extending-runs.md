@@ -17,8 +17,8 @@ jupyter:
 
 A verification run captures enough state on every result row that later runs can reuse parts of it instead of re-executing the whole pipeline. Two facades on `Benchmark` expose this reuse as a first-class operation:
 
-- [`Benchmark.extend_template`](../verification-pipeline/) extends a prior run along the template-verification axes: new judges, new answerers, more replicates. Prior `(question, answerer, replicate)` traces are served from a [ReplayStore](../../advanced-pipeline/replay-store/) so no answering tokens are spent twice; parsing runs live against new judges.
-- [`Benchmark.extend_rubric`](../rubrics/) attaches a new rubric to a prior run and scores every existing trace against it. Answering is replayed, template parsing and verification are skipped entirely, and the new trait scores are merged onto copies of the prior rows.
+- [`Benchmark.extend_template`](verification-pipeline.md) extends a prior run along the template-verification axes: new judges, new answerers, more replicates. Prior `(question, answerer, replicate)` traces are served from a [ReplayStore](../advanced-pipeline/replay-store.md) so no answering tokens are spent twice; parsing runs live against new judges.
+- [`Benchmark.extend_rubric`](rubrics/index.md) attaches a new rubric to a prior run and scores every existing trace against it. Answering is replayed, template parsing and verification are skipped entirely, and the new trait scores are merged onto copies of the prior rows.
 
 ```python tags=["hide-cell"]
 from karenina.benchmark import Benchmark
@@ -38,11 +38,11 @@ from karenina.schemas.entities import LLMRubricTrait, RegexRubricTrait, Rubric
 
 Composing both: if you need new judges *and* new rubric traits on top of a single prior run, call `extend_template` first, then `extend_rubric` on the merged result. The two facades do not compose in a single call. See [Section 8](#8-composing-extend_template-with-extend_rubric) for a worked chain.
 
-For a runnable, end-to-end workflow that walks the full extension lifecycle (initial run, save, load, extend, persist), see the [Extending a Prior Run tutorial](../../notebooks/running-verification/extending-a-prior-run.ipynb).
+For a runnable, end-to-end workflow that walks the full extension lifecycle (initial run, save, load, extend, persist), see the [Extending a Prior Run tutorial](../workflows/running-verification/extending-a-prior-run.md).
 
 ## 2. Shared Mechanics
 
-Both facades build a [ReplayStore](../../advanced-pipeline/replay-store/) from the prior `VerificationResultSet` and pass it through `VerificationConfig.replay_store`. At the generate-answer stage, any `(question, answering_model, replicate)` triple that hits the store replays the captured trace instead of invoking the LLM. Anything that misses runs live.
+Both facades build a [ReplayStore](../advanced-pipeline/replay-store.md) from the prior `VerificationResultSet` and pass it through `VerificationConfig.replay_store`. At the generate-answer stage, any `(question, answering_model, replicate)` triple that hits the store replays the captured trace instead of invoking the LLM. Anything that misses runs live.
 
 | Field captured in the store | `extend_template` | `extend_rubric` |
 |---|---|---|
@@ -227,7 +227,7 @@ Both facades accept `store: bool = True`. When true, the merged set is written t
 
 ## 7. Resumability via `ProgressiveFileSink`
 
-Both facades accept a `sink=` argument that they forward to `Benchmark.run_verification`. Pair it with a [`ProgressiveFileSink`](../../reference/api/sinks/) to make the extension itself resumable: the sink's `seed_prior_results` hook (invoked before the pipeline starts) pre-populates the JSONL and the `.state` manifest with the prior rows, and the new rows stream through `on_result` as they complete. If the extension run is interrupted, [`Benchmark.resume_verification`](../../reference/api/sinks/) picks up where it stopped and the final export contains both the prior rows and the new ones.
+Both facades accept a `sink=` argument that they forward to `Benchmark.run_verification`. Pair it with a [`ProgressiveFileSink`](../reference/api/sinks.md) to make the extension itself resumable: the sink's `seed_prior_results` hook (invoked before the pipeline starts) pre-populates the JSONL and the `.state` manifest with the prior rows, and the new rows stream through `on_result` as they complete. If the extension run is interrupted, [`Benchmark.resume_verification`](../reference/api/sinks.md) picks up where it stopped and the final export contains both the prior rows and the new ones.
 
 ```python
 # from pathlib import Path
@@ -241,7 +241,7 @@ Both facades accept a `sink=` argument that they forward to `Benchmark.run_verif
 # merged = bench.extend_template(prior_results=prior, config=phase_b, sink=sink)
 ```
 
-Without a sink, the extension still runs to completion in memory; resumability is the only feature you lose. For sink internals, see [Sinks reference](../../reference/api/sinks/) and the [Progressive Save tutorial](../../notebooks/running-verification/progressive-save.ipynb).
+Without a sink, the extension still runs to completion in memory; resumability is the only feature you lose. For sink internals, see [Sinks reference](../reference/api/sinks.md) and the [Progressive Save tutorial](../workflows/running-verification/progressive-save.md).
 
 ## 8. Composing `extend_template` with `extend_rubric`
 
@@ -273,17 +273,17 @@ If you need a different `replicate_count` across phases you must rerun the rubri
 
 ## 9. Failure Mode: Prior Results Without a Captured Replay Store
 
-`extend_template` and `extend_rubric` build their internal [ReplayStore](../../advanced-pipeline/replay-store/) by calling `capture_from_result_set(prior_results, ...)`. Capture walks each `VerificationResult` and pulls the captured `raw_trace` (and, for `extend_rubric`, structured agent metrics) off `metadata.captured_trace`. If `prior_results` was not produced by `Benchmark.run_verification` (for example, you constructed the result set by hand, replayed it through a custom executor, or post-processed it through transformations that drop the captured trace), the resulting store will be empty or partial.
+`extend_template` and `extend_rubric` build their internal [ReplayStore](../advanced-pipeline/replay-store.md) by calling `capture_from_result_set(prior_results, ...)`. Capture walks each `VerificationResult` and pulls the captured `raw_trace` (and, for `extend_rubric`, structured agent metrics) off `metadata.captured_trace`. If `prior_results` was not produced by `Benchmark.run_verification` (for example, you constructed the result set by hand, replayed it through a custom executor, or post-processed it through transformations that drop the captured trace), the resulting store will be empty or partial.
 
 A miss in the internal store is silent. Both facades default the store to `miss_policy="fall_through"`, so every triple that does not match runs the answering stage live, spending answering tokens for traces the original run already paid for. For long extensions this surfaces as a much larger token bill than expected and as wall-clock time that scales with the prior set rather than the new work.
 
 The contract that prevents this: only call `extend_template` / `extend_rubric` with result sets returned directly from `Benchmark.run_verification` (or a `Benchmark.resume_verification` of the same). Result sets loaded from a database or from a JSON export retain captured traces and remain safe; result sets fabricated for tests do not. If you need to chain extensions through a non-runner step, capture the replay store explicitly with `capture_from_result_set(...)` first and persist it alongside the JSON export so the next step can rebuild from a known-good source.
 
-For the cross-cutting guarantees and on-disk format of captures, see [Replay Store: Capturing live runs](../../advanced-pipeline/replay-store/#capturing-live-runs).
+For the cross-cutting guarantees and on-disk format of captures, see [Replay Store: Capturing live runs](../advanced-pipeline/replay-store.md#capturing-live-runs).
 
 ## 10. Cross-Reference: Multi-turn Extension via Scenarios
 
-When the prior run is a scenario benchmark, capture goes through a different path: `ScenarioExecutionResult.to_replay_store(*, answering_model_id, ...)` walks each turn and emits scenario-mode keys. The resulting store can then be passed back through `extend_template` / `extend_rubric` exactly like a QA capture, with `(scenario_id, scenario_node)` lookups handling the multi-turn shape. See [Scenarios: Execution](../scenarios/execution/) for the full surface.
+When the prior run is a scenario benchmark, capture goes through a different path: `ScenarioExecutionResult.to_replay_store(*, answering_model_id, ...)` walks each turn and emits scenario-mode keys. The resulting store can then be passed back through `extend_template` / `extend_rubric` exactly like a QA capture, with `(scenario_id, scenario_node)` lookups handling the multi-turn shape. See [Scenarios: Execution](scenarios/execution.md) for the full surface.
 
 If your prior run mixed QA questions with scenarios in the same `VerificationResultSet`, `capture_from_result_set` handles both modes in one pass; the resulting store carries QA-mode entries and scenario-mode entries in the same `entries` list and serves them via the corresponding lookup index.
 
@@ -335,15 +335,15 @@ The first two raises in each table protect the engine from degenerate inputs. Th
 
 ## 13. ScenarioReplayBuilder and Replicate Canonicalization
 
-When the prior run is a scenario benchmark and you want to project a QA-mode capture across many scenario variants before extending, [`ScenarioReplayBuilder`](../../advanced-pipeline/replay-store/#projecting-qa-stores-onto-scenarios) is the right tool. The constraint that propagates to the extension call: `ScenarioReplayBuilder` requires QA stores captured with `replicate_selector="first"` or `"last"` (which emit `replicate=None`). A QA store captured with `replicate_selector="all"` is rejected at `add_qa` time because the 3-axis specificity ladder does not fall through from a `replicate=None` probe to integer-replicate entries. See [Replay Store: Replicate canonicalization](../../advanced-pipeline/replay-store/#replicate-canonicalization).
+When the prior run is a scenario benchmark and you want to project a QA-mode capture across many scenario variants before extending, [`ScenarioReplayBuilder`](../advanced-pipeline/replay-store.md#projecting-qa-stores-onto-scenarios) is the right tool. The constraint that propagates to the extension call: `ScenarioReplayBuilder` requires QA stores captured with `replicate_selector="first"` or `"last"` (which emit `replicate=None`). A QA store captured with `replicate_selector="all"` is rejected at `add_qa` time because the 3-axis specificity ladder does not fall through from a `replicate=None` probe to integer-replicate entries. See [Replay Store: Replicate canonicalization](../advanced-pipeline/replay-store.md#replicate-canonicalization).
 
 ## 14. Further Reading
 
-- [Verification Pipeline](../verification-pipeline/): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that both facades drive.
-- [Evaluation Modes](../evaluation-modes/): how `rubric_only` differs from `template_only` and `template_and_rubric`.
-- [Rubrics](../../../core_concepts/rubrics/): trait types and `DynamicRubric`.
-- [Replay Store](../../advanced-pipeline/replay-store/): the cache layer the extensions build internally.
-- [Sinks reference](../../reference/api/sinks/): `ResultSink.seed_prior_results`, `ProgressiveFileSink`, `CompositeSink`.
-- [Scenarios: Execution](../scenarios/execution/): `ScenarioExecutionResult.to_replay_store` for multi-turn captures.
-- [Extending a Prior Run tutorial](../../notebooks/running-verification/extending-a-prior-run.ipynb): runnable end-to-end workflow.
+- [Verification Pipeline](verification-pipeline.md): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that both facades drive.
+- [Evaluation Modes](evaluation-modes.md): how `rubric_only` differs from `template_only` and `template_and_rubric`.
+- [Rubrics](rubrics/index.md): trait types and `DynamicRubric`.
+- [Replay Store](../advanced-pipeline/replay-store.md): the cache layer the extensions build internally.
+- [Sinks reference](../reference/api/sinks.md): `ResultSink.seed_prior_results`, `ProgressiveFileSink`, `CompositeSink`.
+- [Scenarios: Execution](scenarios/execution.md): `ScenarioExecutionResult.to_replay_store` for multi-turn captures.
+- [Extending a Prior Run tutorial](../workflows/running-verification/extending-a-prior-run.md): runnable end-to-end workflow.
 - `karenina/src/karenina/benchmark/verification/extension.py`: the helper implementations (`extend_template_run`, `extend_rubric_run`) if you need to read the exact validation and merge code.

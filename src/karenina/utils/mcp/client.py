@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mcp import ClientSession
@@ -36,7 +36,8 @@ async def connect_mcp_session(
     Args:
         exit_stack: AsyncExitStack for managing session lifecycle.
         config: MCP server configuration. Must include 'url' for HTTP/SSE transport.
-            Optional 'headers' dict for authentication.
+            Optional 'headers' dict for authentication. Optional 'timeout' and
+            'sse_read_timeout' floats (seconds) override the MCP SDK defaults.
 
     Returns:
         Initialized ClientSession ready for tool calls.
@@ -67,7 +68,12 @@ async def connect_mcp_session(
     logger.debug(f"Connecting to MCP server at {url}")
 
     # Create HTTP transport and enter it into the exit stack
-    http_transport = await exit_stack.enter_async_context(streamablehttp_client(url, headers=headers))
+    transport_kwargs: dict[str, Any] = {"headers": headers}
+    if (timeout := config_dict.get("timeout")) is not None:
+        transport_kwargs["timeout"] = timeout
+    if (sse_read_timeout := config_dict.get("sse_read_timeout")) is not None:
+        transport_kwargs["sse_read_timeout"] = sse_read_timeout
+    http_transport = await exit_stack.enter_async_context(streamablehttp_client(url, **transport_kwargs))
 
     read_stream, write_stream, _ = http_transport
 

@@ -10,7 +10,7 @@ After running verification and analyzing results, you'll often want to export da
 ## Benchmark Export Methods
 
 !!! warning "Deprecated methods"
-    `export_verification_results()`, `export_verification_results_to_file()`, and `load_verification_results_from_file()` on `Benchmark` are deprecated and emit a `DeprecationWarning`. They still work, so the examples on this page remain accurate. The maintained replacements live on `ResultsStore`: `ResultsStore.export()` returns a JSON-serializable dict, `ResultsStore.export_to_file()` writes that dict to a JSON file, and `ResultsStore.from_file()` loads a `ResultsStore` back. The `ResultsStore` export path covers JSON only. The deprecated `Benchmark` methods below additionally produce CSV output and return the export as a string.
+    `export_verification_results()`, `export_verification_results_to_file()`, and `load_verification_results_from_file()` on `Benchmark` are deprecated and emit a `DeprecationWarning`. They still work, so the export examples on this page remain accurate. Use `ResultsIOManager` to load standard verification-result JSON or CSV exports. Use `ResultsStore.from_file()` only for the store-specific JSON format written by `ResultsStore.export_to_file()`.
 
 The `Benchmark` class provides two methods for exporting verification results:
 
@@ -107,7 +107,7 @@ Supported extensions: `.json` (JSON format), `.csv` (CSV format). Other extensio
 
 ## DataFrame Export
 
-DataFrames built from the [DataFrame analysis](../../notebooks/analyzing-results/dataframe-analysis.ipynb) workflow can be exported using standard pandas methods:
+DataFrames built from the [DataFrame analysis](dataframe-analysis.md) workflow can be exported using standard pandas methods:
 
 ### Export to CSV
 
@@ -157,19 +157,59 @@ if judgment_results.get_results_with_judgment():
 
 ## Loading Exported Results
 
-Previously exported JSON results can be loaded back into a benchmark:
+`ResultsIOManager` is the default loader for verification-result exports. It
+returns validated `VerificationResult` objects:
 
 ```python
 from pathlib import Path
+from karenina.benchmark import ResultsIOManager
 
-results_dict = benchmark.load_verification_results_from_file(
-    Path("results.json"),
-    run_name="imported-run",  # optional: assign a run name
-)
+results_dict = ResultsIOManager.load_from_json(Path("results.json"))
 print(f"Loaded {len(results_dict)} results")
 ```
 
-This returns a `dict[str, VerificationResult]` mapping result IDs to result objects. The loaded results are stored in the benchmark's in-memory results store and can be analyzed using the same DataFrame builders and filtering methods.
+This returns a `dict[str, VerificationResult]` mapping result IDs to result
+objects. For multi-gigabyte files, stream validated rows instead of loading the
+whole export:
+
+```python
+for result in ResultsIOManager.iter_from_json(Path("results.json")):
+    print(result.metadata.question_id)
+```
+
+Pass `raw=True` only for low-level migration or recovery work that cannot
+validate rows against the current `VerificationResult` schema.
+
+For an export that also contains multi-turn scenario executions, load the
+complete validated result set. This preserves run metadata and the compact
+scenario records in addition to the flat turn results:
+
+```python
+result_set = ResultsIOManager.load_result_set_from_json(Path("scenario_results.json"))
+
+scenario_results = result_set.get_scenario_results()
+scenario_df = scenario_results.to_dataframe()
+turn_df = scenario_results.to_turn_dataframe()
+outcome_df = scenario_results.to_outcome_dataframe()
+```
+
+`scenario_df` has one row per scenario execution, including status, path,
+terminal failure, and dynamic `outcome_*` columns. `turn_df` has one row per
+visited node and links each turn to its flat verification result ID.
+`outcome_df` has one typed scalar row per outcome criterion. The same accessors
+work on the live `VerificationResultSet` returned by
+`Benchmark.run_verification()`, so live and stored analyses use one interface.
+
+When an analysis needs a slice of stored structured messages, format it with
+Karenina's canonical trace formatter. This retains assistant text, tool calls,
+and tool results for a post-hoc rubric:
+
+```python
+from karenina.benchmark import format_trace_messages
+
+messages = result.template.trace_messages if result.template else []
+post_hoc_text = format_trace_messages(messages)
+```
 
 !!! note
     Only JSON format can be loaded back. CSV exports are one-way (export only) since CSV cannot represent the full nested result structure.
@@ -185,14 +225,17 @@ This returns a `dict[str, VerificationResult]` mapping result IDs to result obje
 | Quick spreadsheet analysis | `export_verification_results_to_file("results.csv")` |
 | Custom pandas analysis workflow | `df.to_csv(...)` or `df.to_excel(...)` |
 | Feed results into another tool | `export_verification_results(format="json")` as string |
-| Re-analyze previous results | `load_verification_results_from_file("results.json")` |
+| Re-analyze previous results | `ResultsIOManager.load_from_json(Path("results.json"))` |
+| Stream a large results export | `ResultsIOManager.iter_from_json(Path("results.json"))` |
+| Re-analyze multi-turn scenarios | `ResultsIOManager.load_result_set_from_json(Path("results.json"))` |
+| Reload a `ResultsStore` archive | `ResultsStore.from_file("store.json")` |
 
 ---
 
 ## Next Steps
 
 - [Understand result structure](verification-result.md) — Fields available in each result
-- [Analyze with DataFrames](../../notebooks/analyzing-results/dataframe-analysis.ipynb) — Build and explore DataFrames before exporting
+- [Analyze with DataFrames](dataframe-analysis.md) — Build and explore DataFrames before exporting
 - [Iterate on your benchmark](iterating.md) — Use exports to identify and fix failures
-- [Run verification](../../notebooks/running-verification/basic-verification.ipynb) — Generate results to export
-- [CLI export](../../notebooks/running-verification/basic-verification.ipynb) — Export directly from the command line with `--output`
+- [Run verification](../running-verification/basic-verification.md) — Generate results to export
+- [CLI export](../running-verification/basic-verification.md) — Export directly from the command line with `--output`

@@ -1,10 +1,10 @@
 # Rubrics
 
-Rubrics evaluate **how** a model responded by assessing observable properties of the raw response trace, properties that do not require ground truth. While [answer templates](../../notebooks/core_concepts/answer-templates.ipynb) verify *what* the model said (factual correctness against a known answer), rubrics assess qualities like safety, conciseness, tone, or the presence of specific elements (citations, disclaimers).
+Rubrics evaluate **how** a model responded by assessing observable properties of the raw response trace, properties that do not require ground truth. While [answer templates](../answer-templates.md) verify *what* the model said (factual correctness against a known answer), rubrics assess qualities like safety, conciseness, tone, or the presence of specific elements (citations, disclaimers).
 
 !!! tip "Trace filtering"
 
-    For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../notebooks/running-verification/mcp-agent-evaluation.ipynb#trace-handling) for an end-to-end example.
+    For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../workflows/running-verification/mcp-agent-evaluation.md) for an end-to-end example.
 
 Rubrics come in five trait types (LLM, regex, callable, metric, agentic) that work differently: some require an LLM call, others run locally with no model involved, and agentic traits launch an agent to investigate workspace artifacts. They can be applied **globally** across all questions or **per-question** for domain-specific checks.
 
@@ -16,7 +16,7 @@ A **rubric** is a collection of evaluation traits that assess observable propert
 - **Complement templates**: templates check factual correctness via `verify()`; rubrics assess qualities that characterize the answer style or structure
 - **Multiple trait types**: five types (LLM, regex, callable, metric, agentic) with different execution models
 
-Unlike templates, which operate on parsed structured data, rubrics evaluate the **raw response text** directly. See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb) for a full comparison of the two evaluation building blocks.
+Unlike templates, which operate on parsed structured data, rubrics evaluate the **raw response text** directly. See [templates vs rubrics](../template-vs-rubric.md) for a full comparison of the two evaluation building blocks.
 
 A `Rubric` in Karenina is a collector object that gathers traits of different types into separate lists:
 
@@ -56,43 +56,43 @@ Once created, a rubric needs to be attached to an evaluation object. In benchmar
 | **Benchmark + Question** | Attach rubrics at both levels | The current question | You need both shared benchmark-wide traits and prompt-specific checks | Karenina merges both trait sets for that question; trait names must be unique across scopes or a `ValueError` is raised |
 | **TaskEval** | Attach a rubric with `task_eval.add_rubric()`; pass `step_id` for step-specific evaluation | All recorded text or one named step | You are evaluating free-text output outside the benchmark loop | Traits evaluate against the TaskEval global scope or the selected step scope |
 
-See [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) for benchmark usage and [TaskEval](../../notebooks/core_concepts/task-eval.ipynb) for free-text evaluation. Each trait type has its own sub-page with full API details.
+See [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) for benchmark usage and [TaskEval](../task-eval.md) for free-text evaluation. Each trait type has its own sub-page with full API details.
 
 ## 3. Trait Type Overview
 
-Given the question "Which is the putative target of venetoclax?", a [template](../../notebooks/core_concepts/answer-templates.ipynb) checks whether the response identifies `BCL2` as the target (ground truth verification), while rubric traits assess other properties of the response:
+Given the question "Which is the putative target of venetoclax?", a [template](../answer-templates.md) checks whether the response identifies `BCL2` as the target (ground truth verification), while rubric traits assess other properties of the response:
 
 | Trait Type | Returns | LLM Required | Example | Note |
 |------------|---------|--------------|---------|------|
-| [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (boolean) | `bool` | Yes | "Mentions safety profile of the drug" | Supports optional [deep judgment](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) for evidence-based evaluation |
-| [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (score) | `int` | Yes | "Rate clarity from 1-5" | Configurable range |
-| [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (literal) | `int` | Yes | "Classify tone as formal/casual/technical" | Returns index based on class order; `higher_is_better` controls direction |
-| [**LLMRubricTrait**](../../notebooks/core_concepts/rubrics/llm-traits.ipynb) (template kind) | structured `dict` | Yes | "Audit citation style across several fields at once" | Pass a Pydantic class as `kind`; judge fills the schema in one call; see [template kind](../../notebooks/core_concepts/rubrics/llm-traits.ipynb#7-template-kind) |
-| [**RegexRubricTrait**](../../notebooks/core_concepts/rubrics/regex-traits.ipynb) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
-| [**CallableRubricTrait**](../../notebooks/core_concepts/rubrics/callable-traits.ipynb) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
-| [**MetricRubricTrait**](../../notebooks/core_concepts/rubrics/metric-traits.ipynb) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
-| [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
-| [**AgenticRubricTrait**](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb) (template kind) | structured `dict` | Yes (agent) | "Audit code quality across multiple dimensions" | Agent investigates and populates a Pydantic template you define; captures multi-field evaluation findings in a single trait |
+| [**LLMRubricTrait**](llm-traits.md) (boolean) | `bool` | Yes | "Mentions safety profile of the drug" | Supports optional [deep judgment](llm-traits.md) for evidence-based evaluation |
+| [**LLMRubricTrait**](llm-traits.md) (score) | `int` | Yes | "Rate clarity from 1-5" | Configurable range |
+| [**LLMRubricTrait**](llm-traits.md) (literal) | `int` | Yes | "Classify tone as formal/casual/technical" | Returns index based on class order; `higher_is_better` controls direction |
+| [**LLMRubricTrait**](llm-traits.md) (template kind) | structured `dict` | Yes | "Audit citation style across several fields at once" | Pass a Pydantic class as `kind`; judge fills the schema in one call; see [template kind](llm-traits.md) |
+| [**RegexRubricTrait**](regex-traits.md) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
+| [**CallableRubricTrait**](callable-traits.md) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
+| [**MetricRubricTrait**](metric-traits.md) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
+| [**AgenticRubricTrait**](agentic-traits.md) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
+| [**AgenticRubricTrait**](agentic-traits.md) (template kind) | structured `dict` | Yes (agent) | "Audit code quality across multiple dimensions" | Agent investigates and populates a Pydantic template you define; captures multi-field evaluation findings in a single trait |
 
-Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../../notebooks/core_concepts/verification-pipeline.ipynb) showing how evaluation works (RubricEvaluation).
+Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../verification-pipeline.md) showing how evaluation works (RubricEvaluation).
 
 No ground truth does not mean no specification. Rubric traits work better when the description makes your standard explicit. If you care about conciseness, say what that means in context: for example, "answers the question directly, avoids repetition, and stays under 120 words unless the prompt asks for detail." Clear trait descriptions improve the quality and consistency of evaluation even when no single correct answer exists.
 
-See [templates vs rubrics](../../notebooks/core_concepts/template-vs-rubric.ipynb) for a full comparison, and [evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for how to combine them in a single benchmark.
+See [templates vs rubrics](../template-vs-rubric.md) for a full comparison, and [evaluation modes](../evaluation-modes.md) for how to combine them in a single benchmark.
 
 ## 4. Choosing the Right Trait Type
 
 | Need | Trait Type | Tutorial Example |
 |------|-----------|-----------------|
-| Subjective quality (clarity, conciseness, tone) | LLMRubricTrait (boolean or score) | [LLM score trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-1-subjective-quality-llm-score) |
-| Categorical classification (quality tiers, tone levels) | LLMRubricTrait (literal) | [LLM literal trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-2-categorical-classification-llm-literal) |
-| Exact keyword or format validation | RegexRubricTrait | [Regex trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-3-exact-keywordformat-validation-regex) |
-| Complex validation logic (word counts, structure) | CallableRubricTrait | [Callable trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-4-complex-validation-logic-callable) |
-| Precision/recall/F1 measurement | MetricRubricTrait | [Metric trait](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-5-precisionrecallf1-metric-trait) |
-| Deterministic, reproducible check | RegexRubricTrait, or CallableRubricTrait if your function is pure local code | [Inverted regex](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-6-deterministic-reproducible-check-regex-inverted) |
-| Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment | [Deep judgment](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb#need-7-evidence-based-with-excerpts-llm-boolean--deep-judgment) |
+| Subjective quality (clarity, conciseness, tone) | LLMRubricTrait (boolean or score) | [LLM score trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Categorical classification (quality tiers, tone levels) | LLMRubricTrait (literal) | [LLM literal trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Exact keyword or format validation | RegexRubricTrait | [Regex trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Complex validation logic (word counts, structure) | CallableRubricTrait | [Callable trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Precision/recall/F1 measurement | MetricRubricTrait | [Metric trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Deterministic, reproducible check | RegexRubricTrait, or CallableRubricTrait if your function is pure local code | [Inverted regex](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment | [Deep judgment](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
 
-For a hands-on tutorial that walks through each of these needs with a complete example, see [Choosing the Right Rubric Trait Type](../../notebooks/creating-benchmarks/choosing-rubric-traits.ipynb).
+For a hands-on tutorial that walks through each of these needs with a complete example, see [Choosing the Right Rubric Trait Type](../../workflows/creating-benchmarks/choosing-rubric-traits.md).
 
 ### Decision Flowchart
 
@@ -222,7 +222,7 @@ dynamic = DynamicRubric(
 benchmark.set_global_dynamic_rubric(dynamic)
 ```
 
-`add_question` does not accept a `dynamic_rubric` parameter; the only public facade method for dynamic rubrics is `set_global_dynamic_rubric`. To scope a `DynamicRubric` to a single question, build a [`Question`](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb) with its `question_dynamic_rubric` field set (a dict, e.g. `dynamic.model_dump()`); the pipeline merges global and per-question dynamic rubrics at evaluation time.
+`add_question` does not accept a `dynamic_rubric` parameter; the only public facade method for dynamic rubrics is `set_global_dynamic_rubric`. To scope a `DynamicRubric` to a single question, build a [`Question`](../questions-and-benchmarks/questions.md) with its `question_dynamic_rubric` field set (a dict, e.g. `dynamic.model_dump()`); the pipeline merges global and per-question dynamic rubrics at evaluation time.
 
 If the response discusses dosing but not interactions or contraindications, only `dosing_clarity` is evaluated. The other two traits appear in results as skipped.
 
@@ -234,11 +234,11 @@ If the response discusses dosing but not interactions or contraindications, only
 
 ## 7. Next Steps
 
-- [LLM traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): boolean and score kinds with deep judgment
-- [Literal traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): ordered categorical classification (part of LLM traits)
-- [Regex traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb): deterministic pattern matching
-- [Callable traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb): custom Python functions
-- [Metric traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb): precision, recall, F1 computation
-- [Agentic traits](../../notebooks/core_concepts/rubrics/agentic-traits.ipynb): agent-investigated evaluation for workspace artifacts
-- [Evaluation modes](../../notebooks/core_concepts/evaluation-modes.ipynb): template_only, template_and_rubric, rubric_only
-- [Full Evaluation Benchmark](../../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb): workflow guide for adding rubrics to benchmarks
+- [LLM traits](llm-traits.md): boolean and score kinds with deep judgment
+- [Literal traits](llm-traits.md): ordered categorical classification (part of LLM traits)
+- [Regex traits](regex-traits.md): deterministic pattern matching
+- [Callable traits](callable-traits.md): custom Python functions
+- [Metric traits](metric-traits.md): precision, recall, F1 computation
+- [Agentic traits](agentic-traits.md): agent-investigated evaluation for workspace artifacts
+- [Evaluation modes](../evaluation-modes.md): template_only, template_and_rubric, rubric_only
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): workflow guide for adding rubrics to benchmarks

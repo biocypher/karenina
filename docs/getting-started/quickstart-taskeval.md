@@ -172,7 +172,7 @@ task = TaskEval(
 print(f"Created TaskEval: {task.task_id}")
 ```
 
-> **Learn more**: [TaskEval Concepts](../notebooks/core_concepts/task-eval.ipynb)
+> **Learn more**: [TaskEval Concepts](../core_concepts/task-eval.md)
 
 ---
 
@@ -192,7 +192,7 @@ task.log(
 print(f"Logged {len(task.global_logs)} event(s)")
 ```
 
-> **Learn more**: [Logging methods](../notebooks/task-eval/basic-evaluation.ipynb#log-outputs) · [Structured trace logging](../notebooks/task-eval/basic-evaluation.ipynb#trace-logging)
+> **Learn more**: [Logging methods](../workflows/task-eval/basic-evaluation.md) · [Structured trace logging](../workflows/task-eval/basic-evaluation.md)
 
 ---
 
@@ -232,7 +232,7 @@ task.add_template(Answer)
 print("Attached answer template with 2 verification fields")
 ```
 
-> **Learn more**: [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) · [Template Construction](../workflows/creating-benchmarks/index.md)
+> **Learn more**: [Answer Templates](../core_concepts/answer-templates.md) · [Template Construction](../workflows/creating-benchmarks/index.md)
 
 ---
 
@@ -299,7 +299,7 @@ result = task.evaluate(config)
 print(f"Evaluation complete: {result.summary()}")
 ```
 
-> **Learn more**: [Evaluation modes](../notebooks/core_concepts/evaluation-modes.ipynb) · [Model Config](../reference/configuration/model-config.md)
+> **Learn more**: [Evaluation modes](../core_concepts/evaluation-modes.md) · [Model Config](../reference/configuration/model-config.md)
 
 ---
 
@@ -323,9 +323,9 @@ You can also export the full results as JSON or Markdown for downstream analysis
 print(result.export_json()[:300])
 ```
 
-For programmatic access to individual fields (template verdicts, rubric scores, metadata), see the [results inspection reference](../notebooks/task-eval/basic-evaluation.ipynb#inspect-results).
+For programmatic access to individual fields (template verdicts, rubric scores, metadata), see the [results inspection reference](../workflows/task-eval/basic-evaluation.md).
 
-> **Learn more**: [Results inspection](../notebooks/task-eval/basic-evaluation.ipynb#inspect-results) · [DataFrame analysis](../notebooks/analyzing-results/dataframe-analysis.ipynb)
+> **Learn more**: [Results inspection](../workflows/task-eval/basic-evaluation.md) · [DataFrame analysis](../workflows/analyzing-results/dataframe-analysis.md)
 
 ---
 
@@ -380,16 +380,16 @@ for step_id in ["retrieval", "synthesis"]:
     print(f"Step '{step_id}': {stats['rubric_traits_passed']}/{stats['rubric_traits_total']} traits passed")
 ```
 
-> **Learn more**: [Multi-step evaluation](../notebooks/task-eval/multi-step-evaluation.ipynb) · [Step scoping](../notebooks/core_concepts/task-eval.ipynb#9-step-specific-evaluation)
+> **Learn more**: [Multi-step evaluation](../workflows/task-eval/multi-step-evaluation.md) · [Step scoping](../core_concepts/task-eval.md)
 
 ---
 
 ## Next Steps
 
-- **[TaskEval Concepts](../notebooks/core_concepts/task-eval.ipynb)**: Merge strategies, object structure, pipeline integration
-- **[Answer Templates](../notebooks/core_concepts/answer-templates.ipynb)**: Field types, descriptions, and writing `verify()` methods
+- **[TaskEval Concepts](../core_concepts/task-eval.md)**: Merge strategies, object structure, pipeline integration
+- **[Answer Templates](../core_concepts/answer-templates.md)**: Field types, descriptions, and writing `verify()` methods
 - **[Rubrics](../core_concepts/rubrics/index.md)**: All five trait types (LLM, Regex, Callable, Metric, Agentic)
-- **[Benchmark Quick Start](../notebooks/quickstart.ipynb)**: If you need Karenina to generate responses and evaluate them
+- **[Benchmark Quick Start](quickstart.md)**: If you need Karenina to generate responses and evaluate them
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and add_template

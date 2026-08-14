@@ -244,6 +244,7 @@ def rubric_evaluator(
             model_config=parsing_model_config,
             evaluation_strategy="batch",
         )
+        _ = evaluator.llm
 
     return evaluator
 

@@ -15,13 +15,36 @@ from karenina.adapters.agent_runtime import (
     get_container_runtime_config,
     map_path_for_prompt,
     preflight_container_runtime,
+    preflight_container_workspace,
     preflight_docker_runtime,
     register_agent_runtime_profile,
     workspace_path_for_prompt,
 )
 from karenina.ports import AdapterUnavailableError
 from karenina.ports.capabilities import PortCapabilities
-from karenina.schemas.config import ModelConfig
+from karenina.schemas.config import AgentRuntimeConfig, ModelConfig
+
+
+def test_typed_runtime_config_drives_adapter_and_overrides_legacy_values():
+    config = ModelConfig(
+        id="claude",
+        model_name="claude-sonnet-4-20250514",
+        interface="claude_agent_sdk",
+        agent_runtime=AgentRuntimeConfig(
+            backend="container",
+            container_runtime="docker",
+            container_image="typed-image:latest",
+        ),
+        extra_kwargs={
+            "agent_runtime": {
+                "backend": "native",
+                "container_image": "legacy-image:latest",
+            }
+        },
+    )
+
+    assert get_claude_sdk_backend(config) == "container"
+    assert get_container_runtime_config(config).image == "typed-image:latest"
 
 
 def test_deepagents_docker_workspace_maps_to_container_path(tmp_path):
@@ -312,6 +335,52 @@ def test_docker_command_does_not_carry_singularity_isolation_flags(tmp_path):
     assert "--no-home" not in command
     assert "--no-mount" not in command
     assert "bind-paths" not in command
+
+
+def test_container_workspace_preflight_verifies_marker_visibility(monkeypatch, tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    calls: list[list[str]] = []
+
+    def visible_marker(command, **_kwargs):
+        calls.append(command)
+        marker_name = command[-1].split("/workspace/", maxsplit=1)[1].rstrip('"')
+        assert (workspace / marker_name).is_file()
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("karenina.adapters.agent_runtime.subprocess.run", visible_marker)
+    config = ContainerRuntimeConfig(runtime="docker", image="visible-probe:latest")
+
+    preflight_container_workspace(config, workspace)
+    preflight_container_workspace(config, workspace)
+
+    assert len(calls) == 1
+    assert not list(workspace.glob(".karenina-container-probe-*"))
+
+
+def test_container_workspace_preflight_rejects_invisible_bind(monkeypatch, tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    monkeypatch.setattr(
+        "karenina.adapters.agent_runtime.subprocess.run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command,
+            1,
+            stdout="",
+            stderr="workspace marker is absent",
+        ),
+    )
+
+    with pytest.raises(AdapterUnavailableError) as exc_info:
+        preflight_container_workspace(
+            ContainerRuntimeConfig(runtime="docker", image="invisible-probe:latest"),
+            workspace,
+        )
+
+    assert exc_info.value.reason == "container_workspace_unavailable"
+    assert "shared with Docker, Colima" in str(exc_info.value)
+    assert not list(workspace.glob(".karenina-container-probe-*"))
 
 
 def test_singularity_rejects_docker_only_add_hosts():

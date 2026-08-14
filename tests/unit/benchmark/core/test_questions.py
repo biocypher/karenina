@@ -1361,6 +1361,46 @@ class TestAddQuestions:
         assert len(ids) == 2
         assert len(benchmark.get_question_ids()) == 2
 
+    def test_add_questions_can_create_unfinished_drafts(self) -> None:
+        """Test bulk import can explicitly create curator-review drafts."""
+        benchmark = Benchmark.create(name="drafts")
+
+        ids = benchmark.add_questions(
+            [
+                {"question": "Q1?", "raw_answer": "A1"},
+                {"question": "Q2?", "raw_answer": "A2"},
+            ],
+            finished=False,
+        )
+
+        assert benchmark.get_unfinished_questions(ids_only=True) == ids
+        assert benchmark.get_finished_questions(ids_only=True) == []
+
+    def test_add_questions_omitted_finished_keeps_existing_default(self) -> None:
+        """Test omission remains backward compatible for programmatic import."""
+        benchmark = Benchmark.create(name="ready")
+
+        ids = benchmark.add_questions(
+            [{"question": "Q1?", "raw_answer": "A1"}],
+        )
+
+        assert benchmark.get_finished_questions(ids_only=True) == ids
+
+    def test_dict_item_finished_value_overrides_batch_default(self) -> None:
+        """Test an item-specific state takes precedence over the batch default."""
+        benchmark = Benchmark.create(name="mixed")
+
+        ids = benchmark.add_questions(
+            [
+                {"question": "Q1?", "raw_answer": "A1"},
+                {"question": "Q2?", "raw_answer": "A2", "finished": True},
+            ],
+            finished=False,
+        )
+
+        assert benchmark.get_unfinished_questions(ids_only=True) == [ids[0]]
+        assert benchmark.get_finished_questions(ids_only=True) == [ids[1]]
+
 
 @pytest.mark.unit
 class TestIteration:

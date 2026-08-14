@@ -62,6 +62,13 @@ except ImportError as e:
     logger.warning("verify-status command unavailable: %s", e)
 
 try:
+    from .repair import repair
+
+    app.command(name="repair")(repair)
+except ImportError as e:
+    logger.warning("repair command unavailable: %s", e)
+
+try:
     from .preset import preset_app
 
     app.add_typer(preset_app, name="preset", help="Manage verification presets")

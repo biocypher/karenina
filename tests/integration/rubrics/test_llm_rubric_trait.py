@@ -538,6 +538,7 @@ class TestTemplateKindRubricEvaluator:
             return_value=mock_llm,
         ):
             evaluator = RubricEvaluator(model_config, evaluation_strategy="sequential")
+            _ = evaluator.llm
         # Force serial execution so the mocked .invoke (not .ainvoke) is used.
         evaluator.llm_trait_evaluator._async_enabled = False
         return evaluator

@@ -489,8 +489,8 @@ _TaskEval.add_template = _original_add_template
 
 ## Next Steps
 
-- [Basic Evaluation](../../notebooks/task-eval/basic-evaluation.ipynb): Template-based correctness evaluation with TaskEval
-- [Multi-Step Agent Evaluation](../../notebooks/task-eval/multi-step-evaluation.ipynb): Step-scoped evaluation for agent workflows
+- [Basic Evaluation](basic-evaluation.md): Template-based correctness evaluation with TaskEval
+- [Multi-Step Agent Evaluation](multi-step-evaluation.md): Step-scoped evaluation for agent workflows
 - [Rubrics](../../core_concepts/rubrics/index.md): All five trait types in depth
 - [Callable Traits](../../core_concepts/rubrics/callable-traits.md): Advanced callable patterns
 - [Evaluation Modes](../../core_concepts/evaluation-modes.md): How rubric-only mode works in the pipeline

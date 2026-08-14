@@ -218,23 +218,20 @@ Within `VerificationResultRubric`, agentic results occupy three dedicated fields
 | `agentic_trait_investigation_traces` | `dict[str, str] \| None` | `AGENTIC_TRAIT_INVESTIGATION_TRACES` result field |
 | `agentic_trait_extraction_metadata` | `dict[str, dict[str, str \| None]] \| None` | `AGENTIC_TRAIT_EXTRACTION_METADATA` result field (per-trait `method`, `local_json_error`, `parser_error`) |
 
-### Runner Auto-Upgrade Check
+### Rubric Mode Check
 
-In `run_single_model_verification()`, the runner automatically upgrades `evaluation_mode` from `"template_only"` to `"template_and_rubric"` when a rubric with any traits (including agentic traits) is provided:
+`run_single_model_verification()` does NOT upgrade `evaluation_mode` automatically. When a rubric with any traits (including agentic traits) is provided while `evaluation_mode="template_only"`, the runner logs a warning and skips rubric evaluation:
 
 ```python
-if (
-    rubric
-    and (
-        rubric.llm_traits or rubric.regex_traits or rubric.callable_traits
-        or rubric.metric_traits or rubric.agentic_traits
+if (_has_rubric_traits or _has_dynamic_rubric_traits) and evaluation_mode == "template_only":
+    logger.warning(
+        "Rubric traits were provided but evaluation_mode='template_only'. "
+        "Rubric evaluation will be skipped. Set evaluation_mode='template_and_rubric' "
+        "to evaluate rubric traits."
     )
-    and evaluation_mode == "template_only"
-):
-    evaluation_mode = "template_and_rubric"
 ```
 
-This ensures that passing a rubric with only agentic traits triggers Stage 11b without requiring the caller to explicitly set `evaluation_mode`.
+To trigger Stage 11b with agentic traits, set `evaluation_mode="template_and_rubric"` (or `"rubric_only"`) explicitly. The stage itself runs whenever the mode includes rubrics and agentic traits are attached.
 
 ### Orchestrator Registration Order
 
@@ -298,7 +295,7 @@ This allows the investigation agent to selectively search the trace using file t
 | ArtifactKeys (agentic rubric section) | `benchmark/verification/stages/core/base.py` |
 | VerificationContext (agentic rubric fields) | `benchmark/verification/stages/core/base.py` |
 | Stage orchestrator (Stage 11b registration) | `benchmark/verification/stages/core/orchestrator.py` |
-| Pipeline runner (auto-upgrade, config threading) | `benchmark/verification/runner.py` |
+| Pipeline runner (rubric-mode check, config threading) | `benchmark/verification/runner.py` |
 | FinalizeResult (rubric result assembly) | `benchmark/verification/stages/pipeline/finalize_result.py` |
 | VerificationResultRubric (agentic fields) | `schemas/verification/result_components.py` |
 | Extraction output schemas | `schemas/outputs/rubric.py` |

@@ -313,7 +313,7 @@ print(f"verify(): {parsed.verify()}")
 
 Five patterns form a toolkit for factual verification. Most real benchmarks use a mix: boolean fields for presence checks, string fields for extractable values, and numeric fields for measurements. Start with the simplest pattern that handles your ground truth, and reach for more complex ones only when needed.
 
-For step-by-step examples of implementing each pattern inside a benchmark, see [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/).
+For step-by-step examples of implementing each pattern inside a benchmark, see [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md).
 
 ### 4.1. Boolean Check
 
@@ -1245,7 +1245,7 @@ def verify(self) -> bool:
 ## 11. Next Steps
 
 - [Verification Primitives](verification-primitives.md): Full reference for all 23 verification primitives, including parameters and examples
-- [Rubrics](../../../core_concepts/rubrics/): Assess response quality beyond correctness
-- [Evaluation Modes](../evaluation-modes/): Choose between template-only, rubric-only, or both
-- [Factual QA Benchmark](../../creating-benchmarks/factual-qa-benchmark/): Step-by-step implementation of these patterns in a benchmark
-- [Philosophy](../../../home/philosophy/): Why the LLM-as-judge approach works
+- [Rubrics](rubrics/index.md): Assess response quality beyond correctness
+- [Evaluation Modes](evaluation-modes.md): Choose between template-only, rubric-only, or both
+- [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md): Step-by-step implementation of these patterns in a benchmark
+- [Philosophy](../home/philosophy.md): Why the LLM-as-judge approach works
