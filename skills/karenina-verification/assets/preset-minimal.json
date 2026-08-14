@@ -1,0 +1,21 @@
+{
+  "_comment_overview": "Minimal VerificationConfig preset. Remove fields to use defaults. Load with VerificationConfig.from_preset(path) or karenina verify --preset path.",
+
+  "config": {
+    "answering_models": [
+      {
+        "id": "answerer",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet-4-6"
+      }
+    ],
+    "parsing_models": [
+      {
+        "id": "judge",
+        "model_provider": "anthropic",
+        "model_name": "claude-haiku-4-5"
+      }
+    ],
+    "evaluation_mode": "template_only"
+  }
+}
