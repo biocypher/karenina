@@ -1,0 +1,8 @@
+services:
+  paper:
+    volumes:
+      - type: bind
+        source: ${KARENINA_CLAUDE_CONFIG_DIR:?Set KARENINA_CLAUDE_CONFIG_DIR}
+        target: /tmp/claude-config
+    environment:
+      CLAUDE_CONFIG_DIR: /tmp/claude-config

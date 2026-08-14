@@ -15,6 +15,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import tarfile
 import tomllib
 import zipfile
 from collections import Counter
@@ -88,3 +89,23 @@ def test_wheel_builds_and_ships_package_data(tmp_path: Path) -> None:
     assert len(adele_data) == expected_adele, (
         f"expected {expected_adele} ADeLe data files in the wheel, found {len(adele_data)}"
     )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_sdist_excludes_paper_folder(tmp_path: Path) -> None:
+    """The paper/ reproduction folder is repo-only and must not ship in sdists."""
+    if shutil.which("uv"):
+        command = ["uv", "build", "--sdist", "--out-dir", str(tmp_path), str(REPO_ROOT)]
+    else:
+        command = [sys.executable, "-m", "build", "--sdist", "--outdir", str(tmp_path), str(REPO_ROOT)]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    assert result.returncode == 0, f"sdist build failed:\n{result.stdout}\n{result.stderr}"
+
+    sdists = list(tmp_path.glob("*.tar.gz"))
+    assert len(sdists) == 1, f"expected exactly one sdist, got {sdists}"
+
+    with tarfile.open(sdists[0]) as archive:
+        paper_members = [name for name in archive.getnames() if "/paper/" in name]
+    assert not paper_members, f"sdist must not contain paper/: {paper_members[:5]}"

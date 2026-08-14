@@ -1,0 +1,24 @@
+services:
+  paper:
+    volumes:
+      - type: bind
+        source: ${KARENINA_DOCKER_SOCKET:-/var/run/docker.sock}
+        target: /var/run/docker.sock
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+    group_add:
+      - "${KARENINA_DOCKER_GID:-0}"
+
+  bixbench-base:
+    profiles: [images]
+    image: karenina-bixbench:latest
+    build:
+      context: .
+      dockerfile: paper/docker/bixbench/Dockerfile
+
+  bixbench-claude:
+    profiles: [images]
+    image: karenina-bixbench-claude:latest
+    build:
+      context: .
+      dockerfile: paper/docker/bixbench/Dockerfile.claude

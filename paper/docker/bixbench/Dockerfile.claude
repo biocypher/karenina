@@ -1,0 +1,20 @@
+ARG BIXBENCH_BASE_IMAGE=karenina-bixbench:latest
+FROM ${BIXBENCH_BASE_IMAGE}
+
+ARG CLAUDE_CODE_VERSION=2.1.146
+
+LABEL org.opencontainers.image.title="Karenina BixBench Claude Code sandbox" \
+      org.opencontainers.image.description="BixBench scientific sandbox with the retained Claude Code CLI"
+
+# Version 2.1.146 is the retained BixBench Claude Code version. It must be
+# changed only with a deliberate compatibility check against the configured
+# Anthropic-compatible endpoint.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates nodejs npm \
+    && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+    && npm cache clean --force \
+    && claude --version \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace

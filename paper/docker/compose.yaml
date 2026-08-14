@@ -1,0 +1,47 @@
+name: karenina-paper
+
+services:
+  paper:
+    image: karenina-paper:latest
+    build:
+      context: .
+      dockerfile: paper/docker/Dockerfile
+    working_dir: ${KARENINA_REPOSITORY_ROOT:?Set KARENINA_REPOSITORY_ROOT}
+    user: "${KARENINA_HOST_UID:-0}:${KARENINA_HOST_GID:-0}"
+    volumes:
+      - type: bind
+        source: ${KARENINA_REPOSITORY_ROOT:?Set KARENINA_REPOSITORY_ROOT}
+        target: ${KARENINA_REPOSITORY_ROOT:?Set KARENINA_REPOSITORY_ROOT}
+      - type: bind
+        source: ${KARENINA_PAPER_DATA:?Set KARENINA_PAPER_DATA}
+        target: ${KARENINA_PAPER_DATA:?Set KARENINA_PAPER_DATA}
+        read_only: true
+    environment:
+      - HOME=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - PYTHONPATH=${KARENINA_REPOSITORY_ROOT}/src:${KARENINA_REPOSITORY_ROOT}
+      - KARENINA_PAPER_DATA=${KARENINA_PAPER_DATA}
+      - ANTHROPIC_API_KEY
+      - ANTHROPIC_AUTH_TOKEN
+      - CLAUDE_CODE_OAUTH_TOKEN
+      - ZAI_API_KEY
+      - KARENINA_BIX_API_KEY
+      - KARENINA_BIX_QWEN_API_KEY
+      - KARENINA_BIX_QWEN_ENDPOINT
+      - KARENINA_BIX_CLAUDE_CONTAINER_IMAGE=${KARENINA_BIX_CLAUDE_CONTAINER_IMAGE:-karenina-bixbench-claude:latest}
+      - KARENINA_BIX_DEEPAGENTS_CONTAINER_IMAGE=${KARENINA_BIX_DEEPAGENTS_CONTAINER_IMAGE:-karenina-bixbench:latest}
+      - KARENINA_PAPER_GPT_OSS_URL
+      - KARENINA_PAPER_GPT_OSS_KEY
+      - KARENINA_PAPER_GPT_OSS_120B_URL
+      - KARENINA_PAPER_QWEN3_5_122B_A10B_URL
+      - KARENINA_PAPER_VLLM_KEY
+      - KARENINA_PAPER_QWEN3_5_A3B_URL
+      - KARENINA_PAPER_QWEN3_6_A3B_URL
+      - KARENINA_PAPER_OTP_MCP_SOURCE
+      - KARENINA_PAPER_MCP_HOST
+      - KARENINA_PAPER_MCP_BASE_PORT
+      - KARENINA_SIMPLE_MODEL
+      - KARENINA_SIMPLE_MODEL_URL
+      - KARENINA_SIMPLE_MODEL_KEY
+    extra_hosts:
+      - host.docker.internal:host-gateway
