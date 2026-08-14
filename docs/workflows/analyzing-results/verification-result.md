@@ -135,7 +135,7 @@ Convenience properties:
 | `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success |
 | `caveats` | `list[Caveat]` | Informational flags on the run |
 | `execution_time` | `float` | Execution time in seconds |
-| `timestamp` | `str` | ISO timestamp of when verification was run |
+| `timestamp` | `str` | Timestamp of when verification was run (`YYYY-MM-DD HH:MM:SS`, space separator, no timezone) |
 
 ### Retry Counts
 

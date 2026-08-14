@@ -243,7 +243,7 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `answering_system_prompt` | `str \| None` | System prompt used for the answering model |
 | `parsing_system_prompt` | `str \| None` | System prompt used for the parsing model |
 | `execution_time` | `float` | Pipeline execution time in seconds |
-| `timestamp` | `str` | ISO timestamp of when the result was produced |
+| `timestamp` | `str` | Timestamp of when the result was produced (`YYYY-MM-DD HH:MM:SS`, space separator, no timezone) |
 | `result_id` | `str` | Deterministic 16-character SHA256 hash (see below) |
 | `run_name` | `str \| None` | Organizing label for verification runs |
 | `replicate` | `int \| None` | Replicate number (1, 2, 3, ...) for repeated runs |
