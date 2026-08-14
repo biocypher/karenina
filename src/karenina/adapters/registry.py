@@ -527,6 +527,11 @@ class AdapterRegistry:
         except ImportError:
             logger.debug("TaskEval registration module not available")
 
+        try:
+            from karenina.adapters.codex_sdk import registration as _codex  # noqa: F401
+        except ImportError:
+            logger.debug("Codex SDK registration module not available")
+
     @classmethod
     def _discover_entry_points(cls) -> None:
         """Discover and load external adapters via ``karenina.adapters`` entry points.

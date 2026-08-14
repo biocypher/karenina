@@ -105,6 +105,11 @@ deep-agents = [
     "deepagents>=0.4.0",
     "langchain-mcp-adapters>=0.1.0",
 ]
+codex = [
+    # Keep the pre-1.0 SDK on the validated stable release. It installs the
+    # matching bundled Codex CLI runtime used by the adapter.
+    "openai-codex==0.144.4",
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"
