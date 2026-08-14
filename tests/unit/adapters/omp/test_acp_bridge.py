@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
+pytest.importorskip("acp", reason="OMP optional dependency not installed")
+
 from acp.schema import (
     AgentMessageChunk,
     AgentThoughtChunk,

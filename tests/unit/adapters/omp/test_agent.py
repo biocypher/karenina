@@ -4,8 +4,11 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any
 
-import acp
 import pytest
+
+pytest.importorskip("acp", reason="OMP optional dependency not installed")
+
+import acp
 from acp.schema import AgentMessageChunk, PromptResponse, TextContentBlock, Usage
 
 from karenina.adapters.omp.agent import OmpAgentAdapter
