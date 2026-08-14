@@ -1,8 +1,8 @@
 # Synced Documentation Manifest
 
-Last synced: 2026-08-14T19:02:42Z (ISO 8601 UTC / RFC 3339)
+Last synced: 2026-08-14T19:11:49Z (ISO 8601 UTC / RFC 3339)
 Source: docs/
-Files synced: 112
+Files synced: 113
 
 | Source Path | Reference Path | Lines |
 |-------------|---------------|-------|
@@ -82,6 +82,7 @@ Files synced: 112
 | docs/reference/configuration/prompt-config.md | skills/using-karenina/references/reference/configuration/prompt-config.md | 195 |
 | docs/reference/configuration/verification-config.md | skills/using-karenina/references/reference/configuration/verification-config.md | 335 |
 | docs/reference/index.md | skills/using-karenina/references/reference/index.md | 30 |
+| docs/skills.md | skills/using-karenina/references/skills.md | 64 |
 | docs/workflows/analyzing-results/database-persistence.md | skills/using-karenina/references/workflows/analyzing-results/database-persistence.md | 386 |
 | docs/workflows/analyzing-results/dataframe-analysis.md | skills/using-karenina/references/workflows/analyzing-results/dataframe-analysis.md | 486 |
 | docs/workflows/analyzing-results/error-analysis.md | skills/using-karenina/references/workflows/analyzing-results/error-analysis.md | 130 |
