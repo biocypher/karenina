@@ -1,0 +1,152 @@
+[
+  {
+    "id": 1,
+    "prompt": "I want to benchmark Claude against GPT-4 on 50 pharmacology questions with ground truth answers",
+    "expected_route": "karenina-qa",
+    "explicit": true
+  },
+  {
+    "id": 2,
+    "prompt": "Help me evaluate how well our LLM answers drug interaction questions",
+    "expected_route": "karenina-qa",
+    "explicit": false
+  },
+  {
+    "id": 3,
+    "prompt": "I have a CSV of questions and correct answers, how do I load them into karenina and run verification?",
+    "expected_route": "karenina-qa",
+    "explicit": true
+  },
+  {
+    "id": 4,
+    "prompt": "Set up a benchmark that tests whether the model can identify protein targets from drug names",
+    "expected_route": "karenina-qa",
+    "explicit": false
+  },
+  {
+    "id": 5,
+    "prompt": "I need to compare three models on the same set of factual questions about genomics",
+    "expected_route": "karenina-qa",
+    "explicit": false
+  },
+  {
+    "id": 6,
+    "prompt": "I have chatbot logs from our production system and want to evaluate response quality",
+    "expected_route": "karenina-task-eval",
+    "explicit": false
+  },
+  {
+    "id": 7,
+    "prompt": "Evaluate these pre-recorded LLM outputs against a rubric for safety and accuracy",
+    "expected_route": "karenina-task-eval",
+    "explicit": true
+  },
+  {
+    "id": 8,
+    "prompt": "I exported agent traces from our RAG pipeline. Can I run them through karenina without calling the LLM again?",
+    "expected_route": "karenina-task-eval",
+    "explicit": false
+  },
+  {
+    "id": 9,
+    "prompt": "Use TaskEval to assess these human-written medical summaries",
+    "expected_route": "karenina-task-eval",
+    "explicit": true
+  },
+  {
+    "id": 10,
+    "prompt": "I have a JSON file with model outputs, I want to score them using karenina's template engine without re-running generation",
+    "expected_route": "karenina-task-eval",
+    "explicit": false
+  },
+  {
+    "id": 11,
+    "prompt": "Build a multi-turn scenario that tests whether the model changes its answer when the user pushes back",
+    "expected_route": "karenina-scenarios",
+    "explicit": true
+  },
+  {
+    "id": 12,
+    "prompt": "I want to test sycophancy: ask a question, then challenge the answer, and see if the model sticks to its guns",
+    "expected_route": "karenina-scenarios",
+    "explicit": false
+  },
+  {
+    "id": 13,
+    "prompt": "Create a conversation graph where the model answers a knowledge question, and if wrong, gets a follow-up hint before trying again",
+    "expected_route": "karenina-scenarios",
+    "explicit": false
+  },
+  {
+    "id": 14,
+    "prompt": "I need a BaseAnswer template that extracts a drug name, mechanism, and target from the LLM response",
+    "expected_route": "karenina-template-authoring",
+    "explicit": true
+  },
+  {
+    "id": 15,
+    "prompt": "My template verify() is returning False even when the answer looks correct. The FuzzyMatch threshold might be too high",
+    "expected_route": "karenina-template-authoring",
+    "explicit": false
+  },
+  {
+    "id": 16,
+    "prompt": "Write an answer template with VerifiedField for extracting clinical trial phase and sponsor name",
+    "expected_route": "karenina-template-authoring",
+    "explicit": true
+  },
+  {
+    "id": 17,
+    "prompt": "I want to add a rubric trait that checks whether the response cites specific clinical trials",
+    "expected_route": "karenina-rubric-authoring",
+    "explicit": true
+  },
+  {
+    "id": 18,
+    "prompt": "Create a rubric with safety, conciseness, and citation quality traits for medical Q&A evaluation",
+    "expected_route": "karenina-rubric-authoring",
+    "explicit": false
+  },
+  {
+    "id": 19,
+    "prompt": "How do I configure the answering model to use Claude Sonnet and the parsing model to use Haiku?",
+    "expected_route": "karenina-verification",
+    "explicit": true
+  },
+  {
+    "id": 20,
+    "prompt": "My verification keeps auto-failing on the abstention check. How do I disable it or tune the threshold?",
+    "expected_route": "karenina-verification",
+    "explicit": false
+  },
+  {
+    "id": 21,
+    "prompt": "How do I extract a DataFrame from my verification results and calculate pass rate by model?",
+    "expected_route": "karenina-results",
+    "explicit": true
+  },
+  {
+    "id": 22,
+    "prompt": "I ran verification and want to compare rubric trait scores across three models",
+    "expected_route": "karenina-results",
+    "explicit": false
+  },
+  {
+    "id": 23,
+    "prompt": "I want to replay saved LLM responses through the full benchmark pipeline using the manual adapter",
+    "expected_route": "karenina-manual",
+    "explicit": true
+  },
+  {
+    "id": 24,
+    "prompt": "What is the difference between the verification pipeline and rubric evaluation?",
+    "expected_route": "none",
+    "explicit": false
+  },
+  {
+    "id": 25,
+    "prompt": "Explain what karenina is and how it compares to other LLM evaluation frameworks",
+    "expected_route": "none",
+    "explicit": false
+  }
+]

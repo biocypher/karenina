@@ -92,3 +92,9 @@ release: check
 	uv run semantic-release version
 
 all: clean install dev check
+
+sync-skill-docs: ## Sync karenina docs into skills/using-karenina/references
+	uv run skills/using-karenina/scripts/sync_docs.py \
+		--source docs/ \
+		--target skills/using-karenina/references/
+	@echo "Done. $$(find skills/using-karenina/references/ -name '*.md' | wc -l | tr -d ' ') files synced."

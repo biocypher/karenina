@@ -205,6 +205,7 @@ nav:
     - "Quick Start: Scenarios": notebooks/quickstart-scenarios.ipynb
     - "Quick Start: TaskEval": notebooks/quickstart-taskeval.ipynb
     - Workspace Init: getting-started/workspace-init.md
+    - Agent Skills: skills.md
   - Core Concepts:
     - Overview: core_concepts/index.md
     - Questions & Benchmarks:

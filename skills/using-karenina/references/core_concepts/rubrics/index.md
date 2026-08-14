@@ -1,0 +1,244 @@
+# Rubrics
+
+Rubrics evaluate **how** a model responded by assessing observable properties of the raw response trace, properties that do not require ground truth. While [answer templates](../answer-templates.md) verify *what* the model said (factual correctness against a known answer), rubrics assess qualities like safety, conciseness, tone, or the presence of specific elements (citations, disclaimers).
+
+> **Trace filtering:**
+> 
+> For agent workflows, `VerificationConfig.use_full_trace_for_rubric` controls whether rubric evaluation uses the full trace (`True`, the default) or only the final AI message (`False`). See the [VerificationConfig Reference](../../reference/configuration/verification-config.md#trace-filtering) for the config fields and [MCP-enabled verification](../../workflows/running-verification/mcp-agent-evaluation.md) for an end-to-end example.
+> 
+Rubrics come in five trait types (LLM, regex, callable, metric, agentic) that work differently: some require an LLM call, others run locally with no model involved, and agentic traits launch an agent to investigate workspace artifacts. They can be applied **globally** across all questions or **per-question** for domain-specific checks.
+
+## 1. What Are Rubrics?
+
+A **rubric** is a collection of evaluation traits that assess observable properties of an LLM response without requiring a ground-truth answer:
+
+- **No ground truth needed**: rubrics evaluate properties you can judge by reading the response alone (conciseness, safety, presence of citations)
+- **Complement templates**: templates check factual correctness via `verify()`; rubrics assess qualities that characterize the answer style or structure
+- **Multiple trait types**: five types (LLM, regex, callable, metric, agentic) with different execution models
+
+Unlike templates, which operate on parsed structured data, rubrics evaluate the **raw response text** directly. See [templates vs rubrics](../template-vs-rubric.md) for a full comparison of the two evaluation building blocks.
+
+A `Rubric` in Karenina is a collector object that gathers traits of different types into separate lists:
+
+```python
+from karenina.schemas.entities.rubric import Rubric, LLMRubricTrait, RegexRubricTrait
+
+rubric = Rubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="conciseness",
+            description="Is the response concise and free of unnecessary repetition?",
+            kind="boolean",
+            higher_is_better=True,
+        ),
+    ],
+    regex_traits=[
+        RegexRubricTrait(
+            name="has_citations",
+            description="The response includes at least one citation.",
+            pattern=r"\[\d+\]",
+            higher_is_better=True,
+        ),
+    ],
+    agentic_traits=[...],
+    # callable_traits and metric_traits default to empty lists
+)
+```
+
+## 2. Where Rubrics Attach
+
+Once created, a rubric needs to be attached to an evaluation object. In benchmarks, the object it attaches to determines scope; in TaskEval, rubrics can be global or step-specific.
+
+| Object | How to attach | Applies to | Use when | Evaluation behavior |
+|--------|---------------|------------|----------|---------------------|
+| **Benchmark** | Attach a rubric at the benchmark level, or add single traits with `benchmark.add_global_rubric_trait()` | Every question in the benchmark | You want the same quality checks across all responses, such as conciseness, tone, safety, or tool-grounding | Only benchmark-level traits are evaluated |
+| **Question** | Attach a rubric at the question level, or add single traits with `benchmark.add_question_rubric_trait()` | One question only | A check only makes sense for a particular prompt, such as drug safety details or citation presence | Only question-level traits are evaluated |
+| **Benchmark + Question** | Attach rubrics at both levels | The current question | You need both shared benchmark-wide traits and prompt-specific checks | Karenina merges both trait sets for that question; trait names must be unique across scopes or a `ValueError` is raised |
+| **TaskEval** | Attach a rubric with `task_eval.add_rubric()`; pass `step_id` for step-specific evaluation | All recorded text or one named step | You are evaluating free-text output outside the benchmark loop | Traits evaluate against the TaskEval global scope or the selected step scope |
+
+See [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md) for benchmark usage and [TaskEval](../task-eval.md) for free-text evaluation. Each trait type has its own sub-page with full API details.
+
+## 3. Trait Type Overview
+
+Given the question "Which is the putative target of venetoclax?", a [template](../answer-templates.md) checks whether the response identifies `BCL2` as the target (ground truth verification), while rubric traits assess other properties of the response:
+
+| Trait Type | Returns | LLM Required | Example | Note |
+|------------|---------|--------------|---------|------|
+| [**LLMRubricTrait**](llm-traits.md) (boolean) | `bool` | Yes | "Mentions safety profile of the drug" | Supports optional [deep judgment](llm-traits.md) for evidence-based evaluation |
+| [**LLMRubricTrait**](llm-traits.md) (score) | `int` | Yes | "Rate clarity from 1-5" | Configurable range |
+| [**LLMRubricTrait**](llm-traits.md) (literal) | `int` | Yes | "Classify tone as formal/casual/technical" | Returns index based on class order; `higher_is_better` controls direction |
+| [**LLMRubricTrait**](llm-traits.md) (template kind) | structured `dict` | Yes | "Audit citation style across several fields at once" | Pass a Pydantic class as `kind`; judge fills the schema in one call; see [template kind](llm-traits.md) |
+| [**RegexRubricTrait**](regex-traits.md) | `bool` | No | "Has bracket citations `[N]`" | 100% reproducible; supports `case_sensitive` and `invert_result` options |
+| [**CallableRubricTrait**](callable-traits.md) | `bool` or `int` | No | "Under 150 words" | Created via `from_callable()`; Karenina runs your Python function locally, but the function may itself call external services. Serialized with cloudpickle; only load from trusted sources |
+| [**MetricRubricTrait**](metric-traits.md) | metrics dict | Yes | "Expected drug interactions mentioned" | Two modes: `tp_only` (precision/recall/F1) and `full_matrix` (adds specificity/accuracy) |
+| [**AgenticRubricTrait**](agentic-traits.md) (boolean/score/literal) | `bool`, `int`, or class index | Yes (agent) | "Which library was used for logistic regression?" | Agent investigates workspace, parser extracts score |
+| [**AgenticRubricTrait**](agentic-traits.md) (template kind) | structured `dict` | Yes (agent) | "Audit code quality across multiple dimensions" | Agent investigates and populates a Pydantic template you define; captures multi-field evaluation findings in a single trait |
+
+Trait descriptions are not questions sent to the model; they are evaluation criteria applied to the response after the fact. Each trait type's sub-page includes a [pipeline diagram](../verification-pipeline.md) showing how evaluation works (RubricEvaluation).
+
+No ground truth does not mean no specification. Rubric traits work better when the description makes your standard explicit. If you care about conciseness, say what that means in context: for example, "answers the question directly, avoids repetition, and stays under 120 words unless the prompt asks for detail." Clear trait descriptions improve the quality and consistency of evaluation even when no single correct answer exists.
+
+See [templates vs rubrics](../template-vs-rubric.md) for a full comparison, and [evaluation modes](../evaluation-modes.md) for how to combine them in a single benchmark.
+
+## 4. Choosing the Right Trait Type
+
+| Need | Trait Type | Tutorial Example |
+|------|-----------|-----------------|
+| Subjective quality (clarity, conciseness, tone) | LLMRubricTrait (boolean or score) | [LLM score trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Categorical classification (quality tiers, tone levels) | LLMRubricTrait (literal) | [LLM literal trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Exact keyword or format validation | RegexRubricTrait | [Regex trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Complex validation logic (word counts, structure) | CallableRubricTrait | [Callable trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Precision/recall/F1 measurement | MetricRubricTrait | [Metric trait](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Deterministic, reproducible check | RegexRubricTrait, or CallableRubricTrait if your function is pure local code | [Inverted regex](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+| Evidence-based evaluation with excerpts | LLMRubricTrait with deep judgment | [Deep judgment](../../workflows/creating-benchmarks/choosing-rubric-traits.md) |
+
+For a hands-on tutorial that walks through each of these needs with a complete example, see [Choosing the Right Rubric Trait Type](../../workflows/creating-benchmarks/choosing-rubric-traits.md).
+
+### Decision Flowchart
+
+```
+0. Does the check require inspecting workspace artifacts (code files, output data)?
+   │
+   ├─ YES: Need multiple related findings from one evaluation?
+   │   │
+   │   ├─ YES → AgenticRubricTrait with template kind
+   │   │        Pass a Pydantic class as kind to capture structured output.
+   │   │
+   │   └─ NO → AgenticRubricTrait (boolean/score/literal)
+   │           context_mode controls what the agent sees.
+   │
+   └─ NO: Does the check require language understanding?
+      │
+      ├─ NO: Can it be expressed as a single regex pattern?
+      │   │
+      │   ├─ YES → RegexRubricTrait
+      │   │        Check presence: higher_is_better=True
+      │   │        Check absence:  invert_result=True
+      │   │
+      │   └─ NO (multiple patterns, numeric logic, conditionals)
+      │       → CallableRubricTrait
+      │         Accepts one str, returns bool or int.
+      │
+      └─ YES: Is it a checklist of items the response should cover?
+          │
+          ├─ YES → MetricRubricTrait
+          │        Coverage only: evaluation_mode="tp_only"
+          │        Coverage + absence: evaluation_mode="full_matrix"
+          │
+          └─ NO: What kind of judgment?
+              │
+              ├─ Yes/no → LLMRubricTrait (kind="boolean")
+              │           Need traceable evidence? Set deep_judgment_enabled=True
+              │           on the trait, then opt the run in via
+              │           VerificationConfig.deep_judgment_rubric_mode (per-trait
+              │           enablement vs. global pipeline mode are independent)
+              │
+              ├─ Named tiers with observable boundaries
+              │   → LLMRubricTrait (kind="literal")
+              │     Write mutually exclusive class descriptions.
+              │
+              └─ Continuous scale (no clear category boundaries)
+                  → LLMRubricTrait (kind="score")
+                    Anchor the scale at 3+ points with concrete criteria.
+```
+
+**Priority heuristic**: prefer regex traits, and prefer pure local callable traits, over LLM traits when possible. They are usually faster, cheaper, and more reproducible. Callable traits inherit those properties only if the function itself stays local and deterministic. Use LLM traits when the evaluation genuinely requires language understanding or when your callable would just re-implement an external judge.
+
+## 5. The `higher_is_better` Field
+
+All trait types include a `higher_is_better` field (`bool | None`) that controls directionality. A value of `None` means directionality does not apply.
+
+- **Boolean traits**: `True` means `True` is a positive outcome
+- **Score traits**: `True` means higher scores indicate better performance
+- **Literal traits**: `True` means later classes (higher indices) are better
+- **Regex traits**: `True` means a match indicates a positive outcome
+
+This field is used by analysis tools and DataFrame builders to correctly interpret and aggregate rubric results. It is also crucial for the GEPA optimization procedure, which relies on `higher_is_better` to determine the direction of improvement when optimizing prompts against rubric scores. GEPA documentation is forthcoming.
+
+## 6. Dynamic Rubric
+
+A **DynamicRubric** is a conditional rubric whose traits are only evaluated when their concept is detected in the response. Before rubric evaluation begins, the pipeline sends the response to the parsing LLM with a batch presence check. For each trait, the LLM determines whether the concept described by that trait is meaningfully present. Traits whose concept is absent are skipped entirely; traits whose concept is present are promoted into the standard rubric and evaluated normally.
+
+This is useful when a rubric covers concepts that may or may not appear in a given response. For example, a pharmacology rubric might include traits for drug interactions, dosing information, and contraindications. If the response only discusses dosing, the interaction and contraindication traits are skipped rather than evaluated against irrelevant content.
+
+### The `summary` Field
+
+All five trait types (LLM, regex, callable, metric, agentic) support an optional `summary` field: a short concept label used by the presence check prompt. The presence check prefers `summary` over `description` because it is concise and purpose-built for concept detection. If `summary` is not set, the presence check falls back to `description`. If neither is set, validation raises a `ValueError`.
+
+### How It Works
+
+1. The `DynamicRubric` is attached to a question (or globally to the benchmark).
+2. At the start of Stage 11 ([RubricEvaluation](../../advanced-pipeline/stages.md#11a-rubricevaluation)), the pipeline collects all non-agentic traits from the dynamic rubric and sends them to the parsing LLM in a single batch call.
+3. The LLM returns a structured `ConceptPresenceResult` indicating which concepts are present.
+4. Traits with `present=True` are promoted into `context.rubric` and evaluated by the standard rubric evaluators.
+5. Traits with `present=False` are recorded in `dynamic_rubric_skipped_traits` with the reason `"concept not present in response"`.
+6. The `dynamic_rubric_promoted_traits` and `dynamic_rubric_skipped_traits` fields are stored on the `VerificationResultRubric` and surfaced in the [rubric DataFrame](../../workflows/analyzing-results/dataframe-analysis.md) as `{trait_name}_skipped` columns.
+
+### Example
+
+```python
+from karenina.schemas.entities.rubric import (
+    DynamicRubric,
+    LLMRubricTrait,
+    RegexRubricTrait,
+)
+
+dynamic = DynamicRubric(
+    llm_traits=[
+        LLMRubricTrait(
+            name="interaction_safety",
+            summary="drug interaction warnings",
+            description=(
+                "Answer True if the response includes warnings about potential "
+                "drug interactions. Answer False if no interaction information "
+                "is provided."
+            ),
+            kind="boolean",
+            higher_is_better=True,
+        ),
+        LLMRubricTrait(
+            name="dosing_clarity",
+            summary="dosing instructions",
+            description=(
+                "Rate the clarity of dosing information from 1 (unclear or missing "
+                "key details) to 5 (precise, unambiguous, includes route, frequency, "
+                "and duration)."
+            ),
+            kind="score",
+            higher_is_better=True,
+        ),
+    ],
+    regex_traits=[
+        RegexRubricTrait(
+            name="has_contraindications",
+            summary="contraindication list",
+            pattern=r"(?i)contraindicated?\b",
+            higher_is_better=True,
+        ),
+    ],
+)
+
+# Attach globally to the benchmark (applies to every question)
+benchmark.set_global_dynamic_rubric(dynamic)
+```
+
+`add_question` does not accept a `dynamic_rubric` parameter; the only public facade method for dynamic rubrics is `set_global_dynamic_rubric`. To scope a `DynamicRubric` to a single question, build a [`Question`](../questions-and-benchmarks/questions.md) with its `question_dynamic_rubric` field set (a dict, e.g. `dynamic.model_dump()`); the pipeline merges global and per-question dynamic rubrics at evaluation time.
+
+If the response discusses dosing but not interactions or contraindications, only `dosing_clarity` is evaluated. The other two traits appear in results as skipped.
+
+### Validation Rules
+
+- Every trait must have at least one of `summary` or `description`.
+- Trait names must not conflict with any static rubric trait names on the same question; collisions raise `ValueError`.
+- The `rubric_trait_names` filter (if configured) is applied after the presence check: a present trait excluded by the filter is recorded as skipped with reason `"excluded by rubric_trait_names filter"`.
+
+## 7. Next Steps
+
+- [LLM traits](llm-traits.md): boolean and score kinds with deep judgment
+- [Literal traits](llm-traits.md): ordered categorical classification (part of LLM traits)
+- [Regex traits](regex-traits.md): deterministic pattern matching
+- [Callable traits](callable-traits.md): custom Python functions
+- [Metric traits](metric-traits.md): precision, recall, F1 computation
+- [Agentic traits](agentic-traits.md): agent-investigated evaluation for workspace artifacts
+- [Evaluation modes](../evaluation-modes.md): template_only, template_and_rubric, rubric_only
+- [Full Evaluation Benchmark](../../workflows/creating-benchmarks/full-evaluation-benchmark.md): workflow guide for adding rubrics to benchmarks

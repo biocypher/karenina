@@ -470,6 +470,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 - [**Installation Guide**](docs/getting-started/installation.md): Setup and requirements
 - [**Quick Start: Benchmark**](docs/getting-started/quickstart.md): Your first evaluation end-to-end
 - [**Quick Start: TaskEval**](docs/getting-started/quickstart-taskeval.md): Evaluate pre-recorded outputs
+- [**Agent Skills**](docs/skills.md): Instruction packs for coding agents — install into `.claude/skills/`
 
 ### Core Concepts
 - [**Answer Templates**](docs/core_concepts/answer-templates.md): Structured correctness verification
