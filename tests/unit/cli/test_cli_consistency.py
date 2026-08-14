@@ -400,8 +400,11 @@ class TestEmbeddingDefaults:
 
         assert config.embedding_check_threshold == pytest.approx(0.90)
 
-    def test_no_env_var_uses_field_default(self) -> None:
+    def test_no_env_var_uses_field_default(self, monkeypatch: Any) -> None:
         """When neither CLI nor env var sets threshold, field default should apply."""
+        monkeypatch.delenv("EMBEDDING_CHECK_THRESHOLD", raising=False)
+        monkeypatch.delenv("EMBEDDING_CHECK_MODEL", raising=False)
+
         config = build_config_from_cli_args(
             answering_model="test-model",
             answering_provider="anthropic",

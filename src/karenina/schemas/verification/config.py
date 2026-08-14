@@ -27,7 +27,12 @@ from .prompt_config import PromptConfig
 
 logger = logging.getLogger(__name__)
 
-# Default system prompts for answering and parsing models
+# Default system prompts. Only the answering default is auto-applied (in
+# VerificationConfig.__init__, answering_models only); parsing models keep
+# system_prompt=None so programmatic judge configs stay explicit.
+# DEFAULT_PARSING_SYSTEM_PROMPT is NOT auto-applied: it is the suggested
+# default surfaced in interactive CLI mode (cli/interactive.py) and exported
+# as public API (karenina.schemas).
 DEFAULT_ANSWERING_SYSTEM_PROMPT = "You are an expert assistant. Answer the question accurately and concisely."
 DEFAULT_PARSING_SYSTEM_PROMPT = (
     "You are a validation assistant. Parse and validate responses against the given Pydantic template."
