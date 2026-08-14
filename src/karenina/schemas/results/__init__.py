@@ -18,8 +18,15 @@ from .aggregation import (
     create_default_registry,
 )
 from .judgment import JudgmentResults
+from .row_key import ResultRowKey
 from .rubric import RubricResults
 from .rubric_judgment import RubricJudgmentResults
+from .scenario import (
+    ScenarioResultRecord,
+    ScenarioResults,
+    ScenarioTerminalFailureRecord,
+    ScenarioTurnRecord,
+)
 from .template import TemplateResults
 from .verification_result_set import VerificationResultSet
 
@@ -38,6 +45,11 @@ __all__ = [
     "TemplateResults",
     "RubricResults",
     "JudgmentResults",
+    "ResultRowKey",
     "RubricJudgmentResults",
+    "ScenarioResultRecord",
+    "ScenarioResults",
+    "ScenarioTerminalFailureRecord",
+    "ScenarioTurnRecord",
     "VerificationResultSet",
 ]

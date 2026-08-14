@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from .judgment import JudgmentResults
 from .rubric import RubricResults
 from .rubric_judgment import RubricJudgmentResults
+from .scenario import ScenarioResults
 from .template import TemplateResults
 
 if TYPE_CHECKING:
@@ -47,6 +48,10 @@ class VerificationResultSet(BaseModel):
     errors: list[tuple[str, BaseException]] | None = Field(
         default=None,
         description="Errors from failed scenario executions as (description, exception) tuples",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Run metadata loaded with or attached to this result set",
     )
 
     model_config = {"arbitrary_types_allowed": True}
@@ -226,6 +231,14 @@ class VerificationResultSet(BaseModel):
             ```
         """
         return RubricJudgmentResults(results=self.results)
+
+    def get_scenario_results(self) -> ScenarioResults:
+        """Get the scenario execution view for a scenario verification run.
+
+        Returns:
+            ScenarioResults wrapping live or loaded scenario executions.
+        """
+        return ScenarioResults(results=list(self.scenario_results or []))
 
     # ========================================================================
     # Filtering

@@ -392,7 +392,7 @@ print(f"q_identify: {q_identify.question}")
 print(f"q_challenge: {q_challenge.question[:60]}...")
 ```
 
-> **Learn more**: [Answer Templates](../notebooks/core_concepts/answer-templates.ipynb) · [Building Scenarios](../notebooks/core_concepts/scenarios/building-scenarios.ipynb)
+> **Learn more**: [Answer Templates](../core_concepts/answer-templates.md) · [Building Scenarios](../core_concepts/scenarios/building-scenarios.md)
 
 ---
 
@@ -430,7 +430,7 @@ print(f"Edges: {len(scenario._edges)}")
 print(f"Entry: {scenario._entry_node}")
 ```
 
-> **Learn more**: [Building Scenarios](../notebooks/core_concepts/scenarios/building-scenarios.ipynb) · [State and Routing](../notebooks/core_concepts/scenarios/state-and-routing.ipynb)
+> **Learn more**: [Building Scenarios](../core_concepts/scenarios/building-scenarios.md) · [State and Routing](../core_concepts/scenarios/state-and-routing.md)
 
 ---
 
@@ -451,7 +451,7 @@ scenario.add_outcome(
 print(f"Outcomes: {[o['name'] for o in scenario._outcomes]}")
 ```
 
-> **Learn more**: [Outcome Criteria](../notebooks/core_concepts/scenarios/outcome-criteria.ipynb)
+> **Learn more**: [Outcome Criteria](../core_concepts/scenarios/outcome-criteria.md)
 
 ---
 
@@ -498,7 +498,7 @@ for i, vr in enumerate(result_set.results):
             print(f"  {field_name} = {field_value}")
 ```
 
-> **Learn more**: [Sycophancy Tutorial](../notebooks/scenarios/sycophancy-tutorial.ipynb) for the full three-node walkthrough with branching paths and outcome evaluation
+> **Learn more**: [Sycophancy Tutorial](../workflows/scenarios/sycophancy-tutorial.md) for the full three-node walkthrough with branching paths and outcome evaluation
 
 ---
 
@@ -529,7 +529,7 @@ with TemporaryDirectory() as tmpdir:
 
 ## Next Steps
 
-- **[Sycophancy Tutorial](../notebooks/scenarios/sycophancy-tutorial.ipynb)**: Full three-node walkthrough with branching paths, both outcome criteria, and result interpretation
-- **[Building Scenarios](../notebooks/core_concepts/scenarios/building-scenarios.ipynb)**: Complete builder API, node parameters, and graph patterns
-- **[Outcome Criteria](../notebooks/core_concepts/scenarios/outcome-criteria.ipynb)**: All check node types, composition operators, and sugar functions
-- **[Q/A Benchmark Quick Start](../notebooks/quickstart.ipynb)**: If you need single-turn evaluation with template correctness and rubric quality checks
+- **[Sycophancy Tutorial](../workflows/scenarios/sycophancy-tutorial.md)**: Full three-node walkthrough with branching paths, both outcome criteria, and result interpretation
+- **[Building Scenarios](../core_concepts/scenarios/building-scenarios.md)**: Complete builder API, node parameters, and graph patterns
+- **[Outcome Criteria](../core_concepts/scenarios/outcome-criteria.md)**: All check node types, composition operators, and sugar functions
+- **[Q/A Benchmark Quick Start](quickstart.md)**: If you need single-turn evaluation with template correctness and rubric quality checks

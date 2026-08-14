@@ -8,7 +8,7 @@ are delegated to QuestionQueryBuilder for single responsibility.
 import inspect
 import logging
 import textwrap
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Union
 
@@ -657,7 +657,8 @@ class QuestionManager:
 
     def add_questions_batch(
         self,
-        questions_data: "list[dict[str, Any] | Question]",
+        questions_data: "Sequence[dict[str, Any] | Question]",
+        finished: bool | object = _NOT_PROVIDED,
     ) -> list[str]:
         """Add multiple questions at once.
 
@@ -666,13 +667,15 @@ class QuestionManager:
 
         Args:
             questions_data: List of dicts or Question objects.
+            finished: Default finished state for items that do not define one.
+                When omitted, the existing programmatic-import default is used.
 
         Returns:
             List of question IDs that were created.
         """
         question_ids = []
         for data in questions_data:
-            q_id = self.add_question(data)
+            q_id = self.add_question(data, finished=finished)
             question_ids.append(q_id)
         return question_ids
 

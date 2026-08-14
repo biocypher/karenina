@@ -794,9 +794,16 @@ class LangChainLLMAdapter:
         init_chat_model), the http_client/http_async_client attributes are
         usually not present and the call is a no-op.
 
+        Structured-output adapters borrow the base adapter's model and HTTP
+        clients. Their owner closes those shared resources after the complete
+        evaluation, so closing them here would break a later rubric stage.
+
         Cleanup never raises: each close is wrapped in try/except so that
         ``aclose`` can always be called safely from cleanup paths.
         """
+        if self._base_model is not None:
+            return
+
         async_client = getattr(self._model, "http_async_client", None)
         if async_client is not None:
             try:

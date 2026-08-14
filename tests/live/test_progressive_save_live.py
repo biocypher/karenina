@@ -49,6 +49,8 @@ DEFAULT_QA_BENCHMARK = Path(
 # Endpoints on codon-gpu-001. See memory/reference_gpu_server.md.
 VLLM_QWEN35 = os.getenv("VLLM_QWEN35_URL", "http://codon-gpu-001:8002")
 VLLM_QWEN36 = os.getenv("VLLM_QWEN36_URL", "http://codon-gpu-001:8103")
+VLLM_QWEN35_MODEL = os.getenv("VLLM_QWEN35_MODEL", "qwen3.5-a3b")
+VLLM_QWEN36_MODEL = os.getenv("VLLM_QWEN36_MODEL", "qwen3.6-a3b")
 
 OPENAI_EXTRA_KWARGS: dict = {
     "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
@@ -56,9 +58,9 @@ OPENAI_EXTRA_KWARGS: dict = {
 }
 
 
-def _model(model_name: str, base_url: str) -> ModelConfig:
+def _model(role_id: str, model_name: str, base_url: str) -> ModelConfig:
     return ModelConfig(
-        id=model_name,
+        id=role_id,
         model_name=model_name,
         interface="openai_endpoint",
         endpoint_base_url=base_url,
@@ -111,7 +113,7 @@ def qa_subset() -> Benchmark:
 
 def test_live_fresh_run_clean_finalize(qa_subset: Benchmark, tmp_path: Path) -> None:
     output = tmp_path / "live_fresh.json"
-    config = _config([_model("qwen3.5-a3b", VLLM_QWEN35)])
+    config = _config([_model("qwen35-slot", VLLM_QWEN35_MODEL, VLLM_QWEN35)])
     sink = ProgressiveFileSink(
         output_path=output,
         config=config,
@@ -139,7 +141,7 @@ def test_live_resume_skips_completed_triples(qa_subset: Benchmark, tmp_path: Pat
     the executor is handed an empty queue.
     """
     output = tmp_path / "live_resume.json"
-    config = _config([_model("qwen3.5-a3b", VLLM_QWEN35)])
+    config = _config([_model("qwen35-slot", VLLM_QWEN35_MODEL, VLLM_QWEN35)])
 
     sink = ProgressiveFileSink(output_path=output, config=config, benchmark_path=str(DEFAULT_QA_BENCHMARK))
     first_set = qa_subset.run_verification(config=config, run_name="live-resume-1", sink=sink)
@@ -174,8 +176,8 @@ def test_live_multi_model_fanout_resume(qa_subset: Benchmark, tmp_path: Path) ->
     qwen3.5 first, then add qwen3.6 as a second answerer and assert only
     the 3 qwen3.6 triples run live (triple-level skip across models).
     """
-    qwen35 = _model("qwen3.5-a3b", VLLM_QWEN35)
-    qwen36 = _model("qwen3.6-a3b", VLLM_QWEN36)
+    qwen35 = _model("qwen35-slot", VLLM_QWEN35_MODEL, VLLM_QWEN35)
+    qwen36 = _model("qwen36-slot", VLLM_QWEN36_MODEL, VLLM_QWEN36)
 
     first_config = _config([qwen35])
     first_set = qa_subset.run_verification(config=first_config, run_name="live-fanout-1")
@@ -191,4 +193,4 @@ def test_live_multi_model_fanout_resume(qa_subset: Benchmark, tmp_path: Path) ->
     # Only qwen3.6 triples should have run live.
     assert len(second_set) == 3
     for r in second_set:
-        assert r.metadata.answering.model_name == "qwen3.6-a3b"
+        assert r.metadata.answering.model_name == VLLM_QWEN36_MODEL

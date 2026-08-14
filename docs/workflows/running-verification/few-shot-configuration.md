@@ -400,5 +400,5 @@ print("Done")
 - [Few-Shot Concepts](../../core_concepts/few-shot.md): Detailed explanation of modes, resolution, and edge cases
 - [Prompt Assembly](../../core_concepts/prompt-assembly.md): How few-shot examples are injected into the answering prompt
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md): All configuration fields
-- [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb): Simplest verification workflow
-- [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb): Template and rubric evaluation with quality checks
+- [Basic Verification](basic-verification.md): Simplest verification workflow
+- [Full Evaluation](full-evaluation.md): Template and rubric evaluation with quality checks

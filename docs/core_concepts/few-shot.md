@@ -15,7 +15,7 @@ jupyter:
 
 # Few-Shot Examples
 
-Few-shot examples teach the **answering model** how to respond by prepending question-answer pairs to the prompt before the main question. They affect only the answering stage of the [verification pipeline](../verification-pipeline/); the [Judge LLM](../answer-templates/), [rubric evaluators](../../../core_concepts/rubrics/), and all other pipeline stages never see them.
+Few-shot examples teach the **answering model** how to respond by prepending question-answer pairs to the prompt before the main question. They affect only the answering stage of the [verification pipeline](verification-pipeline.md); the [Judge LLM](answer-templates.md), [rubric evaluators](rubrics/index.md), and all other pipeline stages never see them.
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -31,7 +31,7 @@ from karenina.schemas import (
 
 ## 1. What Are Few-Shot Examples?
 
-A few-shot example is a `{"question": "...", "answer": "..."}` pair stored on a [question](../questions-and-benchmarks/questions/). When verification runs, Karenina prepends the resolved examples to the prompt so the answering model sees a pattern before it encounters the real question:
+A few-shot example is a `{"question": "...", "answer": "..."}` pair stored on a [question](questions-and-benchmarks/questions.md). When verification runs, Karenina prepends the resolved examples to the prompt so the answering model sees a pattern before it encounters the real question:
 
 ```text
 Question: How many chromosomes in a human somatic cell?
@@ -434,7 +434,7 @@ These fields enable filtering and grouping in analysis (e.g., comparing accuracy
 
 ## 14. Next Steps
 
-- [Answer Templates](../answer-templates/): what few-shot examples help the answering model produce
-- [Verification Pipeline](../verification-pipeline/): where GenerateAnswer fits in the 13-stage pipeline (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard)
-- [Running Verification](../../../workflows/running-verification/): complete configuration and execution workflow
-- [VerificationConfig Reference](../../../reference/configuration/verification-config/): exhaustive field reference including `few_shot_config`
+- [Answer Templates](answer-templates.md): what few-shot examples help the answering model produce
+- [Verification Pipeline](verification-pipeline.md): where GenerateAnswer fits in the 13-stage pipeline (with sub-stages 7a/7b and 11a/11b plus the always-on placeholder-retry guard)
+- [Running Verification](../workflows/running-verification/index.md): complete configuration and execution workflow
+- [VerificationConfig Reference](../reference/configuration/verification-config.md): exhaustive field reference including `few_shot_config`

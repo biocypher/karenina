@@ -111,6 +111,70 @@ class TestConnectMcpSession:
                     headers={"Authorization": "Bearer token123"},
                 )
 
+    @pytest.mark.asyncio
+    async def test_passes_timeouts_to_transport(self) -> None:
+        """Test that configured timeouts are passed to the transport."""
+        from karenina.adapters.claude_tool.mcp import connect_mcp_session
+
+        mock_session = AsyncMock()
+
+        with (
+            patch("mcp.client.streamable_http.streamablehttp_client") as mock_client,
+            patch("mcp.ClientSession") as mock_session_class,
+        ):
+            mock_transport_cm = AsyncMock()
+            mock_transport_cm.__aenter__.return_value = (AsyncMock(), AsyncMock(), None)
+            mock_transport_cm.__aexit__.return_value = None
+            mock_client.return_value = mock_transport_cm
+
+            mock_session_cm = AsyncMock()
+            mock_session_cm.__aenter__.return_value = mock_session
+            mock_session_cm.__aexit__.return_value = None
+            mock_session_class.return_value = mock_session_cm
+
+            async with AsyncExitStack() as stack:
+                config: dict[str, Any] = {
+                    "type": "http",
+                    "url": "https://mcp.example.com/mcp",
+                    "timeout": 240.0,
+                    "sse_read_timeout": 600.0,
+                }
+
+                await connect_mcp_session(stack, config)
+                assert mock_client.call_args.kwargs["timeout"] == 240.0
+                assert mock_client.call_args.kwargs["sse_read_timeout"] == 600.0
+
+    @pytest.mark.asyncio
+    async def test_omits_timeouts_when_unset(self) -> None:
+        """Test that timeout kwargs are omitted when not configured."""
+        from karenina.adapters.claude_tool.mcp import connect_mcp_session
+
+        mock_session = AsyncMock()
+
+        with (
+            patch("mcp.client.streamable_http.streamablehttp_client") as mock_client,
+            patch("mcp.ClientSession") as mock_session_class,
+        ):
+            mock_transport_cm = AsyncMock()
+            mock_transport_cm.__aenter__.return_value = (AsyncMock(), AsyncMock(), None)
+            mock_transport_cm.__aexit__.return_value = None
+            mock_client.return_value = mock_transport_cm
+
+            mock_session_cm = AsyncMock()
+            mock_session_cm.__aenter__.return_value = mock_session
+            mock_session_cm.__aexit__.return_value = None
+            mock_session_class.return_value = mock_session_cm
+
+            async with AsyncExitStack() as stack:
+                config: dict[str, Any] = {
+                    "type": "http",
+                    "url": "https://mcp.example.com/mcp",
+                }
+
+                await connect_mcp_session(stack, config)
+                assert "timeout" not in mock_client.call_args.kwargs
+                assert "sse_read_timeout" not in mock_client.call_args.kwargs
+
 
 class TestConnectAllMcpServers:
     """Tests for connect_all_mcp_servers function."""

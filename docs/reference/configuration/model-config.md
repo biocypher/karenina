@@ -1,8 +1,8 @@
 # ModelConfig Reference
 
-This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) and [Adapters Overview](../../core_concepts/adapters.md).
+This is the exhaustive reference for all `ModelConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../workflows/running-verification/basic-verification.md) and [Adapters Overview](../../core_concepts/adapters.md).
 
-`ModelConfig` is a Pydantic model with **22 fields** organized into the categories below. Import: `from karenina.schemas import ModelConfig`. Field counts can drift slightly with new releases; the source of truth is `karenina/schemas/config/models.py`.
+`ModelConfig` is a Pydantic model with fields organized into the categories below. Import: `from karenina.schemas import ModelConfig`. The source of truth is `karenina/schemas/config/models.py`.
 
 ---
 
@@ -61,7 +61,7 @@ silently falling back to environment credentials.
 
 ## MCP Configuration
 
-These fields configure MCP (Model Context Protocol) tool access. See [MCP Integration Overview](../../notebooks/core_concepts/mcp-overview.ipynb) for architecture and usage patterns.
+These fields configure MCP (Model Context Protocol) tool access. See [MCP Integration Overview](../../core_concepts/mcp-overview.md) for architecture and usage patterns.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -155,7 +155,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `manual_traces` | `ManualTraces \| None` | `None` | Pre-recorded trace data for the manual interface. **Required** when `interface="manual"`. Excluded from serialization. See [Manual Interface](../../notebooks/core_concepts/manual-interface.ipynb) for format details. |
+| `manual_traces` | `ManualTraces \| None` | `None` | Pre-recorded trace data for the manual interface. **Required** when `interface="manual"`. Excluded from serialization. See [Manual Interface](../../core_concepts/manual-interface.md) for format details. |
 
 **Validation rules:**
 
@@ -170,6 +170,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `agent_timeout` | `int \| None` | `None` | Timeout in seconds for agent execution. Overrides the default timeout (180s) used in answer generation. Set higher for complex questions with many tool calls. |
+| `agent_runtime` | `AgentRuntimeConfig \| None` | `None` | Typed runtime backend, access mode, sandbox, container image, network, and file-read settings for `claude_agent_sdk` and `langchain_deep_agents`. See [Sandboxed Runtime Backends](../../core_concepts/agentic-evaluation.md). |
 | `request_timeout` | `float \| None` | `None` | HTTP request timeout in seconds for individual LLM API calls on this model. Typically stamped by the pipeline from `VerificationConfig.request_timeout`. `None` means use the provider SDK default (no timeout). |
 | `retry_policy` | `RetryPolicy \| None` | `None` | Per-category retry policy for transient LLM errors on this model. Typically stamped by the pipeline from `VerificationConfig.retry_policy`. `None` means inherit the pipeline-level policy. |
 
@@ -179,7 +180,30 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific API keys, custom parameters, or provider-specific settings not covered by other fields. Recognized keys include the `agent_runtime` sub-dict that configures [sandboxed agent runtimes](../../notebooks/core_concepts/agentic-evaluation.ipynb#10-sandboxed-runtime-backends) (`backend`, `access_mode`, `container_runtime`, `container_image`, `container_network`, `container_add_hosts`, `sandbox_enabled`) for the `claude_agent_sdk` and `langchain_deep_agents` interfaces, `endpoint_base_url_mode` (`"auto_v1"` / `"raw"`) for the `openai_endpoint` and `langchain_deep_agents` interfaces, `claude_sdk_parser_openai_base_url` (explicit OpenAI-compatible parser endpoint for `claude_agent_sdk`), and `effort` (extended-thinking tier) for Anthropic `langchain_deep_agents` models. See [Available Adapters](../../advanced-adapters/available-adapters.md). |
+| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific settings not covered by typed fields. Recognized keys include `endpoint_base_url_mode` (`"auto_v1"` / `"raw"`), `claude_sdk_parser_openai_base_url`, and `effort`. Older saved configurations may contain an `agent_runtime` dictionary here, but new code should use the typed `agent_runtime` field. See [Available Adapters](../../advanced-adapters/available-adapters.md). |
+
+### Probe an OpenAI-compatible endpoint
+
+Use the read-only public probe before a costly run to confirm that an endpoint
+is reachable and advertises the configured model. This queries only the models
+route and does not generate text:
+
+```python
+from karenina.utils import probe_openai_endpoint, select_openai_endpoint
+
+result = probe_openai_endpoint("http://localhost:8000", timeout=5.0)
+if not result.exposes("my-model"):
+    raise RuntimeError(result.error or "model is not available")
+
+endpoint = select_openai_endpoint(
+    ["http://gpu-1:8000", "http://gpu-2:8000"],
+    "my-model",
+)
+```
+
+Pass `api_key=` for endpoints whose models route requires bearer
+authentication. Provider base paths ending in a version segment, such as
+`/v1` or `/v4`, are preserved.
 
 ---
 
@@ -247,7 +271,7 @@ ModelConfig(
 ## Related
 
 - [VerificationConfig Reference](verification-config.md) — uses `ModelConfig` for `answering_models` and `parsing_models`
-- [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb) — step-by-step configuration guide
+- [Basic Verification](../../workflows/running-verification/basic-verification.md) — step-by-step configuration guide
 - [Adapters Overview](../../core_concepts/adapters.md) — interface comparison and selection guide
-- [MCP Integration Overview](../../notebooks/core_concepts/mcp-overview.ipynb) — MCP architecture and adapter capabilities
+- [MCP Integration Overview](../../core_concepts/mcp-overview.md) — MCP architecture and adapter capabilities
 - [Environment Variables](../../workflows/configuration/environment-variables.md) — API keys and path configuration

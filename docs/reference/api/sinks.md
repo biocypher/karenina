@@ -2,7 +2,7 @@
 
 `ResultSink` is the Protocol that streams [`VerificationResult`](../../core_concepts/results-and-scoring.md) instances out of the executor as a verification run progresses. Sinks are the single extension point for progressive save, crash recovery, incremental database writes, and any other per-result persistence the caller may need. Karenina ships four implementations covering the common cases, plus `AgenticProgressiveFileSink`, a `ProgressiveFileSink` subclass specialized for agentic workspace benchmarks (see section 3.5).
 
-For the user-facing tutorial covering `--progressive-save`, `--resume`, `verify-status`, and the typical CLI flow, see [Progressive Save and Resume](../../notebooks/running-verification/progressive-save.ipynb). For how sinks interact with `extend_template` / `extend_rubric`, see [Extending Runs](../../core_concepts/extending-runs.md). For inspecting `.state` sidecars from the terminal, see the [`verify-status` CLI reference](../cli/verify-status.md).
+For the user-facing tutorial covering `--progressive-save`, `--resume`, `verify-status`, and the typical CLI flow, see [Progressive Save and Resume](../../workflows/running-verification/progressive-save.md). For how sinks interact with `extend_template` / `extend_rubric`, see [Extending Runs](../../core_concepts/extending-runs.md). For inspecting `.state` sidecars from the terminal, see the [`verify-status` CLI reference](../cli/verify-status.md).
 
 ## 1. Canonical Imports
 
@@ -205,7 +205,7 @@ with `replicate` either an `int` (one-based) or `None` for single-replicate runs
 
 ## 7. Wiring Sinks Into `Benchmark`
 
-Two facade methods on [`Benchmark`](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb) accept or construct sinks.
+Two facade methods on [`Benchmark`](../../core_concepts/questions-and-benchmarks/benchmarks.md) accept or construct sinks.
 
 ### `Benchmark.run_verification(config, *, sink=None, ...)`
 
@@ -255,4 +255,4 @@ When a sink is attached, the batch runner calls `sink.iter_results()` once at th
 1. The executor raised `VerificationBatchError`. The runner catches it (only when a sink is attached; without a sink the exception still propagates, preserving back-compat) and uses `exc.partial_results` for the merged result set.
 2. After the batch returns, `len(results) != len(task_queue)`. This catches silent shortfalls: tasks that completed but never produced a stored result, or queues that were truncated mid-flight.
 
-Custom-sink authors should treat `all_complete` as "every task in the manifest produced a successful result"; a `False` value can mean either an explicit failure path or a quiet shortfall. Persistent storage should be retained on `False` so a later resume can continue from the durable manifest. See [Progressive Save and Resume](../../notebooks/running-verification/progressive-save.ipynb#partial-failure-keep-state-retry-only-failures) for the user-facing description of this behavior.
+Custom-sink authors should treat `all_complete` as "every task in the manifest produced a successful result"; a `False` value can mean either an explicit failure path or a quiet shortfall. Persistent storage should be retained on `False` so a later resume can continue from the durable manifest. See [Progressive Save and Resume](../../workflows/running-verification/progressive-save.md) for the user-facing description of this behavior.

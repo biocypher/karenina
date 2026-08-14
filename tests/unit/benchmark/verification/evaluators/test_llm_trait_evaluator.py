@@ -304,3 +304,106 @@ class TestTemplateEvaluation:
         evaluator.evaluate_template("q", "a", [_make_template_trait()])
 
         mock_llm.with_structured_output.assert_called_once_with(_CitationCheck)
+
+
+# =============================================================================
+# Ground-truth partitioning in batch evaluation
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestBatchGroundTruthPartition:
+    """Tests for ground-truth isolation in LLMTraitEvaluator.evaluate_batch."""
+
+    def _make_evaluator_capturing_prompts(self, prompts: list[str]):
+        """Build an evaluator whose mocked judge appends each user prompt to ``prompts``."""
+        from dataclasses import dataclass
+        from unittest.mock import MagicMock
+
+        from karenina.benchmark.verification.evaluators.rubric.llm_trait import LLMTraitEvaluator
+
+        @dataclass
+        class _FakeScores:
+            scores: dict
+
+        @dataclass
+        class _FakeResponse:
+            raw: object
+            usage: object = None
+
+        def fake_invoke(messages):
+            prompts.append("\n".join(m.text for m in messages if m.text))
+            return _FakeResponse(raw=_FakeScores(scores={"grounded_trait": True, "plain_trait": True}))
+
+        structured_llm = MagicMock()
+        structured_llm.invoke.side_effect = fake_invoke
+        mock_llm = MagicMock()
+        mock_llm.with_structured_output.return_value = structured_llm
+
+        return LLMTraitEvaluator(mock_llm, async_enabled=False, model_config=_make_model_config())
+
+    def _make_traits(self) -> tuple[LLMRubricTrait, LLMRubricTrait]:
+        exposed = LLMRubricTrait(
+            name="grounded_trait",
+            description="Matches the reference.",
+            kind="boolean",
+            include_ground_truth=True,
+        )
+        plain = LLMRubricTrait(
+            name="plain_trait",
+            description="Is clear.",
+            kind="boolean",
+        )
+        return exposed, plain
+
+    def test_batch_partition_isolates_ground_truth(self):
+        """Non-opted-in traits share no prompt with the reference answer."""
+        prompts: list[str] = []
+        evaluator = self._make_evaluator_capturing_prompts(prompts)
+        exposed, plain = self._make_traits()
+
+        results, _ = evaluator.evaluate_batch("q", "a", [exposed, plain], ground_truth="SECRET-REF")
+
+        assert len(prompts) == 2
+        exposed_prompts = [p for p in prompts if "SECRET-REF" in p]
+        plain_prompts = [p for p in prompts if "SECRET-REF" not in p]
+        assert len(exposed_prompts) == 1
+        assert len(plain_prompts) == 1
+        assert "grounded_trait" in exposed_prompts[0]
+        assert "plain_trait" not in exposed_prompts[0]
+        assert "plain_trait" in plain_prompts[0]
+        assert results["grounded_trait"] is True
+        assert results["plain_trait"] is True
+
+    def test_batch_single_call_when_ground_truth_absent(self):
+        """A mixed trait list stays in one call when no ground truth is given."""
+        prompts: list[str] = []
+        evaluator = self._make_evaluator_capturing_prompts(prompts)
+        exposed, plain = self._make_traits()
+
+        evaluator.evaluate_batch("q", "a", [exposed, plain], ground_truth=None)
+
+        assert len(prompts) == 1
+        assert "REFERENCE ANSWER" not in prompts[0]
+
+    def test_batch_single_call_when_all_traits_opted_in(self):
+        """An all-exposed trait list keeps a single call with the reference."""
+        prompts: list[str] = []
+        evaluator = self._make_evaluator_capturing_prompts(prompts)
+        exposed, _ = self._make_traits()
+
+        evaluator.evaluate_batch("q", "a", [exposed], ground_truth="SECRET-REF")
+
+        assert len(prompts) == 1
+        assert "SECRET-REF" in prompts[0]
+
+    def test_batch_single_call_when_no_trait_opted_in(self):
+        """An all-plain trait list keeps a single call without the reference."""
+        prompts: list[str] = []
+        evaluator = self._make_evaluator_capturing_prompts(prompts)
+        _, plain = self._make_traits()
+
+        evaluator.evaluate_batch("q", "a", [plain], ground_truth="SECRET-REF")
+
+        assert len(prompts) == 1
+        assert "SECRET-REF" not in prompts[0]

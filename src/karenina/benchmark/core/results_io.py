@@ -3,6 +3,7 @@
 import csv
 import json
 import logging
+from collections.abc import Iterator
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,8 @@ if TYPE_CHECKING:
 
 from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.results.failure import Failure, FailureCategory
+from karenina.schemas.results.scenario import ScenarioResultRecord
+from karenina.schemas.results.verification_result_set import VerificationResultSet
 from karenina.schemas.verification import VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 from karenina.schemas.verification.result_components import (
@@ -307,6 +310,109 @@ class ResultsIOManager:
                         continue
 
         return results
+
+    @staticmethod
+    def load_result_set_from_json(file_path: Path) -> VerificationResultSet:
+        """Load and validate a complete verification result set from JSON.
+
+        Unlike the legacy dictionary loader, this method preserves run metadata
+        and compact scenario execution records when the export contains them.
+        Malformed rows raise instead of being skipped, making this the preferred
+        analysis path for saved experiment outputs.
+
+        Args:
+            file_path: Path to a standard JSON verification export.
+
+        Returns:
+            A validated result set with optional scenario results and metadata.
+
+        Raises:
+            ValueError: If the JSON shape or any result row is invalid.
+        """
+        with open(file_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+
+        metadata: dict[str, Any] = {}
+        scenario_data: list[object] = []
+        result_data: object
+
+        if isinstance(data, list):
+            result_data = data
+        elif isinstance(data, dict):
+            loaded_metadata = data.get("metadata")
+            if loaded_metadata is not None:
+                if not isinstance(loaded_metadata, dict):
+                    raise ValueError("Invalid results export: metadata must be an object")
+                metadata = dict(loaded_metadata)
+
+            if "results" in data:
+                result_data = data["results"]
+                loaded_scenarios = data.get("scenario_results", [])
+                if not isinstance(loaded_scenarios, list):
+                    raise ValueError("Invalid results export: scenario_results must be an array")
+                scenario_data = loaded_scenarios
+            elif "runs" in data:
+                runs = data["runs"]
+                if not isinstance(runs, dict):
+                    raise ValueError("Invalid results export: runs must be an object")
+                result_data = [row for rows in runs.values() for row in rows]
+                metadata = {**metadata, "run_names": list(runs)}
+            else:
+                result_data = data
+        else:
+            raise ValueError("Invalid results export: top-level JSON must be an array or object")
+
+        if isinstance(result_data, dict):
+            result_items = list(result_data.values())
+        elif isinstance(result_data, list):
+            result_items = result_data
+        else:
+            raise ValueError("Invalid results export: results must be an array or object")
+
+        results: list[VerificationResult] = []
+        for index, item in enumerate(result_items):
+            if not isinstance(item, dict):
+                raise ValueError(f"Invalid results export: result {index} must be an object")
+            item_copy = dict(item)
+            item_copy.pop("row_index", None)
+            try:
+                results.append(VerificationResult.model_validate(item_copy))
+            except Exception as e:
+                raise ValueError(f"Invalid verification result at index {index}") from e
+
+        scenario_results: list[ScenarioResultRecord] = []
+        for index, item in enumerate(scenario_data):
+            try:
+                scenario_results.append(ScenarioResultRecord.model_validate(item))
+            except Exception as e:
+                raise ValueError(f"Invalid scenario result at index {index}") from e
+
+        return VerificationResultSet(
+            results=results,
+            scenario_results=scenario_results or None,
+            metadata=metadata,
+        )
+
+    @staticmethod
+    def iter_from_json(
+        file_path: Path,
+        *,
+        raw: bool = False,
+    ) -> Iterator[VerificationResult] | Iterator[dict[str, Any]]:
+        """Stream rows from a results JSON export.
+
+        Args:
+            file_path: Path to a v2.2 export or legacy array export.
+            raw: Yield dictionaries instead of validating current result models.
+
+        Returns:
+            An iterator over results or raw row dictionaries.
+        """
+        from karenina.benchmark.core.results_stream import iter_results_from_json
+
+        if raw:
+            return iter_results_from_json(file_path, raw=True)
+        return iter_results_from_json(file_path)
 
     @staticmethod
     def load_from_csv(file_path: Path) -> dict[str, VerificationResult]:

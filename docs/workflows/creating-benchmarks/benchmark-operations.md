@@ -17,7 +17,7 @@ jupyter:
 
 This page covers the full operational API for working with `Benchmark` objects: creating, populating, inspecting, querying, and checking readiness. Think of it as a reference for everything you can do with a benchmark before running verification.
 
-For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/benchmarks.ipynb). For end-to-end benchmark creation scenarios, see the other pages in this section ([Factual QA](factual-qa-benchmark.md), [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md), [Scaled Benchmark Creation](scaled-benchmark-creation.md)).
+For the conceptual overview of what a benchmark *is*, see [Benchmarks (Core Concepts)](../../core_concepts/questions-and-benchmarks/benchmarks.md). For end-to-end benchmark creation scenarios, see the other pages in this section ([Factual QA](factual-qa-benchmark.md), [Full Evaluation](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md), [Scaled Benchmark Creation](scaled-benchmark-creation.md)).
 
 ```python tags=["hide-cell"]
 # Setup cell: hidden in rendered documentation.
@@ -107,7 +107,7 @@ print(f"Added via Question object: {q_extra_id}")
 
 Pass both the question and an answer template in one call. See [Inline (at question creation time)](#inline-at-question-creation-time) below for the full example.
 
-Question IDs are deterministic: derived from the question text via hashing. The same text always produces the same ID. For details on ID generation and custom IDs, see [Questions (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#deterministic-ids).
+Question IDs are deterministic: derived from the question text via hashing. The same text always produces the same ID. For details on ID generation and custom IDs, see [Questions (Core Concepts)](../../core_concepts/questions-and-benchmarks/questions.md).
 
 ---
 
@@ -122,7 +122,7 @@ The Judge LLM sees `raw_answer` as context during the parsing stage. A precise `
 | Good | `"BCL2 (B-cell lymphoma 2)"` | Full name with abbreviation; clear and unambiguous |
 | Good | `"BCL2 (B-cell lymphoma 2), an anti-apoptotic protein overexpressed in CLL"` | Rich context; particularly helpful for domain-specific questions |
 
-For more on the relationship between `raw_answer` and the template's `ground_truth()`, see [Questions (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#raw_answer-vs-template-ground_truth).
+For more on the relationship between `raw_answer` and the template's `ground_truth()`, see [Questions (Core Concepts)](../../core_concepts/questions-and-benchmarks/questions.md).
 
 ---
 
@@ -293,7 +293,7 @@ Custom properties describe the benchmark as a whole. For per-question metadata, 
 
 ### Finished status
 
-The `finished` flag determines whether a question enters the verification pipeline. Only finished questions are processed by `get_finished_templates()`. See [Questions (Core Concepts)](../../notebooks/core_concepts/questions-and-benchmarks/questions.ipynb#the-finished-flag) for the conceptual explanation.
+The `finished` flag determines whether a question enters the verification pipeline. Only finished questions are processed by `get_finished_templates()`. See [Questions (Core Concepts)](../../core_concepts/questions-and-benchmarks/questions.md) for the conceptual explanation.
 
 ```python
 # Mark individual questions

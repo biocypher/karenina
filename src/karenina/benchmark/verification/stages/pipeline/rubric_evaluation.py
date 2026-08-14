@@ -250,6 +250,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                         rubric=configured_rubric,  # Use configured rubric with resolved settings
                         config=dj_config,  # Pass config for deep judgment settings
                         task_eval_mode=context.task_eval_mode,
+                        ground_truth=context.raw_answer,
                     )
 
                     # Combine scores for backward compatibility
@@ -305,6 +306,7 @@ class RubricEvaluationStage(BaseVerificationStage):
                         answer=rubric_evaluation_input,  # Use filtered or full trace based on config
                         rubric=configured_rubric,  # Use configured rubric
                         task_eval_mode=context.task_eval_mode,
+                        ground_truth=context.raw_answer,
                     )
 
                     # Track rubric evaluation calls

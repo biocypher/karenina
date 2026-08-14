@@ -44,6 +44,10 @@ def no_docker_preflight(monkeypatch):
         "karenina.adapters.claude_agent_sdk.agent.preflight_container_runtime",
         lambda *_args, **_kwargs: None,
     )
+    monkeypatch.setattr(
+        "karenina.adapters.claude_agent_sdk.agent.preflight_container_workspace",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 @pytest.mark.unit
@@ -177,6 +181,10 @@ class TestWorkspacePath:
             "karenina.adapters.claude_agent_sdk.agent.preflight_container_runtime",
             lambda config, **_kwargs: captured.update({"image": config.image, "runtime": config.runtime}),
         )
+        monkeypatch.setattr(
+            "karenina.adapters.claude_agent_sdk.agent.preflight_container_workspace",
+            lambda _config, workspace, **_kwargs: captured.update({"workspace": str(workspace)}),
+        )
         config = ModelConfig(
             id="test",
             model_name="claude-sonnet-4-20250514",
@@ -196,7 +204,11 @@ class TestWorkspacePath:
             config=AgentConfig(workspace_path=workspace),
         )
 
-        assert captured == {"image": "karenina-bixbench-claude:latest", "runtime": "docker"}
+        assert captured == {
+            "image": "karenina-bixbench-claude:latest",
+            "runtime": "docker",
+            "workspace": str(workspace),
+        }
 
     @pytest.mark.usefixtures("no_docker_preflight")
     def test_zai_anthropic_endpoint_sets_auth_token_and_glm_mapping(self, tmp_path):

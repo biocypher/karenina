@@ -13,7 +13,7 @@ Most users can work entirely with the interfaces described in [Running Verificat
 
 ## The 13-Stage Pipeline (with 7a/7b and 11a/11b sub-stages)
 
-Every verification run executes a subset of 13 numbered stages in a fixed order, with sub-stages 7a/7b (template parsing) and 11a/11b (rubric evaluation) selecting between classical and agentic variants. The orchestrator also unconditionally inserts a `PlaceholderRetryAutoFail` guard between TraceValidationAutoFail and AbstentionCheck. In total the pipeline package exposes **16 stage classes**; `StageOrchestrator.from_config` builds the stage list based on [evaluation mode](../notebooks/core_concepts/evaluation-modes.ipynb) and feature flags.
+Every verification run executes a subset of 13 numbered stages in a fixed order, with sub-stages 7a/7b (template parsing) and 11a/11b (rubric evaluation) selecting between classical and agentic variants. The orchestrator also unconditionally inserts a `PlaceholderRetryAutoFail` guard between TraceValidationAutoFail and AbstentionCheck. In total the pipeline package exposes **16 stage classes**; `StageOrchestrator.from_config` builds the stage list based on [evaluation mode](../core_concepts/evaluation-modes.md) and feature flags.
 
 ```
  ┌─────────────────────────────────────────────────────────────────┐
@@ -128,12 +128,12 @@ Each stage implements `should_run(context)` to decide at runtime whether to exec
 | [Deep Judgment: Rubrics](deep-judgment-rubrics.md) | Per-trait deep judgment configuration and modes |
 | [Prompt Assembly System](prompt-assembly.md) | Tri-section prompt pattern, `PromptAssembler`, `AdapterInstructionRegistry` |
 | [Custom Stages](custom-stages.md) | `BaseVerificationStage` interface, writing and registering new stages |
-| [Error Handling and Retries](../notebooks/advanced/pipeline/error-handling.ipynb) | `ErrorRegistry`, `RetryPolicy`, `RetryExecutor`, timeout escalation, retry observability |
+| [Error Handling and Retries](error-handling.md) | `ErrorRegistry`, `RetryPolicy`, `RetryExecutor`, timeout escalation, retry observability |
 
 ## Related
 
 - [Running Verification](../workflows/running-verification/index.md) — User-facing verification workflow
-- [VerificationConfig Tutorial](../notebooks/running-verification/basic-verification.ipynb) — Configuring pipeline features
-- [Evaluation Modes](../notebooks/core_concepts/evaluation-modes.ipynb) — How modes affect stage selection
+- [VerificationConfig Tutorial](../workflows/running-verification/basic-verification.md) — Configuring pipeline features
+- [Evaluation Modes](../core_concepts/evaluation-modes.md) — How modes affect stage selection
 - [VerificationResult Structure](../workflows/analyzing-results/verification-result.md) — What the pipeline produces
 - [VerificationConfig Reference](../reference/configuration/verification-config.md) — All configuration fields

@@ -15,7 +15,7 @@ jupyter:
 
 # Metric Traits
 
-Metric traits use the **parsing model as a bucket assigner** to turn a response into confusion-list buckets, then compute deterministic metrics from those buckets. They are the rubric trait type for **countable coverage and absence checks**: use them when you already know the concrete items a good answer should include or avoid, and you want signals such as precision, recall, F1, specificity, or accuracy. For an overview of all rubric trait types, see the [rubrics index](../../../../core_concepts/rubrics/).
+Metric traits use the **parsing model as a bucket assigner** to turn a response into confusion-list buckets, then compute deterministic metrics from those buckets. They are the rubric trait type for **countable coverage and absence checks**: use them when you already know the concrete items a good answer should include or avoid, and you want signals such as precision, recall, F1, specificity, or accuracy. For an overview of all rubric trait types, see the [rubrics index](index.md).
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -24,11 +24,11 @@ Metric traits use the **parsing model as a bucket assigner** to turn a response 
 
 ## 1. What Metric Traits Are
 
-A `MetricRubricTrait` evaluates a response during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). Unlike other trait types that return a single boolean or score, metric traits return a **dictionary of metrics** computed from confusion-list buckets.
+A `MetricRubricTrait` evaluates a response during [RubricEvaluation](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). Unlike other trait types that return a single boolean or score, metric traits return a **dictionary of metrics** computed from confusion-list buckets.
 
 Metric traits are meant for evaluations you can decompose into a **small checklist of countable items**. Typical examples include whether a biomedical answer mentions the expected entities, covers the canonical papers, states the key mechanism claims, or avoids a known set of false statements.
 
-Use `MetricRubricTrait` when the evaluation is best expressed as: "Here are the items that should be present, and maybe here are the items that should not be present." If the check requires a holistic judgment like clarity or tone, prefer [LLM traits](../llm-traits/). If the check can be expressed as an exact pattern or local Python function, prefer [Regex traits](../regex-traits/) or [Callable traits](../callable-traits/).
+Use `MetricRubricTrait` when the evaluation is best expressed as: "Here are the items that should be present, and maybe here are the items that should not be present." If the check requires a holistic judgment like clarity or tone, prefer [LLM traits](llm-traits.md). If the check can be expressed as an exact pattern or local Python function, prefer [Regex traits](regex-traits.md) or [Callable traits](callable-traits.md).
 
 ### 1.1 Philosophy
 
@@ -48,8 +48,8 @@ That means good metric traits define **countable, observable units**:
 
 | Better fit for Metric Traits | Better fit for other tools |
 |------------------------------|----------------------------|
-| "How many expected references did the answer cover?" | "Is the answer clear and well organized?" → [LLM trait](../llm-traits/) |
-| "Did the answer mention the expected entities and avoid these known false claims?" | "Does the answer match a citation format exactly?" → [Regex trait](../regex-traits/) |
+| "How many expected references did the answer cover?" | "Is the answer clear and well organized?" → [LLM trait](llm-traits.md) |
+| "Did the answer mention the expected entities and avoid these known false claims?" | "Does the answer match a citation format exactly?" → [Regex trait](regex-traits.md) |
 | "What fraction of the expected checklist items were present?" | "Did the parsed answer match the gold structured fields?" → template verification |
 
 A useful litmus test: if you can write the evaluation as a short checklist of atomic items and you care about coverage-style metrics over that checklist, a metric trait is probably the right abstraction.
@@ -76,7 +76,7 @@ In both modes, Karenina stores the derived metrics in `VerificationResult.rubric
 |-------|------|---------|-------------|
 | `name` | `str` | *(required)* | Human-readable identifier |
 | `description` | `str \| None` | `None` | Optional scope or evaluator context |
-| `summary` | `str \| None` | `None` | Short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset |
+| `summary` | `str \| None` | `None` | Short concept label used by the [dynamic rubric](index.md#6-dynamic-rubric) presence check; falls back to `description` when unset |
 | `evaluation_mode` | `Literal["tp_only", "full_matrix"]` | `"tp_only"` | Whether you define only TP instructions or both TP and TN |
 | `metrics` | `list[str]` | *(required)* | Metrics to compute for this trait |
 | `tp_instructions` | `list[str]` | *(required)* | Items that should be present in the answer |
@@ -119,7 +119,7 @@ FinalizeResult
   → VerificationResult.rubric.metric_trait_confusion_lists
 ```
 
-Metric traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](../llm-traits/) with [deep judgment](../../../../advanced-pipeline/deep-judgment-rubrics/) enabled.
+Metric traits skip stage 12 (DeepJudgmentRubric), which applies only to [LLM traits](llm-traits.md) with [deep judgment](../../advanced-pipeline/deep-judgment-rubrics.md) enabled.
 
 The `description` field is useful, but it is supporting context, not the main scoring mechanism. Use it to narrow scope or explain domain context; use the instruction lists to define what is actually counted.
 
@@ -426,8 +426,8 @@ print(rubric.get_metric_trait_names())
 
 ## 10. Next Steps
 
-- [LLM Rubric Traits](../llm-traits/): open-ended boolean, score, and literal judgments
-- [Regex Traits](../regex-traits/): deterministic pattern matching on response text
-- [Callable Traits](../callable-traits/): custom local Python evaluation logic
-- [Templates vs rubrics](../../template-vs-rubric/): choosing between correctness checks and rubric-style evaluation
-- [Rubrics Overview](../../../../core_concepts/rubrics/): when to use each trait type
+- [LLM Rubric Traits](llm-traits.md): open-ended boolean, score, and literal judgments
+- [Regex Traits](regex-traits.md): deterministic pattern matching on response text
+- [Callable Traits](callable-traits.md): custom local Python evaluation logic
+- [Templates vs rubrics](../template-vs-rubric.md): choosing between correctness checks and rubric-style evaluation
+- [Rubrics Overview](index.md): when to use each trait type

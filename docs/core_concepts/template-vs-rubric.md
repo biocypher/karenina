@@ -32,7 +32,7 @@ Karenina evaluates LLM responses using two complementary building blocks: **answ
 | **Requires ground truth** | Yes (the `self.correct` dictionary) | No (judges by reading the response alone) |
 | **Method** | Judge LLM parses response into schema, then `verify()` checks programmatically | Trait evaluators assess the raw text (LLM, regex, callable, or metric) |
 | **Output** | Boolean (pass/fail) | Boolean, integer score, or metrics dict |
-| **Pipeline stages** | [ParseTemplate](../verification-pipeline/) (stage 7a, plus optional 7b agentic parsing), [VerifyTemplate](../verification-pipeline/) (stage 8) | [RubricEvaluation](../verification-pipeline/) (stage 11a, plus optional 11b agentic rubric evaluation) |
+| **Pipeline stages** | [ParseTemplate](verification-pipeline.md) (stage 7a, plus optional 7b agentic parsing), [VerifyTemplate](verification-pipeline.md) (stage 8) | [RubricEvaluation](verification-pipeline.md) (stage 11a, plus optional 11b agentic rubric evaluation) |
 
 In short:
 
@@ -67,7 +67,7 @@ These are not alternative ways of doing the same thing. They evaluate orthogonal
 
 A template is a [Pydantic model](https://docs.pydantic.dev/latest/) that defines **what to extract** from the response and **how to check it**. Each field uses `VerifiedField` to declare the extraction description, the ground truth, and the verification primitive in a single declaration. The Judge LLM fills in the schema fields, then the primitive's `check()` method compares them against the expected values.
 
-The judge's role varies by field type. With `str` fields, the judge acts as a pure parser: it extracts values that the primitive then checks. With `bool` fields, the description often encodes the evaluation criterion ("True if TP53 is identified as the most common"), so the judge performs some evaluation during extraction. See [Answer Templates](../answer-templates/) for guidance on this tradeoff.
+The judge's role varies by field type. With `str` fields, the judge acts as a pure parser: it extracts values that the primitive then checks. With `bool` fields, the description often encodes the evaluation criterion ("True if TP53 is identified as the most common"), so the judge performs some evaluation during extraction. See [Answer Templates](answer-templates.md) for guidance on this tradeoff.
 
 ```python
 from karenina.schemas.entities import BaseAnswer, VerifiedField
@@ -114,18 +114,18 @@ The verification is entirely programmatic: once the Judge LLM fills in the schem
            bool/int      bool        bool/int
 ```
 
-[Rubrics](../../../core_concepts/rubrics/) evaluate **qualities of the raw response** without parsing it into structured data first. Unlike templates, rubrics never see a filled schema; they work directly on the response text. Five trait classes are available (LLM, regex, callable, metric, agentic), and `LLMRubricTrait` supports boolean, score, and literal evaluation kinds:
+[Rubrics](rubrics/index.md) evaluate **qualities of the raw response** without parsing it into structured data first. Unlike templates, rubrics never see a filled schema; they work directly on the response text. Five trait classes are available (LLM, regex, callable, metric, agentic), and `LLMRubricTrait` supports boolean, score, and literal evaluation kinds:
 
 | Trait Type | Returns | LLM Required | Use Case |
 |---|---|---|---|
-| **[LLMRubricTrait](../rubrics/llm-traits/)** (boolean) | `bool` | Yes | Binary quality judgment (safety, conciseness) |
-| **[LLMRubricTrait](../rubrics/llm-traits/)** (score) | `int` | Yes | Numeric rating within a configurable range |
-| **[LLMRubricTrait](../rubrics/llm-traits/)** (literal) | `int` | Yes | Classification into ordered categories (e.g., tone: formal/casual/technical) |
-| **[RegexRubricTrait](../rubrics/regex-traits/)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
-| **[CallableRubricTrait](../rubrics/callable-traits/)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
-| **[MetricRubricTrait](../rubrics/metric-traits/)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
+| **[LLMRubricTrait](rubrics/llm-traits.md)** (boolean) | `bool` | Yes | Binary quality judgment (safety, conciseness) |
+| **[LLMRubricTrait](rubrics/llm-traits.md)** (score) | `int` | Yes | Numeric rating within a configurable range |
+| **[LLMRubricTrait](rubrics/llm-traits.md)** (literal) | `int` | Yes | Classification into ordered categories (e.g., tone: formal/casual/technical) |
+| **[RegexRubricTrait](rubrics/regex-traits.md)** | `bool` | No | Deterministic pattern matching (citations, format compliance) |
+| **[CallableRubricTrait](rubrics/callable-traits.md)** | `bool` or `int` | No | Custom Python logic (word count, readability, structure checks) |
+| **[MetricRubricTrait](rubrics/metric-traits.md)** | metrics dict | Yes | Precision/recall/F1 over expected content items |
 
-Rubrics can be attached at the **benchmark level** (applied to every question) or the **question level** (applied to one question). When both are present, Karenina merges them; trait names must be unique across scopes. See [Rubrics](../../../core_concepts/rubrics/) for full details on attachment, scoping, and the `higher_is_better` field.
+Rubrics can be attached at the **benchmark level** (applied to every question) or the **question level** (applied to one question). When both are present, Karenina merges them; trait names must be unique across scopes. See [Rubrics](rubrics/index.md) for full details on attachment, scoping, and the `higher_is_better` field.
 
 ## 4. The Ground-Truth Boundary
 
@@ -257,11 +257,11 @@ If you find yourself delegating most fields to the Judge LLM, consider whether r
 | "Did the response mention all expected drug interactions?" | Rubric (metric trait) | Precision/recall over a checklist of expected items |
 | "Did the response get the drug target right AND explain it clearly?" | Both | Correctness (template) + quality (rubric) |
 
-**Priority heuristic for rubric trait type selection**: prefer regex or callable traits over LLM traits when possible. They are faster, cheaper, and fully reproducible. Use LLM traits when the evaluation genuinely requires language understanding. See the [decision flowchart](../../../core_concepts/rubrics/#decision-flowchart) in the rubrics docs for detailed trait type selection guidance.
+**Priority heuristic for rubric trait type selection**: prefer regex or callable traits over LLM traits when possible. They are faster, cheaper, and fully reproducible. Use LLM traits when the evaluation genuinely requires language understanding. See the [decision flowchart](rubrics/index.md#decision-flowchart) in the rubrics docs for detailed trait type selection guidance.
 
 ## 6. Evaluation Modes
 
-The `evaluation_mode` field on [VerificationConfig](../../../reference/configuration/verification-config/) controls which building blocks are active during a pipeline run:
+The `evaluation_mode` field on [VerificationConfig](../reference/configuration/verification-config.md) controls which building blocks are active during a pipeline run:
 
 | Mode | Templates | Rubrics | Pipeline stages active | When to use |
 |---|---|---|---|---|
@@ -269,7 +269,7 @@ The `evaluation_mode` field on [VerificationConfig](../../../reference/configura
 | `template_and_rubric` | Yes | Yes | All 13 stages (plus the always-on placeholder-retry guard between 4 and 5) | Correctness + quality assessment |
 | `rubric_only` | No | Yes | Stages 2-5, 11-13 (template stages skipped; placeholder-retry guard still runs between 4 and 5) | Quality-only evaluation; no correct answer needed |
 
-For details on configuring evaluation modes, see [Evaluation Modes](../evaluation-modes/).
+For details on configuring evaluation modes, see [Evaluation Modes](evaluation-modes.md).
 
 ## 7. Worked Example: Both Together
 
@@ -345,10 +345,10 @@ The template verdict and rubric scores are independent. A response could correct
 
 ## 8. Next Steps
 
-- [Answer Templates](../answer-templates/): deep dive into template structure, `verify()`, and field types
-- [Rubrics](../../../core_concepts/rubrics/): all trait types, attachment scoping, and the `higher_is_better` field
-- [Evaluation Modes](../evaluation-modes/): configuring `template_only`, `rubric_only`, and `template_and_rubric`
-- [Verification Pipeline](../verification-pipeline/): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that executes both evaluation paths
-- [LLM Evaluation Philosophy](../../../home/philosophy/): why Karenina uses LLMs as judges
+- [Answer Templates](answer-templates.md): deep dive into template structure, `verify()`, and field types
+- [Rubrics](rubrics/index.md): all trait types, attachment scoping, and the `higher_is_better` field
+- [Evaluation Modes](evaluation-modes.md): configuring `template_only`, `rubric_only`, and `template_and_rubric`
+- [Verification Pipeline](verification-pipeline.md): the 13-stage engine (with sub-stages 7a/7b and 11a/11b, plus an always-on placeholder-retry guard between stages 4 and 5) that executes both evaluation paths
+- [LLM Evaluation Philosophy](../home/philosophy.md): why Karenina uses LLMs as judges
 
-**Back to**: [Core Concepts](../../../core_concepts/)
+**Back to**: [Core Concepts](index.md)

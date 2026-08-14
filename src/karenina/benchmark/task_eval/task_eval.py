@@ -645,8 +645,10 @@ class TaskEval:
         for rep_idx in range(replicate_count):
             replicate = None if replicate_count == 1 else rep_idx + 1
 
-            # In rubric_only mode with no explicit questions, create a synthetic question
-            if evaluation_mode == "rubric_only" and not context.questions and concatenated_logs:
+            # In rubric_only mode with no explicit questions, create a synthetic question.
+            # Empty or whitespace-only logged input still produces this row (with
+            # response_text "") so deterministic traits can fire on empty output.
+            if evaluation_mode == "rubric_only" and not context.questions:
                 synthetic_question = {
                     "id": f"{step_prefix}rubric_only_eval",
                     "question": f"Evaluate the logged output{step_suffix}",
@@ -860,6 +862,7 @@ class Answer(BaseAnswer):
             parsing_model=parsing_model,
             rubric=rubric,
             dynamic_rubric=dynamic_rubric,
+            raw_answer=question_dict.get("raw_answer", ""),
             cached_answer_data=cached_answer_data,
             run_name=run_name,
             replicate=replicate,

@@ -161,7 +161,7 @@ benchmark = Benchmark.load(str(_tmp))
 print(f"{benchmark.name}: {benchmark.question_count} questions")
 ```
 
-For details on loading and inspecting benchmarks, see [Basic Verification](basic-verification.ipynb).
+For details on loading and inspecting benchmarks, see [Basic Verification](basic-verification.md).
 
 ---
 
@@ -202,7 +202,7 @@ print(f"Sufficiency:{config.sufficiency_enabled}")
 print(f"Embedding:  {config.embedding_check_enabled}")
 ```
 
-When abstention is detected at Stage 5, the pipeline short-circuits subsequent parsing and rubric stages and records the outcome as structured `failure` / `caveat` metadata on the `VerificationResult`. The same applies when Stage 6 flags an insufficient response. These are recorded outcomes, not deep-judgment auto-fails. See [Evaluation Modes](../../notebooks/core_concepts/evaluation-modes.ipynb) for stage-skipping rules.
+When abstention is detected at Stage 5, the pipeline short-circuits subsequent parsing and rubric stages and records the outcome as structured `failure` / `caveat` metadata on the `VerificationResult`. The same applies when Stage 6 flags an insufficient response. These are recorded outcomes, not deep-judgment auto-fails. See [Evaluation Modes](../../core_concepts/evaluation-modes.md) for stage-skipping rules.
 
 ---
 
@@ -396,8 +396,8 @@ The presence check runs automatically at the start of Stage 11 (RubricEvaluation
 
 ## Related Pages
 
-- [Basic Verification](basic-verification.ipynb) — Simpler template-only path
-- [Deep Judgment](deep-judgment.ipynb) — Add excerpt-based reasoning to template and rubric evaluation
+- [Basic Verification](basic-verification.md) — Simpler template-only path
+- [Deep Judgment](deep-judgment.md) — Add excerpt-based reasoning to template and rubric evaluation
 - [VerificationConfig Reference](../../reference/configuration/verification-config.md) — All configuration fields
 - [PromptConfig Reference](../../reference/configuration/prompt-config.md) — Prompt injection points
 - [Preset Schema Reference](../../reference/configuration/preset-schema.md) — Preset JSON format

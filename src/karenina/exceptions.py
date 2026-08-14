@@ -100,6 +100,26 @@ class McpClientError(McpError):
         self.server_name = server_name
 
 
+class McpServerError(McpError):
+    """Raised when a managed local MCP server cannot start or stop.
+
+    Args:
+        message: Human-readable description of the lifecycle failure.
+        server_name: Name of the managed MCP server, if known.
+        log_path: Server log path that may contain diagnostic output.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        server_name: str | None = None,
+        log_path: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.server_name = server_name
+        self.log_path = log_path
+
+
 class StreamingTimeoutError(KareninaError, TimeoutError):
     """Raised when an LLM streaming operation times out.
 

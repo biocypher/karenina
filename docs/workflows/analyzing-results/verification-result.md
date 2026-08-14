@@ -551,7 +551,7 @@ Counts are approximate; consult `src/karenina/schemas/verification/result_compon
 
 ## Next Steps
 
-- [DataFrame Analysis](../../notebooks/analyzing-results/dataframe-analysis.ipynb) — Convert results to pandas DataFrames for deeper analysis
+- [DataFrame Analysis](dataframe-analysis.md) — Convert results to pandas DataFrames for deeper analysis
 - [Exporting Results](exporting.md) — Save results as JSON or CSV
 - [Iterating](iterating.md) — Improve templates and rubrics based on results
-- [Running Verification](../../notebooks/running-verification/basic-verification.ipynb) — If you haven't run verification yet
+- [Running Verification](../running-verification/basic-verification.md) — If you haven't run verification yet

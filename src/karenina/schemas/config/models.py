@@ -15,6 +15,25 @@ if TYPE_CHECKING:
 # ============================================================================
 
 
+class AgentRuntimeConfig(BaseModel):
+    """Typed execution-runtime settings for an agent adapter.
+
+    Adapter-specific backend validation remains with the adapter because the
+    available backends differ between Claude Agent SDK and DeepAgents.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["native", "filesystem", "container", "docker", "local_shell"] | None = None
+    access_mode: Literal["read_write", "read_only"] = "read_write"
+    sandbox_enabled: bool = True
+    container_runtime: Literal["docker", "singularity", "apptainer"] = "docker"
+    container_image: str | None = None
+    container_network: Literal["bridge", "none"] = "bridge"
+    container_add_hosts: tuple[str, ...] = ()
+    read_max_bytes: int | None = Field(default=None, gt=0)
+
+
 class ModelRetryConfig(BaseModel):
     """Configuration for LangChain ModelRetryMiddleware.
 
@@ -560,14 +579,22 @@ class ModelConfig(BaseModel):
     mcp_tool_description_overrides: dict[str, str] | None = (
         None  # Optional tool description overrides for GEPA optimization
     )
+    # HTTP timeout in seconds for MCP streamable HTTP connections.
+    # None uses the MCP SDK default (30 seconds).
+    mcp_http_timeout: float | None = None
+    # SSE read timeout in seconds for MCP streamable HTTP connections.
+    # Governs in-session tool-call reads. None uses the MCP SDK default (300 seconds).
+    mcp_sse_read_timeout: float | None = None
     # OpenAI Endpoint configuration (for openai_endpoint interface)
     endpoint_base_url: str | None = None  # Custom endpoint base URL
     endpoint_api_key: SecretStr | None = None  # User-provided API key
     # Anthropic-specific configuration (for Anthropic models on supported interfaces)
     anthropic_base_url: str | None = None  # Custom Anthropic API endpoint (for proxies, self-hosted)
     anthropic_api_key: SecretStr | None = None  # Override ANTHROPIC_API_KEY env var
+    # Typed filesystem, sandbox, or container settings for agent adapters.
+    agent_runtime: AgentRuntimeConfig | None = None
     # Extra keyword arguments to pass to the underlying model interface.
-    # Adapter runtime settings can live under extra_kwargs["agent_runtime"].
+    # Legacy exports may retain runtime settings under extra_kwargs["agent_runtime"].
     # Useful for passing vendor-specific API keys, custom parameters, etc.
     extra_kwargs: dict[str, Any] | None = None
     # Manual interface configuration

@@ -15,7 +15,7 @@ jupyter:
 
 # LLM Rubric Traits
 
-LLM rubric traits use the **parsing model as an evaluator LLM** to judge observable properties of a model's raw response trace. They are the flexible rubric trait type: use them when the check requires language understanding, interpretation, or classification rather than exact pattern matching or deterministic logic. For an overview of all rubric trait types, see the [rubrics index](../../../../core_concepts/rubrics/).
+LLM rubric traits use the **parsing model as an evaluator LLM** to judge observable properties of a model's raw response trace. They are the flexible rubric trait type: use them when the check requires language understanding, interpretation, or classification rather than exact pattern matching or deterministic logic. For an overview of all rubric trait types, see the [rubrics index](index.md).
 
 ```python tags=["hide-cell"]
 # Mock cell: ensures examples execute without live API keys.
@@ -28,7 +28,7 @@ An `LLMRubricTrait` sends the original question, the model's raw response trace,
 
 LLM rubric traits are meant for qualities you can judge by reading the answer itself, without needing ground truth. Typical examples include whether a biomedical answer presents evidence in a usable style rather than a vague one, hedges appropriately when discussing off-label use, or develops its reasoning as a coherent chain rather than a pile of disconnected claims.
 
-Use `LLMRubricTrait` when the evaluation genuinely needs semantic judgment. If the check can be expressed as an exact pattern or a Python-defined rule, prefer [Regex traits](../regex-traits/) or [Callable traits](../callable-traits/). Pure local regex/callable checks are faster, cheaper, and more reproducible.
+Use `LLMRubricTrait` when the evaluation genuinely needs semantic judgment. If the check can be expressed as an exact pattern or a Python-defined rule, prefer [Regex traits](regex-traits.md) or [Callable traits](callable-traits.md). Pure local regex/callable checks are faster, cheaper, and more reproducible.
 
 ### 1.1 Philosophy
 
@@ -73,11 +73,11 @@ Choose the kind based on the shape of the judgment:
 - Use **literal** when you can define distinct named categories.
 - Use **[template](#7-template-kind)** when one evaluation naturally produces several related fields that you would otherwise split across multiple scalar traits.
 
-In addition to `name`, `description`, and `kind`, every `LLMRubricTrait` accepts an optional `summary: str | None` field (a short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset).
+In addition to `name`, `description`, and `kind`, every `LLMRubricTrait` accepts an optional `summary: str | None` field (a short concept label used by the [dynamic rubric](index.md#6-dynamic-rubric) presence check; falls back to `description` when unset).
 
 ## 3. Why the `description` Field Matters
 
-LLM traits are evaluated during [RubricEvaluation](../../verification-pipeline/) of the [verification pipeline](../../verification-pipeline/). During evaluation, the [prompt assembler](../../../../advanced-pipeline/prompt-assembly/) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response trace, and your trait definition.
+LLM traits are evaluated during [RubricEvaluation](../verification-pipeline.md) of the [verification pipeline](../verification-pipeline.md). During evaluation, the [prompt assembler](../../advanced-pipeline/prompt-assembly.md) builds a message for the parsing model containing: a **system prompt** assigning the evaluator role, and a **user prompt** with the original question text, the model's full response trace, and your trait definition.
 
 ```
 Previous Stages
@@ -116,7 +116,7 @@ Two factors control evaluation quality:
 1. **Trait-definition quality**: For boolean and score traits, this mostly means the `description`. For literal traits, it means the combination of the top-level `description` and the class descriptions. Detailed, observable criteria with explicit boundary cases produce more consistent judgments.
 2. **Model capability**: More capable parsing models interpret nuanced descriptions more faithfully. If you need fine-grained distinctions, use a stronger model. Simpler judgments are reliable even with smaller models.
 
-If multiple LLM traits exist on the same rubric, Karenina uses `VerificationConfig.rubric_evaluation_strategy` to decide whether to evaluate them in a single parsing call (`"batch"`, the default) or one by one (`"sequential"`). Results are stored in `VerificationResult.rubric` and become available for analysis and DataFrame export. See the [VerificationConfig reference](../../../../reference/configuration/verification-config/) for the full field definition.
+If multiple LLM traits exist on the same rubric, Karenina uses `VerificationConfig.rubric_evaluation_strategy` to decide whether to evaluate them in a single parsing call (`"batch"`, the default) or one by one (`"sequential"`). Results are stored in `VerificationResult.rubric` and become available for analysis and DataFrame export. See the [VerificationConfig reference](../../reference/configuration/verification-config.md) for the full field definition.
 
 ## 4. Boolean Kind
 
@@ -476,7 +476,7 @@ Literal traits are evaluated through the standard classification path. The [deep
 
 The scalar kinds ([boolean](#4-boolean-kind), [score](#5-score-kind), [literal](#6-literal-kind)) each return a single value per trait. Template kind lets you pass a Pydantic `BaseModel` subclass as `kind`, and the judge LLM populates the entire schema in one structured-output call, producing a multi-field evaluation finding from a single trait instead of several scalar traits that share the same underlying investigation.
 
-Unlike the [agentic template kind](../agentic-traits/#54-template-kind-agentic-evaluation-with-structured-output), which launches an agent with tool access, the LLM-trait template kind uses the same single parsing call as scalar LLM traits. The parsing model reads the question and the response trace, then fills in every field of the schema at once. There is no agent, no tool use, and no workspace access. Use this variant when the evaluation can be judged from the response text alone but naturally produces several related findings that are awkward to split across individual boolean/score/literal traits (for example, a compliance audit with multiple criteria, a structured summary of rhetorical moves, or a tagged list of cited sources). If you need to inspect files, run code, or explore workspace state, use the [agentic template kind](../agentic-traits/#54-template-kind-agentic-evaluation-with-structured-output) instead.
+Unlike the [agentic template kind](agentic-traits.md#54-template-kind-agentic-evaluation-with-structured-output), which launches an agent with tool access, the LLM-trait template kind uses the same single parsing call as scalar LLM traits. The parsing model reads the question and the response trace, then fills in every field of the schema at once. There is no agent, no tool use, and no workspace access. Use this variant when the evaluation can be judged from the response text alone but naturally produces several related findings that are awkward to split across individual boolean/score/literal traits (for example, a compliance audit with multiple criteria, a structured summary of rhetorical moves, or a tagged list of cited sources). If you need to inspect files, run code, or explore workspace state, use the [agentic template kind](agentic-traits.md#54-template-kind-agentic-evaluation-with-structured-output) instead.
 
 ### 7.1 Constraints
 
@@ -525,7 +525,7 @@ print(f"Fields: {list(CitationFindings.model_fields.keys())}")
 
 ### 7.3 Result Shape
 
-Template traits flatten their structured output into `VerificationResultRubric.llm_trait_scores` using dotted keys. Each field of the Pydantic schema becomes an entry `"trait_name.field_name"`, mirroring the convention used for [agentic template traits](../agentic-traits/#54-template-kind-agentic-evaluation-with-structured-output) under `agentic_trait_scores`.
+Template traits flatten their structured output into `VerificationResultRubric.llm_trait_scores` using dotted keys. Each field of the Pydantic schema becomes an entry `"trait_name.field_name"`, mirroring the convention used for [agentic template traits](agentic-traits.md#54-template-kind-agentic-evaluation-with-structured-output) under `agentic_trait_scores`.
 
 For the example above, a successful evaluation stores:
 
@@ -668,12 +668,12 @@ config = VerificationConfig(
 # - "custom": use per-trait settings from deep_judgment_rubric_config
 ```
 
-For detailed configuration (four modes, per-trait overrides, result fields, cost considerations), see [deep judgment rubrics](../../../../advanced-pipeline/deep-judgment-rubrics/).
+For detailed configuration (four modes, per-trait overrides, result fields, cost considerations), see [deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md).
 
 ## 10. Next Steps
 
-- [Regex traits](../regex-traits/): deterministic pattern matching
-- [Callable traits](../callable-traits/): custom Python functions
-- [Metric traits](../metric-traits/): precision, recall, F1 computation
-- [Evaluation modes](../../evaluation-modes/): choosing when rubrics are evaluated
-- [Deep judgment rubrics](../../../../advanced-pipeline/deep-judgment-rubrics/): advanced evidence-based evaluation
+- [Regex traits](regex-traits.md): deterministic pattern matching
+- [Callable traits](callable-traits.md): custom Python functions
+- [Metric traits](metric-traits.md): precision, recall, F1 computation
+- [Evaluation modes](../evaluation-modes.md): choosing when rubrics are evaluated
+- [Deep judgment rubrics](../../advanced-pipeline/deep-judgment-rubrics.md): advanced evidence-based evaluation

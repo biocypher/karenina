@@ -328,7 +328,7 @@ The string `"__user__"` is reserved for scenario-internal user prompts and canno
 print("ToolFilter / ToolFilterEntry: karenina.schemas.scenario.types")
 ```
 
-`ToolFilter` is fully serialized in the SchemaOrg checkpoint and round-trips through `scenario_to_schema_org` / `schema_org_to_scenario`. For how MCP tools are wired into the answering model in the first place, see the [MCP Integration](../../notebooks/advanced/mcp-integration.ipynb) page.
+`ToolFilter` is fully serialized in the SchemaOrg checkpoint and round-trips through `scenario_to_schema_org` / `schema_org_to_scenario`. For how MCP tools are wired into the answering model in the first place, see the [MCP Integration](../../advanced-adapters/mcp-integration.md) page.
 
 ### 4.6 Handover Strategies
 
@@ -528,4 +528,4 @@ Note: looping scenarios require a fallback edge on the looping node. Without it,
 
 - [Outcome Criteria](outcome-criteria.md): declarative assertions evaluated after the scenario completes
 - [State and Routing](state-and-routing.md): how runtime state accumulates and how edges are resolved
-- [Sycophancy Tutorial](../../notebooks/scenarios/sycophancy-tutorial.ipynb): end-to-end walkthrough building a sycophancy resistance scenario
+- [Sycophancy Tutorial](../../workflows/scenarios/sycophancy-tutorial.md): end-to-end walkthrough building a sycophancy resistance scenario

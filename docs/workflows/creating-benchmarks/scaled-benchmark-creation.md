@@ -118,7 +118,7 @@ The function supports Excel, CSV, and TSV formats:
 # questions = extract_questions_from_file(
 #     file_path="questions.xlsx",
 #     question_column="Question",
-#     answer_column="Expected Answer",
+#     answer_column="Reference Answer",
 #     author_name_column="Author",
 #     keywords_columns=[
 #         {"column": "Tags", "separator": ","},
@@ -126,7 +126,8 @@ The function supports Excel, CSV, and TSV formats:
 #     custom_metadata_columns=["Complexity"],
 # )
 #
-# benchmark.add_questions(questions)
+# Import unfinished drafts for model-assisted template construction.
+# benchmark.add_questions(questions, finished=False)
 ```
 
 For this tutorial, we add questions manually:
@@ -193,6 +194,23 @@ first_id = benchmark.get_question_ids()[0]
 template = benchmark.get_template(first_id)
 print(template)
 ```
+
+Template generation does not constitute curator approval. For a benchmark
+created from an expert-authored table, import the questions with
+`finished=False`, review the generated fields and reference values, then mark
+only accepted items finished.
+
+For spreadsheet-based review, export a workbook without executing template
+source:
+
+```python
+from karenina.benchmark import export_curation_workbook
+
+export_curation_workbook(benchmark, "curation_review.xlsx")
+```
+
+The workbook uses `Reference Answer`, `Judge Instruction`, `Reference Value`,
+and `Curation Status` labels and includes a summary sheet.
 
 ---
 
@@ -276,7 +294,7 @@ ADeLe provides:
 - **Ordinal scores** from 0 (none) to 5 (very high) on each dimension
 - **Filtering support** — select question subsets by complexity for targeted evaluation
 
-See [ADeLe Concepts](../../notebooks/core_concepts/adele.ipynb) for the full dimension list and scoring reference.
+See [ADeLe Concepts](../../core_concepts/adele.md) for the full dimension list and scoring reference.
 
 ---
 
@@ -321,7 +339,7 @@ print(f"K: {few_shot_config.pool_k}")
 print(f"Global examples: {len(few_shot_config.global_examples)}")
 ```
 
-See [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb) for the full configuration reference.
+See [Few-Shot Configuration](../../core_concepts/few-shot.md) for the full configuration reference.
 
 ---
 
@@ -375,9 +393,9 @@ Save checkpoint
 
 ## Next Steps
 
-- [Factual QA Benchmark](factual-qa-benchmark.ipynb): Detailed template patterns (boolean, numeric, regex)
-- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Add rubric traits alongside templates
-- [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation
-- [Answer Templates](../../notebooks/core_concepts/answer-templates.ipynb): Template concepts
-- [ADeLe Concepts](../../notebooks/core_concepts/adele.ipynb): Full ADeLe dimension reference
-- [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb): Advanced few-shot options
+- [Factual QA Benchmark](factual-qa-benchmark.md): Detailed template patterns (boolean, numeric, regex)
+- [Full Evaluation Benchmark](full-evaluation-benchmark.md): Add rubric traits alongside templates
+- [Quality Assessment](quality-assessment-benchmark.md): Rubric-only evaluation
+- [Answer Templates](../../core_concepts/answer-templates.md): Template concepts
+- [ADeLe Concepts](../../core_concepts/adele.md): Full ADeLe dimension reference
+- [Few-Shot Configuration](../../core_concepts/few-shot.md): Advanced few-shot options

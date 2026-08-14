@@ -246,7 +246,7 @@ print(f"Logged {len(task.global_logs)} event(s)")
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `text` | `str` | (required) | Text content to log |
-| `step_id` | `str \| None` | `None` | Step identifier for grouping (see [Multi-Step Evaluation](../../notebooks/task-eval/multi-step-evaluation.ipynb)) |
+| `step_id` | `str \| None` | `None` | Step identifier for grouping (see [Multi-Step Evaluation](multi-step-evaluation.md)) |
 | `target` | `"global" \| "step" \| "both"` | `"both"` | Where to store the log |
 | `level` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Log level |
 | `tags` | `list[str] \| None` | `None` | Optional tags |
@@ -356,7 +356,7 @@ The per-call override takes precedence over the instance default.
 
 ## Attach Evaluation Criteria
 
-Attach [templates](../../core_concepts/answer-templates.md), [rubrics](../../core_concepts/rubrics/index.md), or both. TaskEval auto-detects the [evaluation mode](../../notebooks/core_concepts/evaluation-modes.ipynb) based on what you provide:
+Attach [templates](../../core_concepts/answer-templates.md), [rubrics](../../core_concepts/rubrics/index.md), or both. TaskEval auto-detects the [evaluation mode](../../core_concepts/evaluation-modes.md) based on what you provide:
 
 | You attach | Evaluation mode | What happens |
 |------------|----------------|--------------|
@@ -591,8 +591,8 @@ _TaskEval.add_template = _original_add_template
 
 ## Next Steps
 
-- [Quality Assessment with Rubrics](../../notebooks/task-eval/quality-assessment.ipynb): Rubric-only evaluation with all trait types
-- [Multi-Step Agent Evaluation](../../notebooks/task-eval/multi-step-evaluation.ipynb): Step-scoped evaluation for agent workflows
+- [Quality Assessment with Rubrics](quality-assessment.md): Rubric-only evaluation with all trait types
+- [Multi-Step Agent Evaluation](multi-step-evaluation.md): Step-scoped evaluation for agent workflows
 - [TaskEval concept page](../../core_concepts/task-eval.md): Object structure, pipeline integration, and merge strategies in depth
 - [Answer Templates](../../core_concepts/answer-templates.md): Writing `verify()` methods and field descriptions
 - [Rubrics](../../core_concepts/rubrics/index.md): All five trait types (LLM, regex, callable, metric, literal)

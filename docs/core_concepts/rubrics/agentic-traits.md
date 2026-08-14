@@ -15,7 +15,7 @@ jupyter:
 
 # Agentic Rubric Traits
 
-Agentic rubric traits deploy an **agent with tool access** to investigate workspace artifacts before producing a structured score. They are the rubric trait type to use when evaluation requires examining files, running code, or navigating a workspace directory, not just reading the response text. For an overview of all rubric trait types, see the [rubrics index](../../../../core_concepts/rubrics/).
+Agentic rubric traits deploy an **agent with tool access** to investigate workspace artifacts before producing a structured score. They are the rubric trait type to use when evaluation requires examining files, running code, or navigating a workspace directory, not just reading the response text. For an overview of all rubric trait types, see the [rubrics index](index.md).
 
 ```python tags=["hide-cell"]
 # Mock cell: builds pre-computed result objects for the examples below.
@@ -76,13 +76,13 @@ _mock_result = VerificationResult(
 
 ## 1. What Agentic Rubric Traits Are
 
-An `AgenticRubricTrait` launches an agent that can read files, execute code, and explore the workspace before the system extracts a structured score from the investigation trace. This is fundamentally different from [LLM traits](../llm-traits/), which evaluate qualities visible in the response text through a single parsing call with no tool access.
+An `AgenticRubricTrait` launches an agent that can read files, execute code, and explore the workspace before the system extracts a structured score from the investigation trace. This is fundamentally different from [LLM traits](llm-traits.md), which evaluate qualities visible in the response text through a single parsing call with no tool access.
 
-Use `AgenticRubricTrait` when the evaluation depends on **artifacts the answering model produced** (generated files, code output, database entries) or on **workspace state that cannot be inferred from the response text alone**. If the check can be made by reading the response, prefer an [LLM trait](../llm-traits/) or a local check ([regex](../regex-traits/), [callable](../callable-traits/)).
+Use `AgenticRubricTrait` when the evaluation depends on **artifacts the answering model produced** (generated files, code output, database entries) or on **workspace state that cannot be inferred from the response text alone**. If the check can be made by reading the response, prefer an [LLM trait](llm-traits.md) or a local check ([regex](regex-traits.md), [callable](callable-traits.md)).
 
 ### 1.1 Scope Boundary
 
-This page covers how to define, configure, and interpret agentic rubric traits. It does not cover the pipeline stage mechanics or advanced configuration of evaluation strategies; those are documented in [Agentic Rubric Evaluation](../../../../advanced-pipeline/agentic-rubric-evaluation/) (forthcoming).
+This page covers how to define, configure, and interpret agentic rubric traits. It does not cover the pipeline stage mechanics or advanced configuration of evaluation strategies; those are documented in [Agentic Rubric Evaluation](../../advanced-pipeline/agentic-rubric-evaluation.md) (forthcoming).
 
 | Evaluates response text (use LLM traits) | Evaluates workspace artifacts (use agentic traits) |
 |-------------------------------------------|----------------------------------------------------|
@@ -134,7 +134,7 @@ Question + Response Trace + Workspace Path
 |-------|------|----------|---------|-------------|
 | `name` | `str` | Yes | | Human-readable identifier (must be unique within the rubric) |
 | `description` | `str` | Yes | | Evaluation instructions for the agent. This is the primary channel for telling the agent what to investigate and what counts as evidence |
-| `summary` | `str \| None` | No | `None` | Short concept label used by the [dynamic rubric](../../../../core_concepts/rubrics/#6-dynamic-rubric) presence check; falls back to `description` when unset |
+| `summary` | `str \| None` | No | `None` | Short concept label used by the [dynamic rubric](index.md#6-dynamic-rubric) presence check; falls back to `description` when unset |
 | `kind` | `"boolean"` / `"score"` / `"literal"` / `type[BaseModel]` | Yes | | Shape of the result. String literals produce scalar scores; a `BaseModel` subclass (template kind) produces structured multi-field findings (see Section 5.4) |
 | `higher_is_better` | `bool \| None` | Yes | | Whether higher values indicate better performance. Must be `None` for template kind, because structured results have no single direction |
 | `min_score` | `int \| None` | No | `1` | Lower bound for score traits. Auto-derived for literal |
@@ -166,7 +166,7 @@ The `context_mode` field controls what information the agent receives at the sta
 
 ### 4.2 Execution Lifecycle
 
-During the [verification pipeline](../../verification-pipeline/), agentic rubric traits are evaluated in Stage 11b (AgenticRubricEvaluation), which runs after the standard RubricEvaluation stage (Stage 11) and before DeepJudgmentRubric (Stage 12). The stage only runs when the rubric contains at least one `AgenticRubricTrait`.
+During the [verification pipeline](../verification-pipeline.md), agentic rubric traits are evaluated in Stage 11b (AgenticRubricEvaluation), which runs after the standard RubricEvaluation stage (Stage 11) and before DeepJudgmentRubric (Stage 12). The stage only runs when the rubric contains at least one `AgenticRubricTrait`.
 
 For each agentic trait, the pipeline:
 
@@ -312,7 +312,7 @@ print(f"Fields: {list(CodeQualityFindings.model_fields.keys())}")
 
 Because the output has multiple fields with potentially different meanings, `higher_is_better` is set to `None`. Results are stored as flat dot-notation keys in `agentic_trait_scores` (`code_quality.has_type_hints`, `code_quality.test_count`, `code_quality.external_dependencies`), making them easy to access in DataFrames and downstream analysis.
 
-`LLMRubricTrait` accepts the same template kind for text-only evaluations that do not require tool access; the result is stored under `llm_trait_scores` with the same dotted-key convention. See the [LLM-trait template section](../llm-traits/#7-template-kind) for when to prefer it over the agentic variant.
+`LLMRubricTrait` accepts the same template kind for text-only evaluations that do not require tool access; the result is stored under `llm_trait_scores` with the same dotted-key convention. See the [LLM-trait template section](llm-traits.md#7-template-kind) for when to prefer it over the agentic variant.
 
 ### 5.5 Trace Materialization
 
@@ -388,7 +388,7 @@ print(library_trait.validate_score(4))  # False (out of range)
 
 **Litmus test:** can the evaluation be done from the response text alone?
 
-- **Yes** (the quality is visible in what the model wrote): use an [LLM trait](../llm-traits/), [regex trait](../regex-traits/), or [callable trait](../callable-traits/).
+- **Yes** (the quality is visible in what the model wrote): use an [LLM trait](llm-traits.md), [regex trait](regex-traits.md), or [callable trait](callable-traits.md).
 - **No** (the evaluation requires inspecting files, running code, or checking workspace state): use an `AgenticRubricTrait`.
 
 | Scenario | Trait type | Why |
@@ -404,9 +404,9 @@ print(library_trait.validate_score(4))  # False (out of range)
 
 ## 7. Next Steps
 
-- [LLM traits](../llm-traits/): text-based evaluation with the parsing model
-- [Regex traits](../regex-traits/): deterministic pattern matching
-- [Callable traits](../callable-traits/): custom Python functions
-- [Metric traits](../metric-traits/): precision, recall, F1 computation
-- [Rubrics index](../../../../core_concepts/rubrics/): overview of all trait types and how to choose
-- [Evaluation modes](../../evaluation-modes/): template_only, template_and_rubric, rubric_only
+- [LLM traits](llm-traits.md): text-based evaluation with the parsing model
+- [Regex traits](regex-traits.md): deterministic pattern matching
+- [Callable traits](callable-traits.md): custom Python functions
+- [Metric traits](metric-traits.md): precision, recall, F1 computation
+- [Rubrics index](index.md): overview of all trait types and how to choose
+- [Evaluation modes](../evaluation-modes.md): template_only, template_and_rubric, rubric_only

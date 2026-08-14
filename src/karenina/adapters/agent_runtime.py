@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +28,8 @@ CONTAINER_RUNTIMES = {"docker", "singularity", "apptainer"}
 CLAUDE_SDK_BACKENDS = {"native", CONTAINER_BACKEND, LEGACY_DOCKER_BACKEND}
 DEEPAGENTS_BACKENDS = {"filesystem", CONTAINER_BACKEND, LEGACY_DOCKER_BACKEND, "local_shell"}
 DOCKER_PREFLIGHT_TIMEOUT_SECONDS = 10
+_container_workspace_preflight_lock = threading.Lock()
+_container_workspace_preflight_cache: set[tuple[str, str, str]] = set()
 
 
 @dataclass(frozen=True)
@@ -135,17 +139,21 @@ def claude_sdk_sandbox_enabled(model_config: ModelConfig) -> bool:
 
 
 def get_agent_runtime_options(model_config: ModelConfig) -> dict[str, object]:
-    """Return adapter runtime options from ModelConfig.extra_kwargs.
+    """Return typed adapter runtime options with legacy export compatibility.
 
-    Adapter-specific runtime settings live under ``extra_kwargs["agent_runtime"]``
-    so the shared ModelConfig schema does not grow a field for every adapter.
+    ``ModelConfig.agent_runtime`` is the public configuration surface. Older
+    exports may still store the same keys under
+    ``extra_kwargs["agent_runtime"]``. Typed values take precedence when both
+    forms are present.
     """
 
     extra_kwargs = getattr(model_config, "extra_kwargs", None) or {}
     raw_options = extra_kwargs.get(AGENT_RUNTIME_EXTRA_KEY)
-    if isinstance(raw_options, dict):
-        return raw_options
-    return {}
+    options = dict(raw_options) if isinstance(raw_options, dict) else {}
+    typed_config = getattr(model_config, "agent_runtime", None)
+    if typed_config is not None:
+        options.update(typed_config.model_dump(exclude_none=True, exclude_unset=True))
+    return options
 
 
 def get_agent_runtime_option(
@@ -360,6 +368,102 @@ def preflight_container_runtime(
             f"agent_runtime container_image for {config.runtime} must be an existing local .sif file: {config.image}",
             reason="container_image_unavailable",
         )
+
+
+def _workspace_mount_scope(workspace: Path) -> str:
+    """Return a stable cache scope for container host-path sharing."""
+
+    parts = workspace.parts
+    depth = min(3, len(parts))
+    return str(Path(*parts[:depth]))
+
+
+def preflight_container_workspace(
+    config: ContainerRuntimeConfig,
+    host_workspace: str | Path,
+    *,
+    timeout: int = DOCKER_PREFLIGHT_TIMEOUT_SECONDS,
+) -> None:
+    """Verify that a host workspace bind is visible inside the container.
+
+    Desktop Docker runtimes may accept a bind source that is not shared with
+    their VM and silently expose an empty directory. A small marker check
+    catches that condition before an agent spends model turns looking for
+    files that exist only in the host filesystem. Successful checks are cached
+    by runtime, image, and host-path sharing scope.
+
+    Args:
+        config: Resolved container runtime configuration.
+        host_workspace: Host directory that will be mounted at ``/workspace``.
+        timeout: Maximum seconds for the marker probe.
+
+    Raises:
+        AdapterUnavailableError: If the workspace is absent or not visible in
+            the configured container runtime.
+    """
+
+    workspace = Path(host_workspace).resolve()
+    if not workspace.is_dir():
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            f"Container sandbox workspace does not exist: {workspace}",
+            reason="missing_workspace",
+        )
+    if not config.image:
+        from karenina.ports import AdapterUnavailableError
+
+        raise AdapterUnavailableError(
+            "agent_runtime container_image is required for workspace preflight",
+            reason="missing_container_image",
+        )
+
+    cache_key = (config.runtime, config.image, _workspace_mount_scope(workspace))
+    with _container_workspace_preflight_lock:
+        if cache_key in _container_workspace_preflight_cache:
+            return
+
+        marker_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=workspace,
+                prefix=".karenina-container-probe-",
+                delete=False,
+            ) as marker:
+                marker_path = Path(marker.name)
+            command = build_container_command(
+                config=config,
+                host_workspace=workspace,
+                argv=["/bin/sh", "-c", f'test -f "/workspace/{marker_path.name}"'],
+            )
+            result = subprocess.run(  # noqa: S603
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as e:
+            from karenina.ports import AdapterUnavailableError
+
+            raise AdapterUnavailableError(
+                f"Container workspace visibility probe timed out after {timeout} seconds: {workspace}",
+                reason="container_workspace_unavailable",
+            ) from e
+        finally:
+            if marker_path is not None:
+                marker_path.unlink(missing_ok=True)
+
+        if result.returncode != 0:
+            from karenina.ports import AdapterUnavailableError
+
+            raise AdapterUnavailableError(
+                "Container runtime could not see the configured host workspace. "
+                f"Ensure the path is shared with Docker, Colima, or the selected runtime: {workspace}. "
+                f"Probe failed: {_docker_command_output(result)}",
+                reason="container_workspace_unavailable",
+            )
+        _container_workspace_preflight_cache.add(cache_key)
 
 
 def _env_flags_for_docker(env: dict[str, str | None]) -> list[str]:

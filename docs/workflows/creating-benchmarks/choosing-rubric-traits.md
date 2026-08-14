@@ -17,7 +17,7 @@ jupyter:
 
 Karenina offers six trait types (LLM boolean, LLM score, LLM literal, regex, callable, metric) that cover seven distinct evaluation needs. This tutorial is organized by **need**: "I need to check X. Which trait type solves it?" For each need, you will create a trait, attach it to a benchmark, and learn when to prefer one type over another.
 
-This complements the build-focused tutorials ([Full Evaluation Benchmark](full-evaluation-benchmark.ipynb), [Quality Assessment](quality-assessment-benchmark.ipynb)) by providing a decision framework for trait selection.
+This complements the build-focused tutorials ([Full Evaluation Benchmark](full-evaluation-benchmark.md), [Quality Assessment](quality-assessment-benchmark.md)) by providing a decision framework for trait selection.
 
 **What you'll learn:**
 
@@ -158,7 +158,7 @@ benchmark.update_template(q3_id, Answer)
 print(f"Q3 added: {q3_id[:50]}...")
 ```
 
-Templates are kept minimal here because the tutorial focus is rubric traits. See [Factual QA Benchmark](factual-qa-benchmark.ipynb) for detailed template patterns.
+Templates are kept minimal here because the tutorial focus is rubric traits. See [Factual QA Benchmark](factual-qa-benchmark.md) for detailed template patterns.
 
 ---
 
@@ -468,7 +468,7 @@ for qid in benchmark.get_question_ids():
 
 ## Decision Flowchart
 
-See the [decision flowchart on the Rubrics concept page](../../../core_concepts/rubrics/#decision-flowchart) for a quick reference that maps evaluation needs to trait types.
+See the [decision flowchart on the Rubrics concept page](../../core_concepts/rubrics/index.md#decision-flowchart) for a quick reference that maps evaluation needs to trait types.
 
 ---
 
@@ -516,10 +516,10 @@ shutil.rmtree(tmpdir, ignore_errors=True)
 
 ## Next Steps
 
-- [Full Evaluation Benchmark](full-evaluation-benchmark.ipynb): Build a complete template + rubric benchmark from scratch
-- [Quality Assessment](quality-assessment-benchmark.ipynb): Rubric-only evaluation for tasks with no single correct answer
+- [Full Evaluation Benchmark](full-evaluation-benchmark.md): Build a complete template + rubric benchmark from scratch
+- [Quality Assessment](quality-assessment-benchmark.md): Rubric-only evaluation for tasks with no single correct answer
 - [Rubrics Overview](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts, the `higher_is_better` field, and trait type API details
-- [LLM Traits](../../notebooks/core_concepts/rubrics/llm-traits.ipynb): Boolean, score, and literal kinds with deep judgment
-- [Regex Traits](../../notebooks/core_concepts/rubrics/regex-traits.ipynb): Deterministic pattern matching
-- [Callable Traits](../../notebooks/core_concepts/rubrics/callable-traits.ipynb): Custom Python functions
-- [Metric Traits](../../notebooks/core_concepts/rubrics/metric-traits.ipynb): Precision, recall, F1 computation
+- [LLM Traits](../../core_concepts/rubrics/llm-traits.md): Boolean, score, and literal kinds with deep judgment
+- [Regex Traits](../../core_concepts/rubrics/regex-traits.md): Deterministic pattern matching
+- [Callable Traits](../../core_concepts/rubrics/callable-traits.md): Custom Python functions
+- [Metric Traits](../../core_concepts/rubrics/metric-traits.md): Precision, recall, F1 computation

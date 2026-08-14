@@ -160,7 +160,7 @@ When `workspace_path` is set, the pipeline expects a pre-existing directory at `
 
 ### 2.2. Workspace Copying
 
-By default, the pipeline copies each question's workspace to a sibling working directory before the agent runs (`workspace_copy=True` on [VerificationConfig](../reference/configuration/verification-config/)). This protects the original workspace for re-runs. The copy receives a unique suffix based on timestamp, process ID, and replicate index, making it safe for parallel execution.
+By default, the pipeline copies each question's workspace to a sibling working directory before the agent runs (`workspace_copy=True` on [VerificationConfig](../reference/configuration/verification-config.md)). This protects the original workspace for re-runs. The copy receives a unique suffix based on timestamp, process ID, and replicate index, making it safe for parallel execution.
 
 When `workspace_copy=False`, the pipeline operates directly in the original directory. This is destructive: the agent may modify files that cannot be recovered.
 
@@ -190,7 +190,7 @@ This distinction matters for the pipeline. For deep agent adapters, the pipeline
 
 ### 3.3. The `agent_tier` Field
 
-The field is declared on `AdapterSpec` in the [adapter registry](../../src/karenina/adapters/registry.py):
+The field is declared on `AdapterSpec` in the adapter registry:
 
 ```python
 @dataclass
@@ -206,7 +206,7 @@ Two built-in adapters set `agent_tier="deep_agent"`: `claude_agent_sdk` and `lan
 
 ## 4. Two-Step Agentic Judging (Stage 7b)
 
-When `agentic_parsing=True` in [VerificationConfig](../reference/configuration/verification-config/), the pipeline replaces the classical `ParseTemplateStage` (Stage 7a) with `AgenticParseTemplateStage` (Stage 7b). The two-step process separates investigation from extraction:
+When `agentic_parsing=True` in [VerificationConfig](../reference/configuration/verification-config.md), the pipeline replaces the classical `ParseTemplateStage` (Stage 7a) with `AgenticParseTemplateStage` (Stage 7b). The two-step process separates investigation from extraction:
 
 ### 4.1. Step 1: Investigation
 
@@ -233,7 +233,7 @@ Separating investigation from extraction keeps each step focused. The investigat
 
 ### 4.3. Pipeline Integration
 
-`AgenticParseTemplateStage` sits in the same position as `ParseTemplateStage` in the stage sequence. The [StageOrchestrator](../../src/karenina/benchmark/verification/stages/core/orchestrator.py) selects one or the other based on the `agentic_parsing` flag:
+`AgenticParseTemplateStage` sits in the same position as `ParseTemplateStage` in the stage sequence. The StageOrchestrator selects one or the other based on the `agentic_parsing` flag:
 
 ```
 Stage 6: SufficiencyCheck (optional)
@@ -349,32 +349,30 @@ Agentic evaluation extends beyond template verification to rubric evaluation as 
 
 This is particularly powerful for coding benchmarks where quality signals live in the code files (library choices, error handling, documentation quality) rather than in the response trace.
 
-See [Agentic Rubric Traits](rubrics/agentic-traits.md) for trait definition and usage, and [Stage 11b Internals](../../advanced-pipeline/agentic-rubric-evaluation.md) for the pipeline mechanics.
+See [Agentic Rubric Traits](rubrics/agentic-traits.md) for trait definition and usage, and [Stage 11b Internals](../advanced-pipeline/agentic-rubric-evaluation.md) for the pipeline mechanics.
 
 ## 10. Sandboxed Runtime Backends
 
-By default a [deep agent adapter](#3-deep-agent-vs-tool-loop-adapters) executes its shell and file tools directly on the host, rooted at the question [workspace](#2-workspaces). For untrusted code or reproducible environments, both deep agent adapters can instead run the agent inside a sandbox or a container. The runtime is configured through a single structured sub-dictionary on `ModelConfig.extra_kwargs` under the key `agent_runtime`, so the shared [ModelConfig](../reference/configuration/model-config/) schema does not grow a field for every adapter.
+By default a [deep agent adapter](#3-deep-agent-vs-tool-loop-adapters) executes its shell and file tools directly on the host, rooted at the question [workspace](#2-workspaces). For untrusted code or reproducible environments, both deep agent adapters can instead run the agent inside a sandbox or a container. Configure this with the typed `AgentRuntimeConfig` field on `ModelConfig`.
 
 ```python
-from karenina.schemas.config import ModelConfig
+from karenina.schemas import AgentRuntimeConfig, ModelConfig
 
 docker_agent_config = ModelConfig(
     id="coder",
     model_name="claude-sonnet-4-20250514",
     interface="claude_agent_sdk",
-    extra_kwargs={
-        "agent_runtime": {
-            "backend": "container",
-            "container_runtime": "docker",
-            "container_image": "karenina-bio:latest",
-        }
-    },
+    agent_runtime=AgentRuntimeConfig(
+        backend="container",
+        container_runtime="docker",
+        container_image="karenina-bio:latest",
+    ),
 )
 ```
 
 ### 10.1. Runtime Options
 
-Every key lives under `extra_kwargs["agent_runtime"]`:
+`AgentRuntimeConfig` exposes these fields:
 
 | Key | Type | Default | Applies to | Meaning |
 |-----|------|---------|------------|---------|
@@ -423,18 +421,16 @@ singularity_config = ModelConfig(
     id="coder-hpc",
     model_name="claude-sonnet-4-20250514",
     interface="claude_agent_sdk",
-    extra_kwargs={
-        "agent_runtime": {
-            "backend": "container",
-            "container_runtime": "singularity",
-            "container_image": "/data/images/karenina-bio.sif",
-            "access_mode": "read_write",
-        }
-    },
+    agent_runtime=AgentRuntimeConfig(
+        backend="container",
+        container_runtime="singularity",
+        container_image="/data/images/karenina-bio.sif",
+        access_mode="read_write",
+    ),
 )
 ```
 
-The same `agent_runtime` block works for `interface="langchain_deep_agents"`. Only the default backend name differs (`filesystem` instead of `native`).
+The same typed field works for `interface="langchain_deep_agents"`. Only the default backend name differs (`filesystem` instead of `native`). Older saved configurations that contain `extra_kwargs["agent_runtime"]` remain readable, but new code should use `AgentRuntimeConfig`.
 
 ## 11. Next Steps
 
@@ -442,5 +438,5 @@ The same `agent_runtime` block works for `interface="langchain_deep_agents"`. On
 - [Answer Templates](answer-templates.md): Writing the schemas that both classical and agentic judges fill in
 - [Adapters](adapters.md): Understanding port protocols and the adapter registry
 - [MCP Overview](mcp-overview.md): Tool-augmented evaluation for the answering model
-- [Running Verification](../workflows/running-verification/): End-to-end verification workflow including agentic scenarios
+- [Running Verification](../workflows/running-verification/index.md): End-to-end verification workflow including agentic scenarios
 - [Agentic Rubric Traits](rubrics/agentic-traits.md): Agent-investigated quality evaluation

@@ -381,7 +381,7 @@ print("Done.")
 
 ## Next Steps
 
-- [ADeLe Concept Page](../../notebooks/core_concepts/adele.ipynb): Full dimension reference and scoring details
+- [ADeLe Concept Page](../../core_concepts/adele.md): Full dimension reference and scoring details
 - [Rubrics](../../core_concepts/rubrics/index.md): Deep dive into rubric concepts and trait types
-- [Scaled Benchmark Creation](../../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb): Bulk workflows, template generation, and classification in context
+- [Scaled Benchmark Creation](scaled-benchmark-creation.md): Bulk workflows, template generation, and classification in context
 - [Running Verification](../running-verification/index.md): Execute benchmarks with ADeLe rubrics

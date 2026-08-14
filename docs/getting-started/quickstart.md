@@ -162,7 +162,7 @@ for q in questions:
 print(f"Added {len(question_ids)} questions")
 ```
 
-> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb), including bulk import from Excel, CSV, and TSV files
+> **Learn more**: [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md), including bulk import from Excel, CSV, and TSV files
 
 ---
 
@@ -224,7 +224,7 @@ benchmark.update_template(question_ids[1], Answer)
 print("Updated template for Venetoclax question with class-based definition")
 ```
 
-> **Learn more**: [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Scaled Benchmark Creation](../notebooks/creating-benchmarks/scaled-benchmark-creation.ipynb) · [Answer Templates (Concepts)](../notebooks/core_concepts/answer-templates.ipynb)
+> **Learn more**: [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Scaled Benchmark Creation](../workflows/creating-benchmarks/scaled-benchmark-creation.md) · [Answer Templates (Concepts)](../core_concepts/answer-templates.md)
 
 ---
 
@@ -274,7 +274,7 @@ benchmark.add_question_rubric_trait(
 print(f"Added LLM trait 'Discusses Safety Profile' to question {venetoclax_qid}")
 ```
 
-> **Learn more**: [Full Evaluation Benchmark](../notebooks/creating-benchmarks/full-evaluation-benchmark.ipynb) · [All Five Trait Types](../core_concepts/rubrics/index.md): LLM, Regex, Callable, Metric, and Agentic traits
+> **Learn more**: [Full Evaluation Benchmark](../workflows/creating-benchmarks/full-evaluation-benchmark.md) · [All Five Trait Types](../core_concepts/rubrics/index.md): LLM, Regex, Callable, Metric, and Agentic traits
 
 ---
 
@@ -312,7 +312,7 @@ results = benchmark.run_verification(config)
 print(f"Verification complete — {len(results.results)} results")
 ```
 
-> **Learn more**: [Verification Config](../notebooks/running-verification/basic-verification.ipynb) · [Multi-Model Evaluation](../notebooks/running-verification/multi-model-comparison.ipynb) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
+> **Learn more**: [Verification Config](../workflows/running-verification/basic-verification.md) · [Multi-Model Evaluation](../workflows/running-verification/multi-model-comparison.md) · [Model Config Reference](../reference/configuration/model-config.md) · [CLI Verification](../reference/cli/verify.md)
 
 ---
 
@@ -348,7 +348,7 @@ df_rubrics = rubric_results.to_dataframe()
 df_rubrics[["question_id", "trait_name", "trait_score", "trait_type"]]
 ```
 
-> **Learn more**: [DataFrame Analysis](../notebooks/analyzing-results/dataframe-analysis.ipynb) · [VerificationResult](../workflows/analyzing-results/verification-result.md) · [Exporting Results](../workflows/analyzing-results/exporting.md)
+> **Learn more**: [DataFrame Analysis](../workflows/analyzing-results/dataframe-analysis.md) · [VerificationResult](../workflows/analyzing-results/verification-result.md) · [Exporting Results](../workflows/analyzing-results/exporting.md)
 
 ---
 
@@ -371,7 +371,7 @@ loaded = Benchmark.load(checkpoint_path)
 print(f"Loaded '{loaded.name}' with {loaded.question_count} questions")
 ```
 
-> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](../notebooks/creating-benchmarks/factual-qa-benchmark.ipynb) · [Loading Benchmarks](../notebooks/running-verification/basic-verification.ipynb)
+> **Learn more**: [Checkpoints](../core_concepts/questions-and-benchmarks/checkpoints.md) · [Factual QA Benchmark](../workflows/creating-benchmarks/factual-qa-benchmark.md) · [Loading Benchmarks](../workflows/running-verification/basic-verification.md)
 
 ```python tags=["hide-cell"]
 # Restore original LLM behavior and clean up temp directory

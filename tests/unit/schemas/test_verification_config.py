@@ -645,6 +645,28 @@ def test_sanitize_model_config_preserves_agent_runtime_extra_kwargs() -> None:
 
 
 @pytest.mark.unit
+def test_sanitize_model_config_preserves_typed_agent_runtime() -> None:
+    """Typed runtime settings survive preset sanitization."""
+    model = {
+        "id": "deep-agent",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet-4-20250514",
+        "temperature": 0.0,
+        "interface": "langchain_deep_agents",
+        "system_prompt": "test",
+        "agent_runtime": {
+            "backend": "container",
+            "container_runtime": "docker",
+            "container_image": "python:3.13-slim",
+        },
+    }
+
+    result = VerificationConfig.sanitize_model_config(model)
+
+    assert result["agent_runtime"] == model["agent_runtime"]
+
+
+@pytest.mark.unit
 def test_sanitize_model_config_openai_endpoint_includes_endpoint_fields() -> None:
     """Test sanitize_model_config includes endpoint fields for openai_endpoint."""
     model = {

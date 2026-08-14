@@ -1,6 +1,6 @@
 # VerificationConfig Reference
 
-This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../notebooks/running-verification/basic-verification.ipynb).
+This is the exhaustive reference for all `VerificationConfig` fields. For a tutorial introduction with examples, see [Basic Verification](../../workflows/running-verification/basic-verification.md).
 
 `VerificationConfig` is a Pydantic model with **~38 user-facing fields** organized into the categories below. Field counts can drift slightly with new releases; the source of truth is `karenina/schemas/verification/config.py`.
 
@@ -64,7 +64,7 @@ See [ModelConfig Reference](model-config.md) for all `ModelConfig` fields.
 | `sufficiency_enabled` | `bool` | `False` | Enable response sufficiency detection. When the response lacks enough information to fill the template, parsing is skipped and the result is auto-failed. |
 | `include_extraction_hints` | `bool` | `True` | Controls whether extraction hints are included in parsing prompts. Extraction hints provide the judge LLM with guidance on how to extract specific template fields from the response. Enabled by default. |
 
-See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage examples.
+See [Full Evaluation](../../workflows/running-verification/full-evaluation.md) for usage examples.
 
 ---
 
@@ -91,7 +91,7 @@ See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb
 | `answerer_concurrency_limits` | `int \| dict[str, int] \| None` | `None` | — | Per-answerer concurrency cap, enforced at task start. Pass an `int` to apply the same cap to every entry in `answering_models` (keyed by `ModelConfig.id`). Pass a `dict` keyed by `ModelConfig.id` for per-model caps; answerers not in the dict run uncapped. `None` disables caps. |
 | `request_timeout` | `float` | `120.0` | — | HTTP request timeout (seconds) for all LLM calls in the pipeline (answer generation, parsing, rubric evaluation, guardrail calls). Must be a number: `None` is rejected. The per-model `ModelConfig.request_timeout` is `float \| None`, where `None` means the provider SDK default. |
 
-Both sequential and parallel execution modes collect per-question errors without aborting. If any questions fail (or the parallel batch exceeds its timeout), `VerificationBatchError` is raised with `partial_results` and `errors` attributes so callers can recover partial progress. See [Basic Verification: Error Handling](../../notebooks/running-verification/basic-verification.ipynb) for usage examples.
+Both sequential and parallel execution modes collect per-question errors without aborting. If any questions fail (or the parallel batch exceeds its timeout), `VerificationBatchError` is raised with `partial_results` and `errors` attributes so callers can recover partial progress. See [Basic Verification: Error Handling](../../workflows/running-verification/basic-verification.md) for usage examples.
 
 ---
 
@@ -194,9 +194,9 @@ The `workspace_root` directory is configured on `Benchmark`, not on `Verificatio
 |-------|------|---------|-------------|
 | `replay_store` | `ReplayStore \| None` | `None` | Replay layer (see `karenina.replay`). When provided, the pipeline short-circuits to canned traces on matching keys and runs live otherwise. Excluded from serialization (can hold large captured traces). Loaded by the CLI from `--replay <path>`. |
 | `replay_parse_on_hydration_mismatch` | `Literal["fall_through", "strict"]` | `"fall_through"` | What to do when a replay key matches the answering call but downstream parse inputs differ from the captured run. `fall_through` falls back to live execution, `strict` raises an error. |
-| `skip_triples` | `frozenset[tuple[str, str, str, int \| None]] \| None` | `None` | Set of completed `(question_id, answering_canonical_key, parsing_canonical_key, replicate)` tuples that the executor must skip. Populated by the resume path (loaded from a `.state` file) and by [`extend_template`](../../notebooks/core_concepts/extending-runs.ipynb) so already-completed work is not re-run. Excluded from serialization and `repr`. |
+| `skip_triples` | `frozenset[tuple[str, str, str, int \| None]] \| None` | `None` | Set of completed `(question_id, answering_canonical_key, parsing_canonical_key, replicate)` tuples that the executor must skip. Populated by the resume path (loaded from a `.state` file) and by [`extend_template`](../../core_concepts/extending-runs.md) so already-completed work is not re-run. Excluded from serialization and `repr`. |
 
-See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme, and [Extending Runs](../../notebooks/core_concepts/extending-runs.ipynb) for how `skip_triples` drives `extend_template` / `extend_rubric`.
+See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page for the keying scheme, and [Extending Runs](../../core_concepts/extending-runs.md) for how `skip_triples` drives `extend_template` / `extend_rubric`.
 
 ---
 
@@ -222,8 +222,8 @@ See the [Replay Store](../../advanced-pipeline/replay-store.md) advanced page fo
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../notebooks/core_concepts/few-shot.ipynb). |
-| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [Full Evaluation](../../notebooks/running-verification/full-evaluation.ipynb) for usage and [PromptConfig Reference](prompt-config.md) for all fields. |
+| `few_shot_config` | `FewShotConfig \| None` | `None` | Few-shot prompting configuration. Controls example injection into prompts. See [Few-Shot Configuration](../../core_concepts/few-shot.md). |
+| `prompt_config` | `PromptConfig \| None` | `None` | Per-task prompt instruction overrides. Injects custom instructions into specific pipeline stages. See [Full Evaluation](../../workflows/running-verification/full-evaluation.md) for usage and [PromptConfig Reference](prompt-config.md) for all fields. |
 | `db_config` | `DBConfig \| None` | `None` | `DBConfig` instance for automatic result persistence to a database. When set, results are saved after each verification run. See DBConfig fields below. |
 
 ### DBConfig Fields

@@ -7,7 +7,7 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue)](http://mypy-lang.org/)
 
-**Structured LLM evaluation: from factual Q&A to agentic coding tasks**
+**Turning domain expertise into multi-dimensional evaluation of biomedical AI**
 
 [Paper](#-the-paper) • [About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
 
@@ -21,15 +21,15 @@
 
 <img src="docs/assets/graphical-abstract.png" alt="Karenina graphical abstract: expert-led benchmark design feeds three evaluation settings and yields a multidimensional model profile" width="100%">
 
-<em>From expert-defined evaluation intent to a multi-dimensional model profile, across question answering, multi-turn interaction, and agentic tasks.</em>
+<em>From expert knowledge to living, multi-dimensional evaluations across question answering, multi-turn conversations, and agentic tasks.</em>
 
 </div>
 
-Karenina is the framework behind a forthcoming paper on expert-built, multi-axis evaluation of biomedical AI:
+Karenina is the framework presented in the forthcoming paper, *Turning Domain Expertise into Multi-Dimensional Evaluation of Biomedical AI with Karenina*:
 
-> Large language models and autonomous agents are becoming embedded in biomedical research, and the insights they generate will increasingly shape research directions and clinical decisions. However, their outputs are variable and open-ended, complicating reliable evaluation and reproducibility. Existing benchmarks fall short of addressing this, measuring narrow, static tasks that poorly reflect real-world capabilities. Closing this gap demands tailored, multi-dimensional evaluations and the means for domain experts to build them. Here we introduce Karenina, an open-source framework for multi-dimensional evaluation at scale. We apply it across settings of increasing agency: drug-discovery questions, multi-turn interactions, and autonomous bioinformatics tasks. These evaluations revealed that similar scores concealed consequential differences: answers that were correct yet ungrounded in the retrieved evidence; errors of biological reasoning rather than of workflow setup and execution; models that abandoned correct answers when challenged with false claims. These findings establish expert-built, multi-dimensional evaluation as essential for trustworthy AI in biomedicine.
+> Language models and agents increasingly inform decisions about human health, yet current benchmarks reward correct answers even when the underlying reasoning is flawed, measuring narrow, static tasks that poorly reflect real use. Closing this gap demands multi-dimensional evaluations built by experts, but expert knowledge does not translate directly into benchmarks: criteria must be made testable, applied consistently to open-ended output, and revised as models change. Here we introduce Karenina, an open-source framework that turns expert knowledge into such evaluations at scale. We apply it across settings of increasing agency: drug-discovery questions, multi-turn conversations, and autonomous bioinformatics agents. Reading dimensions together exposed what single scores concealed: answers correct yet ungrounded in the retrieved evidence; failures of biological reasoning masked by flawless workflow execution; models abandoning correct answers when challenged with false claims. Reading these dimensions together moves evaluation beyond scoring, enabling trustworthy decision-making with AI in biomedicine.
 
-**Status:** the manuscript is in preparation. The title, author list, and a link to the preprint will be added here once it is out.
+**Status:** the manuscript is in preparation. A link to the preprint will be added here once it is available.
 
 Every evaluation reported in the paper was run with this library, using the workflows that are already documented here: [answer templates](docs/core_concepts/answer-templates.md) and [rubrics](docs/core_concepts/rubrics/index.md) over [MCP tool access](docs/core_concepts/mcp-overview.md) for the drug-discovery questions, [scenarios](docs/core_concepts/scenarios/index.md) for the multi-turn interactions, and [agentic evaluation](docs/core_concepts/agentic-evaluation.md) with workspace-inspecting judges for the bioinformatics tasks. The benchmark definitions and analysis code needed to reproduce the published figures and tables will be released shortly, and linked from here.
 
@@ -62,11 +62,11 @@ The rest of this README explains how these pieces fit together, starting with [w
 
 ## 🎯 About Karenina
 
-Karenina is an open-source Python framework for defining, running, and sharing LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions via [MCP](docs/core_concepts/mcp-overview.md), and fully [agentic coding and data analysis tasks](docs/core_concepts/agentic-evaluation.md) where both the answering model and the judge operate in a real workspace with file and code access.
+Karenina is an open-source Python framework for turning domain knowledge into living, multi-dimensional LLM evaluations that can be defined, run, shared, and revised as models change. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions via [MCP](docs/core_concepts/mcp-overview.md), and fully [agentic coding and data analysis tasks](docs/core_concepts/agentic-evaluation.md) where both the answering model and the judge operate in a real workspace with file and code access.
 
 It formalizes ground truth as structured **[answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models that encode what a correct response looks like, letting a Judge LLM parse free-form responses into those schemas for programmatic verification. Combined with **[rubrics](docs/core_concepts/rubrics/index.md)** for quality assessment (LLM judgment, regex, callable, metric, and agentic traits), Karenina provides a flexible [evaluation pipeline](docs/core_concepts/verification-pipeline.md) from quick correctness checks to complex multi-trait scoring. It supports two modes: **[Benchmark](docs/getting-started/quickstart.md)** (closed-loop: define questions, generate responses, evaluate) and **[TaskEval](docs/core_concepts/task-eval.md)** (open-loop: supply pre-recorded outputs, evaluate with the same pipeline).
 
-The core challenge Karenina addresses is making the formulation of domain-specific benchmarks accessible to non-LLM-technical experts, allowing them to focus their time and expertise on knowledge rather than infrastructure. LLM-assisted template generation automates most code writing, and a JSON-LD format (building on schema.org vocabularies) provides seamless portability between the Python library, REST API, and web GUI.
+The core challenge Karenina addresses is translating domain expertise into criteria that are testable, applied consistently to open-ended outputs, and easy to revise as models and evaluation needs change. It makes domain-specific benchmark construction accessible to experts without requiring them to become evaluation-infrastructure specialists. LLM-assisted template generation automates most code writing, and a JSON-LD format (building on schema.org vocabularies) provides seamless portability between the Python library, REST API, and web GUI.
 
 ### Why This Approach
 

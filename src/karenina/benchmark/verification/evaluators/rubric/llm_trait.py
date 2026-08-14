@@ -125,6 +125,26 @@ class LLMTraitEvaluator:
             instruction_context=instruction_context,
         )
 
+    @staticmethod
+    def _merge_usage_metadata(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+        """Merge usage metadata dicts from two LLM calls by summing numeric fields.
+
+        Non-numeric fields (like ``model``) keep the first non-None value.
+        """
+        if not first:
+            return second
+        if not second:
+            return first
+        merged: dict[str, Any] = {}
+        for key in first.keys() | second.keys():
+            a = first.get(key)
+            b = second.get(key)
+            if isinstance(a, int | float) and isinstance(b, int | float):
+                merged[key] = a + b
+            else:
+                merged[key] = a if a is not None else b
+        return merged
+
     def evaluate_batch(
         self,
         question: str,
@@ -132,9 +152,15 @@ class LLMTraitEvaluator:
         traits: list[LLMRubricTrait],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> tuple[dict[str, int | bool], dict[str, Any]]:
         """
-        Evaluate all traits in a single LLM call using structured output.
+        Evaluate all traits in batch LLM calls using structured output.
+
+        Normally all traits share one call. When ``ground_truth`` is set and
+        the traits mix opted-in (``include_ground_truth=True``) and non-opted-in
+        traits, the groups are evaluated in two separate calls so the reference
+        answer never appears in a prompt shared with non-opted-in traits.
 
         Args:
             question: The original question asked.
@@ -142,15 +168,45 @@ class LLMTraitEvaluator:
             traits: List of LLM traits to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block from the
                 rendered user prompt. Set automatically by TaskEval.
+            ground_truth: Reference answer for traits with
+                include_ground_truth=True. None disables the reference block.
 
         Returns:
             Tuple of (results_dict, usage_metadata)
         """
+        exposed = [trait for trait in traits if trait.include_ground_truth]
+        unexposed = [trait for trait in traits if not trait.include_ground_truth]
+
+        if not (ground_truth and exposed and unexposed):
+            return self._evaluate_batch_call(
+                question, answer, traits, task_eval_mode=task_eval_mode, ground_truth=ground_truth
+            )
+
+        exposed_results, exposed_usage = self._evaluate_batch_call(
+            question, answer, exposed, task_eval_mode=task_eval_mode, ground_truth=ground_truth
+        )
+        unexposed_results, unexposed_usage = self._evaluate_batch_call(
+            question, answer, unexposed, task_eval_mode=task_eval_mode, ground_truth=None
+        )
+        results = {**unexposed_results, **exposed_results}
+        usage_metadata = self._merge_usage_metadata(exposed_usage, unexposed_usage)
+        return results, usage_metadata
+
+    def _evaluate_batch_call(
+        self,
+        question: str,
+        answer: str,
+        traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
+        ground_truth: str | None = None,
+    ) -> tuple[dict[str, int | bool], dict[str, Any]]:
+        """Evaluate the given traits in a single batch LLM call."""
         from karenina.schemas.outputs import BatchRubricScores
 
         system_prompt = self._llm_prompt_builder.build_batch_system_prompt()
         user_prompt = self._llm_prompt_builder.build_batch_user_prompt(
-            question, answer, traits, task_eval_mode=task_eval_mode
+            question, answer, traits, task_eval_mode=task_eval_mode, ground_truth=ground_truth
         )
 
         # Build instruction_context for adapter instructions (format-specific content)
@@ -187,6 +243,7 @@ class LLMTraitEvaluator:
         traits: list[LLMRubricTrait],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> tuple[dict[str, int | bool], list[dict[str, Any]]]:
         """
         Evaluate traits one by one.
@@ -201,6 +258,9 @@ class LLMTraitEvaluator:
             traits: List of LLM traits to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block from each
                 rendered user prompt. Set automatically by TaskEval.
+            ground_truth: Reference answer rendered only in prompts of traits
+                with include_ground_truth=True. Each trait has its own prompt,
+                so no partitioning is needed here.
 
         Returns:
             Tuple of (results_dict, list_of_usage_metadata)
@@ -213,7 +273,7 @@ class LLMTraitEvaluator:
             model_class = SingleBooleanScore if trait.kind == "boolean" else SingleNumericScore
             system_prompt = self._llm_prompt_builder.build_single_trait_system_prompt(trait)
             user_prompt = self._llm_prompt_builder.build_single_trait_user_prompt(
-                question, answer, trait, task_eval_mode=task_eval_mode
+                question, answer, trait, task_eval_mode=task_eval_mode, ground_truth=ground_truth
             )
 
             # Build instruction_context for adapter instructions
@@ -363,6 +423,7 @@ class LLMTraitEvaluator:
         traits: list[LLMRubricTrait],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """Evaluate template-kind LLM traits and return flattened dotted results.
 
@@ -380,6 +441,9 @@ class LLMTraitEvaluator:
             traits: Template-kind LLM traits (``trait.is_template_kind`` True).
             task_eval_mode: When True, omit the **QUESTION:** block from each
                 rendered user prompt. Set automatically by TaskEval.
+            ground_truth: Reference answer rendered only in prompts of traits
+                with include_ground_truth=True. Each trait has its own prompt,
+                so no partitioning is needed here.
 
         Returns:
             Tuple of (flattened_results, usage_metadata_list).
@@ -396,7 +460,7 @@ class LLMTraitEvaluator:
             kind_class = cast(type[BaseModel], trait.kind)  # already a BaseModel subclass
             system_prompt = self._llm_prompt_builder.build_template_system_prompt(trait)
             user_prompt = self._llm_prompt_builder.build_template_user_prompt(
-                question, answer, trait, task_eval_mode=task_eval_mode
+                question, answer, trait, task_eval_mode=task_eval_mode, ground_truth=ground_truth
             )
 
             instruction_context: dict[str, object] = {
@@ -499,12 +563,19 @@ class LLMTraitEvaluator:
         traits: list[LLMRubricTrait],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
         """
-        Evaluate literal (categorical) traits in a single LLM call.
+        Evaluate literal (categorical) traits in batch LLM calls.
 
         Literal traits classify responses into predefined categories. The LLM
         returns class names, which are then converted to integer indices.
+
+        Normally all literal traits share one call. When ``ground_truth`` is
+        set and the traits mix opted-in (``include_ground_truth=True``) and
+        non-opted-in traits, the groups are evaluated in two separate calls so
+        the reference answer never appears in a prompt shared with
+        non-opted-in traits.
 
         Uses LLMPort.with_structured_output() for parsing.
 
@@ -514,23 +585,54 @@ class LLMTraitEvaluator:
             traits: List of literal kind LLM traits to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block from the
                 rendered user prompt. Set automatically by TaskEval.
+            ground_truth: Reference answer for traits with
+                include_ground_truth=True. None disables the reference block.
 
         Returns:
             Tuple of (scores, labels, usage_metadata) where:
             - scores: Dict mapping trait names to int indices (0 to N-1, or -1 for error)
             - labels: Dict mapping trait names to class labels (or invalid value for error)
-            - usage_metadata: Usage metadata from the LLM call
+            - usage_metadata: Usage metadata from the LLM call(s)
         """
-        from karenina.schemas.outputs import BatchLiteralClassifications
-
         # Filter to only literal traits
         literal_traits = [t for t in traits if t.kind == "literal"]
         if not literal_traits:
             return {}, {}, {}
 
+        exposed = [trait for trait in literal_traits if trait.include_ground_truth]
+        unexposed = [trait for trait in literal_traits if not trait.include_ground_truth]
+
+        if not (ground_truth and exposed and unexposed):
+            return self._evaluate_literal_batch_call(
+                question, answer, literal_traits, task_eval_mode=task_eval_mode, ground_truth=ground_truth
+            )
+
+        exposed_scores, exposed_labels, exposed_usage = self._evaluate_literal_batch_call(
+            question, answer, exposed, task_eval_mode=task_eval_mode, ground_truth=ground_truth
+        )
+        unexposed_scores, unexposed_labels, unexposed_usage = self._evaluate_literal_batch_call(
+            question, answer, unexposed, task_eval_mode=task_eval_mode, ground_truth=None
+        )
+        scores = {**unexposed_scores, **exposed_scores}
+        labels = {**unexposed_labels, **exposed_labels}
+        usage_metadata = self._merge_usage_metadata(exposed_usage, unexposed_usage)
+        return scores, labels, usage_metadata
+
+    def _evaluate_literal_batch_call(
+        self,
+        question: str,
+        answer: str,
+        literal_traits: list[LLMRubricTrait],
+        *,
+        task_eval_mode: bool = False,
+        ground_truth: str | None = None,
+    ) -> tuple[dict[str, int], dict[str, str], dict[str, Any]]:
+        """Evaluate the given literal traits in a single batch LLM call."""
+        from karenina.schemas.outputs import BatchLiteralClassifications
+
         system_prompt = self._literal_prompt_builder.build_batch_system_prompt()
         user_prompt = self._literal_prompt_builder.build_batch_user_prompt(
-            question, answer, literal_traits, task_eval_mode=task_eval_mode
+            question, answer, literal_traits, task_eval_mode=task_eval_mode, ground_truth=ground_truth
         )
 
         # Build instruction_context for adapter instructions (format-specific content)
@@ -572,6 +674,7 @@ class LLMTraitEvaluator:
         traits: list[LLMRubricTrait],
         *,
         task_eval_mode: bool = False,
+        ground_truth: str | None = None,
     ) -> tuple[dict[str, int], dict[str, str], list[dict[str, Any]]]:
         """
         Evaluate literal traits one by one.
@@ -586,6 +689,9 @@ class LLMTraitEvaluator:
             traits: List of literal kind LLM traits to evaluate.
             task_eval_mode: When True, omit the **QUESTION:** block from each
                 rendered user prompt. Set automatically by TaskEval.
+            ground_truth: Reference answer rendered only in prompts of traits
+                with include_ground_truth=True. Each trait has its own prompt,
+                so no partitioning is needed here.
 
         Returns:
             Tuple of (scores, labels, usage_metadata_list) where:
@@ -605,7 +711,7 @@ class LLMTraitEvaluator:
         for trait in literal_traits:
             system_prompt = self._literal_prompt_builder.build_single_trait_system_prompt(trait)
             user_prompt = self._literal_prompt_builder.build_single_trait_user_prompt(
-                question, answer, trait, task_eval_mode=task_eval_mode
+                question, answer, trait, task_eval_mode=task_eval_mode, ground_truth=ground_truth
             )
 
             # Build instruction_context for adapter instructions

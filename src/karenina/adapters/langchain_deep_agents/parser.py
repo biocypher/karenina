@@ -149,9 +149,13 @@ class DeepAgentsParserAdapter:
                 # structured-output capability.
                 raise
             logger.warning("Structured output failed, falling back to text extraction: %s", e)
+            # Some OpenAI-compatible transports retain loop-affine connection
+            # state after a structured-output failure. Use a fresh model for
+            # the text fallback so it cannot inherit a stale async pool.
+            fallback_model = create_chat_model(self._config)
             response = await self._retry_executor.aexecute_with_timeout(
                 self._ainvoke_with_timeout,
-                chat_model,
+                fallback_model,
                 lc_messages,
                 timeout=self._config.request_timeout,
             )

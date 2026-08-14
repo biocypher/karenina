@@ -10,7 +10,7 @@ This section is about *looking things up* — exhaustive tables of every CLI fla
 |-----------|---------------|
 | [Configuration Reference](configuration/index.md) | Exhaustive field-by-field tables for VerificationConfig, ModelConfig, PromptConfig, presets, and environment variables |
 | [CLI Reference](cli/index.md) | Complete documentation for all CLI commands (`verify`, `verify-status`, `serve`, `init`, `optimize`, `optimize-history`, `optimize-compare`, `analyze-errors`, `preset`) |
-| [API Reference](api/SUMMARY.md) | Auto-generated Python API reference from source code docstrings |
+| API Reference | Auto-generated Python API reference from source code docstrings |
 
 ---
 
@@ -23,7 +23,7 @@ This section is about *looking things up* — exhaustive tables of every CLI fla
 | Choose evaluation mode or feature flags | [VerificationConfig](configuration/verification-config.md) |
 | Customize LLM prompts | [PromptConfig](configuration/prompt-config.md) |
 | Understand preset file format | [Preset Schema](configuration/preset-schema.md) |
-| Look up a class, function, or module | [API Reference](api/SUMMARY.md) |
+| Look up a class, function, or module | API Reference |
 | Run verification from the terminal | [verify command](cli/verify.md) |
 | Check the status of a running job | [verify-status command](cli/verify-status.md) |
 | Manage saved presets | [preset command](cli/preset.md) |

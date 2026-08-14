@@ -32,6 +32,7 @@ from karenina.adapters.agent_runtime import (
     get_claude_sdk_backend,
     get_container_runtime_config,
     preflight_container_runtime,
+    preflight_container_workspace,
 )
 from karenina.ports import (
     AdapterUnavailableError,
@@ -194,6 +195,7 @@ class ClaudeSDKAgentAdapter:
                 reason="missing_claude_sdk_container_image",
             )
         preflight_container_runtime(container_config)
+        preflight_container_workspace(container_config, workspace_path)
         env = {
             "KARENINA_CLAUDE_CONTAINER_WORKSPACE": str(workspace_path.resolve()),
             "KARENINA_CLAUDE_CONTAINER_RUNTIME": container_config.runtime,

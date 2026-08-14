@@ -15,7 +15,7 @@ jupyter:
 
 # Evaluation Modes
 
-An **evaluation mode** tells Karenina which evaluation path to run for a verification: [template](../answer-templates/) verification, [rubric](../../../core_concepts/rubrics/) evaluation, or both.
+An **evaluation mode** tells Karenina which evaluation path to run for a verification: [template](answer-templates.md) verification, [rubric](rubrics/index.md) evaluation, or both.
 
 ```python tags=["hide-cell"]
 from karenina.schemas import ModelConfig, VerificationConfig
@@ -99,7 +99,7 @@ Four execution details matter in practice:
 1. `rubric_only` truly skips template stages at the orchestrator level.
 2. `template_and_rubric` evaluates rubrics on the raw response, not on parsed template fields.
 3. Rubric stages are only added when a non-empty `Rubric` is actually attached.
-4. [DynamicRubric](../../../core_concepts/rubrics/) traits participate in `template_and_rubric` and `rubric_only` modes. In `template_only` mode, dynamic rubric traits are ignored because rubric evaluation does not run. The presence check that gates dynamic traits occurs at the start of Stage 11 (RubricEvaluation), so it only executes in modes that include rubric stages.
+4. [DynamicRubric](rubrics/index.md) traits participate in `template_and_rubric` and `rubric_only` modes. In `template_only` mode, dynamic rubric traits are ignored because rubric evaluation does not run. The presence check that gates dynamic traits occurs at the start of Stage 11 (RubricEvaluation), so it only executes in modes that include rubric stages.
 
 That means `template_and_rubric` is not "template mode with nicer reporting." It is a combined run with two distinct evaluation paths:
 
@@ -192,11 +192,11 @@ So in `rubric_only`, treat rubric scores as the primary output and `verify_resul
 
 ### Low-level runner behavior
 
-At the low-level `run_single_model_verification(...)` API, passing a non-empty rubric while leaving `evaluation_mode="template_only"` does not upgrade the mode. The runner logs a warning (`Rubric traits were provided but evaluation_mode='template_only'. Rubric evaluation will be skipped.`) and runs the template-only pipeline unchanged, so no [rubric evaluation](../../../core_concepts/rubrics/) stage is added and the rubric is ignored. Set `evaluation_mode="template_and_rubric"` to score the rubric.
+At the low-level `run_single_model_verification(...)` API, passing a non-empty rubric while leaving `evaluation_mode="template_only"` does not upgrade the mode. The runner logs a warning (`Rubric traits were provided but evaluation_mode='template_only'. Rubric evaluation will be skipped.`) and runs the template-only pipeline unchanged, so no [rubric evaluation](rubrics/index.md) stage is added and the rubric is ignored. Set `evaluation_mode="template_and_rubric"` to score the rubric.
 
 ### TaskEval behavior
 
-[TaskEval](../task-eval/) infers the mode from what you attach:
+[TaskEval](task-eval.md) infers the mode from what you attach:
 
 - template only -> `template_only`
 - rubric only -> `rubric_only`
@@ -210,9 +210,9 @@ The `evaluation_mode` used for each verification is stored in `result.metadata.e
 
 ## 7. Next Steps
 
-- [Templates vs Rubrics](../template-vs-rubric/): the conceptual distinction between correctness and quality
-- [Answer Templates](../answer-templates/): how parsing and `verify()` work
-- [Rubrics](../../../core_concepts/rubrics/): trait types and selection guidance
-- [Verification Pipeline](../verification-pipeline/): the full stage-by-stage execution model
-- [Results and Scoring](../results-and-scoring/): how to read `VerificationResult`
-- [VerificationConfig Reference](../../../reference/configuration/verification-config/): complete configuration fields
+- [Templates vs Rubrics](template-vs-rubric.md): the conceptual distinction between correctness and quality
+- [Answer Templates](answer-templates.md): how parsing and `verify()` work
+- [Rubrics](rubrics/index.md): trait types and selection guidance
+- [Verification Pipeline](verification-pipeline.md): the full stage-by-stage execution model
+- [Results and Scoring](results-and-scoring.md): how to read `VerificationResult`
+- [VerificationConfig Reference](../reference/configuration/verification-config.md): complete configuration fields
