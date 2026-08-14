@@ -140,6 +140,7 @@ def extract_final_response(items: list[Any]) -> str | None:
         The last non-empty assistant text, or None.
     """
     for message in reversed(_converter.from_provider(items)):
-        if message.role == Role.ASSISTANT and message.text:
-            return message.text
+        text = message.text
+        if message.role == Role.ASSISTANT and isinstance(text, str) and text:
+            return text
     return None

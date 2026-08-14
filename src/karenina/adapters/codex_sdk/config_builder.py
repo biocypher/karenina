@@ -15,7 +15,7 @@ channels the Codex SDK exposes:
 Everything in this module is SDK-free and side-effect free so it can be
 unit tested without the openai-codex package installed.
 
-Custom endpoint note: the codex CLI (0.132.0) only supports
+Custom endpoint note: the supported codex CLI only accepts
 ``wire_api="responses"`` (``wire_api="chat"`` was removed). Stock vLLM
 serves /v1/responses but rejects codex's request shape, so the adapter
 routes custom endpoints through a local rewriting shim (see

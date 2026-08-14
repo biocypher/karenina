@@ -1,5 +1,10 @@
 # OpenAI Codex Python SDK — Step-0 validation against local vLLM
 
+> Historical validation record: the original experiments below used SDK
+> 0.1.0b2 / CLI 0.132.0. The adapter dependency was refreshed and revalidated
+> on 2026-08-14 with SDK and bundled CLI 0.144.4; the Responses-only custom
+> provider behavior and compatibility shim remain applicable.
+
 Contract for the karenina codex adapter. All facts verified in the worktree
 `karenina-codex-worktree` on 2026-06-11 against the vLLM endpoint
 `http://hl-codon-gpu-020:8000/v1` (model id `qwen3.5-122b-a10b`, 262k ctx,

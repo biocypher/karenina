@@ -106,9 +106,9 @@ deep-agents = [
     "langchain-mcp-adapters>=0.1.0",
 ]
 codex = [
-    # Pinned: beta SDK, validated against the bundled codex CLI 0.132.0
-    # (wire_api="responses" only; see adapters/codex_sdk/endpoint_shim.py).
-    "openai-codex==0.1.0b2",
+    # Keep the pre-1.0 SDK on the validated stable release. It installs the
+    # matching bundled Codex CLI runtime used by the adapter.
+    "openai-codex==0.144.4",
 ]
 
 [project.scripts]

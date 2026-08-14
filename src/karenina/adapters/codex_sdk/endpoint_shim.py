@@ -1,6 +1,6 @@
 """Local request-rewriting shim for custom OpenAI-compatible endpoints.
 
-The codex CLI (0.132.0) only speaks ``wire_api="responses"`` to custom
+The supported codex CLI only speaks ``wire_api="responses"`` to custom
 providers, and stock vLLM's /v1/responses implementation rejects codex's
 request shape in three ways (verified live, see
 specs/codex_sdk_findings.md):
