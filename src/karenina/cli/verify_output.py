@@ -132,6 +132,7 @@ def run_verification_with_progress(
                 config=config,
                 run_name="cli-verification",
                 global_rubric=benchmark.get_global_rubric(),
+                async_enabled=config.async_enabled,
                 progress_callback=progress_callback,
                 sink=progressive_sink,
             )
@@ -141,6 +142,7 @@ def run_verification_with_progress(
             config=config,
             run_name="cli-verification",
             global_rubric=benchmark.get_global_rubric(),
+            async_enabled=config.async_enabled,
             sink=progressive_sink,
         )
 

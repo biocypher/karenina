@@ -1185,3 +1185,107 @@ class TestMergeStrategyValidation:
         """Both documented strategies are accepted."""
         task = TaskEval(task_id="x", merge_strategy=strategy)
         assert task.merge_strategy == strategy
+
+
+@pytest.mark.unit
+class TestFullTraceFlagForwarding:
+    """VerificationConfig full-trace flags must reach the verification runner."""
+
+    def test_use_full_trace_flags_forwarded_to_runner(self, monkeypatch):
+        """use_full_trace_for_template/rubric from the config reach run_single_model_verification."""
+        from pydantic import Field
+
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.entities import BaseAnswer
+        from karenina.schemas.verification import VerificationConfig
+
+        class Answer(BaseAnswer):
+            target: str = Field(default="BCL2", description="The drug target")
+
+            def verify(self) -> bool:
+                return self.target.upper() == "BCL2"
+
+        mock_result = TestEvaluationLoop()._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*_args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = TaskEval(task_id="full-trace")
+        task.log("first message", target="step", step_id="s1")
+        task.log("second message", target="step", step_id="s1")
+        task.add_template(Answer, step_id="s1")
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+            use_full_trace_for_template=True,
+            use_full_trace_for_rubric=False,
+        )
+
+        task.evaluate(config)
+
+        assert len(call_kwargs) == 1
+        assert call_kwargs[0]["use_full_trace_for_template"] is True
+        assert call_kwargs[0]["use_full_trace_for_rubric"] is False
+
+    def test_defaults_forward_runner_defaults(self, monkeypatch):
+        """Without config flags, runner defaults (False/True) are forwarded."""
+        from pydantic import Field
+
+        from karenina.schemas.config import ModelConfig
+        from karenina.schemas.entities import BaseAnswer
+        from karenina.schemas.verification import VerificationConfig
+
+        class Answer(BaseAnswer):
+            target: str = Field(default="BCL2", description="The drug target")
+
+            def verify(self) -> bool:
+                return self.target.upper() == "BCL2"
+
+        mock_result = TestEvaluationLoop()._make_mock_verification_result()
+        call_kwargs: list[dict[str, Any]] = []
+
+        def mock_run(*_args, **kwargs):
+            call_kwargs.append(kwargs)
+            return mock_result
+
+        monkeypatch.setattr(
+            "karenina.benchmark.verification.runner.run_single_model_verification",
+            mock_run,
+        )
+
+        task = TaskEval(task_id="defaults")
+        task.log("a message")
+        task.add_template(Answer)
+
+        config = VerificationConfig(
+            parsing_models=[
+                ModelConfig(
+                    id="mock",
+                    model_provider="mock",
+                    model_name="mock",
+                    interface="langchain",
+                )
+            ],
+            parsing_only=True,
+        )
+
+        task.evaluate(config)
+
+        assert len(call_kwargs) == 1
+        assert call_kwargs[0]["use_full_trace_for_template"] is False
+        assert call_kwargs[0]["use_full_trace_for_rubric"] is True

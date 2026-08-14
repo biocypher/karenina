@@ -121,6 +121,18 @@ class TestLoadLegacyResultSet:
         reloaded = ResultsIOManager.load_legacy_result_set(path)
         assert [row.metadata.result_id for row in reloaded.results] == ids
 
+    def test_plain_replicate_key_is_preserved(self, tmp_path: Path) -> None:
+        """v2.1 rows carrying a plain ``replicate`` key keep their replicate."""
+        payload = _legacy_export()
+        for row in payload["results"]:
+            metadata = row["metadata"]
+            metadata["replicate"] = metadata.pop("answering_replicate")
+            metadata.pop("parsing_replicate")
+
+        loaded = ResultsIOManager.load_legacy_result_set(_write_export(tmp_path, payload))
+
+        assert [row.metadata.replicate for row in loaded.results] == [3, 1]
+
     def test_corrupted_row_yields_error_naming_index(self, tmp_path: Path) -> None:
         payload = _legacy_export()
         payload["results"][1]["metadata"]["timestamp"] = 12345  # not a string

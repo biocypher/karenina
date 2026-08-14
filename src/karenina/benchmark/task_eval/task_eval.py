@@ -664,6 +664,8 @@ class TaskEval:
         # Extract guard flags from config
         abstention_enabled = config.abstention_enabled
         sufficiency_enabled = config.sufficiency_enabled
+        use_full_trace_for_template = config.use_full_trace_for_template
+        use_full_trace_for_rubric = config.use_full_trace_for_rubric
 
         # Build step prefix for synthetic question IDs and error messages
         step_prefix = f"step_{step_id}_" if step_id else ""
@@ -699,6 +701,8 @@ class TaskEval:
                     replicate=replicate,
                     abstention_enabled=abstention_enabled,
                     sufficiency_enabled=sufficiency_enabled,
+                    use_full_trace_for_template=use_full_trace_for_template,
+                    use_full_trace_for_rubric=use_full_trace_for_rubric,
                 )
 
             for question in context.questions:
@@ -732,6 +736,8 @@ class TaskEval:
                     replicate=replicate,
                     abstention_enabled=abstention_enabled,
                     sufficiency_enabled=sufficiency_enabled,
+                    use_full_trace_for_template=use_full_trace_for_template,
+                    use_full_trace_for_rubric=use_full_trace_for_rubric,
                 )
 
         return step_eval
@@ -753,6 +759,8 @@ class TaskEval:
         replicate: int | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
+        use_full_trace_for_template: bool = False,
+        use_full_trace_for_rubric: bool = True,
     ) -> None:
         """Evaluate a single question and store the result.
 
@@ -772,6 +780,10 @@ class TaskEval:
             replicate: Replicate index (1-based), or None for single-replicate runs
             abstention_enabled: Whether abstention detection is enabled
             sufficiency_enabled: Whether sufficiency detection is enabled
+            use_full_trace_for_template: Parse the template from the full trace
+                instead of only the final AI message
+            use_full_trace_for_rubric: Evaluate rubric traits against the full
+                trace instead of only the final AI message
         """
         question_id = question_dict.get("id", "unknown")
         assert isinstance(question_id, str), "Question ID must be a string"
@@ -791,6 +803,8 @@ class TaskEval:
                 replicate=replicate,
                 abstention_enabled=abstention_enabled,
                 sufficiency_enabled=sufficiency_enabled,
+                use_full_trace_for_template=use_full_trace_for_template,
+                use_full_trace_for_rubric=use_full_trace_for_rubric,
             )
 
             if question_id not in step_eval.verification_results:
@@ -822,6 +836,8 @@ class TaskEval:
         replicate: int | None = None,
         abstention_enabled: bool = False,
         sufficiency_enabled: bool = False,
+        use_full_trace_for_template: bool = False,
+        use_full_trace_for_rubric: bool = True,
     ) -> Any:
         """Evaluate response using main verification pipeline with cached answer data.
 
@@ -895,7 +911,8 @@ class Answer(BaseAnswer):
             replicate=replicate,
             abstention_enabled=abstention_enabled,
             sufficiency_enabled=sufficiency_enabled,
-            rubric_evaluation_strategy="batch",
+            use_full_trace_for_template=use_full_trace_for_template,
+            use_full_trace_for_rubric=use_full_trace_for_rubric,
             evaluation_mode=evaluation_mode,
             task_eval_mode=True,
             callable_registry=self.callable_registry,

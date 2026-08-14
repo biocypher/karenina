@@ -491,11 +491,11 @@ class ResultsIOManager:
         metadata["answering"] = answering
         metadata["parsing"] = parsing
 
-        replicate = metadata.pop("answering_replicate", None)
+        answering_replicate = metadata.pop("answering_replicate", None)
         parsing_replicate = metadata.pop("parsing_replicate", None)
-        if replicate is None:
-            replicate = parsing_replicate
-        metadata["replicate"] = replicate
+        replicate = answering_replicate if answering_replicate is not None else parsing_replicate
+        if replicate is not None:
+            metadata["replicate"] = replicate
 
         # Dropped legacy fields with no current-schema equivalent.
         metadata.pop("completed_without_errors", None)
