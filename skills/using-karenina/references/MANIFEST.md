@@ -1,13 +1,13 @@
 # Synced Documentation Manifest
 
-Last synced: 2026-08-14T19:11:49Z (ISO 8601 UTC / RFC 3339)
+Last synced: 2026-08-14T20:10:00Z (ISO 8601 UTC / RFC 3339)
 Source: docs/
 Files synced: 113
 
 | Source Path | Reference Path | Lines |
 |-------------|---------------|-------|
-| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 541 |
-| docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 229 |
+| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 573 |
+| docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 230 |
 | docs/advanced-adapters/mcp-integration.md | skills/using-karenina/references/advanced-adapters/mcp-integration.md | 420 |
 | docs/advanced-adapters/ports.md | skills/using-karenina/references/advanced-adapters/ports.md | 551 |
 | docs/advanced-adapters/writing-adapters.md | skills/using-karenina/references/advanced-adapters/writing-adapters.md | 788 |
@@ -23,7 +23,7 @@ Files synced: 113
 | docs/advanced-pipeline/run-artifacts-and-repair.md | skills/using-karenina/references/advanced-pipeline/run-artifacts-and-repair.md | 118 |
 | docs/advanced-pipeline/stages.md | skills/using-karenina/references/advanced-pipeline/stages.md | 796 |
 | docs/advanced.md | skills/using-karenina/references/advanced.md | 25 |
-| docs/core_concepts/adapters.md | skills/using-karenina/references/core_concepts/adapters.md | 340 |
+| docs/core_concepts/adapters.md | skills/using-karenina/references/core_concepts/adapters.md | 354 |
 | docs/core_concepts/adele.md | skills/using-karenina/references/core_concepts/adele.md | 443 |
 | docs/core_concepts/agentic-evaluation.md | skills/using-karenina/references/core_concepts/agentic-evaluation.md | 442 |
 | docs/core_concepts/answer-templates.md | skills/using-karenina/references/core_concepts/answer-templates.md | 1251 |
@@ -75,7 +75,7 @@ Files synced: 113
 | docs/reference/cli/serve.md | skills/using-karenina/references/reference/cli/serve.md | 129 |
 | docs/reference/cli/verify-status.md | skills/using-karenina/references/reference/cli/verify-status.md | 187 |
 | docs/reference/cli/verify.md | skills/using-karenina/references/reference/cli/verify.md | 357 |
-| docs/reference/configuration/env-vars.md | skills/using-karenina/references/reference/configuration/env-vars.md | 142 |
+| docs/reference/configuration/env-vars.md | skills/using-karenina/references/reference/configuration/env-vars.md | 146 |
 | docs/reference/configuration/index.md | skills/using-karenina/references/reference/configuration/index.md | 68 |
 | docs/reference/configuration/model-config.md | skills/using-karenina/references/reference/configuration/model-config.md | 277 |
 | docs/reference/configuration/preset-schema.md | skills/using-karenina/references/reference/configuration/preset-schema.md | 412 |

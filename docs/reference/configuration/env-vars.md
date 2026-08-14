@@ -19,6 +19,8 @@ This is the exhaustive reference for every environment variable recognized by ka
 | `ANTHROPIC_AUTH_TOKEN` | `str` | — | Alternative Anthropic auth token forwarded alongside `CLAUDE_CODE_OAUTH_TOKEN` by the `claude_agent_sdk` adapter when no API key is configured. |
 | `GOOGLE_API_KEY` | `str` | — | Google AI API key. Required when using the `langchain` interface with Google models (e.g., `google_genai` provider). |
 | `OPENROUTER_API_KEY` | `str` | — | OpenRouter API key. Required when using the `openrouter` interface. Read via `os.environ.get()` in the OpenRouter model factory. |
+| `ZHIPU_API_KEY` | `str` | — | Zhipu API key inherited by the OMP subprocess when using a Zhipu provider route. OMP also supports credentials stored by its own account manager. |
+| `OPENCODE_API_KEY` | `str` | — | OpenCode API key inherited by the OMP subprocess when using an OpenCode provider route. OMP also supports credentials stored by its own account manager. |
 | `TAVILY_API_KEY` | `str` | — | Tavily search API key. Required when deep judgment web search is enabled (`search_enabled=True`). Used by the Tavily search utility. |
 
 ### Embedding Check
@@ -104,6 +106,8 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 | `ANTHROPIC_AUTH_TOKEN` | `adapters/claude_agent_sdk/auth.py`, `adapters/claude_agent_sdk/llm.py`, `adapters/claude_agent_sdk/agent.py` |
 | `GOOGLE_API_KEY` | LangChain/LiteLLM (via provider SDK) |
 | `OPENROUTER_API_KEY` | `adapters/langchain/models.py` |
+| `ZHIPU_API_KEY` | `adapters/omp/agent.py` (inherited by the OMP subprocess) |
+| `OPENCODE_API_KEY` | `adapters/omp/agent.py` (inherited by the OMP subprocess) |
 | `TAVILY_API_KEY` | `benchmark/verification/utils/search_tavily.py` |
 | `EMBEDDING_CHECK` | `schemas/verification/config.py`, `benchmark/verification/utils/embedding_check.py` |
 | `EMBEDDING_CHECK_MODEL` | `schemas/verification/config.py`, `benchmark/verification/utils/embedding_check.py` |
@@ -125,12 +129,12 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 
 | Category | Count |
 |----------|-------|
-| API Keys | 7 |
+| API Keys | 9 |
 | Embedding Check | 3 |
 | Async Execution | 3 |
 | Path Configuration | 3 |
 | Other Settings | 4 |
-| **Total** | **20** |
+| **Total** | **22** |
 
 ---
 
