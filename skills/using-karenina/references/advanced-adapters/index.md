@@ -155,6 +155,7 @@ manual                                        → always available, no fallback 
 | `openai_endpoint` | OpenAI-compatible (routes to langchain) | Yes | Yes | No (JSON fallback) | `tool_loop` | None |
 | `claude_agent_sdk` | Anthropic Agent SDK | Yes | Yes | Yes (native) | `deep_agent` | `langchain` |
 | `claude_tool` | Anthropic Python SDK | Yes | Yes | Yes (native) | `tool_loop` | `langchain` |
+| `omp` | Oh My Pi over ACP (multi-provider) | Yes | Yes (built in) | Agent-only | `deep_agent` | `langchain` when unavailable |
 | `manual` | Pre-recorded traces | No | No | No | `tool_loop` | None |
 
 `openrouter` and `openai_endpoint` are **routing interfaces** — they resolve to the `langchain` adapter at creation time, sharing the same implementation with interface-specific configuration (API keys, base URLs).

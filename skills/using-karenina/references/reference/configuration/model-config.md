@@ -12,14 +12,14 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 |-------|------|---------|-------------|
 | `id` | `str \| None` | `None` | Unique identifier for this model configuration. **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. Used in results to identify which model produced each result. |
 | `model_name` | `str \| None` | `None` | Model name passed to the underlying provider (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-20250514"`, `"gemini-2.0-flash"`). **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. |
-| `model_provider` | `str \| None` | `None` | LLM provider name (e.g., `"openai"`, `"anthropic"`, `"google_genai"`). **Required** only for the `langchain` interface (passed to `init_chat_model()`). Not required for other interfaces. |
-| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values: `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
+| `model_provider` | `str \| None` | `None` | Provider identifier. Required when the selected adapter's `AdapterSpec.requires_provider` is true (including `langchain`, `langchain_deep_agents`, and `omp`). For OMP it forms the `provider/model` selector. |
+| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values include `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"omp"`, and `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
 
 **Validation rules:**
 
 - Non-manual interfaces require both `id` and `model_name`
 - Manual interface auto-sets `id="manual"` and `model_name="manual"` if not provided
-- Only `langchain` interface requires `model_provider`
+- `model_provider` is required when the registered adapter sets `requires_provider=True`
 
 ---
 

@@ -1,124 +1,89 @@
 ---
 name: karenina-adapter-gather-context
-description: Gather requirements for a new karenina adapter. Collects SDK documentation, capabilities, and maps them to karenina ports. Use as Phase 1 of adapter creation.
+description: Research a prospective Karenina adapter, select its supported ports and transport, and produce an evidence-backed context document with protocol-to-Karenina mappings.
 ---
 
-# Phase 1: Gather Context for Karenina Adapter
+# Phase 1: Gather Adapter Context
 
-Collect all information needed to design and implement a new karenina adapter.
+Produce `docs/adapters/<name>-context.md`. Prefer primary documentation, source, executable help/version output, and official protocol specifications.
 
-## What you're building
+## 1. Resolve known inputs
 
-A karenina adapter implements three port interfaces that the verification pipeline uses:
+Extract from the request and repository before asking questions:
 
-- **AgentPort**: Multi-turn agent loops with tool calling and MCP servers. Used for answer generation (the agent analyzes data, writes code, uses tools). This is the primary interface.
-- **LLMPort**: Simple single-turn LLM calls without agent loops. Used for judge parsing, rubric evaluation, and deep judgment. Called many times per benchmark run.
-- **ParserPort**: LLM-based structured output extraction. Takes free-form text and extracts typed Pydantic models. Used to parse agent traces into answer templates.
+- Runtime/SDK/CLI and official URL
+- Desired interface name and distribution model
+- Requested providers, models, subscriptions, endpoints, and live tests
+- Whether built-in tools, MCP, workspace writes, or sandboxing are expected
+- Existing PR/branch or closest reference adapter
 
-All three must be implemented. Read their protocol definitions at `karenina/src/karenina/ports/` (agent.py, llm.py, parser.py) to understand exact method signatures.
+Ask only for a choice that cannot be discovered and would materially change the implementation. Never ask again for facts already provided.
 
-## Process
+## 2. Select the port matrix
 
-### 1. Identify the target SDK
+Read the current definitions in `src/karenina/ports/`. For each port, record supported, unsupported, or uncertain with evidence:
 
-Ask the user (via AskUserQuestion) for:
-- **SDK name**: The framework or SDK to integrate (e.g., "LangChain Deep Agents", "CrewAI", "AutoGen")
-- **Documentation URL**: Primary docs or GitHub repository
-- **PyPI package name**: The pip-installable package
+- `AgentPort`: agent loop, workspace, tools/MCP, trace, cancellation
+- `LLMPort`: direct single-turn calls, structured output, streaming
+- `ParserPort`: typed Pydantic extraction and usage
 
-### 2. Fetch SDK documentation
+Do not require all three. Identify how callers should configure duties the adapter does not implement. Verify the actual factory behavior before describing fallback.
 
-Use WebFetch to retrieve:
-- The SDK's main README or overview page
-- API reference for agent creation, invocation, and tool use
-- Any trace/observability documentation
-- Message type documentation
+## 3. Discover protocols first
 
-### 3. Identify key capabilities
+Read [Protocol bridging](../karenina-adapter-create/references/protocol-bridge.md). Check the target for standard agent/model/tool protocols before selecting a vendor API. If a standard exists:
 
-For each capability, determine if the SDK supports it:
+1. Record protocol name, version, transport, official client libraries, and runtime negotiation.
+2. Compare it with native SDK/JSON/RPC modes using the semantic-coverage table.
+3. Probe the real executable or a minimal client when possible.
+4. Identify extensions and missing semantics.
+5. Make a preliminary standard/native/hybrid recommendation.
 
-| Capability | Question to answer |
-|-----------|-------------------|
-| Agent loops | Does the SDK run multi-turn agent loops with tool calling? |
-| Async support | Does the SDK support async invocation (`await`)? |
-| MCP integration | Can the SDK connect to MCP servers? How? |
-| Tool definition | How are tools defined and passed to the agent? |
-| Message types | What message types exist (human, AI, tool, system)? |
-| Traces | How is conversation history accessible after invocation? |
-| Usage/tokens | How are token counts and costs exposed? Are they per-turn or aggregated? Does structured output preserve usage metadata? |
-| Streaming | Does the SDK expose a streaming API (async generator or callback)? Does the final chunk carry usage metadata, or is usage only available from a non-streaming call? Can partial content be captured if the stream is cut short? |
-| Structured output | Does the SDK support constrained JSON output? Does `with_structured_output()` return just the parsed result, or can it include the raw LLM response (needed for usage tracking)? What type does it return: a Pydantic model, a dict, or a JSON string? |
-| No-tools behavior | What happens when the agent is invoked with no tools and no MCP servers? Does it fall back to single-turn completion, raise an error, or hang? |
-| System prompts | How are system prompts provided? |
-| Recursion/turn limits | How does the SDK control max iterations? What happens when the limit is hit: does it raise, return partial state, or silently truncate? What is the mapping ratio (e.g., LangGraph uses 2 recursion steps per agent turn)? |
-| Agent timeout recovery | If the agent run hits a wall-clock timeout mid-loop, can the SDK expose the partial trace collected so far (messages, tool calls, final assistant output), or does it lose everything? Is there a checkpointer / state accessor that survives an `asyncio.wait_for` cancellation? |
-| Filesystem/workspace | Does the SDK have built-in file tools (read, write, ls)? If so, do they operate on real disk or a virtual/in-memory state? Can the working directory be configured? |
-| Backend/runtime | Does the SDK use an abstract backend (e.g., virtual state vs real filesystem)? What is the default? Can it be switched? |
+## 4. Gather capability evidence
 
-### 4. Ask targeted clarifying questions
+Cover only relevant ports, plus these cross-cutting areas:
 
-**Before asking**: Review the user's original message for answers already provided. If the user said something like "it should work like the Claude SDK adapter," that resolves the deep-agent question. Skip questions that are clearly answered. When in doubt, ask; one extra question is better than a wrong assumption.
+| Area | Evidence to capture |
+| --- | --- |
+| Async/process model | Native async, thread wrapper, subprocess lifetime, concurrency limits |
+| Messages | Roles, content types, history, system instructions, chunk/message ids |
+| Tools | Built-in versus client-supplied, tool input/result ids, parallel calls |
+| MCP | Supported transports and exact server schema |
+| Workspace | Real disk, virtual FS, `cwd`, absolute paths, multiple roots |
+| Security | OS sandbox, container, approval policy, client permission callbacks |
+| Limits | Turn/request/token limits and observable stop reason |
+| Timeout | Cancellation API, partial events, bounded cleanup |
+| Usage | Per-call versus cumulative; input/output/cache/thought/cost semantics |
+| Model routing | Provider/model selector and actual routed model reporting |
+| Errors | Protocol errors, process exit, provider errors, retry behavior |
+| Optional dependency | Install name/version and behavior when absent |
 
-Use AskUserQuestion to ask about:
-- Should this be deep agent (SDK handles tool loop) or scaffolded (karenina orchestrates)?
-- Should built-in SDK tools be enabled or disabled during benchmarking?
-- What interface name to use in the registry?
-- Availability check strategy (import check, CLI check, etc.)
-- Fallback behavior when SDK is unavailable
-- **Distribution model**: How should this adapter be registered?
-  - **Built-in** (shipped with karenina): adapter lives in `karenina/src/karenina/adapters/<name>/`, one import added to `_load_builtins()` in `registry.py`
-  - **Plugin** (entry point): adapter lives in `karenina/src/karenina/adapters/<name>/` or a separate package, registered via `[project.entry-points."karenina.adapters"]` in `pyproject.toml`, auto-discovered at runtime
-  - **Manual** (user calls `AdapterRegistry.register()`): simplest, no packaging changes, but caller must register before creating `ModelConfig`
+## 5. Inspect Karenina integration points
 
-### 5. Produce context document
+Read:
 
-Save a structured context document to `docs/adapters/<name>-context.md` with:
+- `src/karenina/adapters/registry.py`
+- `src/karenina/adapters/agent_runtime.py` for agent adapters
+- Current factory behavior for missing factories and unavailable adapters
+- The closest built-in adapter and its tests
+- Adapter documentation under `skills/using-karenina/references/advanced-adapters/`
 
-```markdown
-# <SDK Name> Adapter Context
+Preserve local repository instructions and unrelated worktree changes.
 
-## SDK Overview
-- Package: <pypi-name>
-- Docs: <url>
-- Version: >=<minimum>
+## 6. Write the context document
 
-## Capabilities
-| Capability | Supported | Notes |
-|...
+Include:
 
-## Key API Surface
-- Agent creation: `create_agent(...)`
-- Invocation: `agent.invoke(...)` / `agent.ainvoke(...)`
-- Message types: ...
-- Trace access: ...
-- Usage access: ...
+1. Runtime overview and authoritative links
+2. Supported-port matrix
+3. Standard protocol discovery and transport decision matrix
+4. Capabilities with evidence
+5. Preliminary protocol/API-to-Karenina bridge table
+6. Dependency and availability strategy
+7. Workspace/security boundary
+8. Live-test matrix, including exact requested routes
+9. Resolved decisions and genuine open questions
 
-## Concept Mapping (preliminary)
-| karenina concept | SDK equivalent |
-|...
+For usage, state formulas, not just field names. For safety, state whether isolation is enforced by the OS, a container, a permission gate, or only a prompt.
 
-## Critical Integration Points
-- Filesystem access: Real disk / virtual state / configurable
-- Usage tracking: Per-turn metadata location / aggregation needed
-- Structured output: Preserves raw response for usage? (include_raw?)
-- Structured output return type: Pydantic model / dict / JSON string
-- Recursion limit: SDK parameter name and mapping ratio (e.g., 2x for LangGraph)
-- Recursion limit: Behavior on limit hit (exception / partial state / empty)
-- No-tools behavior: Falls back to single-turn / raises error / other
-- Streaming: Async iterator API / callback-based / none; where usage lands (final chunk vs separate call)
-- Agent timeout: Can partial trace be recovered from the SDK state after `asyncio.wait_for` cancels the run?
-
-## Design Questions (resolved)
-- Natively agentic: Yes/No
-- Built-in tools: Enabled/Disabled
-- Interface name: `<name>`
-- Availability: Import check / CLI check
-- Fallback: None / langchain
-- Filesystem backend: Real / virtual / needs configuration
-- Distribution: built-in / plugin / manual
-```
-
-## Next Step
-
-Run `/karenina-adapter-design` to begin Phase 2 using this context document.
+Continue with `$karenina-adapter-design`.
