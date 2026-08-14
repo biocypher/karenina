@@ -1344,6 +1344,26 @@ class DynamicRubric(BaseModel):
                     f"Trait names must be unique across all types within a dynamic rubric."
                 )
             seen_all.add(name)
+
+        # Reject dots in trait names across all trait types, mirroring
+        # ``Rubric.validate_trait_names``: dotted keys are reserved for
+        # template-kind fields ("trait.field"), and a scalar trait named
+        # "a.b" alongside a template trait named "a" would cause silent
+        # misattribution in the result splitter (see ``finalize_result.py``).
+        for trait_list, trait_type in (
+            (self.llm_traits, "LLM"),
+            (self.regex_traits, "Regex"),
+            (self.callable_traits, "Callable"),
+            (self.metric_traits, "Metric"),
+            (self.agentic_traits, "Agentic"),
+        ):
+            for trait in trait_list:
+                if "." in trait.name:
+                    raise ValueError(
+                        f"{trait_type} trait name '{trait.name}' contains '.', "
+                        f"which would collide with dot-notation keys from "
+                        f"template-kind traits."
+                    )
         return self
 
     @model_validator(mode="after")

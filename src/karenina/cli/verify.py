@@ -5,6 +5,7 @@ This module implements the main 'karenina verify' command.
 Config building is in verify_config.py, output/display helpers in verify_output.py.
 """
 
+import json
 import time
 from pathlib import Path
 from typing import Annotated
@@ -23,7 +24,7 @@ from karenina.schemas.verification.config import (
 )
 
 from .utils import cli_error, filter_templates_by_indices, parse_question_indices, validate_output_path
-from .verify_config import build_config_non_interactive, validate_cli_config_requirements
+from .verify_config import build_config_non_interactive, load_manual_traces, validate_cli_config_requirements
 from .verify_output import (
     display_summary,
     export_results,
@@ -37,12 +38,27 @@ console = Console()
 
 def _handle_resume_mode(
     resume: Path,
-) -> tuple[ProgressiveFileSink, VerificationConfig, str, Path, str]:
+    manual_traces: Path | None = None,
+) -> tuple[ProgressiveFileSink, VerificationConfig, str, Path, str, Benchmark | None]:
     """
     Handle resume mode: load everything from the state file.
 
+    The state file cannot serialize ManualTraces, so resuming a
+    manual-interface run requires re-supplying them via ``manual_traces``
+    (the same ``--manual-traces`` file as a fresh run). The traces are
+    loaded against the benchmark recorded in the state and injected into
+    the stored config before it is revalidated.
+
+    Args:
+        resume: Path to the ``.state`` file.
+        manual_traces: Optional path to a manual traces JSON file,
+            required when the stored config uses ``interface='manual'``.
+
     Returns:
-        Tuple of (sink, config, benchmark_path, output, output_format)
+        Tuple of (sink, config, benchmark_path, output, output_format,
+        benchmark). ``benchmark`` is the benchmark loaded for traces
+        re-attachment, or None when no ``manual_traces`` was given (the
+        caller then loads the benchmark itself).
 
     Raises:
         typer.Exit: If the state file is missing, invalid, or already complete.
@@ -52,7 +68,14 @@ def _handle_resume_mode(
 
     console.print(f"[cyan]Loading resume state from {resume}...[/cyan]")
     try:
-        sink = ProgressiveFileSink.load_for_resume(resume)
+        traces_obj = None
+        benchmark: Benchmark | None = None
+        if manual_traces is not None:
+            with open(resume) as f:
+                state_benchmark_path = json.load(f)["benchmark_path"]
+            benchmark = _load_benchmark(state_benchmark_path)
+            traces_obj = load_manual_traces(manual_traces, benchmark)
+        sink = ProgressiveFileSink.load_for_resume(resume, manual_traces=traces_obj)
         config = sink.config
         benchmark_path = sink.benchmark_path
         output = sink.output_path
@@ -66,7 +89,7 @@ def _handle_resume_mode(
             console.print("[yellow]All tasks already completed. Nothing to resume.[/yellow]")
             raise typer.Exit(code=0)
 
-        return sink, config, benchmark_path, output, output_format
+        return sink, config, benchmark_path, output, output_format, benchmark
 
     except typer.Exit:
         raise
@@ -303,7 +326,10 @@ def verify(
         Path | None,
         typer.Option(
             "--resume",
-            help="Resume from a .state file (loads config from state, ignores other config options)",
+            help=(
+                "Resume from a .state file (loads config from state, ignores other config options; "
+                "combine with --manual-traces when the run used --interface manual)"
+            ),
         ),
     ] = None,
 ) -> None:
@@ -366,13 +392,17 @@ def verify(
                 raise typer.Exit(code=1)
 
         # Step 3: Handle resume mode or build fresh config
+        resume_benchmark: Benchmark | None = None
         if resume:
-            progressive_sink, config, benchmark_path, output, output_format = _handle_resume_mode(resume)
+            progressive_sink, config, benchmark_path, output, output_format, resume_benchmark = _handle_resume_mode(
+                resume, manual_traces=manual_traces
+            )
 
-        # Step 3: Load benchmark
+        # Step 3: Load benchmark (reuse the one loaded for manual-traces
+        # re-attachment when resuming)
         if benchmark_path is None:
             cli_error("benchmark_path must be set (not resuming or resume should have set it)")
-        benchmark = _load_benchmark(benchmark_path)
+        benchmark = resume_benchmark if resume_benchmark is not None else _load_benchmark(benchmark_path)
 
         # Set global rubric on progressive sink if resuming
         if resume and progressive_sink:

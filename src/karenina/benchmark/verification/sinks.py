@@ -382,6 +382,7 @@ class ProgressiveFileSink:
         *,
         global_rubric: Rubric | None = None,
         config_updater: Callable[[VerificationConfig], VerificationConfig] | None = None,
+        manual_traces: Any | None = None,
     ) -> ProgressiveFileSink:
         """Reconstruct a sink from an existing ``.state`` + JSONL pair.
 
@@ -391,6 +392,12 @@ class ProgressiveFileSink:
             config_updater: Optional transform applied to the rehydrated
                 stored config, for example to re-inject secrets that
                 pydantic masked when serializing the state file.
+            manual_traces: Optional :class:`ManualTraces` re-attached to
+                stored answering models with ``interface='manual'`` before
+                config revalidation. The state file excludes
+                ``manual_traces`` (not serializable), so manual-interface
+                runs must re-supply them here; without them the config
+                still fails with the ModelConfig validation error.
 
         Returns:
             A ``ProgressiveFileSink`` whose :meth:`completed_triples` returns
@@ -412,7 +419,12 @@ class ProgressiveFileSink:
             raise ValueError(f"Incompatible state format version: {fmt} (expected {STATE_FORMAT_VERSION})")
 
         output_path = Path(state_data["output_path"])
-        config = VerificationConfig(**state_data["config"])
+        config_data = state_data["config"]
+        if manual_traces is not None:
+            for model in config_data.get("answering_models", []):
+                if model.get("interface") == "manual":
+                    model["manual_traces"] = manual_traces
+        config = VerificationConfig(**config_data)
         if config_updater is not None:
             config = config_updater(config)
         if _has_masked_secrets(config):
@@ -796,13 +808,17 @@ class AgenticProgressiveFileSink(ProgressiveFileSink):
         *,
         global_rubric: Rubric | None = None,
         config_updater: Callable[[VerificationConfig], VerificationConfig] | None = None,
+        manual_traces: Any | None = None,
         trace_output_dir: Path | None = None,
         trace_layout: str = "question",
         keep_progress_sidecars: bool = False,
         write_partial_export: bool = True,
     ) -> AgenticProgressiveFileSink:
         base = ProgressiveFileSink.load_for_resume(
-            state_path, global_rubric=global_rubric, config_updater=config_updater
+            state_path,
+            global_rubric=global_rubric,
+            config_updater=config_updater,
+            manual_traces=manual_traces,
         )
         sink = cls(
             output_path=base.output_path,

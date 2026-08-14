@@ -159,3 +159,31 @@ class TestMaskRunConfiguration:
             "password": None,
         }
         assert source["models"][0]["token"] == "secret"
+
+    def test_masks_model_secrets_but_preserves_token_limits_and_timeouts(self) -> None:
+        model = ModelConfig(
+            id="answerer",
+            model_provider="anthropic",
+            model_name="claude-sonnet-4-20250514",
+            interface="langchain",
+            max_tokens=8192,
+            max_context_tokens=100000,
+            request_timeout=120.0,
+            mcp_http_timeout=15.0,
+            anthropic_api_key="private-key",
+            extra_kwargs={"openrouter_apikey": "or-private-key", "credentials": {"api_key": "extra-private-key"}},
+        )
+
+        masked = mask_run_configuration({"answering_models": [model.model_dump(mode="json")]})
+
+        entry = masked["answering_models"][0]
+        assert entry["max_tokens"] == 8192
+        assert entry["max_context_tokens"] == 100000
+        assert entry["request_timeout"] == 120.0
+        assert entry["mcp_http_timeout"] == 15.0
+        assert entry["extra_kwargs"]["openrouter_apikey"] == "**********"
+        assert entry["model_name"] == "claude-sonnet-4-20250514"
+        assert entry["id"] == "answerer"
+        assert entry["anthropic_api_key"] == "**********"
+        assert entry["extra_kwargs"]["credentials"]["api_key"] == "**********"
+        assert "private-key" not in json.dumps(masked)
