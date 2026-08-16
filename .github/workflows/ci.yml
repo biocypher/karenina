@@ -22,7 +22,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --dev --no-sources-package karenina
 
       - name: Run tests
         run: uv run pytest -v
