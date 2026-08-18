@@ -9,7 +9,7 @@
 
 **Turning domain expertise into multi-dimensional evaluation of biomedical AI**
 
-[Paper](#-the-paper) • [About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
+[Paper](#-the-paper) • [About](#-about-karenina) • [The Problem](#-the-problem) • [Getting Started](#-getting-started) • [CLI](#-command-line-interface) • [Skills](#-agent-skills) • [Features](#-key-features) • [Architecture](#%EF%B8%8F-architecture) • [Installation](#-installation) • [Docs](#-documentation) • [Contributing](#-contributing)
 
 </div>
 
@@ -50,6 +50,7 @@ The rest of this README explains how these pieces fit together, starting with [w
   - [Beyond Correctness: Rubric Evaluation](#beyond-correctness-rubric-evaluation)
 - [Getting Started](#-getting-started)
 - [Command-Line Interface](#-command-line-interface)
+- [Agent Skills](#-agent-skills)
 - [Key Features](#-key-features)
 - [Architecture](#%EF%B8%8F-architecture)
 - [Installation](#-installation)
@@ -339,6 +340,16 @@ karenina serve --port 8080
 
 [CLI Reference](docs/reference/cli/index.md)
 
+## 🤖 Agent Skills
+
+Karenina ships **agent skills**: instruction packs that teach a coding agent how to drive the framework. One family covers *using* karenina (building benchmarks, authoring templates and rubrics, configuring the pipeline, reading results), the other covers *extending* it with a new adapter so karenina can talk to another LLM SDK or agent framework. They live in [`skills/`](skills/), are versioned with the library, and follow the [Agent Skills](https://agentskills.io) format, so Claude Code, Codex, Pi and other compatible agents can all load them:
+
+```bash
+./skills/install.sh --help
+```
+
+[Skills overview and installation](skills/README.md)
+
 ## ✨ Key Features
 
 - **[Structured evaluation via answer templates](docs/core_concepts/answer-templates.md)**: Pydantic models parsed by a Judge LLM, verified programmatically
@@ -470,7 +481,7 @@ Then open your browser to `http://127.0.0.1:8000`.
 - [**Installation Guide**](docs/getting-started/installation.md): Setup and requirements
 - [**Quick Start: Benchmark**](docs/getting-started/quickstart.md): Your first evaluation end-to-end
 - [**Quick Start: TaskEval**](docs/getting-started/quickstart-taskeval.md): Evaluate pre-recorded outputs
-- [**Agent Skills**](docs/skills.md): Instruction packs for coding agents — install into `.claude/skills/`
+- [**Agent Skills**](skills/README.md): Instruction packs for coding agents, for using and for extending karenina
 
 ### Core Concepts
 - [**Answer Templates**](docs/core_concepts/answer-templates.md): Structured correctness verification
