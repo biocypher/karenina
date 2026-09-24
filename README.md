@@ -6,6 +6,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue)](http://mypy-lang.org/)
+[![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.09.01.748513-b31b1b.svg)](https://www.biorxiv.org/content/10.64898/2026.09.01.748513v1)
 
 **Turning domain expertise into multi-dimensional evaluation of biomedical AI**
 
@@ -25,11 +26,11 @@
 
 </div>
 
-Karenina is the framework presented in the forthcoming paper, *Turning Domain Expertise into Multi-Dimensional Evaluation of Biomedical AI with Karenina*:
+Karenina is the framework presented in the paper [*Turning Domain Expertise into Multi-Dimensional Evaluation of Biomedical AI with Karenina*](https://www.biorxiv.org/content/10.64898/2026.09.01.748513v1), now available as a preprint on bioRxiv:
 
 > Language models and agents increasingly inform decisions about human health, yet current benchmarks reward correct answers even when the underlying reasoning is flawed, measuring narrow, static tasks that poorly reflect real use. Closing this gap demands multi-dimensional evaluations built by experts, but expert knowledge does not translate directly into benchmarks: criteria must be made testable, applied consistently to open-ended output, and revised as models change. Here we introduce Karenina, an open-source framework that turns expert knowledge into such evaluations at scale. We apply it across settings of increasing agency: drug-discovery questions, multi-turn conversations, and autonomous bioinformatics agents. Reading dimensions together exposed what single scores concealed: answers correct yet ungrounded in the retrieved evidence; failures of biological reasoning masked by flawless workflow execution; models abandoning correct answers when challenged with false claims. Reading these dimensions together moves evaluation beyond scoring, enabling trustworthy decision-making with AI in biomedicine.
 
-**Status:** the manuscript is in preparation. A link to the preprint will be added here once it is available.
+📄 **Preprint:** [www.biorxiv.org/content/10.64898/2026.09.01.748513v1](https://www.biorxiv.org/content/10.64898/2026.09.01.748513v1)
 
 Every evaluation reported in the paper was run with this library, using the workflows that are already documented here: [answer templates](docs/core_concepts/answer-templates.md) and [rubrics](docs/core_concepts/rubrics/index.md) over [MCP tool access](docs/core_concepts/mcp-overview.md) for the drug-discovery questions, [scenarios](docs/core_concepts/scenarios/index.md) for the multi-turn interactions, and [agentic evaluation](docs/core_concepts/agentic-evaluation.md) with workspace-inspecting judges for the bioinformatics tasks. The benchmark definitions and analysis code needed to reproduce the published figures and tables will be released shortly, and linked from here.
 
