@@ -510,7 +510,7 @@ class TestRubricDataFrameAgenticSupport:
         assert cq_row["investigation_trace"].iloc[0] == "I examined the code and found it well-structured."
 
         fi_row = df[df["trait_name"] == "FollowsInstructions"]
-        assert fi_row["investigation_trace"].iloc[0] is None
+        assert pd.isna(fi_row["investigation_trace"].iloc[0])
 
     def test_investigation_trace_none_when_no_traces(
         self,
