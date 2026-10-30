@@ -403,6 +403,30 @@ class TestLimits:
         with pytest.raises(AgentTimeoutError, match="no messages"):
             await _agent(models).arun([Message.user("Q")], config=AgentConfig(timeout=0.1))
 
+    @pytest.mark.parametrize("hung_stage", ["connect", "list_tools"])
+    async def test_hung_mcp_setup_is_bounded_by_the_run_timeout(
+        self, hung_stage: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def connect(_stack: Any, _servers: dict[str, Any]) -> dict[str, Any]:
+            if hung_stage == "connect":
+                await asyncio.sleep(5)
+            return {"s": object()}
+
+        async def list_tools(_sessions: dict[str, Any]) -> list[tuple[str, Any, Any]]:
+            await asyncio.sleep(5)
+            return []
+
+        monkeypatch.setattr(agent_module, "connect_all_mcp_servers", connect)
+        monkeypatch.setattr(agent_module, "get_all_mcp_tools", list_tools)
+        models = FakeModels(responses=[response([text_part("never")])])
+        with pytest.raises(AgentTimeoutError, match="no messages"):
+            await _agent(models).arun(
+                [Message.user("Q")],
+                mcp_servers={"s": {"type": "http", "url": "http://localhost:1/mcp"}},
+                config=AgentConfig(timeout=0.1),
+            )
+        assert models.calls == []
+
     async def test_per_call_timeout_is_not_mistaken_for_the_run_timeout(self) -> None:
         models = FakeModels(responses=[Delay(5), Delay(5), response([text_part("never")])])
         adapter = _agent(models, request_timeout=0.05, retry_policy=fast_policy(timeout=1))

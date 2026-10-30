@@ -192,7 +192,6 @@ class GoogleGenAIAgentAdapter:
     ) -> AgentResult:
         """Set up tools and contents, run the loop, and build the result."""
         options = self._settings.run_options(config.extra)
-        toolset = await self._build_toolset(exit_stack, tools, mcp_servers)
         system_instruction = (
             extract_system_instruction(messages) or config.system_prompt or self._settings.system_prompt
         )
@@ -205,6 +204,9 @@ class GoogleGenAIAgentAdapter:
         scope = asyncio.timeout(config.timeout)
         try:
             async with scope:
+                # MCP setup counts against the run's timeout, so a hung
+                # initialize or list_tools cannot outlive it.
+                toolset = await self._build_toolset(exit_stack, tools, mcp_servers)
                 await self._turn_loop(state, toolset, options, system_instruction, config.max_turns)
         except TimeoutError:
             if not scope.expired():
