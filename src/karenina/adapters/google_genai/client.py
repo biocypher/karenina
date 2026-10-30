@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from karenina.ports import AdapterUnavailableError
 
-from .errors import AUTH_HINT, GeminiAuthError
+from .errors import translate_auth_error
 
 if TYPE_CHECKING:
     from .settings import GoogleGenAISettings
@@ -53,6 +53,8 @@ def build_client(settings: GoogleGenAISettings) -> Any:
             client arguments.
         GeminiAuthError: If Google application default credentials are
             missing or cannot be loaded.
+        GeminiConnectionError: If loading the credentials failed for a
+            network reason.
     """
     try:
         from google import genai
@@ -85,7 +87,7 @@ def build_client(settings: GoogleGenAISettings) -> Any:
             )
         return genai.Client(api_key=api_key, http_options=http_options)
     except GoogleAuthError as e:
-        raise GeminiAuthError(f"{AUTH_HINT} ({type(e).__name__}: {e})") from e
+        raise translate_auth_error(e) from e
     except ValueError as e:
         raise AdapterUnavailableError(f"Could not create the google-genai client: {e}", reason=str(e)) from e
 

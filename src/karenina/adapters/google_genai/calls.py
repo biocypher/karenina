@@ -32,12 +32,11 @@ from google.genai import errors as genai_errors
 from karenina.benchmark.verification.async_lifecycle import get_global_llm_limiter
 
 from .errors import (
-    AUTH_HINT,
-    GeminiAuthError,
     GeminiClientError,
     GeminiFinishReasonError,
     GeminiIncompleteResponseError,
     translate_api_error,
+    translate_auth_error,
 )
 from .grounding import GroundingInfo, merge_candidate_metadata
 
@@ -315,23 +314,34 @@ def build_generate_config(
     return types.GenerateContentConfig(**kwargs)
 
 
+_MAX_RAW_RESPONSE_CHARS = 300
+
+
 @contextlib.contextmanager
 def translated_sdk_errors() -> Iterator[None]:
     """Translate SDK and auth exceptions raised in the block into port errors.
 
     Raises:
         GeminiAPIError: For ``google.genai.errors.APIError``.
-        GeminiAuthError: For ``google.auth`` errors.
-        GeminiClientError: For ``ValueError``, which the SDK raises for
-            requests it cannot send (for example a field the backend does
-            not support). Never retried.
+        GeminiIncompleteResponseError: For a response body or stream chunk
+            that is not JSON (``UnknownApiResponseError``). Retried.
+        GeminiConnectionError: For a network failure while refreshing
+            Google credentials. Retried.
+        GeminiAuthError: For other ``google.auth`` errors (login missing,
+            expired or refused). Never retried.
+        GeminiClientError: For other ``ValueError``s, which the SDK raises
+            for requests it cannot send (for example a field the backend
+            does not support). Never retried.
     """
     try:
         yield
     except genai_errors.APIError as e:
         raise translate_api_error(e) from e
+    except genai_errors.UnknownApiResponseError as e:
+        detail = str(e)[:_MAX_RAW_RESPONSE_CHARS]
+        raise GeminiIncompleteResponseError(f"Gemini returned a response that is not JSON: {detail}") from e
     except GoogleAuthError as e:
-        raise GeminiAuthError(f"{AUTH_HINT} ({type(e).__name__}: {e})") from e
+        raise translate_auth_error(e) from e
     except ValueError as e:
         raise GeminiClientError(f"Gemini request rejected by the SDK: {e}") from e
 
@@ -364,8 +374,8 @@ async def generate(
     Raises:
         GeminiAPIError: An API error, after retries for transient ones.
         GeminiAuthError: Missing or expired Google credentials.
-        GeminiIncompleteResponseError: No finish reason or an empty STOP,
-            after retries.
+        GeminiIncompleteResponseError: No finish reason, an empty STOP, or
+            a non-JSON response, after retries.
         GeminiFinishReasonError: The prompt itself was blocked.
         TimeoutError: The per-attempt guard fired on every attempt.
     """

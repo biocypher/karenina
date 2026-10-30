@@ -47,16 +47,25 @@ class GeminiServerError(GeminiAPIError):
 
 
 class GeminiAuthError(PortError):
-    """Google credentials are missing or could not be refreshed. Permanent."""
+    """Google credentials are missing or were refused. Permanent."""
+
+
+class GeminiConnectionError(PortError):
+    """A transient network failure outside the API call itself.
+
+    Raised when refreshing Google credentials fails for a network reason
+    (``google.auth`` TransportError, or a RefreshError marked retryable).
+    Retried with the connection budget.
+    """
 
 
 class GeminiIncompleteResponseError(PortError):
     """A call returned no usable answer.
 
     Raised when a call ends without a finish reason (for example a stream
-    cut short), or when it stops with STOP but holds no text and no function
-    call. Treated as a server error and retried, never returned as an empty
-    answer.
+    cut short), when it stops with STOP but holds no text and no function
+    call, or when a response body is not JSON. Treated as a server error and
+    retried, never returned as an empty answer.
     """
 
 
@@ -100,6 +109,28 @@ def translate_api_error(exc: Any) -> GeminiAPIError:
     return GeminiClientError(message, code=code, status=status)
 
 
+def translate_auth_error(exc: Exception) -> PortError:
+    """Translate a ``google.auth`` exception into a port error.
+
+    Network failures while refreshing credentials are transient. Every
+    other auth failure means the login is missing, expired or refused.
+
+    Args:
+        exc: A ``google.auth.exceptions.GoogleAuthError``.
+
+    Returns:
+        GeminiConnectionError for a TransportError or a retryable error,
+        GeminiAuthError (with the login hint) otherwise. The caller raises
+        it with ``from exc``.
+    """
+    from google.auth.exceptions import TransportError
+
+    detail = f"{type(exc).__name__}: {exc}"
+    if isinstance(exc, TransportError) or getattr(exc, "retryable", False):
+        return GeminiConnectionError(f"Network failure while refreshing Google credentials ({detail})")
+    return GeminiAuthError(f"{AUTH_HINT} ({detail})")
+
+
 def build_error_registry() -> ErrorRegistry:
     """Build the adapter's ErrorRegistry with the google_genai patterns.
 
@@ -115,6 +146,7 @@ def build_error_registry() -> ErrorRegistry:
     registry.register(GeminiRateLimitError, ErrorCategory.RATE_LIMIT)
     registry.register(GeminiServerError, ErrorCategory.SERVER_ERROR)
     registry.register(GeminiIncompleteResponseError, ErrorCategory.SERVER_ERROR)
+    registry.register(GeminiConnectionError, ErrorCategory.CONNECTION)
     # Raw SDK errors, in case one escapes translation.
     registry.register("ServerError", ErrorCategory.SERVER_ERROR)
     registry.register_pattern("resource_exhausted", ErrorCategory.RATE_LIMIT)
