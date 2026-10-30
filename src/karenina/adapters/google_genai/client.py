@@ -8,8 +8,9 @@ Builds ``genai.Client`` for either backend (design D3):
   for example the EBI POC gateway.
 
 The SDK's own HTTP retries are switched off (``HttpRetryOptions(attempts=1)``)
-because ``RetryExecutor`` is the only retry layer (design D6), and
-``request_timeout`` is passed as ``HttpOptions.timeout`` in milliseconds.
+because ``RetryExecutor`` is the only retry layer (design D6). The request
+timeout is not set here: ``calls.py`` passes it per attempt, so a timeout
+escalated by the retry policy can lengthen a call.
 
 The SDK's async transport (aiohttp when installed) is bound to the event
 loop that first used it, while karenina may call one adapter from several
@@ -64,8 +65,6 @@ def build_client(settings: GoogleGenAISettings) -> Any:
         raise AdapterUnavailableError(_INSTALL_HINT, reason="google-genai not installed") from e
 
     http_kwargs: dict[str, Any] = {"retry_options": types.HttpRetryOptions(attempts=1)}
-    if settings.request_timeout is not None:
-        http_kwargs["timeout"] = int(settings.request_timeout * 1000)
     if settings.base_url:
         http_kwargs["base_url"] = settings.base_url
     http_options = types.HttpOptions(**http_kwargs)

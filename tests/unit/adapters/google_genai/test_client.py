@@ -34,7 +34,8 @@ class TestBuildClient:
         http_options = kwargs["http_options"]
         # RetryExecutor is the only retry layer (design D6).
         assert http_options.retry_options.attempts == 1
-        assert http_options.timeout == 30_000
+        # The timeout travels with each request instead (see test_request_timeout.py).
+        assert http_options.timeout is None
         assert http_options.base_url is None
 
     def test_gemini_api_client_uses_key_and_base_url(self) -> None:

@@ -7,6 +7,8 @@ whole agent run. Each attempt:
 - holds one ``GlobalLLMLimiter`` permit for the call only (design D13),
 - runs under the ``request_timeout`` wall-clock guard,
 - translates SDK errors into port errors (``errors.py``),
+- passes ``request_timeout`` as the request's own HTTP timeout, so a
+  timeout escalated by the retry policy really lengthens the call,
 - for a stream, accumulates parts, usage and grounding across chunks,
 - fails as ``GeminiIncompleteResponseError`` (retried) when the call ends
   without a finish reason, or with STOP but no text and no function call,
@@ -314,6 +316,29 @@ def build_generate_config(
     return types.GenerateContentConfig(**kwargs)
 
 
+def with_request_timeout(config: Any, timeout: float | None) -> Any:
+    """Return ``config`` with the attempt's timeout as its own HTTP timeout.
+
+    The SDK applies ``HttpOptions.timeout`` per request (an aiohttp total
+    timeout), so setting it per attempt, rather than once on the client,
+    lets an escalated retry timeout really lengthen the call. The client's
+    other HTTP options (base URL, retries off) still apply.
+
+    Args:
+        config: The ``GenerateContentConfig``.
+        timeout: The attempt's timeout in seconds, or None to leave the
+            config unchanged.
+
+    Returns:
+        A copy of the config carrying the timeout, or the config itself.
+    """
+    if timeout is None:
+        return config
+    from google.genai import types
+
+    return config.model_copy(update={"http_options": types.HttpOptions(timeout=int(timeout * 1000))})
+
+
 _MAX_RAW_RESPONSE_CHARS = 300
 
 
@@ -395,10 +420,11 @@ async def _attempt(
     timeout: float | None,
 ) -> CallOutcome:
     """One call attempt under a limiter permit and the wall-clock guard."""
+    attempt_config = with_request_timeout(config, timeout)
     async with get_global_llm_limiter().borrow():
         with translated_sdk_errors():
             genai_client = client.get()
-            call = (_call_streamed if stream else _call_once)(genai_client, model, contents, config)
+            call = (_call_streamed if stream else _call_once)(genai_client, model, contents, attempt_config)
             outcome = await (call if timeout is None else asyncio.wait_for(call, timeout=timeout))
     ensure_complete(outcome, stream=stream)
     return outcome

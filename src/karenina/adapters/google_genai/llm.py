@@ -42,6 +42,7 @@ from .calls import (
     generate,
     raise_for_llm_finish,
     translated_sdk_errors,
+    with_request_timeout,
 )
 from .client import GenAIClientHolder
 from .errors import GeminiClientError, build_error_registry
@@ -328,7 +329,7 @@ class GoogleGenAILLMAdapter:
             with translated_sdk_errors():
                 client = self._client.get()
                 opening = client.aio.models.generate_content_stream(
-                    model=self._settings.model_name, contents=contents, config=config
+                    model=self._settings.model_name, contents=contents, config=with_request_timeout(config, timeout)
                 )
                 return await (opening if timeout is None else asyncio.wait_for(opening, timeout=timeout))
 
