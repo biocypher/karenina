@@ -50,9 +50,9 @@ from karenina.benchmark.verification.workspace_capture import safe_path_componen
 from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.entities import Rubric
 from karenina.schemas.results import VerificationResultSet
-from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationJob
+from karenina.utils.errors import ErrorCategory
 from karenina.utils.file_ops import atomic_write
 from karenina.utils.progressive_save import TaskIdentifier
 
@@ -101,12 +101,69 @@ def _is_parser_stage(stage: str | None) -> bool:
 # infrastructure failures that leave the answer trace usable.
 _AGENTIC_RUBRIC_STAGE = "AgenticRubricEvaluation"
 
+# Failure categories produced when a transient error exhausted its retries.
+_TRANSIENT_FAILURE_CATEGORIES = frozenset(
+    {
+        FailureCategory.CONNECTION.value,
+        FailureCategory.TIMEOUT.value,
+        FailureCategory.RATE_LIMIT.value,
+        FailureCategory.SERVER_ERROR.value,
+    }
+)
+
 
 def _has_usable_answer_trace(result: VerificationResult) -> bool:
     template = result.template
     if template is None:
         return False
     return bool((template.raw_llm_response or "").strip())
+
+
+def _is_retryable_judge_failure(result: VerificationResult) -> bool:
+    """Return True when an agentic rubric judge failed for a retryable reason.
+
+    The row keeps a usable answer, so resume re-runs the task and the
+    executor reuses that answer (only the judge runs again). A judge failure
+    counts when ``rubric.agentic_trait_evaluation_errors`` holds an error
+    whose category is not ``permanent``, or when the row failed at the
+    agentic rubric stage with a transient failure category. Permanent errors
+    (for example a bad model name) are never retried, because they would
+    fail again on every resume. Scenario rows are not retried this way:
+    their task is the whole scenario, not one turn.
+    """
+    if result.metadata.scenario_id is not None or not _has_usable_answer_trace(result):
+        return False
+    errors = result.rubric.agentic_trait_evaluation_errors if result.rubric is not None else None
+    if errors and any(error.get("category") != ErrorCategory.PERMANENT.value for error in errors.values()):
+        return True
+    failure = result.metadata.failure
+    return (
+        failure is not None
+        and _failure_attr(failure, "stage") == _AGENTIC_RUBRIC_STAGE
+        and _failure_attr(failure, "category") in _TRANSIENT_FAILURE_CATEGORIES
+    )
+
+
+def _latest_rows_for_export(rows: Iterable[VerificationResult], *, manifest: Iterable[str]) -> list[VerificationResult]:
+    """Keep the latest row of each QA task and every scenario turn row, in order.
+
+    A QA task re-run on resume (see :func:`_is_retryable_judge_failure`)
+    appends a second JSONL line for the same task. Only the newest one is
+    exported. Scenario tasks append one row per turn and are kept as they are.
+    """
+    exported: list[VerificationResult] = []
+    position: dict[str, int] = {}
+    for row in rows:
+        if row.metadata.scenario_id is not None:
+            exported.append(row)
+            continue
+        key = _scenario_manifest_key(row, manifest)
+        if key in position:
+            exported[position[key]] = row
+        else:
+            position[key] = len(exported)
+            exported.append(row)
+    return exported
 
 
 def _is_retryable_parser_failure(result: VerificationResult) -> bool:
@@ -123,10 +180,12 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     parser input, so the task must not be skipped just because the timeout row
     already exists in the JSONL sidecar.
 
-    Agentic rubric rows whose judge investigation failed are retried too: the
-    failure is the judge's infrastructure, not a judgment of the answer. The
-    caveat catches rows whose failure category was set by an earlier rule.
+    Agentic rubric rows whose judge failed for a retryable reason are retried
+    too (see :func:`_is_retryable_judge_failure`).
     """
+
+    if _is_retryable_judge_failure(result):
+        return True
 
     failure = result.metadata.failure
     if failure is None or not _has_usable_answer_trace(result):
@@ -135,8 +194,6 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     category = _failure_attr(failure, "category")
     stage = _failure_attr(failure, "stage")
     if stage == "GenerateAnswer" and category == FailureCategory.TIMEOUT.value:
-        return True
-    if stage == _AGENTIC_RUBRIC_STAGE or Caveat.AGENTIC_INVESTIGATION_FAILED in result.metadata.caveats:
         return True
     return bool(category == FailureCategory.PARSING.value or _is_parser_stage(stage))
 
@@ -542,9 +599,14 @@ class ProgressiveFileSink:
     # -- ResultSink protocol ----------------------------------------------
 
     def completed_triples(self) -> set[TripleKey]:
-        """Return already-persisted triples for ``config.skip_triples``."""
+        """Return already-persisted triples for ``config.skip_triples``.
+
+        Rows whose agentic rubric judge failed for a retryable reason are left
+        out, so resume re-runs them (the executor reuses their answer). See
+        :func:`_is_retryable_judge_failure`.
+        """
         with self._lock:
-            completed_snapshot = set(self._completed)
+            completed_snapshot = set(self._completed) - self._retryable_judge_keys()
         out: set[TripleKey] = set()
         for key in completed_snapshot:
             try:
@@ -635,11 +697,22 @@ class ProgressiveFileSink:
         """Handle terminal state.
 
         On ``all_complete=True``, write the final frontend-export JSON at
-        :attr:`output_path` and remove the sidecars. On partial completion,
-        keep the sidecars intact so ``resume`` can continue.
+        :attr:`output_path` and remove the sidecars. If some rows still have
+        a retryable agentic judge failure, the export is written but marked
+        incomplete and the sidecars are kept, so ``resume`` can re-run them.
+        On partial completion, keep the sidecars intact so ``resume`` can
+        continue.
         """
         with self._lock:
-            if all_complete:
+            retryable = self._retryable_judge_keys()
+            if all_complete and retryable:
+                self.write_final_export(is_complete=False)
+                self._save_state()
+                logger.info(
+                    "ProgressiveFileSink kept state for resume: %d task(s) with a retryable agentic judge failure",
+                    len(retryable),
+                )
+            elif all_complete:
                 self.write_final_export()
                 self._delete_sidecars()
                 logger.info("ProgressiveFileSink finalized: full export at %s", self.output_path)
@@ -658,9 +731,9 @@ class ProgressiveFileSink:
 
     @property
     def completed_count(self) -> int:
-        """Number of completed tasks."""
+        """Number of completed tasks, not counting those resume will re-run."""
         with self._lock:
-            return len(self._completed)
+            return len(self._completed - self._retryable_judge_keys())
 
     @property
     def total_tasks(self) -> int:
@@ -692,9 +765,13 @@ class ProgressiveFileSink:
             return iter(list(self._results))
 
     def get_result_set(self) -> VerificationResultSet:
-        """Return buffered results as a :class:`VerificationResultSet`."""
+        """Return buffered results as a :class:`VerificationResultSet`.
+
+        Like the final export, a QA task re-run on resume contributes only
+        its latest row.
+        """
         with self._lock:
-            return VerificationResultSet(results=list(self._results))
+            return VerificationResultSet(results=_latest_rows_for_export(self._results, manifest=self._manifest))
 
     def set_global_rubric(self, rubric: Rubric | None) -> None:
         """Attach a global rubric used by the final export."""
@@ -722,11 +799,16 @@ class ProgressiveFileSink:
         }
         atomic_write(self.state_path, json.dumps(state, indent=2))
 
-    def write_final_export(self, output_path: Path | None = None) -> Path:
+    def write_final_export(self, output_path: Path | None = None, *, is_complete: bool | None = True) -> Path:
         """Assemble and atomically write the frontend-export JSON.
+
+        Only the latest row of each QA task is exported (a task re-run on
+        resume has two JSONL rows). Scenario turn rows are all kept.
 
         Args:
             output_path: Destination. Defaults to :attr:`output_path`.
+            is_complete: Value of the export's ``is_complete`` flag. None
+                means True.
 
         Returns:
             The path the export was written to.
@@ -755,13 +837,21 @@ class ProgressiveFileSink:
             scenario_results = _reconstruct_scenario_results_for_export(results, manifest=self._manifest)
             export_verification_results_json_stream(
                 job,
-                iter(results),
+                iter(_latest_rows_for_export(results, manifest=self._manifest)),
                 self.global_rubric,
-                is_complete=True,
+                is_complete=is_complete is not False,
                 scenario_results=scenario_results or None,
                 out_path=target,
             )
             return target
+
+    def _retryable_judge_keys(self) -> set[str]:
+        """Manifest keys whose latest row has a retryable agentic judge failure.
+
+        Callers hold ``self._lock``.
+        """
+        latest_rows = _dedupe_latest_by_manifest_key(self._results, manifest=self._manifest)
+        return {_scenario_manifest_key(row, self._manifest) for row in latest_rows if _is_retryable_judge_failure(row)}
 
     def _delete_sidecars(self) -> None:
         """Remove the ``.state`` and ``.results.jsonl`` files."""
