@@ -535,3 +535,74 @@ class TestValidateAgentSupport:
                 higher_is_better=True,
                 model_override=override,
             )
+
+
+# ------------------------------------------------------------------
+# Shared strategy
+# ------------------------------------------------------------------
+
+
+def _make_shared_context(agentic_traits, mcp_urls_dict=None):
+    """Build a context that runs the shared strategy with an optional MCP judge."""
+    ctx = _make_context(agentic_traits=agentic_traits)
+    ctx.parsing_model = ModelConfig(
+        id="judge",
+        model_name="judge-model",
+        model_provider="anthropic",
+        interface="claude_agent_sdk",
+        mcp_urls_dict=mcp_urls_dict,
+    )
+    ctx.agentic_rubric_strategy = "shared"
+    return ctx
+
+
+def _make_shared_agent_result(raw_trace="Shared investigation."):
+    from karenina.ports import AgentResult, Message
+    from karenina.ports.usage import UsageMetadata
+
+    return AgentResult(
+        final_response="Done.",
+        raw_trace=raw_trace,
+        trace_messages=[Message.assistant("Done.")],
+        usage=UsageMetadata(input_tokens=40, output_tokens=10, total_tokens=50),
+        turns=2,
+        limit_reached=False,
+    )
+
+
+@pytest.mark.unit
+class TestSharedStrategy:
+    """Tests for the shared investigation strategy."""
+
+    def test_shared_agent_receives_judge_mcp_servers(self, monkeypatch):
+        import karenina.adapters as adapters_pkg
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_shared_agent_result()
+        monkeypatch.setattr(adapters_pkg, "get_agent", lambda _model: fake_agent)
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.run_extraction.return_value = True
+        fake_evaluator.last_extraction_metadata = None
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_shared_context(
+            [_make_trait(name="a"), _make_trait(name="b")],
+            mcp_urls_dict={"citations": "http://localhost:8765/mcp"},
+        )
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        fake_agent.run.assert_called_once()
+        assert fake_agent.run.call_args.kwargs["mcp_servers"] == {
+            "citations": {"type": "http", "url": "http://localhost:8765/mcp"},
+        }
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"a": True, "b": True}
+        traces = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+        assert traces == {"a": "Shared investigation.", "b": "Shared investigation."}

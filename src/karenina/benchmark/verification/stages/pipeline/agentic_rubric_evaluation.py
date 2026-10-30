@@ -14,6 +14,7 @@ from typing import Any
 from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
+from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
@@ -363,7 +364,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 workspace_path=workspace_path if workspace_path else None,
             )
 
-            result = agent.run(messages=messages, config=agent_config)
+            result = agent.run(
+                messages=messages,
+                mcp_servers=build_mcp_servers(first_model),
+                config=agent_config,
+            )
             shared_trace = result.raw_trace
         except Exception:
             logger.warning(

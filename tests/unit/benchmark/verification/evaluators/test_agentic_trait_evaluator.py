@@ -562,3 +562,151 @@ class TestTraceMaterialization:
         user_text = user_msgs[0].text
         assert "Inline trace content" in user_text
         assert "/tmp/test_trace.txt" not in user_text
+
+
+def _make_mcp_model_config() -> ModelConfig:
+    """Create a judge ModelConfig with one MCP server."""
+    return ModelConfig(
+        id="test-agent-model",
+        model_name="test-model",
+        model_provider="anthropic",
+        interface="claude_agent_sdk",
+        mcp_urls_dict={"citations": "http://localhost:8765/mcp"},
+    )
+
+
+@pytest.mark.unit
+class TestJudgeMcpServers:
+    """A judge with MCP servers investigates through AgentPort with those servers."""
+
+    def test_trace_only_judge_with_mcp_uses_agent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """trace_only with no workspace takes the agent path when mcp_urls_dict is set."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result(raw_trace="Looked up the citation.")
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+
+        def _no_llm(_model: ModelConfig) -> None:
+            raise AssertionError("an MCP judge must not use the single-call LLM path")
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_llm", _no_llm)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_mcp_model_config())
+        score, trace = evaluator.evaluate_trait(
+            trait=_make_trait(context_mode="trace_only"),
+            question_text="Q",
+            raw_llm_response="See PMID 123.",
+            workspace_path=None,
+        )
+
+        assert score is True
+        assert trace == "Looked up the citation."
+        fake_agent.run.assert_called_once()
+        assert fake_agent.run.call_args.kwargs["mcp_servers"] == {
+            "citations": {"type": "http", "url": "http://localhost:8765/mcp"},
+        }
+
+    def test_trace_only_judge_without_mcp_keeps_llm_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A built-in-only judge (no MCP) still makes a single LLM call."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
+
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(
+            content="Verdict: fine.",
+            usage=UsageMetadata(input_tokens=10, output_tokens=5),
+        )
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+
+        def _no_agent(_model: ModelConfig) -> None:
+            raise AssertionError("a judge without MCP servers must keep the LLM path")
+
+        monkeypatch.setattr(agentic_trait, "get_agent", _no_agent)
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        score, _trace = evaluator.evaluate_trait(
+            trait=_make_trait(context_mode="trace_only"),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path=None,
+        )
+
+        assert score is True
+        fake_llm.invoke.assert_called_once()
+
+    @pytest.mark.parametrize(
+        ("model_config", "expected_servers"),
+        [
+            (_make_model_config(), {}),
+            (
+                _make_mcp_model_config(),
+                {"citations": {"type": "http", "url": "http://localhost:8765/mcp"}},
+            ),
+        ],
+    )
+    def test_workspace_agent_receives_judge_mcp_servers(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        model_config: ModelConfig,
+        expected_servers: dict[str, dict[str, str]],
+    ) -> None:
+        """The agent path passes mcp_servers built exactly like generate_answer."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_agent_result()
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=model_config)
+        evaluator.evaluate_trait(
+            trait=_make_trait(context_mode="workspace_only"),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path="/tmp/workspace",
+        )
+
+        assert fake_agent.run.call_args.kwargs["mcp_servers"] == expected_servers
+
+    def test_mcp_judge_prompt_mentions_tools(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without file or code tools, an MCP judge is told to use its tools, not only the text."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports import PortCapabilities
+
+        fake_agent = MagicMock()
+        fake_agent.capabilities = PortCapabilities()
+        fake_agent.run.return_value = _make_agent_result()
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_mcp_model_config())
+        evaluator.evaluate_trait(
+            trait=_make_trait(context_mode="trace_only"),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path=None,
+        )
+
+        messages = fake_agent.run.call_args.kwargs["messages"]
+        system_text = next(m.text for m in messages if m.role == Role.SYSTEM)
+        assert "tools available to you" in system_text
+        assert "Use only the response text" not in system_text
+
+    def test_build_mcp_servers_empty_without_urls(self) -> None:
+        """build_mcp_servers returns an empty mapping when no MCP servers are configured."""
+        from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
+
+        assert build_mcp_servers(_make_model_config()) == {}

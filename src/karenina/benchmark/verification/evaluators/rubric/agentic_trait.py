@@ -36,6 +36,26 @@ logger = logging.getLogger(__name__)
 AgenticTraitExtractionMetadata = dict[str, str | None]
 
 
+def build_mcp_servers(model_config: ModelConfig) -> dict[str, Any]:
+    """Build the AgentPort ``mcp_servers`` mapping for a judge model.
+
+    Mirrors the answering model's MCP wiring in the generate_answer stage:
+    every entry of ``mcp_urls_dict`` becomes a streamable HTTP server. MCP
+    timeouts are not set here. The adapter reads ``mcp_http_timeout`` and
+    ``mcp_sse_read_timeout`` from the same ModelConfig when it is created.
+
+    Args:
+        model_config: The judge's resolved ModelConfig.
+
+    Returns:
+        Mapping of server name to MCP server config, empty when the model has
+        no MCP servers.
+    """
+    if not model_config.mcp_urls_dict:
+        return {}
+    return {name: {"type": "http", "url": url} for name, url in model_config.mcp_urls_dict.items()}
+
+
 class AgenticTraitEvaluator:
     """Evaluates a single agentic rubric trait via investigation and extraction.
 
@@ -118,7 +138,9 @@ class AgenticTraitEvaluator:
         """Launch agent to investigate the response/workspace.
 
         For ``trace_only`` mode without a workspace, uses LLMPort (single
-        call) instead of AgentPort, since no tool access is needed.
+        call) instead of AgentPort, since no tool access is needed. A judge
+        whose ModelConfig sets ``mcp_urls_dict`` always uses AgentPort, so
+        it can call its MCP tools.
 
         Args:
             trait: The agentic rubric trait to evaluate.
@@ -133,10 +155,12 @@ class AgenticTraitEvaluator:
         """
         agent = None
         capabilities = PortCapabilities()
+        has_mcp_servers = bool(self._model_config.mcp_urls_dict)
         needs_tools = (
             trait.context_mode != "trace_only"
             or workspace_path is not None
             or (trait.materialize_trace and trace_file_path is not None)
+            or has_mcp_servers
         )
         if needs_tools:
             agent = get_agent(self._model_config)
@@ -150,6 +174,8 @@ class AgenticTraitEvaluator:
             )
         elif capabilities.supports_file_tools:
             execution_text = "You may inspect files, but command execution is not available."
+        elif has_mcp_servers:
+            execution_text = "Use the response text supplied in the prompt and the tools available to you."
         else:
             execution_text = "Use only the response text supplied in the prompt."
         system_text = (
@@ -245,7 +271,11 @@ class AgenticTraitEvaluator:
         *,
         agent: Any | None = None,
     ) -> str:
-        """Run investigation via AgentPort (multi-turn with tools)."""
+        """Run investigation via AgentPort (multi-turn with tools).
+
+        The judge's MCP servers (``mcp_urls_dict``) are passed to the agent
+        the same way the generate_answer stage passes the answering model's.
+        """
         if agent is None:
             agent = get_agent(self._model_config)
 
@@ -256,7 +286,11 @@ class AgenticTraitEvaluator:
         )
 
         try:
-            result = agent.run(messages=messages, config=agent_config)
+            result = agent.run(
+                messages=messages,
+                mcp_servers=build_mcp_servers(self._model_config),
+                config=agent_config,
+            )
             logger.info(
                 "Agentic rubric investigation for '%s' completed in %d turns (limit_reached=%s)",
                 trait.name,
