@@ -7,8 +7,11 @@ Two-step evaluation for agentic rubric traits:
 This mirrors the Stage 7b (AgenticParseTemplate) pattern.
 """
 
+from __future__ import annotations
+
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -20,7 +23,7 @@ from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import prepare_extraction_input
 from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
-from karenina.ports import AgentConfig, Message, PortCapabilities
+from karenina.ports import AgentConfig, Message, PortCapabilities, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 from karenina.schemas.outputs.rubric import (
@@ -34,6 +37,38 @@ from karenina.utils.json_extraction import extract_json_from_response
 logger = logging.getLogger(__name__)
 
 AgenticTraitExtractionMetadata = dict[str, str | None]
+
+
+@dataclass
+class AgenticInvestigation:
+    """Output of one agentic trait investigation.
+
+    Attributes:
+        trace: Raw investigation trace text.
+        usage: Usage reported by the agent run or the single LLM call, or None.
+    """
+
+    trace: str
+    usage: UsageMetadata | None = None
+
+
+@dataclass
+class AgenticTraitEvaluation:
+    """Outcome of evaluating one agentic rubric trait.
+
+    Attributes:
+        score: The extracted score, a dict for template kind traits, or None
+            when the investigation or the extraction failed.
+        trace: The investigation trace, or None when the investigation failed.
+        investigation_usage: Usage of the investigation, or None.
+        extraction_usage: Usage of the extraction parser call, or None when
+            the score was recovered locally or extraction failed.
+    """
+
+    score: int | bool | dict[str, Any] | None
+    trace: str | None
+    investigation_usage: UsageMetadata | None = None
+    extraction_usage: UsageMetadata | None = None
 
 
 def build_mcp_servers(model_config: ModelConfig) -> dict[str, Any]:
@@ -72,6 +107,7 @@ class AgenticTraitEvaluator:
         self._model_config = model_config
         self._prompt_config = prompt_config
         self.last_extraction_metadata: AgenticTraitExtractionMetadata | None = None
+        self.last_extraction_usage: UsageMetadata | None = None
 
     def evaluate_trait(
         self,
@@ -80,7 +116,7 @@ class AgenticTraitEvaluator:
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
         trace_file_path: Path | None = None,
-    ) -> tuple[int | bool | dict[str, Any] | None, str | None]:
+    ) -> AgenticTraitEvaluation:
         """Evaluate a single agentic rubric trait.
 
         Args:
@@ -93,13 +129,13 @@ class AgenticTraitEvaluator:
                 inlining the full trace.
 
         Returns:
-            Tuple of (score, investigation_trace).
-            score is None if evaluation failed; a dict for template kind traits.
-            investigation_trace is None if the agent failed before producing output.
+            The trait's AgenticTraitEvaluation. Its score is None if evaluation
+            failed (a dict for template kind traits). Its trace is None if the
+            agent failed before producing output.
         """
         # Step 1: Investigation
         try:
-            investigation_trace = self._run_investigation(
+            investigation = self._run_investigation(
                 trait,
                 question_text,
                 raw_llm_response,
@@ -112,20 +148,25 @@ class AgenticTraitEvaluator:
                 trait.name,
                 exc_info=True,
             )
-            return None, None
+            return AgenticTraitEvaluation(score=None, trace=None)
+
+        evaluation = AgenticTraitEvaluation(
+            score=None,
+            trace=investigation.trace,
+            investigation_usage=investigation.usage,
+        )
 
         # Step 2: Extraction
         try:
-            score = self.run_extraction(trait, investigation_trace)
+            evaluation.score = self.run_extraction(trait, investigation.trace)
         except Exception:
             logger.warning(
                 "Score extraction failed for trait '%s', preserving trace",
                 trait.name,
                 exc_info=True,
             )
-            return None, investigation_trace
-
-        return score, investigation_trace
+        evaluation.extraction_usage = self.last_extraction_usage
+        return evaluation
 
     def _run_investigation(
         self,
@@ -134,7 +175,7 @@ class AgenticTraitEvaluator:
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
         trace_file_path: Path | None = None,
-    ) -> str:
+    ) -> AgenticInvestigation:
         """Launch agent to investigate the response/workspace.
 
         For ``trace_only`` mode without a workspace, uses LLMPort (single
@@ -151,7 +192,7 @@ class AgenticTraitEvaluator:
                 the prompt references this file instead of inlining the trace.
 
         Returns:
-            Raw investigation trace string.
+            The investigation trace and its usage.
         """
         agent = None
         capabilities = PortCapabilities()
@@ -246,7 +287,7 @@ class AgenticTraitEvaluator:
         self,
         trait: AgenticRubricTrait,
         messages: list[Message],
-    ) -> str:
+    ) -> AgenticInvestigation:
         """Run investigation via LLMPort (single call, no tools).
 
         Used for trace_only mode where the trace is inlined in the prompt
@@ -259,7 +300,7 @@ class AgenticTraitEvaluator:
                 "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
                 trait.name,
             )
-            return result.content or ""
+            return AgenticInvestigation(trace=result.content or "", usage=result.usage)
         finally:
             close_adapter(llm)
 
@@ -270,7 +311,7 @@ class AgenticTraitEvaluator:
         workspace_path: Path | str | None,
         *,
         agent: Any | None = None,
-    ) -> str:
+    ) -> AgenticInvestigation:
         """Run investigation via AgentPort (multi-turn with tools).
 
         The judge's MCP servers (``mcp_urls_dict``) are passed to the agent
@@ -297,7 +338,7 @@ class AgenticTraitEvaluator:
                 result.turns,
                 result.limit_reached,
             )
-            return result.raw_trace
+            return AgenticInvestigation(trace=result.raw_trace, usage=result.usage)
         finally:
             close_adapter(agent)
 
@@ -312,11 +353,15 @@ class AgenticTraitEvaluator:
         AgenticRubricEvaluationStage needs to call it directly
         (shared investigation, per-trait extraction).
 
+        The parser call's usage is left in ``last_extraction_usage`` (None when
+        no parser call succeeded).
+
         Returns:
             The extracted score (bool for boolean traits, int for score/literal),
             or a dict for template kind traits.
         """
         self.last_extraction_metadata = None
+        self.last_extraction_usage = None
         if trait.is_template_kind:
             return self._extract_template(trait, investigation_trace)
 
@@ -348,6 +393,7 @@ class AgenticTraitEvaluator:
                     SingleBooleanScore,
                     retry_policy=self._model_config.retry_policy,
                 )
+                self.last_extraction_usage = bool_result.usage
                 return bool_result.parsed.result
 
             if trait.kind == "score":
@@ -357,6 +403,7 @@ class AgenticTraitEvaluator:
                     SingleNumericScore,
                     retry_policy=self._model_config.retry_policy,
                 )
+                self.last_extraction_usage = score_result.usage
                 return score_result.parsed.score
 
             if trait.kind == "literal":
@@ -366,6 +413,7 @@ class AgenticTraitEvaluator:
                     SingleLiteralClassification,
                     retry_policy=self._model_config.retry_policy,
                 )
+                self.last_extraction_usage = literal_result.usage
                 return self._resolve_literal_index(
                     literal_result.parsed.classification,
                     trait,
@@ -479,6 +527,7 @@ class AgenticTraitEvaluator:
             "local_json_error": local_error,
             "parser_error": None,
         }
+        self.last_extraction_usage = parse_result.usage
         return parse_result.parsed.model_dump()
 
     @staticmethod

@@ -8,6 +8,7 @@ strategy). Each trait produces a score and an investigation trace.
 import logging
 import re
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,12 +17,40 @@ from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
 from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker, usage_to_callback_metadata
+from karenina.ports import UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
+from karenina.schemas.verification.model_identity import ModelIdentity
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
+
+# UsageTracker stage key for the judge's investigation and extraction calls.
+AGENTIC_RUBRIC_USAGE_STAGE = "agentic_rubric_evaluation"
+
+
+@dataclass
+class _AgenticRubricOutputs:
+    """Per-trait outputs collected by one strategy run."""
+
+    scores: dict[str, int | bool | dict[str, Any] | None] = field(default_factory=dict)
+    traces: dict[str, str | None] = field(default_factory=dict)
+    extraction_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
+
+    def record_score(self, trait: AgenticRubricTrait, score: int | bool | dict[str, Any] | None) -> None:
+        """Store a trait score, expanding template kind dicts into dotted keys."""
+        if trait.is_template_kind and isinstance(score, dict):
+            for field_name, value in score.items():
+                self.scores[f"{trait.name}.{field_name}"] = value
+        else:
+            self.scores[trait.name] = score
+
+    def record_skipped(self, trait: AgenticRubricTrait) -> None:
+        """Store an empty entry for a trait whose model lacks agent support."""
+        self.scores[trait.name] = None
+        self.traces[trait.name] = None
 
 
 class AgenticRubricEvaluationStage(BaseVerificationStage):
@@ -47,6 +76,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_trait_scores: Dict mapping trait name to score (or None on failure).
         agentic_trait_investigation_traces: Dict mapping trait name to investigation trace.
         agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
+
+    The judge's investigation and extraction usage is recorded in the usage
+    tracker under the ``agentic_rubric_evaluation`` stage.
     """
 
     @property
@@ -126,22 +158,27 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 trace_file_path,
             )
 
+        usage_tracker = self.get_or_create_usage_tracker(context)
+
         try:
             strategy = context.agentic_rubric_strategy
             if strategy == "shared":
-                scores, traces, extraction_metadata = self._execute_shared(
+                outputs = self._execute_shared(
                     traits,
                     context,
                     raw_response,
                     workspace_path,
+                    usage_tracker,
                 )
             else:
-                scores, traces, extraction_metadata = self._execute_individual(
+                outputs = self._execute_individual(
                     traits,
                     context,
                     raw_response,
                     workspace_path,
+                    usage_tracker,
                 )
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
             # Store in artifacts
             self.set_artifact_and_result(
@@ -152,20 +189,20 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             self.set_artifact_and_result(
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_SCORES,
-                scores,
+                outputs.scores,
             )
             self.set_artifact_and_result(
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
-                traces,
+                outputs.traces,
             )
             self.set_artifact_and_result(
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
-                extraction_metadata,
+                outputs.extraction_metadata,
             )
 
-            evaluated = sum(1 for v in scores.values() if v is not None)
+            evaluated = sum(1 for v in outputs.scores.values() if v is not None)
             logger.info(
                 "Agentic rubric evaluation complete: %d/%d traits scored",
                 evaluated,
@@ -194,20 +231,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[
-        dict[str, int | bool | dict[str, Any] | None],
-        dict[str, str | None],
-        dict[str, dict[str, str | None]],
-    ]:
+        usage_tracker: UsageTracker,
+    ) -> _AgenticRubricOutputs:
         """Evaluate each trait with its own agent.
 
         Returns:
-            Tuple of (scores_dict, traces_dict).
+            The per-trait scores, traces and extraction metadata.
         """
         # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
-        scores: dict[str, int | bool | dict[str, Any] | None] = {}
-        traces: dict[str, str | None] = {}
-        extraction_metadata: dict[str, dict[str, str | None]] = {}
+        outputs = _AgenticRubricOutputs()
 
         for trait in traits:
             model = self._resolve_model(trait, context)
@@ -216,31 +248,28 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                     "Skipping trait '%s': resolved model lacks agent support",
                     trait.name,
                 )
-                scores[trait.name] = None
-                traces[trait.name] = None
+                outputs.record_skipped(trait)
                 continue
 
             evaluator = AgenticTraitEvaluator(
                 model_config=model,
                 prompt_config=context.prompt_config,
             )
-            score, trace = evaluator.evaluate_trait(
+            evaluation = evaluator.evaluate_trait(
                 trait=trait,
                 question_text=context.question_text,
                 raw_llm_response=raw_response,
                 workspace_path=workspace_path,
             )
-            if trait.is_template_kind and isinstance(score, dict):
-                for field_name, value in score.items():
-                    scores[f"{trait.name}.{field_name}"] = value
-            else:
-                scores[trait.name] = score
-            traces[trait.name] = trace
+            outputs.record_score(trait, evaluation.score)
+            outputs.traces[trait.name] = evaluation.trace
+            self._track_usage(usage_tracker, model, evaluation.investigation_usage)
+            self._track_usage(usage_tracker, model, evaluation.extraction_usage)
             metadata = getattr(evaluator, "last_extraction_metadata", None)
             if isinstance(metadata, dict):
-                extraction_metadata[trait.name] = metadata
+                outputs.extraction_metadata[trait.name] = metadata
 
-        return scores, traces, extraction_metadata
+        return outputs
 
     def _execute_shared(
         self,
@@ -248,18 +277,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[
-        dict[str, int | bool | dict[str, Any] | None],
-        dict[str, str | None],
-        dict[str, dict[str, str | None]],
-    ]:
+        usage_tracker: UsageTracker,
+    ) -> _AgenticRubricOutputs:
         """Evaluate all traits with a single shared agent.
 
         All traits must resolve to the same model (by interface, provider,
         and model_name). If they differ, falls back to individual strategy.
 
         Returns:
-            Tuple of (scores_dict, traces_dict).
+            The per-trait scores, traces and extraction metadata.
         """
         # Resolve all models and check they are identical
         resolved: list[tuple[AgenticRubricTrait, ModelConfig | None]] = [
@@ -269,9 +295,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         valid = [(trait, m) for trait, m in resolved if m is not None]
         if not valid:
             logger.warning("No traits have agent support; all skipped")
-            empty_scores: dict[str, int | bool | dict[str, Any] | None] = {t.name: None for t in traits}
-            empty_traces: dict[str, str | None] = {t.name: None for t in traits}
-            return empty_scores, empty_traces, {}
+            skipped = _AgenticRubricOutputs()
+            for trait in traits:
+                skipped.record_skipped(trait)
+            return skipped
 
         # Check that all valid models match on interface + provider + model_name
         first_model = valid[0][1]
@@ -283,6 +310,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 context,
                 raw_response,
                 workspace_path,
+                usage_tracker,
             )
 
         # Build a combined investigation prompt
@@ -370,6 +398,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 config=agent_config,
             )
             shared_trace = result.raw_trace
+            self._track_usage(usage_tracker, first_model, result.usage)
         except Exception:
             logger.warning(
                 "Shared agentic investigation failed; falling back to individual",
@@ -380,45 +409,61 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 context,
                 raw_response,
                 workspace_path,
+                usage_tracker,
             )
         finally:
             if agent is not None:
                 close_adapter(agent)
 
         # Per-trait extraction from the shared trace
-        result_scores: dict[str, int | bool | dict[str, Any] | None] = {}
-        result_traces: dict[str, str | None] = {}
-        extraction_metadata: dict[str, dict[str, str | None]] = {}
+        outputs = _AgenticRubricOutputs()
 
         for trait, model in resolved:
             if model is None:
-                result_scores[trait.name] = None
-                result_traces[trait.name] = None
+                outputs.record_skipped(trait)
                 continue
 
-            result_traces[trait.name] = shared_trace
+            outputs.traces[trait.name] = shared_trace
             try:
-                extracted = evaluator.run_extraction(trait, shared_trace)
-                if trait.is_template_kind and isinstance(extracted, dict):
-                    for field_name, value in extracted.items():
-                        result_scores[f"{trait.name}.{field_name}"] = value
-                else:
-                    result_scores[trait.name] = extracted
-                metadata = getattr(evaluator, "last_extraction_metadata", None)
-                if isinstance(metadata, dict):
-                    extraction_metadata[trait.name] = metadata
+                outputs.record_score(trait, evaluator.run_extraction(trait, shared_trace))
             except Exception:
                 logger.warning(
                     "Extraction failed for trait '%s' in shared strategy",
                     trait.name,
                     exc_info=True,
                 )
-                result_scores[trait.name] = None
-                metadata = getattr(evaluator, "last_extraction_metadata", None)
-                if isinstance(metadata, dict):
-                    extraction_metadata[trait.name] = metadata
+                outputs.scores[trait.name] = None
+            self._track_usage(usage_tracker, first_model, evaluator.last_extraction_usage)
+            metadata = getattr(evaluator, "last_extraction_metadata", None)
+            if isinstance(metadata, dict):
+                outputs.extraction_metadata[trait.name] = metadata
 
-        return result_scores, result_traces, extraction_metadata
+        return outputs
+
+    # ------------------------------------------------------------------
+    # Usage
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _track_usage(
+        usage_tracker: UsageTracker,
+        model: ModelConfig,
+        usage: UsageMetadata | None,
+    ) -> None:
+        """Record one judge agent run or call under the agentic rubric usage stage.
+
+        Usage that is missing or reports no tokens and no web searches is skipped.
+        """
+        if not isinstance(usage, UsageMetadata):
+            return
+        if not (usage.input_tokens or usage.output_tokens or usage.web_search_queries):
+            return
+        model_str = ModelIdentity.from_model_config(model, role="parsing").display_string
+        usage_tracker.track_call(
+            AGENTIC_RUBRIC_USAGE_STAGE,
+            model_str,
+            usage_to_callback_metadata(model_str, usage),
+        )
 
     # ------------------------------------------------------------------
     # Trace materialization

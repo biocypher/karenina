@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel, Field
 
+from karenina.benchmark.verification.evaluators.rubric.agentic_trait import AgenticTraitEvaluation
 from karenina.benchmark.verification.stages.core.base import (
     ArtifactKeys,
     VerificationContext,
@@ -143,7 +144,7 @@ class TestAgenticRubricEvaluationExecute:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (True, "investigation trace")
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=True, trace="investigation trace")
 
         monkeypatch.setattr(
             mod,
@@ -174,7 +175,7 @@ class TestAgenticRubricEvaluationExecute:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (True, "investigation trace")
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=True, trace="investigation trace")
         fake_evaluator.last_extraction_metadata = {
             "method": "local_json",
             "local_json_error": None,
@@ -206,7 +207,7 @@ class TestAgenticRubricEvaluationExecute:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (None, None)
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=None, trace=None)
 
         monkeypatch.setattr(
             mod,
@@ -234,8 +235,8 @@ class TestAgenticRubricEvaluationExecute:
         def fake_evaluate_trait(trait, question_text, raw_llm_response, workspace_path):
             call_count["n"] += 1
             if trait.name == "code_quality":
-                return True, "trace_cq"
-            return False, "trace_safety"
+                return AgenticTraitEvaluation(score=True, trace="trace_cq")
+            return AgenticTraitEvaluation(score=False, trace="trace_safety")
 
         fake_evaluator = MagicMock()
         fake_evaluator.evaluate_trait.side_effect = fake_evaluate_trait
@@ -268,7 +269,7 @@ class TestAgenticRubricEvaluationExecute:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (True, "investigation trace")
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=True, trace="investigation trace")
 
         monkeypatch.setattr(
             mod,
@@ -312,7 +313,7 @@ class TestAgenticRubricEvaluationExecute:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (True, "investigation trace")
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=True, trace="investigation trace")
 
         monkeypatch.setattr(
             mod,
@@ -353,9 +354,9 @@ class TestTemplateKindFlattening:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (
-            {"count": 3, "items": ["pip", "run"]},
-            "investigation trace",
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(
+            score={"count": 3, "items": ["pip", "run"]},
+            trace="investigation trace",
         )
 
         monkeypatch.setattr(
@@ -390,7 +391,7 @@ class TestTemplateKindFlattening:
         )
 
         fake_evaluator = MagicMock()
-        fake_evaluator.evaluate_trait.return_value = (True, "trace")
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=True, trace="trace")
 
         monkeypatch.setattr(
             mod,
@@ -606,3 +607,108 @@ class TestSharedStrategy:
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"a": True, "b": True}
         traces = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
         assert traces == {"a": "Shared investigation.", "b": "Shared investigation."}
+
+
+# ------------------------------------------------------------------
+# Usage tracking
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestJudgeUsageTracking:
+    """The judge's usage lands in the usage tracker under the agentic rubric stage."""
+
+    def test_individual_strategy_tracks_investigation_and_extraction(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
+        from karenina.ports.usage import UsageMetadata
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(
+            score=True,
+            trace="trace",
+            investigation_usage=UsageMetadata(
+                input_tokens=100,
+                output_tokens=40,
+                total_tokens=140,
+                cache_read_tokens=30,
+                reasoning_tokens=12,
+                web_search_queries=3,
+            ),
+            extraction_usage=UsageMetadata(input_tokens=20, output_tokens=5, total_tokens=25),
+        )
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        prior = UsageTracker()
+        prior.track_call("answer_generation", "answerer", {"answerer": {"input_tokens": 7, "total_tokens": 7}})
+        ctx.set_artifact(ArtifactKeys.USAGE_TRACKER, prior)
+
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        tracker = ctx.get_artifact(ArtifactKeys.USAGE_TRACKER)
+        assert tracker is prior
+        summary = tracker.get_total_summary()
+        stage = summary[mod.AGENTIC_RUBRIC_USAGE_STAGE]
+        assert stage["input_tokens"] == 120
+        assert stage["output_tokens"] == 45
+        assert stage["total_tokens"] == 165
+        assert stage["web_search_queries"] == 3
+        assert stage["reasoning_tokens"] == 12
+        assert summary["answer_generation"]["input_tokens"] == 7
+        assert summary["total"]["input_tokens"] == 127
+        assert summary["total"]["web_search_queries"] == 3
+
+    def test_missing_usage_is_not_tracked(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=True, trace="trace")
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        tracker = ctx.get_artifact(ArtifactKeys.USAGE_TRACKER)
+        assert tracker.get_stage_summary(mod.AGENTIC_RUBRIC_USAGE_STAGE) is None
+
+    def test_shared_strategy_tracks_shared_run_and_extractions(self, monkeypatch):
+        import karenina.adapters as adapters_pkg
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.ports.usage import UsageMetadata
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_shared_agent_result()
+        monkeypatch.setattr(adapters_pkg, "get_agent", lambda _model: fake_agent)
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.run_extraction.return_value = True
+        fake_evaluator.last_extraction_metadata = None
+        fake_evaluator.last_extraction_usage = UsageMetadata(input_tokens=5, output_tokens=1, total_tokens=6)
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_shared_context([_make_trait(name="a"), _make_trait(name="b")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        stage = ctx.get_artifact(ArtifactKeys.USAGE_TRACKER).get_stage_summary(mod.AGENTIC_RUBRIC_USAGE_STAGE)
+        # One shared run (40 in) plus one extraction per trait (5 in each).
+        assert stage["input_tokens"] == 50
+        assert stage["total_tokens"] == 62

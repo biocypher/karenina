@@ -88,16 +88,16 @@ class TestAgenticTraitEvaluator:
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
         trait = _make_trait()
 
-        score, trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait=trait,
             question_text="Write a function.",
             raw_llm_response="def foo(): pass",
             workspace_path=None,
         )
 
-        assert score is True
-        assert trace is not None
-        assert "investigated" in trace
+        assert evaluation.score is True
+        assert evaluation.trace is not None
+        assert "investigated" in evaluation.trace
 
     def test_evaluate_single_score_trait(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Single score trait returns int score (trace_only via LLMPort)."""
@@ -120,14 +120,14 @@ class TestAgenticTraitEvaluator:
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
         trait = _make_trait(kind="score")
 
-        score, trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait=trait,
             question_text="Write a function.",
             raw_llm_response="def foo(): pass",
             workspace_path=None,
         )
 
-        assert score == 3
+        assert evaluation.score == 3
 
     def test_evaluate_trait_agent_failure_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLM failure returns None score and None trace (trace_only via LLMPort)."""
@@ -141,15 +141,15 @@ class TestAgenticTraitEvaluator:
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
         trait = _make_trait()
 
-        score, trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait=trait,
             question_text="Write a function.",
             raw_llm_response="def foo(): pass",
             workspace_path=None,
         )
 
-        assert score is None
-        assert trace is None
+        assert evaluation.score is None
+        assert evaluation.trace is None
 
     def test_extraction_failure_preserves_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Parser failure returns None score but preserves the investigation trace."""
@@ -171,15 +171,15 @@ class TestAgenticTraitEvaluator:
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
         trait = _make_trait()
 
-        score, trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait=trait,
             question_text="Write a function.",
             raw_llm_response="def foo(): pass",
             workspace_path=None,
         )
 
-        assert score is None
-        assert trace == "I found several issues."
+        assert evaluation.score is None
+        assert evaluation.trace == "I found several issues."
 
     def test_workspace_only_mode_excludes_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """workspace_only context_mode does not include raw_llm_response in prompt."""
@@ -425,14 +425,14 @@ class TestTraceMaterialization:
         monkeypatch.setattr(agentic_trait, "get_parser", lambda _: mock_parser)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
-        score, trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait,
             question_text="Q",
             raw_llm_response="Response",
             workspace_path=None,
             trace_file_path=Path("/tmp/test_trace.txt"),
         )
-        assert score is True
+        assert evaluation.score is True
 
     def test_materialize_trace_replaces_inline_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When materialize_trace=True and trace_file_path given, prompt uses file reference."""
@@ -596,15 +596,15 @@ class TestJudgeMcpServers:
         monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_mcp_model_config())
-        score, trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait=_make_trait(context_mode="trace_only"),
             question_text="Q",
             raw_llm_response="See PMID 123.",
             workspace_path=None,
         )
 
-        assert score is True
-        assert trace == "Looked up the citation."
+        assert evaluation.score is True
+        assert evaluation.trace == "Looked up the citation."
         fake_agent.run.assert_called_once()
         assert fake_agent.run.call_args.kwargs["mcp_servers"] == {
             "citations": {"type": "http", "url": "http://localhost:8765/mcp"},
@@ -631,14 +631,14 @@ class TestJudgeMcpServers:
         monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
 
         evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
-        score, _trace = evaluator.evaluate_trait(
+        evaluation = evaluator.evaluate_trait(
             trait=_make_trait(context_mode="trace_only"),
             question_text="Q",
             raw_llm_response="Answer.",
             workspace_path=None,
         )
 
-        assert score is True
+        assert evaluation.score is True
         fake_llm.invoke.assert_called_once()
 
     @pytest.mark.parametrize(
@@ -710,3 +710,77 @@ class TestJudgeMcpServers:
         from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
 
         assert build_mcp_servers(_make_model_config()) == {}
+
+
+@pytest.mark.unit
+class TestJudgeUsage:
+    """The evaluator returns the judge's investigation and extraction usage."""
+
+    def test_llm_path_returns_llm_and_parser_usage(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports import ParsePortResult
+        from karenina.ports.llm import LLMResponse
+
+        llm_usage = UsageMetadata(input_tokens=100, output_tokens=50, total_tokens=150, web_search_queries=2)
+        parser_usage = UsageMetadata(input_tokens=20, output_tokens=5, total_tokens=25)
+
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(content="Looks right.", usage=llm_usage)
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = ParsePortResult(
+            parsed=SingleBooleanScore(result=True),
+            usage=parser_usage,
+        )
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path=None,
+        )
+
+        assert evaluation.investigation_usage is llm_usage
+        assert evaluation.extraction_usage is parser_usage
+
+    def test_agent_path_returns_agent_usage(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        agent_result = _make_agent_result()
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = agent_result
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(context_mode="workspace_only"),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path="/tmp/workspace",
+        )
+
+        assert evaluation.investigation_usage is agent_result.usage
+
+    def test_local_template_extraction_has_no_parser_usage(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        parser = MagicMock()
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: parser)
+        trait = AgenticRubricTrait(
+            name="findings",
+            description="Test.",
+            kind=_TestFindings,
+            higher_is_better=None,
+            context_mode="trace_only",
+        )
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(_make_model_config())
+        evaluator.run_extraction(trait, '```json\n{"count": 1, "items": ["a"]}\n```')
+
+        assert evaluator.last_extraction_usage is None
+        parser.parse_to_pydantic.assert_not_called()
