@@ -271,6 +271,13 @@ class VerificationResultRubric(BaseModel):
         "Each trace is the raw agent investigation output string. "
         "Keyed by trait name.",
     )
+    agentic_trait_investigation_messages: dict[str, list[dict[str, Any]]] | None = Field(
+        default=None,
+        description="Structured investigation messages from agentic rubric traits, keyed by trait name. "
+        "Each list holds the judge's serialised trace messages (tool calls, tool results, thinking) "
+        "in the same format as template.trace_messages. A single-call judge without tools stores "
+        "one assistant message. Traits whose investigation failed have no entry.",
+    )
     agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
         default=None,
         description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",

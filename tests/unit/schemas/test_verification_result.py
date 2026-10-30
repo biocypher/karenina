@@ -459,6 +459,16 @@ class TestVerificationResultRubricAgenticFields:
         )
         assert "investigated" in rubric.agentic_trait_investigation_traces["code_quality"]
 
+    def test_investigation_messages_default_none_and_old_rows_load(self):
+        assert VerificationResultRubric().agentic_trait_investigation_messages is None
+        old_row = {"agentic_trait_investigation_traces": {"code_quality": "trace"}}
+        assert VerificationResultRubric.model_validate(old_row).agentic_trait_investigation_messages is None
+
+    def test_investigation_messages_stored(self):
+        messages = {"code_quality": [{"role": "assistant", "content": "Looks fine.", "block_index": 0}]}
+        rubric = VerificationResultRubric(agentic_trait_investigation_messages=messages)
+        assert rubric.agentic_trait_investigation_messages == messages
+
 
 # =============================================================================
 # VerificationResultDeepJudgment Tests

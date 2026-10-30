@@ -337,6 +337,7 @@ _RUBRIC_TRAIT_BUCKETS: tuple[str, ...] = (
     "callable_trait_scores",
     "agentic_trait_scores",
     "agentic_trait_investigation_traces",
+    "agentic_trait_investigation_messages",
 )
 
 

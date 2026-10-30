@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
@@ -45,10 +45,14 @@ class AgenticInvestigation:
 
     Attributes:
         trace: Raw investigation trace text.
+        messages: Structured investigation messages. The agent path keeps
+            ``AgentResult.trace_messages``. The single-call LLM path holds one
+            assistant message with the response text.
         usage: Usage reported by the agent run or the single LLM call, or None.
     """
 
     trace: str
+    messages: list[Message] = field(default_factory=list)
     usage: UsageMetadata | None = None
 
 
@@ -60,6 +64,8 @@ class AgenticTraitEvaluation:
         score: The extracted score, a dict for template kind traits, or None
             when the investigation or the extraction failed.
         trace: The investigation trace, or None when the investigation failed.
+        messages: The structured investigation messages, or None when the
+            investigation failed.
         investigation_usage: Usage of the investigation, or None.
         extraction_usage: Usage of the extraction parser call, or None when
             the score was recovered locally or extraction failed.
@@ -67,6 +73,7 @@ class AgenticTraitEvaluation:
 
     score: int | bool | dict[str, Any] | None
     trace: str | None
+    messages: list[Message] | None = None
     investigation_usage: UsageMetadata | None = None
     extraction_usage: UsageMetadata | None = None
 
@@ -153,6 +160,7 @@ class AgenticTraitEvaluator:
         evaluation = AgenticTraitEvaluation(
             score=None,
             trace=investigation.trace,
+            messages=investigation.messages,
             investigation_usage=investigation.usage,
         )
 
@@ -192,7 +200,7 @@ class AgenticTraitEvaluator:
                 the prompt references this file instead of inlining the trace.
 
         Returns:
-            The investigation trace and its usage.
+            The investigation trace, messages and usage.
         """
         agent = None
         capabilities = PortCapabilities()
@@ -300,7 +308,12 @@ class AgenticTraitEvaluator:
                 "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
                 trait.name,
             )
-            return AgenticInvestigation(trace=result.content or "", usage=result.usage)
+            content = result.content or ""
+            return AgenticInvestigation(
+                trace=content,
+                messages=[Message.assistant(content)],
+                usage=result.usage,
+            )
         finally:
             close_adapter(llm)
 
@@ -338,7 +351,11 @@ class AgenticTraitEvaluator:
                 result.turns,
                 result.limit_reached,
             )
-            return AgenticInvestigation(trace=result.raw_trace, usage=result.usage)
+            return AgenticInvestigation(
+                trace=result.raw_trace,
+                messages=list(result.trace_messages or []),
+                usage=result.usage,
+            )
         finally:
             close_adapter(agent)
 

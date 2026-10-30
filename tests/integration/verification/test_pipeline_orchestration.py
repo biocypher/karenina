@@ -1199,6 +1199,38 @@ class TestFinalizeResultAgenticRubric:
         assert result.rubric.regex_trait_scores is None
         assert result.rubric.callable_trait_scores is None
 
+    def test_agentic_investigation_messages_reach_result(self, minimal_model_config: ModelConfig):
+        """Serialised judge messages are stored per trait; None entries are dropped."""
+        context = self._make_context(minimal_model_config)
+        context.set_result_field("timestamp", "2024-01-01 12:00:00")
+        context.set_result_field("execution_time", 1.0)
+
+        judge_messages = [
+            {"role": "assistant", "content": "", "block_index": 0, "tool_calls": [{"id": "c1", "name": "search"}]},
+            {"role": "assistant", "content": "Supported.", "block_index": 1},
+        ]
+        context.set_result_field(ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED, True)
+        context.set_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES, {"citations_ok": True, "other": None})
+        context.set_result_field(
+            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            {"citations_ok": "Supported.", "other": None},
+        )
+        context.set_result_field(
+            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
+            {"citations_ok": judge_messages, "other": None},
+        )
+
+        FinalizeResultStage().execute(context)
+
+        result = context.get_artifact("final_result")
+        assert result.rubric is not None
+        assert result.rubric.agentic_trait_investigation_messages == {"citations_ok": judge_messages}
+
+        # The field survives a JSON round trip (progressive save JSONL rows).
+        restored = VerificationResult.model_validate_json(result.model_dump_json())
+        assert restored.rubric is not None
+        assert restored.rubric.agentic_trait_investigation_messages == {"citations_ok": judge_messages}
+
     def test_classical_rubric_still_works(self, minimal_model_config: ModelConfig):
         """When classical rubric runs (without agentic), behavior is preserved."""
         context = self._make_context(minimal_model_config)

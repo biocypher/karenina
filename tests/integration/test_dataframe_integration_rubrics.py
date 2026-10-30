@@ -512,6 +512,31 @@ class TestRubricDataFrameAgenticSupport:
         fi_row = df[df["trait_name"] == "FollowsInstructions"]
         assert pd.isna(fi_row["investigation_trace"].iloc[0])
 
+    def test_investigation_messages_column_present(self):
+        """investigation_messages column is populated from agentic_trait_investigation_messages."""
+        judge_messages = [{"role": "assistant", "content": "Looks fine.", "block_index": 0}]
+        rubric = VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={"CodeQuality": 4, "FollowsInstructions": True},
+            agentic_trait_investigation_messages={"CodeQuality": judge_messages},
+        )
+        result = VerificationResult(
+            metadata=create_metadata("messages_q1"),
+            template=VerificationResultTemplate(
+                raw_llm_response="test",
+                template_verification_performed=True,
+                verify_result=True,
+            ),
+            rubric=rubric,
+        )
+        df = RubricResults(results=[result]).to_dataframe(trait_type="agentic")
+
+        assert "investigation_messages" in df.columns
+        cq_row = df[df["trait_name"] == "CodeQuality"]
+        assert cq_row["investigation_messages"].iloc[0] == judge_messages
+        fi_row = df[df["trait_name"] == "FollowsInstructions"]
+        assert fi_row["investigation_messages"].iloc[0] is None
+
     def test_investigation_trace_none_when_no_traces(
         self,
         verification_result_with_agentic: VerificationResult,

@@ -17,8 +17,9 @@ from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
 from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.utils.trace_formatting import messages_to_dicts
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker, usage_to_callback_metadata
-from karenina.ports import UsageMetadata
+from karenina.ports import Message, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -37,6 +38,7 @@ class _AgenticRubricOutputs:
 
     scores: dict[str, int | bool | dict[str, Any] | None] = field(default_factory=dict)
     traces: dict[str, str | None] = field(default_factory=dict)
+    messages: dict[str, list[dict[str, Any]] | None] = field(default_factory=dict)
     extraction_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
 
     def record_score(self, trait: AgenticRubricTrait, score: int | bool | dict[str, Any] | None) -> None:
@@ -47,10 +49,17 @@ class _AgenticRubricOutputs:
         else:
             self.scores[trait.name] = score
 
+    def record_investigation(
+        self, trait: AgenticRubricTrait, trace: str | None, messages: list[Message] | None
+    ) -> None:
+        """Store a trait's investigation trace and its serialised messages."""
+        self.traces[trait.name] = trace
+        self.messages[trait.name] = messages_to_dicts(messages) if messages is not None else None
+
     def record_skipped(self, trait: AgenticRubricTrait) -> None:
         """Store an empty entry for a trait whose model lacks agent support."""
         self.scores[trait.name] = None
-        self.traces[trait.name] = None
+        self.record_investigation(trait, None, None)
 
 
 class AgenticRubricEvaluationStage(BaseVerificationStage):
@@ -75,6 +84,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_rubric_evaluation_performed: True when this stage ran.
         agentic_trait_scores: Dict mapping trait name to score (or None on failure).
         agentic_trait_investigation_traces: Dict mapping trait name to investigation trace.
+        agentic_trait_investigation_messages: Dict mapping trait name to the serialised
+            investigation messages (None when the investigation failed).
         agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
 
     The judge's investigation and extraction usage is recorded in the usage
@@ -98,6 +109,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED,
             ArtifactKeys.AGENTIC_TRAIT_SCORES,
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
             ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
         ]
 
@@ -198,6 +210,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
             self.set_artifact_and_result(
                 context,
+                ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
+                outputs.messages,
+            )
+            self.set_artifact_and_result(
+                context,
                 ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
                 outputs.extraction_metadata,
             )
@@ -236,7 +253,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Evaluate each trait with its own agent.
 
         Returns:
-            The per-trait scores, traces and extraction metadata.
+            The per-trait scores, traces, messages and extraction metadata.
         """
         # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
         outputs = _AgenticRubricOutputs()
@@ -262,7 +279,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 workspace_path=workspace_path,
             )
             outputs.record_score(trait, evaluation.score)
-            outputs.traces[trait.name] = evaluation.trace
+            outputs.record_investigation(trait, evaluation.trace, evaluation.messages)
             self._track_usage(usage_tracker, model, evaluation.investigation_usage)
             self._track_usage(usage_tracker, model, evaluation.extraction_usage)
             metadata = getattr(evaluator, "last_extraction_metadata", None)
@@ -285,7 +302,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         and model_name). If they differ, falls back to individual strategy.
 
         Returns:
-            The per-trait scores, traces and extraction metadata.
+            The per-trait scores, traces, messages and extraction metadata.
         """
         # Resolve all models and check they are identical
         resolved: list[tuple[AgenticRubricTrait, ModelConfig | None]] = [
@@ -398,6 +415,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 config=agent_config,
             )
             shared_trace = result.raw_trace
+            shared_messages = list(result.trace_messages or [])
             self._track_usage(usage_tracker, first_model, result.usage)
         except Exception:
             logger.warning(
@@ -423,7 +441,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 outputs.record_skipped(trait)
                 continue
 
-            outputs.traces[trait.name] = shared_trace
+            outputs.record_investigation(trait, shared_trace, shared_messages)
             try:
                 outputs.record_score(trait, evaluator.run_extraction(trait, shared_trace))
             except Exception:

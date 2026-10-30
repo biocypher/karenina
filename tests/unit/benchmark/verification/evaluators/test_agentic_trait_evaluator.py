@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import BaseModel, Field
 
-from karenina.ports import AgentResult, Message, Role
+from karenina.ports import AgentResult, Message, Role, ToolUseContent
 from karenina.ports.usage import UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
@@ -784,3 +784,73 @@ class TestJudgeUsage:
 
         assert evaluator.last_extraction_usage is None
         parser.parse_to_pydantic.assert_not_called()
+
+
+@pytest.mark.unit
+class TestInvestigationMessages:
+    """The evaluator keeps the judge's structured investigation messages."""
+
+    def test_agent_path_keeps_trace_messages(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        tool_call = Message(
+            role=Role.ASSISTANT,
+            content=[ToolUseContent(id="call_1", name="europepmc_search", input={"query": "PMID 123"})],
+        )
+        agent_result = AgentResult(
+            final_response="Citation checks out.",
+            raw_trace="--- AI Message ---\nCitation checks out.",
+            trace_messages=[
+                tool_call,
+                Message.tool_result("call_1", "Found PMID 123."),
+                Message.assistant("Citation checks out."),
+            ],
+            usage=UsageMetadata(input_tokens=10, output_tokens=5),
+            turns=2,
+            limit_reached=False,
+        )
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = agent_result
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_mcp_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(),
+            question_text="Q",
+            raw_llm_response="See PMID 123.",
+            workspace_path=None,
+        )
+
+        assert evaluation.messages == agent_result.trace_messages
+
+    def test_llm_path_stores_single_assistant_message(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
+
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(
+            content="The answer is well supported.",
+            usage=UsageMetadata(input_tokens=10, output_tokens=5),
+        )
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.side_effect = RuntimeError("Parse failed")
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path=None,
+        )
+
+        # Extraction failed, but the investigation record is kept.
+        assert evaluation.score is None
+        assert evaluation.messages is not None
+        assert len(evaluation.messages) == 1
+        assert evaluation.messages[0].role == Role.ASSISTANT
+        assert evaluation.messages[0].text == "The answer is well supported."

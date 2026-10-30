@@ -712,3 +712,93 @@ class TestJudgeUsageTracking:
         # One shared run (40 in) plus one extraction per trait (5 in each).
         assert stage["input_tokens"] == 50
         assert stage["total_tokens"] == 62
+
+
+# ------------------------------------------------------------------
+# Investigation messages
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestInvestigationMessages:
+    """The stage stores each trait's serialised investigation messages."""
+
+    def test_individual_strategy_serialises_messages_like_template_trace(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.ports import Message, Role, ToolUseContent
+
+        judge_messages = [
+            Message(role=Role.ASSISTANT, content=[ToolUseContent(id="c1", name="europepmc_get", input={"id": "1"})]),
+            Message.tool_result("c1", "Title: Example"),
+            Message.assistant("Supported."),
+        ]
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(
+            score=True,
+            trace="trace",
+            messages=judge_messages,
+        )
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        messages = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)
+        stored = messages["code_quality"]
+        assert [m["block_index"] for m in stored] == [0, 1, 2]
+        assert stored[0]["tool_calls"] == [{"id": "c1", "name": "europepmc_get", "input": {"id": "1"}}]
+        assert stored[1]["role"] == "tool"
+        assert stored[1]["tool_result"] == {"tool_use_id": "c1", "is_error": False}
+        assert stored[2] == {"role": "assistant", "content": "Supported.", "block_index": 2}
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES) == messages
+        assert ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES in mod.AgenticRubricEvaluationStage().produces
+
+    def test_missing_messages_stored_as_none(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=None, trace=None, messages=None)
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES) == {"code_quality": None}
+
+    def test_shared_strategy_stores_shared_messages_per_trait(self, monkeypatch):
+        import karenina.adapters as adapters_pkg
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_shared_agent_result()
+        monkeypatch.setattr(adapters_pkg, "get_agent", lambda _model: fake_agent)
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.run_extraction.return_value = True
+        fake_evaluator.last_extraction_metadata = None
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_shared_context([_make_trait(name="a"), _make_trait(name="b")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        messages = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)
+        expected = [{"role": "assistant", "content": "Done.", "block_index": 0}]
+        assert messages == {"a": expected, "b": expected}

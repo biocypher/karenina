@@ -506,3 +506,37 @@ class TestExtendRubricSinkForwarding:
         # recorder pushed through the (unmocked) sink lifecycle, which in
         # this monkey-patched setup is nothing.
         assert sink.results == []
+
+
+@pytest.mark.unit
+class TestMergeAgenticInvestigationMessages:
+    """extend_rubric merges agentic investigation messages like investigation traces."""
+
+    def test_messages_union_and_collision(self) -> None:
+        from karenina.benchmark.verification.extension import _merge_rubric_onto_row
+
+        prior_messages = [{"role": "assistant", "content": "old", "block_index": 0}]
+        new_messages = [{"role": "assistant", "content": "new", "block_index": 0}]
+        target = _make_result(
+            question_id="q1",
+            run_name="prior",
+            rubric=VerificationResultRubric(
+                agentic_trait_scores={"a": True},
+                agentic_trait_investigation_messages={"a": prior_messages},
+            ),
+        )
+        source = _make_result(
+            question_id="q1",
+            run_name="extend",
+            rubric=VerificationResultRubric(
+                agentic_trait_scores={"b": False},
+                agentic_trait_investigation_messages={"b": new_messages},
+            ),
+        )
+
+        _merge_rubric_onto_row(target, source)
+
+        assert target.rubric is not None
+        assert target.rubric.agentic_trait_investigation_messages == {"a": prior_messages, "b": new_messages}
+        with pytest.raises(ValueError, match="collision in agentic_trait_scores"):
+            _merge_rubric_onto_row(target, source)
