@@ -22,7 +22,7 @@ from collections import Counter
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from karenina.replay import capture_from_result_set
+from karenina.replay import ReplayStore, capture_from_result_set
 from karenina.schemas.results import VerificationResultSet
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
@@ -128,6 +128,15 @@ def extend_template_run(
         include_agent_traces=True,
         only_successful=False,
         replicate_selector="all",
+    )
+    # Replay only the answering side. The captured verify_result is the prior
+    # judge's verdict: if replayed, TraceValidationAutoFail would adopt it and
+    # skip trace validation, and it would stand in for the new judge whenever
+    # the new judge does not reach verification (abstention, parse failure,
+    # blank answer).
+    replay_store = ReplayStore(
+        miss_policy=replay_store.miss_policy,
+        entries=[(key, entry.model_copy(update={"verify_result": None})) for key, entry in replay_store.entries],
     )
     logger.info(
         "extend_template: captured replay store with %d entries from %d prior results",
