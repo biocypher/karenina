@@ -17,12 +17,14 @@ from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
 from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.utils.parser_resilience import classify_parser_exception
 from karenina.benchmark.verification.utils.trace_formatting import messages_to_dicts
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker, usage_to_callback_metadata
 from karenina.ports import Message, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AGENTIC_JUDGE_REQUIREMENT, AgenticRubricTrait
 from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
@@ -30,6 +32,45 @@ logger = logging.getLogger(__name__)
 
 # UsageTracker stage key for the judge's investigation and extraction calls.
 AGENTIC_RUBRIC_USAGE_STAGE = "agentic_rubric_evaluation"
+
+
+@dataclass(frozen=True)
+class _JudgeFailure:
+    """An error that left one agentic trait without a judgment."""
+
+    phase: str  # "investigation" or "extraction"
+    error: Exception
+    category: ErrorCategory
+
+    def to_record(self) -> dict[str, str]:
+        """Return the entry stored in ``agentic_trait_evaluation_errors``."""
+        return {
+            "phase": self.phase,
+            "error_type": type(self.error).__name__,
+            "message": str(self.error),
+            "category": self.category.value,
+        }
+
+
+def _judge_failure(
+    phase: str,
+    error: Exception | None,
+    registry: ErrorRegistry,
+) -> _JudgeFailure | None:
+    """Classify a judge error, or return None when it is not an infrastructure failure.
+
+    Investigation errors always count. Extraction errors count only when
+    retryable (connection, timeout, rate limit, server error), so a schema
+    or validation failure keeps today's behaviour: the trace is kept and
+    the score is None. Wrapped causes are classified too, the same way as
+    for parser errors.
+    """
+    if error is None:
+        return None
+    category = classify_parser_exception(error, registry)
+    if phase == "extraction" and not category.is_retryable():
+        return None
+    return _JudgeFailure(phase=phase, error=error, category=category)
 
 
 @dataclass
@@ -40,7 +81,7 @@ class _AgenticRubricOutputs:
     traces: dict[str, str | None] = field(default_factory=dict)
     messages: dict[str, list[dict[str, Any]] | None] = field(default_factory=dict)
     extraction_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
-    investigation_errors: dict[str, Exception] = field(default_factory=dict)
+    failures: dict[str, _JudgeFailure] = field(default_factory=dict)
 
     def record_score(self, trait: AgenticRubricTrait, score: int | bool | dict[str, Any] | None) -> None:
         """Store a trait score, expanding template kind dicts into dotted keys."""
@@ -88,17 +129,24 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_trait_investigation_messages: Dict mapping trait name to the serialised
             investigation messages (None when the investigation failed).
         agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
+        agentic_trait_evaluation_errors: Dict mapping trait name to the error that
+            left it without a judgment (phase, error_type, message, category).
 
     The judge's investigation and extraction usage is recorded in the usage
     tracker under the ``agentic_rubric_evaluation`` stage.
 
-    A trait whose investigation raised keeps a failure record as its trace,
-    and the stage marks the context with an error attributed to this stage.
-    The result is then classified as an infrastructure failure (never a
-    judgment) and always carries the ``agentic_investigation_failed`` caveat,
-    even when an earlier rule (content, abstention) decides the failure
-    category. AgenticProgressiveFileSink retries such rows on resume, and
-    the executor reuses their answer trace.
+    A trait whose investigation raised keeps a failure record as its trace.
+    A trait whose extraction raised a retryable error (connection, timeout,
+    rate limit, server error) keeps its investigation trace. In both cases
+    the error is recorded in ``agentic_trait_evaluation_errors`` and the
+    stage marks the context with an error attributed to this stage, so the
+    result is classified as an infrastructure failure (never a judgment).
+    The ``agentic_investigation_failed`` or ``agentic_extraction_failed``
+    caveat is always set, even when an earlier rule (content, abstention)
+    decides the failure category. Non-retryable extraction failures (for
+    example schema validation) only leave the score None. Progressive-save
+    resume retries rows whose recorded errors are retryable, and the
+    executor reuses their answer trace.
     """
 
     @property
@@ -120,7 +168,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
             ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
+            ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS,
             ArtifactKeys.AGENTIC_INVESTIGATION_FAILED,
+            ArtifactKeys.AGENTIC_EXTRACTION_FAILED,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -229,8 +279,13 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 outputs.extraction_metadata,
             )
 
-            if outputs.investigation_errors:
-                self._mark_investigation_failures(context, outputs.investigation_errors)
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS,
+                {name: failure.to_record() for name, failure in outputs.failures.items()},
+            )
+            if outputs.failures:
+                self._mark_judge_failures(context, outputs.failures)
 
             evaluated = sum(1 for v in outputs.scores.values() if v is not None)
             logger.info(
@@ -293,8 +348,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
             outputs.record_score(trait, evaluation.score)
             outputs.record_investigation(trait, evaluation.trace, evaluation.messages)
-            if evaluation.investigation_error is not None:
-                outputs.investigation_errors[trait.name] = evaluation.investigation_error
+            failure = _judge_failure(
+                "investigation", evaluation.investigation_error, context.error_registry
+            ) or _judge_failure("extraction", evaluation.extraction_error, context.error_registry)
+            if failure is not None:
+                outputs.failures[trait.name] = failure
             self._track_usage(usage_tracker, model, evaluation.investigation_usage)
             self._track_usage(usage_tracker, model, evaluation.extraction_usage)
             metadata = getattr(evaluator, "last_extraction_metadata", None)
@@ -459,13 +517,16 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             outputs.record_investigation(trait, shared_trace, shared_messages)
             try:
                 outputs.record_score(trait, evaluator.run_extraction(trait, shared_trace))
-            except Exception:
+            except Exception as e:
                 logger.warning(
                     "Extraction failed for trait '%s' in shared strategy",
                     trait.name,
                     exc_info=True,
                 )
                 outputs.scores[trait.name] = None
+                failure = _judge_failure("extraction", e, context.error_registry)
+                if failure is not None:
+                    outputs.failures[trait.name] = failure
             self._track_usage(usage_tracker, first_model, evaluator.last_extraction_usage)
             metadata = getattr(evaluator, "last_extraction_metadata", None)
             if isinstance(metadata, dict):
@@ -477,26 +538,34 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     # Failures
     # ------------------------------------------------------------------
 
-    def _mark_investigation_failures(
+    def _mark_judge_failures(
         self,
         context: VerificationContext,
-        errors: dict[str, Exception],
+        failures: dict[str, _JudgeFailure],
     ) -> None:
-        """Mark the context as failed because one or more investigations raised.
+        """Mark the context as failed because one or more judges could not judge.
 
         Follows the AgenticParseTemplate stage: the error category comes from
         the context's ErrorRegistry (using the first failure), so the failure
         classifier reports a retry-exhausted or system failure at this stage,
-        not a judgment. The ``agentic_investigation_failed`` result field also
-        raises a caveat, which survives when a higher-priority classifier rule
-        (content, abstention, sufficiency) sets the failure category instead.
+        not a judgment. The ``agentic_investigation_failed`` and
+        ``agentic_extraction_failed`` result fields also raise caveats, which
+        survive when a higher-priority classifier rule (content, abstention,
+        sufficiency) sets the failure category instead.
         """
-        self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_INVESTIGATION_FAILED, True)
-        details = ", ".join(f"'{name}' ({type(error).__name__}: {error})" for name, error in errors.items())
-        first_error = next(iter(errors.values()))
+        phases = {failure.phase for failure in failures.values()}
+        if "investigation" in phases:
+            self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_INVESTIGATION_FAILED, True)
+        if "extraction" in phases:
+            self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_EXTRACTION_FAILED, True)
+        details = ", ".join(
+            f"'{name}' ({failure.phase}, {type(failure.error).__name__}: {failure.error})"
+            for name, failure in failures.items()
+        )
+        first = next(iter(failures.values()))
         context.mark_error(
-            f"Agentic rubric investigation failed for {len(errors)} trait(s): {details}",
-            category=context.error_registry.classify(first_error),
+            f"Agentic rubric judge failed for {len(failures)} trait(s): {details}",
+            category=first.category,
             stage=self.name,
         )
 

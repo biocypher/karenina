@@ -167,3 +167,36 @@ def test_google_genai_judge_runs_end_to_end(judge_as: str, fake_models: FakeMode
     assert judge_usage["reasoning_tokens"] == 12
     assert judge_usage["web_search_queries"] == 2
     assert result.template.usage_metadata["total"]["web_search_queries"] == 2
+
+
+@pytest.mark.unit
+def test_rate_limited_extraction_is_an_infrastructure_failure(fake_models: FakeModels, mcp: SimpleNamespace) -> None:
+    """A 429 on the extraction call, after the parser's retries, leaves a record instead of a silent None."""
+    from google.genai import errors as genai_errors
+
+    from karenina.schemas.results.caveat import Caveat
+    from karenina.schemas.results.failure import FailureGroup
+
+    quota = genai_errors.ClientError(429, {"error": {"code": 429, "message": "quota", "status": "RESOURCE_EXHAUSTED"}})
+    # Every extraction attempt is rate limited. The adapter and the pipeline both retry.
+    fake_models.responses[2:] = [quota] * 50
+
+    ctx = _context(judge_as="model_override")
+    AgenticRubricEvaluationStage().execute(ctx)
+    FinalizeResultStage().execute(ctx)
+    result = ctx.get_artifact("final_result")
+
+    extraction_calls = len(fake_models.calls) - 2
+    assert extraction_calls >= 3
+    assert len(fake_models.responses) == 50 - extraction_calls
+    assert result.rubric.agentic_trait_scores == {"citations_supported": None}
+    assert "Verdict: supported." in result.rubric.agentic_trait_investigation_traces["citations_supported"]
+    assert result.rubric.agentic_trait_investigation_messages["citations_supported"]
+    error = result.rubric.agentic_trait_evaluation_errors["citations_supported"]
+    assert error["phase"] == "extraction"
+    assert error["error_type"] == "GeminiRateLimitError"
+    assert error["category"] == "rate_limit"
+    assert result.metadata.failure is not None
+    assert result.metadata.failure.stage == "AgenticRubricEvaluation"
+    assert result.metadata.failure.group in (FailureGroup.RETRY_EXHAUSTED, FailureGroup.SYSTEM)
+    assert Caveat.AGENTIC_EXTRACTION_FAILED in result.metadata.caveats

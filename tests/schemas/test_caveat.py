@@ -13,6 +13,7 @@ class TestCaveat:
         assert Caveat.RETRIES_USED.value == "retries_used"
         assert Caveat.PARSE_DECISION_MALFORMED.value == "parse_decision_malformed"
         assert Caveat.AGENTIC_INVESTIGATION_FAILED.value == "agentic_investigation_failed"
+        assert Caveat.AGENTIC_EXTRACTION_FAILED.value == "agentic_extraction_failed"
 
     def test_is_str_enum(self):
         assert isinstance(Caveat.PARTIAL_CONTENT, str)

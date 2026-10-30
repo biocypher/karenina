@@ -888,9 +888,17 @@ class TestFailedInvestigation:
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"citations": None, "clarity": True}
 
         assert ctx.error is not None
-        assert "'citations' (RuntimeError: judge crashed)" in ctx.error
+        assert "'citations' (investigation, RuntimeError: judge crashed)" in ctx.error
         assert ctx.error_stage == "AgenticRubricEvaluation"
         assert ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED) is True
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS) == {
+            "citations": {
+                "phase": "investigation",
+                "error_type": "RuntimeError",
+                "message": "judge crashed",
+                "category": "permanent",
+            }
+        }
 
     def test_error_category_comes_from_error_registry(self, monkeypatch):
         from karenina.benchmark.verification.stages.pipeline import (
@@ -929,6 +937,7 @@ class TestFailedInvestigation:
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES) == {"code_quality": "kept trace"}
         assert ctx.error is None
         assert ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED) is None
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS) == {}
 
     def test_finalized_result_is_a_system_failure_at_the_stage(self, monkeypatch):
         """End to end through finalize: the row carries a Failure, not a judgment."""
@@ -958,6 +967,7 @@ class TestFailedInvestigation:
         assert failure.group == FailureGroup.SYSTEM
         assert failure.stage == "AgenticRubricEvaluation"
         assert Caveat.AGENTIC_INVESTIGATION_FAILED in result.metadata.caveats
+        assert result.rubric.agentic_trait_evaluation_errors["citations"]["phase"] == "investigation"
         assert result.rubric.agentic_trait_investigation_traces == {
             "citations": "[investigation failed: RuntimeError: judge crashed]",
         }
@@ -999,3 +1009,154 @@ class TestFailedInvestigation:
         assert failure is not None
         assert failure.category.value == expected_category
         assert Caveat.AGENTIC_INVESTIGATION_FAILED in collect_caveats(ctx)
+
+
+# ------------------------------------------------------------------
+# Failed extractions
+# ------------------------------------------------------------------
+
+
+def _extraction_failure_evaluator(error: Exception) -> MagicMock:
+    """Fake evaluator whose investigation succeeds and whose extraction raised ``error``."""
+    from karenina.ports import Message
+
+    fake = MagicMock()
+    fake.evaluate_trait.return_value = AgenticTraitEvaluation(
+        score=None,
+        trace="Investigated. Verdict: supported.",
+        messages=[Message.assistant("Verdict: supported.")],
+        extraction_error=error,
+    )
+    return fake
+
+
+@pytest.mark.unit
+class TestFailedExtraction:
+    """A retryable extraction error is an infrastructure failure, a validation error is not."""
+
+    @pytest.mark.parametrize(
+        ("error", "category"),
+        [
+            (ConnectionError("reset by peer"), "connection"),
+            (TimeoutError("read timed out"), "timeout"),
+        ],
+    )
+    def test_retryable_extraction_error_is_recorded(self, monkeypatch, error, category):
+        from karenina.benchmark.verification.failure_classifier import collect_caveats
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = _extraction_failure_evaluator(error)
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        # The trace and messages are kept.
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES) == {
+            "citations": "Investigated. Verdict: supported."
+        }
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)["citations"][0]["content"] == (
+            "Verdict: supported."
+        )
+        record = ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS)["citations"]
+        assert record["phase"] == "extraction"
+        assert record["category"] == category
+        assert ctx.error is not None
+        assert "'citations' (extraction," in ctx.error
+        assert ctx.error_stage == "AgenticRubricEvaluation"
+        assert collect_caveats(ctx) == [Caveat.AGENTIC_EXTRACTION_FAILED]
+
+    def test_wrapped_retryable_parse_error_is_recorded(self, monkeypatch):
+        """A ParseError raised from a provider rate limit is classified by its cause."""
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.ports import ParseError
+
+        class RateLimitError(Exception):
+            pass
+
+        try:
+            try:
+                raise RateLimitError("429 Too Many Requests")
+            except RateLimitError as cause:
+                raise ParseError("structured output failed") from cause
+        except ParseError as wrapped:
+            error = wrapped
+
+        fake_evaluator = _extraction_failure_evaluator(error)
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        record = ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS)["citations"]
+        assert record["category"] == "rate_limit"
+        assert record["error_type"] == "ParseError"
+
+    def test_non_retryable_extraction_error_keeps_todays_behaviour(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = _extraction_failure_evaluator(ValueError("schema validation failed"))
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"citations": None}
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)["citations"].startswith("Investigated")
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS) == {}
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_FAILED) is None
+        assert ctx.error is None
+
+    def test_shared_strategy_records_retryable_extraction_error(self, monkeypatch):
+        import karenina.adapters as adapters_pkg
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = _make_shared_agent_result()
+        monkeypatch.setattr(adapters_pkg, "get_agent", lambda _model: fake_agent)
+
+        def run_extraction(trait, _trace):
+            if trait.name == "a":
+                raise ConnectionError("parser connection dropped")
+            if trait.name == "b":
+                raise ValueError("schema validation failed")
+            return True
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.run_extraction.side_effect = run_extraction
+        fake_evaluator.last_extraction_metadata = None
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_shared_context([_make_trait(name="a"), _make_trait(name="b"), _make_trait(name="c")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"a": None, "b": None, "c": True}
+        errors = ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS)
+        assert list(errors) == ["a"]
+        assert errors["a"]["category"] == "connection"
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)["a"] == "Shared investigation."
+        assert ctx.error_stage == "AgenticRubricEvaluation"

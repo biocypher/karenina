@@ -278,6 +278,14 @@ class VerificationResultRubric(BaseModel):
         "in the same format as template.trace_messages. A single-call judge without tools stores "
         "one assistant message. Traits whose investigation failed have no entry.",
     )
+    agentic_trait_evaluation_errors: dict[str, dict[str, str]] | None = Field(
+        default=None,
+        description="Errors that left an agentic rubric trait without a judgment, keyed by trait name. "
+        "Each entry has 'phase' ('investigation' or 'extraction'), 'error_type', 'message' and "
+        "'category' (an ErrorCategory value: 'connection', 'timeout', 'rate_limit', 'server_error' "
+        "or 'permanent'). Only 'permanent' errors are not worth retrying. Investigation errors are "
+        "always recorded. Extraction errors are recorded only when retryable.",
+    )
     agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
         default=None,
         description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",

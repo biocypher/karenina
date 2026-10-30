@@ -73,6 +73,10 @@ class AgenticTraitEvaluation:
         investigation_error: The exception that ended the investigation, or
             None. When set, the outcome is an infrastructure failure, not a
             judgment.
+        extraction_error: The exception raised by score extraction, or None.
+            The trace and messages are kept. The stage decides from the
+            error's category whether it is an infrastructure failure
+            (retryable, for example a rate limit) or a plain missing score.
     """
 
     score: int | bool | dict[str, Any] | None
@@ -81,6 +85,7 @@ class AgenticTraitEvaluation:
     investigation_usage: UsageMetadata | None = None
     extraction_usage: UsageMetadata | None = None
     investigation_error: Exception | None = None
+    extraction_error: Exception | None = None
 
 
 def investigation_failure_record(error: BaseException) -> str:
@@ -182,12 +187,13 @@ class AgenticTraitEvaluator:
         # Step 2: Extraction
         try:
             evaluation.score = self.run_extraction(trait, investigation.trace)
-        except Exception:
+        except Exception as e:
             logger.warning(
                 "Score extraction failed for trait '%s', preserving trace",
                 trait.name,
                 exc_info=True,
             )
+            evaluation.extraction_error = e
         evaluation.extraction_usage = self.last_extraction_usage
         return evaluation
 

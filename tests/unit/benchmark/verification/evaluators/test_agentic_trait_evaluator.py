@@ -214,6 +214,7 @@ class TestAgenticTraitEvaluator:
         assert evaluation.score is None
         assert evaluation.trace == "I found several issues."
         assert evaluation.investigation_error is None
+        assert isinstance(evaluation.extraction_error, RuntimeError)
 
     def test_workspace_only_mode_excludes_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """workspace_only context_mode does not include raw_llm_response in prompt."""

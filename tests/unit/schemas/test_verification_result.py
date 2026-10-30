@@ -464,6 +464,20 @@ class TestVerificationResultRubricAgenticFields:
         old_row = {"agentic_trait_investigation_traces": {"code_quality": "trace"}}
         assert VerificationResultRubric.model_validate(old_row).agentic_trait_investigation_messages is None
 
+    def test_evaluation_errors_default_none_and_round_trip(self):
+        assert VerificationResultRubric().agentic_trait_evaluation_errors is None
+        errors = {
+            "citations": {
+                "phase": "extraction",
+                "error_type": "GeminiRateLimitError",
+                "message": "quota",
+                "category": "rate_limit",
+            }
+        }
+        rubric = VerificationResultRubric(agentic_trait_evaluation_errors=errors)
+        restored = VerificationResultRubric.model_validate_json(rubric.model_dump_json())
+        assert restored.agentic_trait_evaluation_errors == errors
+
     def test_investigation_messages_stored(self):
         messages = {"code_quality": [{"role": "assistant", "content": "Looks fine.", "block_index": 0}]}
         rubric = VerificationResultRubric(agentic_trait_investigation_messages=messages)

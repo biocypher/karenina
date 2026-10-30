@@ -368,6 +368,7 @@ class FinalizeResultStage(BaseVerificationStage):
             agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
             agentic_trait_traces_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
             agentic_trait_messages_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)
+            agentic_trait_errors = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS) or None
             agentic_trait_extraction_metadata = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
             # Filter out None traces and messages (skipped traits, failed investigations) to satisfy the schema
             agentic_trait_traces = (
@@ -397,6 +398,7 @@ class FinalizeResultStage(BaseVerificationStage):
                 agentic_trait_scores=agentic_trait_scores,
                 agentic_trait_investigation_traces=agentic_trait_traces,
                 agentic_trait_investigation_messages=agentic_trait_messages,
+                agentic_trait_evaluation_errors=agentic_trait_errors,
                 agentic_trait_extraction_metadata=agentic_trait_extraction_metadata,
                 dynamic_rubric_skipped_traits=dynamic_skipped,
                 dynamic_rubric_promoted_traits=dynamic_promoted,
