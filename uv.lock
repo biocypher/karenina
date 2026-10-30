@@ -2381,6 +2381,9 @@ examples = [
 gepa = [
     { name = "gepa" },
 ]
+google-genai = [
+    { name = "google-genai" },
+]
 paper-analysis = [
     { name = "arviz" },
     { name = "bambi" },
@@ -2428,6 +2431,7 @@ requires-dist = [
     { name = "deepagents", marker = "extra == 'deep-agents'", specifier = ">=0.4.0" },
     { name = "gepa", specifier = ">=0.0.24" },
     { name = "gepa", marker = "extra == 'gepa'", specifier = ">=0.0.24" },
+    { name = "google-genai", marker = "extra == 'google-genai'", specifier = ">=1.56,<3" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "ijson", specifier = ">=3.3.0" },
     { name = "ipykernel", marker = "extra == 'examples'", specifier = ">=6.0.0" },
@@ -6316,8 +6320,8 @@ name = "uvicorn"
 version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click" },
-    { name = "h11" },
+    { name = "click", marker = "sys_platform != 'emscripten'" },
+    { name = "h11", marker = "sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/71/57/1616c8274c3442d802621abf5deb230771c7a0fec9414cb6763900eb3868/uvicorn-0.37.0.tar.gz", hash = "sha256:4115c8add6d3fd536c8ee77f0e14a7fd2ebba939fed9b02583a97f80648f9e13", size = 80367 }
 wheels = [

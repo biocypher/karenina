@@ -1,7 +1,8 @@
 """Conformance: LLM adapter retries route through RetryExecutor.
 
 Asserts a shared contract across the single-turn LLM adapters that own
-their transient retries (langchain, claude_tool, langchain_deep_agents):
+their transient retries (langchain, claude_tool, langchain_deep_agents,
+google_genai):
 a classified-retryable error raised by the underlying SDK call is retried
 by RetryExecutor (not an SDK-internal layer), so a bound track_retries
 tracker observes every retry. This is the telemetry guarantee that the
@@ -129,10 +130,46 @@ def _make_deep_agents(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, _Counter]:
     return DeepAgentsLLMAdapter(config), counter
 
 
+def _make_google_genai(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, _Counter]:
+    """GoogleGenAILLMAdapter over a flaky fake genai client."""
+    pytest.importorskip("google.genai", reason="google-genai not installed")
+    from google.genai import types
+
+    from karenina.adapters.google_genai.llm import GoogleGenAILLMAdapter
+
+    counter = _Counter()
+
+    async def flaky_generate(**_kwargs: Any) -> Any:
+        counter.calls += 1
+        if counter.calls <= FAILURES:
+            raise ConnectionError("connection refused")
+        return types.GenerateContentResponse(
+            candidates=[
+                types.Candidate(
+                    content=types.Content(role="model", parts=[types.Part(text="Paris")]),
+                    finish_reason=types.FinishReason.STOP,
+                )
+            ],
+            usage_metadata=types.GenerateContentResponseUsageMetadata(prompt_token_count=3, candidates_token_count=5),
+        )
+
+    config = ModelConfig(
+        id="conformance-google-genai",
+        model_name="gemini-3.8-flash",
+        interface="google_genai",
+        retry_policy=_tight_policy(),
+    )
+    adapter = GoogleGenAILLMAdapter(config)
+    client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=flaky_generate)))
+    monkeypatch.setattr(adapter._client, "get", lambda: client)
+    return adapter, counter
+
+
 ADAPTER_FACTORIES = [
     pytest.param(_make_langchain, id="langchain"),
     pytest.param(_make_claude_tool, id="claude_tool"),
     pytest.param(_make_deep_agents, id="langchain_deep_agents"),
+    pytest.param(_make_google_genai, id="google_genai"),
 ]
 
 

@@ -105,6 +105,9 @@ deep-agents = [
     "deepagents>=0.4.0",
     "langchain-mcp-adapters>=0.1.0",
 ]
+google-genai = [
+    "google-genai>=1.56,<3",  # google_genai adapter (Gemini on Vertex AI or the Gemini API)
+]
 
 [project.scripts]
 karenina = "karenina.cli:app"
