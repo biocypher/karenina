@@ -11,6 +11,7 @@ from karenina.benchmark.verification.extension import extend_rubric_run
 from karenina.replay import ReplayStore
 from karenina.schemas.config import ModelConfig
 from karenina.schemas.entities import (
+    AgenticRubricTrait,
     LLMRubricTrait,
     MetricRubricTrait,
     RegexRubricTrait,
@@ -540,3 +541,117 @@ class TestMergeAgenticInvestigationMessages:
         assert target.rubric.agentic_trait_investigation_messages == {"a": prior_messages, "b": new_messages}
         with pytest.raises(ValueError, match="collision in agentic_trait_scores"):
             _merge_rubric_onto_row(target, source)
+
+
+def _judge_failed_source(question_id: str, run_name: str = "extend") -> VerificationResult:
+    """A rubric-only row whose agentic judge hit a rate limit during extraction."""
+    from karenina.schemas.results.caveat import Caveat
+    from karenina.schemas.results.failure import Failure, FailureCategory
+
+    row = _make_result(
+        question_id=question_id,
+        run_name=run_name,
+        rubric=VerificationResultRubric(
+            rubric_evaluation_performed=True,
+            agentic_trait_scores={"citations": None},
+            agentic_trait_investigation_traces={"citations": "Investigated."},
+            agentic_trait_evaluation_errors={
+                "citations": {
+                    "phase": "extraction",
+                    "error_type": "GeminiRateLimitError",
+                    "message": "429",
+                    "category": "rate_limit",
+                }
+            },
+        ),
+    )
+    row.metadata.failure = Failure(
+        category=FailureCategory.UNEXPECTED_ERROR,
+        stage="AgenticRubricEvaluation",
+        reason="Agentic rubric judge failed for 1 trait(s)",
+    )
+    row.metadata.caveats = [Caveat.AGENTIC_EXTRACTION_FAILED]
+    return row
+
+
+@pytest.mark.unit
+class TestMergeAgenticJudgeFailure:
+    """extend_rubric keeps a failed re-judgment identifiable on the enriched row."""
+
+    def test_failure_caveat_and_errors_are_carried_over(self) -> None:
+        from karenina.benchmark.verification.extension import _merge_rubric_onto_row
+        from karenina.schemas.results.caveat import Caveat
+
+        target = _make_result(question_id="q1", run_name="prior")
+        source = _judge_failed_source("q1")
+
+        _merge_rubric_onto_row(target, source)
+
+        assert target.metadata.failure is not None
+        assert target.metadata.failure.stage == "AgenticRubricEvaluation"
+        assert target.metadata.caveats == [Caveat.AGENTIC_EXTRACTION_FAILED]
+        assert target.rubric is not None
+        assert target.rubric.agentic_trait_evaluation_errors["citations"]["category"] == "rate_limit"
+        assert target.rubric.agentic_trait_investigation_traces == {"citations": "Investigated."}
+
+    def test_prior_failure_is_kept_and_caveat_still_added(self) -> None:
+        from karenina.benchmark.verification.extension import _merge_rubric_onto_row
+        from karenina.schemas.results.caveat import Caveat
+        from karenina.schemas.results.failure import Failure, FailureCategory
+
+        target = _make_result(question_id="q1", run_name="prior")
+        target.metadata.failure = Failure(category=FailureCategory.CONTENT, stage="verify_template", reason="no")
+        source = _judge_failed_source("q1")
+
+        _merge_rubric_onto_row(target, source)
+
+        assert target.metadata.failure.category == FailureCategory.CONTENT
+        assert Caveat.AGENTIC_EXTRACTION_FAILED in target.metadata.caveats
+
+    def test_failure_from_another_stage_is_not_copied(self) -> None:
+        from karenina.benchmark.verification.extension import _merge_rubric_onto_row
+        from karenina.schemas.results.failure import Failure, FailureCategory
+
+        target = _make_result(question_id="q1", run_name="prior")
+        source = _make_result(question_id="q1", run_name="extend")
+        source.metadata.failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR, stage="RubricEvaluation", reason="other"
+        )
+
+        _merge_rubric_onto_row(target, source)
+
+        assert target.metadata.failure is None
+
+    def test_extend_rubric_marks_rows_whose_judge_failed(
+        self,
+        bench_and_recorder: tuple[Benchmark, _FakeRubricRecorder],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from karenina.schemas.results.caveat import Caveat
+
+        bench, recorder = bench_and_recorder
+
+        def rubric_run_with_failed_judge(*args: Any, **kwargs: Any) -> VerificationResultSet:
+            rows = recorder(*args, **kwargs).results
+            return VerificationResultSet(
+                results=[
+                    _judge_failed_source(r.metadata.question_id) if r.metadata.question_id == "q1" else r for r in rows
+                ]
+            )
+
+        monkeypatch.setattr(
+            Benchmark, "run_verification", lambda _self, *a, **kw: rubric_run_with_failed_judge(*a, **kw)
+        )
+        bench.set_global_rubric(
+            Rubric(agentic_traits=[AgenticRubricTrait(name="citations", description="Check.", kind="boolean")])
+        )
+        prior = _make_prior_set(run_name="first", question_ids=["q1", "q2"])
+        config = VerificationConfig(answering_models=[ANSWERING_MODEL], parsing_models=[JUDGE_A])
+
+        merged = {r.metadata.question_id: r for r in bench.extend_rubric(prior, config, store=False).results}
+
+        assert merged["q1"].metadata.failure is not None
+        assert merged["q1"].metadata.failure.stage == "AgenticRubricEvaluation"
+        assert Caveat.AGENTIC_EXTRACTION_FAILED in merged["q1"].metadata.caveats
+        assert merged["q2"].metadata.failure is None
+        assert merged["q2"].metadata.caveats == []
