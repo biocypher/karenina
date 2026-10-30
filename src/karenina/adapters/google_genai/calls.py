@@ -9,7 +9,8 @@ whole agent run. Each attempt:
 - translates SDK errors into port errors (``errors.py``),
 - for a stream, accumulates parts, usage and grounding across chunks,
 - fails as ``GeminiIncompleteResponseError`` (retried) when the call ends
-  without a finish reason, so a cut stream is never an empty success.
+  without a finish reason, or with STOP but no text and no function call,
+  so a cut stream or an empty turn is never an empty success.
 
 Finish reasons are compared by name string (``classify_finish_reason``), so
 reasons the installed SDK does not know map to a permanent stop instead of
@@ -130,6 +131,32 @@ def classify_finish_reason(name: str | None) -> FinishKind:
     if name in _BAD_TOOL_CALL_REASONS:
         return "bad_tool_call"
     return "blocked"
+
+
+def ensure_complete(outcome: CallOutcome, *, stream: bool) -> None:
+    """Fail a call that returned no usable answer, so it is retried.
+
+    Raises:
+        GeminiFinishReasonError: When the prompt itself was blocked
+            (permanent).
+        GeminiIncompleteResponseError: When the call ended without a finish
+            reason, or stopped with STOP but returned no text (thoughts
+            excluded) and no function call. Gemini sometimes ends a turn
+            this way after function responses.
+    """
+    if outcome.block_reason is not None and not outcome.parts:
+        raise GeminiFinishReasonError(
+            f"Gemini blocked the prompt: {outcome.block_reason}", finish_reason=outcome.block_reason
+        )
+    kind = "stream" if stream else "single call"
+    if outcome.finish_reason is None or outcome.finish_reason in _INCOMPLETE_REASONS:
+        raise GeminiIncompleteResponseError(
+            f"Gemini call ended without a finish reason ({kind}, {len(outcome.parts)} parts received)"
+        )
+    if outcome.finish_reason == "STOP" and not outcome.text and not outcome.has_function_calls:
+        raise GeminiIncompleteResponseError(
+            f"Gemini stopped with no text and no function call ({kind}, {len(outcome.parts)} parts received)"
+        )
 
 
 def finish_error(outcome: CallOutcome) -> GeminiFinishReasonError:
@@ -337,7 +364,8 @@ async def generate(
     Raises:
         GeminiAPIError: An API error, after retries for transient ones.
         GeminiAuthError: Missing or expired Google credentials.
-        GeminiIncompleteResponseError: No finish reason, after retries.
+        GeminiIncompleteResponseError: No finish reason or an empty STOP,
+            after retries.
         GeminiFinishReasonError: The prompt itself was blocked.
         TimeoutError: The per-attempt guard fired on every attempt.
     """
@@ -362,16 +390,7 @@ async def _attempt(
             genai_client = client.get()
             call = (_call_streamed if stream else _call_once)(genai_client, model, contents, config)
             outcome = await (call if timeout is None else asyncio.wait_for(call, timeout=timeout))
-
-    if outcome.block_reason is not None and not outcome.parts:
-        raise GeminiFinishReasonError(
-            f"Gemini blocked the prompt: {outcome.block_reason}", finish_reason=outcome.block_reason
-        )
-    if outcome.finish_reason is None or outcome.finish_reason in _INCOMPLETE_REASONS:
-        raise GeminiIncompleteResponseError(
-            f"Gemini call ended without a finish reason ({'stream' if stream else 'single call'}, "
-            f"{len(outcome.parts)} parts received)"
-        )
+    ensure_complete(outcome, stream=stream)
     return outcome
 
 

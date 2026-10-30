@@ -107,11 +107,6 @@ class TestBasics:
         assert models.calls[0]["config"].system_instruction == "agent-config prompt"
         assert models.calls[1]["config"].system_instruction == "model-config prompt"
 
-    async def test_empty_response_is_an_error(self) -> None:
-        models = FakeModels(responses=[response([], finish="STOP")])
-        with pytest.raises(AgentResponseError, match="no content"):
-            await _agent(models).arun([Message.user("Q")])
-
     async def test_sync_run_without_a_loop(self) -> None:
         models = FakeModels(responses=[response([text_part("sync ok")])])
         adapter = _agent(models)
@@ -341,21 +336,11 @@ class TestServerSideTools:
 
 @pytest.mark.unit
 class TestFinishReasons:
-    async def test_too_many_tool_calls_ends_the_run_with_limit_reached(self) -> None:
-        models = FakeModels(
-            responses=[response([], finish="TOO_MANY_TOOL_CALLS", grounding=search_grounding(["q"] * 1 + ["r"]))]
-        )
-        result = await _agent(models, extra_kwargs={"builtin_tools": ["google_search"]}).arun([Message.user("Q")])
-        assert result.limit_reached is True
-        assert result.final_response == "[No final response extracted]"
-        assert "TOO_MANY_TOOL_CALLS" in result.raw_trace
-        assert result.usage.web_search_queries == 2
-
-    async def test_too_many_tool_calls_without_any_trace(self) -> None:
+    async def test_too_many_tool_calls_without_any_trace_fails(self) -> None:
+        # More cases (text kept as a limit, searches only) are in test_empty_turns.py.
         models = FakeModels(responses=[response([], finish="TOO_MANY_TOOL_CALLS")])
-        result = await _agent(models).arun([Message.user("Q")])
-        assert result.limit_reached is True
-        assert result.trace_messages == []
+        with pytest.raises(AgentResponseError, match="TOO_MANY_TOOL_CALLS"):
+            await _agent(models).arun([Message.user("Q")])
 
     @pytest.mark.parametrize("reason", ["MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL"])
     async def test_bad_tool_call_gets_a_corrective_note(self, reason: str) -> None:

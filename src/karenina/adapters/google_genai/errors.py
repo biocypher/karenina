@@ -51,9 +51,12 @@ class GeminiAuthError(PortError):
 
 
 class GeminiIncompleteResponseError(PortError):
-    """A call ended without a finish reason (for example a stream cut short).
+    """A call returned no usable answer.
 
-    Treated as a server error and retried, never returned as an empty answer.
+    Raised when a call ends without a finish reason (for example a stream
+    cut short), or when it stops with STOP but holds no text and no function
+    call. Treated as a server error and retried, never returned as an empty
+    answer.
     """
 
 

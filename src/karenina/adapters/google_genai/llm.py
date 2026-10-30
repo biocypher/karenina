@@ -38,12 +38,13 @@ from .calls import (
     CallOutcome,
     StreamAccumulator,
     build_generate_config,
+    ensure_complete,
     generate,
     raise_for_llm_finish,
     translated_sdk_errors,
 )
 from .client import GenAIClientHolder
-from .errors import GeminiClientError, GeminiIncompleteResponseError, build_error_registry
+from .errors import GeminiClientError, build_error_registry
 from .grounding import resolve_source_urls
 from .messages import extract_system_instruction, to_contents
 from .settings import BUILTIN_GOOGLE_SEARCH, GoogleGenAISettings
@@ -310,7 +311,7 @@ class GoogleGenAILLMAdapter:
 
         Stream establishment goes through ``RetryExecutor`` under one limiter
         permit. The established stream is never retried mid-flight. A stream
-        that ends without a finish reason raises
+        that ends without a finish reason, or with STOP but no text, raises
         ``GeminiIncompleteResponseError`` from the iteration.
 
         Args:
@@ -363,10 +364,7 @@ class GoogleGenAILLMAdapter:
                         if text and not getattr(part, "thought", None):
                             yield text
             outcome = accumulator.outcome()
-            if outcome.finish_reason in (None, "FINISH_REASON_UNSPECIFIED"):
-                raise GeminiIncompleteResponseError(
-                    f"Gemini stream ended without a finish reason ({len(outcome.parts)} parts received)"
-                )
+            ensure_complete(outcome, stream=True)
             raise_for_llm_finish(outcome)
 
         response._set_chunk_source(_chunks())

@@ -329,6 +329,11 @@ class GoogleGenAIAgentAdapter:
             if kind == "blocked":
                 raise finish_error(outcome)
             if kind == "tool_limit":
+                if not _has_assistant_text(state.trace):
+                    raise AgentResponseError(
+                        "Gemini stopped with TOO_MANY_TOOL_CALLS (its server-side tool loop ran too long) "
+                        "before writing any text"
+                    )
                 state.limit_reached = True
                 state.notes.append(
                     "Gemini stopped with TOO_MANY_TOOL_CALLS (its server-side tool loop ran too long), "
@@ -344,6 +349,13 @@ class GoogleGenAIAgentAdapter:
                 if kind == "max_tokens":
                     state.notes.append(f"Turn {turn} stopped at MAX_TOKENS: its response may be truncated")
                 if not calls:
+                    if not outcome.text:
+                        # An empty STOP is already retried inside calls.generate,
+                        # so this is a MAX_TOKENS turn that wrote nothing.
+                        raise AgentResponseError(
+                            f"Gemini ended the run with an empty final turn (finish reason "
+                            f"{outcome.finish_reason}), so it wrote no answer"
+                        )
                     return
                 await self._run_function_calls(state, toolset, calls, options)
 
@@ -397,8 +409,7 @@ class GoogleGenAIAgentAdapter:
         if not state.trace:
             if timeout_reached:
                 raise AgentTimeoutError(f"Agent execution timed out after {timeout}s with no messages")
-            if not state.limit_reached:
-                raise AgentResponseError("Gemini returned no content")
+            raise AgentResponseError("Gemini returned no content")
 
         notes = list(state.notes)
         if state.limit_reached:
@@ -464,6 +475,11 @@ class GoogleGenAIAgentAdapter:
     async def aclose(self) -> None:
         """Close the google-genai clients. MCP sessions close per run. Safe to call twice."""
         await self._client.aclose()
+
+
+def _has_assistant_text(trace: list[Message]) -> bool:
+    """True when some assistant message in the trace carries text (thoughts excluded)."""
+    return any(message.role == Role.ASSISTANT and message.text for message in trace)
 
 
 def _final_response(trace: list[Message]) -> str:

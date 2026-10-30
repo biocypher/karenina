@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 from google.genai import types
 
 from karenina.schemas.config import ModelConfig
-from karenina.utils.retry_policy import CategoryRetryConfig, RetryPolicy
+from karenina.utils.retry_policy import CategoryRetryConfig, RetryExecutor, RetryPolicy
 
 MODEL_VERSION = "gemini-3.8-flash-001"
 
@@ -194,3 +194,30 @@ def install(holder_owner: Any, models: FakeModels) -> FakeClient:
     client = FakeClient(models)
     holder.get = lambda: client
     return client
+
+
+async def run_generate(
+    models: FakeModels,
+    *,
+    stream: bool = False,
+    request_timeout: float | None = None,
+    retry_policy: RetryPolicy | None = None,
+) -> Any:
+    """Run ``calls.generate`` once against fake models with a zero-backoff policy."""
+    from karenina.adapters.google_genai.calls import build_generate_config, generate
+    from karenina.adapters.google_genai.client import GenAIClientHolder
+    from karenina.adapters.google_genai.errors import build_error_registry
+    from karenina.adapters.google_genai.settings import GoogleGenAISettings
+
+    settings = GoogleGenAISettings.from_model_config(make_config())
+    holder = GenAIClientHolder(settings)
+    install(holder, models)
+    return await generate(
+        holder,
+        model="gemini-3.8-flash",
+        contents=[types.Content(role="user", parts=[types.Part(text="Q")])],
+        config=build_generate_config(settings, system_instruction=None),
+        stream=stream,
+        request_timeout=request_timeout,
+        retry_executor=RetryExecutor(retry_policy or fast_policy(), build_error_registry()),
+    )
