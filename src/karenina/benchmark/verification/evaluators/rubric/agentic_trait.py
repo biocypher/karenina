@@ -63,12 +63,16 @@ class AgenticTraitEvaluation:
     Attributes:
         score: The extracted score, a dict for template kind traits, or None
             when the investigation or the extraction failed.
-        trace: The investigation trace, or None when the investigation failed.
+        trace: The investigation trace. When the investigation failed, a
+            record of the form ``[investigation failed: <ExceptionType>: <message>]``.
         messages: The structured investigation messages, or None when the
             investigation failed.
         investigation_usage: Usage of the investigation, or None.
         extraction_usage: Usage of the extraction parser call, or None when
             the score was recovered locally or extraction failed.
+        investigation_error: The exception that ended the investigation, or
+            None. When set, the outcome is an infrastructure failure, not a
+            judgment.
     """
 
     score: int | bool | dict[str, Any] | None
@@ -76,6 +80,12 @@ class AgenticTraitEvaluation:
     messages: list[Message] | None = None
     investigation_usage: UsageMetadata | None = None
     extraction_usage: UsageMetadata | None = None
+    investigation_error: Exception | None = None
+
+
+def investigation_failure_record(error: BaseException) -> str:
+    """Return the trace stored for a trait whose investigation raised ``error``."""
+    return f"[investigation failed: {type(error).__name__}: {error}]"
 
 
 def build_mcp_servers(model_config: ModelConfig) -> dict[str, Any]:
@@ -137,8 +147,9 @@ class AgenticTraitEvaluator:
 
         Returns:
             The trait's AgenticTraitEvaluation. Its score is None if evaluation
-            failed (a dict for template kind traits). Its trace is None if the
-            agent failed before producing output.
+            failed (a dict for template kind traits). If the investigation
+            raised, the evaluation carries the exception in
+            ``investigation_error`` and a failure record as its trace.
         """
         # Step 1: Investigation
         try:
@@ -149,13 +160,17 @@ class AgenticTraitEvaluator:
                 workspace_path,
                 trace_file_path=trace_file_path,
             )
-        except Exception:
+        except Exception as e:
             logger.warning(
                 "Agentic investigation failed for trait '%s'",
                 trait.name,
                 exc_info=True,
             )
-            return AgenticTraitEvaluation(score=None, trace=None)
+            return AgenticTraitEvaluation(
+                score=None,
+                trace=investigation_failure_record(e),
+                investigation_error=e,
+            )
 
         evaluation = AgenticTraitEvaluation(
             score=None,

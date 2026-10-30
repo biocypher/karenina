@@ -40,6 +40,7 @@ class _AgenticRubricOutputs:
     traces: dict[str, str | None] = field(default_factory=dict)
     messages: dict[str, list[dict[str, Any]] | None] = field(default_factory=dict)
     extraction_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
+    investigation_errors: dict[str, Exception] = field(default_factory=dict)
 
     def record_score(self, trait: AgenticRubricTrait, score: int | bool | dict[str, Any] | None) -> None:
         """Store a trait score, expanding template kind dicts into dotted keys."""
@@ -90,6 +91,12 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
 
     The judge's investigation and extraction usage is recorded in the usage
     tracker under the ``agentic_rubric_evaluation`` stage.
+
+    A trait whose investigation raised keeps a failure record as its trace,
+    and the stage marks the context with an error attributed to this stage.
+    The result is then classified as an infrastructure failure (never a
+    judgment). AgenticProgressiveFileSink retries such rows on resume, and
+    the executor reuses their answer trace.
     """
 
     @property
@@ -219,6 +226,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 outputs.extraction_metadata,
             )
 
+            if outputs.investigation_errors:
+                self._mark_investigation_failures(context, outputs.investigation_errors)
+
             evaluated = sum(1 for v in outputs.scores.values() if v is not None)
             logger.info(
                 "Agentic rubric evaluation complete: %d/%d traits scored",
@@ -280,6 +290,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
             outputs.record_score(trait, evaluation.score)
             outputs.record_investigation(trait, evaluation.trace, evaluation.messages)
+            if evaluation.investigation_error is not None:
+                outputs.investigation_errors[trait.name] = evaluation.investigation_error
             self._track_usage(usage_tracker, model, evaluation.investigation_usage)
             self._track_usage(usage_tracker, model, evaluation.extraction_usage)
             metadata = getattr(evaluator, "last_extraction_metadata", None)
@@ -457,6 +469,30 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 outputs.extraction_metadata[trait.name] = metadata
 
         return outputs
+
+    # ------------------------------------------------------------------
+    # Failures
+    # ------------------------------------------------------------------
+
+    def _mark_investigation_failures(
+        self,
+        context: VerificationContext,
+        errors: dict[str, Exception],
+    ) -> None:
+        """Mark the context as failed because one or more investigations raised.
+
+        Follows the AgenticParseTemplate stage: the error category comes from
+        the context's ErrorRegistry (using the first failure), so the failure
+        classifier reports a retry-exhausted or system failure at this stage,
+        not a judgment.
+        """
+        details = ", ".join(f"'{name}' ({type(error).__name__}: {error})" for name, error in errors.items())
+        first_error = next(iter(errors.values()))
+        context.mark_error(
+            f"Agentic rubric investigation failed for {len(errors)} trait(s): {details}",
+            category=context.error_registry.classify(first_error),
+            stage=self.name,
+        )
 
     # ------------------------------------------------------------------
     # Usage

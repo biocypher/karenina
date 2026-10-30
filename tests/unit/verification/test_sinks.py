@@ -437,6 +437,26 @@ class TestAgenticProgressiveFileSink:
         assert sink.completed_triples() == set()
         assert list(sink.iter_results())[0].template.raw_llm_response == "usable partial trace"
 
+    @pytest.mark.parametrize("category", [FailureCategory.UNEXPECTED_ERROR, FailureCategory.CONNECTION])
+    def test_agentic_rubric_investigation_failure_is_retried_on_resume(
+        self,
+        tmp_path: Path,
+        category: FailureCategory,
+    ):
+        sink = self._fresh(tmp_path)
+        failure = Failure(
+            category=category,
+            stage="AgenticRubricEvaluation",
+            reason="Agentic rubric investigation failed for 1 trait(s)",
+        )
+        result = _result("q1", failure=failure, raw_llm_response="usable answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert sink.completed_triples() == set()
+        assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
+
     def test_success_after_parser_failure_becomes_terminal_and_export_dedupes(self, tmp_path: Path):
         sink = self._fresh(tmp_path)
         parser_failure = Failure(

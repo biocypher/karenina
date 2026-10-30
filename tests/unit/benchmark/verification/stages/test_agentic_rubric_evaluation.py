@@ -802,3 +802,124 @@ class TestInvestigationMessages:
         messages = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)
         expected = [{"role": "assistant", "content": "Done.", "block_index": 0}]
         assert messages == {"a": expected, "b": expected}
+
+
+# ------------------------------------------------------------------
+# Failed investigations
+# ------------------------------------------------------------------
+
+
+def _failing_evaluator(failing_trait: str, error: Exception) -> MagicMock:
+    """Fake evaluator whose investigation raises for one trait and scores the rest."""
+
+    def evaluate_trait(trait, question_text, raw_llm_response, workspace_path):  # noqa: ARG001
+        if trait.name == failing_trait:
+            return AgenticTraitEvaluation(
+                score=None,
+                trace=f"[investigation failed: {type(error).__name__}: {error}]",
+                investigation_error=error,
+            )
+        return AgenticTraitEvaluation(score=True, trace="fine", messages=[])
+
+    fake = MagicMock()
+    fake.evaluate_trait.side_effect = evaluate_trait
+    return fake
+
+
+@pytest.mark.unit
+class TestFailedInvestigation:
+    """A failed investigation leaves a record and marks an infrastructure failure."""
+
+    def test_failure_record_and_stage_error(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = _failing_evaluator("citations", RuntimeError("judge crashed"))
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations"), _make_trait(name="clarity")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        traces = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+        assert traces["citations"] == "[investigation failed: RuntimeError: judge crashed]"
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)["citations"] is None
+        # The other trait is still evaluated and stored.
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"citations": None, "clarity": True}
+
+        assert ctx.error is not None
+        assert "'citations' (RuntimeError: judge crashed)" in ctx.error
+        assert ctx.error_stage == "AgenticRubricEvaluation"
+
+    def test_error_category_comes_from_error_registry(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.utils.errors import ErrorCategory
+
+        fake_evaluator = _failing_evaluator("citations", ConnectionError("MCP server unreachable"))
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.error_category == ErrorCategory.CONNECTION
+
+    def test_extraction_failure_is_not_an_infrastructure_failure(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(score=None, trace="kept trace", messages=[])
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait()])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES) == {"code_quality": "kept trace"}
+        assert ctx.error is None
+
+    def test_finalized_result_is_a_system_failure_at_the_stage(self, monkeypatch):
+        """End to end through finalize: the row carries a Failure, not a judgment."""
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.benchmark.verification.stages.pipeline.finalize_result import FinalizeResultStage
+        from karenina.schemas.results.failure import FailureCategory, FailureGroup
+
+        fake_evaluator = _failing_evaluator("citations", RuntimeError("judge crashed"))
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations")])
+        ctx.set_result_field("timestamp", "2026-10-30 12:00:00")
+        ctx.set_result_field("execution_time", 1.0)
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+        FinalizeResultStage().execute(ctx)
+
+        result = ctx.get_artifact("final_result")
+        failure = result.metadata.failure
+        assert failure is not None
+        assert failure.category == FailureCategory.UNEXPECTED_ERROR
+        assert failure.group == FailureGroup.SYSTEM
+        assert failure.stage == "AgenticRubricEvaluation"
+        assert result.rubric.agentic_trait_investigation_traces == {
+            "citations": "[investigation failed: RuntimeError: judge crashed]",
+        }
+        assert result.rubric.agentic_trait_investigation_messages == {}

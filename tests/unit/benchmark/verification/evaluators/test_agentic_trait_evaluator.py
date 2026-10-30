@@ -37,6 +37,17 @@ def _make_model_config() -> ModelConfig:
     )
 
 
+def _make_mcp_model_config() -> ModelConfig:
+    """Create a judge ModelConfig with one MCP server."""
+    return ModelConfig(
+        id="test-agent-model",
+        model_name="test-model",
+        model_provider="anthropic",
+        interface="claude_agent_sdk",
+        mcp_urls_dict={"citations": "http://localhost:8765/mcp"},
+    )
+
+
 def _make_agent_result(
     raw_trace: str = "Investigation complete.",
     turns: int = 3,
@@ -129,12 +140,13 @@ class TestAgenticTraitEvaluator:
 
         assert evaluation.score == 3
 
-    def test_evaluate_trait_agent_failure_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """LLM failure returns None score and None trace (trace_only via LLMPort)."""
+    def test_evaluate_trait_investigation_failure_leaves_record(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An investigation that raises leaves a failure record, not a silent None (trace_only via LLMPort)."""
         from karenina.benchmark.verification.evaluators.rubric import agentic_trait
 
         fake_llm = MagicMock()
-        fake_llm.invoke.side_effect = RuntimeError("LLM timed out")
+        error = RuntimeError("LLM timed out")
+        fake_llm.invoke.side_effect = error
 
         monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
 
@@ -149,7 +161,28 @@ class TestAgenticTraitEvaluator:
         )
 
         assert evaluation.score is None
-        assert evaluation.trace is None
+        assert evaluation.trace == "[investigation failed: RuntimeError: LLM timed out]"
+        assert evaluation.messages is None
+        assert evaluation.investigation_error is error
+
+    def test_agent_investigation_failure_leaves_record(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The agent path reports a raised investigation the same way."""
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        fake_agent = MagicMock()
+        fake_agent.run.side_effect = ConnectionError("MCP server unreachable")
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_mcp_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path=None,
+        )
+
+        assert evaluation.trace == "[investigation failed: ConnectionError: MCP server unreachable]"
+        assert isinstance(evaluation.investigation_error, ConnectionError)
 
     def test_extraction_failure_preserves_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Parser failure returns None score but preserves the investigation trace."""
@@ -180,6 +213,7 @@ class TestAgenticTraitEvaluator:
 
         assert evaluation.score is None
         assert evaluation.trace == "I found several issues."
+        assert evaluation.investigation_error is None
 
     def test_workspace_only_mode_excludes_trace(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """workspace_only context_mode does not include raw_llm_response in prompt."""
@@ -562,17 +596,6 @@ class TestTraceMaterialization:
         user_text = user_msgs[0].text
         assert "Inline trace content" in user_text
         assert "/tmp/test_trace.txt" not in user_text
-
-
-def _make_mcp_model_config() -> ModelConfig:
-    """Create a judge ModelConfig with one MCP server."""
-    return ModelConfig(
-        id="test-agent-model",
-        model_name="test-model",
-        model_provider="anthropic",
-        interface="claude_agent_sdk",
-        mcp_urls_dict={"citations": "http://localhost:8765/mcp"},
-    )
 
 
 @pytest.mark.unit

@@ -96,6 +96,11 @@ def _is_parser_stage(stage: str | None) -> bool:
     return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate", "DynamicParseTemplate"}
 
 
+# Stage name of AgenticRubricEvaluationStage. Its failures are judge
+# infrastructure failures that leave the answer trace usable.
+_AGENTIC_RUBRIC_STAGE = "AgenticRubricEvaluation"
+
+
 def _has_usable_answer_trace(result: VerificationResult) -> bool:
     template = result.template
     if template is None:
@@ -116,6 +121,9 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     later resume enables partial trace scoring: the answer trace is usable
     parser input, so the task must not be skipped just because the timeout row
     already exists in the JSONL sidecar.
+
+    Agentic rubric rows whose judge investigation failed are retried too: the
+    failure is the judge's infrastructure, not a judgment of the answer.
     """
 
     failure = result.metadata.failure
@@ -125,6 +133,8 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     category = _failure_attr(failure, "category")
     stage = _failure_attr(failure, "stage")
     if stage == "GenerateAnswer" and category == FailureCategory.TIMEOUT.value:
+        return True
+    if stage == _AGENTIC_RUBRIC_STAGE:
         return True
     return bool(category == FailureCategory.PARSING.value or _is_parser_stage(stage))
 
