@@ -95,7 +95,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     A trait whose investigation raised keeps a failure record as its trace,
     and the stage marks the context with an error attributed to this stage.
     The result is then classified as an infrastructure failure (never a
-    judgment). AgenticProgressiveFileSink retries such rows on resume, and
+    judgment) and always carries the ``agentic_investigation_failed`` caveat,
+    even when an earlier rule (content, abstention) decides the failure
+    category. AgenticProgressiveFileSink retries such rows on resume, and
     the executor reuses their answer trace.
     """
 
@@ -118,6 +120,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
             ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
+            ArtifactKeys.AGENTIC_INVESTIGATION_FAILED,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -484,8 +487,11 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         Follows the AgenticParseTemplate stage: the error category comes from
         the context's ErrorRegistry (using the first failure), so the failure
         classifier reports a retry-exhausted or system failure at this stage,
-        not a judgment.
+        not a judgment. The ``agentic_investigation_failed`` result field also
+        raises a caveat, which survives when a higher-priority classifier rule
+        (content, abstention, sufficiency) sets the failure category instead.
         """
+        self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_INVESTIGATION_FAILED, True)
         details = ", ".join(f"'{name}' ({type(error).__name__}: {error})" for name, error in errors.items())
         first_error = next(iter(errors.values()))
         context.mark_error(

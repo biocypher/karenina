@@ -12,6 +12,9 @@ class Caveat(str, Enum):
     EMBEDDING_OVERRIDE = "embedding_override"
     RETRIES_USED = "retries_used"
     PARSE_DECISION_MALFORMED = "parse_decision_malformed"
+    # An agentic rubric judge's investigation raised, so at least one agentic
+    # trait has no judgment. Set whatever failure category the row ends with.
+    AGENTIC_INVESTIGATION_FAILED = "agentic_investigation_failed"
 
 
 __all__ = ["Caveat"]

@@ -50,6 +50,7 @@ from karenina.benchmark.verification.workspace_capture import safe_path_componen
 from karenina.schemas import VerificationConfig, VerificationResult
 from karenina.schemas.entities import Rubric
 from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.results.failure import FailureCategory
 from karenina.schemas.verification import VerificationJob
 from karenina.utils.file_ops import atomic_write
@@ -123,7 +124,8 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     already exists in the JSONL sidecar.
 
     Agentic rubric rows whose judge investigation failed are retried too: the
-    failure is the judge's infrastructure, not a judgment of the answer.
+    failure is the judge's infrastructure, not a judgment of the answer. The
+    caveat catches rows whose failure category was set by an earlier rule.
     """
 
     failure = result.metadata.failure
@@ -134,7 +136,7 @@ def _is_retryable_parser_failure(result: VerificationResult) -> bool:
     stage = _failure_attr(failure, "stage")
     if stage == "GenerateAnswer" and category == FailureCategory.TIMEOUT.value:
         return True
-    if stage == _AGENTIC_RUBRIC_STAGE:
+    if stage == _AGENTIC_RUBRIC_STAGE or Caveat.AGENTIC_INVESTIGATION_FAILED in result.metadata.caveats:
         return True
     return bool(category == FailureCategory.PARSING.value or _is_parser_stage(stage))
 

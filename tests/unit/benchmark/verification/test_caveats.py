@@ -46,3 +46,8 @@ class TestCollectCaveats:
         ctx = make_context()
         ctx.set_result_field(ArtifactKeys.PARSE_DECISION_MALFORMED, True)
         assert Caveat.PARSE_DECISION_MALFORMED in collect_caveats(ctx)
+
+    def test_agentic_investigation_failed_independent_of_verdict(self):
+        ctx = make_context(template_verification_performed=True, verify_result=False)
+        ctx.set_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED, True)
+        assert collect_caveats(ctx) == [Caveat.AGENTIC_INVESTIGATION_FAILED]

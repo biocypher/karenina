@@ -248,6 +248,7 @@ class ArtifactKeys:
     AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
     AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
     AGENTIC_TRAIT_INVESTIGATION_MESSAGES = "agentic_trait_investigation_messages"
+    AGENTIC_INVESTIGATION_FAILED = "agentic_investigation_failed"
     AGENTIC_TRAIT_EXTRACTION_METADATA = "agentic_trait_extraction_metadata"
 
     # ==========================================================================

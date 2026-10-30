@@ -13,6 +13,7 @@ from karenina.benchmark.verification.stages.core.base import (
 )
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait, Rubric
+from karenina.schemas.results.caveat import Caveat
 
 
 def _make_trait(name="code_quality", kind="boolean"):
@@ -854,6 +855,7 @@ class TestFailedInvestigation:
         assert ctx.error is not None
         assert "'citations' (RuntimeError: judge crashed)" in ctx.error
         assert ctx.error_stage == "AgenticRubricEvaluation"
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED) is True
 
     def test_error_category_comes_from_error_registry(self, monkeypatch):
         from karenina.benchmark.verification.stages.pipeline import (
@@ -891,6 +893,7 @@ class TestFailedInvestigation:
 
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES) == {"code_quality": "kept trace"}
         assert ctx.error is None
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED) is None
 
     def test_finalized_result_is_a_system_failure_at_the_stage(self, monkeypatch):
         """End to end through finalize: the row carries a Failure, not a judgment."""
@@ -919,7 +922,45 @@ class TestFailedInvestigation:
         assert failure.category == FailureCategory.UNEXPECTED_ERROR
         assert failure.group == FailureGroup.SYSTEM
         assert failure.stage == "AgenticRubricEvaluation"
+        assert Caveat.AGENTIC_INVESTIGATION_FAILED in result.metadata.caveats
         assert result.rubric.agentic_trait_investigation_traces == {
             "citations": "[investigation failed: RuntimeError: judge crashed]",
         }
         assert result.rubric.agentic_trait_investigation_messages == {}
+
+    @pytest.mark.parametrize(
+        ("prior_fields", "expected_category"),
+        [
+            (
+                {ArtifactKeys.TEMPLATE_VERIFICATION_PERFORMED: True, ArtifactKeys.VERIFY_RESULT: False},
+                "content",
+            ),
+            ({ArtifactKeys.ABSTENTION_DETECTED: True}, "abstention"),
+            ({ArtifactKeys.SUFFICIENCY_DETECTED: True}, "sufficiency"),
+        ],
+    )
+    def test_caveat_marks_failure_when_an_earlier_rule_sets_the_category(
+        self, monkeypatch, prior_fields, expected_category
+    ):
+        """Content, abstention and sufficiency outrank the stage error, the caveat does not depend on them."""
+        from karenina.benchmark.verification.failure_classifier import classify_failure, collect_caveats
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        fake_evaluator = _failing_evaluator("citations", RuntimeError("judge crashed"))
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="citations")])
+        for key, value in prior_fields.items():
+            ctx.set_result_field(key, value)
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        failure = classify_failure(ctx)
+        assert failure is not None
+        assert failure.category.value == expected_category
+        assert Caveat.AGENTIC_INVESTIGATION_FAILED in collect_caveats(ctx)

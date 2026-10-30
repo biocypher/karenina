@@ -19,6 +19,7 @@ from karenina.benchmark.verification.sinks import (
     is_completed_result,
 )
 from karenina.schemas.config import ModelConfig
+from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.results.failure import Failure, FailureCategory
 from karenina.schemas.verification import (
     VerificationConfig,
@@ -456,6 +457,27 @@ class TestAgenticProgressiveFileSink:
 
         assert sink.completed_triples() == set()
         assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
+
+    def test_judge_failure_caveat_is_retried_when_another_rule_set_the_category(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(category=FailureCategory.CONTENT, stage="verify_template", reason="verify returned False")
+        result = _result("q1", failure=failure, raw_llm_response="usable answer trace")
+        result.metadata.caveats = [Caveat.AGENTIC_INVESTIGATION_FAILED]
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert sink.completed_triples() == set()
+
+    def test_content_failure_without_judge_caveat_stays_terminal(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(category=FailureCategory.CONTENT, stage="verify_template", reason="verify returned False")
+        result = _result("q1", failure=failure, raw_llm_response="usable answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert len(sink.completed_triples()) == 1
 
     def test_success_after_parser_failure_becomes_terminal_and_export_dedupes(self, tmp_path: Path):
         sink = self._fresh(tmp_path)
