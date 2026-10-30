@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -288,6 +288,27 @@ def build_generate_config(
     return types.GenerateContentConfig(**kwargs)
 
 
+@contextlib.contextmanager
+def translated_sdk_errors() -> Iterator[None]:
+    """Translate SDK and auth exceptions raised in the block into port errors.
+
+    Raises:
+        GeminiAPIError: For ``google.genai.errors.APIError``.
+        GeminiAuthError: For ``google.auth`` errors.
+        GeminiClientError: For ``ValueError``, which the SDK raises for
+            requests it cannot send (for example a field the backend does
+            not support). Never retried.
+    """
+    try:
+        yield
+    except genai_errors.APIError as e:
+        raise translate_api_error(e) from e
+    except GoogleAuthError as e:
+        raise GeminiAuthError(f"{AUTH_HINT} ({type(e).__name__}: {e})") from e
+    except ValueError as e:
+        raise GeminiClientError(f"Gemini request rejected by the SDK: {e}") from e
+
+
 async def generate(
     client: GenAIClientHolder,
     *,
@@ -337,18 +358,10 @@ async def _attempt(
 ) -> CallOutcome:
     """One call attempt under a limiter permit and the wall-clock guard."""
     async with get_global_llm_limiter().borrow():
-        try:
+        with translated_sdk_errors():
             genai_client = client.get()
             call = (_call_streamed if stream else _call_once)(genai_client, model, contents, config)
             outcome = await (call if timeout is None else asyncio.wait_for(call, timeout=timeout))
-        except genai_errors.APIError as e:
-            raise translate_api_error(e) from e
-        except GoogleAuthError as e:
-            raise GeminiAuthError(f"{AUTH_HINT} ({type(e).__name__}: {e})") from e
-        except ValueError as e:
-            # The SDK raises ValueError for requests it cannot send (for
-            # example a field the backend does not support). Never retried.
-            raise GeminiClientError(f"Gemini request rejected by the SDK: {e}") from e
 
     if outcome.block_reason is not None and not outcome.parts:
         raise GeminiFinishReasonError(
