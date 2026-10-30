@@ -21,7 +21,7 @@ from karenina.benchmark.verification.utils.trace_formatting import messages_to_d
 from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker, usage_to_callback_metadata
 from karenina.ports import Message, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.entities.rubric import AgenticRubricTrait
+from karenina.schemas.entities.rubric import AGENTIC_JUDGE_REQUIREMENT, AgenticRubricTrait
 from karenina.schemas.verification.model_identity import ModelIdentity
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
@@ -153,8 +153,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             context: Verification context with rubric and artifacts.
 
         Raises:
-            ValueError: If no agentic trait can be evaluated because
-                the resolved model interface lacks ``agent_tier='deep_agent'``.
+            ValueError: If an agentic trait's resolved model interface cannot
+                judge it (see :meth:`AgenticRubricTrait.accepts_judge_interface`).
         """
         traits = context.rubric.agentic_traits  # type: ignore[union-attr]
         self._validate_agent_support(traits, context)
@@ -577,36 +577,33 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Validate that every agentic trait can be evaluated.
 
         Checks each trait's resolved model (model_override or parsing_model)
-        for ``agent_tier='deep_agent'``. Raises if any trait cannot be
-        evaluated, since silent skipping hides configuration errors.
+        with :meth:`AgenticRubricTrait.accepts_judge_interface`: a
+        ``deep_agent`` interface judges any trait, and a ``tool_loop``
+        interface with MCP support judges ``trace_only`` traits without
+        ``materialize_trace``. Raises if any trait cannot be evaluated,
+        since silent skipping hides configuration errors.
 
         Raises:
-            ValueError: If any trait resolves to an interface that lacks
-                ``agent_tier='deep_agent'``.
+            ValueError: If any trait resolves to an interface that cannot
+                judge it.
         """
-        default_model = context.parsing_model
-        default_spec = AdapterRegistry.get_spec(default_model.interface)
-        default_ok = default_spec is not None and default_spec.agent_tier == "deep_agent"
-
         unsupported: list[str] = []
         for trait in traits:
-            if trait.model_override is not None:
-                spec = AdapterRegistry.get_spec(trait.model_override.interface)
-                if spec is None or spec.agent_tier != "deep_agent":
-                    unsupported.append(trait.name)
-            elif not default_ok:
-                unsupported.append(trait.name)
+            model = trait.model_override or context.parsing_model
+            if not trait.accepts_judge_interface(model.interface):
+                spec = AdapterRegistry.get_spec(model.interface)
+                unsupported.append(
+                    f"'{trait.name}' (interface='{model.interface}', "
+                    f"agent_tier='{spec.agent_tier if spec else 'unknown'}', "
+                    f"context_mode='{trait.context_mode}', materialize_trace={trait.materialize_trace})"
+                )
 
         if unsupported:
-            trait_names = ", ".join(f"'{n}'" for n in unsupported)
             raise ValueError(
-                f"Agentic rubric traits ({trait_names}) require an interface with "
-                f"agent_tier='deep_agent' (e.g., 'claude_agent_sdk' or "
-                f"'langchain_deep_agents'), but the resolved model uses "
-                f"interface='{default_model.interface}' "
-                f"(agent_tier='{default_spec.agent_tier if default_spec else 'unknown'}'). "
-                f"Either change the parsing model interface or set model_override "
-                f"on each agentic trait."
+                f"Agentic rubric traits {', '.join(unsupported)} cannot be judged by their resolved model. "
+                f"Agentic traits require {AGENTIC_JUDGE_REQUIREMENT} (e.g., 'claude_agent_sdk' or "
+                f"'langchain_deep_agents' for any trait, 'google_genai' for trace_only traits). "
+                f"Either change the parsing model interface or set model_override on each agentic trait."
             )
 
     @staticmethod
@@ -616,16 +613,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     ) -> ModelConfig | None:
         """Resolve the model to use for a given trait.
 
-        Returns trait.model_override if set; otherwise context.parsing_model.
-        Validates that the resolved model's interface has
-        agent_tier='deep_agent'. Returns None if the interface lacks deep
-        agent support (the trait will be skipped).
+        Returns trait.model_override if set, otherwise context.parsing_model.
+        Returns None (the trait is skipped) if that model's interface cannot
+        judge the trait (see :meth:`AgenticRubricTrait.accepts_judge_interface`).
         """
         model = trait.model_override or context.parsing_model
-        spec = AdapterRegistry.get_spec(model.interface)
-        if spec is None or spec.agent_tier != "deep_agent":
+        if not trait.accepts_judge_interface(model.interface):
+            spec = AdapterRegistry.get_spec(model.interface)
             logger.warning(
-                "Interface '%s' has agent_tier='%s' (not 'deep_agent'); trait '%s' will be skipped",
+                "Interface '%s' (agent_tier='%s') cannot judge trait '%s', so it will be skipped",
                 model.interface,
                 spec.agent_tier if spec else "unknown",
                 trait.name,

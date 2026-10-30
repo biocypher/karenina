@@ -519,6 +519,41 @@ class TestValidateAgentSupport:
         # Should not raise
         AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
 
+    def _google_genai_context(self, trait):
+        ctx = _make_context(agentic_traits=[trait])
+        ctx.parsing_model = ModelConfig(id="gemini", model_name="gemini-4-argon", interface="google_genai")
+        return ctx
+
+    def test_mcp_tool_loop_parsing_model_judges_trace_only_traits(self):
+        """A tool_loop interface with MCP support (google_genai) passes for trace_only traits."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trait = AgenticRubricTrait(
+            name="citations", description="Check.", kind="boolean", higher_is_better=True, context_mode="trace_only"
+        )
+        ctx = self._google_genai_context(trait)
+
+        AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
+        assert AgenticRubricEvaluationStage._resolve_model(trait, ctx) is ctx.parsing_model
+
+    def test_mcp_tool_loop_parsing_model_rejected_for_workspace_traits(self):
+        """The same judge cannot evaluate a trait that needs file tools, and the error names it."""
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import (
+            AgenticRubricEvaluationStage,
+        )
+
+        trait = _make_trait("needs_files")  # context_mode defaults to trace_and_workspace
+        ctx = self._google_genai_context(trait)
+
+        with pytest.raises(ValueError, match="agent_tier='deep_agent'") as excinfo:
+            AgenticRubricEvaluationStage._validate_agent_support([trait], ctx)
+        message = str(excinfo.value)
+        assert "'needs_files' (interface='google_genai', agent_tier='tool_loop'" in message
+        assert "supports_mcp=True" in message
+        assert AgenticRubricEvaluationStage._resolve_model(trait, ctx) is None
+
     def test_model_override_with_non_deep_agent_rejected_at_construction(self):
         """AgenticRubricTrait rejects non-deep_agent model_override at construction."""
         from pydantic import ValidationError as PydanticValidationError
