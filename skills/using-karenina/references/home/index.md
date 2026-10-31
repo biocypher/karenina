@@ -1,9 +1,9 @@
 # What is Karenina?
 
 > **Experimental Project:**
-> 
-> Karenina is an experimental project still making its baby steps towards maturity. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
-> 
+>
+> Karenina is experimental and under active development. Best effort has been applied in creating a correct set of documentation, however some errors and imprecisions may be present. If you encounter any, please [open an issue](https://github.com/biocypher/karenina/issues) on the GitHub repository and we will try to get them fixed as soon as possible.
+>
 **Karenina** is an open-source Python framework that simplifies how you define, run, and share LLM evaluations. It covers the full evaluation spectrum: simple factual Q&A, tool-augmented interactions where models use external tools via [MCP](../core_concepts/mcp-overview.md), and fully [agentic coding and data analysis tasks](../core_concepts/agentic-evaluation.md) where both the answering model and the judge operate in a real workspace with file and code access.
 
 Its core idea is formalizing ground truth as structured [answer templates](../core_concepts/answer-templates.md): Pydantic models that encode what a correct response looks like, letting a [Judge LLM](philosophy.md#the-llm-as-judge-approach) parse free-form responses into those schemas for programmatic verification. Combined with [rubrics](../core_concepts/rubrics/index.md) for quality assessment and support for classical methods like regex, Karenina provides a flexible [evaluation pipeline](../core_concepts/verification-pipeline.md) from quick checks to complex multi-trait scoring. It supports three evaluation modes:

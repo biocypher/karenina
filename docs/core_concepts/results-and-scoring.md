@@ -249,7 +249,7 @@ Every result carries a `VerificationResultMetadata` sub-object regardless of eva
 | `replicate` | `int \| None` | Replicate number (1, 2, 3, ...) for repeated runs |
 | `keywords` | `list[str] \| None` | Keywords associated with the question |
 | `failure` | `Failure \| None` | Structured non-pass verdict; `None` on success, otherwise carries `category`, derived `group`, originating `stage`, and `reason`. See the [Failure and Caveats reference](../reference/api/failure-and-caveats.md) for the full taxonomy |
-| `caveats` | `list[Caveat]` | Informational flags attached to the run, orthogonal to pass/fail. Four values: `partial_content` (streaming response truncated), `embedding_override` (similarity fallback flipped a verdict), `retries_used` (at least one retry attempt was made), `parse_decision_malformed` (a parse-decision call returned unparseable output). A passing result can carry caveats. See the [Failure and Caveats reference](../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) for trigger conditions |
+| `caveats` | `list[Caveat]` | Informational flags attached to the run, orthogonal to pass/fail. Seven values: `partial_content` (streaming response truncated), `embedding_override` (similarity fallback flipped a verdict), `retries_used` (at least one retry attempt was made), `parse_decision_malformed` (a parse-decision call returned unparseable output), `agentic_investigation_failed` (an agentic rubric judge's investigation raised), `agentic_extraction_failed` (an agentic rubric judge's score extraction hit a retryable error), `agentic_investigation_incomplete` (an agentic trait score was extracted from an investigation that hit its turn limit or timeout). A passing result can carry caveats. See the [Failure and Caveats reference](../reference/api/failure-and-caveats.md#5-caveat-7-informational-flags) for trigger conditions |
 | `few_shot_enabled` | `bool` | Whether few-shot prompting was active (default `False`) |
 | `few_shot_example_count` | `int` | Number of few-shot examples used (default `0`) |
 | `evaluation_mode` | `str \| None` | Evaluation mode used (e.g., `"template_only"`, `"template_and_rubric"`) |
@@ -378,7 +378,7 @@ Each optional check records three pieces of state: whether it was attempted, wha
 |-------|------|-------------|
 | `recursion_limit_reached` | `bool` | Whether an MCP agent hit its recursion limit |
 | `answering_mcp_servers` | `list[str] \| None` | MCP servers attached to the answering model |
-| `usage_metadata` | `dict \| None` | Token usage breakdown by stage (`answer_generation`, `parsing`, `rubric_evaluation`, `abstention_check`, `total`) |
+| `usage_metadata` | `dict \| None` | Token usage breakdown by stage (`answer_generation`, `parsing`, `rubric_evaluation`, `agentic_rubric_evaluation`, `abstention_check`, `total`). Entries also carry `reasoning_tokens` and `web_search_queries` when a call in that stage reported them |
 | `agent_metrics` | `dict \| None` | MCP agent metrics: `iterations`, `tool_calls`, `tools_used`, `suspect_failed_tool_calls`, `suspect_failed_tools` |
 
 ## 4. Rubric Results: The Quality Record
@@ -393,6 +393,8 @@ The `rubric` sub-object (`VerificationResultRubric`) is present whenever rubric 
 | `callable_trait_scores` | `dict[str, bool \| int \| float] \| None` | Callable trait results (score may be a float in `[min_score, max_score]`) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric trait metrics (precision, recall, F1, etc.) |
 | `metric_trait_confusion_lists` | `dict[str, dict[str, list[str]]] \| None` | Per-metric confusion lists (tp, tn, fp, fn containing excerpts) |
+| `agentic_trait_scores` | `dict[str, Any] \| None` | Agentic trait scores (template kind traits use dotted keys) |
+| `agentic_trait_investigation_traces`, `agentic_trait_investigation_messages`, `agentic_trait_extraction_metadata`, `agentic_trait_evaluation_errors` | `dict \| None` | Per-trait judge traces (raw and structured), extraction provenance, and the errors of judges that could not judge. See [Agentic Traits](rubrics/agentic-traits.md) |
 | `rubric_evaluation_strategy` | `str \| None` | `"batch"` or `"sequential"` |
 
 ### 4.1. Accessing Trait Scores

@@ -371,3 +371,34 @@ class TestProviderSDKExceptionClassification:
         openai = pytest.importorskip("openai")
         exc = openai.InternalServerError("server exploded", response=self._response(500), body=None)
         assert ErrorRegistry().classify(exc) == ErrorCategory.SERVER_ERROR
+
+
+class _DeclaresServerError(Exception):
+    error_category = ErrorCategory.SERVER_ERROR
+
+
+class _DeclaresPermanent(Exception):
+    error_category = ErrorCategory.PERMANENT
+
+
+@pytest.mark.unit
+class TestDeclaredCategory:
+    """An exception's own ``error_category`` beats the built-in name and message rules."""
+
+    def test_declared_category_is_used(self) -> None:
+        assert ErrorRegistry().classify(_DeclaresServerError("nothing recognisable")) is ErrorCategory.SERVER_ERROR
+
+    def test_declared_permanent_beats_message_keywords(self) -> None:
+        exc = _DeclaresPermanent("400: input token count (1500001), connection timeout")
+        assert ErrorRegistry().classify(exc) is ErrorCategory.PERMANENT
+
+    def test_user_registration_beats_the_declared_category(self) -> None:
+        registry = ErrorRegistry()
+        registry.register(_DeclaresPermanent, ErrorCategory.RATE_LIMIT)
+        assert registry.classify(_DeclaresPermanent("x")) is ErrorCategory.RATE_LIMIT
+
+    def test_a_non_category_attribute_is_ignored(self) -> None:
+        class Odd(Exception):
+            error_category = "server_error"
+
+        assert ErrorRegistry().classify(Odd("plain")) is ErrorCategory.PERMANENT

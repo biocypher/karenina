@@ -157,6 +157,7 @@ The following table shows all registered `(interface, task)` pairs across the co
 | `openai_endpoint` | parsing, rubric, deep judgment | Same as `langchain` (shared factories) |
 | `claude_tool` | parsing, rubric, deep judgment | Minimal extraction directives (native structured output) |
 | `claude_agent_sdk` | parsing, rubric, deep judgment | Minimal best-interpretation directive (native structured output) |
+| `google_genai` | *(none)* | No registered instructions. The default instructions apply, and its parser enforces the schema natively |
 | `manual` | *(none)* | No registered instructions |
 
 The key difference: LangChain-based adapters need explicit JSON schema and format instructions because they lack native structured output. Claude-based adapters (Claude Tool and Claude Agent SDK) use native structured output, so their instructions are minimal, just extraction or interpretation directives.

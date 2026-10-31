@@ -123,6 +123,7 @@ An MCP tool has three fields:
 |---------|---------------|---------|
 | **LangChain** | MCP tool → LangChain Tool | Via `langchain-mcp-adapters` `MultiServerMCPClient.get_tools()`. Returns LangChain Tool objects for direct use in LangGraph agents. |
 | **Claude Tool** | MCP tool → `@beta_async_tool` function | `wrap_mcp_tool()` creates an async function decorated with Anthropic's `@beta_async_tool`. The function calls `session.call_tool(tool.name, kwargs)` and records results in a `ToolResultCollector`. |
+| **Google GenAI** | MCP tool → Gemini `FunctionDeclaration` | The MCP `inputSchema` is passed as the declaration's JSON Schema. Tool names are rewritten to fit Gemini's naming rules and mapped back, and the adapter's own loop calls `session.call_tool(original_name, args)`. |
 | **Claude Agent SDK** | MCP tool → SDK-native tools | The SDK discovers and manages tools natively via `mcp_servers` in `ClaudeAgentOptions`. Tools use `mcp__{server_name}__{tool_name}` naming. |
 | **Manual** | N/A | No MCP support. Raises `ValueError` if `mcp_urls_dict` is set. |
 
@@ -219,7 +220,7 @@ Tool filtering and description overrides apply at steps 3-4 of the execution flo
 
 > **Note:**
 > HTTP URLs map to `type="http"` (streamable HTTP), not `"sse"`. The Claude Agent SDK handles the transport protocol internally.
-> 
+>
 **Agent execution**:
 
 1. `_convert_mcp_servers()` handles both karenina format and pre-converted SDK format (detects by checking for `"type"` or `"command"` keys).
@@ -256,7 +257,7 @@ async with ClaudeSDKClient(options) as client:
 **Connection flow**:
 
 1. Creates `AsyncExitStack` for resource management.
-2. Calls `connect_all_mcp_servers(exit_stack, mcp_servers)` from `utils/mcp/client.py` (or the adapter's own `mcp.py` which reimplements the same functions).
+2. Calls `connect_all_mcp_servers(exit_stack, mcp_servers)` from `adapters/_mcp_http.py`, the HTTP/SSE session helper it shares with `google_genai` (`adapters/claude_tool/mcp.py` re-exports it).
 3. Calls `get_all_mcp_tools(sessions)` to discover tools.
 4. Each tool is wrapped with `wrap_mcp_tool()`:
    - Creates an async function decorated with `@beta_async_tool`
@@ -285,6 +286,25 @@ Each `ToolResultRecord` holds `tool_name`, `content`, and `is_error`. After each
 - **Native prompt caching** — `cache_control` with `ephemeral` type added to tool schemas, enabling Anthropic's prompt caching for efficiency
 - **Direct API** — No framework overhead; uses Anthropic Python SDK directly
 - `tool_runner` handles the multi-turn loop automatically
+
+### Google GenAI Adapter
+
+**Transport**: HTTP/SSE only, through the same `adapters/_mcp_http.py` helper as Claude Tool
+
+**Connection flow**:
+
+1. Opens one session per server on an `AsyncExitStack` and lists their tools. `mcp_tool_filter` and `mcp_tool_description_overrides` apply. The setup runs inside the run's `AgentConfig.timeout`, so a hung MCP server cannot hold a run past its timeout.
+2. Converts each MCP tool into a Gemini `FunctionDeclaration`. Two tools whose rewritten names collide fail the run before any model call.
+3. Runs its own turn loop with the SDK's automatic function calling switched off. Each turn is one model call. The adapter executes the turn's function calls, sends all results back in one user turn, and records each result as a `tool_result` message (an MCP `isError` result or an exception becomes an error result for the model, never an exception out of the loop).
+4. Closes the MCP sessions when the run ends (session-per-run semantics).
+
+**Unique features**:
+
+- **Server-side tools** next to MCP tools: Gemini's `google_search` and `url_context` run inside a model call and appear in the trace as synthetic tool pairs
+- **Search budget**: `max_search_queries` removes Google Search between calls once the run's query count reaches it
+- Tool results longer than `max_tool_result_chars` (default 50,000) are cut before they reach the model
+
+See [Available Adapters](available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) for configuration.
 
 ### Manual Adapter
 
@@ -359,6 +379,7 @@ The `raw_trace` string is a legacy format that concatenates messages with delimi
 - **LangChain**: `harmonize_agent_response()` — formats from LangChain message list
 - **Claude Tool**: `claude_tool_messages_to_raw_trace()` — formats from unified messages
 - **Claude Agent SDK**: `sdk_messages_to_raw_trace()` — formats from SDK message list
+- **Google GenAI**: the shared `messages_to_raw_trace()` over its unified messages, plus `[Note: ...]` lines for the events that ended or shaped the run
 
 The verification pipeline uses `trace_messages` (structured) by default. The `raw_trace` is available for debugging and backward compatibility.
 
@@ -366,12 +387,12 @@ The verification pipeline uses `trace_messages` (structured) by default. The `ra
 
 ## Transport Protocol Comparison
 
-| Transport | LangChain | Deep Agents | Claude Agent SDK | Claude Tool |
-|-----------|-----------|-------------|-----------------|-------------|
-| **HTTP/SSE** | Via langchain-mcp-adapters `MultiServerMCPClient` | Via langchain-mcp-adapters `MultiServerMCPClient` | Native SDK support (`type="http"`) | Via core `mcp` package `streamablehttp_client` |
-| **Stdio** | Not supported (URL-based only) | Not supported (URL-based only) | Native SDK support (`command` + `args`) | Not supported (HTTP/SSE only) |
-| **Connection library** | langchain-mcp-adapters | langchain-mcp-adapters | Claude Agent SDK | mcp (Python package) |
-| **Cleanup** | `cleanup_mcp_client()` with fallback strategies | `AsyncExitStack` via `aclose()` | SDK-managed (context manager) | `AsyncExitStack` with registered cleanup |
+| Transport | LangChain | Deep Agents | Claude Agent SDK | Claude Tool | Google GenAI |
+|-----------|-----------|-------------|-----------------|-------------|--------------|
+| **HTTP/SSE** | Via langchain-mcp-adapters `MultiServerMCPClient` | Via langchain-mcp-adapters `MultiServerMCPClient` | Native SDK support (`type="http"`) | Via core `mcp` package `streamablehttp_client` | Same helper as Claude Tool |
+| **Stdio** | Not supported (URL-based only) | Not supported (URL-based only) | Native SDK support (`command` + `args`) | Not supported (HTTP/SSE only) | Not supported (HTTP/SSE only) |
+| **Connection library** | langchain-mcp-adapters | langchain-mcp-adapters | Claude Agent SDK | mcp (Python package) | mcp (Python package) |
+| **Cleanup** | `cleanup_mcp_client()` with fallback strategies | `AsyncExitStack` via `aclose()` | SDK-managed (context manager) | `AsyncExitStack` with registered cleanup | `AsyncExitStack` closed when the run ends |
 
 ---
 
@@ -384,6 +405,7 @@ Each adapter handles the agent exceeding its turn limit differently:
 | **LangChain** | Catches `GraphRecursionError` | Extracts partial state from `InMemorySaver` checkpointer. Returns what the agent produced so far. |
 | **Deep Agents** | Catches `GraphRecursionError` | Same LangGraph mechanism as LangChain. Returns partial state with `limit_reached=True`. |
 | **Claude Tool** | Turn counter in `_execute_agent_loop()` | Compares `turn` count against `config.max_turns`. Breaks the loop and returns partial results. |
+| **Google GenAI** | Turn counter in the adapter's loop | One turn is one model call. At `config.max_turns` the loop stops and returns the partial trace with `limit_reached=True`. Gemini's own `TOO_MANY_TOOL_CALLS` stop is treated the same way when the run wrote text. |
 | **Claude Agent SDK** | `ResultMessage.subtype` field | The SDK signals limit reached via the result message. Sets `limit_reached=True` on `AgentResult`. |
 
 In all cases, the pipeline's **RecursionLimitAutoFail** stage (Stage 3) checks `AgentResult.limit_reached` and marks the verification as auto-failed if the limit was hit, while preserving the captured trace for inspection.
@@ -404,9 +426,13 @@ In all cases, the pipeline's **RecursionLimitAutoFail** stage (Stage 3) checks `
 | `adapters/langchain_deep_agents/agent.py` | Deep Agents agent adapter with create_deep_agent |
 | `adapters/claude_agent_sdk/mcp.py` | Claude SDK MCP config conversion |
 | `adapters/claude_agent_sdk/agent.py` | Claude SDK agent adapter |
-| `adapters/claude_tool/mcp.py` | Claude Tool MCP session management |
+| `adapters/_mcp_http.py` | HTTP/SSE MCP session management shared by Claude Tool and Google GenAI |
+| `adapters/claude_tool/mcp.py` | Re-export of `adapters/_mcp_http.py` for existing imports |
 | `adapters/claude_tool/agent.py` | Claude Tool agent adapter with tool_runner |
 | `adapters/claude_tool/tools.py` | Tool wrapping and ToolResultCollector |
+| `adapters/google_genai/agent.py` | Google GenAI agent adapter (karenina-owned turn loop) |
+| `adapters/google_genai/tools.py` | MCP and static tools to Gemini function declarations, name mapping, built-in tools |
+| `adapters/google_genai/grounding.py` | Server-side search and URL-reading metadata to synthetic tool pairs |
 | `adapters/factory.py` | Agent factory routing |
 
 ---

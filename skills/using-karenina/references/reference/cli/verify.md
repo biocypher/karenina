@@ -50,7 +50,7 @@ Configuration priority: interactive selection > CLI arguments + preset > preset 
 | `--parsing-provider` | `TEXT` | — | Parsing model provider for LangChain (required without `--preset`) |
 | `--parsing-id` | `TEXT` | `parsing-1` | Parsing model ID |
 | `--temperature` | `FLOAT` | — | Model temperature (`0.0`–`2.0`) |
-| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual`, `taskeval` |
+| `--interface` | `TEXT` | — | Model interface (required without `--preset`). Values: `langchain`, `openrouter`, `openai_endpoint`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `google_genai`, `manual`, `taskeval` |
 
 ### General Settings
 
@@ -179,6 +179,14 @@ Progressive save enables crash recovery for long-running verification jobs. When
 3. **Resume**: Pass the `.state` file path to `--resume`. The command reloads config from state, merges the completed triple set into `skip_triples`, and runs only the pending triples. All other CLI config options are ignored when resuming.
 
 4. **Finalize**: On full completion, the final export is assembled from the JSONL sidecar, written to the output path, and both sidecars are deleted. On partial failure (`VerificationBatchError`), the sidecars are retained so `--resume` picks up only the failed triples.
+
+    One exception: rows whose [agentic rubric judge](../../advanced-pipeline/agentic-rubric-evaluation.md#9-judge-failures-and-partial-investigations) failed for a retryable reason (a connection, timeout, rate-limit or server error recorded in `rubric.agentic_trait_evaluation_errors`) do not count as completed. When a finished run still has such rows, the export is written but marked incomplete (`job_summary.is_complete` is `false`), the sidecars are kept, and the command prints:
+
+    ```
+    Some tasks can be retried. To retry them: karenina verify --resume results.json.state
+    ```
+
+    The resume re-runs only those rows and reuses their stored answers, so the answering model is not called again. Rows whose judge failed with a permanent error are not re-run.
 
 Resume is **triple-level**: the unit of work is `(question_id, answering_canonical_key, parsing_canonical_key, replicate)`. Multi-model / multi-replicate fan-outs skip only the completed tuples, not whole questions.
 

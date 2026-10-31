@@ -153,6 +153,16 @@ else:
     f.group     # FailureGroup: content | autofail | retry | abstained | system
 ```
 
+Caveats (`Caveat` values) flag conditions regardless of pass/fail: `partial_content`,
+`embedding_override`, `parse_decision_malformed`, `retries_used`, and three for
+agentic rubric judges. `agentic_investigation_failed` and `agentic_extraction_failed`
+mean a judge could not judge (the trait has no score, the error is in
+`result.rubric.agentic_trait_evaluation_errors`, and the row is a failure even if
+its template passed, at stage `AgenticRubricEvaluation` unless an auto-fail, content,
+abstention or sufficiency verdict takes precedence). `agentic_investigation_incomplete`
+means a score was extracted from a judge that hit its turn limit or timeout (score kept,
+see `agentic_trait_extraction_metadata[trait]["investigation_incomplete"]`).
+
 ```python
 # Template results (if template evaluation ran)
 result.template.verify_result              # bool or None: pass/fail
@@ -173,6 +183,9 @@ result.rubric.metric_trait_confusion_lists # dict[str, dict[str, list[str]]]
 result.rubric.rubric_evaluation_performed  # bool: whether rubric evaluation ran
 result.rubric.dynamic_rubric_promoted_traits # list[str] | None: promoted dynamic traits
 result.rubric.agentic_trait_investigation_traces # dict[str, str] | None: raw agent traces
+result.rubric.agentic_trait_investigation_messages # dict[str, list[dict]] | None: structured judge messages (tool calls/results)
+result.rubric.agentic_trait_extraction_metadata # dict[str, dict] | None: provenance, incl. investigation_incomplete
+result.rubric.agentic_trait_evaluation_errors  # dict[str, dict[str, str]] | None: judges that could not judge
 
 # Convenience methods on rubric
 result.rubric.get_all_trait_scores()       # Flat dict across all types

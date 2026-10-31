@@ -4,9 +4,23 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from karenina.ports import AgentExecutionError, MCPServerConfig
+
+if TYPE_CHECKING:
+    from acp.schema import AgentCapabilities
+
+
+def validate_mcp_capabilities(
+    mcp_servers: dict[str, MCPServerConfig] | None, capabilities: AgentCapabilities | None
+) -> None:
+    """Reject optional MCP transports the ACP agent did not advertise."""
+    negotiated = capabilities.mcp_capabilities if capabilities is not None else None
+    for name, server in (mcp_servers or {}).items():
+        transport = server.get("type", "stdio")
+        if transport in {"http", "sse"} and not getattr(negotiated, transport, False):
+            raise AgentExecutionError(f"OMP did not advertise MCP {transport} support for server {name!r}")
 
 
 def convert_mcp_servers(mcp_servers: dict[str, MCPServerConfig] | None) -> list[Any]:
@@ -36,7 +50,7 @@ def convert_mcp_servers(mcp_servers: dict[str, MCPServerConfig] | None) -> list[
             converted.append(
                 McpServerStdio(
                     name=name,
-                    command=str(Path(executable).resolve()),
+                    command=str(Path(executable).absolute()),
                     args=args,
                     env=env,
                 )

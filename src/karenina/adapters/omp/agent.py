@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
+import math
 import os
 import shutil
 import tempfile
+from collections.abc import Awaitable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,7 @@ from karenina.ports import (
     AgentExecutionError,
     AgentResponseError,
     AgentResult,
+    AgentTimeoutError,
     MCPServerConfig,
     Message,
     Role,
@@ -37,6 +39,8 @@ _NO_FINAL_RESPONSE = "[No final response extracted]"
 _STOPPED_RESPONSE = "[Agent stopped before producing a final response]"
 _DEFAULT_CANCEL_GRACE_SECONDS = 10.0
 _PROCESS_EXIT_GRACE_SECONDS = 5.0
+_CLEANUP_GRACE_SECONDS = 5.0
+_STDERR_LIMIT_BYTES = 4_000
 
 
 class OmpAgentAdapter:
@@ -145,32 +149,40 @@ class OmpAgentAdapter:
             ) from exc
 
         from .acp_bridge import OmpAcpClient, usage_from_prompt_response
-        from .mcp import convert_mcp_servers
+        from .mcp import convert_mcp_servers, validate_mcp_capabilities
 
         command = self._command(access_mode)
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            cwd=str(workspace),
-            env=os.environ.copy(),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        cancel_grace = float(self._extra().get("timeout_cancel_grace", _DEFAULT_CANCEL_GRACE_SECONDS))
+        if not math.isfinite(cancel_grace) or cancel_grace < 0:
+            raise AgentExecutionError("OMP timeout_cancel_grace must be finite and non-negative")
+        servers = convert_mcp_servers(mcp_servers)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=str(workspace),
+                env=os.environ.copy(),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except OSError as exc:
+            raise AgentExecutionError(f"OMP subprocess could not start: {exc}") from exc
         if process.stdin is None or process.stdout is None or process.stderr is None:
             await self._stop_process(process)
             raise AgentExecutionError("OMP ACP subprocess did not expose stdio pipes")
 
-        stderr_task = asyncio.create_task(process.stderr.read())
+        stderr_tail = bytearray()
+        stderr_task = asyncio.create_task(self._collect_stderr(process.stderr, stderr_tail))
         client = OmpAcpClient(access_mode=access_mode)
         connection: Any = None
         session_id: str | None = None
-        prompt_task: asyncio.Task[Any] | None = None
+        session_task: asyncio.Task[Any] | None = None
         response: Any = None
         timeout_reached = False
         run_error: Exception | None = None
 
-        try:
-            connection = connect_to_agent(client, process.stdin, process.stdout)
+        async def execute_session() -> Any:
+            nonlocal session_id
             initialized = await connection.initialize(
                 protocol_version=PROTOCOL_VERSION,
                 client_capabilities=ClientCapabilities(),
@@ -180,10 +192,11 @@ class OmpAgentAdapter:
                 raise AgentResponseError(
                     f"ACP protocol mismatch: client supports {PROTOCOL_VERSION}, OMP selected {initialized.protocol_version}"
                 )
+            validate_mcp_capabilities(mcp_servers, getattr(initialized, "agent_capabilities", None))
 
             session = await connection.new_session(
                 cwd=str(workspace),
-                mcp_servers=convert_mcp_servers(mcp_servers),
+                mcp_servers=servers,
             )
             session_id = session.session_id
             await connection.set_config_option(
@@ -202,35 +215,45 @@ class OmpAgentAdapter:
             prompt = build_omp_prompt(messages, config.system_prompt or self._config.system_prompt)
             if not prompt:
                 raise AgentResponseError("OMP prompt is empty after converting Karenina messages")
-            prompt_task = asyncio.create_task(connection.prompt(session_id=session_id, prompt=[text_block(prompt)]))
+            return await connection.prompt(session_id=session_id, prompt=[text_block(prompt)])
+
+        try:
+            connection = connect_to_agent(client, process.stdin, process.stdout)
+            session_task = asyncio.create_task(execute_session())
             if config.timeout is None:
-                response = await prompt_task
+                response = await asyncio.shield(session_task)
             else:
                 try:
-                    response = await asyncio.wait_for(asyncio.shield(prompt_task), timeout=config.timeout)
+                    response = await asyncio.wait_for(asyncio.shield(session_task), timeout=config.timeout)
                 except TimeoutError:
                     timeout_reached = True
-                    await connection.cancel(session_id=session_id)
-                    cancel_grace = float(self._extra().get("timeout_cancel_grace", _DEFAULT_CANCEL_GRACE_SECONDS))
-                    try:
-                        response = await asyncio.wait_for(asyncio.shield(prompt_task), timeout=cancel_grace)
-                    except TimeoutError:
-                        prompt_task.cancel()
-                        with contextlib.suppress(asyncio.CancelledError, Exception):
-                            await prompt_task
+                    if session_id is not None:
+                        await self._cleanup(connection.cancel(session_id=session_id), "cancel session")
+                        try:
+                            response = await asyncio.wait_for(asyncio.shield(session_task), timeout=cancel_grace)
+                        except Exception as exc:
+                            logger.debug("OMP cancellation drain ended: %s", exc)
+                    if response is None:
                         response = SimpleNamespace(stop_reason="cancelled", usage=None)
+        except asyncio.CancelledError:
+            if connection is not None and session_id is not None:
+                await self._cleanup(connection.cancel(session_id=session_id), "cancel interrupted session")
+            raise
         except Exception as exc:
             run_error = exc
         finally:
+            if session_task is not None:
+                if not session_task.done():
+                    session_task.cancel()
+                await self._cleanup(session_task, "drain session task")
             if connection is not None and session_id is not None:
-                with contextlib.suppress(Exception):
-                    await connection.close_session(session_id=session_id)
+                await self._cleanup(connection.close_session(session_id=session_id), "close session")
             if connection is not None:
-                with contextlib.suppress(Exception):
-                    await connection.close()
+                await self._cleanup(connection.close(), "close connection")
             await self._stop_process(process)
+            await self._cleanup(stderr_task, "drain stderr")
 
-        stderr = (await stderr_task).decode(errors="replace").strip()
+        stderr = stderr_tail.decode(errors="replace").strip()
         if run_error is not None:
             if isinstance(run_error, AgentExecutionError | AgentResponseError | AdapterUnavailableError):
                 raise run_error
@@ -242,9 +265,35 @@ class OmpAgentAdapter:
         stop_reason = str(response.stop_reason)
         limit_reached = stop_reason in {"max_tokens", "max_turn_requests"}
         trace_messages = [message for message in client.messages if message.role not in (Role.USER, Role.SYSTEM)]
+        if timeout_reached and not trace_messages:
+            raise AgentTimeoutError("OMP timed out before producing a trace", stderr=stderr or None)
         final_response = extract_final_response(trace_messages)
         if final_response is None:
             final_response = _STOPPED_RESPONSE if (limit_reached or timeout_reached) else _NO_FINAL_RESPONSE
+        if stop_reason == "refusal":
+            raise AgentResponseError(f"OMP refused the prompt: {final_response[:_STDERR_LIMIT_BYTES]}")
+        prompt_usage = getattr(response, "usage", None)
+        if (
+            stop_reason == "end_turn"
+            and not timeout_reached
+            and (
+                prompt_usage is None
+                or (
+                    prompt_usage.total_tokens == 0
+                    and prompt_usage.input_tokens == 0
+                    and prompt_usage.output_tokens == 0
+                    and not prompt_usage.cached_read_tokens
+                    and not prompt_usage.cached_write_tokens
+                )
+            )
+        ):
+            # OMP surfaces provider failures as end_turn text and omits usage
+            # when no tokens were consumed. Do not accept that as a model answer.
+            raise AgentResponseError(
+                "OMP completed without any recorded model usage; the provider may have rejected the request "
+                "or may not expose ACP turn usage: "
+                f"{final_response[:_STDERR_LIMIT_BYTES]}"
+            )
         raw_trace = omp_messages_to_raw_trace(trace_messages).strip()
         if limit_reached:
             raw_trace = f"{raw_trace}\n\n[Note: Agent limit reached - partial response shown]".strip()
@@ -266,15 +315,38 @@ class OmpAgentAdapter:
             timeout_reached=timeout_reached,
         )
 
+    async def _collect_stderr(self, stream: asyncio.StreamReader, tail: bytearray) -> None:
+        """Drain subprocess diagnostics while retaining only a bounded tail."""
+        while chunk := await stream.read(_STDERR_LIMIT_BYTES):
+            tail.extend(chunk)
+            del tail[:-_STDERR_LIMIT_BYTES]
+
+    async def _cleanup(self, operation: Awaitable[Any], label: str) -> None:
+        """Bound cleanup requests without replacing the original run outcome."""
+        try:
+            await asyncio.wait_for(operation, timeout=_CLEANUP_GRACE_SECONDS)
+        except asyncio.CancelledError:
+            logger.debug("OMP cleanup task cancelled: %s", label)
+        except Exception as exc:
+            logger.warning("OMP cleanup failed (%s): %s", label, exc)
+
     async def _stop_process(self, process: asyncio.subprocess.Process) -> None:
+        """Terminate the owned process, escalating to a bounded kill/reap."""
         if process.returncode is not None:
             return
-        process.terminate()
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            logger.debug("OMP process already exited before termination")
+            return
         try:
             await asyncio.wait_for(process.wait(), timeout=_PROCESS_EXIT_GRACE_SECONDS)
         except TimeoutError:
-            process.kill()
-            await process.wait()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                logger.debug("OMP process already exited before kill")
+            await self._cleanup(process.wait(), "reap process")
 
     def run(
         self,

@@ -754,6 +754,14 @@ class MetricRubricTrait(BaseModel):
             return {"tp", "fn", "tn", "fp"}  # All four can be computed
 
 
+# What a judge interface needs to evaluate an agentic rubric trait. Shared by
+# the trait validator and the agentic rubric stage so their errors match.
+AGENTIC_JUDGE_REQUIREMENT = (
+    "agent_tier='deep_agent', or agent_tier='tool_loop' with supports_mcp=True "
+    "for traits with context_mode='trace_only' and materialize_trace=False"
+)
+
+
 class AgenticRubricTrait(BaseModel):
     """Rubric trait evaluated by an agent with tools.
 
@@ -874,19 +882,52 @@ class AgenticRubricTrait(BaseModel):
 
     @model_validator(mode="after")
     def validate_model_override_supports_agents(self) -> "AgenticRubricTrait":
-        """Validate that model_override supports agent creation (if set)."""
-        if self.model_override is not None:
+        """Validate that model_override can judge this trait (if set).
+
+        See :meth:`accepts_judge_interface` for the rule.
+        """
+        if self.model_override is not None and not self.accepts_judge_interface(self.model_override.interface):
             from karenina.adapters.registry import AdapterRegistry
 
             spec = AdapterRegistry.get_spec(self.model_override.interface)
-            if spec is None or spec.agent_tier != "deep_agent":
-                tier = spec.agent_tier if spec else "unknown"
-                raise ValueError(
-                    f"model_override interface '{self.model_override.interface}' "
-                    f"has agent_tier='{tier}'; agentic traits require "
-                    f"agent_tier='deep_agent'."
-                )
+            tier = spec.agent_tier if spec else "unknown"
+            raise ValueError(
+                f"model_override interface '{self.model_override.interface}' has agent_tier='{tier}' "
+                f"and cannot judge agentic trait '{self.name}' (context_mode='{self.context_mode}', "
+                f"materialize_trace={self.materialize_trace}). Agentic traits require "
+                f"{AGENTIC_JUDGE_REQUIREMENT}."
+            )
         return self
+
+    @property
+    def needs_file_tools(self) -> bool:
+        """Return True when the judge must read files (a workspace or a materialized trace file)."""
+        return self.context_mode != "trace_only" or self.materialize_trace
+
+    def accepts_judge_interface(self, interface: str) -> bool:
+        """Return True if a judge on ``interface`` can evaluate this trait.
+
+        A ``deep_agent`` interface (built-in file and code tools) can judge
+        any agentic trait. A ``tool_loop`` interface with MCP support
+        (``supports_mcp=True``, for example ``google_genai``) can judge a
+        trait that needs no file tools, that is ``context_mode='trace_only'``
+        without ``materialize_trace``. The trace is then inlined in the
+        prompt and the judge calls only its MCP servers.
+
+        Args:
+            interface: The judge model's interface name.
+
+        Returns:
+            True if the interface is registered and meets the rule above.
+        """
+        from karenina.adapters.registry import AdapterRegistry
+
+        spec = AdapterRegistry.get_spec(interface)
+        if spec is None:
+            return False
+        if spec.agent_tier == "deep_agent":
+            return True
+        return spec.agent_tier == "tool_loop" and spec.supports_mcp and not self.needs_file_tools
 
     def validate_score(self, value: int | bool) -> bool:
         """Validate that a given score is valid for this trait."""

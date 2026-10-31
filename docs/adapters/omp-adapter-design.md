@@ -36,7 +36,7 @@ src/karenina/adapters/omp/
 7. Set OMP's ACP `model` option to `provider/model`; set `thinking` when configured.
 8. Serialize system instructions and conversation history into one ACP text prompt.
 9. Collect ACP updates into ordered Karenina assistant/tool messages while awaiting `session/prompt`.
-10. On timeout, send `session/cancel`, allow a short drain, and return the partial trace with `timeout_reached=True`.
+10. Bound initialization, session/model setup, and the prompt by the run timeout. On timeout, send `session/cancel` when a session exists, allow a short drain, and return the partial trace with `timeout_reached=True`. Without a trace, raise `AgentTimeoutError`.
 11. Map prompt usage and stop reason, close the ACP session/connection, and terminate the subprocess.
 
 ## Mapping and fidelity rules
@@ -46,6 +46,9 @@ src/karenina/adapters/omp/
 - Preserve the exact `rawInput` dictionary. Serialize `rawOutput` as JSON when it is not text.
 - A failed tool update becomes `ToolResultContent(is_error=True)`.
 - ACP cache-read/write tokens map to Karenina cache fields. Karenina's `total_tokens` remains `input_tokens + output_tokens`; ACP's broader total (which includes cache buckets in OMP) is not copied into that narrower field.
+- Completed `end_turn` responses require a non-zero ACP turn usage summary. OMP can emit provider failures as ordinary text and omit usage, so missing/all-zero usage fails as `AgentResponseError` instead of becoming a benchmark answer. Partial timeout/limit results may omit usage.
+- Validate HTTP/SSE MCP transports against the negotiated optional capabilities before creating a session; stdio is part of the base protocol.
+- Bound cancellation and cleanup waits, cancel outstanding prompt/setup tasks on every exit, and retain only the last 4,000 stderr bytes.
 - `max_turn_requests` and `max_tokens` set `limit_reached=True`; `cancelled` only sets `timeout_reached` when Karenina initiated cancellation for a timeout.
 - `actual_model` is the requested OMP selector because ACP v1 does not standardize the routed model in the prompt response.
 

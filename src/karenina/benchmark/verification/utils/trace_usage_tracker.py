@@ -7,7 +7,14 @@ the expected format.
 """
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from karenina.ports.usage import UsageMetadata as PortUsageMetadata
+
+# Optional per-call counts that are summed per stage and reported only when
+# at least one call in the stage set them, so existing summaries keep their keys.
+_OPTIONAL_COUNT_KEYS: tuple[str, ...] = ("reasoning_tokens", "web_search_queries")
 
 
 @dataclass
@@ -22,6 +29,8 @@ class UsageMetadata:
         total_tokens: Total tokens (input + output)
         input_token_details: Additional input token details (audio, cache_read)
         output_token_details: Additional output token details (audio, reasoning)
+        reasoning_tokens: Thinking tokens reported separately by the adapter, or None
+        web_search_queries: Provider-side web searches made by the call, or None
     """
 
     model_name: str
@@ -30,6 +39,8 @@ class UsageMetadata:
     total_tokens: int = 0
     input_token_details: dict[str, int] = field(default_factory=dict)
     output_token_details: dict[str, int] = field(default_factory=dict)
+    reasoning_tokens: int | None = None
+    web_search_queries: int | None = None
 
     @classmethod
     def from_callback_metadata(
@@ -74,6 +85,8 @@ class UsageMetadata:
                 total_tokens=callback_metadata.get("total_tokens", 0),
                 input_token_details=callback_metadata.get("input_token_details", {}),
                 output_token_details=callback_metadata.get("output_token_details", {}),
+                reasoning_tokens=callback_metadata.get("reasoning_tokens"),
+                web_search_queries=callback_metadata.get("web_search_queries"),
             )
 
         # Model-keyed format: iterate to find first nested dict entry
@@ -86,14 +99,19 @@ class UsageMetadata:
                     total_tokens=metadata.get("total_tokens", 0),
                     input_token_details=metadata.get("input_token_details", {}),
                     output_token_details=metadata.get("output_token_details", {}),
+                    reasoning_tokens=metadata.get("reasoning_tokens"),
+                    web_search_queries=metadata.get("web_search_queries"),
                 )
 
         # Fallback for unexpected format
         return cls(model_name=fallback_model_name)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
+        """Convert to dictionary for serialization.
+
+        ``reasoning_tokens`` and ``web_search_queries`` are included only when set.
+        """
+        result: dict[str, Any] = {
             "model": self.model_name,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
@@ -101,6 +119,43 @@ class UsageMetadata:
             "input_token_details": self.input_token_details,
             "output_token_details": self.output_token_details,
         }
+        for key in _OPTIONAL_COUNT_KEYS:
+            value = getattr(self, key)
+            if value is not None:
+                result[key] = value
+        return result
+
+
+def usage_to_callback_metadata(model_name: str, usage: "PortUsageMetadata") -> dict[str, dict[str, Any]]:
+    """Convert a port UsageMetadata into the model-keyed dict UsageTracker accepts.
+
+    Builds the same ``inner_usage`` dict the generate_answer stage builds for
+    the answering model (token counts, cost and cache keys), plus
+    ``reasoning_tokens`` and ``web_search_queries`` when the adapter set them.
+
+    Args:
+        model_name: Model display string used as the dict key.
+        usage: Usage reported by an adapter for one call or agent run.
+
+    Returns:
+        ``{model_name: inner_usage}`` suitable for :meth:`UsageTracker.track_call`.
+    """
+    inner_usage: dict[str, Any] = {
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "total_tokens": usage.total_tokens,
+    }
+    if usage.cost_usd is not None:
+        inner_usage["cost_usd"] = usage.cost_usd
+    if usage.cache_read_tokens is not None:
+        inner_usage["cache_read_input_tokens"] = usage.cache_read_tokens
+    if usage.cache_creation_tokens is not None:
+        inner_usage["cache_creation_input_tokens"] = usage.cache_creation_tokens
+    if usage.reasoning_tokens is not None:
+        inner_usage["reasoning_tokens"] = usage.reasoning_tokens
+    if usage.web_search_queries is not None:
+        inner_usage["web_search_queries"] = usage.web_search_queries
+    return {model_name: inner_usage}
 
 
 class UsageTracker:
@@ -191,7 +246,7 @@ class UsageTracker:
             for key, val in call.output_token_details.items():
                 output_details[key] = output_details.get(key, 0) + val
 
-        return {
+        summary: dict[str, Any] = {
             "input_tokens": total_input,
             "output_tokens": total_output,
             "total_tokens": total_tokens,
@@ -199,6 +254,11 @@ class UsageTracker:
             "input_token_details": input_details if input_details else {"audio": 0, "cache_read": 0},
             "output_token_details": output_details if output_details else {"audio": 0, "reasoning": 0},
         }
+        for key in _OPTIONAL_COUNT_KEYS:
+            values = [getattr(c, key) for c in calls if getattr(c, key) is not None]
+            if values:
+                summary[key] = sum(values)
+        return summary
 
     def get_total_summary(self) -> dict[str, dict[str, Any]]:
         """
@@ -221,11 +281,16 @@ class UsageTracker:
             total_output = sum(s["output_tokens"] for s in result.values())
             total_tokens = sum(s["total_tokens"] for s in result.values())
 
-            result["total"] = {
+            total: dict[str, Any] = {
                 "input_tokens": total_input,
                 "output_tokens": total_output,
                 "total_tokens": total_tokens,
             }
+            for key in _OPTIONAL_COUNT_KEYS:
+                values = [s[key] for s in result.values() if key in s]
+                if values:
+                    total[key] = sum(values)
+            result["total"] = total
 
         return result
 

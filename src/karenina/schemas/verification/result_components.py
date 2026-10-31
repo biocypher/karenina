@@ -271,9 +271,26 @@ class VerificationResultRubric(BaseModel):
         "Each trace is the raw agent investigation output string. "
         "Keyed by trait name.",
     )
+    agentic_trait_investigation_messages: dict[str, list[dict[str, Any]]] | None = Field(
+        default=None,
+        description="Structured investigation messages from agentic rubric traits, keyed by trait name. "
+        "Each list holds the judge's serialised trace messages (tool calls, tool results, thinking) "
+        "in the same format as template.trace_messages. A single-call judge without tools stores "
+        "one assistant message. Traits whose investigation failed have no entry.",
+    )
+    agentic_trait_evaluation_errors: dict[str, dict[str, str]] | None = Field(
+        default=None,
+        description="Errors that left an agentic rubric trait without a judgment, keyed by trait name. "
+        "Each entry has 'phase' ('investigation' or 'extraction'), 'error_type', 'message' and "
+        "'category' (an ErrorCategory value: 'connection', 'timeout', 'rate_limit', 'server_error' "
+        "or 'permanent'). Only 'permanent' errors are not worth retrying. Investigation errors are "
+        "always recorded. Extraction errors are recorded only when retryable.",
+    )
     agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
         default=None,
-        description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",
+        description="Extraction provenance for agentic rubric traits. Keyed by base trait name. "
+        "An 'investigation_incomplete' entry ('turn_limit' or 'timeout') means the score was "
+        "extracted from a partial investigation trace.",
     )
 
     # Dynamic rubric metadata (populated when a DynamicRubric presence check runs)

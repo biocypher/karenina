@@ -12,6 +12,7 @@ from karenina.benchmark.verification.failure_classifier import (
     collect_caveats,
 )
 from karenina.benchmark.verification.utils.llm_invocation import _split_parsed_response
+from karenina.benchmark.verification.utils.trace_formatting import messages_to_dicts
 from karenina.benchmark.verification.workspace_capture import (
     DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
     capture_workspace,
@@ -240,19 +241,13 @@ class FinalizeResultStage(BaseVerificationStage):
         trace_messages_raw = context.get_artifact(ArtifactKeys.TRACE_MESSAGES)
         if trace_messages_raw:
             # trace_messages contains list[Message] — convert to list[dict]
-            for block_index, msg in enumerate(trace_messages_raw):
-                d = msg.to_dict()
-                d["block_index"] = block_index
-                trace_messages_dicts.append(d)
+            trace_messages_dicts = messages_to_dicts(trace_messages_raw)
 
         # Build conversation_context (full LLM input: system + prior turns + current question)
         conversation_context_dicts: list[dict[str, Any]] = []
         conversation_context_raw = context.get_artifact(ArtifactKeys.CONVERSATION_CONTEXT)
         if conversation_context_raw:
-            for block_index, msg in enumerate(conversation_context_raw):
-                d = msg.to_dict()
-                d["block_index"] = block_index
-                conversation_context_dicts.append(d)
+            conversation_context_dicts = messages_to_dicts(conversation_context_raw)
 
         # Compute raw_llm_response from trace_messages if available,
         # otherwise fall back to the string stored by generate_answer
@@ -372,11 +367,18 @@ class FinalizeResultStage(BaseVerificationStage):
             # Get agentic trait evaluation results (populated by Stage 11b)
             agentic_trait_scores = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_SCORES)
             agentic_trait_traces_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
+            agentic_trait_messages_raw = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES)
+            agentic_trait_errors = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS) or None
             agentic_trait_extraction_metadata = context.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA)
-            # Filter out None traces from failed investigations to satisfy dict[str, str] schema
+            # Filter out None traces and messages (skipped traits, failed investigations) to satisfy the schema
             agentic_trait_traces = (
                 {k: v for k, v in agentic_trait_traces_raw.items() if v is not None}
                 if agentic_trait_traces_raw
+                else None
+            )
+            agentic_trait_messages = (
+                {k: v for k, v in agentic_trait_messages_raw.items() if v is not None}
+                if agentic_trait_messages_raw
                 else None
             )
 
@@ -395,6 +397,8 @@ class FinalizeResultStage(BaseVerificationStage):
                 metric_trait_confusion_lists=context.get_result_field(ArtifactKeys.METRIC_TRAIT_CONFUSION_LISTS),
                 agentic_trait_scores=agentic_trait_scores,
                 agentic_trait_investigation_traces=agentic_trait_traces,
+                agentic_trait_investigation_messages=agentic_trait_messages,
+                agentic_trait_evaluation_errors=agentic_trait_errors,
                 agentic_trait_extraction_metadata=agentic_trait_extraction_metadata,
                 dynamic_rubric_skipped_traits=dynamic_skipped,
                 dynamic_rubric_promoted_traits=dynamic_promoted,

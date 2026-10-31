@@ -421,6 +421,46 @@ class TestCacheHydration:
         # Byte-match against the sidecar row's raw_llm_response.
         assert data["raw_llm_response"] == prior_row.template.raw_llm_response
 
+    def test_resume_after_agentic_judge_failure_reuses_the_answer(self, tmp_path: Path) -> None:
+        """A row whose agentic rubric judge failed is re-run on resume with its answer reused.
+
+        ProgressiveFileSink leaves the retryable row out of completed_triples,
+        and hydration still turns its answer into a cache HIT, so only the
+        judge runs again.
+        """
+        from karenina.schemas.verification.result_components import VerificationResultRubric
+
+        row = _make_result(
+            question_id="q_judge",
+            raw_llm_response="--- AI Message ---\nanswer the judge never scored",
+            failure=Failure(
+                category=FailureCategory.UNEXPECTED_ERROR,
+                stage="AgenticRubricEvaluation",
+                reason="Agentic rubric judge failed for 1 trait(s)",
+            ),
+        )
+        row.rubric = VerificationResultRubric(
+            agentic_trait_scores={"citations": None},
+            agentic_trait_evaluation_errors={
+                "citations": {
+                    "phase": "extraction",
+                    "error_type": "GeminiRateLimitError",
+                    "message": "429",
+                    "category": "rate_limit",
+                }
+            },
+        )
+        sink = _persist_and_resume(tmp_path, [row])
+        assert sink.completed_triples() == set()
+
+        cache = AnswerTraceCache()
+        VerificationExecutor._hydrate_cache_from_results(cache, sink.iter_results())
+
+        status, data = cache.get_or_reserve(_expected_cache_key(row))
+        assert status == "HIT"
+        assert data is not None
+        assert data["raw_llm_response"] == row.template.raw_llm_response
+
     def test_hydration_disabled_when_enable_cache_false(self, tmp_path: Path) -> None:
         """When the executor's cache is None, hydration is a no-op.
 

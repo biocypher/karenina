@@ -12,12 +12,12 @@ import acp
 from acp.schema import AgentMessageChunk, PromptResponse, TextContentBlock, Usage
 
 from karenina.adapters.omp.agent import OmpAgentAdapter
-from karenina.ports import AgentConfig, AgentExecutionError, AgentResponseError, Message, Tool
+from karenina.ports import AgentConfig, AgentExecutionError, AgentResponseError, AgentTimeoutError, Message, Tool
 from karenina.schemas.config import ModelConfig
 
 
 class _FakeStream:
-    async def read(self) -> bytes:
+    async def read(self, _size: int = -1) -> bytes:
         return b""
 
 
@@ -197,3 +197,203 @@ def test_protocol_version_mismatch_fails_before_session_creation(
         )
 
     assert process.terminated is True
+
+
+@pytest.mark.unit
+class TestOmpLifecycle:
+    def test_spawn_failure_is_a_port_error(self, monkeypatch, model_config):
+        async def fail(*_args, **_kwargs):
+            raise FileNotFoundError("configured OMP executable disappeared")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", fail)
+        with pytest.raises(AgentExecutionError, match="subprocess could not start") as error:
+            asyncio.run(OmpAgentAdapter(model_config).arun([Message.user("hello")]))
+        assert isinstance(error.value.__cause__, FileNotFoundError)
+
+    def test_process_ignoring_terminate_is_killed(self, monkeypatch, model_config):
+        monkeypatch.setattr("karenina.adapters.omp.agent._PROCESS_EXIT_GRACE_SECONDS", 0.001)
+
+        async def run():
+            killed = asyncio.Event()
+
+            class StubbornProcess(_FakeProcess):
+                def terminate(self):
+                    self.terminated = True
+
+                def kill(self):
+                    super().kill()
+                    killed.set()
+
+                async def wait(self):
+                    await killed.wait()
+                    return self.returncode
+
+            process = StubbornProcess()
+            await OmpAgentAdapter(model_config)._stop_process(process)
+            assert process.terminated
+            assert killed.is_set()
+            assert process.returncode == -9
+
+        asyncio.run(run())
+
+    @pytest.mark.parametrize("reason", ["end_turn", "refusal"])
+    def test_failed_turn_is_not_a_successful_answer(self, monkeypatch, tmp_path, model_config, reason):
+        process, _ = _install_fake_transport(monkeypatch)
+
+        async def failed_prompt(self, **_kwargs):
+            await self.client.session_update(
+                "omp-session",
+                AgentMessageChunk(
+                    session_update="agent_message_chunk",
+                    content=TextContentBlock(type="text", text="401 token expired or incorrect"),
+                ),
+            )
+            return PromptResponse(stop_reason=reason, usage=Usage(input_tokens=0, output_tokens=0, total_tokens=0))
+
+        monkeypatch.setattr(_FakeConnection, "prompt", failed_prompt)
+        with pytest.raises(AgentResponseError, match="401 token expired"):
+            asyncio.run(
+                OmpAgentAdapter(model_config).arun([Message.user("hello")], config=AgentConfig(workspace_path=tmp_path))
+            )
+        assert process.terminated
+
+    def test_missing_usage_cannot_mask_provider_failure(self, monkeypatch, tmp_path, model_config):
+        _install_fake_transport(monkeypatch)
+        original = _FakeConnection.prompt
+
+        async def without_usage(self, **kwargs):
+            response = await original(self, **kwargs)
+            response.usage = None
+            return response
+
+        monkeypatch.setattr(_FakeConnection, "prompt", without_usage)
+        with pytest.raises(AgentResponseError, match="without any recorded model usage"):
+            asyncio.run(
+                OmpAgentAdapter(model_config).arun([Message.user("hello")], config=AgentConfig(workspace_path=tmp_path))
+            )
+
+    def test_unadvertised_mcp_transport_fails_before_session_creation(self, monkeypatch, tmp_path, model_config):
+        process, record = _install_fake_transport(monkeypatch)
+        with pytest.raises(AgentExecutionError, match="did not advertise MCP http"):
+            asyncio.run(
+                OmpAgentAdapter(model_config).arun(
+                    [Message.user("hello")],
+                    mcp_servers={"remote": {"type": "http", "url": "https://example.test/mcp"}},
+                    config=AgentConfig(workspace_path=tmp_path),
+                )
+            )
+        assert record["connection"].options == []
+        assert record["connection"].closed_session is None
+        assert process.terminated
+
+    @pytest.mark.parametrize("phase", ["initialize", "new_session", "set_config_option"])
+    def test_timeout_includes_session_setup(self, monkeypatch, tmp_path, model_config, phase):
+        process, _ = _install_fake_transport(monkeypatch)
+        model_config.extra_kwargs["timeout_cancel_grace"] = 0.001
+
+        async def stalled(self, **_kwargs):
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(_FakeConnection, phase, stalled)
+
+        async def run():
+            with pytest.raises(AgentTimeoutError, match="before producing a trace"):
+                await asyncio.wait_for(
+                    OmpAgentAdapter(model_config).arun(
+                        [Message.user("hello")], config=AgentConfig(timeout=0.01, workspace_path=tmp_path)
+                    ),
+                    timeout=1,
+                )
+
+        asyncio.run(run())
+        assert process.terminated
+
+    def test_stalled_cleanup_does_not_hang_a_successful_run(self, monkeypatch, tmp_path, model_config):
+        process, _ = _install_fake_transport(monkeypatch)
+        monkeypatch.setattr("karenina.adapters.omp.agent._CLEANUP_GRACE_SECONDS", 0.01)
+
+        async def stalled(self, **_kwargs):
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(_FakeConnection, "close_session", stalled)
+        monkeypatch.setattr(_FakeConnection, "close", stalled)
+
+        async def run():
+            return await asyncio.wait_for(
+                OmpAgentAdapter(model_config).arun(
+                    [Message.user("hello")], config=AgentConfig(workspace_path=tmp_path)
+                ),
+                timeout=1,
+            )
+
+        result = asyncio.run(run())
+        assert result.final_response == "OMP_ADAPTER_OK"
+        assert process.terminated
+
+    def test_stalled_cancel_keeps_partial_result(self, monkeypatch, tmp_path, model_config):
+        process, _ = _install_fake_transport(monkeypatch, hang_until_cancel=True)
+        monkeypatch.setattr("karenina.adapters.omp.agent._CLEANUP_GRACE_SECONDS", 0.01)
+        model_config.extra_kwargs["timeout_cancel_grace"] = 0.001
+
+        async def stalled(self, **_kwargs):
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(_FakeConnection, "cancel", stalled)
+
+        async def run():
+            return await asyncio.wait_for(
+                OmpAgentAdapter(model_config).arun(
+                    [Message.user("hello")], config=AgentConfig(timeout=0.01, workspace_path=tmp_path)
+                ),
+                timeout=1,
+            )
+
+        result = asyncio.run(run())
+        assert result.timeout_reached
+        assert result.final_response == "OMP_ADAPTER_OK"
+        assert process.terminated
+
+    def test_caller_cancellation_cancels_session_and_reaps_process(self, monkeypatch, tmp_path, model_config):
+        process, record = _install_fake_transport(monkeypatch, hang_until_cancel=True)
+
+        async def run():
+            started = asyncio.Event()
+
+            async def stalled(self, **_kwargs):
+                started.set()
+                await asyncio.Event().wait()
+
+            monkeypatch.setattr(_FakeConnection, "prompt", stalled)
+            task = asyncio.create_task(
+                OmpAgentAdapter(model_config).arun([Message.user("hello")], config=AgentConfig(workspace_path=tmp_path))
+            )
+            await asyncio.wait_for(started.wait(), timeout=1)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert record["connection"].cancelled.is_set()
+            assert process.terminated
+            assert not (asyncio.all_tasks() - {asyncio.current_task()})
+
+        asyncio.run(run())
+
+    def test_stderr_is_drained_with_bounded_memory(self, model_config):
+        async def run():
+            stream = asyncio.StreamReader()
+            stream.feed_data(b"x" * 50_000 + b"diagnostic tail")
+            stream.feed_eof()
+            tail = bytearray()
+            await OmpAgentAdapter(model_config)._collect_stderr(stream, tail)
+            return tail
+
+        tail = asyncio.run(run())
+        assert len(tail) == 4_000
+        assert tail.endswith(b"diagnostic tail")
+
+    @pytest.mark.parametrize("value", [float("inf"), float("nan"), -1])
+    def test_invalid_cancellation_grace_fails_before_spawning(self, monkeypatch, model_config, value):
+        _, record = _install_fake_transport(monkeypatch)
+        model_config.extra_kwargs["timeout_cancel_grace"] = value
+        with pytest.raises(AgentExecutionError, match="finite and non-negative"):
+            asyncio.run(OmpAgentAdapter(model_config).arun([Message.user("hello")]))
+        assert "command" not in record

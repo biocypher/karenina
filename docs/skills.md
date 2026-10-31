@@ -27,26 +27,40 @@ match the API of the commit you have checked out.
 
 ## Installation
 
-**Working inside this repository** — nothing to do: `.claude/skills` is a
+From a karenina checkout, the installer copies (or symlinks) the skills into the
+directory your agent scans:
+
+```bash
+./skills/install.sh                      # Claude Code, this project
+./skills/install.sh --agent codex        # Codex, Pi, Gemini CLI, OpenCode, ...
+./skills/install.sh --scope user         # available in every project
+./skills/install.sh --workflow-only      # skip the adapter development skills
+./skills/install.sh --help               # all options
+```
+
+To install by hand, copy the skill directories yourself:
+
+| Agent | Project scope | User scope |
+|-------|---------------|------------|
+| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
+| Codex | `.agents/skills/` | `~/.agents/skills/` (also reads `~/.codex/skills/`) |
+| Pi | `.agents/skills/` | `~/.agents/skills/` |
+| Gemini CLI, OpenCode, Goose, Amp, ... | `.agents/skills/` | `~/.agents/skills/` |
+
+```bash
+mkdir -p .agents/skills
+cp -r /path/to/karenina/skills/karenina-* /path/to/karenina/skills/using-karenina .agents/skills/
+```
+
+`.agents/skills/` is the shared convention that most agents now scan, so skills
+installed there are visible to all of them at once.
+
+**Working inside this repository** there is nothing to do: `.claude/skills` is a
 symlink to `skills/`, so Claude Code discovers them automatically.
 
-**In your own project** (project-level, shared via your repo):
-
-```bash
-mkdir -p .claude/skills
-cp -r /path/to/karenina/skills/karenina-* /path/to/karenina/skills/using-karenina .claude/skills/
-```
-
-**User-level** (available in every project):
-
-```bash
-mkdir -p ~/.claude/skills
-cp -r /path/to/karenina/skills/karenina-* /path/to/karenina/skills/using-karenina ~/.claude/skills/
-```
-
-Copy only the skills you need; every skill is self-contained except that the
-workflow skills refer to `using-karenina/references/` for deep-dive
-documentation, so keep `using-karenina` alongside them.
+Copy only the skills you need. Every skill is self-contained, except that the
+workflow skills refer to `using-karenina/references/` for deep-dive documentation,
+so keep `using-karenina` alongside them.
 
 ## Keeping the reference docs in sync
 

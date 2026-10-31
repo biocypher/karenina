@@ -283,7 +283,7 @@ Every Template, Rubric, and Judgment DataFrame includes six columns that summari
 | `failure_group` | `str | None` | The aggregation [`FailureGroup`](../../reference/api/failure-and-caveats.md#4-failuregroup-5-aggregation-buckets) string value (one of `content`, `autofail`, `retry`, `abstained`, `system`); `None` on success |
 | `failure_stage` | `str | None` | The pipeline stage that originated the failure (e.g. `"verify_template"`, `"parse_template"`); `None` on success |
 | `failure_reason` | `str | None` | Trimmed reason string capped at 500 characters; `None` on success |
-| `caveats` | `str` | Comma-joined list of [`Caveat`](../../reference/api/failure-and-caveats.md#5-caveat-4-informational-flags) string values; empty string when no caveats fired |
+| `caveats` | `str` | Comma-joined list of [`Caveat`](../../reference/api/failure-and-caveats.md#5-caveat-7-informational-flags) string values, or an empty string when no caveats fired |
 
 ```python
 template_df = results.get_template_results().to_dataframe()

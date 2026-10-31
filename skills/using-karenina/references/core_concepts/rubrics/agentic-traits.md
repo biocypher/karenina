@@ -78,7 +78,7 @@ _mock_result = VerificationResult(
 
 An `AgenticRubricTrait` launches an agent that can read files, execute code, and explore the workspace before the system extracts a structured score from the investigation trace. This is fundamentally different from [LLM traits](llm-traits.md), which evaluate qualities visible in the response text through a single parsing call with no tool access.
 
-Use `AgenticRubricTrait` when the evaluation depends on **artifacts the answering model produced** (generated files, code output, database entries) or on **workspace state that cannot be inferred from the response text alone**. If the check can be made by reading the response, prefer an [LLM trait](llm-traits.md) or a local check ([regex](regex-traits.md), [callable](callable-traits.md)).
+Use `AgenticRubricTrait` when the evaluation depends on **artifacts the answering model produced** (generated files, code output, database entries) or on **workspace state that cannot be inferred from the response text alone**. It also fits checks against **external sources** that the judge reaches through tools, for example verifying each citation in the response against a literature database exposed as an MCP server (see Section 4.4). If the check can be made by reading the response, prefer an [LLM trait](llm-traits.md) or a local check ([regex](regex-traits.md), [callable](callable-traits.md)).
 
 ### 1.1 Scope Boundary
 
@@ -150,7 +150,7 @@ Question + Response Trace + Workspace Path
 | `timeout_seconds` | `int` | `120` | Wall-clock timeout for the investigation step |
 | `materialize_trace` | `bool` | `False` | Write the answering agent trace to a file in the workspace instead of inlining it in the investigation prompt. The investigation agent receives the file path and can use grep/search tools on it. Requires `context_mode` that includes the trace (`"trace_only"` or `"trace_and_workspace"`). See Section 5.5 |
 | `persist_trace` | `bool` | `False` | When `True`, the materialized trace file is kept after evaluation. When `False` (default), cleaned up after evaluation completes |
-| `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. The interface must be registered with `agent_tier="deep_agent"`; a model-validator rejects any other tier (including `"basic_agent"`) at trait construction time |
+| `model_override` | `ModelConfig \| None` | `None` | Use a specific model for this trait instead of the pipeline's parsing model. Its interface must be able to judge the trait (see Section 4.4). A model-validator rejects any other interface at trait construction time |
 
 ## 4. How It Works
 
@@ -171,10 +171,10 @@ During the [verification pipeline](../verification-pipeline.md), agentic rubric 
 For each agentic trait, the pipeline:
 
 1. Resolves the model: uses `trait.model_override` if set, otherwise falls back to the pipeline's parsing model.
-2. Validates that the resolved model's interface is registered with `agent_tier="deep_agent"`. If the tier is anything else (or the interface is unregistered), the trait is skipped with a warning.
-3. Runs the investigation step (agent with tools, bounded by `max_turns` and `timeout_seconds`).
+2. Validates that the resolved model's interface can judge the trait (see Section 4.4). If any trait's model cannot, the stage raises `ValueError` naming the trait, its interface and its context mode, before any trait runs.
+3. Runs the investigation step (agent with tools, bounded by `max_turns` and `timeout_seconds`). A `trace_only` trait needs no tools when its judge has no MCP servers and the question has no workspace, so it then runs as a single LLM call with the trace in the prompt.
 4. Runs the extraction step (structured parser call on the investigation trace).
-5. Stores the score in `VerificationResult.rubric.agentic_trait_scores` and the trace in `VerificationResult.rubric.agentic_trait_investigation_traces`.
+5. Stores the score in `VerificationResult.rubric.agentic_trait_scores`, the trace in `VerificationResult.rubric.agentic_trait_investigation_traces`, and the judge's structured messages (tool calls, tool results, thinking) in `VerificationResult.rubric.agentic_trait_investigation_messages`. The judge's token usage is recorded under the `agentic_rubric_evaluation` stage of `template.usage_metadata`.
 
 ### 4.3 Evaluation Strategies
 
@@ -184,6 +184,31 @@ For each agentic trait, the pipeline:
 |----------|----------|-------------|
 | `"individual"` (default) | One agent session per trait. Each trait can use a different model via `model_override` | Robust, isolated. Use when traits require different tools or models, or when you want independent investigation traces |
 | `"shared"` | One shared agent investigates all traits in a single session, then per-trait extraction pulls individual scores | Faster when all traits use the same model. Falls back to individual if traits resolve to different models |
+
+### 4.4 Judge Interfaces
+
+The judge is the resolved model of Section 4.2. What it can judge depends on its [adapter](../adapters.md):
+
+| Judge interface | Can judge | Tools the judge has |
+|-----------------|-----------|---------------------|
+| Deep agent runtimes (`claude_agent_sdk`, `langchain_deep_agents`) | Any agentic trait | Built-in file and code tools, plus MCP servers |
+| Tool-loop interfaces with MCP support (`langchain`, `openrouter`, `openai_endpoint`, `claude_tool`, `google_genai`) | Only traits with `context_mode="trace_only"` and `materialize_trace=False` | The MCP servers in the judge's `mcp_urls_dict`, plus any server-side tools of the provider |
+| `manual`, `taskeval` | No trait | None |
+
+A tool-loop judge reads the trace from its prompt and cannot open files, which is why it is limited to `trace_only` traits. Note that the default `context_mode` is `"trace_and_workspace"`, so such a trait must set `context_mode="trace_only"` explicitly.
+
+When the judge's `ModelConfig` sets `mcp_urls_dict`, the judge always runs as an agent and receives those MCP servers, in the same way the answering model receives its own. A [`google_genai`](../../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) judge can also use Gemini's Google Search and URL reading (`extra_kwargs={"builtin_tools": [...], "max_search_queries": n}`). Its searches and page reads appear as `google_search` and `url_context` tool calls in the judge's trace, and their count appears as `web_search_queries` in usage. A citation check can therefore give a Gemini judge a literature-database MCP server, Google Search as a fallback, and a search budget per run.
+
+### 4.5 When the Judge Fails
+
+A judge that could not judge is never counted as a judgment:
+
+- If the investigation raises, the trait has no score, its trace holds `[investigation failed: <ExceptionType>: <message>]`, and the row gets the `agentic_investigation_failed` caveat.
+- If score extraction fails with a retryable error (connection, timeout, rate limit, server error), the trait has no score but keeps its trace, and the row gets the `agentic_extraction_failed` caveat. A non-retryable extraction error (for example a schema validation failure) only leaves the score empty.
+- In both cases the error is recorded in `rubric.agentic_trait_evaluation_errors` (phase, error type, message, error category) and the row becomes a failure at the `AgenticRubricEvaluation` stage, even when its template passed. [Progressive-save](../../reference/api/sinks.md) resume re-runs such rows unless the error is permanent, and reuses their stored answers.
+- If the judge's agent hits its turn limit or timeout, the score is still extracted from the partial trace and kept. `agentic_trait_extraction_metadata[trait]["investigation_incomplete"]` records `"turn_limit"` or `"timeout"`, and the row gets the informational `agentic_investigation_incomplete` caveat.
+
+Other traits on the row are evaluated as usual. See [Agentic Rubric Evaluation](../../advanced-pipeline/agentic-rubric-evaluation.md#9-judge-failures-and-partial-investigations) for the classification details and [Failure and Caveats](../../reference/api/failure-and-caveats.md) for the caveat list.
 
 ## 5. Patterns and Worked Examples
 
@@ -310,6 +335,8 @@ print(f"Template kind: {trait.is_template_kind}")
 print(f"Fields: {list(CodeQualityFindings.model_fields.keys())}")
 ```
 
+Template kind fields must be `int`, `float`, `str`, `bool`, a `list` of those, or an `Optional` of those with a default, so a `Literal` field is rejected. For a closed set of values, use a `str` field declared with `Field(json_schema_extra={"enum": [...]})` plus a `field_validator` (a reloaded checkpoint keeps only the `str` type).
+
 Because the output has multiple fields with potentially different meanings, `higher_is_better` is set to `None`. Results are stored as flat dot-notation keys in `agentic_trait_scores` (`code_quality.has_type_hints`, `code_quality.test_count`, `code_quality.external_dependencies`), making them easy to access in DataFrames and downstream analysis.
 
 `LLMRubricTrait` accepts the same template kind for text-only evaluations that do not require tool access; the result is stored under `llm_trait_scores` with the same dotted-key convention. See the [LLM-trait template section](llm-traits.md#7-template-kind) for when to prefer it over the agentic variant.
@@ -336,7 +363,7 @@ Trace materialization requires a context mode that includes the trace (`"trace_o
 
 ### 5.6 Reading Results
 
-After verification, agentic trait scores and investigation traces are stored in `VerificationResult.rubric`. The following cells use the `_mock_result` from the hidden setup cell.
+After verification, agentic trait scores and investigation traces are stored in `VerificationResult.rubric`. Two more fields help with auditing: `agentic_trait_investigation_messages` holds each judge's structured messages (tool calls and results readable by field), and `agentic_trait_evaluation_errors` lists the traits whose judge failed (Section 4.5). The following cells use the `_mock_result` from the hidden setup cell.
 
 ```python
 # Access agentic trait scores
