@@ -26,6 +26,7 @@ from tests.unit.adapters.google_genai._fakes import (
     search_grounding,
     text_part,
     thought_part,
+    usage,
 )
 
 LOOKUP = Tool(name="lookup", description="Look up a record", input_schema={"type": "object"})
@@ -161,3 +162,21 @@ class TestLLMEmptyTurns:
         adapter = _llm(models)
         result = await asyncio.to_thread(adapter.stream_invoke, [Message.user("Q")], 5.0)
         assert result.content == "Whole."
+
+
+@pytest.mark.unit
+class TestRetriedAttemptsAreBilled:
+    async def test_usage_and_searches_of_a_retried_attempt_are_kept(self) -> None:
+        searched = response([], grounding=search_grounding(["q1", "q2"]), usage_metadata=usage(100, 3))
+        models = FakeModels(responses=[searched, response([text_part("Done.")], usage_metadata=usage(120, 7))])
+        outcome = await run_generate(models)
+        assert outcome.text == "Done."
+        assert outcome.search_query_count == 2
+        assert outcome.usage_metadata.prompt_token_count == 220
+        assert outcome.usage_metadata.candidates_token_count == 10
+
+    async def test_a_first_time_success_keeps_the_sdk_usage_object(self) -> None:
+        only = usage(10, 5)
+        outcome = await run_generate(FakeModels(responses=[response([text_part("ok")], usage_metadata=only)]))
+        assert outcome.usage_metadata is only
+        assert outcome.search_query_count == 0

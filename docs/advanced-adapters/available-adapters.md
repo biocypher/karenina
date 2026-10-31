@@ -459,7 +459,7 @@ Setting `endpoint_api_key` with the `vertex` backend raises `ValueError`. Missin
 | `max_tokens` | Sent as `max_output_tokens`. Thinking and answer tokens share this budget |
 | `system_prompt` | System instruction used when the messages carry none |
 | `request_timeout` | Wall-clock limit for each model call. Defaults to 300 seconds when unset, so one stuck call cannot hold a whole run |
-| `retry_policy` | Retries through `RetryExecutor`. The SDK's own HTTP retries are switched off, so the [retry policy](../notebooks/advanced/pipeline/error-handling.ipynb) is the only retry layer and only the failed call is repeated |
+| `retry_policy` | Retries through `RetryExecutor`. The SDK's own HTTP retries are switched off, so the [retry policy](../notebooks/advanced/pipeline/error-handling.ipynb) is the only retry layer and only the failed call is repeated. One exception cannot be switched off: on its aiohttp transport the SDK resends a request once, after a 1 to 10 second sleep, when the connection fails or drops, inside the same attempt and its time limit. A retried call that Gemini answered without a usable result (for example an empty `STOP`) still counts toward usage and the search budget |
 | `mcp_urls_dict`, `mcp_tool_filter`, `mcp_tool_description_overrides`, `mcp_http_timeout`, `mcp_sse_read_timeout` | MCP servers and tool filtering, with the same meaning as for `claude_tool` |
 | `extra_kwargs` | The keys in the next table. Any other key raises `ValueError` |
 

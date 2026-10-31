@@ -108,13 +108,21 @@ class GoogleGenAIParserAdapter:
         if portal is not None:
             return portal.call(self.aparse_to_pydantic, messages, schema)
         if running_loop() is None:
-            return asyncio.run(self.aparse_to_pydantic(messages, schema))
+            return asyncio.run(
+                self._llm_adapter.client_holder.run_then_release(self.aparse_to_pydantic, messages, schema)
+            )
         thread_timeout = compute_sync_wrapper_timeout(
             self._llm_adapter.settings.request_timeout,
             retry_policy=self._config.retry_policy,
             internal_call_sequences=self._max_retries + 2,
         )
-        return run_coro_in_thread(self.aparse_to_pydantic, messages, schema, timeout=thread_timeout)
+        return run_coro_in_thread(
+            self._llm_adapter.client_holder.run_then_release,
+            self.aparse_to_pydantic,
+            messages,
+            schema,
+            timeout=thread_timeout,
+        )
 
     async def aclose(self) -> None:
         """Close the inner LLM adapter. Safe to call twice."""

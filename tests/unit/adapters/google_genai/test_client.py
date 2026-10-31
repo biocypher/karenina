@@ -113,3 +113,47 @@ class TestClientHolder:
         client.close.assert_called_once()
         await holder.aclose()  # safe to call twice
         client.close.assert_called_once()
+
+
+def _fake_client() -> MagicMock:
+    client = MagicMock()
+    client.aio.aclose = MagicMock(side_effect=lambda: asyncio.sleep(0))
+    return client
+
+
+@pytest.mark.unit
+class TestShortLivedLoops:
+    """Sync calls outside a portal run on loops that end with the call: their clients must not pile up."""
+
+    def test_run_then_release_closes_the_loop_client(self) -> None:
+        holder = GenAIClientHolder(_settings())
+        built: list[MagicMock] = []
+
+        def build(_settings: Any) -> MagicMock:
+            built.append(_fake_client())
+            return built[-1]
+
+        async def call() -> str:
+            holder.get()
+            return "ok"
+
+        with patch("karenina.adapters.google_genai.client.build_client", side_effect=build):
+            for _ in range(3):
+                assert asyncio.run(holder.run_then_release(call)) == "ok"
+        assert len(built) == 3
+        assert holder._clients == {}
+        for client in built:
+            client.aio.aclose.assert_called_once()
+            client.close.assert_called_once()
+
+    def test_clients_of_closed_loops_are_dropped(self) -> None:
+        holder = GenAIClientHolder(_settings())
+
+        async def call() -> None:
+            holder.get()
+
+        with patch("karenina.adapters.google_genai.client.build_client", side_effect=lambda _s: _fake_client()):
+            for _ in range(5):
+                asyncio.run(call())
+        # Each get() on a new loop drops the clients of loops that have closed.
+        assert len(holder._clients) == 1

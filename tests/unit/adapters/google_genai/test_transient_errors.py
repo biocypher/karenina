@@ -93,3 +93,57 @@ class TestDuringClientConstruction:
             pytest.raises(GeminiConnectionError),
         ):
             build_client(settings)
+
+
+@pytest.mark.unit
+class TestTransportErrors:
+    """aiohttp and httpx failures become port errors inside the attempt, so they never escape raw."""
+
+    async def test_dropped_connection_is_retried(self) -> None:
+        import aiohttp
+
+        models = FakeModels(responses=[aiohttp.ServerDisconnectedError(), response([text_part("ok")])])
+        assert (await run_generate(models)).text == "ok"
+        assert len(models.calls) == 2
+
+    async def test_persistent_dropped_connection_fails_as_a_connection_error(self) -> None:
+        import aiohttp
+
+        models = FakeModels(responses=[aiohttp.ServerDisconnectedError()] * 3)
+        with pytest.raises(GeminiConnectionError, match="Server disconnected") as info:
+            await run_generate(models)
+        assert isinstance(info.value.__cause__, aiohttp.ServerDisconnectedError)
+
+    async def test_transport_timeout_becomes_a_timeout(self) -> None:
+        import aiohttp
+
+        models = FakeModels(responses=[aiohttp.ServerTimeoutError("read timed out"), response([text_part("ok")])])
+        assert (await run_generate(models)).text == "ok"
+        assert len(models.calls) == 2
+
+
+@pytest.mark.unit
+class TestPipelineRegistry:
+    """The pipeline's generic registry classifies the adapter's errors the way the adapter does."""
+
+    @pytest.mark.parametrize(
+        ("error", "category"),
+        [
+            (GeminiIncompleteResponseError("Gemini stopped with no text"), ErrorCategory.SERVER_ERROR),
+            (GeminiConnectionError("Network failure talking to Gemini"), ErrorCategory.CONNECTION),
+            (GeminiAuthError("login expired, timeout"), ErrorCategory.PERMANENT),
+        ],
+    )
+    def test_declared_category_wins_in_a_generic_registry(self, error: Exception, category: ErrorCategory) -> None:
+        from karenina.utils.errors import ErrorRegistry
+
+        assert ErrorRegistry().classify(error) is category
+
+    def test_permanent_400_mentioning_500_stays_permanent(self) -> None:
+        from karenina.adapters.google_genai.errors import GeminiClientError
+        from karenina.utils.errors import ErrorRegistry
+
+        error = GeminiClientError(
+            "Gemini API error 400 INVALID_ARGUMENT: input token count (1500001) exceeds the limit"
+        )
+        assert ErrorRegistry().classify(error) is ErrorCategory.PERMANENT

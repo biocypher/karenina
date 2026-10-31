@@ -8,14 +8,20 @@ Builds ``genai.Client`` for either backend (design D3):
   for example the EBI POC gateway.
 
 The SDK's own HTTP retries are switched off (``HttpRetryOptions(attempts=1)``)
-because ``RetryExecutor`` is the only retry layer (design D6). The request
+because ``RetryExecutor`` is the only retry layer (design D6). One SDK retry
+cannot be switched off: on its aiohttp transport, a request that fails to
+connect or whose connection drops (``ClientConnectorError``, ``ClientOSError``,
+``ServerDisconnectedError``) is sent once more after a 1 to 10 second sleep,
+inside the same attempt and its time limit. The request
 timeout is not set here: ``calls.py`` passes it per attempt, so a timeout
 escalated by the retry policy can lengthen a call.
 
 The SDK's async transport (aiohttp when installed) is bound to the event
 loop that first used it, while karenina may call one adapter from several
 worker loops. ``GenAIClientHolder`` therefore keeps one client per event
-loop.
+loop. A sync call made outside karenina's portal runs on a short-lived loop
+(``asyncio.run``), so it goes through ``run_then_release``, which closes
+that loop's client when the call ends.
 """
 
 from __future__ import annotations
@@ -25,7 +31,8 @@ import logging
 import os
 import threading
 import weakref
-from typing import TYPE_CHECKING, Any
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from karenina.ports import AdapterUnavailableError
 
@@ -37,6 +44,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _INSTALL_HINT = "google-genai not installed. Install with: pip install 'karenina[google-genai]'"
+
+T = TypeVar("T")
 
 
 def build_client(settings: GoogleGenAISettings) -> Any:
@@ -135,11 +144,49 @@ class GenAIClientHolder:
                 loop_ref, client = entry
                 if loop_ref is None or loop_ref() is loop:
                     return client
-            # Drop entries whose loop is gone (their id may be reused).
-            self._clients = {k: v for k, v in self._clients.items() if v[0] is None or v[0]() is not None}
+            # Drop entries whose loop is gone or closed (an id may be reused).
+            stale = [k for k, (ref, _) in self._clients.items() if ref is not None and _loop_finished(ref)]
+            for stale_key in stale:
+                _close_sync(self._clients.pop(stale_key)[1])
             client = build_client(self._settings)
             self._clients[key] = (weakref.ref(loop) if loop is not None else None, client)
             return client
+
+    async def run_then_release(self, func: Callable[..., Awaitable[T]], *args: Any) -> T:
+        """Await ``func(*args)``, then close the running loop's client.
+
+        For sync wrappers that run a call on a loop that ends with it
+        (``asyncio.run`` or a fresh thread). Without this, each such call
+        would leave a client and its open sockets behind until ``aclose()``.
+
+        Args:
+            func: The async function to call.
+            *args: Positional arguments for ``func``.
+
+        Returns:
+            What ``func`` returned.
+        """
+        try:
+            return await func(*args)
+        finally:
+            await self.release_running_loop()
+
+    async def release_running_loop(self) -> None:
+        """Close and forget the client of the running loop, if one was built."""
+        loop = running_loop()
+        if loop is None:
+            return
+        with self._lock:
+            entry = self._clients.pop(id(loop), None)
+        if entry is None:
+            return
+        loop_ref, client = entry
+        if loop_ref is not None and loop_ref() is loop:
+            try:
+                await client.aio.aclose()
+            except Exception:
+                logger.debug("Closing the google-genai async client failed", exc_info=True)
+        _close_sync(client)
 
     async def aclose(self) -> None:
         """Close every client. Safe to call several times.
@@ -159,7 +206,18 @@ class GenAIClientHolder:
                     await client.aio.aclose()
                 except Exception:
                     logger.debug("Closing the google-genai async client failed", exc_info=True)
-            try:
-                client.close()
-            except Exception:
-                logger.debug("Closing the google-genai sync client failed", exc_info=True)
+            _close_sync(client)
+
+
+def _loop_finished(loop_ref: weakref.ref[asyncio.AbstractEventLoop]) -> bool:
+    """True when the loop was garbage collected or closed."""
+    loop = loop_ref()
+    return loop is None or loop.is_closed()
+
+
+def _close_sync(client: Any) -> None:
+    """Close a client's sync transport, ignoring failures."""
+    try:
+        client.close()
+    except Exception:
+        logger.debug("Closing the google-genai sync client failed", exc_info=True)

@@ -459,7 +459,7 @@ class GoogleGenAIAgentAdapter:
             return portal.call(self.arun, messages, tools, mcp_servers, config)
 
         if running_loop() is None:
-            return asyncio.run(self.arun(messages, tools, mcp_servers, config))
+            return asyncio.run(self._client.run_then_release(self.arun, messages, tools, mcp_servers, config))
 
         effective = config or AgentConfig()
         if effective.timeout:
@@ -470,7 +470,11 @@ class GoogleGenAIAgentAdapter:
                 retry_policy=self._config.retry_policy,
                 internal_call_sequences=max(effective.max_turns, 1),
             )
-        return run_coro_in_thread(self.arun, messages, tools, mcp_servers, config, timeout=thread_timeout)
+
+        async def released() -> AgentResult:
+            return await self._client.run_then_release(self.arun, messages, tools, mcp_servers, config)
+
+        return run_coro_in_thread(released, timeout=thread_timeout)
 
     async def aclose(self) -> None:
         """Close the google-genai clients. MCP sessions close per run. Safe to call twice."""

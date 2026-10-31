@@ -23,9 +23,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
 
 from google.auth.exceptions import GoogleAuthError
@@ -35,10 +37,12 @@ from karenina.benchmark.verification.async_lifecycle import get_global_llm_limit
 
 from .errors import (
     GeminiClientError,
+    GeminiConnectionError,
     GeminiFinishReasonError,
     GeminiIncompleteResponseError,
     translate_api_error,
     translate_auth_error,
+    transport_error_types,
 )
 from .grounding import GroundingInfo, merge_candidate_metadata
 
@@ -73,6 +77,9 @@ class CallOutcome:
         model_version: ``response.model_version``.
         response: The raw response (last chunk for a stream).
         block_reason: ``prompt_feedback.block_reason`` when the prompt was blocked.
+        retried_search_queries: Google Search queries of earlier attempts
+            that returned no usable answer and were retried. Gemini bills
+            them, so they count toward usage and the search budget.
     """
 
     parts: list[Any]
@@ -84,6 +91,7 @@ class CallOutcome:
     model_version: str | None
     response: Any | None
     block_reason: str | None = None
+    retried_search_queries: int = 0
 
     @property
     def text(self) -> str:
@@ -97,8 +105,9 @@ class CallOutcome:
 
     @property
     def search_query_count(self) -> int:
-        """Google Search queries made during the call."""
-        return self.grounding.query_count if self.grounding is not None else 0
+        """Google Search queries made during the call, retried attempts included."""
+        own = self.grounding.query_count if self.grounding is not None else 0
+        return own + self.retried_search_queries
 
 
 def _enum_name(value: Any) -> str | None:
@@ -357,11 +366,20 @@ def translated_sdk_errors() -> Iterator[None]:
         GeminiClientError: For other ``ValueError``s, which the SDK raises
             for requests it cannot send (for example a field the backend
             does not support). Never retried.
+        TimeoutError: For a transport timeout (aiohttp ``ServerTimeoutError``,
+            httpx ``TimeoutException``). Retried with the timeout budget.
+        GeminiConnectionError: For a lost connection in the transport, for
+            example aiohttp's "Server disconnected". Retried.
     """
+    timeout_types, connection_types = transport_error_types()
     try:
         yield
     except genai_errors.APIError as e:
         raise translate_api_error(e) from e
+    except timeout_types as e:
+        raise TimeoutError(f"Gemini transport timed out: {type(e).__name__}: {e}") from e
+    except connection_types as e:
+        raise GeminiConnectionError(f"Network failure talking to Gemini: {type(e).__name__}: {e}") from e
     except genai_errors.UnknownApiResponseError as e:
         detail = str(e)[:_MAX_RAW_RESPONSE_CHARS]
         raise GeminiIncompleteResponseError(f"Gemini returned a response that is not JSON: {detail}") from e
@@ -394,7 +412,9 @@ async def generate(
         retry_executor: The adapter's RetryExecutor.
 
     Returns:
-        The call outcome. Its finish reason is set (never None).
+        The call outcome. Its finish reason is set (never None). Usage and
+        search queries of attempts that returned no usable answer and were
+        retried are added to it, because Gemini bills them.
 
     Raises:
         GeminiAPIError: An API error, after retries for transient ones.
@@ -404,10 +424,47 @@ async def generate(
         GeminiFinishReasonError: The prompt itself was blocked.
         TimeoutError: The per-attempt guard fired on every attempt.
     """
+    retried: list[CallOutcome] = []
     outcome: CallOutcome = await retry_executor.aexecute_with_timeout(
-        _attempt, client, model, contents, config, stream, timeout=request_timeout
+        _attempt, client, model, contents, config, stream, retried, timeout=request_timeout
     )
-    return outcome
+    if not retried:
+        return outcome
+    return dataclasses.replace(
+        outcome,
+        usage_metadata=merge_usage_metadata([*(r.usage_metadata for r in retried), outcome.usage_metadata]),
+        retried_search_queries=sum(r.search_query_count for r in retried),
+    )
+
+
+_USAGE_COUNT_FIELDS = (
+    "prompt_token_count",
+    "tool_use_prompt_token_count",
+    "candidates_token_count",
+    "thoughts_token_count",
+    "cached_content_token_count",
+    "total_token_count",
+)
+
+
+def merge_usage_metadata(usages: Iterable[Any]) -> Any:
+    """Sum the token counts of several calls' ``usage_metadata``.
+
+    Args:
+        usages: ``usage_metadata`` objects, None entries ignored.
+
+    Returns:
+        None when none is present, the object itself when one is, else a
+        namespace with each count summed (None when no call reported it).
+    """
+    present = [u for u in usages if u is not None]
+    if len(present) <= 1:
+        return present[0] if present else None
+    merged: dict[str, int | None] = {}
+    for name in _USAGE_COUNT_FIELDS:
+        counts = [int(v) for v in (getattr(u, name, None) for u in present) if v is not None]
+        merged[name] = sum(counts) if counts else None
+    return SimpleNamespace(**merged)
 
 
 async def _attempt(
@@ -416,17 +473,26 @@ async def _attempt(
     contents: list[Any],
     config: Any,
     stream: bool,
+    retried: list[CallOutcome],
     *,
     timeout: float | None,
 ) -> CallOutcome:
-    """One call attempt under a limiter permit and the wall-clock guard."""
+    """One call attempt under a limiter permit and the wall-clock guard.
+
+    An attempt that returned no usable answer is kept in ``retried`` before
+    it raises, so its billed usage is not lost when the retry succeeds.
+    """
     attempt_config = with_request_timeout(config, timeout)
     async with get_global_llm_limiter().borrow():
         with translated_sdk_errors():
             genai_client = client.get()
             call = (_call_streamed if stream else _call_once)(genai_client, model, contents, attempt_config)
             outcome = await (call if timeout is None else asyncio.wait_for(call, timeout=timeout))
-    ensure_complete(outcome, stream=stream)
+    try:
+        ensure_complete(outcome, stream=stream)
+    except GeminiIncompleteResponseError:
+        retried.append(outcome)
+        raise
     return outcome
 
 

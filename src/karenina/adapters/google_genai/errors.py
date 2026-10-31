@@ -3,14 +3,18 @@
 The SDK's own exceptions are translated into port errors inside each call
 attempt, so ``RetryExecutor`` classifies them by type rather than by
 message text (a 400 whose message mentions "timeout" must stay permanent).
+Each port error type declares its category in ``error_category``, so the
+pipeline's own registry (which records judge failures and decides what a
+resume re-runs) classifies it the same way as the adapter.
 ``build_error_registry`` returns the adapter's own ``ErrorRegistry``
 instance with these types registered (design Section 14).
 """
 
 from __future__ import annotations
 
+import functools
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from karenina.ports import AdapterUnavailableError, PortError
 from karenina.utils.errors import ErrorCategory, ErrorRegistry
@@ -37,26 +41,38 @@ class GeminiAPIError(PortError):
 class GeminiClientError(GeminiAPIError):
     """A 4xx API error other than rate limiting. Permanent, never retried."""
 
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.PERMANENT
+
 
 class GeminiRateLimitError(GeminiAPIError):
     """A 429 / ``RESOURCE_EXHAUSTED`` API error. Retried with the rate-limit budget."""
+
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.RATE_LIMIT
 
 
 class GeminiServerError(GeminiAPIError):
     """A 5xx API error, including the EBI gateway's HTML 500. Retried."""
 
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.SERVER_ERROR
+
 
 class GeminiAuthError(PortError):
     """Google credentials are missing or were refused. Permanent."""
 
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.PERMANENT
+
 
 class GeminiConnectionError(PortError):
-    """A transient network failure outside the API call itself.
+    """A transient network failure.
 
-    Raised when refreshing Google credentials fails for a network reason
-    (``google.auth`` TransportError, or a RefreshError marked retryable).
-    Retried with the connection budget.
+    Raised when the SDK's transport (aiohttp or httpx) loses the connection
+    during a call, for example "Server disconnected", and when refreshing
+    Google credentials fails for a network reason (``google.auth``
+    TransportError, or a RefreshError marked retryable). Retried with the
+    connection budget.
     """
+
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.CONNECTION
 
 
 class GeminiIncompleteResponseError(PortError):
@@ -67,6 +83,8 @@ class GeminiIncompleteResponseError(PortError):
     call, or when a response body is not JSON. Treated as a server error and
     retried, never returned as an empty answer.
     """
+
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.SERVER_ERROR
 
 
 class GeminiFinishReasonError(PortError):
@@ -79,6 +97,8 @@ class GeminiFinishReasonError(PortError):
         finish_reason: The finish reason name, for example ``SAFETY``.
         finish_message: The API's explanation, when it sent one.
     """
+
+    error_category: ClassVar[ErrorCategory] = ErrorCategory.PERMANENT
 
     def __init__(self, message: str, *, finish_reason: str, finish_message: str | None = None) -> None:
         super().__init__(message)
@@ -160,21 +180,41 @@ def _register_transport_errors(registry: ErrorRegistry) -> None:
     The SDK uses aiohttp for async calls when it is installed, httpx
     otherwise. Their connection errors carry names and messages the
     built-in rules do not recognise (for example "Server disconnected"), so
-    a dropped stream would otherwise be classified as permanent.
+    a dropped stream would otherwise be classified as permanent. Calls
+    translate them (``calls.translated_sdk_errors``), and these rules cover
+    any that escape translation.
     """
+    timeouts, connections = transport_error_types()
+    # Timeouts first: aiohttp's ServerTimeoutError subclasses ClientConnectionError.
+    for error_type in timeouts:
+        registry.register(error_type, ErrorCategory.TIMEOUT)
+    for error_type in connections:
+        registry.register(error_type, ErrorCategory.CONNECTION)
+
+
+@functools.cache
+def transport_error_types() -> tuple[tuple[type[BaseException], ...], tuple[type[BaseException], ...]]:
+    """Return the installed transports' timeout and connection error types.
+
+    Returns:
+        ``(timeout_types, connection_types)``. A transport that is not
+        installed contributes nothing. Timeout types subclass connection
+        types in aiohttp, so check them first.
+    """
+    timeouts: list[type[BaseException]] = []
+    connections: list[type[BaseException]] = []
     try:
         import aiohttp
     except ImportError:
         pass
     else:
-        # ServerTimeoutError subclasses ClientConnectionError, so it goes first.
-        registry.register(aiohttp.ServerTimeoutError, ErrorCategory.TIMEOUT)
-        registry.register(aiohttp.ClientConnectionError, ErrorCategory.CONNECTION)
-        registry.register(aiohttp.ClientPayloadError, ErrorCategory.CONNECTION)
+        timeouts.append(aiohttp.ServerTimeoutError)
+        connections.extend([aiohttp.ClientConnectionError, aiohttp.ClientPayloadError])
     try:
         import httpx
     except ImportError:
         pass
     else:
-        registry.register(httpx.TimeoutException, ErrorCategory.TIMEOUT)
-        registry.register(httpx.TransportError, ErrorCategory.CONNECTION)
+        timeouts.append(httpx.TimeoutException)
+        connections.append(httpx.TransportError)
+    return tuple(timeouts), tuple(connections)

@@ -110,6 +110,11 @@ class GoogleGenAILLMAdapter:
         return self._settings
 
     @property
+    def client_holder(self) -> GenAIClientHolder:
+        """The per-loop client holder, shared with structured-output copies."""
+        return self._client
+
+    @property
     def capabilities(self) -> PortCapabilities:
         """Declare adapter capabilities (system prompt, structured output, streaming)."""
         return PortCapabilities(
@@ -269,14 +274,18 @@ class GoogleGenAILLMAdapter:
         if portal is not None:
             return portal.call(self.ainvoke, messages)
         if running_loop() is None:
-            return asyncio.run(self.ainvoke(messages))
+            return asyncio.run(self._client.run_then_release(self.ainvoke, messages))
         sequences = self._max_retries + 2 if self._structured_schema is not None else 1
         thread_timeout = compute_sync_wrapper_timeout(
             self._settings.request_timeout,
             retry_policy=self._config.retry_policy,
             internal_call_sequences=sequences,
         )
-        return run_coro_in_thread(self.ainvoke, messages, timeout=thread_timeout)
+
+        async def released() -> LLMResponse:
+            return await self._client.run_then_release(self.ainvoke, messages)
+
+        return run_coro_in_thread(released, timeout=thread_timeout)
 
     def with_structured_output(
         self, schema: type[BaseModel], *, max_retries: int | None = None
@@ -436,9 +445,13 @@ class GoogleGenAILLMAdapter:
         if portal is not None:
             return portal.call(self._astream_with_timeout, messages, timeout)
         if running_loop() is None:
-            return asyncio.run(self._astream_with_timeout(messages, timeout))
+            return asyncio.run(self._client.run_then_release(self._astream_with_timeout, messages, timeout))
         thread_timeout = (timeout if timeout is not None else 300.0) + SYNC_WRAPPER_GRACE_SECONDS
-        return run_coro_in_thread(self._astream_with_timeout, messages, timeout, timeout=thread_timeout)
+
+        async def released() -> LLMResponse:
+            return await self._client.run_then_release(self._astream_with_timeout, messages, timeout)
+
+        return run_coro_in_thread(released, timeout=thread_timeout)
 
     async def aclose(self) -> None:
         """Close the google-genai clients (shared with derived adapters). Safe to call twice."""
