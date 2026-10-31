@@ -187,7 +187,7 @@ class TestConnectAllMcpServers:
         mock_session1 = AsyncMock()
         mock_session2 = AsyncMock()
 
-        with patch("karenina.adapters.claude_tool.mcp.connect_mcp_session") as mock_connect:
+        with patch("karenina.adapters._mcp_http.connect_mcp_session") as mock_connect:
             mock_connect.side_effect = [mock_session1, mock_session2]
 
             async with AsyncExitStack() as stack:
@@ -217,7 +217,7 @@ class TestConnectAllMcpServers:
         """Test raises exception when server connection fails."""
         from karenina.adapters.claude_tool.mcp import connect_all_mcp_servers
 
-        with patch("karenina.adapters.claude_tool.mcp.connect_mcp_session") as mock_connect:
+        with patch("karenina.adapters._mcp_http.connect_mcp_session") as mock_connect:
             mock_connect.side_effect = ValueError("Connection failed")
 
             async with AsyncExitStack() as stack:

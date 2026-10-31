@@ -630,6 +630,11 @@ class RubricDataFrameBuilder:
                 if result.rubric and result.rubric.agentic_trait_investigation_traces
                 else None
             ),
+            "investigation_messages": (
+                result.rubric.agentic_trait_investigation_messages.get(trait_name)
+                if result.rubric and result.rubric.agentic_trait_investigation_messages
+                else None
+            ),
             # === Execution Metadata ===
             "execution_time": metadata.execution_time,
             "timestamp": metadata.timestamp,

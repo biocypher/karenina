@@ -7,7 +7,7 @@ from typing import TypeVar, cast
 from pydantic import BaseModel
 
 from karenina.ports import Message, ParsePortResult, ParserPort
-from karenina.utils.errors import ErrorCategory, ErrorRegistry
+from karenina.utils.errors import ErrorCategory, ErrorRegistry, declared_category
 from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 T = TypeVar("T", bound=BaseModel)
@@ -20,16 +20,22 @@ class _CauseAwareErrorRegistry(ErrorRegistry):
         self._base = base
 
     def classify(self, exception: BaseException) -> ErrorCategory:
-        fallback = self._base.classify(exception)
+        chain: list[BaseException] = []
         current: BaseException | None = exception
-        seen: set[int] = set()
-        while current is not None and id(current) not in seen:
-            seen.add(id(current))
-            category = self._base.classify(current)
+        while current is not None and all(current is not seen for seen in chain):
+            chain.append(current)
+            current = current.__cause__ or current.__context__
+        # An error that declares its category (an adapter's own error type)
+        # decides, so a wrapper's message text cannot override it: a
+        # permanent 400 mentioning "1500001 tokens" is not a server error.
+        for error in chain:
+            if declared_category(error) is not None:
+                return self._base.classify(error)
+        for error in chain:
+            category = self._base.classify(error)
             if category is not ErrorCategory.PERMANENT:
                 return category
-            current = current.__cause__ or current.__context__
-        return fallback
+        return self._base.classify(exception)
 
 
 def classify_parser_exception(exception: BaseException, error_registry: ErrorRegistry | None = None) -> ErrorCategory:

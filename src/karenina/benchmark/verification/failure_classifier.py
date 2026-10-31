@@ -158,7 +158,7 @@ def classify_failure(ctx: VerificationContext) -> Failure | None:
         )
 
     # Rule 6: parsing failure
-    if ctx.error_stage == "parse_template" and ctx.error:
+    if ctx.error_stage in {"ParseTemplate", "parse_template"} and ctx.error:
         return Failure(
             category=FailureCategory.PARSING,
             stage="parse_template",
@@ -198,6 +198,12 @@ def collect_caveats(ctx: VerificationContext) -> list[Caveat]:
         caveats.append(Caveat.EMBEDDING_OVERRIDE)
     if ctx.get_result_field(ArtifactKeys.PARSE_DECISION_MALFORMED):
         caveats.append(Caveat.PARSE_DECISION_MALFORMED)
+    if ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED):
+        caveats.append(Caveat.AGENTIC_INVESTIGATION_FAILED)
+    if ctx.get_result_field(ArtifactKeys.AGENTIC_EXTRACTION_FAILED):
+        caveats.append(Caveat.AGENTIC_EXTRACTION_FAILED)
+    if ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE):
+        caveats.append(Caveat.AGENTIC_INVESTIGATION_INCOMPLETE)
     # RETRY_COUNTS lives in ``ctx.artifacts`` (orchestrator.set_artifact), not
     # in ``ctx.result_builder``. Reading via ``get_result_field`` returns None
     # silently and suppresses this caveat in production.

@@ -4,7 +4,7 @@ Karenina reads environment variables to configure API keys, file paths, executio
 
 > **Precedence:**
 > Environment variables are the **third priority** in the configuration hierarchy; they're overridden by CLI arguments and preset values. See [Configuration Hierarchy](index.md) for details.
-> 
+>
 ---
 
 ## Setting Environment Variables
@@ -41,9 +41,12 @@ API keys authenticate with LLM providers. You only need keys for the providers y
 |----------|----------|---------------|
 | `OPENAI_API_KEY` | OpenAI | Using `langchain` interface with OpenAI models |
 | `ANTHROPIC_API_KEY` | Anthropic | Using `claude_agent_sdk`, `claude_tool`, or LangChain with Anthropic models |
-| `GOOGLE_API_KEY` | Google | Using `langchain` interface with Google models |
+| `GOOGLE_API_KEY` | Google | Using `langchain` interface with Google models, or `google_genai` with the `gemini_api` backend (when `GEMINI_API_KEY` is not set) |
+| `GEMINI_API_KEY` | Google | Using `google_genai` with the `gemini_api` backend |
 | `OPENROUTER_API_KEY` | OpenRouter | Using `openrouter` interface |
 | `TAVILY_API_KEY` | Tavily | Using deep judgment with web search verification |
+
+The `google_genai` interface on its default `vertex` backend needs no API key: it uses Google application default credentials (`gcloud auth application-default login`), with the project from `GOOGLE_CLOUD_PROJECT` and the location from `GOOGLE_CLOUD_LOCATION` (default `global`) unless `extra_kwargs` sets them. See the [environment variables reference](../../reference/configuration/env-vars.md).
 
 **Example**: Running verification with OpenAI models requires only `OPENAI_API_KEY`:
 
@@ -119,7 +122,7 @@ KARENINA_ASYNC_ENABLED=false
 
 > **Tip:**
 > These variables are also available as `VerificationConfig` fields (`async_enabled`, `async_max_workers`). Setting them in code or via CLI overrides the environment variable values.
-> 
+>
 ---
 
 ## Embedding Check

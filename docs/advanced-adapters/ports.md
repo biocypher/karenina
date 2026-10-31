@@ -473,7 +473,11 @@ class UsageMetadata:
     cache_read_tokens: int | None = None    # Anthropic prompt cache reads
     cache_creation_tokens: int | None = None  # Anthropic prompt cache writes
     model: str | None = None       # Model that generated this usage
+    reasoning_tokens: int | None = None    # Thinking tokens, already counted in output_tokens
+    web_search_queries: int | None = None  # Provider-side web searches made by the call or run
 ```
+
+The optional fields stay `None` when the adapter does not report them, and `to_dict()` includes them only when set, so a real zero stays distinct from "not reported". `reasoning_tokens` is informational: thinking is already part of `output_tokens`. `web_search_queries` counts searches the provider ran on its own side (for example Gemini's Google Search through the [`google_genai` adapter](available-adapters.md#google_genai-gemini-through-the-google-genai-sdk)). Providers bill these per query, separately from tokens. Both counts are summed into the per-stage and total entries of `usage_metadata` on a verification result when a stage records them, as the agentic rubric stage does for its judges.
 
 ### PortCapabilities
 

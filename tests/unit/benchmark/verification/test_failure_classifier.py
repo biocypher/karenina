@@ -111,6 +111,15 @@ class TestClassifyFailure:
         assert f.category is FailureCategory.TEMPLATE_VALIDATION
         assert f.stage == "validate_template"
 
+    @pytest.mark.parametrize("stage", ["ParseTemplate", "parse_template"])
+    def test_parsing_failure_recognizes_pipeline_and_legacy_stage_names(self, stage: str) -> None:
+        ctx = make_context(error="could not extract answer", error_stage=stage)
+        failure = classify_failure(ctx)
+        assert failure is not None
+        assert failure.category is FailureCategory.PARSING
+        assert failure.stage == "parse_template"
+        assert failure.details == {"error_message": "could not extract answer"}
+
     def test_unexpected_error_catchall(self) -> None:
         ctx = make_context(
             error_category=None,

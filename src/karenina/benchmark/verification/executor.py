@@ -81,6 +81,11 @@ def _is_parser_stage(stage: str | None) -> bool:
     return stage in {"parse_template", "ParseTemplate", "AgenticParseTemplate"}
 
 
+# Stage name of AgenticRubricEvaluationStage. A judge infrastructure failure
+# there leaves the answer trace usable, so resume reuses it.
+_AGENTIC_RUBRIC_STAGE = "AgenticRubricEvaluation"
+
+
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -291,6 +296,7 @@ class VerificationExecutor:
                 if (
                     failure.category in _INFRA_FAILURE_CATEGORIES
                     and not _is_parser_stage(failure.stage)
+                    and failure.stage != _AGENTIC_RUBRIC_STAGE
                     and not is_timeout_partial_trace
                 ):
                     skipped += 1

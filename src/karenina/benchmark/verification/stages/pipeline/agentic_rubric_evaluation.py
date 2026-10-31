@@ -8,19 +8,116 @@ strategy). Each trait produces a score and an investigation trace.
 import logging
 import re
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
+from karenina.benchmark.verification.evaluators.rubric.agentic_trait import (
+    build_mcp_servers,
+    investigation_incomplete_reason,
+)
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
+from karenina.benchmark.verification.utils.parser_resilience import classify_parser_exception
+from karenina.benchmark.verification.utils.trace_formatting import messages_to_dicts
+from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker, usage_to_callback_metadata
+from karenina.ports import Message, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
-from karenina.schemas.entities.rubric import AgenticRubricTrait
+from karenina.schemas.entities.rubric import AGENTIC_JUDGE_REQUIREMENT, AgenticRubricTrait
+from karenina.schemas.verification.model_identity import ModelIdentity
+from karenina.utils.errors import ErrorCategory, ErrorRegistry
 
 from ..core.base import ArtifactKeys, BaseVerificationStage, VerificationContext
 
 logger = logging.getLogger(__name__)
+
+# UsageTracker stage key for the judge's investigation and extraction calls.
+AGENTIC_RUBRIC_USAGE_STAGE = "agentic_rubric_evaluation"
+
+
+@dataclass(frozen=True)
+class _JudgeFailure:
+    """An error that left one agentic trait without a judgment."""
+
+    phase: str  # "investigation" or "extraction"
+    error: Exception
+    category: ErrorCategory
+
+    def to_record(self) -> dict[str, str]:
+        """Return the entry stored in ``agentic_trait_evaluation_errors``."""
+        return {
+            "phase": self.phase,
+            "error_type": type(self.error).__name__,
+            "message": str(self.error),
+            "category": self.category.value,
+        }
+
+
+def _judge_failure(
+    phase: str,
+    error: Exception | None,
+    registry: ErrorRegistry,
+) -> _JudgeFailure | None:
+    """Classify a judge error, or return None when it is not an infrastructure failure.
+
+    Investigation errors always count. Extraction errors count only when
+    retryable (connection, timeout, rate limit, server error), so a schema
+    or validation failure keeps today's behaviour: the trace is kept and
+    the score is None. Wrapped causes are classified too, the same way as
+    for parser errors.
+    """
+    if error is None:
+        return None
+    category = classify_parser_exception(error, registry)
+    if phase == "extraction" and not category.is_retryable():
+        return None
+    return _JudgeFailure(phase=phase, error=error, category=category)
+
+
+@dataclass
+class _AgenticRubricOutputs:
+    """Per-trait outputs collected by one strategy run."""
+
+    scores: dict[str, int | bool | dict[str, Any] | None] = field(default_factory=dict)
+    traces: dict[str, str | None] = field(default_factory=dict)
+    messages: dict[str, list[dict[str, Any]] | None] = field(default_factory=dict)
+    extraction_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
+    failures: dict[str, _JudgeFailure] = field(default_factory=dict)
+    incomplete: dict[str, str] = field(default_factory=dict)
+
+    def record_score(self, trait: AgenticRubricTrait, score: int | bool | dict[str, Any] | None) -> None:
+        """Store a trait score, expanding template kind dicts into dotted keys."""
+        if trait.is_template_kind and isinstance(score, dict):
+            for field_name, value in score.items():
+                self.scores[f"{trait.name}.{field_name}"] = value
+        else:
+            self.scores[trait.name] = score
+
+    def record_investigation(
+        self, trait: AgenticRubricTrait, trace: str | None, messages: list[Message] | None
+    ) -> None:
+        """Store a trait's investigation trace and its serialised messages."""
+        self.traces[trait.name] = trace
+        self.messages[trait.name] = messages_to_dicts(messages) if messages is not None else None
+
+    def record_extraction_metadata(self, trait: AgenticRubricTrait, metadata: Any) -> None:
+        """Store the evaluator's extraction provenance for a trait, if it reported any."""
+        if isinstance(metadata, dict):
+            self.extraction_metadata[trait.name] = dict(metadata)
+
+    def record_incomplete(self, trait: AgenticRubricTrait, reason: str | None) -> None:
+        """Note that a trait's score came from a partial investigation (turn limit or timeout)."""
+        if reason is None:
+            return
+        self.incomplete[trait.name] = reason
+        self.extraction_metadata.setdefault(trait.name, {})["investigation_incomplete"] = reason
+
+    def record_skipped(self, trait: AgenticRubricTrait) -> None:
+        """Store an empty entry for a trait whose model lacks agent support."""
+        self.scores[trait.name] = None
+        self.record_investigation(trait, None, None)
 
 
 class AgenticRubricEvaluationStage(BaseVerificationStage):
@@ -45,7 +142,35 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_rubric_evaluation_performed: True when this stage ran.
         agentic_trait_scores: Dict mapping trait name to score (or None on failure).
         agentic_trait_investigation_traces: Dict mapping trait name to investigation trace.
-        agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
+        agentic_trait_investigation_messages: Dict mapping trait name to the serialised
+            investigation messages (None when the investigation failed).
+        agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance,
+            including ``investigation_incomplete`` ("turn_limit" or "timeout") for
+            a score extracted from a partial investigation.
+        agentic_trait_evaluation_errors: Dict mapping trait name to the error that
+            left it without a judgment (phase, error_type, message, category).
+
+    The judge's investigation and extraction usage is recorded in the usage
+    tracker under the ``agentic_rubric_evaluation`` stage.
+
+    A trait whose investigation raised keeps a failure record as its trace.
+    A trait whose extraction raised a retryable error (connection, timeout,
+    rate limit, server error) keeps its investigation trace. In both cases
+    the error is recorded in ``agentic_trait_evaluation_errors`` and the
+    stage marks the context with an error attributed to this stage, so the
+    result is classified as an infrastructure failure (never a judgment).
+    The ``agentic_investigation_failed`` or ``agentic_extraction_failed``
+    caveat is always set, even when an earlier rule (content, abstention)
+    decides the failure category. Non-retryable extraction failures (for
+    example schema validation) only leave the score None. Progressive-save
+    resume retries rows whose recorded errors are retryable, and the
+    executor reuses their answer trace.
+
+    A judge whose agent hit its turn limit or timeout returns a partial
+    trace, and the score is still extracted from it. Such traits get an
+    ``investigation_incomplete`` entry in their extraction metadata and the
+    row gets the informational ``agentic_investigation_incomplete`` caveat.
+    The score is kept, no error is marked, and resume does not retry them.
     """
 
     @property
@@ -65,7 +190,12 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_RUBRIC_EVALUATION_PERFORMED,
             ArtifactKeys.AGENTIC_TRAIT_SCORES,
             ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
+            ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
             ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
+            ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS,
+            ArtifactKeys.AGENTIC_INVESTIGATION_FAILED,
+            ArtifactKeys.AGENTIC_EXTRACTION_FAILED,
+            ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -98,8 +228,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             context: Verification context with rubric and artifacts.
 
         Raises:
-            ValueError: If no agentic trait can be evaluated because
-                the resolved model interface lacks ``agent_tier='deep_agent'``.
+            ValueError: If an agentic trait's resolved model interface cannot
+                judge it (see :meth:`AgenticRubricTrait.accepts_judge_interface`).
         """
         traits = context.rubric.agentic_traits  # type: ignore[union-attr]
         self._validate_agent_support(traits, context)
@@ -125,22 +255,27 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 trace_file_path,
             )
 
+        usage_tracker = self.get_or_create_usage_tracker(context)
+
         try:
             strategy = context.agentic_rubric_strategy
             if strategy == "shared":
-                scores, traces, extraction_metadata = self._execute_shared(
+                outputs = self._execute_shared(
                     traits,
                     context,
                     raw_response,
                     workspace_path,
+                    usage_tracker,
                 )
             else:
-                scores, traces, extraction_metadata = self._execute_individual(
+                outputs = self._execute_individual(
                     traits,
                     context,
                     raw_response,
                     workspace_path,
+                    usage_tracker,
                 )
+            context.set_artifact(ArtifactKeys.USAGE_TRACKER, usage_tracker)
 
             # Store in artifacts
             self.set_artifact_and_result(
@@ -151,20 +286,39 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             self.set_artifact_and_result(
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_SCORES,
-                scores,
+                outputs.scores,
             )
             self.set_artifact_and_result(
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES,
-                traces,
+                outputs.traces,
+            )
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_MESSAGES,
+                outputs.messages,
             )
             self.set_artifact_and_result(
                 context,
                 ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA,
-                extraction_metadata,
+                outputs.extraction_metadata,
             )
 
-            evaluated = sum(1 for v in scores.values() if v is not None)
+            self.set_artifact_and_result(
+                context,
+                ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS,
+                {name: failure.to_record() for name, failure in outputs.failures.items()},
+            )
+            if outputs.failures:
+                self._mark_judge_failures(context, outputs.failures)
+            if outputs.incomplete:
+                self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE, True)
+                logger.info(
+                    "Agentic rubric scores extracted from partial investigations: %s",
+                    ", ".join(f"{name} ({reason})" for name, reason in outputs.incomplete.items()),
+                )
+
+            evaluated = sum(1 for v in outputs.scores.values() if v is not None)
             logger.info(
                 "Agentic rubric evaluation complete: %d/%d traits scored",
                 evaluated,
@@ -193,20 +347,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[
-        dict[str, int | bool | dict[str, Any] | None],
-        dict[str, str | None],
-        dict[str, dict[str, str | None]],
-    ]:
+        usage_tracker: UsageTracker,
+    ) -> _AgenticRubricOutputs:
         """Evaluate each trait with its own agent.
 
         Returns:
-            Tuple of (scores_dict, traces_dict).
+            The per-trait scores, traces, messages and extraction metadata.
         """
         # TODO: when context.agentic_rubric_parallel is True, evaluate traits concurrently
-        scores: dict[str, int | bool | dict[str, Any] | None] = {}
-        traces: dict[str, str | None] = {}
-        extraction_metadata: dict[str, dict[str, str | None]] = {}
+        outputs = _AgenticRubricOutputs()
 
         for trait in traits:
             model = self._resolve_model(trait, context)
@@ -215,31 +364,32 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                     "Skipping trait '%s': resolved model lacks agent support",
                     trait.name,
                 )
-                scores[trait.name] = None
-                traces[trait.name] = None
+                outputs.record_skipped(trait)
                 continue
 
             evaluator = AgenticTraitEvaluator(
                 model_config=model,
                 prompt_config=context.prompt_config,
             )
-            score, trace = evaluator.evaluate_trait(
+            evaluation = evaluator.evaluate_trait(
                 trait=trait,
                 question_text=context.question_text,
                 raw_llm_response=raw_response,
                 workspace_path=workspace_path,
             )
-            if trait.is_template_kind and isinstance(score, dict):
-                for field_name, value in score.items():
-                    scores[f"{trait.name}.{field_name}"] = value
-            else:
-                scores[trait.name] = score
-            traces[trait.name] = trace
-            metadata = getattr(evaluator, "last_extraction_metadata", None)
-            if isinstance(metadata, dict):
-                extraction_metadata[trait.name] = metadata
+            outputs.record_score(trait, evaluation.score)
+            outputs.record_investigation(trait, evaluation.trace, evaluation.messages)
+            failure = _judge_failure(
+                "investigation", evaluation.investigation_error, context.error_registry
+            ) or _judge_failure("extraction", evaluation.extraction_error, context.error_registry)
+            if failure is not None:
+                outputs.failures[trait.name] = failure
+            self._track_usage(usage_tracker, model, evaluation.investigation_usage)
+            self._track_usage(usage_tracker, model, evaluation.extraction_usage)
+            outputs.record_extraction_metadata(trait, getattr(evaluator, "last_extraction_metadata", None))
+            outputs.record_incomplete(trait, evaluation.investigation_incomplete)
 
-        return scores, traces, extraction_metadata
+        return outputs
 
     def _execute_shared(
         self,
@@ -247,18 +397,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         context: VerificationContext,
         raw_response: str,
         workspace_path: Path | None,
-    ) -> tuple[
-        dict[str, int | bool | dict[str, Any] | None],
-        dict[str, str | None],
-        dict[str, dict[str, str | None]],
-    ]:
+        usage_tracker: UsageTracker,
+    ) -> _AgenticRubricOutputs:
         """Evaluate all traits with a single shared agent.
 
         All traits must resolve to the same model (by interface, provider,
         and model_name). If they differ, falls back to individual strategy.
 
         Returns:
-            Tuple of (scores_dict, traces_dict).
+            The per-trait scores, traces, messages and extraction metadata.
         """
         # Resolve all models and check they are identical
         resolved: list[tuple[AgenticRubricTrait, ModelConfig | None]] = [
@@ -268,9 +415,10 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         valid = [(trait, m) for trait, m in resolved if m is not None]
         if not valid:
             logger.warning("No traits have agent support; all skipped")
-            empty_scores: dict[str, int | bool | dict[str, Any] | None] = {t.name: None for t in traits}
-            empty_traces: dict[str, str | None] = {t.name: None for t in traits}
-            return empty_scores, empty_traces, {}
+            skipped = _AgenticRubricOutputs()
+            for trait in traits:
+                skipped.record_skipped(trait)
+            return skipped
 
         # Check that all valid models match on interface + provider + model_name
         first_model = valid[0][1]
@@ -282,6 +430,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 context,
                 raw_response,
                 workspace_path,
+                usage_tracker,
             )
 
         # Build a combined investigation prompt
@@ -315,11 +464,17 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                     if capabilities.uses_sandboxed_execution
                     else "You have access to tools and can examine files, run code, and navigate the workspace."
                 )
-            else:
+            elif capabilities.supports_file_tools:
                 access_text = (
                     "You have access to tools and can examine files and navigate the workspace, "
                     "but command execution is not available."
                 )
+            elif first_model.mcp_urls_dict:
+                # A tool-loop judge (for example google_genai) has no file tools:
+                # same wording as the individual strategy.
+                access_text = "Use the response text supplied in the prompt and the tools available to you."
+            else:
+                access_text = "Use only the response text supplied in the prompt."
             system_text = (
                 "You are an evaluation agent investigating the quality of an LLM "
                 f"response. {access_text}\n\n"
@@ -363,8 +518,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 workspace_path=workspace_path if workspace_path else None,
             )
 
-            result = agent.run(messages=messages, config=agent_config)
+            result = agent.run(
+                messages=messages,
+                mcp_servers=build_mcp_servers(first_model),
+                config=agent_config,
+            )
             shared_trace = result.raw_trace
+            shared_messages = list(result.trace_messages or [])
+            shared_incomplete = investigation_incomplete_reason(result)
+            self._track_usage(usage_tracker, first_model, result.usage)
         except Exception:
             logger.warning(
                 "Shared agentic investigation failed; falling back to individual",
@@ -375,45 +537,98 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 context,
                 raw_response,
                 workspace_path,
+                usage_tracker,
             )
         finally:
             if agent is not None:
                 close_adapter(agent)
 
         # Per-trait extraction from the shared trace
-        result_scores: dict[str, int | bool | dict[str, Any] | None] = {}
-        result_traces: dict[str, str | None] = {}
-        extraction_metadata: dict[str, dict[str, str | None]] = {}
+        outputs = _AgenticRubricOutputs()
 
         for trait, model in resolved:
             if model is None:
-                result_scores[trait.name] = None
-                result_traces[trait.name] = None
+                outputs.record_skipped(trait)
                 continue
 
-            result_traces[trait.name] = shared_trace
+            outputs.record_investigation(trait, shared_trace, shared_messages)
             try:
-                extracted = evaluator.run_extraction(trait, shared_trace)
-                if trait.is_template_kind and isinstance(extracted, dict):
-                    for field_name, value in extracted.items():
-                        result_scores[f"{trait.name}.{field_name}"] = value
-                else:
-                    result_scores[trait.name] = extracted
-                metadata = getattr(evaluator, "last_extraction_metadata", None)
-                if isinstance(metadata, dict):
-                    extraction_metadata[trait.name] = metadata
-            except Exception:
+                outputs.record_score(trait, evaluator.run_extraction(trait, shared_trace))
+            except Exception as e:
                 logger.warning(
                     "Extraction failed for trait '%s' in shared strategy",
                     trait.name,
                     exc_info=True,
                 )
-                result_scores[trait.name] = None
-                metadata = getattr(evaluator, "last_extraction_metadata", None)
-                if isinstance(metadata, dict):
-                    extraction_metadata[trait.name] = metadata
+                outputs.scores[trait.name] = None
+                failure = _judge_failure("extraction", e, context.error_registry)
+                if failure is not None:
+                    outputs.failures[trait.name] = failure
+            self._track_usage(usage_tracker, first_model, evaluator.last_extraction_usage)
+            outputs.record_extraction_metadata(trait, getattr(evaluator, "last_extraction_metadata", None))
+            outputs.record_incomplete(trait, shared_incomplete)
 
-        return result_scores, result_traces, extraction_metadata
+        return outputs
+
+    # ------------------------------------------------------------------
+    # Failures
+    # ------------------------------------------------------------------
+
+    def _mark_judge_failures(
+        self,
+        context: VerificationContext,
+        failures: dict[str, _JudgeFailure],
+    ) -> None:
+        """Mark the context as failed because one or more judges could not judge.
+
+        Follows the AgenticParseTemplate stage: the error category comes from
+        the context's ErrorRegistry (using the first failure), so the failure
+        classifier reports a retry-exhausted or system failure at this stage,
+        not a judgment. The ``agentic_investigation_failed`` and
+        ``agentic_extraction_failed`` result fields also raise caveats, which
+        survive when a higher-priority classifier rule (content, abstention,
+        sufficiency) sets the failure category instead.
+        """
+        phases = {failure.phase for failure in failures.values()}
+        if "investigation" in phases:
+            self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_INVESTIGATION_FAILED, True)
+        if "extraction" in phases:
+            self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_EXTRACTION_FAILED, True)
+        details = ", ".join(
+            f"'{name}' ({failure.phase}, {type(failure.error).__name__}: {failure.error})"
+            for name, failure in failures.items()
+        )
+        first = next(iter(failures.values()))
+        context.mark_error(
+            f"Agentic rubric judge failed for {len(failures)} trait(s): {details}",
+            category=first.category,
+            stage=self.name,
+        )
+
+    # ------------------------------------------------------------------
+    # Usage
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _track_usage(
+        usage_tracker: UsageTracker,
+        model: ModelConfig,
+        usage: UsageMetadata | None,
+    ) -> None:
+        """Record one judge agent run or call under the agentic rubric usage stage.
+
+        Usage that is missing or reports no tokens and no web searches is skipped.
+        """
+        if not isinstance(usage, UsageMetadata):
+            return
+        if not (usage.input_tokens or usage.output_tokens or usage.web_search_queries):
+            return
+        model_str = ModelIdentity.from_model_config(model, role="parsing").display_string
+        usage_tracker.track_call(
+            AGENTIC_RUBRIC_USAGE_STAGE,
+            model_str,
+            usage_to_callback_metadata(model_str, usage),
+        )
 
     # ------------------------------------------------------------------
     # Trace materialization
@@ -467,36 +682,33 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         """Validate that every agentic trait can be evaluated.
 
         Checks each trait's resolved model (model_override or parsing_model)
-        for ``agent_tier='deep_agent'``. Raises if any trait cannot be
-        evaluated, since silent skipping hides configuration errors.
+        with :meth:`AgenticRubricTrait.accepts_judge_interface`: a
+        ``deep_agent`` interface judges any trait, and a ``tool_loop``
+        interface with MCP support judges ``trace_only`` traits without
+        ``materialize_trace``. Raises if any trait cannot be evaluated,
+        since silent skipping hides configuration errors.
 
         Raises:
-            ValueError: If any trait resolves to an interface that lacks
-                ``agent_tier='deep_agent'``.
+            ValueError: If any trait resolves to an interface that cannot
+                judge it.
         """
-        default_model = context.parsing_model
-        default_spec = AdapterRegistry.get_spec(default_model.interface)
-        default_ok = default_spec is not None and default_spec.agent_tier == "deep_agent"
-
         unsupported: list[str] = []
         for trait in traits:
-            if trait.model_override is not None:
-                spec = AdapterRegistry.get_spec(trait.model_override.interface)
-                if spec is None or spec.agent_tier != "deep_agent":
-                    unsupported.append(trait.name)
-            elif not default_ok:
-                unsupported.append(trait.name)
+            model = trait.model_override or context.parsing_model
+            if not trait.accepts_judge_interface(model.interface):
+                spec = AdapterRegistry.get_spec(model.interface)
+                unsupported.append(
+                    f"'{trait.name}' (interface='{model.interface}', "
+                    f"agent_tier='{spec.agent_tier if spec else 'unknown'}', "
+                    f"context_mode='{trait.context_mode}', materialize_trace={trait.materialize_trace})"
+                )
 
         if unsupported:
-            trait_names = ", ".join(f"'{n}'" for n in unsupported)
             raise ValueError(
-                f"Agentic rubric traits ({trait_names}) require an interface with "
-                f"agent_tier='deep_agent' (e.g., 'claude_agent_sdk' or "
-                f"'langchain_deep_agents'), but the resolved model uses "
-                f"interface='{default_model.interface}' "
-                f"(agent_tier='{default_spec.agent_tier if default_spec else 'unknown'}'). "
-                f"Either change the parsing model interface or set model_override "
-                f"on each agentic trait."
+                f"Agentic rubric traits {', '.join(unsupported)} cannot be judged by their resolved model. "
+                f"Agentic traits require {AGENTIC_JUDGE_REQUIREMENT} (e.g., 'claude_agent_sdk' or "
+                f"'langchain_deep_agents' for any trait, 'google_genai' for trace_only traits). "
+                f"Either change the parsing model interface or set model_override on each agentic trait."
             )
 
     @staticmethod
@@ -506,16 +718,15 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     ) -> ModelConfig | None:
         """Resolve the model to use for a given trait.
 
-        Returns trait.model_override if set; otherwise context.parsing_model.
-        Validates that the resolved model's interface has
-        agent_tier='deep_agent'. Returns None if the interface lacks deep
-        agent support (the trait will be skipped).
+        Returns trait.model_override if set, otherwise context.parsing_model.
+        Returns None (the trait is skipped) if that model's interface cannot
+        judge the trait (see :meth:`AgenticRubricTrait.accepts_judge_interface`).
         """
         model = trait.model_override or context.parsing_model
-        spec = AdapterRegistry.get_spec(model.interface)
-        if spec is None or spec.agent_tier != "deep_agent":
+        if not trait.accepts_judge_interface(model.interface):
+            spec = AdapterRegistry.get_spec(model.interface)
             logger.warning(
-                "Interface '%s' has agent_tier='%s' (not 'deep_agent'); trait '%s' will be skipped",
+                "Interface '%s' (agent_tier='%s') cannot judge trait '%s', so it will be skipped",
                 model.interface,
                 spec.agent_tier if spec else "unknown",
                 trait.name,

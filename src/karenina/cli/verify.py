@@ -555,6 +555,14 @@ def verify(
         # Step 11: Display summary
         display_summary(final_results, duration)
 
+        # The sink keeps its state when some tasks can still be retried
+        # (for example an agentic rubric judge that hit a rate limit).
+        if progressive_sink is not None and progressive_sink.state_path.exists():
+            console.print(
+                f"[yellow]Some tasks can be retried. To retry them: "
+                f"karenina verify --resume {progressive_sink.state_path}[/yellow]"
+            )
+
         if run_directory is not None:
             run_directory.update_status("completed")
 

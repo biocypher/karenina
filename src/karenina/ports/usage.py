@@ -23,6 +23,10 @@ class UsageMetadata:
         cache_read_tokens: Tokens read from Anthropic's prompt cache (optional).
         cache_creation_tokens: Tokens used to create Anthropic's prompt cache (optional).
         model: The model that generated this usage (optional).
+        reasoning_tokens: Thinking tokens, already counted in output_tokens (optional).
+            Set by adapters whose provider reports them separately.
+        web_search_queries: Number of provider-side web searches the call or run made
+            (optional). Providers bill these per query, separately from tokens.
 
     Example:
         >>> usage = UsageMetadata(
@@ -43,14 +47,16 @@ class UsageMetadata:
     cache_read_tokens: int | None = None
     cache_creation_tokens: int | None = None
     model: str | None = None
+    reasoning_tokens: int | None = None
+    web_search_queries: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert usage metadata to a dictionary.
 
         Returns:
             Dict with all usage fields. Core token counts are always included.
-            Optional fields (cost_usd, cache tokens, model) are included only
-            when they have non-None values.
+            Optional fields (cost_usd, cache tokens, model, reasoning_tokens,
+            web_search_queries) are included only when they have non-None values.
 
         Example:
             >>> usage = UsageMetadata(input_tokens=100, output_tokens=50, total_tokens=150)
@@ -70,4 +76,8 @@ class UsageMetadata:
             result["cache_creation_tokens"] = self.cache_creation_tokens
         if self.model is not None:
             result["model"] = self.model
+        if self.reasoning_tokens is not None:
+            result["reasoning_tokens"] = self.reasoning_tokens
+        if self.web_search_queries is not None:
+            result["web_search_queries"] = self.web_search_queries
         return result

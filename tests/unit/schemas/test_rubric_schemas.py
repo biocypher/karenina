@@ -876,6 +876,64 @@ class TestAgenticRubricTrait:
             )
 
 
+def _judge_config(interface: str):
+    from karenina.schemas.config.models import ModelConfig
+
+    return ModelConfig(id="judge", model_name="judge-model", model_provider="anthropic", interface=interface)
+
+
+@pytest.mark.unit
+class TestAgenticJudgeInterface:
+    """Which judge interfaces can evaluate an agentic trait."""
+
+    @pytest.mark.parametrize("context_mode", ["workspace_only", "trace_and_workspace", "trace_only"])
+    def test_deep_agent_judges_any_trait(self, context_mode):
+        trait = AgenticRubricTrait(
+            name="t",
+            description="Desc.",
+            kind="boolean",
+            context_mode=context_mode,
+            model_override=_judge_config("claude_agent_sdk"),
+        )
+        assert trait.accepts_judge_interface("langchain_deep_agents")
+
+    def test_mcp_tool_loop_judges_trace_only_traits(self):
+        trait = AgenticRubricTrait(
+            name="citations",
+            description="Check citations.",
+            kind="boolean",
+            context_mode="trace_only",
+            model_override=_judge_config("google_genai"),
+        )
+        assert trait.model_override is not None
+        assert trait.needs_file_tools is False
+
+    @pytest.mark.parametrize(
+        ("context_mode", "materialize_trace"),
+        [("workspace_only", False), ("trace_and_workspace", False), ("trace_only", True)],
+    )
+    def test_mcp_tool_loop_rejected_when_file_tools_are_needed(self, context_mode, materialize_trace):
+        with pytest.raises(ValidationError, match="cannot judge agentic trait 'citations'") as excinfo:
+            AgenticRubricTrait(
+                name="citations",
+                description="Check citations.",
+                kind="boolean",
+                context_mode=context_mode,
+                materialize_trace=materialize_trace,
+                model_override=_judge_config("google_genai"),
+            )
+        assert "agent_tier='deep_agent'" in str(excinfo.value)
+        assert "supports_mcp=True" in str(excinfo.value)
+
+    def test_tool_loop_without_mcp_rejected(self):
+        trait = AgenticRubricTrait(name="t", description="Desc.", kind="boolean", context_mode="trace_only")
+        assert trait.accepts_judge_interface("manual") is False
+
+    def test_unknown_interface_rejected(self):
+        trait = AgenticRubricTrait(name="t", description="Desc.", kind="boolean", context_mode="trace_only")
+        assert trait.accepts_judge_interface("no_such_interface") is False
+
+
 @pytest.mark.unit
 class TestRubricAgenticTraitSupport:
     """Tests for Rubric model updates to support agentic traits."""

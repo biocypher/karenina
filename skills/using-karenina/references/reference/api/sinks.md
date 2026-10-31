@@ -66,10 +66,25 @@ Notable instance methods beyond the protocol:
 | Method | Signature | Purpose |
 |--------|-----------|---------|
 | `load_for_resume` (classmethod) | `(state_path: Path, *, global_rubric: Rubric \| None = None) -> ProgressiveFileSink` | Reconstruct a sink from an existing `.state` + JSONL pair. Raises `ValueError` if the state's `format_version` does not match `STATE_FORMAT_VERSION`. Hydrates `_completed`, `_manifest`, `_failed`, `_results` from disk. |
-| `write_final_export` | `(output_path: Path \| None = None) -> Path` | Stream the JSONL into the canonical frontend-export JSON at `output_path` (or `self.output_path`). Called automatically by `on_finalize(all_complete=True)`. |
+| `write_final_export` | `(output_path: Path \| None = None, *, is_complete: bool \| None = True) -> Path` | Stream the JSONL into the canonical frontend-export JSON at `output_path` (or `self.output_path`), keeping only the latest row of each QA task. `is_complete` is written to the export's `job_summary.is_complete`. Called automatically by `on_finalize(all_complete=True)`. |
 | `mark_failed` | `(task_id: str) -> None` | Record a task that was attempted but never produced a result. Optional helper used by the batch runner; not part of `ResultSink`. |
 | `iter_results` | `() -> Iterable[VerificationResult]` | Iterate buffered results without copying. Used by the executor to hydrate its workspace cache on resume (see section 7). |
 | `seed_prior_results` | `(prior_results: VerificationResultSet) -> None` | Pre-populate the JSONL, the buffered list, the completed set, and the manifest with rows from a prior run. Idempotent. Does not require `on_start` to have run first. |
+
+#### Retryable Agentic Judge Failures
+
+A QA row whose [agentic rubric judge](../../advanced-pipeline/agentic-rubric-evaluation.md#9-judge-failures-and-partial-investigations) failed for a retryable reason is persisted like any other row but is not treated as complete. A row qualifies (`_is_retryable_judge_failure`) when it is not a scenario row, has a usable answer trace, and either:
+
+- `rubric.agentic_trait_evaluation_errors` holds an error whose `category` is not `"permanent"`, or
+- `metadata.failure` has stage `AgenticRubricEvaluation` and a transient category (`connection`, `timeout`, `rate_limit`, `server_error`).
+
+For the latest row of each task:
+
+- `completed_triples()` and `completed_count` leave these tasks out, so a resume re-runs them (and the CLI does not report "Nothing to resume"). On resume the executor reuses the stored answer trace (Section 8), so only the stages after answer generation run again.
+- `on_finalize(all_complete=True)` writes the export with `job_summary.is_complete` set to `false`, saves the state and keeps the sidecars. `karenina verify` then prints a resume hint.
+- A re-run task appends a second JSONL line. The final export and `get_result_set()` keep only the latest row of each QA task (scenario turn rows are all kept).
+
+Permanent judge errors (for example a wrong model name) are never re-run, because they would fail again on every resume.
 
 ### 3.2 `DBSink`
 
@@ -138,7 +153,7 @@ sink = InMemorySink()
 A `ProgressiveFileSink` subclass used by agentic workspace benchmarks. It keeps the standard JSONL plus `.state` resume machinery, and adds two behaviors on top:
 
 - **Readable trace sidecars.** For every completed result it writes a human-readable trace file under `trace_output_dir`, laid out per question (`trace_layout="question"`) or per result (`trace_layout="result"`).
-- **Parser-failure retry semantics.** A parser-stage failure that still carries a usable answer trace is treated as a resumable checkpoint rather than a terminal result. Those rows are exposed through `iter_results` for answer-cache hydration but excluded from `completed_triples()`, so a resume retries only the parsing step instead of regenerating the answer. Correspondingly, `on_finalize(all_complete=True)` writes the final export and deletes the sidecars only when no retryable parser failures remain. Otherwise it retains state for resume.
+- **Parser-failure retry semantics.** A parser-stage failure that still carries a usable answer trace, or a [retryable agentic judge failure](#retryable-agentic-judge-failures), is treated as a resumable checkpoint rather than a terminal result. Those rows are exposed through `iter_results` for answer-cache hydration but excluded from `completed_triples()`, so a resume retries only the parsing step instead of regenerating the answer. Correspondingly, `on_finalize(all_complete=True)` writes the final export and deletes the sidecars only when no retryable parser failures remain. Otherwise it retains state for resume.
 
 ```python
 from pathlib import Path

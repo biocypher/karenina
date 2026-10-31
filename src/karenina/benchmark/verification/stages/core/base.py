@@ -247,6 +247,11 @@ class ArtifactKeys:
     AGENTIC_RUBRIC_EVALUATION_PERFORMED = "agentic_rubric_evaluation_performed"
     AGENTIC_TRAIT_SCORES = "agentic_trait_scores"
     AGENTIC_TRAIT_INVESTIGATION_TRACES = "agentic_trait_investigation_traces"
+    AGENTIC_TRAIT_INVESTIGATION_MESSAGES = "agentic_trait_investigation_messages"
+    AGENTIC_INVESTIGATION_FAILED = "agentic_investigation_failed"
+    AGENTIC_EXTRACTION_FAILED = "agentic_extraction_failed"
+    AGENTIC_INVESTIGATION_INCOMPLETE = "agentic_investigation_incomplete"
+    AGENTIC_TRAIT_EVALUATION_ERRORS = "agentic_trait_evaluation_errors"
     AGENTIC_TRAIT_EXTRACTION_METADATA = "agentic_trait_extraction_metadata"
 
     # ==========================================================================
