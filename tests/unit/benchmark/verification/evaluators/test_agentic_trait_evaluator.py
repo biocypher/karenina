@@ -937,3 +937,41 @@ class TestIncompleteInvestigation:
         )
 
         assert evaluation.investigation_incomplete is None
+
+
+def _investigation_prompt(monkeypatch: pytest.MonkeyPatch, trait: AgenticRubricTrait) -> str:
+    """Run one investigation with a fake agent and return every message text it was sent."""
+    from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+    fake_agent = MagicMock()
+    fake_agent.run.return_value = _make_agent_result()
+    monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+    monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: MagicMock())
+
+    evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+    evaluator.evaluate_trait(trait=trait, question_text="Q?", raw_llm_response="A.", workspace_path="/tmp/workspace")
+    call_args = fake_agent.run.call_args
+    messages = call_args.kwargs.get("messages", call_args[0][0] if call_args[0] else [])
+    return "\n".join(m.text for m in messages)
+
+
+@pytest.mark.unit
+class TestInvestigationPrompt:
+    def test_template_kind_prompt_has_schema_and_no_class_repr(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A template-kind trait gets the JSON schema, not a sentence naming the Python class."""
+        trait = AgenticRubricTrait(
+            name="findings",
+            description="Count things.",
+            kind=_TestFindings,
+            higher_is_better=None,
+            context_mode="trace_and_workspace",
+        )
+        prompt = _investigation_prompt(monkeypatch, trait)
+        assert "End your final response with a JSON object matching this schema" in prompt
+        assert "parsed into" not in prompt
+        assert "<class" not in prompt
+
+    def test_builtin_kind_prompt_names_the_kind(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A boolean trait still tells the agent what result its trace becomes."""
+        prompt = _investigation_prompt(monkeypatch, _make_trait(kind="boolean", context_mode="trace_and_workspace"))
+        assert "Your investigation trace will be parsed into a boolean result." in prompt

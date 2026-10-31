@@ -278,10 +278,11 @@ class AgenticTraitEvaluator:
             "You are an evaluation agent investigating the quality of an LLM response. "
             f"Your task: {trait.description}\n\n"
             f"{execution_text}\n\n"
-            "After investigating, summarize your findings clearly. Your investigation "
-            f"trace will be parsed into a {trait.kind} result."
+            "After investigating, summarize your findings clearly."
         )
-        if trait.is_template_kind:
+        if not trait.is_template_kind:
+            system_text += f" Your investigation trace will be parsed into a {trait.kind} result."
+        else:
             kind_class = cast(type[BaseModel], trait.kind)
             schema_json = json.dumps(kind_class.model_json_schema(), indent=2)
             system_text += (
