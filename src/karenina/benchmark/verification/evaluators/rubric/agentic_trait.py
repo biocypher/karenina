@@ -7,8 +7,11 @@ Two-step evaluation for agentic rubric traits:
 This mirrors the Stage 7b (AgenticParseTemplate) pattern.
 """
 
+from __future__ import annotations
+
 import json
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
@@ -20,7 +23,7 @@ from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import prepare_extraction_input
 from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
-from karenina.ports import AgentConfig, Message, PortCapabilities
+from karenina.ports import AgentConfig, AgentResult, Message, PortCapabilities, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 from karenina.schemas.outputs.rubric import (
@@ -34,6 +37,105 @@ from karenina.utils.json_extraction import extract_json_from_response
 logger = logging.getLogger(__name__)
 
 AgenticTraitExtractionMetadata = dict[str, str | None]
+
+
+@dataclass
+class AgenticInvestigation:
+    """Output of one agentic trait investigation.
+
+    Attributes:
+        trace: Raw investigation trace text.
+        messages: Structured investigation messages. The agent path keeps
+            ``AgentResult.trace_messages``. The single-call LLM path holds one
+            assistant message with the response text.
+        usage: Usage reported by the agent run or the single LLM call, or None.
+        incomplete: Why the agent stopped before finishing (``"turn_limit"`` or
+            ``"timeout"``), or None. The trace is then partial.
+    """
+
+    trace: str
+    messages: list[Message] = field(default_factory=list)
+    usage: UsageMetadata | None = None
+    incomplete: str | None = None
+
+
+@dataclass
+class AgenticTraitEvaluation:
+    """Outcome of evaluating one agentic rubric trait.
+
+    Attributes:
+        score: The extracted score, a dict for template kind traits, or None
+            when the investigation or the extraction failed.
+        trace: The investigation trace. When the investigation failed, a
+            record of the form ``[investigation failed: <ExceptionType>: <message>]``.
+        messages: The structured investigation messages, or None when the
+            investigation failed.
+        investigation_usage: Usage of the investigation, or None.
+        extraction_usage: Usage of the extraction parser call, or None when
+            the score was recovered locally or extraction failed.
+        investigation_error: The exception that ended the investigation, or
+            None. When set, the outcome is an infrastructure failure, not a
+            judgment.
+        extraction_error: The exception raised by score extraction, or None.
+            The trace and messages are kept. The stage decides from the
+            error's category whether it is an infrastructure failure
+            (retryable, for example a rate limit) or a plain missing score.
+        investigation_incomplete: ``"turn_limit"`` or ``"timeout"`` when the
+            investigation agent stopped early and returned a partial trace,
+            else None. The score was still extracted from that partial
+            trace. This is informational: the score is kept as it is.
+    """
+
+    score: int | bool | dict[str, Any] | None
+    trace: str | None
+    messages: list[Message] | None = None
+    investigation_usage: UsageMetadata | None = None
+    extraction_usage: UsageMetadata | None = None
+    investigation_error: Exception | None = None
+    extraction_error: Exception | None = None
+    investigation_incomplete: str | None = None
+
+
+def investigation_incomplete_reason(result: AgentResult) -> str | None:
+    """Return why an agent run stopped early, or None if it finished.
+
+    Args:
+        result: The investigation's AgentResult.
+
+    Returns:
+        ``"timeout"`` for a wall-clock timeout, ``"turn_limit"`` for the turn
+        limit, else None. The adapter returns a partial result in both cases.
+    """
+    if result.timeout_reached:
+        return "timeout"
+    if result.limit_reached:
+        return "turn_limit"
+    return None
+
+
+def investigation_failure_record(error: BaseException) -> str:
+    """Return the trace stored for a trait whose investigation raised ``error``."""
+    return f"[investigation failed: {type(error).__name__}: {error}]"
+
+
+def build_mcp_servers(model_config: ModelConfig) -> dict[str, Any]:
+    """Build the AgentPort ``mcp_servers`` mapping for a judge model.
+
+    Mirrors the answering model's MCP wiring in the generate_answer stage:
+    every entry of ``mcp_urls_dict`` becomes a streamable HTTP server. MCP
+    timeouts are not set here. The adapter reads ``mcp_http_timeout`` and
+    ``mcp_sse_read_timeout`` from the same ModelConfig when it is created.
+
+    Args:
+        model_config: The judge's resolved ModelConfig.
+
+    Returns:
+        Mapping of server name to MCP server config, empty when the model has
+        no MCP servers.
+    """
+    if not model_config.mcp_urls_dict:
+        return {}
+    return {name: {"type": "http", "url": url} for name, url in model_config.mcp_urls_dict.items()}
 
 
 class AgenticTraitEvaluator:
@@ -52,6 +154,7 @@ class AgenticTraitEvaluator:
         self._model_config = model_config
         self._prompt_config = prompt_config
         self.last_extraction_metadata: AgenticTraitExtractionMetadata | None = None
+        self.last_extraction_usage: UsageMetadata | None = None
 
     def evaluate_trait(
         self,
@@ -60,7 +163,7 @@ class AgenticTraitEvaluator:
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
         trace_file_path: Path | None = None,
-    ) -> tuple[int | bool | dict[str, Any] | None, str | None]:
+    ) -> AgenticTraitEvaluation:
         """Evaluate a single agentic rubric trait.
 
         Args:
@@ -73,39 +176,52 @@ class AgenticTraitEvaluator:
                 inlining the full trace.
 
         Returns:
-            Tuple of (score, investigation_trace).
-            score is None if evaluation failed; a dict for template kind traits.
-            investigation_trace is None if the agent failed before producing output.
+            The trait's AgenticTraitEvaluation. Its score is None if evaluation
+            failed (a dict for template kind traits). If the investigation
+            raised, the evaluation carries the exception in
+            ``investigation_error`` and a failure record as its trace.
         """
         # Step 1: Investigation
         try:
-            investigation_trace = self._run_investigation(
+            investigation = self._run_investigation(
                 trait,
                 question_text,
                 raw_llm_response,
                 workspace_path,
                 trace_file_path=trace_file_path,
             )
-        except Exception:
+        except Exception as e:
             logger.warning(
                 "Agentic investigation failed for trait '%s'",
                 trait.name,
                 exc_info=True,
             )
-            return None, None
+            return AgenticTraitEvaluation(
+                score=None,
+                trace=investigation_failure_record(e),
+                investigation_error=e,
+            )
+
+        evaluation = AgenticTraitEvaluation(
+            score=None,
+            trace=investigation.trace,
+            messages=investigation.messages,
+            investigation_usage=investigation.usage,
+            investigation_incomplete=investigation.incomplete,
+        )
 
         # Step 2: Extraction
         try:
-            score = self.run_extraction(trait, investigation_trace)
-        except Exception:
+            evaluation.score = self.run_extraction(trait, investigation.trace)
+        except Exception as e:
             logger.warning(
                 "Score extraction failed for trait '%s', preserving trace",
                 trait.name,
                 exc_info=True,
             )
-            return None, investigation_trace
-
-        return score, investigation_trace
+            evaluation.extraction_error = e
+        evaluation.extraction_usage = self.last_extraction_usage
+        return evaluation
 
     def _run_investigation(
         self,
@@ -114,11 +230,13 @@ class AgenticTraitEvaluator:
         raw_llm_response: str | None,
         workspace_path: Path | str | None,
         trace_file_path: Path | None = None,
-    ) -> str:
+    ) -> AgenticInvestigation:
         """Launch agent to investigate the response/workspace.
 
         For ``trace_only`` mode without a workspace, uses LLMPort (single
-        call) instead of AgentPort, since no tool access is needed.
+        call) instead of AgentPort, since no tool access is needed. A judge
+        whose ModelConfig sets ``mcp_urls_dict`` always uses AgentPort, so
+        it can call its MCP tools.
 
         Args:
             trait: The agentic rubric trait to evaluate.
@@ -129,14 +247,16 @@ class AgenticTraitEvaluator:
                 the prompt references this file instead of inlining the trace.
 
         Returns:
-            Raw investigation trace string.
+            The investigation trace, messages and usage.
         """
         agent = None
         capabilities = PortCapabilities()
+        has_mcp_servers = bool(self._model_config.mcp_urls_dict)
         needs_tools = (
             trait.context_mode != "trace_only"
             or workspace_path is not None
             or (trait.materialize_trace and trace_file_path is not None)
+            or has_mcp_servers
         )
         if needs_tools:
             agent = get_agent(self._model_config)
@@ -150,16 +270,19 @@ class AgenticTraitEvaluator:
             )
         elif capabilities.supports_file_tools:
             execution_text = "You may inspect files, but command execution is not available."
+        elif has_mcp_servers:
+            execution_text = "Use the response text supplied in the prompt and the tools available to you."
         else:
             execution_text = "Use only the response text supplied in the prompt."
         system_text = (
             "You are an evaluation agent investigating the quality of an LLM response. "
             f"Your task: {trait.description}\n\n"
             f"{execution_text}\n\n"
-            "After investigating, summarize your findings clearly. Your investigation "
-            f"trace will be parsed into a {trait.kind} result."
+            "After investigating, summarize your findings clearly."
         )
-        if trait.is_template_kind:
+        if not trait.is_template_kind:
+            system_text += f" Your investigation trace will be parsed into a {trait.kind} result."
+        else:
             kind_class = cast(type[BaseModel], trait.kind)
             schema_json = json.dumps(kind_class.model_json_schema(), indent=2)
             system_text += (
@@ -220,7 +343,7 @@ class AgenticTraitEvaluator:
         self,
         trait: AgenticRubricTrait,
         messages: list[Message],
-    ) -> str:
+    ) -> AgenticInvestigation:
         """Run investigation via LLMPort (single call, no tools).
 
         Used for trace_only mode where the trace is inlined in the prompt
@@ -233,7 +356,12 @@ class AgenticTraitEvaluator:
                 "Agentic rubric investigation for '%s' completed via LLMPort (trace_only, no tools)",
                 trait.name,
             )
-            return result.content or ""
+            content = result.content or ""
+            return AgenticInvestigation(
+                trace=content,
+                messages=[Message.assistant(content)],
+                usage=result.usage,
+            )
         finally:
             close_adapter(llm)
 
@@ -244,8 +372,12 @@ class AgenticTraitEvaluator:
         workspace_path: Path | str | None,
         *,
         agent: Any | None = None,
-    ) -> str:
-        """Run investigation via AgentPort (multi-turn with tools)."""
+    ) -> AgenticInvestigation:
+        """Run investigation via AgentPort (multi-turn with tools).
+
+        The judge's MCP servers (``mcp_urls_dict``) are passed to the agent
+        the same way the generate_answer stage passes the answering model's.
+        """
         if agent is None:
             agent = get_agent(self._model_config)
 
@@ -256,14 +388,23 @@ class AgenticTraitEvaluator:
         )
 
         try:
-            result = agent.run(messages=messages, config=agent_config)
+            result = agent.run(
+                messages=messages,
+                mcp_servers=build_mcp_servers(self._model_config),
+                config=agent_config,
+            )
             logger.info(
                 "Agentic rubric investigation for '%s' completed in %d turns (limit_reached=%s)",
                 trait.name,
                 result.turns,
                 result.limit_reached,
             )
-            return result.raw_trace
+            return AgenticInvestigation(
+                trace=result.raw_trace,
+                messages=list(result.trace_messages or []),
+                usage=result.usage,
+                incomplete=investigation_incomplete_reason(result),
+            )
         finally:
             close_adapter(agent)
 
@@ -278,11 +419,15 @@ class AgenticTraitEvaluator:
         AgenticRubricEvaluationStage needs to call it directly
         (shared investigation, per-trait extraction).
 
+        The parser call's usage is left in ``last_extraction_usage`` (None when
+        no parser call succeeded).
+
         Returns:
             The extracted score (bool for boolean traits, int for score/literal),
             or a dict for template kind traits.
         """
         self.last_extraction_metadata = None
+        self.last_extraction_usage = None
         if trait.is_template_kind:
             return self._extract_template(trait, investigation_trace)
 
@@ -314,6 +459,7 @@ class AgenticTraitEvaluator:
                     SingleBooleanScore,
                     retry_policy=self._model_config.retry_policy,
                 )
+                self.last_extraction_usage = bool_result.usage
                 return bool_result.parsed.result
 
             if trait.kind == "score":
@@ -323,6 +469,7 @@ class AgenticTraitEvaluator:
                     SingleNumericScore,
                     retry_policy=self._model_config.retry_policy,
                 )
+                self.last_extraction_usage = score_result.usage
                 return score_result.parsed.score
 
             if trait.kind == "literal":
@@ -332,6 +479,7 @@ class AgenticTraitEvaluator:
                     SingleLiteralClassification,
                     retry_policy=self._model_config.retry_policy,
                 )
+                self.last_extraction_usage = literal_result.usage
                 return self._resolve_literal_index(
                     literal_result.parsed.classification,
                     trait,
@@ -445,6 +593,7 @@ class AgenticTraitEvaluator:
             "local_json_error": local_error,
             "parser_error": None,
         }
+        self.last_extraction_usage = parse_result.usage
         return parse_result.parsed.model_dump()
 
     @staticmethod

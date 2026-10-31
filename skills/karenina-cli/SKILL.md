@@ -291,6 +291,15 @@ both sidecars are deleted; there is nothing to resume. For a completed export
 that contains error rows, re-run just those rows with `karenina repair`
 (see below), not `--resume`.
 
+One exception: rows whose agentic rubric judge failed for a retryable reason
+(connection, timeout, rate limit or server error, recorded in
+`rubric.agentic_trait_evaluation_errors`) are not counted as completed. If any
+remain when the run finishes, the export is written but marked incomplete, the
+sidecars are kept, and the CLI prints
+`Some tasks can be retried. To retry them: karenina verify --resume <state>`.
+That resume re-runs only those rows and reuses their stored answers. Rows whose
+judge failed with a permanent error are not retried.
+
 **Resume is triple-level.** The unit of work is
 `(question_id, answering_canonical_key, parsing_canonical_key, replicate)`,
 not the question. Multi-model / multi-replicate fan-outs skip only the

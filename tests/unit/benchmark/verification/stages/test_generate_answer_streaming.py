@@ -415,3 +415,26 @@ class TestAgentTimeoutPath:
         assert ctx.get_artifact(ArtifactKeys.RESPONSE_TIMEOUT_PARTIAL) is None
         assert ctx.error is None
         assert "Complete response" in ctx.get_artifact(ArtifactKeys.RAW_LLM_RESPONSE)
+
+
+@pytest.mark.unit
+class TestAnswerUsageFields:
+    """The answering model's usage keeps reasoning tokens and search counts on both paths."""
+
+    def test_llm_path_keeps_reasoning_and_search_counts(self) -> None:
+        ctx = _make_context()
+        mock_llm = _make_mock_llm(supports_streaming=False)
+        mock_llm.invoke.return_value = LLMResponse(
+            content="4",
+            usage=UsageMetadata(
+                input_tokens=10, output_tokens=5, total_tokens=15, reasoning_tokens=2, web_search_queries=3
+            ),
+        )
+        with (
+            patch("karenina.benchmark.verification.stages.pipeline.generate_answer.get_llm", return_value=mock_llm),
+            patch(_REGISTRY_PATCH_TARGET, return_value=None),
+        ):
+            GenerateAnswerStage().execute(ctx)
+        summary = ctx.get_artifact(ArtifactKeys.USAGE_TRACKER).get_stage_summary("answer_generation")
+        assert summary["web_search_queries"] == 3
+        assert summary["reasoning_tokens"] == 2

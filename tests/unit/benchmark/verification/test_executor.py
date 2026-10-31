@@ -616,6 +616,43 @@ class TestExecutorCacheHydration:
         assert data is not None
         assert data["raw_llm_response"] == "usable partial trace"
 
+    def test_agentic_rubric_failure_hydrates_answer_cache(self) -> None:
+        """A judge infrastructure failure leaves the answer reusable on resume."""
+        from karenina.utils.answer_cache import AnswerTraceCache
+
+        row = _make_timeout_partial_result("q1")
+        row.metadata.failure = Failure(
+            category=FailureCategory.UNEXPECTED_ERROR,
+            stage="AgenticRubricEvaluation",
+            reason="Agentic rubric investigation failed for 1 trait(s)",
+        )
+        cache = AnswerTraceCache()
+        executor = VerificationExecutor(parallel=False, config=ExecutorConfig())
+
+        executor._hydrate_cache_from_results(cache, [row])
+
+        status, data = cache.get_or_reserve("q1_langchain:answering:")
+        assert status == "HIT"
+        assert data is not None
+
+    def test_answer_stage_infra_failure_is_not_hydrated(self) -> None:
+        """Infrastructure failures before a usable answer still regenerate it."""
+        from karenina.utils.answer_cache import AnswerTraceCache
+
+        row = _make_timeout_partial_result("q1")
+        row.metadata.failure = Failure(
+            category=FailureCategory.CONNECTION,
+            stage="GenerateAnswer",
+            reason="connection retries exhausted",
+        )
+        cache = AnswerTraceCache()
+        executor = VerificationExecutor(parallel=False, config=ExecutorConfig())
+
+        executor._hydrate_cache_from_results(cache, [row])
+
+        status, _ = cache.get_or_reserve("q1_langchain:answering:")
+        assert status == "MISS"
+
 
 # ============================================================================
 # Per-task portal creation (executor concurrency optimization)

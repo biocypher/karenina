@@ -18,7 +18,7 @@ from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.utils.llm_invocation import _construct_few_shot_prompt
 from karenina.benchmark.verification.utils.trace_agent_metrics import extract_agent_metrics_from_messages
-from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker
+from karenina.benchmark.verification.utils.trace_usage_tracker import UsageTracker, usage_to_callback_metadata
 from karenina.benchmark.verification.utils.usage_helpers import should_mark_usage_unavailable
 from karenina.benchmark.verification.workspace_capture import (
     DEFAULT_WORKSPACE_OUTPUT_EXCLUDES,
@@ -549,19 +549,7 @@ class GenerateAnswerStage(BaseVerificationStage):
 
                 # Track usage metadata from adapter
                 if result.usage:
-                    inner_usage: dict[str, int | float] = {
-                        "input_tokens": result.usage.input_tokens,
-                        "output_tokens": result.usage.output_tokens,
-                        "total_tokens": result.usage.total_tokens,
-                    }
-                    if result.usage.cost_usd is not None:
-                        inner_usage["cost_usd"] = result.usage.cost_usd
-                    if result.usage.cache_read_tokens is not None:
-                        inner_usage["cache_read_input_tokens"] = result.usage.cache_read_tokens
-                    if result.usage.cache_creation_tokens is not None:
-                        inner_usage["cache_creation_input_tokens"] = result.usage.cache_creation_tokens
-
-                    usage_metadata = {answering_model_str: inner_usage}
+                    usage_metadata = usage_to_callback_metadata(answering_model_str, result.usage)
                     usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
 
                 # Mark usage_unavailable for the agent path when usage is
@@ -626,15 +614,7 @@ class GenerateAnswerStage(BaseVerificationStage):
 
                 # Track usage metadata
                 if llm_response.usage:
-                    inner_usage = {
-                        "input_tokens": llm_response.usage.input_tokens,
-                        "output_tokens": llm_response.usage.output_tokens,
-                        "total_tokens": llm_response.usage.total_tokens,
-                    }
-                    if llm_response.usage.cost_usd is not None:
-                        inner_usage["cost_usd"] = llm_response.usage.cost_usd
-
-                    usage_metadata = {answering_model_str: inner_usage}
+                    usage_metadata = usage_to_callback_metadata(answering_model_str, llm_response.usage)
                     usage_tracker.track_call("answer_generation", answering_model_str, usage_metadata)
 
                 # No agent metrics for simple LLM calls

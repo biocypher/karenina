@@ -12,7 +12,7 @@ as the existing LangChain and Claude SDK adapters, preserving backward compat.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from karenina.ports.messages import Message
@@ -132,3 +132,23 @@ def messages_to_raw_trace(
                     parts.append(f"{header}\n{content}")
 
     return cfg.message_separator.join(parts)
+
+
+def messages_to_dicts(messages: list[Message]) -> list[dict[str, Any]]:
+    """Serialize port Message objects into the stored trace message format.
+
+    This is the format of ``VerificationResultTemplate.trace_messages``: each
+    message's ``to_dict()`` with ``block_index`` set to its position.
+
+    Args:
+        messages: List of port Message objects.
+
+    Returns:
+        One dict per message, in order.
+    """
+    serialized: list[dict[str, Any]] = []
+    for block_index, msg in enumerate(messages):
+        d = msg.to_dict()
+        d["block_index"] = block_index
+        serialized.append(d)
+    return serialized

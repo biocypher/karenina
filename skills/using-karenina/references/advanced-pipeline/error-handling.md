@@ -63,18 +63,21 @@ The categories carry no special metadata; they exist purely as the routing key b
 
 ### The Match Order
 
-`registry.classify(exc)` walks five rule layers in order and returns the first hit. Knowing the order matters when you need to override a built-in default with a custom rule.
+`registry.classify(exc)` walks six rule layers in order and returns the first hit. Knowing the order matters when you need to override a built-in default with a custom rule.
 
 | # | Rule | Source | Match by |
 |---|------|--------|----------|
 | 1 | User-registered exception classes | `register(SomeException, category)` | `isinstance(exc, SomeException)` |
 | 2 | User-registered type names | `register("SomeError", category)` or `register_pattern(..., match_type="type_name")` | `type(exc).__name__ == "SomeError"` |
 | 3 | User-registered message substrings | `register_pattern(..., match_type="message_substring")` | lowercased substring of `str(exc)` |
-| 4 | Built-in type rules (MRO) | hardcoded | walks `type(exc).__mro__` for known names |
-| 5 | Built-in message substrings | hardcoded | lowercased substring of `str(exc)` |
-| 6 | Default | none | returned as `PERMANENT` |
+| 4 | Category declared by the exception | `error_category` class attribute (an `ErrorCategory`) | `exc.error_category` |
+| 5 | Built-in type rules (MRO) | hardcoded | walks `type(exc).__mro__` for known names |
+| 6 | Built-in message substrings | hardcoded | lowercased substring of `str(exc)` |
+| 7 | Default | none | returned as `PERMANENT` |
 
 User rules always run first and short-circuit before the built-ins, so a custom registration can override any default classification.
+
+An adapter's own error types declare their category in an `error_category` class attribute (the [`google_genai`](../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) adapter does), so every registry classifies them the way the adapter does, by type rather than by message text. When parser and agentic judge errors are classified through their chain of causes, a declared category anywhere in the chain decides: a permanent API error wrapped in `AgentExecutionError` stays permanent even if the wrapper's message contains a keyword such as "500".
 
 ### Built-in Type Rules
 

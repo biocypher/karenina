@@ -176,9 +176,11 @@ phase_b = VerificationConfig(
 If a prior row already carried rubric scores (for example, the seed ran under `evaluation_mode="template_and_rubric"`), the new trait dictionaries are unioned with the old ones by trait name.
 
 - New trait `clarity` added to a row that already had `coherence` -> merged row has both.
-- Same-name trait on both sides -> `ValueError`, naming the colliding trait and the bucket (one of `llm_trait_scores`, `llm_trait_labels`, `regex_trait_scores`, `callable_trait_scores`, `agentic_trait_scores`, `agentic_trait_investigation_traces`).
+- Same-name trait on both sides -> `ValueError`, naming the colliding trait and the bucket (one of `llm_trait_scores`, `llm_trait_labels`, `regex_trait_scores`, `callable_trait_scores`, `agentic_trait_scores`, `agentic_trait_investigation_traces`, `agentic_trait_investigation_messages`, `agentic_trait_evaluation_errors`, `agentic_trait_extraction_metadata`).
 
 This rules out silent overwrites: if you want to re-run an existing trait, clear it from the prior results first.
+
+The merged row keeps the prior row's metadata, with one addition for [agentic traits](rubrics/agentic-traits.md): the rubric-only row's agentic caveats (`agentic_investigation_failed`, `agentic_extraction_failed`, `agentic_investigation_incomplete`) are added to the merged row, and a judge failure's `Failure` is copied when it comes from the `AgenticRubricEvaluation` stage and the prior row has no failure of its own. A judge that failed while re-judging therefore never looks like a successful extension.
 
 ### 4.3 Shape-match requirements
 

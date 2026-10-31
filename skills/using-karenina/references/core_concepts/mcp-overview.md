@@ -47,9 +47,9 @@ MCP provides a standardized protocol for giving the model tool access. You confi
 | Cost and latency must be minimized | Simple LLM | MCP adds multiple LLM calls per question |
 
 > **Litmus test:**
-> 
+>
 > If the question includes phrases like "current status of," "latest data on," or "look up in [database]," MCP is likely appropriate. If the question asks about established knowledge ("What is the mechanism of action of aspirin?"), simple LLM is sufficient and more reproducible.
-> 
+>
 MCP verification costs more and takes longer than simple LLM verification. Each question triggers a multi-turn agent loop with multiple LLM calls and tool invocations. Use MCP only when the evaluation genuinely requires external information or when tool use is itself the capability being tested.
 
 ## 3. Architecture
@@ -195,16 +195,16 @@ print(f"Prompt caching: enabled={middleware.prompt_caching.enabled}, ttl='{middl
 
 Each [adapter](adapters.md) implements MCP differently. The adapter is selected by the `interface` field on `ModelConfig`.
 
-| Feature | `langchain` | `claude_agent_sdk` | `claude_tool` |
-|---------|:-----------:|:------------------:|:-------------:|
-| **Transport** | HTTP/SSE | HTTP/SSE + stdio | HTTP/SSE |
-| **MCP library** | `langchain-mcp-adapters` | Claude Agent SDK | `mcp` Python SDK |
-| **Tool filtering** | Yes | Yes | Yes |
-| **Description overrides** | Yes | Yes | Yes |
-| **Configurable middleware** | Full (`AgentMiddlewareConfig`) | Limits only | Limits only |
-| **Prompt caching** | Middleware-based (Anthropic only) | No | Native (`cache_control`) |
-| **Summarization** | Configurable | Built-in (SDK-managed) | Built-in |
-| **Stdio servers** | No | Yes | No |
+| Feature | `langchain` | `claude_agent_sdk` | `claude_tool` | `google_genai` |
+|---------|:-----------:|:------------------:|:-------------:|:--------------:|
+| **Transport** | HTTP/SSE | HTTP/SSE + stdio | HTTP/SSE | HTTP/SSE |
+| **MCP library** | `langchain-mcp-adapters` | Claude Agent SDK | `mcp` Python SDK | `mcp` Python SDK |
+| **Tool filtering** | Yes | Yes | Yes | Yes |
+| **Description overrides** | Yes | Yes | Yes | Yes |
+| **Configurable middleware** | Full (`AgentMiddlewareConfig`) | Limits only | Limits only | Limits only |
+| **Prompt caching** | Middleware-based (Anthropic only) | No | Native (`cache_control`) | No (cache reads reported in usage) |
+| **Summarization** | Configurable | Built-in (SDK-managed) | Built-in | No (long tool results are cut) |
+| **Stdio servers** | No | Yes | No | No |
 
 ### 6.1 Choosing an Adapter for MCP
 
@@ -213,6 +213,7 @@ Each [adapter](adapters.md) implements MCP differently. The adapter is selected 
 | General-purpose MCP with configurable middleware | `langchain` | Full control over retry, summarization, caching behavior |
 | Need local stdio-based MCP servers | `claude_agent_sdk` | Only adapter supporting stdio transport |
 | Direct Anthropic API without framework overhead | `claude_tool` | Uses Anthropic SDK directly with native prompt caching |
+| Gemini with MCP tools plus Google Search | `google_genai` | Uses the Google GenAI SDK directly. Gemini's server-side search and URL reading run next to MCP tools, with a per-run search budget |
 | Non-Anthropic models (OpenAI, Google) with MCP | `langchain` | Multi-provider support via LangChain |
 | Pre-recorded traces, no live tools | `manual` | Does not support MCP; raises `ValueError` if `mcp_urls_dict` is set |
 
@@ -251,9 +252,9 @@ print(f"Rubric sees full trace: {config.use_full_trace_for_rubric}")
 | `use_full_trace_for_rubric` | `bool` | `True` | `True`: rubric evaluation sees the complete trace. `False`: only the final AI message is evaluated. |
 
 > **Note:**
-> 
+>
 > The full trace is **always captured and stored** regardless of these settings. These flags only control what input the parsing and evaluation models receive. If set to `False` and the trace does not end with an AI message, the corresponding verification stage will fail.
-> 
+>
 The defaults reflect typical evaluation patterns: template parsing usually needs only the final answer (the model's conclusion after tool use), while rubric evaluation benefits from the full trace (to assess qualities like tool selection, reasoning process, or citation of retrieved information). Keep `use_full_trace_for_template=False` on long MCP runs: full traces can easily blow past a judge's context window.
 
 ## 8. MCP Execution Lifecycle

@@ -85,7 +85,7 @@ The `AdapterRegistry` maps interface strings to `AdapterSpec` objects. Each spec
 
 Registration happens lazily via two mechanisms on first registry access, keeping startup lightweight:
 
-1. **Built-in adapters**: The registry imports each built-in adapter's `registration.py` module (`langchain`, `claude_agent_sdk`, `manual`, `claude_tool`, `langchain_deep_agents`, `taskeval`). Each import triggers `AdapterRegistry.register()` with that adapter's `AdapterSpec`. Missing optional dependencies (e.g., `deepagents` not installed) are caught per-adapter and do not block other registrations.
+1. **Built-in adapters**: The registry imports each built-in adapter's `registration.py` module (`langchain`, `claude_agent_sdk`, `manual`, `claude_tool`, `langchain_deep_agents`, `taskeval`, `google_genai`). Each import triggers `AdapterRegistry.register()` with that adapter's `AdapterSpec`. Missing optional dependencies (e.g., `deepagents` not installed) are caught per-adapter and do not block other registrations.
 
 2. **External adapters via entry points**: After loading built-ins, the registry calls `entry_points(group="karenina.adapters")` to discover third-party adapter packages. Each entry point's `load()` function is called, which should register an `AdapterSpec`. Entry points whose name conflicts with a built-in interface are skipped with a warning.
 
@@ -139,6 +139,7 @@ When an adapter's dependencies are missing, the factory transparently falls back
 claude_agent_sdk (Claude CLI not found)       → falls back to langchain
 claude_tool (anthropic package missing)       → falls back to langchain
 langchain_deep_agents (deepagents not found)  → no fallback (raises error)
+google_genai (google-genai not installed)     → no fallback (raises error)
 langchain (langchain_core not installed)      → no fallback (raises error)
 manual                                        → always available, no fallback needed
 ```
@@ -155,6 +156,7 @@ manual                                        → always available, no fallback 
 | `openai_endpoint` | OpenAI-compatible (routes to langchain) | Yes | Yes | No (JSON fallback) | `tool_loop` | None |
 | `claude_agent_sdk` | Anthropic Agent SDK | Yes | Yes | Yes (native) | `deep_agent` | `langchain` |
 | `claude_tool` | Anthropic Python SDK | Yes | Yes | Yes (native) | `tool_loop` | `langchain` |
+| `google_genai` | Google GenAI SDK (Gemini on Vertex AI or the Gemini API) | Yes | Yes | Yes (native) | `tool_loop` | None |
 | `manual` | Pre-recorded traces | No | No | No | `tool_loop` | None |
 
 `openrouter` and `openai_endpoint` are **routing interfaces** — they resolve to the `langchain` adapter at creation time, sharing the same implementation with interface-specific configuration (API keys, base URLs).

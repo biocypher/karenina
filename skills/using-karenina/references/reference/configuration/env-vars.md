@@ -4,7 +4,7 @@ This is the exhaustive reference for every environment variable recognized by ka
 
 > **Precedence:**
 > Environment variables are the **third priority** in the [configuration hierarchy](../../workflows/configuration/index.md): CLI arguments and preset values override them; they override built-in defaults.
-> 
+>
 ---
 
 ## Complete Reference Table
@@ -17,9 +17,17 @@ This is the exhaustive reference for every environment variable recognized by ka
 | `ANTHROPIC_API_KEY` | `str` | — | Anthropic API key. Used when no explicit `anthropic_api_key` is configured for an Anthropic model on `langchain`, `langchain_deep_agents`, `claude_agent_sdk`, or `claude_tool`. The dedicated model field takes precedence and can be paired with `anthropic_base_url` for an Anthropic-compatible gateway. Claude adapters load this variable via `dotenv`. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `str` | — | Claude subscription OAuth token (created by `claude setup-token`). When neither `ANTHROPIC_API_KEY` nor a model-level `anthropic_api_key` is configured, the `claude_agent_sdk` adapter forwards this from the host environment to the SDK subprocess, so the agent can authenticate through a Claude subscription instead of an API key. |
 | `ANTHROPIC_AUTH_TOKEN` | `str` | — | Alternative Anthropic auth token forwarded alongside `CLAUDE_CODE_OAUTH_TOKEN` by the `claude_agent_sdk` adapter when no API key is configured. |
-| `GOOGLE_API_KEY` | `str` | — | Google AI API key. Required when using the `langchain` interface with Google models (e.g., `google_genai` provider). |
+| `GOOGLE_API_KEY` | `str` | — | Google AI API key. Required when using the `langchain` interface with Google models (e.g., `google_genai` provider). The `google_genai` interface also reads it for its `gemini_api` backend when neither `endpoint_api_key` nor `GEMINI_API_KEY` is set. |
+| `GEMINI_API_KEY` | `str` | — | Gemini API key for the `google_genai` interface with the `gemini_api` backend. A model-level `endpoint_api_key` takes precedence, and `GEMINI_API_KEY` takes precedence over `GOOGLE_API_KEY`. Not used by the `vertex` backend, which authenticates with Google application default credentials. |
 | `OPENROUTER_API_KEY` | `str` | — | OpenRouter API key. Required when using the `openrouter` interface. Read via `os.environ.get()` in the OpenRouter model factory. |
 | `TAVILY_API_KEY` | `str` | — | Tavily search API key. Required when deep judgment web search is enabled (`search_enabled=True`). Used by the Tavily search utility. |
+
+### Google Cloud (`google_genai`)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `GOOGLE_CLOUD_PROJECT` | `str` | — | Vertex AI project for the `google_genai` interface when `extra_kwargs["project"]` is not set. |
+| `GOOGLE_CLOUD_LOCATION` | `str` | `global` | Vertex AI location for the `google_genai` interface when `extra_kwargs["location"]` is not set. |
 
 ### Embedding Check
 
@@ -102,7 +110,10 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 | `ANTHROPIC_API_KEY` | `adapters/claude_tool/`, `adapters/claude_agent_sdk/` (via dotenv) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `adapters/claude_agent_sdk/auth.py`, `adapters/claude_agent_sdk/llm.py`, `adapters/claude_agent_sdk/agent.py` |
 | `ANTHROPIC_AUTH_TOKEN` | `adapters/claude_agent_sdk/auth.py`, `adapters/claude_agent_sdk/llm.py`, `adapters/claude_agent_sdk/agent.py` |
-| `GOOGLE_API_KEY` | LangChain/LiteLLM (via provider SDK) |
+| `GOOGLE_API_KEY` | LangChain/LiteLLM (via provider SDK), `adapters/google_genai/client.py` |
+| `GEMINI_API_KEY` | `adapters/google_genai/client.py` |
+| `GOOGLE_CLOUD_PROJECT` | `adapters/google_genai/settings.py` |
+| `GOOGLE_CLOUD_LOCATION` | `adapters/google_genai/settings.py` |
 | `OPENROUTER_API_KEY` | `adapters/langchain/models.py` |
 | `TAVILY_API_KEY` | `benchmark/verification/utils/search_tavily.py` |
 | `EMBEDDING_CHECK` | `schemas/verification/config.py`, `benchmark/verification/utils/embedding_check.py` |

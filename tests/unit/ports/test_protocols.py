@@ -19,7 +19,7 @@ every shipped adapter broke.
 
 The tests below instantiate the real adapter classes that
 ``AdapterFactory`` hands out (langchain, claude_tool, claude_agent_sdk,
-langchain_deep_agents, manual) and check Protocol membership, signature
+langchain_deep_agents, manual, google_genai) and check Protocol membership, signature
 shape, and capabilities exposure against the actual objects. A small
 ``MissingX`` stub class is still used in exactly one place to demonstrate
 that the ``runtime_checkable`` check rejects incomplete implementations —
@@ -78,6 +78,7 @@ def _config(interface: str) -> ModelConfig:
 def _make_llm_adapters() -> list[tuple[str, LLMPort]]:
     from karenina.adapters.claude_agent_sdk.llm import ClaudeSDKLLMAdapter
     from karenina.adapters.claude_tool.llm import ClaudeToolLLMAdapter
+    from karenina.adapters.google_genai.llm import GoogleGenAILLMAdapter
     from karenina.adapters.langchain.llm import LangChainLLMAdapter
     from karenina.adapters.langchain_deep_agents.llm import DeepAgentsLLMAdapter
     from karenina.adapters.manual import ManualLLMAdapter
@@ -88,12 +89,14 @@ def _make_llm_adapters() -> list[tuple[str, LLMPort]]:
         ("claude_agent_sdk", ClaudeSDKLLMAdapter(_config("claude_agent_sdk"))),
         ("langchain_deep_agents", DeepAgentsLLMAdapter(_config("langchain_deep_agents"))),
         ("manual", ManualLLMAdapter(model_config=None)),
+        ("google_genai", GoogleGenAILLMAdapter(_config("google_genai"))),
     ]
 
 
 def _make_agent_adapters() -> list[tuple[str, AgentPort]]:
     from karenina.adapters.claude_agent_sdk.agent import ClaudeSDKAgentAdapter
     from karenina.adapters.claude_tool.agent import ClaudeToolAgentAdapter
+    from karenina.adapters.google_genai.agent import GoogleGenAIAgentAdapter
     from karenina.adapters.langchain.agent import LangChainAgentAdapter
     from karenina.adapters.langchain_deep_agents.agent import DeepAgentsAgentAdapter
     from karenina.adapters.manual import ManualAgentAdapter
@@ -104,12 +107,14 @@ def _make_agent_adapters() -> list[tuple[str, AgentPort]]:
         ("claude_agent_sdk", ClaudeSDKAgentAdapter(_config("claude_agent_sdk"))),
         ("langchain_deep_agents", DeepAgentsAgentAdapter(_config("langchain_deep_agents"))),
         ("manual", ManualAgentAdapter(model_config=None)),
+        ("google_genai", GoogleGenAIAgentAdapter(_config("google_genai"))),
     ]
 
 
 def _make_parser_adapters() -> list[tuple[str, ParserPort]]:
     from karenina.adapters.claude_agent_sdk.parser import ClaudeSDKParserAdapter
     from karenina.adapters.claude_tool.parser import ClaudeToolParserAdapter
+    from karenina.adapters.google_genai.parser import GoogleGenAIParserAdapter
     from karenina.adapters.langchain.parser import LangChainParserAdapter
     from karenina.adapters.langchain_deep_agents.parser import DeepAgentsParserAdapter
     from karenina.adapters.manual import ManualParserAdapter
@@ -120,6 +125,7 @@ def _make_parser_adapters() -> list[tuple[str, ParserPort]]:
         ("claude_agent_sdk", ClaudeSDKParserAdapter(_config("claude_agent_sdk"))),
         ("langchain_deep_agents", DeepAgentsParserAdapter(_config("langchain_deep_agents"))),
         ("manual", ManualParserAdapter(model_config=None)),
+        ("google_genai", GoogleGenAIParserAdapter(_config("google_genai"))),
     ]
 
 
@@ -147,6 +153,7 @@ class TestRealAdaptersSatisfyProtocols:
             "claude_agent_sdk",
             "langchain_deep_agents",
             "manual",
+            "google_genai",
         }
         for name, adapter in adapters:
             assert isinstance(adapter, LLMPort), (
@@ -161,6 +168,7 @@ class TestRealAdaptersSatisfyProtocols:
             "claude_agent_sdk",
             "langchain_deep_agents",
             "manual",
+            "google_genai",
         }
         for name, adapter in adapters:
             assert isinstance(adapter, AgentPort), f"{name} agent adapter no longer satisfies AgentPort"
@@ -173,6 +181,7 @@ class TestRealAdaptersSatisfyProtocols:
             "claude_agent_sdk",
             "langchain_deep_agents",
             "manual",
+            "google_genai",
         }
         for name, adapter in adapters:
             assert isinstance(adapter, ParserPort), f"{name} parser adapter no longer satisfies ParserPort"

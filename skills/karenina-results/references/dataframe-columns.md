@@ -235,11 +235,12 @@ One row per **trait** per result (metric traits exploded by metric name).
 | `evaluation_method` | str or None | `llm`, `regex`, `callable`, `metric`, `agentic` |
 | `metric_name` | str or None | Metric name (for metric traits: `precision`, `recall`, `f1`, etc.). Column exists only when the run includes metric traits |
 | `investigation_trace` | str or None | Raw agent investigation trace (agentic traits only). Column exists only when the run includes agentic traits |
+| `investigation_messages` | list[dict] or None | The judge's structured trace messages, from `rubric.agentic_trait_investigation_messages` (agentic traits only). `None` when the investigation failed. Column exists only when the run includes agentic traits |
 
 Column presence is trait-type driven: each row creator emits only its own
 columns, and `_get_column_order` keeps columns that actually exist. A run
 with only regex and callable traits yields 29 columns with none of
-`trait_label`, `metric_name`, `investigation_trace`, or `confusion_*`.
+`trait_label`, `metric_name`, `investigation_trace`, `investigation_messages`, or `confusion_*`.
 
 ### Confusion Matrix Columns (Metric Traits Only)
 

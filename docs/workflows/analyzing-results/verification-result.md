@@ -337,6 +337,8 @@ Usage metadata structure:
 }
 ```
 
+Agentic rubric judges are recorded under `agentic_rubric_evaluation` (their investigation and extraction calls). A stage entry, and `total`, also carries `reasoning_tokens` (thinking tokens, already counted in `output_tokens`) and `web_search_queries` (provider-side searches, billed per query) when at least one call in that stage reported them, for example a [`google_genai`](../../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) judge with Google Search. The `answer_generation` entry does not carry these two counts. For a `google_genai` answering model that runs as an agent (with MCP servers), the per-call counts are on each assistant message's `usage_metadata` in `template.trace_messages`.
+
 ---
 
 ## Rubric Results
@@ -362,8 +364,10 @@ Scores are split by trait type for type-safe access:
 | `callable_trait_scores` | `dict[str, bool \| int \| float] \| None` | Callable-based traits (boolean, or a score that may be an integer or a float within the trait's score range) |
 | `metric_trait_scores` | `dict[str, dict[str, float]] \| None` | Metric traits with nested metrics (e.g., `{"extraction": {"precision": 1.0, "recall": 0.8, "f1": 0.89}}`) |
 | `agentic_trait_scores` | `dict[str, int \| bool \| float \| str \| list[Any] \| None] \| None` | Agentic rubric trait scores, keyed by trait name. Value type matches the underlying trait kind (boolean, integer score, class index for literal kind, or any value emitted by a template-kind agentic trait). |
-| `agentic_trait_investigation_traces` | `dict[str, str] \| None` | Raw investigation traces from agentic trait agents, keyed by trait name. Each trace is the full text of the agent's investigation session. |
-| `agentic_trait_extraction_metadata` | `dict[str, dict[str, str \| None]] \| None` | Per-trait extraction provenance, keyed by base trait name. Each entry records `method` (`local_json`, `parser_after_local_json_failed`, or `failed`), plus `local_json_error` and `parser_error`. |
+| `agentic_trait_investigation_traces` | `dict[str, str] \| None` | Raw investigation traces from agentic trait judges, keyed by trait name. Each trace is the full text of the judge's investigation session. A trait whose investigation raised holds a record of the form `[investigation failed: <ExceptionType>: <message>]` instead. |
+| `agentic_trait_investigation_messages` | `dict[str, list[dict[str, Any]]] \| None` | Structured investigation messages, keyed by trait name, in the same format as `template.trace_messages`: the judge's tool calls, tool results (including a `google_genai` judge's `google_search` and `url_context` pairs) and thinking, readable by field. A single-call judge without tools stores one assistant message. Traits whose investigation failed have no entry. |
+| `agentic_trait_extraction_metadata` | `dict[str, dict[str, str \| None]] \| None` | Per-trait extraction provenance, keyed by base trait name. Template kind entries record `method` (`local_json`, `parser_after_local_json_failed`, or `failed`), plus `local_json_error` and `parser_error`. An `investigation_incomplete` entry (`"turn_limit"` or `"timeout"`) means the score was extracted from a partial investigation trace. |
+| `agentic_trait_evaluation_errors` | `dict[str, dict[str, str]] \| None` | Errors that left an agentic trait without a judgment, keyed by trait name. Each entry has `phase` (`"investigation"` or `"extraction"`), `error_type`, `message` and `category` (an `ErrorCategory` value: `connection`, `timeout`, `rate_limit`, `server_error` or `permanent`). Investigation errors are always recorded, extraction errors only when retryable. `None` when every judge produced a judgment. |
 
 ### Metric Trait Details
 

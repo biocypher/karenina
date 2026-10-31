@@ -527,6 +527,11 @@ class AdapterRegistry:
         except ImportError:
             logger.debug("TaskEval registration module not available")
 
+        try:
+            from karenina.adapters.google_genai import registration as _gg  # noqa: F401
+        except ImportError:
+            logger.debug("Google GenAI registration module not available")
+
     @classmethod
     def _discover_entry_points(cls) -> None:
         """Discover and load external adapters via ``karenina.adapters`` entry points.
