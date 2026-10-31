@@ -335,6 +335,7 @@ def _merge(
 _AGENTIC_JUDGE_CAVEATS: tuple[Caveat, ...] = (
     Caveat.AGENTIC_INVESTIGATION_FAILED,
     Caveat.AGENTIC_EXTRACTION_FAILED,
+    Caveat.AGENTIC_INVESTIGATION_INCOMPLETE,
 )
 
 # Stage name of AgenticRubricEvaluationStage.
@@ -349,6 +350,7 @@ _RUBRIC_TRAIT_BUCKETS: tuple[str, ...] = (
     "agentic_trait_investigation_traces",
     "agentic_trait_investigation_messages",
     "agentic_trait_evaluation_errors",
+    "agentic_trait_extraction_metadata",
 )
 
 

@@ -15,7 +15,10 @@ from typing import Any
 from karenina.adapters.agent_runtime import workspace_path_for_prompt
 from karenina.adapters.registry import AdapterRegistry, close_adapter
 from karenina.benchmark.verification.evaluators import AgenticTraitEvaluator
-from karenina.benchmark.verification.evaluators.rubric.agentic_trait import build_mcp_servers
+from karenina.benchmark.verification.evaluators.rubric.agentic_trait import (
+    build_mcp_servers,
+    investigation_incomplete_reason,
+)
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.utils.parser_resilience import classify_parser_exception
 from karenina.benchmark.verification.utils.trace_formatting import messages_to_dicts
@@ -82,6 +85,7 @@ class _AgenticRubricOutputs:
     messages: dict[str, list[dict[str, Any]] | None] = field(default_factory=dict)
     extraction_metadata: dict[str, dict[str, str | None]] = field(default_factory=dict)
     failures: dict[str, _JudgeFailure] = field(default_factory=dict)
+    incomplete: dict[str, str] = field(default_factory=dict)
 
     def record_score(self, trait: AgenticRubricTrait, score: int | bool | dict[str, Any] | None) -> None:
         """Store a trait score, expanding template kind dicts into dotted keys."""
@@ -97,6 +101,18 @@ class _AgenticRubricOutputs:
         """Store a trait's investigation trace and its serialised messages."""
         self.traces[trait.name] = trace
         self.messages[trait.name] = messages_to_dicts(messages) if messages is not None else None
+
+    def record_extraction_metadata(self, trait: AgenticRubricTrait, metadata: Any) -> None:
+        """Store the evaluator's extraction provenance for a trait, if it reported any."""
+        if isinstance(metadata, dict):
+            self.extraction_metadata[trait.name] = dict(metadata)
+
+    def record_incomplete(self, trait: AgenticRubricTrait, reason: str | None) -> None:
+        """Note that a trait's score came from a partial investigation (turn limit or timeout)."""
+        if reason is None:
+            return
+        self.incomplete[trait.name] = reason
+        self.extraction_metadata.setdefault(trait.name, {})["investigation_incomplete"] = reason
 
     def record_skipped(self, trait: AgenticRubricTrait) -> None:
         """Store an empty entry for a trait whose model lacks agent support."""
@@ -128,7 +144,9 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
         agentic_trait_investigation_traces: Dict mapping trait name to investigation trace.
         agentic_trait_investigation_messages: Dict mapping trait name to the serialised
             investigation messages (None when the investigation failed).
-        agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance.
+        agentic_trait_extraction_metadata: Dict mapping trait name to extraction provenance,
+            including ``investigation_incomplete`` ("turn_limit" or "timeout") for
+            a score extracted from a partial investigation.
         agentic_trait_evaluation_errors: Dict mapping trait name to the error that
             left it without a judgment (phase, error_type, message, category).
 
@@ -147,6 +165,12 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
     example schema validation) only leave the score None. Progressive-save
     resume retries rows whose recorded errors are retryable, and the
     executor reuses their answer trace.
+
+    A judge whose agent hit its turn limit or timeout returns a partial
+    trace, and the score is still extracted from it. Such traits get an
+    ``investigation_incomplete`` entry in their extraction metadata and the
+    row gets the informational ``agentic_investigation_incomplete`` caveat.
+    The score is kept, no error is marked, and resume does not retry them.
     """
 
     @property
@@ -171,6 +195,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS,
             ArtifactKeys.AGENTIC_INVESTIGATION_FAILED,
             ArtifactKeys.AGENTIC_EXTRACTION_FAILED,
+            ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE,
         ]
 
     def should_run(self, context: VerificationContext) -> bool:
@@ -286,6 +311,12 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
             if outputs.failures:
                 self._mark_judge_failures(context, outputs.failures)
+            if outputs.incomplete:
+                self.set_artifact_and_result(context, ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE, True)
+                logger.info(
+                    "Agentic rubric scores extracted from partial investigations: %s",
+                    ", ".join(f"{name} ({reason})" for name, reason in outputs.incomplete.items()),
+                )
 
             evaluated = sum(1 for v in outputs.scores.values() if v is not None)
             logger.info(
@@ -355,9 +386,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 outputs.failures[trait.name] = failure
             self._track_usage(usage_tracker, model, evaluation.investigation_usage)
             self._track_usage(usage_tracker, model, evaluation.extraction_usage)
-            metadata = getattr(evaluator, "last_extraction_metadata", None)
-            if isinstance(metadata, dict):
-                outputs.extraction_metadata[trait.name] = metadata
+            outputs.record_extraction_metadata(trait, getattr(evaluator, "last_extraction_metadata", None))
+            outputs.record_incomplete(trait, evaluation.investigation_incomplete)
 
         return outputs
 
@@ -489,6 +519,7 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
             )
             shared_trace = result.raw_trace
             shared_messages = list(result.trace_messages or [])
+            shared_incomplete = investigation_incomplete_reason(result)
             self._track_usage(usage_tracker, first_model, result.usage)
         except Exception:
             logger.warning(
@@ -528,9 +559,8 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                 if failure is not None:
                     outputs.failures[trait.name] = failure
             self._track_usage(usage_tracker, first_model, evaluator.last_extraction_usage)
-            metadata = getattr(evaluator, "last_extraction_metadata", None)
-            if isinstance(metadata, dict):
-                outputs.extraction_metadata[trait.name] = metadata
+            outputs.record_extraction_metadata(trait, getattr(evaluator, "last_extraction_metadata", None))
+            outputs.record_incomplete(trait, shared_incomplete)
 
         return outputs
 

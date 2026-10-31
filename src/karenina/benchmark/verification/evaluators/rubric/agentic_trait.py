@@ -23,7 +23,7 @@ from karenina.adapters.registry import close_adapter
 from karenina.benchmark.verification.prompts import PromptAssembler, PromptTask
 from karenina.benchmark.verification.stages.helpers.agentic_parse_helpers import prepare_extraction_input
 from karenina.benchmark.verification.utils.parser_resilience import parse_to_pydantic_resilient
-from karenina.ports import AgentConfig, Message, PortCapabilities, UsageMetadata
+from karenina.ports import AgentConfig, AgentResult, Message, PortCapabilities, UsageMetadata
 from karenina.schemas.config.models import ModelConfig
 from karenina.schemas.entities.rubric import AgenticRubricTrait
 from karenina.schemas.outputs.rubric import (
@@ -49,11 +49,14 @@ class AgenticInvestigation:
             ``AgentResult.trace_messages``. The single-call LLM path holds one
             assistant message with the response text.
         usage: Usage reported by the agent run or the single LLM call, or None.
+        incomplete: Why the agent stopped before finishing (``"turn_limit"`` or
+            ``"timeout"``), or None. The trace is then partial.
     """
 
     trace: str
     messages: list[Message] = field(default_factory=list)
     usage: UsageMetadata | None = None
+    incomplete: str | None = None
 
 
 @dataclass
@@ -77,6 +80,10 @@ class AgenticTraitEvaluation:
             The trace and messages are kept. The stage decides from the
             error's category whether it is an infrastructure failure
             (retryable, for example a rate limit) or a plain missing score.
+        investigation_incomplete: ``"turn_limit"`` or ``"timeout"`` when the
+            investigation agent stopped early and returned a partial trace,
+            else None. The score was still extracted from that partial
+            trace. This is informational: the score is kept as it is.
     """
 
     score: int | bool | dict[str, Any] | None
@@ -86,6 +93,24 @@ class AgenticTraitEvaluation:
     extraction_usage: UsageMetadata | None = None
     investigation_error: Exception | None = None
     extraction_error: Exception | None = None
+    investigation_incomplete: str | None = None
+
+
+def investigation_incomplete_reason(result: AgentResult) -> str | None:
+    """Return why an agent run stopped early, or None if it finished.
+
+    Args:
+        result: The investigation's AgentResult.
+
+    Returns:
+        ``"timeout"`` for a wall-clock timeout, ``"turn_limit"`` for the turn
+        limit, else None. The adapter returns a partial result in both cases.
+    """
+    if result.timeout_reached:
+        return "timeout"
+    if result.limit_reached:
+        return "turn_limit"
+    return None
 
 
 def investigation_failure_record(error: BaseException) -> str:
@@ -182,6 +207,7 @@ class AgenticTraitEvaluator:
             trace=investigation.trace,
             messages=investigation.messages,
             investigation_usage=investigation.usage,
+            investigation_incomplete=investigation.incomplete,
         )
 
         # Step 2: Extraction
@@ -376,6 +402,7 @@ class AgenticTraitEvaluator:
                 trace=result.raw_trace,
                 messages=list(result.trace_messages or []),
                 usage=result.usage,
+                incomplete=investigation_incomplete_reason(result),
             )
         finally:
             close_adapter(agent)

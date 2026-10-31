@@ -416,6 +416,19 @@ class TestProgressiveFileSinkJudgeRetry:
         assert {triple[0] for triple in sink.completed_triples()} == {"q2", "q3"}
         assert sink.completed_count == 2
 
+    def test_incomplete_investigation_is_not_retried(self, tmp_path: Path):
+        from karenina.schemas.results.caveat import Caveat
+
+        sink = self._fresh(tmp_path)
+        row = _result("q1", raw_llm_response="answer")
+        row.metadata.caveats = [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+        sink.on_start(_manifest_from_results([row]), sink.config)
+        sink.on_result(row)
+
+        assert len(sink.completed_triples()) == 1
+        sink.on_finalize(all_complete=True)
+        assert not sink.state_path.exists()
+
     def test_scenario_judge_failure_stays_terminal(self, tmp_path: Path):
         sink = self._fresh(tmp_path)
         row = _judge_failed_result("q1", error_category="rate_limit")
@@ -561,6 +574,17 @@ class TestAgenticProgressiveFileSink:
 
         assert (sink.completed_triples() == set()) is retried
         assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
+
+    def test_incomplete_investigation_is_not_retried(self, tmp_path: Path):
+        from karenina.schemas.results.caveat import Caveat
+
+        sink = self._fresh(tmp_path)
+        row = _result("q1", raw_llm_response="answer")
+        row.metadata.caveats = [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+        sink.on_start([TaskIdentifier.from_result(row).to_key()], sink.config)
+        sink.on_result(row)
+
+        assert len(sink.completed_triples()) == 1
 
     def test_retryable_judge_error_is_retried_when_another_rule_set_the_category(self, tmp_path: Path):
         sink = self._fresh(tmp_path)

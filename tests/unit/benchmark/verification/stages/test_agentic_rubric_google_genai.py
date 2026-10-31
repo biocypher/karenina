@@ -200,3 +200,45 @@ def test_rate_limited_extraction_is_an_infrastructure_failure(fake_models: FakeM
     assert result.metadata.failure.stage == "AgenticRubricEvaluation"
     assert result.metadata.failure.group in (FailureGroup.RETRY_EXHAUSTED, FailureGroup.SYSTEM)
     assert Caveat.AGENTIC_EXTRACTION_FAILED in result.metadata.caveats
+
+
+@pytest.mark.unit
+def test_turn_limited_investigation_is_flagged_and_score_kept(fake_models: FakeModels, mcp: SimpleNamespace) -> None:
+    """A template-kind judge that hits its turn limit keeps the parser's score but is flagged incomplete."""
+    from pydantic import BaseModel, Field
+
+    from karenina.schemas.results.caveat import Caveat
+
+    class Verdict(BaseModel):
+        supported: bool = Field(description="Whether the cited paper supports the claim")
+
+    # Turn 1 only calls the MCP tool, then the turn limit (1) stops the agent.
+    fake_models.responses[1:] = [response([text_part('{"supported": true}')], usage_metadata=usage(40, 5, total=45))]
+
+    ctx = _context(judge_as="model_override")
+    judge = ctx.rubric.agentic_traits[0].model_override
+    ctx.rubric = Rubric(
+        agentic_traits=[
+            AgenticRubricTrait(
+                name="citations",
+                description="Check the citation.",
+                kind=Verdict,
+                higher_is_better=None,
+                context_mode="trace_only",
+                max_turns=1,
+                model_override=judge,
+            )
+        ]
+    )
+    AgenticRubricEvaluationStage().execute(ctx)
+    FinalizeResultStage().execute(ctx)
+    result = ctx.get_artifact("final_result")
+
+    assert fake_models.responses == []
+    assert result.rubric.agentic_trait_scores == {"citations.supported": True}
+    metadata = result.rubric.agentic_trait_extraction_metadata["citations"]
+    assert metadata["investigation_incomplete"] == "turn_limit"
+    assert metadata["method"] == "parser_after_local_json_failed"
+    assert result.metadata.failure is None
+    assert result.metadata.caveats == [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+    assert result.rubric.agentic_trait_evaluation_errors is None

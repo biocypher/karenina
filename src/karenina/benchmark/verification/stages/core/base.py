@@ -250,6 +250,7 @@ class ArtifactKeys:
     AGENTIC_TRAIT_INVESTIGATION_MESSAGES = "agentic_trait_investigation_messages"
     AGENTIC_INVESTIGATION_FAILED = "agentic_investigation_failed"
     AGENTIC_EXTRACTION_FAILED = "agentic_extraction_failed"
+    AGENTIC_INVESTIGATION_INCOMPLETE = "agentic_investigation_incomplete"
     AGENTIC_TRAIT_EVALUATION_ERRORS = "agentic_trait_evaluation_errors"
     AGENTIC_TRAIT_EXTRACTION_METADATA = "agentic_trait_extraction_metadata"
 

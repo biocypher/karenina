@@ -594,6 +594,28 @@ class TestMergeAgenticJudgeFailure:
         assert target.rubric.agentic_trait_evaluation_errors["citations"]["category"] == "rate_limit"
         assert target.rubric.agentic_trait_investigation_traces == {"citations": "Investigated."}
 
+    def test_incomplete_investigation_flag_is_carried_over(self) -> None:
+        from karenina.benchmark.verification.extension import _merge_rubric_onto_row
+        from karenina.schemas.results.caveat import Caveat
+
+        target = _make_result(question_id="q1", run_name="prior")
+        source = _make_result(
+            question_id="q1",
+            run_name="extend",
+            rubric=VerificationResultRubric(
+                agentic_trait_scores={"citations": True},
+                agentic_trait_extraction_metadata={"citations": {"investigation_incomplete": "timeout"}},
+            ),
+        )
+        source.metadata.caveats = [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+
+        _merge_rubric_onto_row(target, source)
+
+        assert target.metadata.failure is None
+        assert target.metadata.caveats == [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+        assert target.rubric.agentic_trait_scores == {"citations": True}
+        assert target.rubric.agentic_trait_extraction_metadata == {"citations": {"investigation_incomplete": "timeout"}}
+
     def test_prior_failure_is_kept_and_caveat_still_added(self) -> None:
         from karenina.benchmark.verification.extension import _merge_rubric_onto_row
         from karenina.schemas.results.caveat import Caveat

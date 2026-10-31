@@ -1160,3 +1160,109 @@ class TestFailedExtraction:
         assert errors["a"]["category"] == "connection"
         assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)["a"] == "Shared investigation."
         assert ctx.error_stage == "AgenticRubricEvaluation"
+
+
+# ------------------------------------------------------------------
+# Incomplete investigations
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestIncompleteInvestigation:
+    """A score from a partial investigation is kept and flagged, never treated as a failure."""
+
+    def test_individual_strategy_flags_trait_and_keeps_score(self, monkeypatch):
+        from karenina.benchmark.verification.failure_classifier import collect_caveats
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        def evaluate_trait(trait, question_text, raw_llm_response, workspace_path):  # noqa: ARG001
+            reason = "timeout" if trait.name == "slow" else None
+            return AgenticTraitEvaluation(score=True, trace="partial", messages=[], investigation_incomplete=reason)
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.side_effect = evaluate_trait
+        fake_evaluator.last_extraction_metadata = None
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_context(agentic_traits=[_make_trait(name="slow"), _make_trait(name="fast")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"slow": True, "fast": True}
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA) == {
+            "slow": {"investigation_incomplete": "timeout"}
+        }
+        assert ctx.error is None
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_TRAIT_EVALUATION_ERRORS) == {}
+        assert collect_caveats(ctx) == [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+
+    def test_template_extraction_metadata_is_kept_alongside_the_flag(self, monkeypatch):
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        evaluator_metadata = {
+            "method": "parser_after_local_json_failed",
+            "local_json_error": "no JSON",
+            "parser_error": None,
+        }
+        fake_evaluator = MagicMock()
+        fake_evaluator.evaluate_trait.return_value = AgenticTraitEvaluation(
+            score={"count": 1, "items": ["a"]}, trace="partial", messages=[], investigation_incomplete="turn_limit"
+        )
+        fake_evaluator.last_extraction_metadata = evaluator_metadata
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        trait = AgenticRubricTrait(
+            name="tool_usage", description="Evaluate.", kind=_StageTestFindings, higher_is_better=None
+        )
+        ctx = _make_context(agentic_traits=[trait])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"tool_usage.count": 1, "tool_usage.items": ["a"]}
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA) == {
+            "tool_usage": {**evaluator_metadata, "investigation_incomplete": "turn_limit"}
+        }
+        # The evaluator's own dict is not modified.
+        assert "investigation_incomplete" not in evaluator_metadata
+
+    def test_shared_strategy_flags_every_trait_of_a_partial_shared_run(self, monkeypatch):
+        import karenina.adapters as adapters_pkg
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+
+        shared = _make_shared_agent_result()
+        shared.limit_reached = True
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = shared
+        monkeypatch.setattr(adapters_pkg, "get_agent", lambda _model: fake_agent)
+
+        fake_evaluator = MagicMock()
+        fake_evaluator.run_extraction.return_value = False
+        fake_evaluator.last_extraction_metadata = None
+        monkeypatch.setattr(
+            mod,
+            "AgenticTraitEvaluator",
+            lambda model_config, **kwargs: fake_evaluator,  # noqa: ARG005
+        )
+
+        ctx = _make_shared_context([_make_trait(name="a"), _make_trait(name="b")])
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_SCORES) == {"a": False, "b": False}
+        assert ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_EXTRACTION_METADATA) == {
+            "a": {"investigation_incomplete": "turn_limit"},
+            "b": {"investigation_incomplete": "turn_limit"},
+        }
+        assert ctx.get_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE) is True
+        assert ctx.error is None

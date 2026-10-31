@@ -288,7 +288,9 @@ class VerificationResultRubric(BaseModel):
     )
     agentic_trait_extraction_metadata: dict[str, dict[str, str | None]] | None = Field(
         default=None,
-        description="Extraction provenance for agentic rubric traits. Keyed by base trait name.",
+        description="Extraction provenance for agentic rubric traits. Keyed by base trait name. "
+        "An 'investigation_incomplete' entry ('turn_limit' or 'timeout') means the score was "
+        "extracted from a partial investigation trace.",
     )
 
     # Dynamic rubric metadata (populated when a DynamicRubric presence check runs)

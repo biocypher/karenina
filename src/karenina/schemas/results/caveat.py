@@ -20,6 +20,10 @@ class Caveat(str, Enum):
     # but no judgment. Non-retryable extraction failures (for example schema
     # validation) do not raise it and leave only a missing score.
     AGENTIC_EXTRACTION_FAILED = "agentic_extraction_failed"
+    # An agentic rubric judge's investigation hit its turn limit or wall-clock
+    # timeout and returned a partial trace. The score was still extracted from
+    # that trace and is kept. Informational only: such rows are not retried.
+    AGENTIC_INVESTIGATION_INCOMPLETE = "agentic_investigation_incomplete"
 
 
 __all__ = ["Caveat"]

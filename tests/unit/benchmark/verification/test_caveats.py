@@ -52,6 +52,11 @@ class TestCollectCaveats:
         ctx.set_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_FAILED, True)
         assert collect_caveats(ctx) == [Caveat.AGENTIC_INVESTIGATION_FAILED]
 
+    def test_agentic_investigation_incomplete(self):
+        ctx = make_context()
+        ctx.set_result_field(ArtifactKeys.AGENTIC_INVESTIGATION_INCOMPLETE, True)
+        assert collect_caveats(ctx) == [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+
     def test_agentic_extraction_failed(self):
         ctx = make_context()
         ctx.set_result_field(ArtifactKeys.AGENTIC_EXTRACTION_FAILED, True)

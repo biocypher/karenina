@@ -878,3 +878,62 @@ class TestInvestigationMessages:
         assert len(evaluation.messages) == 1
         assert evaluation.messages[0].role == Role.ASSISTANT
         assert evaluation.messages[0].text == "The answer is well supported."
+
+
+@pytest.mark.unit
+class TestIncompleteInvestigation:
+    """A partial agent result (turn limit or timeout) is reported, the score is still extracted."""
+
+    @pytest.mark.parametrize(
+        ("limit_reached", "timeout_reached", "expected"),
+        [(True, False, "turn_limit"), (False, True, "timeout"), (True, True, "timeout"), (False, False, None)],
+    )
+    def test_agent_path_reports_why_it_stopped(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        limit_reached: bool,
+        timeout_reached: bool,
+        expected: str | None,
+    ) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+
+        agent_result = _make_agent_result(raw_trace="Partial investigation.", limit_reached=limit_reached)
+        agent_result.timeout_reached = timeout_reached
+        fake_agent = MagicMock()
+        fake_agent.run.return_value = agent_result
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+        monkeypatch.setattr(agentic_trait, "get_agent", lambda _model: fake_agent)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_mcp_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(),
+            question_text="Q",
+            raw_llm_response="Answer.",
+            workspace_path=None,
+        )
+
+        assert evaluation.score is True
+        assert evaluation.trace == "Partial investigation."
+        assert evaluation.investigation_incomplete == expected
+
+    def test_llm_path_is_never_incomplete(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from karenina.benchmark.verification.evaluators.rubric import agentic_trait
+        from karenina.ports.llm import LLMResponse
+
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = LLMResponse(
+            content="Fine.", usage=UsageMetadata(input_tokens=1, output_tokens=1)
+        )
+        fake_parser = MagicMock()
+        fake_parser.parse_to_pydantic.return_value = _make_parse_result(SingleBooleanScore(result=True))
+        monkeypatch.setattr(agentic_trait, "get_llm", lambda _model: fake_llm)
+        monkeypatch.setattr(agentic_trait, "get_parser", lambda _model: fake_parser)
+
+        evaluator = agentic_trait.AgenticTraitEvaluator(model_config=_make_model_config())
+        evaluation = evaluator.evaluate_trait(
+            trait=_make_trait(), question_text="Q", raw_llm_response="Answer.", workspace_path=None
+        )
+
+        assert evaluation.investigation_incomplete is None
