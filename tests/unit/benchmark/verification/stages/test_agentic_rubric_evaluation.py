@@ -644,6 +644,91 @@ class TestSharedStrategy:
         traces = ctx.get_artifact(ArtifactKeys.AGENTIC_TRAIT_INVESTIGATION_TRACES)
         assert traces == {"a": "Shared investigation.", "b": "Shared investigation."}
 
+    @pytest.mark.parametrize(
+        ("capabilities", "mcp", "expected", "absent"),
+        [
+            (
+                {"supports_file_tools": False},
+                True,
+                "Use the response text supplied in the prompt and the tools available to you.",
+                "examine files",
+            ),
+            (
+                {"supports_file_tools": False},
+                False,
+                "Use only the response text supplied in the prompt.",
+                "examine files",
+            ),
+            (
+                {"supports_file_tools": True},
+                False,
+                "can examine files and navigate the workspace, but command execution is not available",
+                "Use only the response text",
+            ),
+        ],
+    )
+    def test_shared_prompt_matches_the_judge_capabilities(self, monkeypatch, capabilities, mcp, expected, absent):
+        """A tool-loop judge without file tools is not told it can read files."""
+        import karenina.adapters as adapters_pkg
+        from karenina.benchmark.verification.stages.pipeline import (
+            agentic_rubric_evaluation as mod,
+        )
+        from karenina.ports.capabilities import PortCapabilities
+
+        fake_agent = MagicMock()
+        fake_agent.capabilities = PortCapabilities(**capabilities)
+        fake_agent.run.return_value = _make_shared_agent_result()
+        monkeypatch.setattr(adapters_pkg, "get_agent", lambda _model: fake_agent)
+        fake_evaluator = MagicMock()
+        fake_evaluator.run_extraction.return_value = True
+        fake_evaluator.last_extraction_metadata = None
+        monkeypatch.setattr(mod, "AgenticTraitEvaluator", lambda model_config, **kwargs: fake_evaluator)  # noqa: ARG005
+
+        mcp_urls = {"citations": "http://localhost:8765/mcp"} if mcp else None
+        ctx = _make_shared_context([_make_trait(name="a"), _make_trait(name="b")], mcp_urls_dict=mcp_urls)
+        mod.AgenticRubricEvaluationStage().execute(ctx)
+
+        prompt = " ".join(str(m.content) for m in fake_agent.run.call_args.kwargs["messages"])
+        assert expected in prompt
+        assert absent not in prompt
+
+
+@pytest.mark.unit
+class TestJudgeFailureClassification:
+    """Judge errors are classified through the pipeline registry the way the adapter classifies them."""
+
+    def test_wrapped_incomplete_gemini_response_is_a_retryable_extraction_failure(self):
+        from karenina.adapters.google_genai.errors import GeminiIncompleteResponseError
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import _judge_failure
+        from karenina.ports import ParseError
+        from karenina.utils.errors import ErrorCategory, ErrorRegistry
+
+        try:
+            try:
+                raise GeminiIncompleteResponseError("Gemini stopped with no text and no function call")
+            except GeminiIncompleteResponseError as inner:
+                raise ParseError("Structured output failed") from inner
+        except ParseError as wrapped:
+            failure = _judge_failure("extraction", wrapped, ErrorRegistry())
+        assert failure is not None
+        assert failure.category is ErrorCategory.SERVER_ERROR
+
+    def test_permanent_gemini_400_mentioning_500_stays_permanent(self):
+        from karenina.adapters.google_genai.errors import GeminiClientError
+        from karenina.benchmark.verification.stages.pipeline.agentic_rubric_evaluation import _judge_failure
+        from karenina.ports import AgentExecutionError
+        from karenina.utils.errors import ErrorCategory, ErrorRegistry
+
+        inner = GeminiClientError(
+            "Gemini API error 400 INVALID_ARGUMENT: input token count (1500001) exceeds the limit"
+        )
+        try:
+            raise AgentExecutionError(f"Agent execution failed: {type(inner).__name__}: {inner}") from inner
+        except AgentExecutionError as wrapped:
+            failure = _judge_failure("investigation", wrapped, ErrorRegistry())
+        assert failure is not None
+        assert failure.category is ErrorCategory.PERMANENT
+
 
 # ------------------------------------------------------------------
 # Usage tracking

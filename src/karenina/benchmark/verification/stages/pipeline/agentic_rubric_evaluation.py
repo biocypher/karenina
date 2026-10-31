@@ -464,11 +464,17 @@ class AgenticRubricEvaluationStage(BaseVerificationStage):
                     if capabilities.uses_sandboxed_execution
                     else "You have access to tools and can examine files, run code, and navigate the workspace."
                 )
-            else:
+            elif capabilities.supports_file_tools:
                 access_text = (
                     "You have access to tools and can examine files and navigate the workspace, "
                     "but command execution is not available."
                 )
+            elif first_model.mcp_urls_dict:
+                # A tool-loop judge (for example google_genai) has no file tools:
+                # same wording as the individual strategy.
+                access_text = "Use the response text supplied in the prompt and the tools available to you."
+            else:
+                access_text = "Use only the response text supplied in the prompt."
             system_text = (
                 "You are an evaluation agent investigating the quality of an LLM "
                 f"response. {access_text}\n\n"
