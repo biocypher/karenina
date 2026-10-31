@@ -92,6 +92,7 @@ Karenina ships with eight interfaces, configured via the `interface` field on `M
 | `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | `tool_loop` | `langchain` |
 | `google_genai` | Google GenAI SDK (Gemini on Vertex AI or the Gemini API) | Yes | Yes | Yes | `tool_loop` | None |
 | `omp` | Oh My Pi coding agent over ACP v1 (multi-provider) | Yes | Built in | Agent-only | `deep_agent` | `langchain` when unavailable |
+| `codex_sdk` | OpenAI Codex SDK and bundled runtime | No | Built in | Agent-only | `deep_agent` | `langchain` |
 | `manual` | Pre-recorded traces | No | No | N/A | `tool_loop` | None |
 
 The **"Parser: Native Structured Output"** column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via `with_structured_output()`.
@@ -110,6 +111,7 @@ The eight interfaces fall into three categories.
 - **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
 - **`google_genai`**: Uses the `google-genai` package directly for Gemini, on Vertex AI (Google application default credentials, the default) or the Gemini API. Runs its own tool loop for function and MCP tools, can enable Gemini's server-side Google Search and URL reading with a per-run search budget, and records searches as tool calls in the trace. See [Available Adapters](../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk).
 - **`omp`**: Launches Oh My Pi as an ACP v1 agent and implements AgentPort only. It preserves streamed reasoning, built-in/MCP tool traces, usage, cancellation, and workspace selection across the protocol bridge. Install the `omp` extra plus the separate OMP CLI. Use another interface for parsing and judging.
+- **`codex_sdk`**: Wraps the Codex Python SDK and bundled app-server for sandboxed coding-agent execution. Implements AgentPort; LLM and parser requests fall back to LangChain. Install `karenina[codex]`. See [Available Adapters](../advanced-adapters/available-adapters.md#codex_sdk-openai-codex-coding-agent).
 - **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](manual-interface.md).
 
 **Routing interfaces** share the `langchain` adapter implementation with interface-specific configuration:
@@ -172,6 +174,7 @@ The eight interfaces fall into three categories.
 | 200+ models through one API key | `openrouter` |
 | Local LLM server (Ollama, vLLM, LM Studio) | `openai_endpoint` |
 | Natively agentic evaluation with planning and subagents | `langchain_deep_agents` |
+| Codex subscription authentication with native coding tools | `codex_sdk` for answering; another interface for parsing/judging |
 | Multi-provider coding agent through OMP accounts/subscriptions | `omp` for answering; another interface for parsing/judging |
 | Claude-only with full native features | `claude_agent_sdk` |
 | Claude-only, lightweight, no CLI dependency | `claude_tool` |
@@ -189,6 +192,7 @@ The eight interfaces fall into three categories.
 | `claude_agent_sdk` | Native structured output; thinking support; direct SDK access | Requires Claude CLI binary installed in PATH |
 | `claude_tool` | Native structured output without CLI dependency | Requires `anthropic` package; Claude models only |
 | `google_genai` | Native structured output, search queries and sources in the trace, search budget, thinking-token usage | Gemini models only. No automatic fallback. No file or shell tools |
+| `codex_sdk` | Native Codex coding tools, sandboxing, and usage/trace bridge | AgentPort only; no enforced turn cap or Karenina MCP/callable tool injection |
 | `omp` | Multi-provider coding-agent loop, ACP trace/usage bridge, and OMP subscriptions | AgentPort only; native host process is not an OS sandbox; ACP v1 cannot inject Karenina `Tool` callables |
 | `manual` | No live API calls; fully deterministic | Only agent port works; no generation or parsing |
 
@@ -210,6 +214,7 @@ When an adapter's required dependency is missing, the factory transparently fall
 | `claude_tool` | `anthropic` Python package importable | `langchain` |
 | `langchain_deep_agents` | `deepagents` Python package importable | None (raises `AdapterUnavailableError`) |
 | `google_genai` | `google-genai` Python package importable | None (raises `AdapterUnavailableError`) |
+| `codex_sdk` | `openai-codex` plus bundled or PATH CLI | `langchain` |
 | `omp` | `omp` CLI in PATH and `agent-client-protocol` Python package importable | `langchain` (for supported ports) |
 | `langchain` | `langchain_core` Python package importable | None (raises `AdapterUnavailableError`) |
 | `manual` | Always available | None (no dependency) |

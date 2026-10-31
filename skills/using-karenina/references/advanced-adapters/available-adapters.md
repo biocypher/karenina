@@ -1,6 +1,6 @@
 # Available Adapters
 
-Karenina ships with eight adapter packages (`langchain`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `google_genai`, `omp`, `manual`, `taskeval`) and two routing interfaces (`openrouter`, `openai_endpoint`) that delegate to LangChain, totaling **ten registered `interface` values**. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
+Karenina ships with nine adapter packages (`langchain`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `google_genai`, `omp`, `codex_sdk`, `manual`, `taskeval`) and two routing interfaces (`openrouter`, `openai_endpoint`) that delegate to LangChain, totaling **eleven registered `interface` values**. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
 
 For the conceptual introduction to adapters, see [Adapters Overview](../core_concepts/adapters.md). For port protocol signatures, see [Port Types](ports.md).
 
@@ -8,17 +8,17 @@ For the conceptual introduction to adapters, see [Adapters Overview](../core_con
 
 ## Feature Comparison
 
-| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `google_genai` | `omp` | `manual` | `taskeval` |
-|---------|:-----------:|:-----------------------:|:------------------:|:-------------:|:--------------:|:-----:|:--------:|:----------:|
-| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | No (Gemini only) | Yes (OMP catalog) | N/A | N/A |
-| **MCP server support** | Yes | Yes | Yes | Yes | Yes | Yes (ACP) | No | No |
-| **Tool use** | Yes | Yes | Yes | Yes | Yes | Yes (built in) | No | No |
-| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` | `deep_agent` | `tool_loop` | N/A (no-op) |
-| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | Yes (native JSON schema) | N/A (agent-only) | No | No (no-op) |
-| **Parser: system prompt** | Yes | Yes | Yes | Yes | Yes | N/A | No | N/A |
-| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | Not configured (cache reads reported in usage) | Provider/OMP cache | No | No |
-| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None | `langchain` when unavailable | None | None |
-| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | `google.genai` importable | `omp` CLI + `acp` package | Always available | Always available |
+| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `google_genai` | `omp` | `codex_sdk` | `manual` | `taskeval` |
+| --------- | :-----------: | :-----------------------: | :------------------: | :-------------: | :--------------: | :-----: | :-----------: | :--------: | :----------: |
+| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | No (Gemini only) | Yes (OMP catalog) | OpenAI or Responses endpoint | N/A | N/A |
+| **MCP server support** | Yes | Yes | Yes | Yes | Yes | Yes (ACP) | No (warns/skips) | No | No |
+| **Tool use** | Yes | Yes | Yes | Yes | Yes | Yes (built in) | Yes (built in) | No | No |
+| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | N/A (no-op) |
+| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | Yes (native JSON schema) | N/A (agent-only) | N/A (LangChain fallback) | No | No (no-op) |
+| **Parser: system prompt** | Yes | Yes | Yes | Yes | Yes | N/A | N/A | No | N/A |
+| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | Not configured (cache reads reported in usage) | Provider/OMP cache | SDK usage reports cache reads | No | No |
+| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None | `langchain` when unavailable | `langchain` | None | None |
+| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | `google.genai` importable | `omp` CLI + `acp` package | SDK + bundled/PATH CLI | Always available | Always available |
 
 ---
 
@@ -459,7 +459,7 @@ Setting `endpoint_api_key` with the `vertex` backend raises `ValueError`. Missin
 | `max_tokens` | Sent as `max_output_tokens`. Thinking and answer tokens share this budget |
 | `system_prompt` | System instruction used when the messages carry none |
 | `request_timeout` | Wall-clock limit for each model call. Defaults to 300 seconds when unset, so one stuck call cannot hold a whole run |
-| `retry_policy` | Retries through `RetryExecutor`. The SDK's own HTTP retries are switched off, so the [retry policy](../advanced-pipeline/error-handling.md) is the only retry layer and only the failed call is repeated. One exception cannot be switched off: on its aiohttp transport the SDK resends a request once, after a 1 to 10 second sleep, when the connection fails or drops, inside the same attempt and its time limit. A retried call that Gemini answered without a usable result (for example an empty `STOP`) still counts toward usage and the search budget |
+| `retry_policy` | Retries through `RetryExecutor`. The SDK's own HTTP retries are switched off, so the [retry policy](../notebooks/advanced/pipeline/error-handling.ipynb) is the only retry layer and only the failed call is repeated. One exception cannot be switched off: on its aiohttp transport the SDK resends a request once, after a 1 to 10 second sleep, when the connection fails or drops, inside the same attempt and its time limit. A retried call that Gemini answered without a usable result (for example an empty `STOP`) still counts toward usage and the search budget |
 | `mcp_urls_dict`, `mcp_tool_filter`, `mcp_tool_description_overrides`, `mcp_http_timeout`, `mcp_sse_read_timeout` | MCP servers and tool filtering, with the same meaning as for `claude_tool` |
 | `extra_kwargs` | The keys in the next table. Any other key raises `ValueError` |
 
@@ -565,7 +565,7 @@ None. The default parsing, rubric, abstention and sufficiency instructions apply
 
 - Gemini models where you need the search queries and sources in the trace, thinking-token counts, or a cap on searches
 - Gemini on Vertex AI with Google application default credentials, or through a Gemini API gateway
-- A Gemini judge for [agentic rubric traits](../core_concepts/rubrics/agentic-traits.md) that checks claims with MCP tools and Google Search (`context_mode="trace_only"`, see [Agentic Rubric Evaluation](../advanced-pipeline/agentic-rubric-evaluation.md))
+- A Gemini judge for [agentic rubric traits](../notebooks/core_concepts/rubrics/agentic-traits.ipynb) that checks claims with MCP tools and Google Search (`context_mode="trace_only"`, see [Agentic Rubric Evaluation](../advanced-pipeline/agentic-rubric-evaluation.md))
 
 ---
 
@@ -606,6 +606,45 @@ HTTP and SSE MCP servers require the matching capability in OMP's ACP initializa
 ACP v1 provides no enforceable turn ceiling, so `AgentConfig.max_turns` is best effort. Use `AgentConfig.timeout` when the run needs a wall-clock limit.
 
 Some OMP provider failures arrive over ACP as assistant text with `end_turn`, rather than a protocol error; OMP omits turn usage when no tokens were consumed. A successful completed turn therefore requires a non-zero ACP usage summary. Missing or all-zero usage raises `AgentResponseError`, including for providers or OMP versions that do not expose turn usage, so authentication or routing errors do not become successful benchmark answers. Partial timeout/limit results may lack usage. ACP `refusal` responses also raise `AgentResponseError`.
+
+---
+
+## `codex_sdk`: OpenAI Codex Coding Agent
+
+An AgentPort-only adapter around the Codex Python SDK and its matching bundled `codex app-server`. Install with `pip install 'karenina[codex]'`. The validated SDK/runtime pair is `0.163.0`.
+
+```python
+from pathlib import Path
+from karenina.adapters import get_agent
+from karenina.ports import AgentConfig, Message
+from karenina.schemas import ModelConfig
+
+agent = get_agent(ModelConfig(
+    id="codex-answerer",
+    model_name="gpt-5.6-sol",
+    interface="codex_sdk",
+))
+result = agent.run(
+    [Message.user("Read input.txt and write a summary to summary.txt.")],
+    config=AgentConfig(workspace_path=Path("./workspace").resolve(), timeout=120),
+)
+```
+
+The native path uses existing Codex authentication. `model_provider` is not required. A custom `endpoint_base_url` selects a Responses API provider; `endpoint_api_key`, when supplied, travels through the subprocess environment rather than command-line arguments. Custom endpoints pass through a per-run loopback shim that folds developer/system messages into instructions and removes echoed reasoning items for strict implementations such as vLLM.
+
+Each call creates a fresh thread and subprocess. Native shell/file operations become paired Karenina tool messages. Streamed answer deltas retain their order, explicit final-answer messages take precedence over commentary, and SDK cumulative usage supplies token/cache counts. Cost is unknown. The protocol lifecycle follows the [official App Server documentation](https://learn.chatgpt.com/docs/app-server).
+
+`agent_runtime.access_mode="read_only"` selects the read-only sandbox; the default is `workspace_write`. Approval escalation is denied. The adapter does not select unrestricted execution. `AgentConfig.timeout` bounds initialization, thread/turn setup, and streaming, followed by bounded interrupt/cleanup grace. Timeouts preserve collected messages and usage; a timeout before any items raises `AgentTimeoutError`. Missing completion and unsolicited interruption raise errors.
+
+**Limits:**
+
+- `max_turns` is not enforced by Codex; the adapter warns when it is configured. Use a timeout to bound the run.
+- Karenina `Tool` callables and supplied MCP servers are unsupported and warn/skip. Codex's own configured tools remain runtime-managed.
+- LLMPort and ParserPort fall back to LangChain. Configure separate judge/parser models when the answering model uses Codex subscription authentication.
+- Internal model calls are owned by the subprocess and do not use Karenina's global LLM limiter.
+- The SDK uses blocking worker threads internally. Its normal process shutdown wakes pending reads; an OS-level process-start or shutdown call that never returns cannot be forcibly canceled by Python's coroutine timeout.
+
+The preserved diagnostics in `scripts/codex/` cover raw SDK behavior, the adapter gate, and parallel pipeline execution against a configurable local Responses endpoint. The raw SDK script is an investigative tool and uses private SDK collection helpers; the adapter and live pytest suite are the acceptance contract.
 
 ---
 
@@ -713,6 +752,7 @@ This adapter is wired by TaskEval; users do not normally instantiate it directly
 | Claude-only with full features | `claude_agent_sdk` | Native structured output, session management |
 | Claude-only, lightweight | `claude_tool` | Native structured output, prompt caching, simpler setup |
 | Gemini with Google Search grounding or Vertex AI | `google_genai` | Search queries and sources in the trace, search budget, thinking-token usage |
+| Native Codex coding tools with subscription authentication | `codex_sdk` | Sandboxed agent execution and full tool traces |
 | Multi-provider coding-agent subscriptions | `omp` | Standard ACP bridge to OMP providers and built-in tools |
 | Offline / CI / reproducibility | `manual` | No API calls, pre-recorded traces |
 | Need native structured output | `claude_agent_sdk`, `claude_tool`, `google_genai`, or `langchain_deep_agents` | All have `supports_structured_output = True` |
@@ -731,6 +771,7 @@ This adapter is wired by TaskEval; users do not normally instantiate it directly
 | `claude_tool` | No | `ANTHROPIC_API_KEY` (or `anthropic_api_key` on ModelConfig) |
 | `google_genai` | No | `vertex` backend: Google application default credentials (no key). `gemini_api` backend: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (or `endpoint_api_key` on ModelConfig) |
 | `omp` | Yes | Provider-specific OMP auth or environment variable |
+| `codex_sdk` | No | Existing Codex login, or custom endpoint key in subprocess environment |
 | `manual` | No | None |
 | `taskeval` | No | None |
 

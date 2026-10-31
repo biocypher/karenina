@@ -306,6 +306,10 @@ Each `ToolResultRecord` holds `tool_name`, `content`, and `is_error`. After each
 
 See [Available Adapters](available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) for configuration.
 
+### Codex SDK Adapter
+
+Karenina-supplied MCP servers are not wired into the Codex SDK adapter. It reports `supports_mcp=False` and warns/skips requested servers. Its built-in coding tools, and any tools configured by the Codex runtime itself, remain runtime-managed.
+
 ### Manual Adapter
 
 MCP is **not supported** with the manual interface. Setting `mcp_urls_dict` on a `ModelConfig` with `interface="manual"` raises a `ValueError`. The manual adapter replays pre-recorded traces, so live tool access is not applicable.

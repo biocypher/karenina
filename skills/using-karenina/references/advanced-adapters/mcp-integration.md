@@ -218,9 +218,9 @@ Tool filtering and description overrides apply at steps 3-4 of the execution flo
 
 `validate_mcp_config()` checks that HTTP configs have `type="http"` and `url`, stdio configs have `command`. `convert_and_validate_mcp_config()` combines both, raising `McpConfigValidationError` on failure.
 
-> **Note:**
-> HTTP URLs map to `type="http"` (streamable HTTP), not `"sse"`. The Claude Agent SDK handles the transport protocol internally.
->
+!!! note
+    HTTP URLs map to `type="http"` (streamable HTTP), not `"sse"`. The Claude Agent SDK handles the transport protocol internally.
+
 **Agent execution**:
 
 1. `_convert_mcp_servers()` handles both karenina format and pre-converted SDK format (detects by checking for `"type"` or `"command"` keys).
@@ -305,6 +305,10 @@ Each `ToolResultRecord` holds `tool_name`, `content`, and `is_error`. After each
 - Tool results longer than `max_tool_result_chars` (default 50,000) are cut before they reach the model
 
 See [Available Adapters](available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) for configuration.
+
+### Codex SDK Adapter
+
+Karenina-supplied MCP servers are not wired into the Codex SDK adapter. It reports `supports_mcp=False` and warns/skips requested servers. Its built-in coding tools, and any tools configured by the Codex runtime itself, remain runtime-managed.
 
 ### Manual Adapter
 

@@ -1,14 +1,14 @@
 # Synced Documentation Manifest
 
-Last synced: 2026-10-31T21:26:26Z (ISO 8601 UTC / RFC 3339)
+Last synced: 2026-10-31T21:46:00Z (ISO 8601 UTC / RFC 3339)
 Source: docs/
 Files synced: 113
 
 | Source Path | Reference Path | Lines |
 |-------------|---------------|-------|
-| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 745 |
-| docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 232 |
-| docs/advanced-adapters/mcp-integration.md | skills/using-karenina/references/advanced-adapters/mcp-integration.md | 446 |
+| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 786 |
+| docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 233 |
+| docs/advanced-adapters/mcp-integration.md | skills/using-karenina/references/advanced-adapters/mcp-integration.md | 450 |
 | docs/advanced-adapters/ports.md | skills/using-karenina/references/advanced-adapters/ports.md | 555 |
 | docs/advanced-adapters/writing-adapters.md | skills/using-karenina/references/advanced-adapters/writing-adapters.md | 788 |
 | docs/advanced-pipeline/agentic-evaluation.md | skills/using-karenina/references/advanced-pipeline/agentic-evaluation.md | 392 |
@@ -23,7 +23,7 @@ Files synced: 113
 | docs/advanced-pipeline/run-artifacts-and-repair.md | skills/using-karenina/references/advanced-pipeline/run-artifacts-and-repair.md | 118 |
 | docs/advanced-pipeline/stages.md | skills/using-karenina/references/advanced-pipeline/stages.md | 802 |
 | docs/advanced.md | skills/using-karenina/references/advanced.md | 25 |
-| docs/core_concepts/adapters.md | skills/using-karenina/references/core_concepts/adapters.md | 373 |
+| docs/core_concepts/adapters.md | skills/using-karenina/references/core_concepts/adapters.md | 378 |
 | docs/core_concepts/adele.md | skills/using-karenina/references/core_concepts/adele.md | 443 |
 | docs/core_concepts/agentic-evaluation.md | skills/using-karenina/references/core_concepts/agentic-evaluation.md | 442 |
 | docs/core_concepts/answer-templates.md | skills/using-karenina/references/core_concepts/answer-templates.md | 1251 |
@@ -77,7 +77,7 @@ Files synced: 113
 | docs/reference/cli/verify.md | skills/using-karenina/references/reference/cli/verify.md | 365 |
 | docs/reference/configuration/env-vars.md | skills/using-karenina/references/reference/configuration/env-vars.md | 157 |
 | docs/reference/configuration/index.md | skills/using-karenina/references/reference/configuration/index.md | 68 |
-| docs/reference/configuration/model-config.md | skills/using-karenina/references/reference/configuration/model-config.md | 292 |
+| docs/reference/configuration/model-config.md | skills/using-karenina/references/reference/configuration/model-config.md | 300 |
 | docs/reference/configuration/preset-schema.md | skills/using-karenina/references/reference/configuration/preset-schema.md | 412 |
 | docs/reference/configuration/prompt-config.md | skills/using-karenina/references/reference/configuration/prompt-config.md | 195 |
 | docs/reference/configuration/verification-config.md | skills/using-karenina/references/reference/configuration/verification-config.md | 335 |

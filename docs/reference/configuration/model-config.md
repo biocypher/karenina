@@ -13,7 +13,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 | `id` | `str \| None` | `None` | Unique identifier for this model configuration. **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. Used in results to identify which model produced each result. |
 | `model_name` | `str \| None` | `None` | Model name passed to the underlying provider (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-20250514"`, `"gemini-2.0-flash"`). **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. |
 | `model_provider` | `str \| None` | `None` | Provider identifier. Required when the selected adapter's `AdapterSpec.requires_provider` is true (including `langchain`, `langchain_deep_agents`, and `omp`). For OMP it forms the `provider/model` selector. |
-| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values include `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"google_genai"`, `"omp"`, and `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
+| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values include `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"google_genai"`, `"omp"`, `"codex_sdk"`, and `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
 
 **Validation rules:**
 
@@ -71,6 +71,14 @@ silently falling back to environment credentials.
 | `extra_kwargs` | Only the adapter's keys are accepted: `backend`, `project`, `location`, `builtin_tools`, `max_search_queries`, `thinking_level`, `thinking_budget`, `include_thoughts`, `stream`, `resolve_grounding_urls`, `generate_content_config`. Any other key raises `ValueError` when the adapter is built |
 
 `builtin_tools` turns on Gemini's server-side `google_search` and `url_context` (off by default), and `max_search_queries` caps Google Search per agent run. See [Available Adapters](../../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) for each key's default and behavior.
+
+---
+
+## Interface-Specific: Codex SDK
+
+`interface="codex_sdk"` selects the Codex coding agent and does not require `model_provider`. Without an endpoint, it uses existing Codex authentication. `endpoint_base_url` selects a custom Responses API provider, with `endpoint_api_key` passed only through the child-process environment. `extra_kwargs.agent_runtime.access_mode` selects `read_only` or the default `workspace_write`; approval escalation is denied.
+
+This adapter implements AgentPort only. LLM/parser requests use the LangChain fallback, which requires its own provider credentials. Karenina-supplied MCP servers and callable tools are unsupported. `AgentConfig.timeout` applies across startup and execution; `max_turns` is unsupported and emits a warning. See [Available Adapters](../../advanced-adapters/available-adapters.md#codex_sdk-openai-codex-coding-agent).
 
 ---
 

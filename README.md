@@ -357,7 +357,7 @@ Karenina ships **agent skills**: instruction packs that teach a coding agent how
 - **[Agentic evaluation](docs/core_concepts/agentic-evaluation.md)**: evaluate coding and data analysis tasks where models and judges operate in workspaces with tool access
 - **[5 rubric trait types](docs/core_concepts/rubrics/index.md)**: LLM (boolean, score, literal), regex, callable, metric, agentic
 - **[2 evaluation modes](docs/core_concepts/evaluation-modes.md)**: Benchmark (closed-loop) and TaskEval (open-loop, pre-recorded outputs)
-- **[9 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `langchain_deep_agents`, `claude_agent_sdk`, `claude_tool`, `google_genai`, `omp`, `openrouter`, `openai_endpoint`, `manual`
+- **[10 LLM interfaces](docs/core_concepts/adapters.md)**: `langchain`, `langchain_deep_agents`, `claude_agent_sdk`, `claude_tool`, `google_genai`, `omp`, `codex_sdk`, `openrouter`, `openai_endpoint`, `manual`
 - **[13-stage configurable verification pipeline](docs/core_concepts/verification-pipeline.md)**: each stage can be enabled or disabled independently
 - **[MCP integration](docs/core_concepts/mcp-overview.md)**: Model Context Protocol servers with tool use tracking
 - **[Few-shot prompting](docs/core_concepts/few-shot.md)**: global or per-question examples with flexible selection modes
@@ -435,6 +435,7 @@ This installs the core package with all required dependencies, including MCP cli
 | `examples` | Running example notebooks (Jupyter) |
 | `embeddings` | Embedding similarity checks (SentenceTransformers) |
 | `gepa` | GEPA prompt optimization integration |
+| `codex` | Codex SDK and matching bundled coding-agent runtime |
 
 ```bash
 # Example: install with embedding support
