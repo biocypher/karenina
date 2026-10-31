@@ -35,6 +35,7 @@ The third clause is a special case for the `manual` interface. Its `agent_tier` 
 | `claude_agent_sdk` | `"deep_agent"` | The Claude CLI binary is itself an agent; the LLMPort path would lose tool call traces |
 | `langchain` | `"tool_loop"` | The adapter orchestrates tool calls explicitly |
 | `claude_tool` | `"tool_loop"` | Same: adapter-orchestrated |
+| `google_genai` | `"tool_loop"` | Same: adapter-orchestrated (karenina-owned turn loop) |
 | `manual` | `"tool_loop"` | Pre-recorded traces; no live agent |
 | `openai_endpoint` | `"tool_loop"` | Routes to `langchain` |
 | `openrouter` | `"tool_loop"` | Routes to `langchain` |

@@ -1,6 +1,6 @@
 # Available Adapters
 
-Karenina ships with six adapter packages (`langchain`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `manual`, `taskeval`) and two routing interfaces (`openrouter`, `openai_endpoint`) that delegate to LangChain, totaling **eight registered `interface` values**. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
+Karenina ships with seven adapter packages (`langchain`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `google_genai`, `manual`, `taskeval`) and two routing interfaces (`openrouter`, `openai_endpoint`) that delegate to LangChain, totaling **nine registered `interface` values**. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
 
 For the conceptual introduction to adapters, see [Adapters Overview](../core_concepts/adapters.md). For port protocol signatures, see [Port Types](ports.md).
 
@@ -8,17 +8,17 @@ For the conceptual introduction to adapters, see [Adapters Overview](../core_con
 
 ## Feature Comparison
 
-| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `manual` | `taskeval` |
-|---------|:-----------:|:-----------------------:|:------------------:|:-------------:|:--------:|:----------:|
-| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | N/A | N/A |
-| **MCP server support** | Yes | Yes | Yes | Yes | No | No |
-| **Tool use** | Yes | Yes | Yes | Yes | No | No |
-| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` | N/A (no-op) |
-| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | No | No (no-op) |
-| **Parser: system prompt** | Yes | Yes | Yes | Yes | No | N/A |
-| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | No | No |
-| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None | None |
-| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | Always available | Always available |
+| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `google_genai` | `manual` | `taskeval` |
+|---------|:-----------:|:-----------------------:|:------------------:|:-------------:|:--------------:|:--------:|:----------:|
+| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | No (Gemini only) | N/A | N/A |
+| **MCP server support** | Yes | Yes | Yes | Yes | Yes | No | No |
+| **Tool use** | Yes | Yes | Yes | Yes | Yes | No | No |
+| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` | `tool_loop` | N/A (no-op) |
+| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | Yes (native JSON schema) | No | No (no-op) |
+| **Parser: system prompt** | Yes | Yes | Yes | Yes | Yes | No | N/A |
+| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | Not configured (cache reads reported in usage) | No | No |
+| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None | None | None |
+| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | `google.genai` importable | Always available | Always available |
 
 ---
 
@@ -409,6 +409,166 @@ Registers prompt instructions for `claude_tool` interface. Notably, the parsing 
 
 ---
 
+## `google_genai`: Gemini Through the Google GenAI SDK
+
+Uses the `google-genai` Python SDK directly for Gemini models, on Vertex AI or on the Gemini API (including gateways that expose it). All three ports are implemented. Compared with reaching Gemini through `langchain`, this adapter keeps Gemini's grounding metadata (search queries and sources) in the trace, reports thinking tokens and search counts in usage, and can cap Google Search per agent run.
+
+### Implementation Classes
+
+| Port | Class | Module |
+|------|-------|--------|
+| AgentPort | `GoogleGenAIAgentAdapter` | `adapters.google_genai.agent` |
+| ParserPort | `GoogleGenAIParserAdapter` | `adapters.google_genai.parser` |
+| LLMPort | `GoogleGenAILLMAdapter` | `adapters.google_genai.llm` |
+
+### Configuration
+
+```python
+from karenina.schemas.config import ModelConfig
+
+config = ModelConfig(
+    id="gemini-judge",
+    model_name="gemini-3.8-flash",
+    interface="google_genai",
+    extra_kwargs={"project": "my-gcp-project"},  # or set GOOGLE_CLOUD_PROJECT
+)
+```
+
+**Required fields**: `id`, `model_name`. `model_provider` is not used.
+
+**Install**: `pip install 'karenina[google-genai]'`. The `google-genai` package also comes with karenina's core LangChain Google dependency, so the adapter is usually available without the extra.
+
+**Availability check**: Checks that `google.genai` is importable. There is no fallback interface: a silent fallback to LangChain would drop the grounding trail and the search budget.
+
+Settings are validated when the adapter is built, so a configuration mistake fails before the first model call.
+
+#### Backends and Credentials
+
+| Backend | Selected when | Credentials | Notes |
+|---------|---------------|-------------|-------|
+| `vertex` (default) | `endpoint_base_url` is not set | Google application default credentials (`gcloud auth application-default login`) | Project from `extra_kwargs["project"]` or `GOOGLE_CLOUD_PROJECT`. Location from `extra_kwargs["location"]`, then `GOOGLE_CLOUD_LOCATION`, then `"global"` |
+| `gemini_api` | `endpoint_base_url` is set, or `extra_kwargs["backend"]="gemini_api"` | `endpoint_api_key`, then `GEMINI_API_KEY`, then `GOOGLE_API_KEY` | `endpoint_base_url` points the client at a gateway. `project` and `location` are ignored with a warning |
+
+Setting `endpoint_api_key` with the `vertex` backend raises `ValueError`. Missing or expired Google credentials fail as a permanent error whose message names the `gcloud auth application-default login` fix.
+
+#### ModelConfig Fields
+
+| Field | Effect |
+|-------|--------|
+| `temperature` | Sampling temperature (some Gemini models ignore it) |
+| `max_tokens` | Sent as `max_output_tokens`. Thinking and answer tokens share this budget |
+| `system_prompt` | System instruction used when the messages carry none |
+| `request_timeout` | Wall-clock limit for each model call. Defaults to 300 seconds when unset, so one stuck call cannot hold a whole run |
+| `retry_policy` | Retries through `RetryExecutor`. The SDK's own HTTP retries are switched off, so the [retry policy](../advanced-pipeline/error-handling.md) is the only retry layer and only the failed call is repeated |
+| `mcp_urls_dict`, `mcp_tool_filter`, `mcp_tool_description_overrides`, `mcp_http_timeout`, `mcp_sse_read_timeout` | MCP servers and tool filtering, with the same meaning as for `claude_tool` |
+| `extra_kwargs` | The keys in the next table. Any other key raises `ValueError` |
+
+#### `extra_kwargs` Keys
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `backend` | `"gemini_api"` when `endpoint_base_url` is set, else `"vertex"` | Backend to call |
+| `project` | `GOOGLE_CLOUD_PROJECT` | Vertex project |
+| `location` | `GOOGLE_CLOUD_LOCATION`, else `"global"` | Vertex location |
+| `builtin_tools` | `[]` | Gemini server-side tools to enable: any of `"google_search"`, `"url_context"` |
+| `max_search_queries` | `None` (no cap) | Google Search budget per agent run (see below) |
+| `thinking_level` | `None` (model default) | Passed to `ThinkingConfig.thinking_level`, checked against the levels the installed SDK knows |
+| `thinking_budget` | `None` | Passed to `ThinkingConfig.thinking_budget`. Cannot be combined with `thinking_level` |
+| `include_thoughts` | `True` on `gemini_api`, `False` on `vertex` | Request thought summaries. They appear as thinking blocks in agent traces |
+| `stream` | `True` on `gemini_api`, `False` on `vertex` | Use streamed calls, so a gateway that cuts silent connections does not drop long calls |
+| `resolve_grounding_urls` | `False` | Follow Google's grounding redirect links to the real source URL (one `HEAD` request per source) |
+| `generate_content_config` | `{}` | Extra `GenerateContentConfig` fields passed through, for example `seed` or `safety_settings`. Fields the adapter sets itself (`tools`, `temperature`, `max_output_tokens`, `system_instruction`, `thinking_config`, the response schema fields, `http_options`, `automatic_function_calling`) are rejected |
+
+### Built-In Tools and the Search Budget
+
+`google_search` and `url_context` are off by default. Gemini runs them on Google's side inside a single model call, so they need no MCP server and no tool loop:
+
+- They apply to every agent turn and to every LLM-port call made with this `ModelConfig`, for example [rubric evaluation](../core_concepts/rubrics/index.md) with a Gemini parsing model. The parser port never enables them, so template parsing and score extraction never search.
+- Google bills each search query, and page text read through `url_context` counts as input tokens.
+- `url_context` opens only URLs written out in the request. Given an identifier such as a DOI or PMID, the model searches instead. To let a model open pages it finds, give it a fetch tool through an [MCP server](mcp-integration.md).
+
+`max_search_queries` is a soft cap per agent run. After each call the agent adds the number of queries Gemini reported, and once the count reaches the cap it removes Google Search from the remaining turns (a note in `raw_trace` records when). Gemini can run several searches inside one call, so a run can end above the cap. LLM-port calls are single calls and have no budget.
+
+Callers that build their own `AgentConfig` can override `builtin_tools`, `max_search_queries` and `max_tool_result_chars` for one run through `AgentConfig.extra`. `max_tool_result_chars` (default 50,000) cuts longer function and MCP tool results, with a marker, before they reach the model.
+
+### Agent Behavior
+
+The agent runs a karenina-owned tool loop. The SDK's automatic function calling is switched off:
+
+- Each turn is one `generate_content` call, and `AgentConfig.max_turns` counts these calls.
+- Static tools and MCP tools are declared as Gemini function declarations. Names are rewritten to fit Gemini's naming rules and mapped back when the model calls them. Two tools whose rewritten names collide fail the run before any model call.
+- The adapter runs each function call itself. A tool error goes back to the model as an error result and is marked `is_error` in the trace. It never ends the run.
+- The model's turns are sent back unchanged, so Gemini's thought signatures survive across turns.
+- `AgentConfig.timeout` bounds the whole run, MCP connection setup included. On a timeout or the turn limit the agent returns the partial trace with `timeout_reached` or `limit_reached` set. A timeout before any message was produced raises `AgentTimeoutError`.
+- Every model call, agent turns included, holds one permit of the global LLM limiter, so [`VerificationConfig.max_concurrent_requests`](../reference/configuration/verification-config.md) also caps agent turns.
+- There are no file or shell tools (`supports_file_tools=False`, `supports_code_execution=False`). Files reach the agent only through an MCP server.
+
+Gemini's finish reasons are handled as follows:
+
+| Finish reason | Agent | LLM port |
+|---------------|-------|----------|
+| `STOP` with text or tool calls | Normal | Normal |
+| `STOP` with no text and no tool call, or a stream that ends without a finish reason | Retried as a server error | Retried as a server error |
+| `MAX_TOKENS` | Text kept, note added. A final turn with no text raises `AgentResponseError` | Text kept. Structured output then usually fails to validate |
+| `TOO_MANY_TOOL_CALLS` (Gemini's own server-side tool loop ran too long) | Run ends with `limit_reached=True` and a note, or raises `AgentResponseError` when no text was written | Permanent error |
+| `MALFORMED_FUNCTION_CALL`, `UNEXPECTED_TOOL_CALL` | A corrective user message is added and the loop continues (counts as a turn) | Permanent error |
+| `SAFETY`, `RECITATION`, `PROHIBITED_CONTENT`, `BLOCKLIST`, `SPII`, `OTHER`, unknown reasons | Permanent error naming the reason | Permanent error naming the reason |
+
+### Trace Capture
+
+`trace_messages` is built turn by turn: assistant messages (text, tool calls, and thinking blocks when `include_thoughts` is on), tool results, and Gemini's server-side activity as synthetic tool pairs:
+
+| Synthetic tool | `ToolUseContent.input` | `ToolResultContent` content (JSON) |
+|----------------|------------------------|-------------------------------------|
+| `google_search` | `{"queries": [...]}` | `{"server_side": true, "sources": [{"title", "uri"}], "supported_segments": n}` |
+| `url_context` | `{"urls": [...]}` | `{"server_side": true, "urls": [{"url", "status"}]}` |
+
+The pairs come before the model's text for the same turn, the order in which they happened, with ids `google_search_<turn>` and `url_context_<turn>`. The trace viewer, regex highlighting and trace parsers therefore see searches and page reads like any other tool call. Each assistant message also carries that call's usage in `usage_metadata`.
+
+`raw_trace` comes from the shared formatter, plus one `[Note: ...]` line for each event that ended or shaped the run (turn limit, timeout, finish reasons, search budget).
+
+A single LLM-port call returns text only. For example, `GenerateAnswer` runs a `google_genai` answering model without MCP servers through `LLMPort`, so its searches show up only in usage, not in the trace.
+
+### Usage
+
+| `UsageMetadata` field | Source in Gemini's `usage_metadata` |
+|-----------------------|-------------------------------------|
+| `input_tokens` | `prompt_token_count` + `tool_use_prompt_token_count` (cached tokens included) |
+| `output_tokens` | `candidates_token_count` + `thoughts_token_count` |
+| `cache_read_tokens` | `cached_content_token_count` |
+| `reasoning_tokens` | `thoughts_token_count` (already counted in `output_tokens`) |
+| `web_search_queries` | Number of Google Search queries. Set when Google Search was available to the call or a query was reported |
+| `cost_usd` | Always `None` (karenina has no price table) |
+
+An agent run's usage is the sum over all its calls. See [UsageMetadata](ports.md#usagemetadata).
+
+### LLM and Parser Behavior
+
+The LLM adapter makes single calls through the same call path as the agent. Structured output (`with_structured_output`) sends the Pydantic schema as `response_json_schema`, validates the reply with the schema, and retries with the validation error as feedback (3 retries by default). If Gemini rejects the JSON Schema form, the adapter tries once more with the SDK's own schema conversion. `astream` and `stream_invoke` are supported and skip thought parts.
+
+The parser uses the LLM adapter's **native structured output** (`supports_structured_output = True`) with 2 validation retries, and always with built-in tools off. A reply that never validates raises `ParseError`.
+
+### Errors and Retries
+
+| Condition | Error category |
+|-----------|----------------|
+| HTTP 5xx (including a gateway's HTML error page), empty or truncated responses, non-JSON response bodies | `SERVER_ERROR` (retried) |
+| HTTP 429 or `RESOURCE_EXHAUSTED` | `RATE_LIMIT` (retried) |
+| Network failures, including while refreshing Google credentials | `CONNECTION` (retried) |
+| Other HTTP 4xx (400, 403, 404), missing credentials, blocking finish reasons | `PERMANENT` |
+
+### Adapter Instructions
+
+None. The default parsing, rubric, abstention and sufficiency instructions apply.
+
+### When to Use
+
+- Gemini models where you need the search queries and sources in the trace, thinking-token counts, or a cap on searches
+- Gemini on Vertex AI with Google application default credentials, or through a Gemini API gateway
+- A Gemini judge for [agentic rubric traits](../core_concepts/rubrics/agentic-traits.md) that checks claims with MCP tools and Google Search (`context_mode="trace_only"`, see [Agentic Rubric Evaluation](../advanced-pipeline/agentic-rubric-evaluation.md))
+
+---
+
 ## `manual` — Pre-Recorded Traces
 
 A special-purpose interface that replays pre-recorded LLM traces instead of making live API calls.
@@ -512,8 +672,9 @@ This adapter is wired by TaskEval; users do not normally instantiate it directly
 | Natively agentic evaluation (multi-provider) | `langchain_deep_agents` | Deep agent runtime with planning and subagents |
 | Claude-only with full features | `claude_agent_sdk` | Native structured output, session management |
 | Claude-only, lightweight | `claude_tool` | Native structured output, prompt caching, simpler setup |
+| Gemini with Google Search grounding or Vertex AI | `google_genai` | Search queries and sources in the trace, search budget, thinking-token usage |
 | Offline / CI / reproducibility | `manual` | No API calls, pre-recorded traces |
-| Need native structured output | `claude_agent_sdk`, `claude_tool`, or `langchain_deep_agents` | All have `supports_structured_output = True` |
+| Need native structured output | `claude_agent_sdk`, `claude_tool`, `google_genai`, or `langchain_deep_agents` | All have `supports_structured_output = True` |
 
 ---
 
@@ -527,6 +688,7 @@ This adapter is wired by TaskEval; users do not normally instantiate it directly
 | `openai_endpoint` | No | Set via `endpoint_api_key` on ModelConfig |
 | `claude_agent_sdk` | No | `ANTHROPIC_API_KEY` (used by Claude CLI) |
 | `claude_tool` | No | `ANTHROPIC_API_KEY` (or `anthropic_api_key` on ModelConfig) |
+| `google_genai` | No | `vertex` backend: Google application default credentials (no key). `gemini_api` backend: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (or `endpoint_api_key` on ModelConfig) |
 | `manual` | No | None |
 | `taskeval` | No | None |
 

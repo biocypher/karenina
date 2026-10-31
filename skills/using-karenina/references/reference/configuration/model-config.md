@@ -13,7 +13,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 | `id` | `str \| None` | `None` | Unique identifier for this model configuration. **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. Used in results to identify which model produced each result. |
 | `model_name` | `str \| None` | `None` | Model name passed to the underlying provider (e.g., `"claude-haiku-4-5"`, `"claude-sonnet-4-20250514"`, `"gemini-2.0-flash"`). **Required** for all non-manual interfaces. Defaults to `"manual"` for manual interface. |
 | `model_provider` | `str \| None` | `None` | LLM provider name (e.g., `"openai"`, `"anthropic"`, `"google_genai"`). **Required** only for the `langchain` interface (passed to `init_chat_model()`). Not required for other interfaces. |
-| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values: `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
+| `interface` | `str` | `"langchain"` | Which adapter backend to use. Built-in values: `"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_agent_sdk"`, `"claude_tool"`, `"langchain_deep_agents"`, `"google_genai"`, `"manual"`. Custom interfaces can be registered via `AdapterRegistry`. See [Adapters Overview](../../core_concepts/adapters.md) for capabilities and trade-offs. |
 
 **Validation rules:**
 
@@ -36,7 +36,7 @@ This is the exhaustive reference for all `ModelConfig` fields. For a tutorial in
 
 ## Interface-Specific: OpenAI Endpoint
 
-These fields apply only when `interface="openai_endpoint"`.
+These fields apply when `interface="openai_endpoint"`. With `interface="google_genai"` they select and configure the `gemini_api` backend (see [Google GenAI](#interface-specific-google-genai) below).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -56,6 +56,21 @@ silently falling back to environment credentials.
 |-------|------|---------|-------------|
 | `anthropic_base_url` | `str \| None` | `None` | Custom Anthropic API endpoint URL. Use for proxies or self-hosted deployments. |
 | `anthropic_api_key` | `SecretStr \| None` | `None` | Override the `ANTHROPIC_API_KEY` environment variable. Stored as `SecretStr` to prevent accidental logging. |
+
+---
+
+## Interface-Specific: Google GenAI
+
+`interface="google_genai"` calls Gemini through the `google-genai` SDK. `model_provider` is not used. The backend is Vertex AI (Google application default credentials) unless `endpoint_base_url` is set, which selects the Gemini API backend and points it at that URL:
+
+| Field | Use with `google_genai` |
+|-------|-------------------------|
+| `endpoint_base_url` | Selects `backend="gemini_api"` and sets the client's base URL (for example a gateway) |
+| `endpoint_api_key` | Gemini API key. Falls back to `GEMINI_API_KEY`, then `GOOGLE_API_KEY`. Rejected with the `vertex` backend |
+| `request_timeout` | Per-call wall-clock limit. Defaults to 300 seconds when `None` |
+| `extra_kwargs` | Only the adapter's keys are accepted: `backend`, `project`, `location`, `builtin_tools`, `max_search_queries`, `thinking_level`, `thinking_budget`, `include_thoughts`, `stream`, `resolve_grounding_urls`, `generate_content_config`. Any other key raises `ValueError` when the adapter is built |
+
+`builtin_tools` turns on Gemini's server-side `google_search` and `url_context` (off by default), and `max_search_queries` caps Google Search per agent run. See [Available Adapters](../../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk) for each key's default and behavior.
 
 ---
 
@@ -171,7 +186,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 |-------|------|---------|-------------|
 | `agent_timeout` | `int \| None` | `None` | Timeout in seconds for agent execution. Overrides the default timeout (180s) used in answer generation. Set higher for complex questions with many tool calls. |
 | `agent_runtime` | `AgentRuntimeConfig \| None` | `None` | Typed runtime backend, access mode, sandbox, container image, network, and file-read settings for `claude_agent_sdk` and `langchain_deep_agents`. See [Sandboxed Runtime Backends](../../core_concepts/agentic-evaluation.md). |
-| `request_timeout` | `float \| None` | `None` | HTTP request timeout in seconds for individual LLM API calls on this model. Typically stamped by the pipeline from `VerificationConfig.request_timeout`. `None` means use the provider SDK default (no timeout). |
+| `request_timeout` | `float \| None` | `None` | HTTP request timeout in seconds for individual LLM API calls on this model. Typically stamped by the pipeline from `VerificationConfig.request_timeout`. `None` means use the provider SDK default (no timeout), except on `google_genai`, which then applies a 300 second limit per call. |
 | `retry_policy` | `RetryPolicy \| None` | `None` | Per-category retry policy for transient LLM errors on this model. Typically stamped by the pipeline from `VerificationConfig.retry_policy`. `None` means inherit the pipeline-level policy. |
 
 ---
@@ -180,7 +195,7 @@ Reduces costs and latency by caching static prompt content on Anthropic's server
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific settings not covered by typed fields. Recognized keys include `endpoint_base_url_mode` (`"auto_v1"` / `"raw"`), `claude_sdk_parser_openai_base_url`, and `effort`. Older saved configurations may contain an `agent_runtime` dictionary here, but new code should use the typed `agent_runtime` field. See [Available Adapters](../../advanced-adapters/available-adapters.md). |
+| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Extra keyword arguments passed to the underlying model interface. Useful for vendor-specific settings not covered by typed fields. Recognized keys include `endpoint_base_url_mode` (`"auto_v1"` / `"raw"`), `claude_sdk_parser_openai_base_url`, `effort`, and the `google_genai` keys listed [above](#interface-specific-google-genai). Older saved configurations may contain an `agent_runtime` dictionary here, but new code should use the typed `agent_runtime` field. See [Available Adapters](../../advanced-adapters/available-adapters.md). |
 
 ### Probe an OpenAI-compatible endpoint
 
