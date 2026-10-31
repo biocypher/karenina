@@ -120,7 +120,7 @@ class TestBasics:
         async def boom(*_args: Any, **_kwargs: Any) -> AgentResult:
             raise AgentTimeoutError("timed out")
 
-        adapter.arun = boom  # type: ignore[method-assign]
+        adapter.arun = boom
         with pytest.raises(AgentTimeoutError) as info:
             await asyncio.to_thread(adapter.run, [Message.user("Q")])
         assert info.value.__context__ is None
