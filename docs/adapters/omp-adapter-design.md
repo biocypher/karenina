@@ -67,8 +67,8 @@ OMP's native runtime is not an OS sandbox. Read-write mode is explicitly unatten
 
 - Unit-test prompt, MCP, trace, usage, permissions, registration, subprocess orchestration, protocol mismatch, cancellation, and malformed events.
 - Run adapter conformance and the full unit suite.
-- Live-test a real file-tool turn using `zhipu-coding-plan/glm-5.3` at high thinking.
-- Live-test at least two different models through `opencode-go`.
+- Live-test a real file-tool turn using `zai/glm-5.3` at high thinking.
+- Live-test file reads, writes, and MCP through an available `opencode-go` model; record unavailable catalog entries separately.
 
 ## Success criteria
 

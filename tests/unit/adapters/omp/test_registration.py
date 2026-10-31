@@ -21,7 +21,7 @@ def test_omp_runtime_capabilities_are_not_claimed_as_sandboxed() -> None:
     spec = AdapterRegistry.get_spec("omp")
     config = ModelConfig(
         id="glm",
-        model_provider="zhipu-coding-plan",
+        model_provider="zai",
         model_name="glm-5.3",
         interface="omp",
     )

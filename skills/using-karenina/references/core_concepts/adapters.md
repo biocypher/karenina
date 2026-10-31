@@ -269,7 +269,7 @@ config = ModelConfig(
 config = ModelConfig(
     id="omp-glm",
     model_name="glm-5.3",
-    model_provider="zhipu-coding-plan",
+    model_provider="zai",
     interface="omp",
     extra_kwargs={"thinking": "high"},
 )

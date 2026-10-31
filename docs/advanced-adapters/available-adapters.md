@@ -576,7 +576,7 @@ An AgentPort-only deep-agent adapter for the multi-provider Oh My Pi coding agen
 ```python
 config = ModelConfig(
     id="omp-glm",
-    model_provider="zhipu-coding-plan",
+    model_provider="zai",
     model_name="glm-5.3",
     interface="omp",
     extra_kwargs={"thinking": "high"},
@@ -587,7 +587,9 @@ config = ModelConfig(
 
 **Install**: install OMP from <https://omp.sh/>, then `pip install 'karenina[omp]'`.
 
-The adapter uses the selector `model_provider/model_name`, so the example selects `zhipu-coding-plan/glm-5.3`. OMP resolves credentials from its auth store or provider environment variables.
+Live validation uses OMP 18.14.2. OMP 17.3.3 is incompatible with current OpenCode Go requests because it omits the required session header; upgrade the CLI when using that route.
+
+The adapter uses the selector `model_provider/model_name`, so the example selects `zai/glm-5.3`. OMP resolves credentials from its auth store or provider environment variables.
 
 The adapter implements AgentPort only. Configure a separate LLM/Parser model for parsing, rubric evaluation, and other single-turn stages. Its `langchain` fallback applies when OMP/ACP is unavailable; it does not supply the unsupported OMP LLM/Parser factories.
 

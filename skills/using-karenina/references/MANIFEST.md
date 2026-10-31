@@ -1,12 +1,12 @@
 # Synced Documentation Manifest
 
-Last synced: 2026-10-31T21:07:55Z (ISO 8601 UTC / RFC 3339)
+Last synced: 2026-10-31T21:26:26Z (ISO 8601 UTC / RFC 3339)
 Source: docs/
 Files synced: 113
 
 | Source Path | Reference Path | Lines |
 |-------------|---------------|-------|
-| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 743 |
+| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 745 |
 | docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 232 |
 | docs/advanced-adapters/mcp-integration.md | skills/using-karenina/references/advanced-adapters/mcp-integration.md | 446 |
 | docs/advanced-adapters/ports.md | skills/using-karenina/references/advanced-adapters/ports.md | 555 |

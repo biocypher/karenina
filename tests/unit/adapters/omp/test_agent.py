@@ -97,7 +97,7 @@ class _FakeConnection:
 def model_config() -> ModelConfig:
     return ModelConfig(
         id="glm",
-        model_provider="zhipu-coding-plan",
+        model_provider="zai",
         model_name="glm-5.3",
         interface="omp",
         extra_kwargs={"omp_cli_path": "/fake/omp", "thinking": "high"},
@@ -145,11 +145,11 @@ def test_successful_acp_run_maps_model_usage_and_options(
     )
 
     assert result.final_response == "OMP_ADAPTER_OK"
-    assert result.actual_model == "zhipu-coding-plan/glm-5.3"
+    assert result.actual_model == "zai/glm-5.3"
     assert result.usage.total_tokens == 24
     assert result.session_id == "omp-session"
     assert result.timeout_reached is False
-    assert ("model", "zhipu-coding-plan/glm-5.3") in record["connection"].options
+    assert ("model", "zai/glm-5.3") in record["connection"].options
     assert ("thinking", "high") in record["connection"].options
     assert "--no-skills" in record["command"]
     assert process.terminated is True
