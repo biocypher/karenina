@@ -163,6 +163,7 @@ The pipeline produces a **`VerificationResult`** per question containing templat
 | `openai_endpoint` | OpenAI-compatible endpoints (routes through LangChain) |
 | `claude_agent_sdk` | Native Anthropic Agent SDK |
 | `claude_tool` | Direct Anthropic SDK with tool use |
+| `google_genai` | Google GenAI SDK for Gemini (Vertex AI or the Gemini API), with Google Search grounding |
 | `manual` | Pre-recorded traces (no live API calls) |
 
 [Read more about adapters →](adapters.md)
