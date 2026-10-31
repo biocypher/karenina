@@ -44,7 +44,7 @@ from .calls import (
     translated_sdk_errors,
     with_request_timeout,
 )
-from .client import GenAIClientHolder
+from .client import GenAIClientHolder, running_loop
 from .errors import GeminiClientError, build_error_registry
 from .grounding import resolve_source_urls
 from .messages import extract_system_instruction, to_contents
@@ -268,9 +268,7 @@ class GoogleGenAILLMAdapter:
         portal = get_async_portal()
         if portal is not None:
             return portal.call(self.ainvoke, messages)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
+        if running_loop() is None:
             return asyncio.run(self.ainvoke(messages))
         sequences = self._max_retries + 2 if self._structured_schema is not None else 1
         thread_timeout = compute_sync_wrapper_timeout(
@@ -437,9 +435,7 @@ class GoogleGenAILLMAdapter:
         portal = get_async_portal()
         if portal is not None:
             return portal.call(self._astream_with_timeout, messages, timeout)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
+        if running_loop() is None:
             return asyncio.run(self._astream_with_timeout(messages, timeout))
         thread_timeout = (timeout if timeout is not None else 300.0) + SYNC_WRAPPER_GRACE_SECONDS
         return run_coro_in_thread(self._astream_with_timeout, messages, timeout, timeout=thread_timeout)

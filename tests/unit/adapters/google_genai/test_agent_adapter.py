@@ -113,6 +113,18 @@ class TestBasics:
         result = await asyncio.to_thread(adapter.run, [Message.user("Q")])
         assert result.final_response == "sync ok"
 
+    async def test_sync_run_error_is_not_chained_to_the_loop_check(self) -> None:
+        """An error from a sync run outside a loop carries no 'no running event loop' context."""
+        adapter = _agent(FakeModels(responses=[]))
+
+        async def boom(*_args: Any, **_kwargs: Any) -> AgentResult:
+            raise AgentTimeoutError("timed out")
+
+        adapter.arun = boom  # type: ignore[method-assign]
+        with pytest.raises(AgentTimeoutError) as info:
+            await asyncio.to_thread(adapter.run, [Message.user("Q")])
+        assert info.value.__context__ is None
+
     async def test_aclose_closes_the_client(self) -> None:
         models = FakeModels(responses=[response([text_part("x")])])
         fake_client = FakeClient(models)

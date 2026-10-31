@@ -38,7 +38,7 @@ from karenina.schemas.config import ModelConfig
 from karenina.utils.retry_policy import RetryExecutor, RetryPolicy
 
 from .calls import build_generate_config, classify_finish_reason, finish_error, generate
-from .client import GenAIClientHolder
+from .client import GenAIClientHolder, running_loop
 from .errors import build_error_registry
 from .grounding import grounding_to_trace, resolve_source_urls
 from .messages import FunctionCallRef, extract_system_instruction, model_parts_to_message, to_contents
@@ -458,9 +458,7 @@ class GoogleGenAIAgentAdapter:
         if portal is not None:
             return portal.call(self.arun, messages, tools, mcp_servers, config)
 
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
+        if running_loop() is None:
             return asyncio.run(self.arun(messages, tools, mcp_servers, config))
 
         effective = config or AgentConfig()

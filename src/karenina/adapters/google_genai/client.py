@@ -91,7 +91,7 @@ def build_client(settings: GoogleGenAISettings) -> Any:
         raise AdapterUnavailableError(f"Could not create the google-genai client: {e}", reason=str(e)) from e
 
 
-def _running_loop() -> asyncio.AbstractEventLoop | None:
+def running_loop() -> asyncio.AbstractEventLoop | None:
     """Return the running event loop, or None outside one."""
     try:
         return asyncio.get_running_loop()
@@ -127,7 +127,7 @@ class GenAIClientHolder:
             AdapterUnavailableError: See ``build_client``.
             GeminiAuthError: See ``build_client``.
         """
-        loop = _running_loop()
+        loop = running_loop()
         key = id(loop) if loop is not None else 0
         with self._lock:
             entry = self._clients.get(key)
@@ -148,7 +148,7 @@ class GenAIClientHolder:
         loop, because an aiohttp session cannot be closed from another loop.
         Clients of other loops close their sync transport and are dropped.
         """
-        loop = _running_loop()
+        loop = running_loop()
         with self._lock:
             entries = list(self._clients.values())
             self._clients = {}

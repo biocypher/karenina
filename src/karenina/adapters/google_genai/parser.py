@@ -21,6 +21,7 @@ from karenina.ports import Message, ParseError, ParsePortResult, ParserPort, Por
 from karenina.ports.capabilities import PortCapabilities
 from karenina.schemas.config import ModelConfig
 
+from .client import running_loop
 from .errors import build_error_registry
 from .llm import GoogleGenAILLMAdapter
 
@@ -106,9 +107,7 @@ class GoogleGenAIParserAdapter:
         portal = get_async_portal()
         if portal is not None:
             return portal.call(self.aparse_to_pydantic, messages, schema)
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
+        if running_loop() is None:
             return asyncio.run(self.aparse_to_pydantic(messages, schema))
         thread_timeout = compute_sync_wrapper_timeout(
             self._llm_adapter.settings.request_timeout,
