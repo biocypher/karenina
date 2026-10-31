@@ -1,147 +1,104 @@
 ---
 name: karenina-adapter-review
-description: Review a new karenina adapter for quality, correctness, and convention compliance. Final phase before merge. Use as Phase 5 of adapter creation.
+description: Audit a completed Karenina adapter against its supported-port contract, protocol mapping, safety claims, lifecycle, tests, documentation, and repository conventions before merge.
 ---
 
-# Phase 5: Review Karenina Adapter
+# Phase 5: Review the Adapter
 
-Comprehensive review of the adapter implementation for quality, correctness, and convention compliance.
+Review evidence, not just code shape. Use a code-review agent only when one is available and repository instructions permit it; otherwise perform the audit directly.
 
-## Prerequisites
+## 1. Contract consistency
 
-- All tests from `/karenina-adapter-test` pass
-- Adapter is registered and functional
+Compare context, design, source, `AdapterSpec`, docs, and tests:
 
-## Review checklist
+- Same supported-port matrix everywhere
+- `None` factories are intentional and documented
+- No claim that availability fallback fills unsupported ports unless verified in factory code
+- Agent tier, tools, MCP, provider requirement, and capabilities match live behavior
+- Configuration examples use real field names and valid model/provider selectors
 
-### 1. Code quality review
+## 2. Protocol audit
 
-Dispatch the code-reviewer agent against the adapter directory:
+Read [Protocol bridging](../karenina-adapter-create/references/protocol-bridge.md) and verify:
 
-```
-Review the adapter at karenina/src/karenina/adapters/<name>/
-against the spec at docs/superpowers/specs/<date>-<name>-design.md
-```
+- Standard protocols were discovered before choosing a native path
+- Transport decision is justified by semantic coverage
+- Protocol version is negotiated/validated
+- Capabilities are not assumed when omitted
+- Every used wire concept has a documented Karenina mapping
+- Chunks are coalesced; tool ids pair; ordering is stable
+- Usage formulas reconcile semantic differences rather than copying names
+- Cancellation precedes termination and partial state is retained
+- Bidirectional callbacks are implemented or rejected correctly
+- Extensions are namespaced and tested
 
-### 2. File size check
+## 3. Safety and lifecycle
 
-All files must be under 800 lines (per CLAUDE.md):
+- Workspace path is absolute and reaches the real tool runtime
+- `cwd`/approvals are not described as an OS sandbox
+- Read-only policy blocks write/execute paths it claims to block
+- MCP sessions, async tasks, clients, streams, temp dirs, and subprocesses close on every exit
+- Interrupt/drain/close/kill waits are bounded
+- Stderr and tool outputs are bounded in diagnostics/traces
+- Secrets are inherited or injected safely and never logged
+- Sessions do not leak state between benchmark runs unless resumption is designed
 
-```bash
-find karenina/src/karenina/adapters/<name>/ -name "*.py" -exec wc -l {} +
-```
+## 4. Port correctness
 
-### 3. No cross-adapter imports
+For each implemented port, verify the current Protocol exactly.
 
-Verify the adapter does not import from other adapter packages:
+AgentPort:
 
-```bash
-# Check for imports from ANY other adapter package (not just specific ones)
-grep -rn "from karenina.adapters\." karenina/src/karenina/adapters/<name>/ \
-    | grep -v "from karenina.adapters.<name>" \
-    | grep -v "from karenina.adapters.registry"
-```
+- no-tools behavior, workspace, MCP/static-tool handling
+- timeout and partial-result behavior on every path
+- real max-turn enforcement or an explicit, tested limitation
+- final response, turns, limits, model, usage, and dual trace agree
 
-Expected: No matches. The adapter should be self-contained. Imports from `karenina.adapters.registry` are allowed (needed for registration). Imports from other adapter packages (e.g., `from karenina.adapters.langchain.initialization`) are not; shared utilities should be copied, not imported across adapters.
+LLMPort:
 
-### 4. Lazy import pattern
+- structured output is JSON, not Python repr
+- streaming methods/capability agree
+- interrupted streaming preserves content and marks usage unavailable
+- request timeout and retry policy reach the backend
 
-Verify `__init__.py` uses the `__getattr__` lazy import pattern, not eager imports:
+ParserPort:
 
-```bash
-head -80 karenina/src/karenina/adapters/<name>/__init__.py
-```
+- requested Pydantic type and raw usage survive extraction
+- retries and parse errors use Karenina conventions
 
-Check: No top-level imports of adapter classes. All imports inside `__getattr__`.
+All implemented ports expose accurate capabilities and idempotent `aclose()`.
 
-### 5. `__all__` exports match implementations
+## 5. Packaging and maintainability
 
-Every name in `__all__` should resolve via `__getattr__`:
+- Optional imports do not prevent registry discovery
+- Availability explains the missing executable/package and install extra
+- No cross-adapter implementation imports
+- Shared logic lives in genuine core utilities or remains self-contained
+- Public methods have useful docstrings and types
+- Logging is lazy and errors use exception chaining
+- Files remain focused; split by responsibility when size harms reviewability
+- Built-in import, plugin entry point, or manual instructions match the design
+- Lockfile and optional dependency metadata are consistent
 
-```python
-from karenina.adapters.<name> import *  # Should not raise
-```
+## 6. Test evidence
 
-### 6. Registration verification
+Require:
 
-```python
-from karenina.adapters.registry import AdapterRegistry
-spec = AdapterRegistry.get_spec("<interface>")
-assert spec is not None
-assert spec.agent_factory is not None
-assert spec.llm_factory is not None
-assert spec.parser_factory is not None
-assert spec.agent_tier == "deep_agent"  # or "tool_loop"
-assert spec.supports_mcp == <expected>
-```
+- Focused adapter tests
+- Applicable conformance tests
+- Protocol transcript/schema tests
+- Format, lint, and type checks
+- Full regression
+- Capability-scoped live tests for every requested route
 
-### 7. Plugin entry point verification
+Inspect live assertions: a successful HTTP/model response is insufficient. Workspace/tool tests need exact file markers and trace evidence; usage needs non-zero input/output and correct cache separation; timeout tests must prove cancellation/cleanup.
 
-For plugin packages (adapters distributed as separate Python packages), verify that `pyproject.toml` declares the entry point correctly under `[project.entry-points."karenina.adapters"]`. The key should match the interface name and the value should point to the registration module.
+## 7. Repository hygiene
 
-### 8. Convention compliance
+- Review the diff and status for unintended files
+- Preserve unrelated user changes
+- Ensure docs/specs/tests are included in the intended PR
+- Keep separate features in separate branches/PRs
+- Rebase or merge according to the user's requested history policy, then rerun risk-proportionate tests
 
-Check against CLAUDE.md:
-- [ ] `from __future__ import annotations` at top of every file
-- [ ] `logger = logging.getLogger(__name__)` after all imports
-- [ ] Google-style docstrings on all public methods
-- [ ] Lazy `%`-style log formatting (no f-strings in logger calls)
-- [ ] Duck typing (no explicit Protocol inheritance)
-- [ ] Exception chaining (`raise ... from e`)
-- [ ] PEP 604 unions (`X | None`, not `Optional[X]`)
-- [ ] Module-level docstrings on all `.py` files
-- [ ] `aclose()` implemented on all three port adapters (required protocol method)
-- [ ] `capabilities` property on all three port adapters (returns `PortCapabilities`)
-- [ ] `LLMPort.astream()` and `LLMPort.stream_invoke()` defined (implemented, or raising `NotImplementedError`); `supports_streaming` capability flag matches reality
-- [ ] `max_retries` warning emitted via `logger.warning()` if unsupported and caller passes it
-
-### 9. Hot-test-proven correctness checks
-
-These items correspond to bugs found in 3 or 4 out of 4 existing adapters during hot testing. Every one must be verified:
-
-- [ ] **Structured output produces valid JSON**: Search for `str(response)` or `str(result)` in the `with_structured_output()` code path. If the framework returns a Pydantic model, the adapter must use `model_dump_json()`. If it returns a dict, it must use `json.dumps()`. Never `str()`.
-- [ ] **`max_turns` is wired to the framework's limit mechanism**: Trace the code path from `AgentConfig.max_turns` to the SDK call. Verify the value actually reaches the SDK parameter (e.g., LangGraph `recursion_limit`, Anthropic tool_runner loop counter). An adapter that accepts `max_turns` but never passes it to the SDK will run indefinitely.
-- [ ] **No-tools fallback exists and honors guards**: Call the agent adapter with `tools=None` and `mcp_servers=None`. It must not crash. The fallback path must still honor `config.timeout` (wrapped in `asyncio.wait_for()`).
-- [ ] **Timeout applies to ALL execution paths**: If the adapter has multiple paths (tool loop vs single-turn fallback), verify both wrap their API call in `asyncio.wait_for()` when `config.timeout` is set.
-- [ ] **MCP sessions outlive their tools**: If the adapter uses MCP, verify that sessions are managed with `AsyncExitStack` and that tools are not used after the session context closes. Check for `async with AsyncExitStack()` patterns where tools escape the block.
-- [ ] **Deferred error pattern for MCP cleanup**: If the adapter uses `AsyncExitStack` for MCP, verify that exceptions during agent execution are captured and re-raised after the stack closes cleanly, preventing `ExceptionGroup` wrapping.
-- [ ] **Streaming timeout capture (LLMPort)**: If `supports_streaming=True`, verify that `stream_invoke()` returns an `LLMResponse` with `is_partial=True` and `usage_unavailable=True` when the wall-clock timeout fires. Accumulated content must be preserved (not discarded), and the async context manager used by `astream()` must yield a `StreamingLLMResponse` that exposes `accumulated_content` even on partial reads. If streaming is not supported, both `astream()` and `stream_invoke()` must exist and raise `NotImplementedError`.
-- [ ] **Agent timeout partial recovery (AgentPort)**: When `config.timeout` fires mid-run and the adapter has collected at least one message, verify that `arun()` returns a partial `AgentResult(timeout_reached=True)` instead of raising `AgentTimeoutError`. The partial result must include the messages collected so far, aggregated usage for the completed turns, and a marker in `raw_trace` (e.g., `"[Note: Agent timed out - partial response shown]"`). Raising `AgentTimeoutError` is only acceptable when no messages were collected, or when the SDK exposes no way to read partial state (document this limitation in the adapter's module docstring).
-
-### 10. Full regression test
-
-```bash
-cd karenina && uv run pytest tests/ -x -q
-```
-
-All existing tests must pass with zero new failures.
-
-### 11. Hot test suite verification
-
-Run the minimum viable hot test set from `/karenina-adapter-test` (H1 + H2 + H5 + H6 + H8 + H9). This is the final gate: code review and cold tests cannot catch bugs that only manifest with live API calls.
-
-Specifically verify:
-- H1: Simple query produces correct answer
-- H2: Agent can read a real file from a workspace directory (catches virtual filesystem bugs)
-- H5: LLMPort returns valid response with non-zero usage tokens
-- H6: ParserPort extracts structured data with non-zero usage tokens
-- H8: Usage tracking is consistent across all three ports (total = input + output, model name present)
-- H9: Short `config.timeout` either returns a partial `AgentResult(timeout_reached=True)` or raises `AgentTimeoutError` (never hangs, never swallows the error)
-
-If any hot test fails, the adapter has a real bug that cold tests missed. Fix before merging.
-
-## Revision loop
-
-If any check fails:
-1. Fix the issue
-2. Re-run the specific check
-3. Repeat until all checks pass (max 3 iterations)
-
-If issues persist after 3 iterations, escalate to the user.
-
-## Completion
-
-Once all checks pass, the adapter is ready for merge. Consider:
-- Updating the adapter docs (`karenina/docs/advanced-adapters/`) if behavior patterns changed
-- Adding the adapter to CLAUDE.md's adapter table
-- Updating the hub skill (`/karenina-adapter-create`) if the pattern has evolved
+Fix every correctness issue found and rerun its focused test. Report any remaining limitation explicitly before proposing merge.

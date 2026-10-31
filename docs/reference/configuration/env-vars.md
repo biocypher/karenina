@@ -20,6 +20,8 @@ This is the exhaustive reference for every environment variable recognized by ka
 | `GOOGLE_API_KEY` | `str` | — | Google AI API key. Required when using the `langchain` interface with Google models (e.g., `google_genai` provider). The `google_genai` interface also reads it for its `gemini_api` backend when neither `endpoint_api_key` nor `GEMINI_API_KEY` is set. |
 | `GEMINI_API_KEY` | `str` | — | Gemini API key for the `google_genai` interface with the `gemini_api` backend. A model-level `endpoint_api_key` takes precedence, and `GEMINI_API_KEY` takes precedence over `GOOGLE_API_KEY`. Not used by the `vertex` backend, which authenticates with Google application default credentials. |
 | `OPENROUTER_API_KEY` | `str` | — | OpenRouter API key. Required when using the `openrouter` interface. Read via `os.environ.get()` in the OpenRouter model factory. |
+| `ZAI_API_KEY` | `str` | — | Z.AI API key inherited by the OMP subprocess when using the `zai` provider route. OMP also supports credentials stored by its own account manager. |
+| `OPENCODE_API_KEY` | `str` | — | OpenCode API key inherited by the OMP subprocess when using an OpenCode provider route. OMP also supports credentials stored by its own account manager. |
 | `TAVILY_API_KEY` | `str` | — | Tavily search API key. Required when deep judgment web search is enabled (`search_enabled=True`). Used by the Tavily search utility. |
 
 ### Google Cloud (`google_genai`)
@@ -115,6 +117,8 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 | `GOOGLE_CLOUD_PROJECT` | `adapters/google_genai/settings.py` |
 | `GOOGLE_CLOUD_LOCATION` | `adapters/google_genai/settings.py` |
 | `OPENROUTER_API_KEY` | `adapters/langchain/models.py` |
+| `ZAI_API_KEY` | `adapters/omp/agent.py` (inherited by the OMP subprocess) |
+| `OPENCODE_API_KEY` | `adapters/omp/agent.py` (inherited by the OMP subprocess) |
 | `TAVILY_API_KEY` | `benchmark/verification/utils/search_tavily.py` |
 | `EMBEDDING_CHECK` | `schemas/verification/config.py`, `benchmark/verification/utils/embedding_check.py` |
 | `EMBEDDING_CHECK_MODEL` | `schemas/verification/config.py`, `benchmark/verification/utils/embedding_check.py` |
@@ -136,12 +140,12 @@ In all cases, the effective precedence is: explicit argument > VerificationConfi
 
 | Category | Count |
 |----------|-------|
-| API Keys | 7 |
+| API Keys | 9 |
 | Embedding Check | 3 |
 | Async Execution | 3 |
 | Path Configuration | 3 |
 | Other Settings | 4 |
-| **Total** | **20** |
+| **Total** | **22** |
 
 ---
 

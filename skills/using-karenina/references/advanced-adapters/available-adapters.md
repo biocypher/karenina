@@ -1,6 +1,6 @@
 # Available Adapters
 
-Karenina ships with seven adapter packages (`langchain`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `google_genai`, `manual`, `taskeval`) and two routing interfaces (`openrouter`, `openai_endpoint`) that delegate to LangChain, totaling **nine registered `interface` values**. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
+Karenina ships with eight adapter packages (`langchain`, `claude_agent_sdk`, `claude_tool`, `langchain_deep_agents`, `google_genai`, `omp`, `manual`, `taskeval`) and two routing interfaces (`openrouter`, `openai_endpoint`) that delegate to LangChain, totaling **ten registered `interface` values**. This page documents each adapter's implementation details, capabilities, configuration requirements, and adapter-specific behavior.
 
 For the conceptual introduction to adapters, see [Adapters Overview](../core_concepts/adapters.md). For port protocol signatures, see [Port Types](ports.md).
 
@@ -8,17 +8,17 @@ For the conceptual introduction to adapters, see [Adapters Overview](../core_con
 
 ## Feature Comparison
 
-| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `google_genai` | `manual` | `taskeval` |
-|---------|:-----------:|:-----------------------:|:------------------:|:-------------:|:--------------:|:--------:|:----------:|
-| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | No (Gemini only) | N/A | N/A |
-| **MCP server support** | Yes | Yes | Yes | Yes | Yes | No | No |
-| **Tool use** | Yes | Yes | Yes | Yes | Yes | No | No |
-| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` | `tool_loop` | N/A (no-op) |
-| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | Yes (native JSON schema) | No | No (no-op) |
-| **Parser: system prompt** | Yes | Yes | Yes | Yes | Yes | No | N/A |
-| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | Not configured (cache reads reported in usage) | No | No |
-| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None | None | None |
-| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | `google.genai` importable | Always available | Always available |
+| Feature | `langchain` | `langchain_deep_agents` | `claude_agent_sdk` | `claude_tool` | `google_genai` | `omp` | `manual` | `taskeval` |
+|---------|:-----------:|:-----------------------:|:------------------:|:-------------:|:--------------:|:-----:|:--------:|:----------:|
+| **Multi-provider support** | Yes (all LangChain providers) | Yes (all LangChain providers) | No (Anthropic only) | No (Anthropic only) | No (Gemini only) | Yes (OMP catalog) | N/A | N/A |
+| **MCP server support** | Yes | Yes | Yes | Yes | Yes | Yes (ACP) | No | No |
+| **Tool use** | Yes | Yes | Yes | Yes | Yes | Yes (built in) | No | No |
+| **Agent tier** | `tool_loop` | `deep_agent` | `deep_agent` | `tool_loop` | `tool_loop` | `deep_agent` | `tool_loop` | N/A (no-op) |
+| **Parser: structured output** | No (JSON fallback) | Yes (native via LangChain) | Yes (native) | Yes (native) | Yes (native JSON schema) | N/A (agent-only) | No | No (no-op) |
+| **Parser: system prompt** | Yes | Yes | Yes | Yes | Yes | N/A | No | N/A |
+| **Prompt caching** | Via middleware config | Via provider config | Via SDK | Native API support | Not configured (cache reads reported in usage) | Provider/OMP cache | No | No |
+| **Auto-fallback** | None (base adapter) | None (explicit install) | `langchain` | `langchain` | None | `langchain` when unavailable | None | None |
+| **Availability check** | `langchain_core` importable | `deepagents` importable | `claude` CLI in PATH | `anthropic` importable | `google.genai` importable | `omp` CLI + `acp` package | Always available | Always available |
 
 ---
 
@@ -569,6 +569,46 @@ None. The default parsing, rubric, abstention and sufficiency instructions apply
 
 ---
 
+## `omp` — Oh My Pi over Agent Client Protocol
+
+An AgentPort-only deep-agent adapter for the multi-provider Oh My Pi coding agent. Karenina launches `omp acp` and uses ACP v1 for version/capability negotiation, sessions, streamed messages and thoughts, tool lifecycle events, MCP configuration, usage, and cancellation.
+
+```python
+config = ModelConfig(
+    id="omp-glm",
+    model_provider="zai",
+    model_name="glm-5.3",
+    interface="omp",
+    extra_kwargs={"thinking": "high"},
+)
+```
+
+**Required fields**: `id`, `model_provider`, `model_name`
+
+**Install**: install OMP from <https://omp.sh/>, then `pip install 'karenina[omp]'`.
+
+Live validation uses OMP 18.14.2. OMP 17.3.3 is incompatible with current OpenCode Go requests because it omits the required session header; upgrade the CLI when using that route.
+
+The adapter uses the selector `model_provider/model_name`, so the example selects `zai/glm-5.3`. OMP resolves credentials from its auth store or provider environment variables.
+
+The adapter implements AgentPort only. Configure a separate LLM/Parser model for parsing, rubric evaluation, and other single-turn stages. Its `langchain` fallback applies when OMP/ACP is unavailable; it does not supply the unsupported OMP LLM/Parser factories.
+
+OMP has built-in file and shell tools. Karenina `Tool` objects are not accepted because ACP v1 has no client-supplied callable-tool definition, but MCP stdio/HTTP/SSE servers are forwarded through `session/new`. By default skills, rules, and extensions are disabled for benchmark reproducibility; opt in with `extra_kwargs` keys `enable_skills`, `enable_rules`, and `enable_extensions`.
+
+Native OMP runs on the host. `workspace_path` selects its working directory and read-only mode uses ACP permission rejection, but neither is an OS sandbox. Run Karenina/OMP in external isolation when hard containment is required.
+
+ACP reports cache usage separately. Karenina records it in `cache_read_tokens`/`cache_creation_tokens` and keeps `total_tokens = input_tokens + output_tokens`.
+
+`AgentConfig.timeout` covers ACP initialization, session/model setup, and the prompt. On timeout the adapter sends cancellation, drains updates for `extra_kwargs["timeout_cancel_grace"]` seconds (default 10), and returns the partial trace with `timeout_reached=True`. A timeout before any trace raises `AgentTimeoutError`. Cancellation, connection cleanup, and process shutdown have bounded waits; only the last 4,000 bytes of stderr are retained for diagnostics.
+
+HTTP and SSE MCP servers require the matching capability in OMP's ACP initialization response. Unsupported transports fail before session creation. Stdio MCP servers do not require an optional capability.
+
+ACP v1 provides no enforceable turn ceiling, so `AgentConfig.max_turns` is best effort. Use `AgentConfig.timeout` when the run needs a wall-clock limit.
+
+Some OMP provider failures arrive over ACP as assistant text with `end_turn`, rather than a protocol error; OMP omits turn usage when no tokens were consumed. A successful completed turn therefore requires a non-zero ACP usage summary. Missing or all-zero usage raises `AgentResponseError`, including for providers or OMP versions that do not expose turn usage, so authentication or routing errors do not become successful benchmark answers. Partial timeout/limit results may lack usage. ACP `refusal` responses also raise `AgentResponseError`.
+
+---
+
 ## `manual` — Pre-Recorded Traces
 
 A special-purpose interface that replays pre-recorded LLM traces instead of making live API calls.
@@ -673,6 +713,7 @@ This adapter is wired by TaskEval; users do not normally instantiate it directly
 | Claude-only with full features | `claude_agent_sdk` | Native structured output, session management |
 | Claude-only, lightweight | `claude_tool` | Native structured output, prompt caching, simpler setup |
 | Gemini with Google Search grounding or Vertex AI | `google_genai` | Search queries and sources in the trace, search budget, thinking-token usage |
+| Multi-provider coding-agent subscriptions | `omp` | Standard ACP bridge to OMP providers and built-in tools |
 | Offline / CI / reproducibility | `manual` | No API calls, pre-recorded traces |
 | Need native structured output | `claude_agent_sdk`, `claude_tool`, `google_genai`, or `langchain_deep_agents` | All have `supports_structured_output = True` |
 
@@ -689,6 +730,7 @@ This adapter is wired by TaskEval; users do not normally instantiate it directly
 | `claude_agent_sdk` | No | `ANTHROPIC_API_KEY` (used by Claude CLI) |
 | `claude_tool` | No | `ANTHROPIC_API_KEY` (or `anthropic_api_key` on ModelConfig) |
 | `google_genai` | No | `vertex` backend: Google application default credentials (no key). `gemini_api` backend: `GEMINI_API_KEY` or `GOOGLE_API_KEY` (or `endpoint_api_key` on ModelConfig) |
+| `omp` | Yes | Provider-specific OMP auth or environment variable |
 | `manual` | No | None |
 | `taskeval` | No | None |
 

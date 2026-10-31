@@ -532,6 +532,11 @@ class AdapterRegistry:
         except ImportError:
             logger.debug("Google GenAI registration module not available")
 
+        try:
+            from karenina.adapters.omp import registration as _omp  # noqa: F401
+        except ImportError:
+            logger.debug("Oh My Pi registration module not available")
+
     @classmethod
     def _discover_entry_points(cls) -> None:
         """Discover and load external adapters via ``karenina.adapters`` entry points.

@@ -1,13 +1,13 @@
 # Synced Documentation Manifest
 
-Last synced: 2026-08-14T19:11:49Z (ISO 8601 UTC / RFC 3339)
+Last synced: 2026-10-31T21:26:26Z (ISO 8601 UTC / RFC 3339)
 Source: docs/
 Files synced: 113
 
 | Source Path | Reference Path | Lines |
 |-------------|---------------|-------|
-| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 703 |
-| docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 231 |
+| docs/advanced-adapters/available-adapters.md | skills/using-karenina/references/advanced-adapters/available-adapters.md | 745 |
+| docs/advanced-adapters/index.md | skills/using-karenina/references/advanced-adapters/index.md | 232 |
 | docs/advanced-adapters/mcp-integration.md | skills/using-karenina/references/advanced-adapters/mcp-integration.md | 446 |
 | docs/advanced-adapters/ports.md | skills/using-karenina/references/advanced-adapters/ports.md | 555 |
 | docs/advanced-adapters/writing-adapters.md | skills/using-karenina/references/advanced-adapters/writing-adapters.md | 788 |
@@ -16,14 +16,14 @@ Files synced: 113
 | docs/advanced-pipeline/custom-stages.md | skills/using-karenina/references/advanced-pipeline/custom-stages.md | 332 |
 | docs/advanced-pipeline/deep-judgment-rubrics.md | skills/using-karenina/references/advanced-pipeline/deep-judgment-rubrics.md | 377 |
 | docs/advanced-pipeline/deep-judgment-templates.md | skills/using-karenina/references/advanced-pipeline/deep-judgment-templates.md | 339 |
-| docs/advanced-pipeline/error-handling.md | skills/using-karenina/references/advanced-pipeline/error-handling.md | 522 |
+| docs/advanced-pipeline/error-handling.md | skills/using-karenina/references/advanced-pipeline/error-handling.md | 525 |
 | docs/advanced-pipeline/index.md | skills/using-karenina/references/advanced-pipeline/index.md | 139 |
 | docs/advanced-pipeline/prompt-assembly.md | skills/using-karenina/references/advanced-pipeline/prompt-assembly.md | 261 |
 | docs/advanced-pipeline/replay-store.md | skills/using-karenina/references/advanced-pipeline/replay-store.md | 778 |
 | docs/advanced-pipeline/run-artifacts-and-repair.md | skills/using-karenina/references/advanced-pipeline/run-artifacts-and-repair.md | 118 |
 | docs/advanced-pipeline/stages.md | skills/using-karenina/references/advanced-pipeline/stages.md | 802 |
 | docs/advanced.md | skills/using-karenina/references/advanced.md | 25 |
-| docs/core_concepts/adapters.md | skills/using-karenina/references/core_concepts/adapters.md | 359 |
+| docs/core_concepts/adapters.md | skills/using-karenina/references/core_concepts/adapters.md | 373 |
 | docs/core_concepts/adele.md | skills/using-karenina/references/core_concepts/adele.md | 443 |
 | docs/core_concepts/agentic-evaluation.md | skills/using-karenina/references/core_concepts/agentic-evaluation.md | 442 |
 | docs/core_concepts/answer-templates.md | skills/using-karenina/references/core_concepts/answer-templates.md | 1251 |
@@ -75,14 +75,14 @@ Files synced: 113
 | docs/reference/cli/serve.md | skills/using-karenina/references/reference/cli/serve.md | 129 |
 | docs/reference/cli/verify-status.md | skills/using-karenina/references/reference/cli/verify-status.md | 187 |
 | docs/reference/cli/verify.md | skills/using-karenina/references/reference/cli/verify.md | 365 |
-| docs/reference/configuration/env-vars.md | skills/using-karenina/references/reference/configuration/env-vars.md | 153 |
+| docs/reference/configuration/env-vars.md | skills/using-karenina/references/reference/configuration/env-vars.md | 157 |
 | docs/reference/configuration/index.md | skills/using-karenina/references/reference/configuration/index.md | 68 |
 | docs/reference/configuration/model-config.md | skills/using-karenina/references/reference/configuration/model-config.md | 292 |
 | docs/reference/configuration/preset-schema.md | skills/using-karenina/references/reference/configuration/preset-schema.md | 412 |
 | docs/reference/configuration/prompt-config.md | skills/using-karenina/references/reference/configuration/prompt-config.md | 195 |
 | docs/reference/configuration/verification-config.md | skills/using-karenina/references/reference/configuration/verification-config.md | 335 |
 | docs/reference/index.md | skills/using-karenina/references/reference/index.md | 30 |
-| docs/skills.md | skills/using-karenina/references/skills.md | 64 |
+| docs/skills.md | skills/using-karenina/references/skills.md | 78 |
 | docs/workflows/analyzing-results/database-persistence.md | skills/using-karenina/references/workflows/analyzing-results/database-persistence.md | 386 |
 | docs/workflows/analyzing-results/dataframe-analysis.md | skills/using-karenina/references/workflows/analyzing-results/dataframe-analysis.md | 486 |
 | docs/workflows/analyzing-results/error-analysis.md | skills/using-karenina/references/workflows/analyzing-results/error-analysis.md | 130 |
