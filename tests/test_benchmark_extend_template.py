@@ -276,6 +276,26 @@ class TestExtendTemplateMultipleAnsweringModels:
         # The captured store must carry one entry per (question, answering) pair.
         assert len(call["config"].replay_store.entries) == 4
 
+    def test_new_judge_does_not_inherit_prior_verdicts(self, recorder: _FakeVerifyRecorder) -> None:
+        """A new judge replays the prior traces but never the prior judge's verdict."""
+        bench = _make_bench()
+        prior_rows = [
+            _make_result(question_id=qid, run_name="verdicts", parsing=JUDGE_A, verify_result=verdict)
+            for qid, verdict in (("q1", True), ("q2", False))
+        ]
+        config = VerificationConfig(
+            answering_models=[ANSWERING_MODEL],
+            parsing_models=[JUDGE_B],
+            evaluation_mode="template_only",
+        )
+
+        bench.extend_template(VerificationResultSet(results=prior_rows), config, store=False)
+
+        entries = [entry for _, entry in recorder.calls[-1]["config"].replay_store.entries]
+        assert len(entries) == 2
+        assert all(entry.raw_trace == "answer-text" for entry in entries)
+        assert all(entry.verify_result is None for entry in entries)
+
 
 @pytest.mark.unit
 class TestExtendTemplateAddAnsweringModel:

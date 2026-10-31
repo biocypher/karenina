@@ -64,16 +64,45 @@ class TestClassifyFailure:
         assert classify_failure(ctx) is None
 
     def test_abstention_beats_sufficiency(self) -> None:
-        ctx = make_context(abstention_detected=True, sufficiency_detected=False)
+        ctx = make_context(
+            abstention_detected=True,
+            sufficiency_check_performed=True,
+            sufficiency_detected=False,
+        )
         f = classify_failure(ctx)
         assert f is not None
         assert f.category is FailureCategory.ABSTENTION
 
-    def test_sufficiency(self) -> None:
-        ctx = make_context(abstention_detected=False, sufficiency_detected=True)
+    def test_sufficiency_insufficient_response_classified(self) -> None:
+        """detected=False means insufficient: the guard failed the row (inverted polarity vs abstention)."""
+        ctx = make_context(
+            abstention_detected=False,
+            sufficiency_check_performed=True,
+            sufficiency_detected=False,
+        )
         f = classify_failure(ctx)
         assert f is not None
         assert f.category is FailureCategory.SUFFICIENCY
+
+    def test_sufficiency_sufficient_response_passes(self) -> None:
+        """detected=True means sufficient: a passing row must not carry a SUFFICIENCY failure."""
+        ctx = make_context(
+            abstention_detected=False,
+            sufficiency_check_performed=True,
+            sufficiency_detected=True,
+            template_verification_performed=True,
+            verify_result=True,
+        )
+        assert classify_failure(ctx) is None
+
+    def test_sufficiency_not_performed_never_classifies(self) -> None:
+        """A False detected flag without the check having run must not classify."""
+        ctx = make_context(
+            sufficiency_detected=False,
+            template_verification_performed=True,
+            verify_result=True,
+        )
+        assert classify_failure(ctx) is None
 
     def test_template_validation_error(self) -> None:
         ctx = make_context(template_validation_error="bad field", error_stage="validate_template")
@@ -81,6 +110,15 @@ class TestClassifyFailure:
         assert f is not None
         assert f.category is FailureCategory.TEMPLATE_VALIDATION
         assert f.stage == "validate_template"
+
+    @pytest.mark.parametrize("stage", ["ParseTemplate", "parse_template"])
+    def test_parsing_failure_recognizes_pipeline_and_legacy_stage_names(self, stage: str) -> None:
+        ctx = make_context(error="could not extract answer", error_stage=stage)
+        failure = classify_failure(ctx)
+        assert failure is not None
+        assert failure.category is FailureCategory.PARSING
+        assert failure.stage == "parse_template"
+        assert failure.details == {"error_message": "could not extract answer"}
 
     def test_unexpected_error_catchall(self) -> None:
         ctx = make_context(

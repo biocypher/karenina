@@ -1066,7 +1066,10 @@ class TestFailedInvestigation:
                 "content",
             ),
             ({ArtifactKeys.ABSTENTION_DETECTED: True}, "abstention"),
-            ({ArtifactKeys.SUFFICIENCY_DETECTED: True}, "sufficiency"),
+            (
+                {ArtifactKeys.SUFFICIENCY_CHECK_PERFORMED: True, ArtifactKeys.SUFFICIENCY_DETECTED: False},
+                "sufficiency",
+            ),
         ],
     )
     def test_caveat_marks_failure_when_an_earlier_rule_sets_the_category(
