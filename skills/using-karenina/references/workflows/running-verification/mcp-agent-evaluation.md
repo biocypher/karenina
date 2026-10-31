@@ -349,13 +349,14 @@ for result in results[:3]:
 
 ## Adapter Comparison
 
-Three adapters support MCP/agent workflows:
+The main adapters for MCP/agent workflows:
 
 | Adapter | Interface | MCP Support | Best For |
 |---------|-----------|-------------|----------|
 | LangChain Agent | `langchain` | Via LangChain tools | OpenAI/Google models with tools |
 | Claude Agent SDK | `claude_agent_sdk` | Native MCP | Claude models with MCP servers |
 | Claude Tool | `claude_tool` | Via tool_use | Claude models with structured tool calling |
+| Google GenAI | `google_genai` | Via Gemini function calling | Gemini models with MCP servers, optionally with Google Search |
 
 Choose the adapter via the `interface` field on `ModelConfig`. Claude Agent SDK provides the most direct MCP integration.
 

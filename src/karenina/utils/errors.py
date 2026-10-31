@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "ErrorCategory",
     "ErrorRegistry",
+    "declared_category",
     "is_retryable_error",
 ]
 
@@ -80,9 +81,12 @@ class ErrorRegistry:
     Classification checks in priority order:
     1. User-registered exception types (isinstance for classes, type name for strings)
     2. User-registered message substring patterns
-    3. Built-in type name rules
-    4. Built-in message substring rules
-    5. Default: PERMANENT
+    3. The category the exception declares in an ``error_category`` attribute
+       (an ErrorCategory), so an adapter's error types classify the same way
+       in every registry, not only the adapter's own
+    4. Built-in type name rules
+    5. Built-in message substring rules
+    6. Default: PERMANENT
 
     Example:
         >>> registry = ErrorRegistry()
@@ -167,21 +171,43 @@ class ErrorRegistry:
             if pattern.lower() in exc_message:
                 return category
 
-        # 4. Built-in type name rules (check full MRO for built-in types)
+        # 4. The category the exception declares
+        declared = declared_category(exception)
+        if declared is not None:
+            return declared
+
+        # 5. Built-in type name rules (check full MRO for built-in types)
         for ancestor in exc_type.__mro__:
             ancestor_name = ancestor.__name__
             if ancestor_name in _BUILTIN_TYPE_RULES:
                 return _BUILTIN_TYPE_RULES[ancestor_name]
 
-        # 5. Built-in message substring rules
+        # 6. Built-in message substring rules
         #    Note: StreamingTimeoutError inherits from TimeoutError, so it is
         #    already classified as TIMEOUT by the MRO check above.
         for keyword, category in _BUILTIN_MESSAGE_RULES:
             if keyword in exc_message:
                 return category
 
-        # 6. No match: permanent
+        # 7. No match: permanent
         return ErrorCategory.PERMANENT
+
+
+def declared_category(exception: BaseException) -> ErrorCategory | None:
+    """Return the category an exception declares in ``error_category``, or None.
+
+    Adapters set ``error_category`` as a class attribute on their error
+    types, so the pipeline's registry classifies them the way the adapter
+    does, without matching type names or message text.
+
+    Args:
+        exception: The exception to inspect.
+
+    Returns:
+        The declared ErrorCategory, or None when the exception declares none.
+    """
+    category = getattr(exception, "error_category", None)
+    return category if isinstance(category, ErrorCategory) else None
 
 
 def is_retryable_error(exception: BaseException) -> bool:

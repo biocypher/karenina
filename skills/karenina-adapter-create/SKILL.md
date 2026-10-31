@@ -1,105 +1,89 @@
 ---
 name: karenina-adapter-create
-description: Guide for creating a new karenina adapter. Provides the full lifecycle from requirements gathering to working, tested code. Use when adding support for a new LLM SDK or agentic framework.
-disable-model-invocation: true
+description: Guide the full lifecycle for adding or revising a Karenina model or coding-agent adapter, including protocol discovery, port selection, implementation, cold tests, live tests, and review.
 ---
 
-# Create Karenina Adapter
+# Create a Karenina Adapter
 
-This skill guides you through creating a new adapter for karenina's verification pipeline. Each adapter implements three port interfaces (AgentPort, LLMPort, ParserPort) and integrates with the AdapterRegistry.
+Use a five-phase workflow. Do not assume every backend implements every Karenina port.
 
-## Lifecycle Overview
+| Phase | Skill | Deliverable |
+| --- | --- | --- |
+| 1 | `$karenina-adapter-gather-context` | `docs/adapters/<name>-context.md` |
+| 2 | `$karenina-adapter-design` | `docs/adapters/<name>-adapter-design.md` |
+| 3 | `$karenina-adapter-implement` | Source, registration, and dependency changes |
+| 4 | `$karenina-adapter-test` | Capability-scoped cold and live evidence |
+| 5 | `$karenina-adapter-review` | Final correctness and maintainability audit |
 
-The adapter creation process has five phases. Invoke each phase skill in order:
+Read [Protocol bridging](references/protocol-bridge.md) before Phase 1 when the target is a coding agent, CLI, daemon, or service. If it implements a standard protocol, design the bridge from that protocol to Karenina explicitly. Do not jump straight to vendor-specific SDK objects.
 
-| Phase | Skill | Produces |
-|-------|-------|----------|
-| 1. Gather Context | `/karenina-adapter-gather-context` | Context document with SDK capabilities |
-| 2. Design | `/karenina-adapter-design` | Design spec with concept mapping |
-| 3. Implement | `/karenina-adapter-implement` | Adapter package (~13 source files) |
-| 4. Test | `/karenina-adapter-test` | Conformance + adapter-specific tests |
-| 5. Review | `/karenina-adapter-review` | Clean, convention-compliant code |
+## Start with a port matrix
 
-## Distribution Models
+Karenina has three independent ports:
 
-There are three ways to distribute an adapter, depending on where the code lives:
+| Port | Purpose | Implement when |
+| --- | --- | --- |
+| `AgentPort` | Agent loop, tools, workspace, MCP, trace | The backend is agentic or owns a tool loop |
+| `LLMPort` | Single-turn generation, streaming, structured output | The backend exposes a direct model-call API with the required semantics |
+| `ParserPort` | Typed Pydantic extraction | The backend can reliably return and validate schema-constrained output |
 
-| Model | Where code lives | How it registers | When to use |
-|-------|-----------------|-----------------|-------------|
-| **Manual** | Any Python module | Call `AdapterRegistry.register()` directly in your code before creating a ModelConfig | One-off experiments, internal prototypes |
-| **Built-in** | `karenina/src/karenina/adapters/<name>/` | Write `registration.py`; add import in `registry.py _load_builtins()` | Adapters shipped with karenina |
-| **Installable plugin** | Separate Python package | Write `registration.py`; declare entry point under `[project.entry-points."karenina.adapters"]` in `pyproject.toml` | Third-party or optional adapters |
+An adapter may implement any non-empty subset. Record unsupported ports in the context, design, registration tests, and user docs. `fallback_interface` handles an unavailable adapter; it does not automatically fill a `None` port factory. Callers needing unsupported duties must configure a separate model/interface unless the factory code explicitly provides port-level fallback.
 
-All three paths call the same `AdapterRegistry.register()` API. The only difference is how the registration module gets imported: manually, via `_load_builtins()`, or via entry point discovery.
+## Distribution
 
-## Canonical Adapter Package
+| Model | Registration |
+| --- | --- |
+| Built in | Add `registration.py` and one guarded import in `AdapterRegistry._load_builtins()` |
+| Plugin | Declare a `karenina.adapters` entry point in the plugin package |
+| Manual | The caller imports a module that invokes `AdapterRegistry.register()` |
 
-Every adapter lives at `karenina/src/karenina/adapters/<name>/` and contains:
+All models use `AdapterSpec`. Choose the distribution from the request or repository context; ask only if the choice materially changes the deliverable and cannot be inferred.
 
+## Package shape
+
+Create only the files the selected ports and transport require. Typical modules include:
+
+```text
+src/karenina/adapters/<name>/
+  __init__.py
+  availability.py
+  registration.py
+  agent.py          # AgentPort only
+  llm.py            # LLMPort only
+  parser.py         # ParserPort only
+  messages.py       # when conversion is non-trivial
+  usage.py          # when accounting needs a dedicated mapper
+  trace.py          # when trace projection needs a dedicated mapper
+  mcp.py            # when MCP is supported
+  protocol.py       # standard/native wire bridge, when applicable
+  errors.py         # when backend error mapping is non-trivial
 ```
-<name>/
-├── __init__.py          # Lazy exports, __all__
-├── availability.py      # SDK availability check
-├── registration.py      # AdapterSpec + AdapterRegistry.register()
-├── agent.py             # AgentPort implementation (core)
-├── llm.py               # LLMPort implementation
-├── parser.py            # ParserPort implementation
-├── messages.py          # Bidirectional message conversion
-├── trace.py             # Dual trace extraction (raw + structured)
-├── usage.py             # UsageMetadata extraction
-├── errors.py            # Exception mapping to karenina hierarchy
-├── mcp.py               # MCPServerConfig conversion (if applicable)
-├── initialization.py    # Model creation (if needed)
-└── prompts/             # Adapter instruction registration
-    ├── __init__.py
-    ├── parsing.py
-    ├── rubric.py
-    └── deep_judgment.py
-```
 
-Not all files are required. `initialization.py` and `mcp.py` are only needed when the adapter uses LangChain model creation or MCP tools respectively.
+Keep optional dependency imports lazy enough that registry discovery can report unavailability instead of losing the interface registration.
 
-## Deliverables Checklist
+## Required outcomes
 
-- [ ] Context document (`docs/adapters/<name>-context.md`)
-- [ ] Design spec (`docs/superpowers/specs/<date>-<name>-design.md`)
-- [ ] Adapter package (all source files)
-- [ ] `AdapterRegistry.register()` called in `registration.py`
-- [ ] `aclose()` implemented on all three port adapters (required protocol method)
-- [ ] `capabilities` property implemented on all three port adapters (returns `PortCapabilities`, including the `supports_streaming` flag)
-- [ ] `LLMPort.astream()` and `LLMPort.stream_invoke()` defined (real implementation, or raising `NotImplementedError` when the SDK has no streaming API)
-- [ ] `AgentResult.timeout_reached` handling: either returns a partial result on timeout, or raises `AgentTimeoutError` with the limitation documented in the adapter's module docstring
-- [ ] (Built-in only) Import added in `registry.py _load_builtins()`
-- [ ] (Plugin only) Entry point declared in `pyproject.toml`
-- [ ] Conformance tests pass
-- [ ] Adapter-specific tests pass (including `test_streaming.py` if applicable and `test_agent_timeout.py` for partial-recovery adapters)
-- [ ] Full test suite passes (no regressions)
-- [ ] All files under 800 lines
-- [ ] No cross-adapter imports
+- Context and design documents state the supported-port matrix.
+- Standard protocol discovery and the protocol-to-Karenina mapping are documented, or the absence of a suitable protocol is documented.
+- Every implemented port satisfies its current Protocol, including `capabilities` and `aclose()`.
+- Registration flags match behavior proved by tests.
+- Agent timeouts cancel the backend and return partial traces when the transport exposes them.
+- `UsageMetadata.total_tokens` follows Karenina's convention (`input_tokens + output_tokens`); cache buckets remain separate even if a provider/protocol defines a broader total.
+- Cold tests cover every implemented port and every declared capability.
+- Live tests exercise the actual provider/runtime, workspace, tools, traces, usage, timeout/limit behavior where supported, and each requested subscription/model route.
+- Full regression tests, lint, format, and type checks pass in proportion to the change.
 
-## Common Pitfalls (from hot testing all 4 adapters)
+## Persistent pitfalls
 
-These bugs were found in multiple adapters during live API testing. They are systematic, not edge cases. The detailed patterns and code examples live in `/karenina-adapter-implement` (Phase 3); the review checklist in `/karenina-adapter-review` (Phase 5) verifies each one.
+- Treating all three factories as mandatory.
+- Claiming fallback for an unsupported port without tracing the factory behavior.
+- Wrapping a proprietary SDK before checking ACP, MCP, OpenAI-compatible APIs, JSON-RPC, or another published protocol.
+- Copying a protocol field by name without reconciling semantics; token totals and turn counts commonly differ.
+- Advertising sandboxing when the runtime only changes `cwd` or uses an approval prompt.
+- Capturing streamed chunks as separate messages instead of coalescing them by protocol message id.
+- Losing tool-call/result correlation ids.
+- Accepting `max_turns`, timeouts, or MCP parameters without forwarding/enforcing them or documenting and testing a protocol limitation.
+- Eager imports that make optional adapters disappear from the registry.
+- Live tests that only ask a trivia question and never prove real workspace/tool behavior.
 
-1. **Structured output must serialize to JSON.** Using `str()` on a Pydantic model produces Python repr, not JSON. Found in 3 of 4 adapters.
-2. **Turn limits must be wired to the framework.** Accepting `max_turns` without passing it to the SDK's limit parameter means the agent runs indefinitely.
-3. **No-tools fallback is required.** Adapters crash when called with `tools=None` and `mcp_servers=None` unless a fallback path exists.
-4. **Timeout must apply to all execution paths.** If the adapter has a no-tools fallback, that path must also honor `config.timeout`.
-5. **MCP sessions must outlive their tools.** Creating sessions in `async with` and returning tools after the block closes produces invalid tool handles.
-6. **Deferred error pattern prevents ExceptionGroup wrapping.** Capture exceptions before `AsyncExitStack` cleanup, re-raise after.
-7. **Streaming partial capture must flip both flags.** On a streaming wall-clock timeout, the returned `LLMResponse` must set both `is_partial=True` and `usage_unavailable=True`. Forgetting `usage_unavailable` lets downstream cost reporting treat zero-token partial responses as real (free) calls.
-8. **Agent timeout should return a partial result when possible.** When `config.timeout` fires mid-run and at least one message was collected, return `AgentResult(timeout_reached=True)` instead of raising `AgentTimeoutError`. The pipeline propagates `timeout_reached` into `VerificationResult.response_timeout_partial` so downstream stages can score partial traces.
-
-## Existing Adapters (for reference)
-
-| Adapter | Interface | Deep Agent | Pattern |
-|---------|-----------|-----------------|---------|
-| LangChain | `langchain` | No (scaffolded) | Orchestrated tool loop |
-| Claude Agent SDK | `claude_agent_sdk` | Yes | CLI-based agent |
-| Claude Tool | `claude_tool` | No | Native structured output |
-| Manual | `manual` | No | Pre-recorded traces |
-| Deep Agents | `langchain_deep_agents` | Yes | LangGraph agent harness |
-
-## Getting Started
-
-Run `/karenina-adapter-gather-context <sdk-name>` to begin Phase 1.
+Begin with `$karenina-adapter-gather-context`.

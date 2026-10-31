@@ -6,7 +6,7 @@ Adapters are the implementations behind Karenina's LLM backend abstraction. They
 
 The verification pipeline needs LLMs for three distinct purposes: generating answers, parsing responses into structured data, and running quality checks and rubric evaluation. Rather than coding those interactions against a specific provider, the pipeline calls abstract **port protocols**. Adapters implement those protocols for specific backends.
 
-The most important idea is: **the pipeline does not know which LLM backend it is using.** Every pipeline stage sees the same port interface regardless of whether the backend is LangChain, the Anthropic Agent SDK, the Anthropic Python SDK, or a set of pre-recorded traces. Swapping backends means changing a single configuration field (`interface` on `ModelConfig`); no pipeline code changes.
+The most important idea is: **the pipeline does not know which LLM backend it is using.** Every pipeline stage sees the same port interface regardless of whether the backend is LangChain, the Anthropic Agent SDK, the Anthropic Python SDK, the Google GenAI SDK, or a set of pre-recorded traces. Swapping backends means changing a single configuration field (`interface` on `ModelConfig`), with no pipeline code changes.
 
 ### 1.1. Adapters vs. Ports
 
@@ -80,7 +80,7 @@ For complete method signatures and detailed protocol documentation, see [Port Ty
 
 ## 3. Available Interfaces
 
-Karenina ships with seven interfaces, configured via the `interface` field on `ModelConfig`. The default is `"langchain"`.
+Karenina ships with eight interfaces, configured via the `interface` field on `ModelConfig`. The default is `"langchain"`.
 
 | Interface | Backend | MCP | Tools | Parser: Native Structured Output | Agent Tier | Fallback |
 |-----------|---------|:---:|:-----:|:-------------------------------:|:----------------:|----------|
@@ -90,6 +90,9 @@ Karenina ships with seven interfaces, configured via the `interface` field on `M
 | `openai_endpoint` | OpenAI-compatible endpoints (routes to `langchain`) | Yes | Yes | No | `tool_loop` | None |
 | `claude_agent_sdk` | Anthropic Agent SDK via Claude CLI | Yes | Yes | Yes | `deep_agent` | `langchain` |
 | `claude_tool` | Anthropic Python SDK (`anthropic` package) | Yes | Yes | Yes | `tool_loop` | `langchain` |
+| `google_genai` | Google GenAI SDK (Gemini on Vertex AI or the Gemini API) | Yes | Yes | Yes | `tool_loop` | None |
+| `omp` | Oh My Pi coding agent over ACP v1 (multi-provider) | Yes | Built in | Agent-only | `deep_agent` | `langchain` when unavailable |
+| `codex_sdk` | OpenAI Codex SDK and bundled runtime | No | Built in | Agent-only | `deep_agent` | `langchain` |
 | `manual` | Pre-recorded traces | No | No | N/A | `tool_loop` | None |
 
 The **"Parser: Native Structured Output"** column indicates whether the parser adapter uses the LLM API's built-in schema enforcement (tool use or JSON mode) rather than embedding JSON instructions in the prompt and parsing the text response. This distinction matters for parsing reliability on complex schemas. All non-manual LLM adapters support structured output on the LLM port via `with_structured_output()`.
@@ -98,14 +101,17 @@ The **"Agent Tier"** column indicates the adapter's agent architecture. Adapters
 
 ### 3.1. Interface Categories
 
-The seven interfaces fall into three categories.
+The eight interfaces fall into three categories.
 
-**Native adapters** have their own implementations of all three ports:
+**Native adapters** have their own implementation of one or more ports:
 
 - **`langchain`**: The default. Uses LangChain's `init_chat_model` and supports all LangChain-compatible providers: Anthropic, OpenAI, Google, and many more. The broadest-compatibility option.
 - **`langchain_deep_agents`**: Uses LangChain Deep Agents (`create_deep_agent`) for natively agentic evaluation with built-in planning, context management, and subagent orchestration. Supports all LangChain-compatible providers. Operates at the `deep_agent` tier. Requires: `pip install deepagents langchain-mcp-adapters`.
 - **`claude_agent_sdk`**: Uses the Claude CLI (`claude` binary) for agent execution and the Anthropic Agent SDK for LLM and parser operations. Provides native structured output in the parser.
 - **`claude_tool`**: Uses the `anthropic` Python package directly with a tool_runner for agent execution. Provides native structured output in the parser without requiring the Claude CLI.
+- **`google_genai`**: Uses the `google-genai` package directly for Gemini, on Vertex AI (Google application default credentials, the default) or the Gemini API. Runs its own tool loop for function and MCP tools, can enable Gemini's server-side Google Search and URL reading with a per-run search budget, and records searches as tool calls in the trace. See [Available Adapters](../advanced-adapters/available-adapters.md#google_genai-gemini-through-the-google-genai-sdk).
+- **`omp`**: Launches Oh My Pi as an ACP v1 agent and implements AgentPort only. It preserves streamed reasoning, built-in/MCP tool traces, usage, cancellation, and workspace selection across the protocol bridge. Install the `omp` extra plus the separate OMP CLI. Use another interface for parsing and judging.
+- **`codex_sdk`**: Wraps the Codex Python SDK and bundled app-server for sandboxed coding-agent execution. Implements AgentPort; LLM and parser requests fall back to LangChain. Install `karenina[codex]`. See [Available Adapters](../advanced-adapters/available-adapters.md#codex_sdk-openai-codex-coding-agent).
 - **`manual`**: Replays pre-recorded traces from `ManualTraceManager`. Only the agent port is functional; LLM and parser adapters raise `ManualInterfaceError` if invoked. See [Manual Interface](manual-interface.md).
 
 **Routing interfaces** share the `langchain` adapter implementation with interface-specific configuration:
@@ -126,25 +132,31 @@ The seven interfaces fall into three categories.
           │
           ├─ YES
           │   │
-          │   3. Access many models through a single API key?
+          │   3. Gemini with Google Search grounding, a search budget, or Vertex AI login?
           │      │
-          │      ├─ YES → openrouter
+          │      ├─ YES → google_genai
           │      │
           │      └─ NO
           │          │
-          │          4. Running a local LLM server (Ollama, vLLM, LM Studio)?
+          │          4. Access many models through a single API key?
           │             │
-          │             ├─ YES → openai_endpoint
+          │             ├─ YES → openrouter
           │             │
-          │             └─ NO → langchain
+          │             └─ NO
+          │                 │
+          │                 5. Running a local LLM server (Ollama, vLLM, LM Studio)?
+          │                    │
+          │                    ├─ YES → openai_endpoint
+          │                    │
+          │                    └─ NO → langchain
           │
           └─ NO (Claude models only)
               │
-              5. Do you need native structured output in the parser?
+              6. Do you need native structured output in the parser?
                  │
                  ├─ YES
                  │   │
-                 │   6. Is the Claude CLI available in PATH?
+                 │   7. Is the Claude CLI available in PATH?
                  │      │
                  │      ├─ YES → claude_agent_sdk
                  │      │
@@ -162,8 +174,11 @@ The seven interfaces fall into three categories.
 | 200+ models through one API key | `openrouter` |
 | Local LLM server (Ollama, vLLM, LM Studio) | `openai_endpoint` |
 | Natively agentic evaluation with planning and subagents | `langchain_deep_agents` |
+| Codex subscription authentication with native coding tools | `codex_sdk` for answering; another interface for parsing/judging |
+| Multi-provider coding agent through OMP accounts/subscriptions | `omp` for answering; another interface for parsing/judging |
 | Claude-only with full native features | `claude_agent_sdk` |
 | Claude-only, lightweight, no CLI dependency | `claude_tool` |
+| Gemini with Google Search grounding, a search budget, or Vertex AI | `google_genai` |
 | Replay pre-recorded traces (testing, CI, TaskEval) | `manual` |
 
 ### Tradeoffs
@@ -176,6 +191,9 @@ The seven interfaces fall into three categories.
 | `openai_endpoint` | Works with any OpenAI-compatible server | Same parser limitation as `langchain`; requires per-model endpoint config |
 | `claude_agent_sdk` | Native structured output; thinking support; direct SDK access | Requires Claude CLI binary installed in PATH |
 | `claude_tool` | Native structured output without CLI dependency | Requires `anthropic` package; Claude models only |
+| `google_genai` | Native structured output, search queries and sources in the trace, search budget, thinking-token usage | Gemini models only. No automatic fallback. No file or shell tools |
+| `codex_sdk` | Native Codex coding tools, sandboxing, and usage/trace bridge | AgentPort only; no enforced turn cap or Karenina MCP/callable tool injection |
+| `omp` | Multi-provider coding-agent loop, ACP trace/usage bridge, and OMP subscriptions | AgentPort only; native host process is not an OS sandbox; ACP v1 cannot inject Karenina `Tool` callables |
 | `manual` | No live API calls; fully deterministic | Only agent port works; no generation or parsing |
 
 ## 5. Routing and Fallback
@@ -195,6 +213,9 @@ When an adapter's required dependency is missing, the factory transparently fall
 | `claude_agent_sdk` | `claude` CLI binary in PATH | `langchain` |
 | `claude_tool` | `anthropic` Python package importable | `langchain` |
 | `langchain_deep_agents` | `deepagents` Python package importable | None (raises `AdapterUnavailableError`) |
+| `google_genai` | `google-genai` Python package importable | None (raises `AdapterUnavailableError`) |
+| `codex_sdk` | `openai-codex` plus bundled or PATH CLI | `langchain` |
+| `omp` | `omp` CLI in PATH and `agent-client-protocol` Python package importable | `langchain` (for supported ports) |
 | `langchain` | `langchain_core` Python package importable | None (raises `AdapterUnavailableError`) |
 | `manual` | Always available | None (no dependency) |
 
@@ -232,6 +253,14 @@ config = ModelConfig(
     interface="claude_agent_sdk",
 )
 
+# Gemini on Vertex AI (Google application default credentials)
+config = ModelConfig(
+    id="gemini",
+    model_name="gemini-3.8-flash",
+    interface="google_genai",
+    extra_kwargs={"project": "my-gcp-project"},
+)
+
 # OpenAI-compatible endpoint (local server)
 config = ModelConfig(
     id="local",
@@ -240,11 +269,20 @@ config = ModelConfig(
     endpoint_base_url="http://localhost:8000/v1",
     endpoint_api_key="not-needed",
 )
+
+# OMP deep agent (AgentPort only; install karenina[omp] and the OMP CLI)
+config = ModelConfig(
+    id="omp-glm",
+    model_name="glm-5.3",
+    model_provider="zai",
+    interface="omp",
+    extra_kwargs={"thinking": "high"},
+)
 ```
 
 <div class="admonition note">
 <p class="admonition-title">Provider requirements</p>
-<p>The <code>langchain</code> and <code>langchain_deep_agents</code> interfaces require <code>model_provider</code> to be set. All other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
+<p>The <code>langchain</code>, <code>langchain_deep_agents</code>, and <code>omp</code> interfaces require <code>model_provider</code> to be set. OMP combines it with <code>model_name</code> as a <code>provider/model</code> selector. Other interfaces either assume a specific provider (<code>claude_agent_sdk</code>, <code>claude_tool</code>, <code>google_genai</code>) or do not need one (<code>openrouter</code>, <code>openai_endpoint</code>, <code>manual</code>).</p>
 </div>
 
 ### Factory Functions

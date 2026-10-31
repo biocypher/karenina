@@ -1,8 +1,8 @@
 """Codex SDK agent adapter implementing the AgentPort interface.
 
 Wraps OpenAI's Codex Python SDK (openai-codex). Each arun() call spawns a
-fresh ``codex app-server`` subprocess via ``async with AsyncCodex(...)``,
-starts one thread, runs one turn, and tears everything down. This mirrors
+fresh ``codex app-server`` subprocess through an owned ``AsyncCodex`` client,
+starts one thread, runs one turn, and explicitly closes the client. This mirrors
 the per-run subprocess tradeoff of the Claude Agent SDK adapter: higher
 startup cost per call, but no cross-run state leakage.
 
@@ -13,25 +13,25 @@ implementations such as stock vLLM reject codex's raw request shape.
 
 Timeout salvage: the adapter drains ``TurnHandle.stream()`` itself,
 accumulating completed items and usage notifications, racing the drain
-against ``config.timeout``. On timeout it stores a provisional partial
-result, calls ``handle.interrupt()`` (errors suppressed), and returns a
+against ``config.timeout`` across initialization, thread setup, and the stream.
+On timeout it stores a provisional partial result, calls ``handle.interrupt()`` with a bounded wait, and returns a
 refined partial with ``timeout_reached=True``.
 
 Known gap: codex has no per-turn iteration cap, so
-``AgentConfig.max_turns`` is best effort. ``limit_reached`` is set only
-when a turn error message indicates a limit.
+``AgentConfig.max_turns`` is not enforced; a warning is emitted.
+``limit_reached`` is set only when a turn error message indicates a limit.
 """
 
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import contextlib
 import logging
 import shutil
 import tempfile
 import threading
 from collections.abc import Callable
+from copy import copy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, TypeVar, cast
@@ -41,6 +41,7 @@ from karenina.ports import (
     AgentConfig,
     AgentResponseError,
     AgentResult,
+    AgentTimeoutError,
     MCPServerConfig,
     Message,
     Role,
@@ -78,9 +79,14 @@ _STOPPED_PLACEHOLDER = "[Agent stopped before producing a final response]"
 _INTERRUPT_RPC_TIMEOUT = 10.0
 _INTERRUPT_DRAIN_GRACE = 15.0
 _POST_CLOSE_DRAIN_GRACE = 5.0
+_CLOSE_TIMEOUT = 5.0
 
 
-def _merge_agent_message_deltas(items: list[Any], deltas_by_item_id: dict[str, list[str]]) -> list[Any]:
+def _merge_agent_message_deltas(
+    items: list[Any],
+    deltas_by_item_id: dict[str, list[str]],
+    item_order: dict[str, int] | None = None,
+) -> list[Any]:
     """Fold streamed agentMessage delta text into the completed item list.
 
     The codex app-server does not always emit ``item/completed`` for the
@@ -114,12 +120,18 @@ def _merge_agent_message_deltas(items: list[Any], deltas_by_item_id: dict[str, l
             if item_id in remaining:
                 delta_text = remaining.pop(item_id)
                 if not (getattr(inner, "text", "") or "").strip() and delta_text:
-                    inner.text = delta_text
+                    # Snapshots must not freeze the mutable source item:
+                    # additional deltas may arrive during timeout salvage.
+                    replacement = copy(inner)
+                    replacement.text = delta_text
+                    item = replacement
         merged.append(item)
 
     for item_id, delta_text in remaining.items():
         if delta_text:
             merged.append(SimpleNamespace(type="agentMessage", id=item_id, text=delta_text, phase=None))
+    if item_order:
+        merged.sort(key=lambda item: item_order.get(getattr(unwrap_item(item), "id", ""), len(item_order)))
     return merged
 
 
@@ -143,7 +155,7 @@ def _run_in_fresh_loop(
     coro_func: Any,
     *args: Any,
     timeout: float = 600,
-    timeout_grace: float = 30,
+    timeout_grace: float = 45,
     timeout_result: Callable[[], T | None] | None = None,
 ) -> Any:
     """Run an async callable in a dedicated thread with a fresh event loop.
@@ -304,6 +316,10 @@ class CodexSDKAgentAdapter:
         from openai_codex import ApprovalMode, AsyncCodex, CodexConfig, Sandbox
 
         config = config or AgentConfig()
+        if config.max_turns is not None:
+            logger.warning(
+                "codex_sdk cannot enforce AgentConfig.max_turns=%s; use timeout to bound execution", config.max_turns
+            )
 
         if tools:
             logger.warning(
@@ -325,190 +341,196 @@ class CodexSDKAgentAdapter:
             workspace_path = Path(temp_workspace)
 
         shim: EndpointShim | None = None
+        codex: Any = None  # The SDK is optional and imported only for a run.
+        handle: Any = None
         items: list[Any] = []
         agent_message_deltas: dict[str, list[str]] = {}
+        item_order: dict[str, int] = {}
         usage: Any = None
         completed_turn: Any = None
         thread_id: str | None = None
         limit_reached = False
         timeout_reached = False
+        stopping = asyncio.Event()
 
-        try:
-            base_url: str | None = None
-            if self._config.endpoint_base_url:
-                # Per-arun shim: strict /v1/responses endpoints (stock vLLM)
-                # reject codex's developer-role messages and echoed reasoning
-                # items, so route requests through the local rewriter. Widen
-                # the upstream socket timeout when the agent timeout exceeds
-                # the shim default.
-                upstream_timeout = max(DEFAULT_UPSTREAM_TIMEOUT_SECONDS, config.timeout or 0.0)
-                shim = EndpointShim(self._config.endpoint_base_url, upstream_timeout=upstream_timeout)
-                await asyncio.to_thread(shim.start)
-                base_url = shim.base_url
-
-            codex_config = CodexConfig(
-                config_overrides=build_codex_config_overrides(self._config, base_url),
-                env=build_codex_env(self._config),
-            )
-            thread_kwargs = build_thread_start_kwargs(
-                self._config,
-                base_instructions=system_prompt,
-                cwd=str(workspace_path),
-            )
-            sandbox_mode = thread_kwargs.pop("sandbox")
-            sandbox = Sandbox.read_only if sandbox_mode == "read_only" else Sandbox.workspace_write
-
-            drain_task: asyncio.Task[None] | None = None
-            try:
-                async with AsyncCodex(codex_config) as codex:
-                    thread = await codex.thread_start(
-                        sandbox=sandbox,
-                        # auto_review keeps escalations non-interactive: the
-                        # SDK's default approval handler auto-accepts.
-                        approval_mode=ApprovalMode.auto_review,
-                        **thread_kwargs,
-                    )
-                    thread_id = thread.id
-                    handle = await thread.turn(prompt_string)
-
-                    async def drain_stream() -> None:
-                        nonlocal usage, completed_turn
-                        # Drain the single-consume notification stream
-                        # ourselves and never call handle.run() afterwards.
-                        async for event in handle.stream():
-                            method = getattr(event, "method", "")
-                            payload = getattr(event, "payload", None)
-                            if payload is None:
-                                continue
-                            if getattr(payload, "turn_id", handle.id) != handle.id:
-                                continue
-                            if method == "item/completed":
-                                items.append(payload.item)
-                            elif method == "item/agentMessage/delta":
-                                # The final agentMessage of a turn often never
-                                # gets an item/completed (verified live: only
-                                # deltas, then turn/completed with empty
-                                # turn.items), so the answer text must be
-                                # accumulated from deltas and synthesized.
-                                delta = getattr(payload, "delta", None)
-                                delta_item_id = getattr(payload, "item_id", None)
-                                if delta and delta_item_id:
-                                    agent_message_deltas.setdefault(delta_item_id, []).append(delta)
-                            elif method == "thread/tokenUsage/updated":
-                                usage = payload.token_usage
-                            elif method == "turn/completed":
-                                turn = getattr(payload, "turn", None)
-                                if turn is not None and getattr(turn, "id", None) == handle.id:
-                                    completed_turn = turn
-
-                    # Timeout handling deliberately avoids cancelling the
-                    # drain task. The SDK reads notifications via a blocking
-                    # queue.get on an executor thread. Cancelling mid-get
-                    # unregisters the queue and strands that thread forever,
-                    # which then hangs event-loop shutdown. Instead: race the
-                    # drain with asyncio.wait, interrupt the turn on timeout,
-                    # and let the stream end naturally on the interrupt's
-                    # turn/completed. AsyncCodex.close() at context exit is
-                    # the fail-safe waker (fail_all on registered queues).
-                    drain_task = asyncio.create_task(drain_stream())
-                    if config.timeout:
-                        done, _ = await asyncio.wait({drain_task}, timeout=config.timeout)
-                        if not done:
-                            timeout_reached = True
-                            logger.warning(
-                                "Codex agent timed out after %ss with %d partial item(s). Interrupting turn",
-                                config.timeout,
-                                len(items),
-                            )
-                            # Store a provisional partial immediately. The
-                            # remaining salvage steps (interrupt RPC, drain
-                            # grace, AsyncCodex.close) can outlast the sync
-                            # wrapper's deadline against an unresponsive
-                            # app-server, and the wrapper falls back to
-                            # whatever the store holds at that moment.
-                            if _partial_result_store is not None:
-                                _partial_result_store.set(
-                                    self._build_agent_result(
-                                        _merge_agent_message_deltas(list(items), agent_message_deltas),
-                                        usage=usage,
-                                        session_id=thread_id,
-                                        limit_reached=limit_reached,
-                                        timeout_reached=True,
-                                    )
-                                )
-                            with contextlib.suppress(Exception):
-                                await asyncio.wait_for(handle.interrupt(), timeout=_INTERRUPT_RPC_TIMEOUT)
-                            # Wait for the interrupted turn to emit its final
-                            # turn/completed so the stream finishes cleanly.
-                            await asyncio.wait({drain_task}, timeout=_INTERRUPT_DRAIN_GRACE)
-                        else:
-                            await drain_task
-                    else:
-                        await drain_task
-            except Exception as e:
-                mapped_error, was_limit = wrap_codex_error(e)
-                if was_limit:
-                    limit_reached = True
-                    logger.warning("Codex agent hit a limit: %s", e)
-                else:
-                    raise mapped_error from e
-            finally:
-                # The context exit above closed the app-server, which wakes
-                # any still-blocked notification read via fail_all. Give the
-                # drain task a short window to observe that, then detach.
-                if drain_task is not None and not drain_task.done():
-                    await asyncio.wait({drain_task}, timeout=_POST_CLOSE_DRAIN_GRACE)
-                    if not drain_task.done():
-                        drain_task.cancel()
-                if drain_task is not None and drain_task.done() and not drain_task.cancelled():
-                    # Retrieve to silence "exception was never retrieved" on
-                    # the expected TransportClosedError after a forced close.
-                    with contextlib.suppress(Exception):
-                        drain_task.exception()
-
-            items = _merge_agent_message_deltas(items, agent_message_deltas)
-
-            if timeout_reached:
-                partial_result = self._build_agent_result(
-                    items,
-                    usage=usage,
-                    session_id=thread_id,
-                    limit_reached=limit_reached,
-                    timeout_reached=True,
-                )
-                if _partial_result_store is not None:
-                    _partial_result_store.set(partial_result)
-                return partial_result
-
-            if completed_turn is not None:
-                status = getattr(getattr(completed_turn, "status", None), "value", None)
-                turn_error = getattr(completed_turn, "error", None)
-                if status == "failed":
-                    error_message = getattr(turn_error, "message", None) or "turn failed"
-                    mapped_error, was_limit = wrap_codex_error(RuntimeError(error_message))
-                    if was_limit:
-                        limit_reached = True
-                        logger.warning("Codex turn failed at a limit: %s", error_message)
-                    else:
-                        raise mapped_error
-
-            # A limit partial with zero items still returns a placeholder
-            # result (mirrors the deep_agents adapter) rather than raising.
-            if completed_turn is None and not items and not limit_reached:
-                raise AgentResponseError("No turn completion or items received from Codex SDK agent")
-
+        def partial_result() -> AgentResult:
             return self._build_agent_result(
-                items,
+                _merge_agent_message_deltas(list(items), agent_message_deltas, item_order),
                 usage=usage,
                 session_id=thread_id,
                 limit_reached=limit_reached,
-                timeout_reached=False,
+                timeout_reached=True,
             )
+
+        async def execute() -> None:
+            nonlocal codex, handle, shim, thread_id, usage, completed_turn
+            base_url: str | None = None
+            if self._config.endpoint_base_url:
+                upstream_timeout = max(DEFAULT_UPSTREAM_TIMEOUT_SECONDS, config.timeout or 0.0)
+                shim = EndpointShim(self._config.endpoint_base_url, upstream_timeout=upstream_timeout)
+                # Binding a loopback socket and starting the server thread is
+                # synchronous, avoiding a cancelled to_thread startup race.
+                shim.start()
+                base_url = shim.base_url
+
+            codex = AsyncCodex(
+                CodexConfig(
+                    config_overrides=build_codex_config_overrides(self._config, base_url),
+                    env=build_codex_env(self._config),
+                )
+            )
+            # Instantiate before entering so a failed or timed-out initialize
+            # still has an owned client to close in the outer finally.
+            await codex.__aenter__()
+            if stopping.is_set():
+                return
+            thread_kwargs = build_thread_start_kwargs(
+                self._config, base_instructions=system_prompt, cwd=str(workspace_path)
+            )
+            sandbox_mode = thread_kwargs.pop("sandbox")
+            sandbox = Sandbox.read_only if sandbox_mode == "read_only" else Sandbox.workspace_write
+            thread = await codex.thread_start(
+                sandbox=sandbox,
+                approval_mode=ApprovalMode.deny_all,
+                **thread_kwargs,
+            )
+            thread_id = thread.id
+            if stopping.is_set():
+                return
+            handle = await thread.turn(prompt_string)
+            if stopping.is_set():
+                return
+            async for event in handle.stream():
+                method = getattr(event, "method", "")
+                payload = getattr(event, "payload", None)
+                if payload is None or getattr(payload, "turn_id", handle.id) != handle.id:
+                    continue
+                if method in {"item/started", "item/completed"}:
+                    from .messages import unwrap_item
+
+                    item = payload.item
+                    item_id = getattr(unwrap_item(item), "id", None)
+                    if item_id:
+                        item_order.setdefault(item_id, len(item_order))
+                    if method == "item/completed":
+                        items.append(item)
+                elif method == "item/agentMessage/delta":
+                    delta = getattr(payload, "delta", None)
+                    item_id = getattr(payload, "item_id", None)
+                    if delta and item_id:
+                        item_order.setdefault(item_id, len(item_order))
+                        agent_message_deltas.setdefault(item_id, []).append(delta)
+                elif method == "thread/tokenUsage/updated":
+                    usage = payload.token_usage
+                elif method == "turn/completed":
+                    turn = getattr(payload, "turn", None)
+                    if turn is not None and getattr(turn, "id", None) == handle.id:
+                        completed_turn = turn
+
+        async def interrupt() -> None:
+            if handle is None:
+                return
+            try:
+                await asyncio.wait_for(handle.interrupt(), timeout=_INTERRUPT_RPC_TIMEOUT)
+            except Exception:
+                logger.warning("Codex turn interrupt failed", exc_info=True)
+
+        execution_task = asyncio.create_task(execute())
+        try:
+            try:
+                # Do not cancel the SDK's queue.get executor threads on timeout.
+                # Closing the process first wakes their registered queues.
+                if config.timeout is not None:
+                    done, _ = await asyncio.wait({execution_task}, timeout=config.timeout)
+                    if not done:
+                        timeout_reached = True
+                        stopping.set()
+                        logger.warning("Codex agent timed out after %ss", config.timeout)
+                        if _partial_result_store is not None and (items or agent_message_deltas):
+                            _partial_result_store.set(partial_result())
+                        await interrupt()
+                        await asyncio.wait({execution_task}, timeout=_INTERRUPT_DRAIN_GRACE if handle else 0)
+                    else:
+                        await execution_task
+                else:
+                    await asyncio.shield(execution_task)
+            except asyncio.CancelledError:
+                stopping.set()
+                await interrupt()
+                raise
+            except Exception as e:
+                mapped_error, was_limit = wrap_codex_error(e)
+                if not was_limit:
+                    raise mapped_error from e
+                limit_reached = True
+                logger.warning("Codex agent hit a limit: %s", e)
         finally:
-            if shim is not None:
-                await asyncio.to_thread(shim.stop)
-            if temp_workspace is not None:
-                await asyncio.to_thread(shutil.rmtree, temp_workspace, ignore_errors=True)
+            stopping.set()
+            execution_was_pending = not execution_task.done()
+            try:
+                if codex is not None:
+                    try:
+                        await asyncio.wait_for(codex.close(), timeout=_CLOSE_TIMEOUT)
+                    except Exception:
+                        logger.warning("Codex client cleanup failed", exc_info=True)
+                if not execution_task.done():
+                    await asyncio.wait({execution_task}, timeout=_POST_CLOSE_DRAIN_GRACE)
+                # Startup can finish after the first close observed no
+                # subprocess. Re-close after that task has stopped so the
+                # late-created process is also owned and cleaned up.
+                if codex is not None and execution_was_pending:
+                    try:
+                        await asyncio.wait_for(codex.close(), timeout=_CLOSE_TIMEOUT)
+                    except Exception:
+                        logger.warning("Codex client cleanup retry failed", exc_info=True)
+                if not execution_task.done():
+                    execution_task.cancel()
+                try:
+                    await execution_task
+                except asyncio.CancelledError:
+                    pass  # Expected cancellation after the transport was closed.
+                except Exception:
+                    # The normal path already surfaced execution errors. A
+                    # forced close can additionally raise TransportClosedError.
+                    if timeout_reached:
+                        logger.debug("Codex stream closed during timeout cleanup", exc_info=True)
+            finally:
+                if shim is not None:
+                    await asyncio.to_thread(shim.stop)
+                if temp_workspace is not None:
+                    await asyncio.to_thread(shutil.rmtree, temp_workspace, ignore_errors=True)
+
+        items = _merge_agent_message_deltas(items, agent_message_deltas, item_order)
+        if timeout_reached:
+            if not items:
+                raise AgentTimeoutError(f"Codex agent timed out after {config.timeout}s before receiving any items")
+            result = self._build_agent_result(
+                items, usage=usage, session_id=thread_id, limit_reached=limit_reached, timeout_reached=True
+            )
+            if _partial_result_store is not None:
+                _partial_result_store.set(result)
+            return result
+
+        if completed_turn is not None:
+            status_value = getattr(completed_turn, "status", None)
+            status = getattr(status_value, "value", status_value)
+            if status == "failed":
+                turn_error = getattr(completed_turn, "error", None)
+                error_message = getattr(turn_error, "message", None) or "turn failed"
+                cause = RuntimeError(error_message)
+                mapped_error, was_limit = wrap_codex_error(cause)
+                if not was_limit:
+                    raise mapped_error from cause
+                limit_reached = True
+                logger.warning("Codex turn failed at a limit: %s", error_message)
+            elif status != "completed":
+                raise AgentResponseError(f"Codex turn ended unexpectedly with status {status!r}")
+        elif not limit_reached:
+            raise AgentResponseError("No turn completion received from Codex SDK agent")
+
+        return self._build_agent_result(
+            items, usage=usage, session_id=thread_id, limit_reached=limit_reached, timeout_reached=False
+        )
 
     def run(
         self,

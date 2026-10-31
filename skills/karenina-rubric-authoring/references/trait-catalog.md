@@ -377,7 +377,7 @@ Agent-investigated evaluation. Spawns an agent with tools that can inspect the r
 | `persist_trace` | `bool` | `False` | Keep materialized trace file after evaluation |
 | `max_turns` | `int` | `15` | Maximum agent turns (controls cost) |
 | `timeout_seconds` | `int` | `120` | Agent timeout in seconds |
-| `model_override` | `ModelConfig \| None` | `None` | Override the model used for this agent |
+| `model_override` | `ModelConfig \| None` | `None` | Judge model for this trait (default: the parsing model). Must pass `accepts_judge_interface()` (see Gotchas) |
 
 ### Example: Boolean
 
@@ -419,6 +419,39 @@ fact_check = AgenticRubricTrait(
 )
 ```
 
+### Example: Trace-Only Judge with MCP Tools and Google Search
+
+A tool-loop judge with MCP servers can check claims in the response against external sources. It needs `context_mode="trace_only"` (the trace is inlined, the judge has no file tools).
+
+```python
+from karenina.schemas.config import ModelConfig
+
+gemini_judge = ModelConfig(
+    id="gemini-judge",
+    model_name="gemini-3.8-flash",
+    interface="google_genai",
+    mcp_urls_dict={"literature": "http://localhost:8765/mcp"},
+    extra_kwargs={"builtin_tools": ["google_search"], "max_search_queries": 5},
+)
+
+citations_supported = AgenticRubricTrait(
+    name="citations_supported",
+    description=(
+        "For each paper the response cites, look it up with the literature tools "
+        "(use Google Search only if the tools find nothing). Answer True if every "
+        "cited paper exists and supports the claim it is cited for."
+    ),
+    kind="boolean",
+    higher_is_better=True,
+    context_mode="trace_only",   # required for a tool_loop judge
+    model_override=gemini_judge,
+    max_turns=20,
+    timeout_seconds=300,
+)
+```
+
+The judge's tool calls, tool results and searches are stored in `result.rubric.agentic_trait_investigation_messages["citations_supported"]`, and its token and search usage under `result.template.usage_metadata["agentic_rubric_evaluation"]`.
+
 ### When to Use
 
 Use AgenticRubricTrait when evaluation requires multi-step investigation: running code, searching for facts, reading files in a workspace, or performing any task that needs tool use. This is the most powerful but most expensive trait type.
@@ -428,8 +461,11 @@ Use AgenticRubricTrait when evaluation requires multi-step investigation: runnin
 - `description` is required and must be non-empty (unlike other trait types where it is optional).
 - `name` must not contain dots. Dots would collide with template-kind dot-notation keys.
 - `materialize_trace=True` requires `context_mode` that includes the trace (`trace_only` or `trace_and_workspace`).
-- `model_override` must use an interface that supports agent creation (has an `agent_factory` in the adapter registry).
+- The judge (`model_override`, else the parsing model) must pass `accepts_judge_interface()`. `deep_agent` interfaces (`claude_agent_sdk`, `langchain_deep_agents`) judge any trait. `tool_loop` interfaces with MCP support (`langchain`, `openrouter`, `openai_endpoint`, `claude_tool`, `google_genai`) judge only `context_mode="trace_only"` traits with `materialize_trace=False`. A bad `model_override` fails at construction, and a bad parsing model raises `ValueError` when the agentic rubric stage starts.
+- A judge whose `ModelConfig` sets `mcp_urls_dict` always investigates as an agent with those MCP servers. Without MCP servers (and without a workspace), a `trace_only` trait runs as a single LLM call.
 - Template kind (`kind=type[BaseModel]`) requires `higher_is_better=None` because directionality is not meaningful for structured results.
+- Template kind fields may only be `int`, `float`, `str`, `bool`, `list` of those, or `Optional` of those with a default, so `Literal` fields are rejected. Workaround: a `str` field with `Field(json_schema_extra={"enum": [...]})` plus a `field_validator` (a reloaded checkpoint keeps only the `str` type).
+- A judge that cannot judge is never a score: an investigation error, or a retryable extraction error, leaves the score `None`, records the error in `result.rubric.agentic_trait_evaluation_errors`, sets the `agentic_investigation_failed` or `agentic_extraction_failed` caveat, and fails the row at stage `AgenticRubricEvaluation`. A score taken from an investigation that hit its turn limit or timeout is kept but flagged with `investigation_incomplete` in `agentic_trait_extraction_metadata` and the `agentic_investigation_incomplete` caveat.
 - Cost scales with `max_turns` and `timeout_seconds`. Start with conservative values and increase if needed.
 
 ### Scoring Output

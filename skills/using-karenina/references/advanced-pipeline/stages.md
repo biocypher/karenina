@@ -303,7 +303,7 @@ Non-fatal: if the check itself fails or schema extraction fails, logs a warning 
 
 > **Note:**
 > SufficiencyCheck requires a template (it needs the schema to judge against). It is not available in `rubric_only` mode.
-> 
+>
 ---
 
 ## 7a. ParseTemplate
@@ -511,7 +511,7 @@ Provides a semantic similarity fallback when field verification failed. If the p
 
 > **Note:**
 > The embedding check only overrides field verification failures — it never overrides regex failures.
-> 
+>
 ---
 
 ## 10. DeepJudgmentAutoFail
@@ -654,11 +654,17 @@ Evaluates rubric traits whose `kind="agentic"` by giving each trait (or a shared
 | Field | Location | Description |
 |-------|----------|-------------|
 | `agentic_trait_scores` | `rubric` | Scores for agentic traits |
+| `agentic_trait_investigation_traces` | `rubric` | Raw judge traces, keyed by trait name |
+| `agentic_trait_investigation_messages` | `rubric` | Structured judge trace messages, keyed by trait name |
+| `agentic_trait_extraction_metadata` | `rubric` | Extraction provenance, including `investigation_incomplete` for scores taken from a partial investigation |
+| `agentic_trait_evaluation_errors` | `rubric` | Errors that left a trait without a judgment (phase, error type, message, error category) |
 | `agentic_rubric_evaluation_performed` | `rubric` | Whether 11b ran |
 
 ### Error Behavior
 
-Non-fatal: per-trait errors are recorded on the result, the pipeline continues.
+Other traits are always evaluated, and a configuration that no judge can serve raises `ValueError` before any trait runs. A judge whose investigation raised, or whose score extraction failed with a retryable error, leaves its trait without a score and marks the row as failed at this stage (an infrastructure failure, never a judgment), with the `agentic_investigation_failed` or `agentic_extraction_failed` caveat. A score extracted from an investigation that hit its turn limit or timeout is kept and flagged with the informational `agentic_investigation_incomplete` caveat. See [Agentic Rubric Evaluation](agentic-rubric-evaluation.md#9-judge-failures-and-partial-investigations).
+
+The judge's usage is recorded under the `agentic_rubric_evaluation` stage key of `template.usage_metadata`.
 
 ---
 

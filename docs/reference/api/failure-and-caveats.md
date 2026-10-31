@@ -58,7 +58,7 @@ f = Failure(category=FailureCategory.PARSING, group="content", stage="parse_temp
 assert f.group is FailureGroup.SYSTEM  # not CONTENT
 ```
 
-## 5. Caveat: 4 Informational Flags
+## 5. Caveat: 7 Informational Flags
 
 | Enum | String | Trigger |
 |------|--------|---------|
@@ -66,8 +66,11 @@ assert f.group is FailureGroup.SYSTEM  # not CONTENT
 | `EMBEDDING_OVERRIDE` | `embedding_override` | The `EMBEDDING_OVERRIDE_APPLIED` artifact is set, meaning the [embedding-similarity fallback](../../core_concepts/verification-pipeline.md) flipped at least one field's verdict |
 | `PARSE_DECISION_MALFORMED` | `parse_decision_malformed` | The `PARSE_DECISION_MALFORMED` result field is set, meaning the Judge's structured parse decision came back malformed |
 | `RETRIES_USED` | `retries_used` | Any entry in the `RETRY_COUNTS` artifact has `used > 0` (a retry attempt was made for some `ErrorCategory`, regardless of whether the run ultimately passed) |
+| `AGENTIC_INVESTIGATION_FAILED` | `agentic_investigation_failed` | An [agentic rubric](../../advanced-pipeline/agentic-rubric-evaluation.md#9-judge-failures-and-partial-investigations) judge's investigation raised, so at least one agentic trait has no judgment. The trait's trace holds an `[investigation failed: ...]` record |
+| `AGENTIC_EXTRACTION_FAILED` | `agentic_extraction_failed` | An agentic rubric judge's score extraction failed with a retryable error (connection, timeout, rate limit, server error), so the trait has a trace but no judgment. Non-retryable extraction failures (for example schema validation) do not raise it |
+| `AGENTIC_INVESTIGATION_INCOMPLETE` | `agentic_investigation_incomplete` | An agentic rubric judge stopped at its turn limit or timeout and the score was extracted from the partial trace. The score is kept. Informational only |
 
-Caveats are emitted by `collect_caveats(ctx)` in append-only order: `PARTIAL_CONTENT`, `EMBEDDING_OVERRIDE`, `PARSE_DECISION_MALFORMED`, `RETRIES_USED`. The result is stored as `metadata.caveats: list[Caveat]`. In CSV exports and DataFrame columns the list is rendered as a comma-joined string of the enum values (empty string when no caveats fired).
+Caveats are emitted by `collect_caveats(ctx)` in append-only order: `PARTIAL_CONTENT`, `EMBEDDING_OVERRIDE`, `PARSE_DECISION_MALFORMED`, `AGENTIC_INVESTIGATION_FAILED`, `AGENTIC_EXTRACTION_FAILED`, `AGENTIC_INVESTIGATION_INCOMPLETE`, `RETRIES_USED`. The result is stored as `metadata.caveats: list[Caveat]`. In CSV exports and DataFrame columns the list is rendered as a comma-joined string of the enum values (empty string when no caveats fired).
 
 ## 6. Classifier Priority: 8 Rules
 
@@ -85,6 +88,8 @@ Caveats are emitted by `collect_caveats(ctx)` in append-only order: `PARTIAL_CON
 | 8 | None of the above | `None` (the run passed) |
 
 Two consequences are worth highlighting. First, a content fail (rule 2) takes precedence over retry exhaustion (rule 3): a model that retried once and then produced a wrong answer is reported as `CONTENT`, not as `RETRY_EXHAUSTED`. Second, rules 5-7 only fire when the verify path did not run; once `verify_template` produces a verdict, the result is either `CONTENT` (rule 2) or pass (rule 8).
+
+A failed agentic rubric judge is classified through these same rules. The AgenticRubricEvaluation stage marks an error with the judge's error category and stage `AgenticRubricEvaluation`, so the row becomes a retry-exhausted failure (rule 3) when that category used up its budget, otherwise an `UNEXPECTED_ERROR` (rule 7), even when its template verification passed. When an earlier rule wins instead (an auto-fail, a content failure, abstention, sufficiency), the `agentic_investigation_failed` and `agentic_extraction_failed` caveats still mark the missing judgment, and `rubric.agentic_trait_evaluation_errors` records each judge error with its phase and error category.
 
 ## 7. `Failure.details` Payload Conventions
 

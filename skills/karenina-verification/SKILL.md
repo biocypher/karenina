@@ -89,17 +89,17 @@ If you omit `system_prompt`, VerificationConfig applies a default to **answering
 | `mcp_tool_description_overrides` | `dict[str, str] \| None` | `None` | |
 | `mcp_http_timeout` | `float \| None` | `None` | MCP streamable-HTTP timeout (None = SDK default 30s) |
 | `mcp_sse_read_timeout` | `float \| None` | `None` | MCP SSE read timeout (None = SDK default 300s) |
-| `endpoint_base_url` | `str \| None` | `None` | For `openai_endpoint` |
-| `endpoint_api_key` | `SecretStr \| None` | `None` | For `openai_endpoint` |
+| `endpoint_base_url` | `str \| None` | `None` | For `openai_endpoint`. On `google_genai` it selects the `gemini_api` backend (gateway URL) |
+| `endpoint_api_key` | `SecretStr \| None` | `None` | For `openai_endpoint`, and the Gemini API key for `google_genai` with `gemini_api` |
 | `anthropic_base_url` | `str \| None` | `None` | For claude_tool/claude_agent_sdk |
 | `anthropic_api_key` | `SecretStr \| None` | `None` | Override env var |
 | `agent_runtime` | `AgentRuntimeConfig \| None` | `None` | Typed runtime settings (backend/sandbox/container) |
-| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Vendor-specific params |
+| `extra_kwargs` | `dict[str, Any] \| None` | `None` | Vendor-specific params. On `google_genai` only its own keys are accepted (unknown keys raise) |
 | `manual_traces` | `ManualTraces \| None` | `None` | Required when `interface="manual"` |
 | `agent_middleware` | `AgentMiddlewareConfig \| None` | `None` | For MCP-enabled agents |
 | `max_context_tokens` | `int \| None` | `None` | Summarization threshold |
 | `agent_timeout` | `int \| None` | `None` | Agent execution timeout (default 180s) |
-| `request_timeout` | `float \| None` | `None` | HTTP request timeout for individual LLM calls (None = provider SDK default) |
+| `request_timeout` | `float \| None` | `None` | HTTP request timeout for individual LLM calls (None = provider SDK default, 300s per call on `google_genai`) |
 | `retry_policy` | `RetryPolicy \| None` | `None` | Per-category retry policy; None uses pipeline-level `RetryPolicy` |
 
 **Fields that do NOT exist on ModelConfig**: `top_p`, `top_k`, `frequency_penalty`, `presence_penalty`, `stop`, `name`, `provider`. Passing any of these raises `ValidationError`.
@@ -145,9 +145,10 @@ The `interface` field on ModelConfig selects which adapter handles LLM communica
 | Native Anthropic SDK | `"claude_agent_sdk"` | Direct Anthropic API; falls back to LangChain if unavailable |
 | Anthropic tool-use evaluation | `"claude_tool"` | Native tool schemas via Anthropic SDK; falls back to LangChain |
 | Deep agent evaluation | `"langchain_deep_agents"` | Autonomous task execution agents; no fallback |
+| Gemini (Vertex AI or Gemini API) with Google Search grounding | `"google_genai"` | Search queries and sources in the trace, per-run search budget, thinking-token usage. No fallback |
 | Offline/pre-recorded traces | `"manual"` | No live LLM calls; requires `manual_traces` |
 
-**Decision rule**: Use `"langchain"` unless you have a specific reason not to. Switch to `"claude_tool"` for tool-use benchmarks, `"claude_agent_sdk"` for native Anthropic features, or `"manual"` for evaluating pre-recorded outputs.
+**Decision rule**: Use `"langchain"` unless you have a specific reason not to. Switch to `"claude_tool"` for tool-use benchmarks, `"claude_agent_sdk"` for native Anthropic features, `"google_genai"` for Gemini with Google Search or a Gemini judge for agentic rubric traits, or `"manual"` for evaluating pre-recorded outputs.
 
 See [references/adapter-selection.md](references/adapter-selection.md) for the full decision table with MCP support and provider requirements.
 
@@ -554,7 +555,7 @@ See [Progressive Save tutorial](../using-karenina/references/workflows/running-v
 
 6. **`include_extraction_hints=True` by default**. Extraction hints are appended to the parsing prompt to help the judge populate template fields. Disable with `include_extraction_hints=False` if they interfere with your template schema.
 
-7. **Agentic features require `"langchain_deep_agents"` or `"claude_agent_sdk"` interface**. When using `agentic_parsing=True` or `AgenticRubricTrait`, set the parsing model's `interface` to `"langchain_deep_agents"` or `"claude_agent_sdk"`. The default `"langchain"` interface technically passes validation (it has a basic agent), but the agent is too minimal to properly investigate artifacts or workspaces. No warning is emitted; the pipeline just produces subpar results.
+7. **Agentic features need a capable judge interface.** `agentic_parsing=True` requires a parsing model with `agent_tier="deep_agent"` (`"langchain_deep_agents"` or `"claude_agent_sdk"`). For `AgenticRubricTrait`, the judge (`model_override`, else the parsing model) must pass `AgenticRubricTrait.accepts_judge_interface()`: a `deep_agent` interface judges any trait, and a `tool_loop` interface with MCP support (`"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_tool"`, `"google_genai"`) judges only traits with `context_mode="trace_only"` and `materialize_trace=False` (the default `context_mode` is `"trace_and_workspace"`, so set it explicitly). Otherwise the stage raises `ValueError` before any trait runs. A judge whose `ModelConfig` sets `mcp_urls_dict` investigates as an agent with those MCP servers, which is how a `"google_genai"` judge checks citations against an MCP literature server plus Google Search.
 
 8. **Workspace settings**. `workspace_copy=True` (default) copies question workspaces before execution, protecting originals. Set `workspace_cleanup=True` (default) to delete working copies after the run.
 

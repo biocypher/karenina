@@ -91,6 +91,36 @@ def _result(
     )
 
 
+def _judge_failed_result(
+    question_id: str,
+    *,
+    error_category: str | None,
+    failure_category: FailureCategory = FailureCategory.UNEXPECTED_ERROR,
+    failure_stage: str = "AgenticRubricEvaluation",
+    raw_llm_response: str = "usable answer trace",
+) -> VerificationResult:
+    """A row whose agentic rubric judge failed, with an optional recorded error category."""
+    from karenina.schemas.verification.result_components import VerificationResultRubric
+
+    failure = Failure(category=failure_category, stage=failure_stage, reason="Agentic rubric judge failed")
+    result = _result(question_id, failure=failure, raw_llm_response=raw_llm_response)
+    errors = None
+    if error_category is not None:
+        errors = {
+            "citations": {
+                "phase": "investigation",
+                "error_type": "SomeError",
+                "message": "boom",
+                "category": error_category,
+            }
+        }
+    result.rubric = VerificationResultRubric(
+        agentic_trait_scores={"citations": None},
+        agentic_trait_evaluation_errors=errors,
+    )
+    return result
+
+
 def _manifest_from_results(results: list[VerificationResult]) -> list[str]:
     return [TaskIdentifier.from_result(r).to_key() for r in results]
 
@@ -368,6 +398,88 @@ class TestOpenOrResume:
 
 
 @pytest.mark.unit
+class TestProgressiveFileSinkJudgeRetry:
+    """Plain ProgressiveFileSink (CLI and Benchmark resume) re-runs retryable judge failures."""
+
+    def _fresh(self, tmp_path: Path) -> ProgressiveFileSink:
+        return ProgressiveFileSink(output_path=tmp_path / "results.json", config=_config(), benchmark_path="b.jsonld")
+
+    def test_retryable_judge_failure_is_not_complete(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        retryable = _judge_failed_result("q1", error_category="rate_limit")
+        permanent = _judge_failed_result("q2", error_category="permanent")
+        passed = _result("q3", raw_llm_response="answer")
+        sink.on_start(_manifest_from_results([retryable, permanent, passed]), sink.config)
+        for row in (retryable, permanent, passed):
+            sink.on_result(row)
+
+        assert {triple[0] for triple in sink.completed_triples()} == {"q2", "q3"}
+        assert sink.completed_count == 2
+
+    def test_incomplete_investigation_is_not_retried(self, tmp_path: Path):
+        from karenina.schemas.results.caveat import Caveat
+
+        sink = self._fresh(tmp_path)
+        row = _result("q1", raw_llm_response="answer")
+        row.metadata.caveats = [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+        sink.on_start(_manifest_from_results([row]), sink.config)
+        sink.on_result(row)
+
+        assert len(sink.completed_triples()) == 1
+        sink.on_finalize(all_complete=True)
+        assert not sink.state_path.exists()
+
+    def test_scenario_judge_failure_stays_terminal(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        row = _judge_failed_result("q1", error_category="rate_limit")
+        row.metadata.scenario_id = "scenario-1"
+        sink.on_start([], sink.config)
+
+        sink.on_result(row)
+
+        assert len(sink.completed_triples()) == 1
+
+    def test_full_batch_with_retryable_failure_keeps_state_and_writes_incomplete_export(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        row = _judge_failed_result("q1", error_category="connection")
+        sink.on_start(_manifest_from_results([row]), sink.config)
+        sink.on_result(row)
+
+        sink.on_finalize(all_complete=True)
+
+        assert sink.state_path.exists()
+        assert sink.jsonl_path.exists()
+        export = json.loads(sink.output_path.read_text())
+        assert export["metadata"]["job_summary"]["is_complete"] is False
+        assert len(export["results"]) == 1
+
+    def test_resume_reruns_the_row_and_the_export_keeps_only_the_new_one(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failed = _judge_failed_result("q1", error_category="connection", raw_llm_response="answer")
+        sink.on_start(_manifest_from_results([failed]), sink.config)
+        sink.on_result(failed)
+        sink.on_finalize(all_complete=True)
+
+        resumed = ProgressiveFileSink.load_for_resume(sink.state_path)
+        assert resumed.completed_triples() == set()
+        assert resumed.completed_count == 0
+        # The failed row stays available for answer-cache hydration.
+        assert [row.metadata.failure is not None for row in resumed.iter_results()] == [True]
+
+        rerun = _result("q1", raw_llm_response="answer")
+        resumed.on_result(rerun)
+        assert len(resumed.completed_triples()) == 1
+        assert len(resumed.get_result_set()) == 1
+        resumed.on_finalize(all_complete=True)
+
+        assert not resumed.state_path.exists()
+        export = json.loads(resumed.output_path.read_text())
+        assert export["metadata"]["job_summary"]["is_complete"] is True
+        assert len(export["results"]) == 1
+        assert export["results"][0]["metadata"]["failure"] is None
+
+
+@pytest.mark.unit
 class TestAgenticProgressiveFileSink:
     def _fresh(self, tmp_path: Path, *, keep_sidecars: bool = False) -> AgenticProgressiveFileSink:
         return AgenticProgressiveFileSink(
@@ -436,6 +548,67 @@ class TestAgenticProgressiveFileSink:
 
         assert sink.completed_triples() == set()
         assert list(sink.iter_results())[0].template.raw_llm_response == "usable partial trace"
+
+    @pytest.mark.parametrize(
+        ("error_category", "failure_category", "retried"),
+        [
+            ("connection", FailureCategory.UNEXPECTED_ERROR, True),
+            ("rate_limit", FailureCategory.RATE_LIMIT, True),
+            (None, FailureCategory.CONNECTION, True),
+            ("permanent", FailureCategory.UNEXPECTED_ERROR, False),
+            (None, FailureCategory.UNEXPECTED_ERROR, False),
+        ],
+    )
+    def test_agentic_judge_failure_is_retried_only_when_retryable(
+        self,
+        tmp_path: Path,
+        error_category: str | None,
+        failure_category: FailureCategory,
+        retried: bool,
+    ):
+        sink = self._fresh(tmp_path)
+        result = _judge_failed_result("q1", error_category=error_category, failure_category=failure_category)
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert (sink.completed_triples() == set()) is retried
+        assert list(sink.iter_results())[0].template.raw_llm_response == "usable answer trace"
+
+    def test_incomplete_investigation_is_not_retried(self, tmp_path: Path):
+        from karenina.schemas.results.caveat import Caveat
+
+        sink = self._fresh(tmp_path)
+        row = _result("q1", raw_llm_response="answer")
+        row.metadata.caveats = [Caveat.AGENTIC_INVESTIGATION_INCOMPLETE]
+        sink.on_start([TaskIdentifier.from_result(row).to_key()], sink.config)
+        sink.on_result(row)
+
+        assert len(sink.completed_triples()) == 1
+
+    def test_retryable_judge_error_is_retried_when_another_rule_set_the_category(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        result = _judge_failed_result(
+            "q1",
+            error_category="rate_limit",
+            failure_category=FailureCategory.CONTENT,
+            failure_stage="verify_template",
+        )
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert sink.completed_triples() == set()
+
+    def test_content_failure_without_judge_caveat_stays_terminal(self, tmp_path: Path):
+        sink = self._fresh(tmp_path)
+        failure = Failure(category=FailureCategory.CONTENT, stage="verify_template", reason="verify returned False")
+        result = _result("q1", failure=failure, raw_llm_response="usable answer trace")
+        sink.on_start([TaskIdentifier.from_result(result).to_key()], sink.config)
+
+        sink.on_result(result)
+
+        assert len(sink.completed_triples()) == 1
 
     def test_success_after_parser_failure_becomes_terminal_and_export_dedupes(self, tmp_path: Path):
         sink = self._fresh(tmp_path)

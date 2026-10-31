@@ -67,7 +67,7 @@ def _codex_model(role_id: str = "codex-live") -> ModelConfig:
         model_name=LIVE_CODEX_MODEL,
         model_provider="openai",
         interface="codex_sdk",
-        endpoint_base_url=LIVE_CODEX_BASE_URL,
+        endpoint_base_url=LIVE_CODEX_BASE_URL or None,
     )
 
 
@@ -164,7 +164,7 @@ def _parsing_model(role_id: str = "qwen-parser") -> ModelConfig:
         model_name=LIVE_CODEX_MODEL,
         model_provider="openai",
         interface="openai_endpoint",
-        endpoint_base_url=LIVE_CODEX_BASE_URL,
+        endpoint_base_url=LIVE_CODEX_BASE_URL or None,
         endpoint_api_key="EMPTY",
         temperature=0.0,
         extra_kwargs={"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}},

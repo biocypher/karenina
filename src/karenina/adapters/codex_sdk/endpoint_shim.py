@@ -30,9 +30,11 @@ across concurrent runs.
 
 from __future__ import annotations
 
+import http.client
 import http.server
 import json
 import logging
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -92,6 +94,68 @@ def rewrite_responses_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+class _UpstreamSockets:
+    """Own upstream sockets so shutdown interrupts stalled response reads."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.sockets: set[socket.socket] = set()
+        self.stopped = False
+
+    def add(self, sock: socket.socket) -> None:
+        with self.lock:
+            if self.stopped:
+                sock.close()
+                raise OSError("Codex endpoint shim is stopping")
+            self.sockets.add(sock)
+
+    def discard(self, sockets: list[socket.socket]) -> None:
+        with self.lock:
+            self.sockets.difference_update(sockets)
+
+    def close(self) -> None:
+        with self.lock:
+            self.stopped = True
+            sockets = list(self.sockets)
+            self.sockets.clear()
+        for sock in sockets:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                logger.debug("Upstream socket was already closed", exc_info=True)
+            sock.close()
+
+
+def _tracked_opener(registry: _UpstreamSockets, owned: list[socket.socket]) -> urllib.request.OpenerDirector:
+    """Build HTTP(S) handlers that retain sockets until each request finishes."""
+
+    def connection_type(base: type[http.client.HTTPConnection]) -> type[http.client.HTTPConnection]:
+        class Connection(base):  # type: ignore[valid-type,misc]
+            timeout: float
+
+            def connect(self) -> None:
+                original_timeout: float = float(self.timeout)
+                self.timeout = min(float(original_timeout), 5.0)
+                super().connect()
+                self.timeout = original_timeout
+                if self.sock is not None:
+                    self.sock.settimeout(original_timeout)
+                    registry.add(self.sock)
+                    owned.append(self.sock)
+
+        return Connection
+
+    class HTTPHandler(urllib.request.HTTPHandler):
+        def http_open(self, request: urllib.request.Request) -> Any:
+            return self.do_open(connection_type(http.client.HTTPConnection), request)
+
+    class HTTPSHandler(urllib.request.HTTPSHandler):
+        def https_open(self, request: urllib.request.Request) -> Any:
+            return self.do_open(connection_type(http.client.HTTPSConnection), request)
+
+    return urllib.request.build_opener(HTTPHandler(), HTTPSHandler())
+
+
 class _ShimRequestHandler(http.server.BaseHTTPRequestHandler):
     """Forward one request to the upstream endpoint, rewriting if needed."""
 
@@ -102,6 +166,7 @@ class _ShimRequestHandler(http.server.BaseHTTPRequestHandler):
     # Set by EndpointShim when building the server.
     upstream_base_url: str = ""
     upstream_timeout: float = DEFAULT_UPSTREAM_TIMEOUT_SECONDS
+    upstream_sockets: _UpstreamSockets
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         """Route handler logging through the module logger at debug level."""
@@ -177,8 +242,10 @@ class _ShimRequestHandler(http.server.BaseHTTPRequestHandler):
             if key.lower() not in _HOP_BY_HOP_REQUEST_HEADERS:
                 request.add_header(key, value)
 
+        owned: list[socket.socket] = []
         try:
-            with urllib.request.urlopen(request, timeout=self.upstream_timeout) as response:  # noqa: S310
+            opener = _tracked_opener(self.upstream_sockets, owned)
+            with opener.open(request, timeout=self.upstream_timeout) as response:  # noqa: S310
                 self._relay_streaming_response(response)
         except urllib.error.HTTPError as e:
             data = e.read()
@@ -189,7 +256,10 @@ class _ShimRequestHandler(http.server.BaseHTTPRequestHandler):
                 data[:500].decode(errors="replace"),
             )
             self._send_buffered_response(e.code, e.headers, data)
-        except OSError as e:
+        except (OSError, http.client.HTTPException) as e:
+            if self.upstream_sockets.stopped:
+                self.close_connection = True
+                return
             logger.warning("codex endpoint shim: upstream request failed for %s: %s", self.path, e)
             message = json.dumps({"error": {"message": f"karenina codex shim upstream failure: {e}"}}).encode()
             self.send_response(502)
@@ -197,6 +267,8 @@ class _ShimRequestHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(message)))
             self.end_headers()
             self.wfile.write(message)
+        finally:
+            self.upstream_sockets.discard(owned)
 
     def do_GET(self) -> None:  # noqa: N802
         """Proxy a GET request upstream."""
@@ -238,6 +310,7 @@ class EndpointShim:
         self._upstream_timeout = upstream_timeout
         self._server: http.server.ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._upstream_sockets = _UpstreamSockets()
 
     @property
     def base_url(self) -> str:
@@ -251,12 +324,14 @@ class EndpointShim:
         """Bind an ephemeral loopback port and start serving in a daemon thread."""
         if self._server is not None:
             return
+        self._upstream_sockets = _UpstreamSockets()
         handler = type(
             "BoundShimRequestHandler",
             (_ShimRequestHandler,),
             {
                 "upstream_base_url": self._upstream_base_url,
                 "upstream_timeout": self._upstream_timeout,
+                "upstream_sockets": self._upstream_sockets,
             },
         )
         self._server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -272,6 +347,7 @@ class EndpointShim:
         """Shut down the server and join the serving thread. Safe to call twice."""
         if self._server is None:
             return
+        self._upstream_sockets.close()
         self._server.shutdown()
         self._server.server_close()
         if self._thread is not None:

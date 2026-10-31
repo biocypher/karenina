@@ -1,0 +1,151 @@
+"""Shared MCP client session management over HTTP/SSE transport.
+
+Used by the adapters that run their own tool loop over the ``mcp`` client
+(``claude_tool`` and ``google_genai``). Each agent run opens fresh MCP
+sessions on an ``AsyncExitStack`` and closes them when the run completes
+(session-per-run semantics).
+
+The implementation uses the MCP Python SDK's streamable HTTP client for
+connecting to remote MCP servers.
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import AsyncExitStack
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from mcp import ClientSession
+
+    from karenina.ports.agent import MCPServerConfig
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["connect_all_mcp_servers", "connect_mcp_session", "get_all_mcp_tools"]
+
+
+async def connect_mcp_session(
+    exit_stack: AsyncExitStack,
+    config: MCPServerConfig,
+) -> ClientSession:
+    """Connect to an MCP server via HTTP/SSE transport.
+
+    Creates a new MCP client session and registers it with the exit stack
+    for automatic cleanup when the stack closes.
+
+    Args:
+        exit_stack: AsyncExitStack for managing session lifecycle.
+        config: MCP server configuration. Must include 'url' for HTTP/SSE transport.
+            Optional 'headers' dict for authentication. Optional 'timeout' and
+            'sse_read_timeout' floats (seconds) override the MCP SDK defaults.
+
+    Returns:
+        Initialized ClientSession ready for tool calls.
+
+    Raises:
+        ValueError: If config doesn't include required 'url' field.
+        ImportError: If mcp package is not installed.
+
+    Example:
+        >>> async with AsyncExitStack() as stack:
+        ...     config = {"url": "https://mcp.example.com/mcp", "type": "http"}
+        ...     session = await connect_mcp_session(stack, config)
+        ...     tools = await session.list_tools()
+    """
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    # Cast to dict for TypedDict access
+    config_dict: dict[str, object] = dict(config)
+    url = config_dict.get("url")
+    if not url or not isinstance(url, str):
+        raise ValueError("MCP server config must include 'url' for HTTP/SSE transport")
+
+    headers_raw = config_dict.get("headers", {})
+    headers: dict[str, str] = headers_raw if isinstance(headers_raw, dict) else {}
+
+    logger.debug("Connecting to MCP server at %s", url)
+
+    # Create HTTP transport and enter it into the exit stack
+    transport_kwargs: dict[str, Any] = {"headers": headers}
+    if (timeout := config_dict.get("timeout")) is not None:
+        transport_kwargs["timeout"] = timeout
+    if (sse_read_timeout := config_dict.get("sse_read_timeout")) is not None:
+        transport_kwargs["sse_read_timeout"] = sse_read_timeout
+    http_transport = await exit_stack.enter_async_context(streamablehttp_client(url, **transport_kwargs))
+
+    read_stream, write_stream, _ = http_transport
+
+    # Create and initialize session
+    session = await exit_stack.enter_async_context(ClientSession(read_stream, write_stream))
+
+    await session.initialize()
+
+    logger.debug("Successfully connected to MCP server at %s", url)
+
+    return session
+
+
+async def connect_all_mcp_servers(
+    exit_stack: AsyncExitStack,
+    mcp_servers: dict[str, MCPServerConfig],
+) -> dict[str, ClientSession]:
+    """Connect to all configured MCP servers.
+
+    Args:
+        exit_stack: AsyncExitStack for managing session lifecycles.
+        mcp_servers: Dict mapping server names to their configurations.
+
+    Returns:
+        Dict mapping server names to initialized ClientSession objects.
+
+    Raises:
+        ValueError: If any server config is invalid.
+        ImportError: If mcp package is not installed.
+    """
+    sessions: dict[str, ClientSession] = {}
+
+    for name, config in mcp_servers.items():
+        try:
+            session = await connect_mcp_session(exit_stack, config)
+            sessions[name] = session
+            logger.info("Connected to MCP server '%s'", name)
+        except Exception as e:
+            logger.error("Failed to connect to MCP server '%s': %s", name, e)
+            raise
+
+    return sessions
+
+
+async def get_all_mcp_tools(sessions: dict[str, Any]) -> list[tuple[str, Any, Any]]:
+    """Get all tools from connected MCP sessions.
+
+    Args:
+        sessions: Dict mapping server names to ClientSession objects.
+
+    Returns:
+        List of tuples (server_name, session, mcp_tool) for each tool.
+    """
+    all_tools: list[tuple[str, Any, Any]] = []
+
+    for server_name, session in sessions.items():
+        try:
+            tools_response = await session.list_tools()
+            mcp_tools = tools_response.tools
+
+            for tool in mcp_tools:
+                all_tools.append((server_name, session, tool))
+
+            logger.debug(
+                "MCP server '%s' provides %d tools: %s",
+                server_name,
+                len(mcp_tools),
+                [t.name for t in mcp_tools],
+            )
+
+        except Exception as e:
+            logger.error("Failed to list tools from MCP server '%s': %s", server_name, e)
+            raise
+
+    return all_tools

@@ -5,6 +5,17 @@
 > on 2026-08-14 with SDK and bundled CLI 0.144.4; the Responses-only custom
 > provider behavior and compatibility shim remain applicable.
 
+## Current adapter validation (2026-10-31)
+
+The adapter is now pinned to SDK and matching bundled CLI `0.163.0`, merged with the current Gemini/OMP-capable `dev` base. The old experiments below are historical; current behavior is documented in `docs/advanced-adapters/available-adapters.md`.
+
+- Approval policy is `deny_all`, preserving `read_only` / `workspace_write` boundaries.
+- The timeout includes initialization, thread/turn setup, and streaming. Cleanup closes the SDK transport before canceling pending reads, with a second close for late startup. Established endpoint-shim sockets are interrupted on shutdown.
+- Streamed deltas retain event order; explicit final-answer messages win over commentary. Partial snapshots do not mutate the source items. Missing completion and unsolicited interruption are errors.
+- `max_turns` is unsupported and warns. Recognizing a provider context-limit failure only marks that result partial; it does not enforce a Karenina turn budget.
+- Native authenticated `gpt-5.6-sol` validation read a random workspace marker, copied it to a real file, returned the marker, recorded four paired tool calls, and reported nonzero consistent usage. An eight-second timeout returned a partial trace in 8.03 seconds.
+- The three original ignored diagnostic scripts are preserved under `scripts/codex/`, with denied escalation and a portable loopback endpoint default. They supplement the live pytest suite.
+
 Contract for the karenina codex adapter. All facts verified in the worktree
 `karenina-codex-worktree` on 2026-06-11 against the vLLM endpoint
 `http://hl-codon-gpu-020:8000/v1` (model id `qwen3.5-122b-a10b`, 262k ctx,

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from karenina.replay import capture_from_result_set
 from karenina.schemas.results import VerificationResultSet
+from karenina.schemas.results.caveat import Caveat
 from karenina.schemas.verification import VerificationConfig, VerificationResult
 from karenina.schemas.verification.model_identity import ModelIdentity
 
@@ -330,6 +331,16 @@ def _merge(
 # ----------------------------------------------------------------------
 
 
+# Caveats a rubric-only run sets when an agentic rubric judge could not judge.
+_AGENTIC_JUDGE_CAVEATS: tuple[Caveat, ...] = (
+    Caveat.AGENTIC_INVESTIGATION_FAILED,
+    Caveat.AGENTIC_EXTRACTION_FAILED,
+    Caveat.AGENTIC_INVESTIGATION_INCOMPLETE,
+)
+
+# Stage name of AgenticRubricEvaluationStage.
+_AGENTIC_RUBRIC_STAGE = "AgenticRubricEvaluation"
+
 _RUBRIC_TRAIT_BUCKETS: tuple[str, ...] = (
     "llm_trait_scores",
     "llm_trait_labels",
@@ -337,6 +348,9 @@ _RUBRIC_TRAIT_BUCKETS: tuple[str, ...] = (
     "callable_trait_scores",
     "agentic_trait_scores",
     "agentic_trait_investigation_traces",
+    "agentic_trait_investigation_messages",
+    "agentic_trait_evaluation_errors",
+    "agentic_trait_extraction_metadata",
 )
 
 
@@ -648,11 +662,36 @@ def _enrich_with_rubric(
     )
 
 
+def _merge_agentic_judge_failure(target: VerificationResult, source: VerificationResult) -> None:
+    """Carry an agentic rubric judge failure from the rubric-only row onto the prior row.
+
+    The merged row otherwise keeps the prior row's metadata, so a judge that
+    failed while re-judging would leave no trace outside the trait's trace
+    text. The agentic judge caveats are added to the target. The source's
+    failure is copied when it comes from the agentic rubric stage and the
+    target has no failure of its own. A prior failure (for example a content
+    failure) is kept, and the caveats and ``agentic_trait_evaluation_errors``
+    still identify the judge failure.
+    """
+    for caveat in _AGENTIC_JUDGE_CAVEATS:
+        if caveat in source.metadata.caveats and caveat not in target.metadata.caveats:
+            target.metadata.caveats.append(caveat)
+
+    failure = source.metadata.failure
+    if failure is not None and failure.stage == _AGENTIC_RUBRIC_STAGE and target.metadata.failure is None:
+        target.metadata.failure = failure.model_copy(deep=True)
+
+
 def _merge_rubric_onto_row(target: VerificationResult, source: VerificationResult) -> None:
     """Union source.rubric.* trait dicts onto target.rubric.* in place.
 
+    A failed agentic rubric judge in the source row is carried over too
+    (see :func:`_merge_agentic_judge_failure`).
+
     Raises ValueError on same-name trait collision within a bucket.
     """
+    _merge_agentic_judge_failure(target, source)
+
     src_rubric = source.rubric
     dst_rubric = target.rubric
     if src_rubric is None or dst_rubric is None:

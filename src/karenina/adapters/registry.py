@@ -528,6 +528,16 @@ class AdapterRegistry:
             logger.debug("TaskEval registration module not available")
 
         try:
+            from karenina.adapters.google_genai import registration as _gg  # noqa: F401
+        except ImportError:
+            logger.debug("Google GenAI registration module not available")
+
+        try:
+            from karenina.adapters.omp import registration as _omp  # noqa: F401
+        except ImportError:
+            logger.debug("Oh My Pi registration module not available")
+
+        try:
             from karenina.adapters.codex_sdk import registration as _codex  # noqa: F401
         except ImportError:
             logger.debug("Codex SDK registration module not available")

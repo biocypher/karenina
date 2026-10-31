@@ -14,8 +14,8 @@ SDK exception mapping:
     TimeoutError / asyncio.TimeoutError   -> AgentTimeoutError
     CodexError / anything else            -> AgentExecutionError
 
-Codex has no max_turns equivalent, so the limit_reached flag is best
-effort: it is set only when the error message mentions a turn, recursion,
+Codex has no max_turns equivalent. The budget is not enforced;
+limit_reached only describes a provider failure and is best effort: it is set only when the error message mentions a turn, recursion,
 or context limit.
 """
 

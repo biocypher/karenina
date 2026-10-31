@@ -19,7 +19,7 @@ from typing import Any
 
 from karenina.ports import Role, ThinkingContent, ToolResultContent
 
-from .messages import CodexMessageConverter
+from .messages import CodexMessageConverter, item_type, unwrap_item
 
 _converter = CodexMessageConverter()
 
@@ -130,8 +130,8 @@ def extract_final_response(items: list[Any]) -> str | None:
 
     Codex's own ``TurnResult.final_response`` can be empty even on success
     (observed against vLLM, see specs/codex_sdk_findings.md), so this
-    helper walks items in reverse and returns the last non-empty
-    agentMessage text.
+    helper prefers explicit final-answer items, then walks items in reverse
+    for the last non-empty agentMessage text.
 
     Args:
         items: ``TurnResult.items`` entries.
@@ -139,6 +139,13 @@ def extract_final_response(items: list[Any]) -> str | None:
     Returns:
         The last non-empty assistant text, or None.
     """
+    for item in reversed(items):
+        inner = unwrap_item(item)
+        phase_value = getattr(inner, "phase", None)
+        phase = getattr(phase_value, "value", phase_value)
+        text = getattr(inner, "text", None)
+        if item_type(item) == "agentMessage" and phase == "final_answer" and isinstance(text, str) and text:
+            return text
     for message in reversed(_converter.from_provider(items)):
         text = message.text
         if message.role == Role.ASSISTANT and isinstance(text, str) and text:

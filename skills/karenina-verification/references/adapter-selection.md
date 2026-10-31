@@ -12,10 +12,11 @@ Choose an adapter by setting `interface` on ModelConfig. The default `"langchain
 | Native Anthropic SDK integration | `"claude_agent_sdk"` | No | Yes | Yes | `"langchain"` |
 | Anthropic tool-use with native schemas | `"claude_tool"` | No | Yes | Yes | `"langchain"` |
 | Autonomous deep agent execution | `"langchain_deep_agents"` | Yes | Yes | Yes | None (explicit install required) |
+| Gemini on Vertex AI or the Gemini API, with Google Search grounding | `"google_genai"` | No | Yes | Yes | None (intentional: a fallback would drop grounding and the search budget) |
 | Pre-recorded/offline traces | `"manual"` | No | No | No | None (intentional) |
 | Pre-collected output evaluation (TaskEval sentinel) | `"taskeval"` | No | No | No | None (no-op; never calls the LLM) |
 
-**Agent tier**: `"claude_agent_sdk"` and `"langchain_deep_agents"` are registered with `agent_tier="deep_agent"` — full agent runtimes with built-in tools (the runtime handles tool loops internally; `GenerateAnswer` prefers the `AgentPort` path to capture the full trace). Every other interface defaults to `agent_tier="tool_loop"` (the adapter orchestrates each tool-call turn explicitly). Use a `deep_agent`-tier interface for the parsing model when enabling `agentic_parsing=True` or `AgenticRubricTrait`.
+**Agent tier**: `"claude_agent_sdk"` and `"langchain_deep_agents"` are registered with `agent_tier="deep_agent"`: full agent runtimes with built-in tools (the runtime handles tool loops internally, and `GenerateAnswer` prefers the `AgentPort` path to capture the full trace). Every other interface defaults to `agent_tier="tool_loop"` (the adapter orchestrates each tool-call turn explicitly). Use a `deep_agent`-tier interface for the parsing model when enabling `agentic_parsing=True`. For `AgenticRubricTrait`, a `deep_agent` judge handles any trait, and a `tool_loop` judge with MCP support (for example `"google_genai"`) handles `context_mode="trace_only"` traits without `materialize_trace`.
 
 ## When to Switch from LangChain
 
@@ -38,7 +39,15 @@ Choose an adapter by setting `interface` on ModelConfig. The default `"langchain
 - You need the investigation agent to use tools autonomously to verify artifacts
 - Preferred over `"claude_agent_sdk"` when you want LangChain-based tool ecosystem
 
-**Agentic features require `"claude_agent_sdk"` or `"langchain_deep_agents"`**: While `"langchain"` technically passes validation for agentic features (it registers a basic agent), it uses a minimal ReAct agent that does not properly investigate workspaces or artifacts. Always use `"claude_agent_sdk"` or `"langchain_deep_agents"` for the parsing model when enabling `agentic_parsing=True` or using `AgenticRubricTrait`.
+**Agentic judges**: `agentic_parsing=True` is rejected at config validation unless every parsing model has `agent_tier="deep_agent"` (`"claude_agent_sdk"` or `"langchain_deep_agents"`). `AgenticRubricTrait` judges follow `AgenticRubricTrait.accepts_judge_interface()`: `deep_agent` interfaces judge any trait (they need file tools for workspaces and materialized traces), while `tool_loop` interfaces with MCP support (`"langchain"`, `"openrouter"`, `"openai_endpoint"`, `"claude_tool"`, `"google_genai"`) judge only `context_mode="trace_only"` traits with `materialize_trace=False`. Their tools are the MCP servers in the judge's `mcp_urls_dict` (plus server-side tools such as Gemini's Google Search). A judge that cannot serve a trait raises `ValueError` at the start of the agentic rubric stage.
+
+**Switch to `"google_genai"`** when:
+- Evaluating or judging with Gemini on Vertex AI (Google application default credentials, the default backend) or through a Gemini API gateway (`endpoint_base_url` selects the `gemini_api` backend)
+- You need Google Search or URL reading (`extra_kwargs={"builtin_tools": ["google_search", "url_context"]}`, off by default) with the queries and sources recorded as `google_search` / `url_context` tool calls in agent traces (a single LLM call reports only the query count in usage)
+- You want a per-run search cap (`max_search_queries`, a soft cap: Search is removed between model calls, so one call can exceed it) or thinking-token and search counts in usage (`reasoning_tokens`, `web_search_queries`)
+- You need a Gemini judge for agentic rubric traits that calls MCP tools (karenina runs the tool loop, so MCP servers work)
+
+Note that `url_context` only opens URLs written out in the request. To let a judge open pages it finds, give it a fetch tool through an MCP server.
 
 **Switch to `"openai_endpoint"`** when:
 - Connecting to self-hosted models (vLLM, Ollama, TGI)
@@ -78,6 +87,25 @@ ModelConfig(
     anthropic_api_key=SecretStr("sk-ant-..."),
 )
 ```
+
+### `"google_genai"`
+
+```python
+ModelConfig(
+    id="gemini-judge",
+    model_name="gemini-3.8-flash",
+    interface="google_genai",
+    # model_provider NOT used. Default backend is Vertex AI with Google ADC.
+    mcp_urls_dict={"literature": "http://localhost:8765/mcp"},  # optional MCP servers
+    extra_kwargs={
+        "project": "my-gcp-project",          # or GOOGLE_CLOUD_PROJECT
+        "builtin_tools": ["google_search"],   # off by default
+        "max_search_queries": 5,              # soft cap per agent run
+    },
+)
+```
+
+Unknown `extra_kwargs` keys raise `ValueError`. Accepted keys: `backend`, `project`, `location`, `builtin_tools`, `max_search_queries`, `thinking_level`, `thinking_budget`, `include_thoughts`, `stream`, `resolve_grounding_urls`, `generate_content_config`. Install with `pip install 'karenina[google-genai]'`. For the `gemini_api` backend set `endpoint_base_url` (and `endpoint_api_key`, or `GEMINI_API_KEY` / `GOOGLE_API_KEY`).
 
 ### `"manual"`
 

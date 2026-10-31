@@ -229,3 +229,56 @@ class TestEndpointShimStreaming:
             shim.stop()
             upstream.shutdown()
             upstream.server_close()
+
+
+class TestEndpointShimShutdown:
+    def test_stop_interrupts_stalled_upstream_and_client(self):
+        upstream_closed = threading.Event()
+        client_done = threading.Event()
+        first_received = threading.Event()
+
+        class StalledHandler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(b"1\r\nx\r\n")
+                self.wfile.flush()
+                assert self.rfile.read(1) == b""
+                upstream_closed.set()
+
+        upstream = http.server.ThreadingHTTPServer(("127.0.0.1", 0), StalledHandler)
+        serving = threading.Thread(target=upstream.serve_forever, daemon=True)
+        serving.start()
+        shim = EndpointShim(f"http://127.0.0.1:{upstream.server_address[1]}/v1")
+        shim.start()
+
+        def consume():
+            request = urllib.request.Request(shim.base_url + "/responses", data=b"{}")
+            try:
+                with urllib.request.urlopen(request, timeout=2) as response:
+                    assert response.read(1) == b"x"
+                    first_received.set()
+                    response.read()
+            except http.client.IncompleteRead:
+                pass  # A stopped chunked stream intentionally has no terminator.
+            finally:
+                client_done.set()
+
+        client = threading.Thread(target=consume, daemon=True)
+        client.start()
+        assert first_received.wait(2)
+        shim.stop()
+        assert client_done.wait(1)
+        assert upstream_closed.wait(1)
+        client.join(timeout=1)
+        upstream.shutdown()
+        upstream.server_close()
+        serving.join(timeout=1)

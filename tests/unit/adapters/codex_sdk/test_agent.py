@@ -20,6 +20,7 @@ from karenina.ports import (
     AgentConfig,
     AgentExecutionError,
     AgentResponseError,
+    AgentTimeoutError,
     Message,
 )
 from karenina.schemas.config import ModelConfig
@@ -116,9 +117,11 @@ def build_fake_codex_module(
     stream_error: Exception | None = None,
     ignore_interrupt: bool = False,
     close_hang_s: float = 0.0,
+    stall_phase: str | None = None,
 ) -> tuple[types.ModuleType, dict[str, Any]]:
     """Build a fake openai_codex module plus a record of observed calls."""
     record: dict[str, Any] = {}
+    closed = asyncio.Event()
     handle = _FakeTurnHandle(events, hang, stream_error, ignore_interrupt)
     record["handle"] = handle
 
@@ -132,9 +135,14 @@ def build_fake_codex_module(
             record["codex_config"] = config
 
         async def __aenter__(self) -> FakeAsyncCodex:
+            record["entered"] = True
+            if stall_phase == "initialize":
+                await closed.wait()
+                raise RuntimeError("transport closed")
             return self
 
-        async def __aexit__(self, *_exc: Any) -> None:
+        async def close(self) -> None:
+            closed.set()
             if close_hang_s:
                 # Bounded hang so abandoned worker threads still finish
                 # before interpreter exit joins them.
@@ -143,7 +151,19 @@ def build_fake_codex_module(
 
         async def thread_start(self, **kwargs: Any) -> _FakeThread:
             record["thread_start_kwargs"] = kwargs
-            return _FakeThread(handle, record)
+            if stall_phase == "thread_start":
+                await closed.wait()
+                raise RuntimeError("transport closed")
+            thread = _FakeThread(handle, record)
+            if stall_phase == "turn_start":
+
+                async def stalled_turn(_prompt: str) -> _FakeTurnHandle:
+                    record["turn_started"] = True
+                    await closed.wait()
+                    raise RuntimeError("transport closed")
+
+                thread.turn = stalled_turn
+            return thread
 
     module = types.ModuleType("openai_codex")
     module.AsyncCodex = FakeAsyncCodex
@@ -209,7 +229,7 @@ class TestSuccessfulRun:
         assert kwargs["model_provider"] == "karenina"
         assert kwargs["base_instructions"] == "Be helpful"
         assert kwargs["sandbox"] == "workspace_write"
-        assert kwargs["approval_mode"] == "auto_review"
+        assert kwargs["approval_mode"] == "deny_all"
         assert kwargs["cwd"]  # temp workspace fallback was created
 
     def test_endpoint_overrides_point_at_local_shim(
@@ -301,18 +321,17 @@ class TestTimeoutSalvage:
         assert "--- Tool Message (call_id: cmd_1) ---" in result.raw_trace
         assert result.final_response == "[Agent stopped before producing a final response]"
 
-    def test_timeout_with_no_items_still_returns_partial(
+    def test_timeout_with_no_items_raises(
         self, monkeypatch: pytest.MonkeyPatch, codex_model_config: ModelConfig
     ) -> None:
         module, record = build_fake_codex_module([], hang=True)
         monkeypatch.setitem(sys.modules, "openai_codex", module)
         adapter = _make_adapter(codex_model_config)
 
-        result = asyncio.run(adapter.arun([Message.user("hi")], config=AgentConfig(timeout=0.2)))
-
-        assert result.timeout_reached is True
-        assert result.trace_messages == []
+        with pytest.raises(AgentTimeoutError):
+            asyncio.run(adapter.arun([Message.user("hi")], config=AgentConfig(timeout=0.2)))
         assert record["handle"].interrupt_called is True
+        assert record["closed"] is True
 
     def test_unresponsive_interrupt_still_returns_within_grace(
         self, monkeypatch: pytest.MonkeyPatch, codex_model_config: ModelConfig
@@ -351,6 +370,7 @@ class TestTimeoutSalvage:
             return original_run_in_fresh_loop(coro_func, *args, **kwargs)
 
         monkeypatch.setattr(agent_module, "_run_in_fresh_loop", fast_wrapper)
+        monkeypatch.setattr(agent_module, "_CLOSE_TIMEOUT", 0.05)
 
         events = [_item_event(make_agent_message("salvaged partial"))]
         module, record = build_fake_codex_module(events, hang=True, close_hang_s=5.0)
@@ -430,3 +450,119 @@ class TestFailures:
 
         with pytest.raises(AgentResponseError, match="No turn completion"):
             asyncio.run(adapter.arun([Message.user("hi")]))
+
+
+class TestLifecycleGuards:
+    @pytest.mark.parametrize("phase", ["initialize", "thread_start", "turn_start"])
+    def test_timeout_covers_startup(self, monkeypatch, native_model_config, phase):
+        import karenina.adapters.codex_sdk.agent as agent_module
+
+        monkeypatch.setattr(agent_module, "_POST_CLOSE_DRAIN_GRACE", 0.05)
+        module, record = build_fake_codex_module([], stall_phase=phase)
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        adapter = _make_adapter(native_model_config)
+        with pytest.raises(AgentTimeoutError):
+            asyncio.run(asyncio.wait_for(adapter.arun([Message.user("hi")], config=AgentConfig(timeout=0.03)), 1.0))
+        assert record["closed"] is True
+
+    def test_external_cancel_closes_client_and_drains_execution(self, monkeypatch, native_model_config):
+        import karenina.adapters.codex_sdk.agent as agent_module
+
+        monkeypatch.setattr(agent_module, "_POST_CLOSE_DRAIN_GRACE", 0.01)
+        module, record = build_fake_codex_module([], hang=True)
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        adapter = _make_adapter(native_model_config)
+
+        async def scenario():
+            task = asyncio.create_task(adapter.arun([Message.user("hi")]))
+            while "thread_start_kwargs" not in record:
+                await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert not [t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()]
+
+        asyncio.run(scenario())
+        assert record["closed"] is True
+        assert record["handle"].interrupt_called is True
+
+    def test_hanging_close_is_bounded_for_async_call(self, monkeypatch, native_model_config):
+        import karenina.adapters.codex_sdk.agent as agent_module
+
+        monkeypatch.setattr(agent_module, "_CLOSE_TIMEOUT", 0.02)
+        module, _ = build_fake_codex_module(_successful_events(), close_hang_s=10)
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        result = asyncio.run(asyncio.wait_for(_make_adapter(native_model_config).arun([Message.user("hi")]), 1))
+        assert result.final_response == "Created hello.txt."
+
+    def test_missing_completion_with_items_raises(self, monkeypatch, native_model_config):
+        module, _ = build_fake_codex_module([_item_event(make_agent_message("partial"))])
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        with pytest.raises(AgentResponseError, match="No turn completion"):
+            asyncio.run(_make_adapter(native_model_config).arun([Message.user("hi")]))
+
+    def test_unsolicited_interruption_raises(self, monkeypatch, native_model_config):
+        module, _ = build_fake_codex_module(
+            [_item_event(make_agent_message("partial")), _completed_event("interrupted")]
+        )
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        with pytest.raises(AgentResponseError, match="interrupted"):
+            asyncio.run(_make_adapter(native_model_config).arun([Message.user("hi")]))
+
+    def test_delta_commentary_precedes_completed_final_answer(self, monkeypatch, native_model_config):
+        events = [
+            _agent_delta_event("commentary", "Let me calculate."),
+            _item_event(make_agent_message("The answer is42.", item_id="final", phase="final_answer")),
+            _completed_event(),
+        ]
+        module, _ = build_fake_codex_module(events)
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        result = asyncio.run(_make_adapter(native_model_config).arun([Message.user("hi")]))
+        assert result.final_response == "The answer is42."
+        assert [m.text for m in result.trace_messages] == ["Let me calculate.", "The answer is42."]
+
+
+class TestDeltaSnapshots:
+    def test_snapshot_does_not_mutate_source_or_drop_later_deltas(self):
+        from karenina.adapters.codex_sdk.agent import _merge_agent_message_deltas
+        from karenina.adapters.codex_sdk.messages import unwrap_item
+
+        item = make_agent_message("", item_id="answer")
+        first = _merge_agent_message_deltas([item], {"answer": ["partial"]})
+        second = _merge_agent_message_deltas([item], {"answer": ["partial", " final"]})
+        assert unwrap_item(item).text == ""
+        assert unwrap_item(first[0]).text == "partial"
+        assert unwrap_item(second[0]).text == "partial final"
+
+
+class TestLateStartupCleanup:
+    @pytest.mark.parametrize("close_delay", [0.0, 0.08])
+    def test_process_created_after_first_close_is_closed_again(self, monkeypatch, native_model_config, close_delay):
+        import karenina.adapters.codex_sdk.agent as agent_module
+
+        module, record = build_fake_codex_module([])
+        client_type = module.AsyncCodex
+        original_close = client_type.close
+
+        async def late_enter(self):
+            await asyncio.sleep(0.05)
+            record["alive"] = True
+            return self
+
+        async def close(self):
+            record["closes"] = record.get("closes", 0) + 1
+            record["alive"] = False
+            await original_close(self)
+            if record["closes"] == 1:
+                await asyncio.sleep(close_delay)
+
+        monkeypatch.setattr(client_type, "__aenter__", late_enter)
+        monkeypatch.setattr(client_type, "close", close)
+        monkeypatch.setattr(agent_module, "_POST_CLOSE_DRAIN_GRACE", 0.2)
+        monkeypatch.setitem(sys.modules, "openai_codex", module)
+        with pytest.raises(AgentTimeoutError):
+            asyncio.run(_make_adapter(native_model_config).arun([Message.user("hi")], config=AgentConfig(timeout=0.01)))
+        assert record["alive"] is False
+        assert record["closes"] == 2
+        assert "thread_start_kwargs" not in record
